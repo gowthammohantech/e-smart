@@ -169,7 +169,7 @@ export default function Home() {
               label="Expenses"
               value={monthExpenses}
               tone="warn"
-              icon="receipt"
+              icon="receipt-text-outline"
               caption={`${expenses.filter((e) => inRange(e.date, thisMonth)).length} entries`}
               onPress={() => router.push('/(app)/expenses')}
             />
