@@ -4,16 +4,16 @@ import {
   BusinessDocument,
   Company,
   DocumentKind,
-  Expense,
   Item,
   Party,
   Payment,
-  StockMovement,
+  Transporter,
 } from '@/types';
 import { Money, money, sum, zero } from '@/lib/money';
 import { buildOutstanding, summarizeAging } from '@/domain/receivables';
-import { stockMap } from '@/domain/stockLedger';
-import { PURCHASE_KINDS, SALES_KINDS } from '@/domain/documentStates';
+import { SALES_KINDS } from '@/domain/documentStates';
+import { isExpired } from '@/domain/gst/eway/validity';
+import { nowISO } from '@/lib/date';
 
 /**
  * Every read below is scoped by the active company, which is how the
@@ -42,15 +42,12 @@ export function useCompanies() {
   return useAppStore((s) => s.companies);
 }
 
-export function useParties(kind?: 'customer' | 'supplier'): Party[] {
+export function useParties(): Party[] {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const parties = useAppStore((s) => s.parties);
   return useMemo(
-    () =>
-      parties
-        .filter((p) => p.companyId === companyId && (!kind || p.kind === kind))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [parties, companyId, kind],
+    () => parties.filter((p) => p.companyId === companyId).sort((a, b) => a.name.localeCompare(b.name)),
+    [parties, companyId],
   );
 }
 
@@ -80,25 +77,19 @@ export function useTaxCategories() {
   return useMemo(() => cats.filter((c) => c.companyId === companyId).sort((a, b) => a.rate - b.rate), [cats, companyId]);
 }
 
-export function useExpenseCategories() {
+export function useTransporters(): Transporter[] {
   const companyId = useAppStore((s) => s.activeCompanyId);
-  const cats = useAppStore((s) => s.expenseCategories);
-  return useMemo(() => cats.filter((c) => c.companyId === companyId), [cats, companyId]);
+  const transporters = useAppStore((s) => s.transporters);
+  return useMemo(
+    () => transporters.filter((t) => t.companyId === companyId).sort((a, b) => a.name.localeCompare(b.name)),
+    [transporters, companyId],
+  );
 }
 
 export function usePaymentAccounts() {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const accs = useAppStore((s) => s.paymentAccounts);
   return useMemo(() => accs.filter((a) => a.companyId === companyId), [accs, companyId]);
-}
-
-export function useExchangeRates() {
-  const companyId = useAppStore((s) => s.activeCompanyId);
-  const rates = useAppStore((s) => s.exchangeRates);
-  return useMemo(
-    () => rates.filter((r) => r.companyId === companyId).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom)),
-    [rates, companyId],
-  );
 }
 
 export function useNumberingSeries() {
@@ -122,47 +113,20 @@ export function useDocument(id: string | undefined): BusinessDocument | undefine
   return useAppStore((s) => s.documents.find((d) => d.id === id));
 }
 
-export function usePayments(direction?: 'received' | 'paid'): Payment[] {
+export function usePayments(): Payment[] {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const payments = useAppStore((s) => s.payments);
   return useMemo(
     () =>
       payments
-        .filter((p) => p.companyId === companyId && (!direction || p.direction === direction))
+        .filter((p) => p.companyId === companyId)
         .sort((a, b) => (b.date === a.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date))),
-    [payments, companyId, direction],
+    [payments, companyId],
   );
 }
 
 export function usePayment(id: string | undefined): Payment | undefined {
   return useAppStore((s) => s.payments.find((p) => p.id === id));
-}
-
-export function useExpenses(): Expense[] {
-  const companyId = useAppStore((s) => s.activeCompanyId);
-  const expenses = useAppStore((s) => s.expenses);
-  return useMemo(
-    () => expenses.filter((e) => e.companyId === companyId).sort((a, b) => b.date.localeCompare(a.date)),
-    [expenses, companyId],
-  );
-}
-
-export function useExpense(id: string | undefined): Expense | undefined {
-  return useAppStore((s) => s.expenses.find((e) => e.id === id));
-}
-
-export function useStockMovements(itemId?: string): StockMovement[] {
-  const companyId = useAppStore((s) => s.activeCompanyId);
-  const movements = useAppStore((s) => s.stockMovements);
-  return useMemo(
-    () => movements.filter((m) => m.companyId === companyId && (!itemId || m.itemId === itemId)),
-    [movements, companyId, itemId],
-  );
-}
-
-export function useStockLevels(): Record<string, number> {
-  const movements = useStockMovements();
-  return useMemo(() => stockMap(movements), [movements]);
 }
 
 export function useNotifications() {
@@ -202,22 +166,12 @@ export function useAttachments(entityId?: string) {
 
 export function useReceivables() {
   const invoices = useDocuments('invoice');
-  const payments = usePayments('received');
+  const payments = usePayments();
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
     const outstanding = buildOutstanding(invoices, payments);
     return { outstanding, summary: summarizeAging(outstanding, baseCurrency) };
   }, [invoices, payments, baseCurrency]);
-}
-
-export function usePayables() {
-  const bills = useDocuments('purchaseBill');
-  const payments = usePayments('paid');
-  const baseCurrency = useBaseCurrency();
-  return useMemo(() => {
-    const outstanding = buildOutstanding(bills, payments);
-    return { outstanding, summary: summarizeAging(outstanding, baseCurrency) };
-  }, [bills, payments, baseCurrency]);
 }
 
 /** Outstanding amount for one party, in the company base currency. */
@@ -227,15 +181,10 @@ export function usePartyOutstanding(partyId: string | undefined) {
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
     if (!partyId) return zero(baseCurrency);
-    const docs = documents.filter(
-      (d) => d.partyId === partyId && (d.kind === 'invoice' || d.kind === 'purchaseBill'),
-    );
+    const docs = documents.filter((d) => d.partyId === partyId && d.kind === 'invoice');
     const partyPayments = payments.filter((p) => p.partyId === partyId);
     const rows = buildOutstanding(docs, partyPayments);
-    return sum(
-      rows.map((r) => money(Math.round(r.outstanding.minor * (r.document.exchangeRate || 1)), baseCurrency)),
-      baseCurrency,
-    );
+    return sum(rows.map((r) => money(r.outstanding.minor, baseCurrency)), baseCurrency);
   }, [documents, payments, partyId, baseCurrency]);
 }
 
@@ -246,10 +195,10 @@ export function usePartyHistory(partyId: string | undefined) {
     const docs = documents.filter((d) => d.partyId === partyId);
     return {
       quotes: docs.filter((d) => d.kind === 'quote'),
-      orders: docs.filter((d) => d.kind === 'salesOrder' || d.kind === 'purchaseOrder'),
-      invoices: docs.filter((d) => d.kind === 'invoice' || d.kind === 'purchaseBill'),
-      deliveries: docs.filter((d) => d.kind === 'delivery' || d.kind === 'goodsReceipt'),
-      returns: docs.filter((d) => d.kind === 'salesReturn' || d.kind === 'purchaseReturn'),
+      orders: docs.filter((d) => d.kind === 'salesOrder'),
+      invoices: docs.filter((d) => d.kind === 'invoice'),
+      deliveries: docs.filter((d) => d.kind === 'delivery'),
+      returns: docs.filter((d) => d.kind === 'salesReturn'),
       payments: payments.filter((p) => p.partyId === partyId),
       all: docs,
     };
@@ -260,8 +209,68 @@ export function useSalesDocuments() {
   return useDocuments(SALES_KINDS);
 }
 
-export function usePurchaseDocuments() {
-  return useDocuments(PURCHASE_KINDS);
+/* ------------------------------------------------------------------ */
+/* GST compliance views                                                */
+/* ------------------------------------------------------------------ */
+
+/** The e-invoice queue, grouped the way the register screen shows it. */
+export function useEInvoiceQueue() {
+  const documents = useDocuments(['invoice', 'salesReturn']);
+  return useMemo(() => {
+    const statusOf = (d: BusinessDocument) => d.compliance?.eInvoice?.status ?? 'notApplicable';
+    return {
+      pending: documents.filter((d) => statusOf(d) === 'pending'),
+      generated: documents.filter((d) => statusOf(d) === 'generated'),
+      failed: documents.filter((d) => statusOf(d) === 'failed'),
+      cancelled: documents.filter((d) => statusOf(d) === 'cancelled'),
+      notApplicable: documents.filter((d) => statusOf(d) === 'notApplicable'),
+      all: documents,
+    };
+  }, [documents]);
+}
+
+/** The e-way bill queue. Expiry is derived on read, never stored stale. */
+export function useEWayBillQueue() {
+  const documents = useDocuments(SALES_KINDS);
+  return useMemo(() => {
+    const now = nowISO();
+    const withBill = documents.filter((d) => d.compliance?.eWayBill?.ewbNo);
+    const live = withBill.filter(
+      (d) =>
+        d.compliance!.eWayBill!.status === 'generated' &&
+        !isExpired(d.compliance!.eWayBill!.validUpto, now),
+    );
+    return {
+      active: live,
+      expiringToday: live.filter(
+        (d) => (d.compliance!.eWayBill!.validUpto ?? '').slice(0, 10) === now.slice(0, 10),
+      ),
+      expired: withBill.filter(
+        (d) =>
+          d.compliance!.eWayBill!.status === 'generated' &&
+          isExpired(d.compliance!.eWayBill!.validUpto, now),
+      ),
+      cancelled: withBill.filter((d) => d.compliance!.eWayBill!.status === 'cancelled'),
+      all: withBill,
+    };
+  }, [documents]);
+}
+
+/** Headline counts for the GST hub and the Home dashboard. */
+export function useComplianceSummary() {
+  const eInvoices = useEInvoiceQueue();
+  const eWayBills = useEWayBillQueue();
+  return useMemo(
+    () => ({
+      registered: eInvoices.generated.length,
+      failed: eInvoices.failed.length,
+      cancelled: eInvoices.cancelled.length,
+      ewbActive: eWayBills.active.length,
+      ewbExpiringToday: eWayBills.expiringToday.length,
+      ewbExpired: eWayBills.expired.length,
+    }),
+    [eInvoices, eWayBills],
+  );
 }
 
 /** Total of a money list guarded against an empty array. */

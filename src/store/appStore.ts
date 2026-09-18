@@ -9,23 +9,22 @@ import {
   Branch,
   BusinessDocument,
   Company,
-  DeviceSession,
+  ComplianceInfo,
   DocStatus,
   DocumentKind,
   DocumentLine,
-  ExchangeRate,
-  Expense,
-  ExpenseCategory,
+  EInvoiceCancelReason,
+  EwbPartB,
   Integration,
+  IrpError,
   Item,
   NotificationKind,
   NumberingSeries,
   Party,
   Payment,
   PaymentAccount,
-  StockMovement,
-  SyncQueueEntry,
   TaxCategory,
+  Transporter,
   User,
 } from '@/types';
 import { Money, zero } from '@/lib/money';
@@ -34,6 +33,13 @@ import { uid } from '@/lib/id';
 import { calculateDocument } from '@/domain/lineCalc';
 import { formatNumber } from '@/domain/numbering';
 import { initialStatus, isFinalized } from '@/domain/documentStates';
+import { eInvoiceApplicability } from '@/domain/gst/applicability';
+import { buildEInvoicePayload } from '@/domain/gst/einvoice/buildPayload';
+import { IrpAckRecord, createMockIrp } from '@/domain/gst/einvoice/mockIrp';
+import { ewbApplicability } from '@/domain/gst/eway/applicability';
+import { buildPartA } from '@/domain/gst/eway/buildPartA';
+import { EwbRecord, createMockEwb } from '@/domain/gst/eway/mockEwb';
+import { CargoType, isExpired } from '@/domain/gst/eway/validity';
 import { INTEGRATIONS } from '@/data/masters';
 import {
   ACCOUNT_ID,
@@ -41,48 +47,38 @@ import {
   PRIMARY_COMPANY_ID,
   seedBranches,
   seedCompanies,
-  seedDevices,
-  seedExchangeRates,
-  seedExpenseCategories,
   seedItems,
   seedNumberingSeries,
   seedParties,
   seedPaymentAccounts,
   seedTaxCategories,
+  seedTransporters,
   seedUsers,
 } from '@/data/seed';
 import {
   seedAttachments,
   seedAudit,
   seedDocuments,
-  seedExpenses,
   seedNotifications,
   seedPayments,
-  seedStockMovements,
-  seedSyncQueue,
 } from '@/data/seedTransactions';
 
 export type AppData = {
   accountId: string;
   users: User[];
-  devices: DeviceSession[];
   companies: Company[];
   branches: Branch[];
   parties: Party[];
   items: Item[];
   taxCategories: TaxCategory[];
-  expenseCategories: ExpenseCategory[];
   paymentAccounts: PaymentAccount[];
-  exchangeRates: ExchangeRate[];
+  transporters: Transporter[];
   numberingSeries: NumberingSeries[];
   documents: BusinessDocument[];
   payments: Payment[];
-  expenses: Expense[];
-  stockMovements: StockMovement[];
   attachments: Attachment[];
   notifications: AppNotification[];
   auditEvents: AuditEvent[];
-  syncQueue: SyncQueueEntry[];
   integrations: Integration[];
 };
 
@@ -101,43 +97,34 @@ export function buildSeedData(): AppData {
   const items = seedItems();
   const taxCategories = seedTaxCategories();
   const series = seedNumberingSeries();
-  const documents = seedDocuments({ items, parties, taxCategories, series });
+  const documents = seedDocuments({ items, parties, taxCategories, series, companies });
   const payments = seedPayments(documents, series);
-  const expenses = seedExpenses(series);
-  const stockMovements = seedStockMovements(items, documents);
 
   // Advance each series past the numbers the seed data already consumed.
   const advanced = series.map((s) => {
     const used =
       s.kind === 'payment'
         ? payments.filter((p) => p.companyId === s.companyId).length
-        : s.kind === 'expense'
-          ? expenses.filter((e) => e.companyId === s.companyId).length
-          : documents.filter((d) => d.companyId === s.companyId && d.kind === s.kind).length;
+        : documents.filter((d) => d.companyId === s.companyId && d.kind === s.kind).length;
     return { ...s, nextNumber: used + 1 };
   });
 
   return {
     accountId: ACCOUNT_ID,
     users,
-    devices: seedDevices(),
     companies,
     branches,
     parties,
     items,
     taxCategories,
-    expenseCategories: seedExpenseCategories(),
     paymentAccounts: seedPaymentAccounts(),
-    exchangeRates: seedExchangeRates(),
+    transporters: seedTransporters(),
     numberingSeries: advanced,
     documents,
     payments,
-    expenses,
-    stockMovements,
     attachments: seedAttachments(),
     notifications: seedNotifications(documents, payments),
     auditEvents: seedAudit(documents, payments),
-    syncQueue: seedSyncQueue(),
     integrations: INTEGRATIONS.map((i) => ({ ...i })),
   };
 }
@@ -149,7 +136,6 @@ type Actions = {
   signUp: (name: string, email: string) => void;
   signOut: () => void;
   completeOnboarding: () => void;
-  revokeDevice: (id: string) => void;
 
   /* company */
   setActiveCompany: (companyId: string) => void;
@@ -168,12 +154,10 @@ type Actions = {
   removeItem: (id: string) => void;
   saveTaxCategory: (cat: TaxCategory) => void;
   removeTaxCategory: (id: string) => void;
-  saveExpenseCategory: (cat: ExpenseCategory) => void;
-  removeExpenseCategory: (id: string) => void;
   savePaymentAccount: (acc: PaymentAccount) => void;
   removePaymentAccount: (id: string) => void;
-  saveExchangeRate: (rate: ExchangeRate) => void;
-  removeExchangeRate: (id: string) => void;
+  saveTransporter: (t: Transporter) => string;
+  removeTransporter: (id: string) => void;
   saveNumberingSeries: (series: NumberingSeries) => void;
 
   /* documents */
@@ -187,17 +171,20 @@ type Actions = {
   duplicateDocument: (id: string) => string;
   convertDocument: (id: string, target: DocumentKind) => string;
 
+  /* GST compliance */
+  generateEInvoice: (documentId: string) => ComplianceResult;
+  cancelEInvoice: (documentId: string, reasonCode: EInvoiceCancelReason, remarks?: string) => ComplianceResult;
+  generateEWayBill: (
+    documentId: string,
+    input: { partB: EwbPartB; distanceKm: number; cargo: CargoType },
+  ) => ComplianceResult;
+  updateEwbVehicle: (documentId: string, partB: EwbPartB) => ComplianceResult;
+  extendEWayBill: (documentId: string, remainingDistanceKm: number) => ComplianceResult;
+  cancelEWayBill: (documentId: string, reason: string) => ComplianceResult;
+
   /* payments */
   savePayment: (payment: Payment) => string;
   removePayment: (id: string) => void;
-
-  /* expenses */
-  saveExpense: (expense: Expense) => string;
-  removeExpense: (id: string) => void;
-
-  /* inventory */
-  addStockMovement: (m: Omit<StockMovement, 'id' | 'createdAt' | 'createdBy'>) => void;
-  transferStock: (args: { itemId: string; fromBranchId: string; toBranchId: string; quantity: number; date: string; notes?: string }) => void;
 
   /* supporting */
   addAttachment: (a: Omit<Attachment, 'id' | 'uploadedAt'>) => string;
@@ -207,8 +194,6 @@ type Actions = {
   markAllNotificationsRead: () => void;
   clearNotifications: () => void;
   toggleIntegration: (id: string) => void;
-  retrySync: (id: string) => void;
-  clearSyncQueue: () => void;
 
   /* demo control */
   resetDemoData: () => void;
@@ -216,14 +201,15 @@ type Actions = {
   setHydrated: (v: boolean) => void;
 };
 
+/** What every compliance action hands back: success, or the portal's reasons. */
+export type ComplianceResult = { ok: boolean; errors?: IrpError[] };
+
 export type NewDocumentInput = {
   kind: DocumentKind;
   partyId: string;
   date: string;
   dueDate?: string;
   validUntil?: string;
-  currency: string;
-  exchangeRate: number;
   lines: DocumentLine[];
   documentDiscountMode?: 'percent' | 'amount';
   documentDiscountValue?: number;
@@ -232,8 +218,8 @@ export type NewDocumentInput = {
   notes?: string;
   terms?: string;
   reference?: string;
-  supplierDocNumber?: string;
   placeOfSupplyStateCode?: string;
+  reverseCharge?: boolean;
   branchId?: string;
   attachmentIds?: string[];
   sourceDocumentId?: string;
@@ -314,9 +300,7 @@ export const useAppStore = create<AppState>()(
         const company = companyOf(doc.companyId);
         return calculateDocument({
           lines: doc.lines,
-          currency: doc.currency,
-          baseCurrency: company?.baseCurrency ?? 'INR',
-          exchangeRate: doc.exchangeRate,
+          currency: company?.baseCurrency ?? 'INR',
           documentDiscountMode: doc.documentDiscountMode,
           documentDiscountValue: doc.documentDiscountValue,
           charges: doc.charges,
@@ -341,44 +325,61 @@ export const useAppStore = create<AppState>()(
         return number;
       };
 
-      /** Post stock movements for a document that has just been finalized. */
-      const postStockFor = (doc: BusinessDocument) => {
+      const itemsOf = (companyId: string) => get().items.filter((i) => i.companyId === companyId);
+
+      /** Everything a compliance action needs about one document. */
+      const complianceContextFor = (documentId: string) => {
         const s = get();
-        const type =
-          doc.kind === 'invoice' || doc.kind === 'delivery'
-            ? 'salesIssue'
-            : doc.kind === 'goodsReceipt' || doc.kind === 'purchaseBill'
-              ? 'purchaseReceipt'
-              : doc.kind === 'salesReturn'
-                ? 'salesReturn'
-                : doc.kind === 'purchaseReturn'
-                  ? 'purchaseReturn'
-                  : null;
-        if (!type) return;
+        const doc = s.documents.find((d) => d.id === documentId);
+        if (!doc) return null;
+        const company = companyOf(doc.companyId);
+        const party = s.parties.find((p) => p.id === doc.partyId);
+        if (!company || !party) return null;
+        return { doc, company, party };
+      };
 
-        const already = s.stockMovements.some((m) => m.referenceId === doc.id);
-        if (already) return;
+      const patchCompliance = (documentId: string, patch: ComplianceInfo) => {
+        set({
+          documents: get().documents.map((d) =>
+            d.id === documentId
+              ? { ...d, compliance: { ...d.compliance, ...patch }, updatedAt: nowISO() }
+              : d,
+          ),
+        });
+      };
 
-        const moves: StockMovement[] = [];
-        doc.lines.forEach((line) => {
-          const item = s.items.find((i) => i.id === line.itemId);
-          if (!item || !item.trackInventory) return;
-          moves.push({
-            id: uid('stk'),
-            companyId: doc.companyId,
-            branchId: doc.branchId,
-            itemId: item.id,
-            type,
-            quantity: line.quantity,
-            unitCost: type === 'purchaseReceipt' ? line.unitPrice : item.purchasePrice,
-            date: doc.date,
-            referenceId: doc.id,
-            referenceNumber: doc.number,
-            createdBy: s.session.userId ?? CURRENT_USER_ID,
-            createdAt: nowISO(),
+      /**
+       * The portals are built fresh on every call from the documents in the
+       * store, so their registers can never drift from what the app holds —
+       * including across a reload from AsyncStorage.
+       */
+      const irp = () => {
+        const activeIrns = new Map<string, IrpAckRecord>();
+        get().documents.forEach((d) => {
+          const record = d.compliance?.eInvoice;
+          if (!record?.irn || !record.ackDate) return;
+          activeIrns.set(record.irn, {
+            ackDate: record.ackDate,
+            documentId: d.id,
+            cancelled: record.status === 'cancelled',
           });
         });
-        if (moves.length) set({ stockMovements: [...get().stockMovements, ...moves] });
+        return createMockIrp({ now: () => new Date(), activeIrns });
+      };
+
+      const ewb = () => {
+        const activeBills = new Map<string, EwbRecord>();
+        get().documents.forEach((d) => {
+          const record = d.compliance?.eWayBill;
+          if (!record?.ewbNo || !record.ewbDate || !record.validUpto) return;
+          activeBills.set(record.ewbNo, {
+            ewbDate: record.ewbDate,
+            validUpto: record.validUpto,
+            documentId: d.id,
+            cancelled: record.status === 'cancelled',
+          });
+        });
+        return createMockEwb({ now: () => new Date(), activeBills });
       };
 
       const seed = buildSeedData();
@@ -432,7 +433,6 @@ export const useAppStore = create<AppState>()(
         signOut: () => set({ session: emptySession }),
         completeOnboarding: () =>
           set({ session: { ...get().session, onboardingComplete: true } }),
-        revokeDevice: (id) => set({ devices: get().devices.filter((d) => d.id !== id) }),
 
         /* ------------------------------------------------------------ */
         /* company                                                      */
@@ -459,13 +459,11 @@ export const useAppStore = create<AppState>()(
             isPrimary: true,
           };
           const kinds: NumberingSeries['kind'][] = [
-            'invoice', 'quote', 'salesOrder', 'delivery', 'salesReturn',
-            'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense',
+            'invoice', 'quote', 'salesOrder', 'delivery', 'salesReturn', 'payment',
           ];
           const prefixes: Record<string, string> = {
             invoice: 'INV', quote: 'QT', salesOrder: 'SO', delivery: 'DN', salesReturn: 'CRN',
-            purchaseOrder: 'PO', goodsReceipt: 'GRN', purchaseBill: 'BILL', purchaseReturn: 'DRN',
-            payment: 'PAY', expense: 'EXP',
+            payment: 'PAY',
           };
           const series: NumberingSeries[] = kinds.map((kind) => ({
             id: uid('series'),
@@ -491,7 +489,6 @@ export const useAppStore = create<AppState>()(
             companyId: id,
             name: 'Cash in hand',
             type: 'cash',
-            currency: partial.baseCurrency,
             openingBalance: zero(partial.baseCurrency),
             isDefault: true,
           };
@@ -535,33 +532,17 @@ export const useAppStore = create<AppState>()(
           set({
             parties: exists ? get().parties.map((p) => (p.id === party.id ? party : p)) : [...get().parties, party],
           });
-          audit(exists ? 'updated' : 'created', party.kind, party.id, party.name);
+          audit(exists ? 'updated' : 'created', 'customer', party.id, party.name);
           return party.id;
         },
         removeParty: (id) => {
           const p = get().parties.find((x) => x.id === id);
           set({ parties: get().parties.filter((x) => x.id !== id) });
-          if (p) audit('deleted', p.kind, id, p.name);
+          if (p) audit('deleted', 'customer', id, p.name);
         },
         saveItem: (item) => {
           const exists = get().items.some((i) => i.id === item.id);
           set({ items: exists ? get().items.map((i) => (i.id === item.id ? item : i)) : [...get().items, item] });
-          if (!exists && item.trackInventory && item.openingStock > 0) {
-            const m: StockMovement = {
-              id: uid('stk'),
-              companyId: item.companyId,
-              branchId: get().activeBranchId ?? 'brn_mum',
-              itemId: item.id,
-              type: 'opening',
-              quantity: item.openingStock,
-              unitCost: item.purchasePrice,
-              date: today(),
-              notes: 'Opening stock',
-              createdBy: get().session.userId ?? CURRENT_USER_ID,
-              createdAt: nowISO(),
-            };
-            set({ stockMovements: [...get().stockMovements, m] });
-          }
           audit(exists ? 'updated' : 'created', 'item', item.id, item.name);
           return item.id;
         },
@@ -580,15 +561,21 @@ export const useAppStore = create<AppState>()(
           audit(exists ? 'updated' : 'created', 'taxCategory', cat.id, cat.name);
         },
         removeTaxCategory: (id) => set({ taxCategories: get().taxCategories.filter((c) => c.id !== id) }),
-        saveExpenseCategory: (cat) => {
-          const exists = get().expenseCategories.some((c) => c.id === cat.id);
+        saveTransporter: (t) => {
+          const exists = get().transporters.some((x) => x.id === t.id);
           set({
-            expenseCategories: exists
-              ? get().expenseCategories.map((c) => (c.id === cat.id ? cat : c))
-              : [...get().expenseCategories, cat],
+            transporters: exists
+              ? get().transporters.map((x) => (x.id === t.id ? t : x))
+              : [...get().transporters, t],
           });
+          audit(exists ? 'updated' : 'created', 'transporter', t.id, t.name);
+          return t.id;
         },
-        removeExpenseCategory: (id) => set({ expenseCategories: get().expenseCategories.filter((c) => c.id !== id) }),
+        removeTransporter: (id) => {
+          const t = get().transporters.find((x) => x.id === id);
+          set({ transporters: get().transporters.filter((x) => x.id !== id) });
+          if (t) audit('deleted', 'transporter', id, t.name);
+        },
         savePaymentAccount: (acc) => {
           const exists = get().paymentAccounts.some((a) => a.id === acc.id);
           const next = exists
@@ -601,16 +588,6 @@ export const useAppStore = create<AppState>()(
           });
         },
         removePaymentAccount: (id) => set({ paymentAccounts: get().paymentAccounts.filter((a) => a.id !== id) }),
-        saveExchangeRate: (rate) => {
-          const exists = get().exchangeRates.some((r) => r.id === rate.id);
-          set({
-            exchangeRates: exists
-              ? get().exchangeRates.map((r) => (r.id === rate.id ? rate : r))
-              : [...get().exchangeRates, rate],
-          });
-          audit(exists ? 'updated' : 'created', 'exchangeRate', rate.id, `${rate.from}/${rate.to}`);
-        },
-        removeExchangeRate: (id) => set({ exchangeRates: get().exchangeRates.filter((r) => r.id !== id) }),
         saveNumberingSeries: (series) => {
           set({ numberingSeries: get().numberingSeries.map((s) => (s.id === series.id ? series : s)) });
           audit('updated', 'numberingSeries', series.id, series.prefix);
@@ -633,6 +610,7 @@ export const useAppStore = create<AppState>()(
           const finalized = isFinalized(status);
           const number = finalized ? consumeSeriesNumber(draft.kind, draft.date) : `${draft.kind.toUpperCase()}-DRAFT`;
           const party = s.parties.find((p) => p.id === draft.partyId);
+          const currency = companyOf(s.activeCompanyId)?.baseCurrency ?? 'INR';
 
           const doc: BusinessDocument = {
             id: uid(draft.kind),
@@ -646,30 +624,30 @@ export const useAppStore = create<AppState>()(
             dueDate: draft.dueDate,
             validUntil: draft.validUntil,
             reference: draft.reference,
-            supplierDocNumber: draft.supplierDocNumber,
-            currency: draft.currency,
-            exchangeRate: draft.exchangeRate,
             lines: draft.lines,
             documentDiscountMode: draft.documentDiscountMode ?? 'percent',
             documentDiscountValue: draft.documentDiscountValue ?? 0,
-            charges: draft.charges ?? zero(draft.currency),
-            applyRoundOff: draft.applyRoundOff ?? draft.currency === 'INR',
-            placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress.stateCode,
+            charges: draft.charges ?? zero(currency),
+            applyRoundOff: draft.applyRoundOff ?? true,
+            placeOfSupplyStateCode:
+              draft.placeOfSupplyStateCode ??
+              party?.shippingAddress?.stateCode ??
+              party?.billingAddress.stateCode,
+            reverseCharge: draft.reverseCharge,
             notes: draft.notes,
             terms: draft.terms,
             attachmentIds: draft.attachmentIds ?? [],
             sourceDocumentId: draft.sourceDocumentId,
             totals: {
-              subtotal: zero(draft.currency),
-              lineDiscount: zero(draft.currency),
-              documentDiscount: zero(draft.currency),
-              taxableAmount: zero(draft.currency),
+              subtotal: zero(currency),
+              lineDiscount: zero(currency),
+              documentDiscount: zero(currency),
+              taxableAmount: zero(currency),
               taxLines: [],
-              totalTax: zero(draft.currency),
-              charges: zero(draft.currency),
-              roundOff: zero(draft.currency),
-              grandTotal: zero(draft.currency),
-              grandTotalBase: zero(draft.currency),
+              totalTax: zero(currency),
+              charges: zero(currency),
+              roundOff: zero(currency),
+              grandTotal: zero(currency),
             },
             createdBy: s.session.userId ?? CURRENT_USER_ID,
             createdAt: nowISO(),
@@ -678,7 +656,6 @@ export const useAppStore = create<AppState>()(
           doc.totals = computeTotals(doc);
 
           set({ documents: [doc, ...get().documents] });
-          if (finalized) postStockFor(doc);
           audit(finalized ? 'finalized' : 'created', draft.kind, doc.id, doc.number);
           return doc.id;
         },
@@ -708,7 +685,6 @@ export const useAppStore = create<AppState>()(
           }
           const updated = { ...existing, status, number, updatedAt: nowISO() };
           set({ documents: get().documents.map((d) => (d.id === id ? updated : d)) });
-          if (isFinalized(status)) postStockFor(updated);
           audit(`marked ${status}`, existing.kind, id, number);
 
           if (existing.kind === 'invoice' && status === 'sent') {
@@ -720,26 +696,24 @@ export const useAppStore = create<AppState>()(
           const existing = get().documents.find((d) => d.id === id);
           if (!existing) return;
           const target: DocStatus =
-            existing.kind === 'salesReturn' || existing.kind === 'purchaseReturn'
+            existing.kind === 'salesReturn'
               ? 'approved'
               : existing.kind === 'quote'
                 ? 'sent'
-                : existing.kind === 'salesOrder' || existing.kind === 'purchaseOrder'
+                : existing.kind === 'salesOrder'
                   ? 'confirmed'
                   : existing.kind === 'delivery'
                     ? 'delivered'
-                    : existing.kind === 'goodsReceipt'
-                      ? 'received'
-                      : 'issued';
+                    : 'issued';
           get().setDocumentStatus(id, target);
         },
 
         removeDocument: (id) => {
           const d = get().documents.find((x) => x.id === id);
-          set({
-            documents: get().documents.filter((x) => x.id !== id),
-            stockMovements: get().stockMovements.filter((m) => m.referenceId !== id),
-          });
+          // A registered invoice is the portal's record as much as ours: the
+          // IRN has to be cancelled before the document can go.
+          if (d?.compliance?.eInvoice?.status === 'generated') return;
+          set({ documents: get().documents.filter((x) => x.id !== id) });
           if (d) audit('deleted', d.kind, id, d.number);
         },
 
@@ -751,8 +725,6 @@ export const useAppStore = create<AppState>()(
             partyId: src.partyId,
             date: today(),
             dueDate: src.dueDate,
-            currency: src.currency,
-            exchangeRate: src.exchangeRate,
             lines: src.lines.map((l) => ({ ...l, id: uid('ln') })),
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
@@ -775,11 +747,9 @@ export const useAppStore = create<AppState>()(
             partyId: src.partyId,
             date: today(),
             dueDate:
-              target === 'invoice' || target === 'purchaseBill'
+              target === 'invoice'
                 ? new Date(Date.now() + (party?.paymentTermsDays ?? 30) * 86400000).toISOString().slice(0, 10)
                 : undefined,
-            currency: src.currency,
-            exchangeRate: src.exchangeRate,
             lines: src.lines.map((l) => ({ ...l, id: uid('ln') })),
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
@@ -831,7 +801,7 @@ export const useAppStore = create<AppState>()(
           }
 
           audit(exists ? 'updated payment' : 'recorded payment', 'payment', withNumber.id, withNumber.number);
-          if (!exists && withNumber.direction === 'received') {
+          if (!exists) {
             notify('paymentReceived', 'Payment recorded', `${withNumber.number} recorded successfully.`, 'payment', withNumber.id);
           }
           return withNumber.id;
@@ -859,64 +829,174 @@ export const useAppStore = create<AppState>()(
         },
 
         /* ------------------------------------------------------------ */
-        /* expenses                                                     */
+        /* GST compliance                                               */
         /* ------------------------------------------------------------ */
-        saveExpense: (expense) => {
-          const exists = get().expenses.some((e) => e.id === expense.id);
-          const withNumber =
-            expense.number && expense.number !== ''
-              ? expense
-              : { ...expense, number: consumeSeriesNumber('expense', expense.date) };
-          set({
-            expenses: exists
-              ? get().expenses.map((e) => (e.id === expense.id ? withNumber : e))
-              : [withNumber, ...get().expenses],
+        generateEInvoice: (documentId) => {
+          const ctx = complianceContextFor(documentId);
+          if (!ctx) return { ok: false, errors: [{ code: '0', message: 'Document not found' }] };
+          const { doc, company, party } = ctx;
+
+          const applicability = eInvoiceApplicability({ company, party, doc });
+          if (!applicability.applicable) {
+            patchCompliance(documentId, {
+              eInvoice: { status: 'notApplicable', errors: [{ code: '0', message: applicability.reason }] },
+            });
+            return { ok: false, errors: [{ code: '0', message: applicability.reason }] };
+          }
+
+          const payload = buildEInvoicePayload({ company, party, doc, items: itemsOf(doc.companyId) });
+          const result = irp().generate({ payload, documentId });
+
+          if (!result.ok) {
+            patchCompliance(documentId, { eInvoice: { status: 'failed', errors: result.errors } });
+            audit('e-invoice rejected', doc.kind, doc.id, doc.number, {
+              after: result.errors.map((e) => `${e.code} ${e.message}`).join('; '),
+            });
+            notify('eInvoice', 'IRN not generated', result.errors[0].message, doc.kind, doc.id);
+            return { ok: false, errors: result.errors };
+          }
+
+          patchCompliance(documentId, {
+            eInvoice: {
+              status: 'generated',
+              irn: result.irn,
+              ackNo: result.ackNo,
+              ackDate: result.ackDate,
+              signedQrPayload: result.signedQrCode,
+              generatedAt: nowISO(),
+            },
           });
-          audit(exists ? 'updated' : 'created', 'expense', withNumber.id, withNumber.number);
-          return withNumber.id;
-        },
-        removeExpense: (id) => {
-          const e = get().expenses.find((x) => x.id === id);
-          set({ expenses: get().expenses.filter((x) => x.id !== id) });
-          if (e) audit('deleted', 'expense', id, e.number);
+          audit('e-invoice generated', doc.kind, doc.id, doc.number, { after: result.irn });
+          notify('eInvoice', 'IRN generated', `${doc.number} is registered with the IRP.`, doc.kind, doc.id);
+          return { ok: true };
         },
 
-        /* ------------------------------------------------------------ */
-        /* inventory                                                    */
-        /* ------------------------------------------------------------ */
-        addStockMovement: (m) => {
-          const movement: StockMovement = {
-            ...m,
-            id: uid('stk'),
-            createdBy: get().session.userId ?? CURRENT_USER_ID,
-            createdAt: nowISO(),
-          };
-          set({ stockMovements: [...get().stockMovements, movement] });
-          const item = get().items.find((i) => i.id === m.itemId);
-          audit('stock movement', 'inventory', movement.id, item?.name ?? m.itemId);
+        cancelEInvoice: (documentId, reasonCode, remarks) => {
+          const ctx = complianceContextFor(documentId);
+          const irn = ctx?.doc.compliance?.eInvoice?.irn;
+          if (!ctx || !irn) {
+            return { ok: false, errors: [{ code: '0', message: 'This document has no IRN to cancel' }] };
+          }
+
+          const result = irp().cancel({ irn, reasonCode, remarks });
+          if (!result.ok) return { ok: false, errors: result.errors };
+
+          patchCompliance(documentId, {
+            eInvoice: {
+              ...ctx.doc.compliance!.eInvoice!,
+              status: 'cancelled',
+              cancelledAt: result.cancelledAt,
+              cancelReasonCode: reasonCode,
+              cancelRemarks: remarks,
+              errors: undefined,
+            },
+          });
+          // A cancelled invoice cannot carry a live e-way bill.
+          const ewb = ctx.doc.compliance?.eWayBill;
+          if (ewb?.status === 'generated') get().cancelEWayBill(documentId, 'Invoice cancelled');
+
+          audit('e-invoice cancelled', ctx.doc.kind, documentId, ctx.doc.number);
+          notify('eInvoice', 'IRN cancelled', `${ctx.doc.number} was withdrawn from the IRP.`, ctx.doc.kind, documentId);
+          return { ok: true };
         },
 
-        transferStock: ({ itemId, fromBranchId, toBranchId, quantity, date, notes }) => {
-          const s = get();
-          const item = s.items.find((i) => i.id === itemId);
-          const base: Omit<StockMovement, 'id' | 'type' | 'branchId'> = {
-            companyId: s.activeCompanyId,
-            itemId,
-            quantity,
-            unitCost: item?.purchasePrice ?? zero('INR'),
-            date,
-            notes,
-            createdBy: s.session.userId ?? CURRENT_USER_ID,
-            createdAt: nowISO(),
-          };
-          set({
-            stockMovements: [
-              ...s.stockMovements,
-              { ...base, id: uid('stk'), type: 'transferOut', branchId: fromBranchId },
-              { ...base, id: uid('stk'), type: 'transferIn', branchId: toBranchId },
-            ],
+        generateEWayBill: (documentId, input) => {
+          const ctx = complianceContextFor(documentId);
+          if (!ctx) return { ok: false, errors: [{ code: '0', message: 'Document not found' }] };
+          const { doc, company, party } = ctx;
+          const items = itemsOf(doc.companyId);
+
+          const applicability = ewbApplicability({ company, party, doc, items });
+          if (!applicability.applicable) {
+            patchCompliance(documentId, {
+              eWayBill: { status: 'notApplicable', errors: [{ code: '0', message: applicability.reason }] },
+            });
+            return { ok: false, errors: [{ code: '0', message: applicability.reason }] };
+          }
+
+          const partA = buildPartA({ company, party, doc, items });
+          const result = ewb().generate({
+            partA,
+            partB: input.partB,
+            distanceKm: input.distanceKm,
+            cargo: input.cargo,
+            documentId,
           });
-          audit('stock transfer', 'inventory', itemId, item?.name ?? itemId);
+
+          if (!result.ok) {
+            patchCompliance(documentId, {
+              eWayBill: { status: 'failed', partA, partB: input.partB, errors: result.errors },
+            });
+            return { ok: false, errors: result.errors };
+          }
+
+          patchCompliance(documentId, {
+            eWayBill: {
+              status: 'generated',
+              ewbNo: result.ewbNo,
+              ewbDate: result.ewbDate,
+              validUpto: result.validUpto,
+              distanceKm: input.distanceKm,
+              cargo: input.cargo,
+              partA,
+              partB: input.partB,
+              generatedAt: nowISO(),
+            },
+          });
+          audit('e-way bill generated', doc.kind, doc.id, doc.number, { after: result.ewbNo });
+          notify('eWayBill', 'E-way bill generated', `${result.ewbNo} is valid until ${result.validUpto.slice(0, 10)}.`, doc.kind, doc.id);
+          return { ok: true };
+        },
+
+        updateEwbVehicle: (documentId, partB) => {
+          const ctx = complianceContextFor(documentId);
+          const record = ctx?.doc.compliance?.eWayBill;
+          if (!ctx || !record?.ewbNo) {
+            return { ok: false, errors: [{ code: '0', message: 'No e-way bill on this document' }] };
+          }
+          const result = ewb().updateVehicle({ ewbNo: record.ewbNo, partB });
+          if (!result.ok) return { ok: false, errors: result.errors };
+
+          patchCompliance(documentId, { eWayBill: { ...record, partB, errors: undefined } });
+          audit('e-way bill vehicle updated', ctx.doc.kind, documentId, record.ewbNo);
+          return { ok: true };
+        },
+
+        extendEWayBill: (documentId, remainingDistanceKm) => {
+          const ctx = complianceContextFor(documentId);
+          const record = ctx?.doc.compliance?.eWayBill;
+          if (!ctx || !record?.ewbNo) {
+            return { ok: false, errors: [{ code: '0', message: 'No e-way bill on this document' }] };
+          }
+          const result = ewb().extend({
+            ewbNo: record.ewbNo,
+            remainingDistanceKm,
+            cargo: record.cargo ?? 'regular',
+          });
+          if (!result.ok) return { ok: false, errors: result.errors };
+
+          patchCompliance(documentId, {
+            eWayBill: { ...record, status: 'generated', validUpto: result.validUpto, errors: undefined },
+          });
+          audit('e-way bill extended', ctx.doc.kind, documentId, record.ewbNo);
+          return { ok: true };
+        },
+
+        cancelEWayBill: (documentId, reason) => {
+          const ctx = complianceContextFor(documentId);
+          const record = ctx?.doc.compliance?.eWayBill;
+          if (!ctx || !record?.ewbNo) {
+            return { ok: false, errors: [{ code: '0', message: 'No e-way bill on this document' }] };
+          }
+          const result = ewb().cancel({ ewbNo: record.ewbNo, reason });
+          if (!result.ok) return { ok: false, errors: result.errors };
+
+          patchCompliance(documentId, {
+            eWayBill: { ...record, status: 'cancelled', cancelledAt: result.cancelledAt, cancelReason: reason },
+          });
+          audit('e-way bill cancelled', ctx.doc.kind, documentId, record.ewbNo);
+          notify('eWayBill', 'E-way bill cancelled', `${record.ewbNo} was cancelled.`, ctx.doc.kind, documentId);
+          return { ok: true };
         },
 
         /* ------------------------------------------------------------ */
@@ -939,9 +1019,6 @@ export const useAppStore = create<AppState>()(
           set({
             integrations: get().integrations.map((i) => (i.id === id ? { ...i, connected: !i.connected } : i)),
           }),
-        retrySync: (id) =>
-          set({ syncQueue: get().syncQueue.filter((q) => q.id !== id) }),
-        clearSyncQueue: () => set({ syncQueue: [] }),
 
         /* ------------------------------------------------------------ */
         /* demo control                                                 */
@@ -957,7 +1034,9 @@ export const useAppStore = create<AppState>()(
       };
     },
     {
-      name: 'ebs.data.v1',
+      // Bumped from ebs.data.v1: a blob written by the full prototype would
+      // rehydrate slices this build no longer has.
+      name: 'ebs.gst.v1',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => {
         const { hydrated, ...rest } = s;

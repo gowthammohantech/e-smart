@@ -3,17 +3,15 @@ import {
   AuditEvent,
   AppNotification,
   BusinessDocument,
+  Company,
   DocStatus,
   DocumentKind,
   DocumentLine,
-  Expense,
   Item,
   NumberingSeries,
   Party,
   Payment,
   PaymentMethod,
-  StockMovement,
-  SyncQueueEntry,
   TaxCategory,
 } from '@/types';
 import { Money, fromMajor, money, zero } from '@/lib/money';
@@ -21,6 +19,12 @@ import { addDaysISO, nowISO, today } from '@/lib/date';
 import { calculateDocument } from '@/domain/lineCalc';
 import { formatNumber } from '@/domain/numbering';
 import { uid } from '@/lib/id';
+import { eInvoiceApplicability } from '@/domain/gst/applicability';
+import { buildEInvoicePayload } from '@/domain/gst/einvoice/buildPayload';
+import { IrpAckRecord, createMockIrp } from '@/domain/gst/einvoice/mockIrp';
+import { buildPartA } from '@/domain/gst/eway/buildPartA';
+import { ewbApplicability } from '@/domain/gst/eway/applicability';
+import { createMockEwb } from '@/domain/gst/eway/mockEwb';
 import { PRIMARY_COMPANY_ID, SECOND_COMPANY_ID, CURRENT_USER_ID } from './seed';
 import { makeRng } from './rng';
 
@@ -35,6 +39,7 @@ type BuildArgs = {
   parties: Party[];
   taxCategories: TaxCategory[];
   series: NumberingSeries[];
+  companies: Company[];
 };
 
 function seriesFor(series: NumberingSeries[], companyId: string, kind: NumberingSeries['kind']) {
@@ -67,17 +72,9 @@ function buildLines(items: Item[], count: number, rand: ReturnType<typeof makeRn
   });
 }
 
-function buildPurchaseLines(items: Item[], count: number, rand: ReturnType<typeof makeRng>): DocumentLine[] {
-  return buildLines(items.filter((i) => i.trackInventory), count, rand).map((l) => {
-    const item = items.find((i) => i.id === l.itemId)!;
-    return { ...l, unitPrice: item.purchasePrice, discountValue: 0, quantity: rand.int(10, 80) };
-  });
-}
-
 function totalsFor(
   lines: DocumentLine[],
   currency: string,
-  exchangeRate: number,
   taxCategories: TaxCategory[],
   homeState: string,
   placeOfSupply: string,
@@ -86,8 +83,6 @@ function totalsFor(
   return calculateDocument({
     lines,
     currency,
-    baseCurrency: 'INR',
-    exchangeRate,
     documentDiscountMode: 'percent',
     documentDiscountValue: 0,
     charges: zero(currency),
@@ -102,11 +97,11 @@ function totalsFor(
   });
 }
 
-export function seedDocuments({ items, parties, taxCategories, series }: BuildArgs): BusinessDocument[] {
+export function seedDocuments({ items, parties, taxCategories, series, companies }: BuildArgs): BusinessDocument[] {
   const docs: BusinessDocument[] = [];
-  const customers = parties.filter((p) => p.companyId === PRIMARY_COMPANY_ID && p.kind === 'customer');
-  const suppliers = parties.filter((p) => p.companyId === PRIMARY_COMPANY_ID && p.kind === 'supplier');
+  const customers = parties.filter((p) => p.companyId === PRIMARY_COMPANY_ID);
   const sellable = items.filter((i) => i.companyId === PRIMARY_COMPANY_ID && i.status === 'active');
+  const goods = sellable.filter((i) => i.type === 'goods');
   const counters: Record<string, number> = {};
 
   const nextNumber = (companyId: string, kind: NumberingSeries['kind'], date: string) => {
@@ -121,15 +116,13 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
     status: DocStatus,
     date: string,
     lines: DocumentLine[],
-    opts: { dueDays?: number; branchId?: string; companyId?: string; currency?: string; rate?: number; validDays?: number; sourceId?: string } = {},
+    opts: { dueDays?: number; branchId?: string; companyId?: string; validDays?: number; sourceId?: string } = {},
   ): BusinessDocument => {
     const companyId = opts.companyId ?? PRIMARY_COMPANY_ID;
-    const currency = opts.currency ?? party.currency;
-    const exchangeRate = opts.rate ?? (currency === 'INR' ? 1 : 23.85);
+    const currency = 'INR';
     const homeState = companyId === PRIMARY_COMPANY_ID ? '27' : '29';
     const pos = party.billingAddress.stateCode ?? homeState;
-    const totals = totalsFor(lines, currency, exchangeRate, taxCategories, homeState, pos, currency === 'INR');
-    const isB2B = !!party.taxId;
+    const totals = totalsFor(lines, currency, taxCategories, homeState, pos, true);
     return {
       id: uid(kind),
       companyId,
@@ -141,27 +134,19 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
       date,
       dueDate: opts.dueDays !== undefined ? addDaysISO(date, opts.dueDays) : undefined,
       validUntil: opts.validDays !== undefined ? addDaysISO(date, opts.validDays) : undefined,
-      currency,
-      exchangeRate,
       lines,
       documentDiscountMode: 'percent',
       documentDiscountValue: 0,
       charges: zero(currency),
-      applyRoundOff: currency === 'INR',
+      applyRoundOff: true,
       placeOfSupplyStateCode: pos,
       notes: undefined,
       terms: kind === 'invoice' ? 'Goods once sold will not be taken back. Interest @18% p.a. on overdue amounts.' : undefined,
       attachmentIds: [],
       sourceDocumentId: opts.sourceId,
       totals,
-      compliance:
-        kind === 'invoice' && isB2B
-          ? {
-              eInvoiceStatus: status === 'draft' ? 'pending' : 'generated',
-              irn: status === 'draft' ? undefined : `${rng.int(10, 99)}${uid('').replace(/[^a-z0-9]/g, '').slice(0, 30)}`.slice(0, 32),
-              ewayBillStatus: 'notApplicable',
-            }
-          : undefined,
+      // Compliance is filled in below by running the finished documents
+      // through the mock portals, rather than invented here.
       createdBy: CURRENT_USER_ID,
       createdAt: `${date}T09:${String(rng.int(10, 59)).padStart(2, '0')}:00.000Z`,
       updatedAt: `${date}T09:${String(rng.int(10, 59)).padStart(2, '0')}:00.000Z`,
@@ -218,14 +203,10 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
     );
   });
 
-  // Foreign-currency invoice (AED) to exercise FX.
-  const exportCustomer = parties.find((p) => p.id === 'cus_13')!;
+  // An SEZ supply, so the SEZ branch of the payload has a document.
+  const sezCustomer = parties.find((p) => p.id === 'cus_13')!;
   docs.push(
-    mkDoc('invoice', exportCustomer, 'issued', daysAgo(18), buildLines(sellable.filter((i) => i.trackInventory), 3, rng), {
-      dueDays: 30,
-      currency: 'AED',
-      rate: 23.85,
-    }),
+    mkDoc('invoice', sezCustomer, 'issued', daysAgo(6), buildLines(goods, 3, rng), { dueDays: 30 }),
   );
 
   // --- Quotations ---------------------------------------------------
@@ -247,50 +228,13 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
   // --- Delivery notes -------------------------------------------------
   (['draft', 'delivered', 'delivered', 'cancelled'] as DocStatus[]).forEach((status, i) => {
     const party = customers[(i + 5) % customers.length];
-    docs.push(mkDoc('delivery', party, status, daysAgo(i * 6 + 1), buildLines(sellable.filter((s) => s.trackInventory), 2, rng)));
+    docs.push(mkDoc('delivery', party, status, daysAgo(i * 6 + 1), buildLines(goods, 2, rng)));
   });
 
   // --- Sales returns --------------------------------------------------
   (['requested', 'approved', 'processed'] as DocStatus[]).forEach((status, i) => {
     const party = customers[(i + 2) % customers.length];
-    docs.push(mkDoc('salesReturn', party, status, daysAgo(i * 11 + 5), buildLines(sellable.filter((s) => s.trackInventory), 1, rng)));
-  });
-
-  // --- Purchase orders / receipts / bills / returns --------------------
-  (['draft', 'confirmed', 'received', 'confirmed', 'cancelled'] as DocStatus[]).forEach((status, i) => {
-    const party = suppliers[i % suppliers.length];
-    docs.push(mkDoc('purchaseOrder', party, status, daysAgo(i * 8 + 4), buildPurchaseLines(sellable, rng.int(2, 4), rng), { dueDays: 20 }));
-  });
-
-  (['draft', 'received', 'received', 'billed'] as DocStatus[]).forEach((status, i) => {
-    const party = suppliers[(i + 2) % suppliers.length];
-    docs.push(mkDoc('goodsReceipt', party, status, daysAgo(i * 10 + 6), buildPurchaseLines(sellable, rng.int(1, 3), rng)));
-  });
-
-  const billPlan: { days: number; status: DocStatus; terms: number }[] = [
-    { days: 3, status: 'issued', terms: 30 },
-    { days: 8, status: 'paid', terms: 15 },
-    { days: 14, status: 'partiallyPaid', terms: 30 },
-    { days: 22, status: 'overdue', terms: 15 },
-    { days: 30, status: 'paid', terms: 30 },
-    { days: 44, status: 'overdue', terms: 21 },
-    { days: 58, status: 'paid', terms: 30 },
-    { days: 75, status: 'issued', terms: 45 },
-    { days: 92, status: 'paid', terms: 30 },
-    { days: 118, status: 'overdue', terms: 30 },
-  ];
-  billPlan.forEach((plan, i) => {
-    const party = suppliers[i % suppliers.length];
-    const d = mkDoc('purchaseBill', party, plan.status, daysAgo(plan.days), buildPurchaseLines(sellable, rng.int(2, 5), rng), {
-      dueDays: plan.terms,
-    });
-    d.supplierDocNumber = `${party.code}-${rng.int(1000, 9999)}`;
-    docs.push(d);
-  });
-
-  (['requested', 'processed'] as DocStatus[]).forEach((status, i) => {
-    const party = suppliers[(i + 3) % suppliers.length];
-    docs.push(mkDoc('purchaseReturn', party, status, daysAgo(i * 13 + 9), buildPurchaseLines(sellable, 1, rng)));
+    docs.push(mkDoc('salesReturn', party, status, daysAgo(i * 11 + 5), buildLines(goods, 1, rng)));
   });
 
   // --- Second company (isolation demo) ---------------------------------
@@ -327,11 +271,137 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
     }),
   );
 
-  return docs;
+  return applyCompliance(docs, { parties, items, companies });
+}
+
+/**
+ * Register the seeded documents with the mock portals.
+ *
+ * The seed does not invent IRNs. It runs the finished invoices through the
+ * same code path the app uses, so every seeded IRN verifies, every Ack date
+ * sits inside or outside the cancellation window on purpose, and the QR on a
+ * seeded invoice scans back to its own payload.
+ */
+function applyCompliance(
+  docs: BusinessDocument[],
+  ctx: { parties: Party[]; items: Item[]; companies: Company[] },
+): BusinessDocument[] {
+  const activeIrns = new Map<string, IrpAckRecord>();
+  const activeBills = new Map<string, { ewbDate: string; validUpto: string; documentId: string }>();
+
+  // A deliberately broken GSTIN on one customer, so the rejection path has a
+  // document of its own.
+  const brokenGstinCustomerId = 'cus_7';
+
+  return docs.map((doc, index) => {
+    const company = ctx.companies.find((c) => c.id === doc.companyId);
+    const party = ctx.parties.find((p) => p.id === doc.partyId);
+    if (!company || !party) return doc;
+
+    const items = ctx.items.filter((i) => i.companyId === doc.companyId);
+    const applicability = eInvoiceApplicability({ company, party, doc });
+    if (!applicability.applicable) {
+      return {
+        ...doc,
+        compliance: {
+          eInvoice: { status: 'notApplicable' as const, errors: [{ code: '0', message: applicability.reason }] },
+        },
+      };
+    }
+
+    // The IRP will not accept a document older than thirty days, exactly as
+    // the real one will not — so the older seeded invoices stay unregistered.
+    const ackAt = new Date(`${doc.date}T10:00:00.000Z`);
+    const irp = createMockIrp({ now: () => ackAt, activeIrns });
+
+    const effectiveParty =
+      party.id === brokenGstinCustomerId ? { ...party, taxId: `${party.taxId?.slice(0, 14)}X` } : party;
+
+    const payload = buildEInvoicePayload({ company, party: effectiveParty, doc, items });
+    const result = irp.generate({ payload, documentId: doc.id });
+
+    if (!result.ok) {
+      return { ...doc, compliance: { eInvoice: { status: 'failed' as const, errors: result.errors } } };
+    }
+
+    activeIrns.set(result.irn, { ackDate: result.ackDate, documentId: doc.id });
+
+    // One registered invoice is cancelled, to show the withdrawn state.
+    const cancelThisOne = index % 17 === 5;
+    if (cancelThisOne) {
+      const cancel = irp.cancel({ irn: result.irn, reasonCode: '2' });
+      if (cancel.ok) {
+        activeIrns.set(result.irn, { ackDate: result.ackDate, documentId: doc.id, cancelled: true });
+        return {
+          ...doc,
+          compliance: {
+            eInvoice: {
+              status: 'cancelled' as const,
+              irn: result.irn,
+              ackNo: result.ackNo,
+              ackDate: result.ackDate,
+              signedQrPayload: result.signedQrCode,
+              generatedAt: ackAt.toISOString(),
+              cancelledAt: cancel.cancelledAt,
+              cancelReasonCode: '2' as const,
+            },
+          },
+        };
+      }
+    }
+
+    const compliance: BusinessDocument['compliance'] = {
+      eInvoice: {
+        status: 'generated',
+        irn: result.irn,
+        ackNo: result.ackNo,
+        ackDate: result.ackDate,
+        signedQrPayload: result.signedQrCode,
+        generatedAt: ackAt.toISOString(),
+      },
+    };
+
+    // Give the goods invoices over the threshold a live e-way bill.
+    const withEwb = { ...doc, compliance };
+    const ewbNeeded = ewbApplicability({ company, party, doc: withEwb, items });
+    if (ewbNeeded.applicable && index % 5 === 1) {
+      const generatedAt = new Date(Date.now() - 6 * 3_600_000);
+      const ewb = createMockEwb({ now: () => generatedAt, activeBills });
+      const distanceKm = 120 + ((index * 37) % 480);
+      const partA = buildPartA({ company, party, doc: withEwb, items });
+      const partB = {
+        transMode: '1' as const,
+        vehicleNo: `MH12AB${String(1000 + (index % 9000))}`,
+        vehicleType: 'R' as const,
+        transporterId: undefined,
+      };
+      const generated = ewb.generate({ partA, partB, distanceKm, cargo: 'regular', documentId: doc.id });
+      if (generated.ok) {
+        activeBills.set(generated.ewbNo, {
+          ewbDate: generated.ewbDate,
+          validUpto: generated.validUpto,
+          documentId: doc.id,
+        });
+        compliance.eWayBill = {
+          status: 'generated',
+          ewbNo: generated.ewbNo,
+          ewbDate: generated.ewbDate,
+          validUpto: generated.validUpto,
+          distanceKm,
+          cargo: 'regular',
+          partA,
+          partB,
+          generatedAt: generatedAt.toISOString(),
+        };
+      }
+    }
+
+    return { ...doc, compliance };
+  });
 }
 
 /* ------------------------------------------------------------------ */
-/* Payments derived from the invoice/bill statuses                     */
+/* Payments derived from the invoice statuses                          */
 /* ------------------------------------------------------------------ */
 
 export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]): Payment[] {
@@ -345,16 +415,16 @@ export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]
     return formatNumber(s, { date, sequence: counters[companyId] });
   };
 
-  const payable = docs.filter((d) => d.kind === 'invoice' || d.kind === 'purchaseBill');
+  const payable = docs.filter((d) => d.kind === 'invoice');
 
   payable.forEach((doc, i) => {
-    const isSale = doc.kind === 'invoice';
+    const currency = doc.totals.grandTotal.currency;
     let amount: Money | null = null;
 
     if (doc.status === 'paid') {
       amount = doc.totals.grandTotal;
     } else if (doc.status === 'partiallyPaid') {
-      amount = money(Math.round(doc.totals.grandTotal.minor * 0.4), doc.currency);
+      amount = money(Math.round(doc.totals.grandTotal.minor * 0.4), currency);
     }
     if (!amount || amount.minor <= 0) return;
 
@@ -365,17 +435,14 @@ export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]
       companyId: doc.companyId,
       branchId: doc.branchId,
       number: nextNumber(doc.companyId, clamped),
-      direction: isSale ? 'received' : 'paid',
       partyId: doc.partyId,
       date: clamped,
       amount,
-      currency: doc.currency,
-      exchangeRate: doc.exchangeRate,
       method: methods[i % methods.length],
       reference: i % 3 === 0 ? `UTR${rng.int(100000000, 999999999)}` : undefined,
       accountId: doc.companyId === PRIMARY_COMPANY_ID ? (i % 4 === 0 ? 'acc_cash' : 'acc_hdfc') : 'acc_a_bank',
       allocations: [{ documentId: doc.id, documentNumber: doc.number, amount }],
-      unallocated: zero(doc.currency),
+      unallocated: zero(currency),
       notes: undefined,
       attachmentIds: [],
       createdBy: CURRENT_USER_ID,
@@ -389,12 +456,9 @@ export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]
     companyId: PRIMARY_COMPANY_ID,
     branchId: 'brn_mum',
     number: nextNumber(PRIMARY_COMPANY_ID, daysAgo(4)),
-    direction: 'received',
     partyId: 'cus_2',
     date: daysAgo(4),
     amount: fromMajor(50000, 'INR'),
-    currency: 'INR',
-    exchangeRate: 1,
     method: 'bank',
     reference: 'ADV-2026-07',
     accountId: 'acc_hdfc',
@@ -410,191 +474,13 @@ export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]
 }
 
 /* ------------------------------------------------------------------ */
-/* Expenses                                                            */
-/* ------------------------------------------------------------------ */
-
-const EXPENSE_PLAN: [string, number, number, string][] = [
-  ['exp_rent', 55000, 2, 'Godown rent — Bhosari'],
-  ['exp_salary', 148000, 3, 'Staff salaries'],
-  ['exp_transport', 18400, 4, 'Freight — Mumbai to Nashik'],
-  ['exp_utilities', 12250, 6, 'Electricity bill'],
-  ['exp_marketing', 24000, 8, 'Google Ads top-up'],
-  ['exp_office', 4380, 9, 'Stationery & printer ink'],
-  ['exp_travel', 16800, 11, 'Client visit — Bengaluru'],
-  ['exp_professional', 35000, 13, 'CA quarterly retainer'],
-  ['exp_transport', 9200, 15, 'Local delivery charges'],
-  ['exp_repairs', 7650, 17, 'Forklift servicing'],
-  ['exp_bank', 1180, 19, 'Bank charges & NEFT fees'],
-  ['exp_utilities', 3400, 21, 'Internet & broadband'],
-  ['exp_rent', 55000, 32, 'Godown rent — Bhosari'],
-  ['exp_salary', 145000, 33, 'Staff salaries'],
-  ['exp_transport', 21300, 36, 'Freight — Pune to Surat'],
-  ['exp_marketing', 48000, 39, 'Trade expo stall'],
-  ['exp_office', 6100, 44, 'Packing consumables'],
-  ['exp_travel', 22400, 48, 'Supplier audit — Vadodara'],
-  ['exp_rent', 55000, 62, 'Godown rent — Bhosari'],
-  ['exp_salary', 142000, 63, 'Staff salaries'],
-  ['exp_utilities', 14100, 66, 'Electricity bill'],
-  ['exp_professional', 35000, 73, 'CA quarterly retainer'],
-  ['exp_repairs', 12900, 81, 'Warehouse racking repair'],
-  ['exp_bank', 980, 88, 'Bank charges'],
-];
-
-export function seedExpenses(series: NumberingSeries[]): Expense[] {
-  let counter = 0;
-  const s = series.find((x) => x.companyId === PRIMARY_COMPANY_ID && x.kind === 'expense')!;
-  const methods: PaymentMethod[] = ['bank', 'upi', 'cash', 'card'];
-
-  const out = EXPENSE_PLAN.map(([categoryId, amount, days, notes], i) => {
-    counter += 1;
-    const date = daysAgo(days);
-    const gross = fromMajor(amount, 'INR');
-    const taxable = categoryId === 'exp_salary' || categoryId === 'exp_rent';
-    return {
-      id: uid('exp'),
-      companyId: PRIMARY_COMPANY_ID,
-      branchId: i % 3 === 2 ? 'brn_pun' : 'brn_mum',
-      number: formatNumber(s, { date, sequence: counter }),
-      categoryId,
-      date,
-      amount: gross,
-      currency: 'INR',
-      exchangeRate: 1,
-      taxCategoryId: taxable ? undefined : 'tax_18',
-      taxAmount: taxable ? zero('INR') : money(Math.round((gross.minor * 18) / 118), 'INR'),
-      taxInclusive: true,
-      accountId: i % 5 === 0 ? 'acc_cash' : 'acc_hdfc',
-      method: methods[i % methods.length],
-      notes,
-      billable: false,
-      recurrence: categoryId === 'exp_rent' || categoryId === 'exp_salary' ? ('monthly' as const) : ('none' as const),
-      nextRecurrenceDate:
-        categoryId === 'exp_rent' || categoryId === 'exp_salary' ? addDaysISO(date, 30) : undefined,
-      attachmentIds: [],
-      createdBy: CURRENT_USER_ID,
-      createdAt: `${date}T10:00:00.000Z`,
-    } as Expense;
-  });
-
-  return out;
-}
-
-/* ------------------------------------------------------------------ */
-/* Stock movements derived from opening stock + documents              */
-/* ------------------------------------------------------------------ */
-
-export function seedStockMovements(items: Item[], docs: BusinessDocument[]): StockMovement[] {
-  const moves: StockMovement[] = [];
-
-  items
-    .filter((i) => i.trackInventory)
-    .forEach((item) => {
-      moves.push({
-        id: uid('stk'),
-        companyId: item.companyId,
-        branchId: item.companyId === PRIMARY_COMPANY_ID ? 'brn_mum' : 'brn_blr',
-        itemId: item.id,
-        type: 'opening',
-        quantity: item.openingStock,
-        unitCost: item.purchasePrice,
-        date: daysAgo(365),
-        notes: 'Opening stock on migration',
-        createdBy: CURRENT_USER_ID,
-        createdAt: `${daysAgo(365)}T08:00:00.000Z`,
-      });
-    });
-
-  const affects = (d: BusinessDocument): boolean =>
-    !['draft', 'cancelled', 'rejected', 'requested'].includes(d.status);
-
-  docs.forEach((doc) => {
-    if (!affects(doc)) return;
-    const type =
-      doc.kind === 'invoice' || doc.kind === 'delivery'
-        ? 'salesIssue'
-        : doc.kind === 'goodsReceipt' || doc.kind === 'purchaseBill'
-          ? 'purchaseReceipt'
-          : doc.kind === 'salesReturn'
-            ? 'salesReturn'
-            : doc.kind === 'purchaseReturn'
-              ? 'purchaseReturn'
-              : null;
-    if (!type) return;
-
-    doc.lines.forEach((line) => {
-      const item = items.find((i) => i.id === line.itemId);
-      if (!item || !item.trackInventory) return;
-      moves.push({
-        id: uid('stk'),
-        companyId: doc.companyId,
-        branchId: doc.branchId,
-        itemId: item.id,
-        type,
-        quantity: line.quantity,
-        unitCost: type === 'purchaseReceipt' ? line.unitPrice : item.purchasePrice,
-        date: doc.date,
-        referenceId: doc.id,
-        referenceNumber: doc.number,
-        createdBy: CURRENT_USER_ID,
-        createdAt: doc.createdAt,
-      });
-    });
-  });
-
-  // A couple of manual adjustments and a transfer for the ledger demo.
-  const first = items.find((i) => i.trackInventory)!;
-  moves.push({
-    id: uid('stk'),
-    companyId: PRIMARY_COMPANY_ID,
-    branchId: 'brn_mum',
-    itemId: first.id,
-    type: 'adjustment',
-    quantity: -3,
-    unitCost: first.purchasePrice,
-    date: daysAgo(21),
-    notes: 'Damaged in handling',
-    createdBy: CURRENT_USER_ID,
-    createdAt: `${daysAgo(21)}T16:40:00.000Z`,
-  });
-  const second = items.filter((i) => i.trackInventory)[4];
-  moves.push({
-    id: uid('stk'),
-    companyId: PRIMARY_COMPANY_ID,
-    branchId: 'brn_mum',
-    itemId: second.id,
-    type: 'transferOut',
-    quantity: 25,
-    unitCost: second.purchasePrice,
-    date: daysAgo(14),
-    notes: 'Mumbai → Pune restock',
-    createdBy: CURRENT_USER_ID,
-    createdAt: `${daysAgo(14)}T12:10:00.000Z`,
-  });
-  moves.push({
-    id: uid('stk'),
-    companyId: PRIMARY_COMPANY_ID,
-    branchId: 'brn_pun',
-    itemId: second.id,
-    type: 'transferIn',
-    quantity: 25,
-    unitCost: second.purchasePrice,
-    date: daysAgo(14),
-    notes: 'Mumbai → Pune restock',
-    createdBy: CURRENT_USER_ID,
-    createdAt: `${daysAgo(14)}T12:10:00.000Z`,
-  });
-
-  return moves;
-}
-
-/* ------------------------------------------------------------------ */
-/* Notifications, audit trail, sync queue, attachments                 */
+/* Notifications                                                       */
 /* ------------------------------------------------------------------ */
 
 export function seedNotifications(docs: BusinessDocument[], payments: Payment[]): AppNotification[] {
   const out: AppNotification[] = [];
   const overdue = docs.filter((d) => d.kind === 'invoice' && d.status === 'overdue').slice(0, 4);
-  const recentPayments = payments.filter((p) => p.direction === 'received').slice(-3);
+  const recentPayments = payments.slice(-3);
 
   overdue.forEach((d, i) => {
     out.push({
@@ -624,26 +510,50 @@ export function seedNotifications(docs: BusinessDocument[], payments: Payment[])
     });
   });
 
-  out.push({
-    id: uid('ntf'),
-    companyId: PRIMARY_COMPANY_ID,
-    kind: 'lowStock',
-    title: '3 items below reorder level',
-    body: 'Review low stock and raise a purchase order.',
-    entityType: 'inventory',
-    read: false,
-    createdAt: nowISO(),
+  const registered = docs.filter((d) => d.compliance?.eInvoice?.status === 'generated');
+  registered.slice(0, 2).forEach((d, i) => {
+    out.push({
+      id: uid('ntf'),
+      companyId: d.companyId,
+      kind: 'eInvoice',
+      title: 'IRN generated',
+      body: `${d.number} is registered with the IRP.`,
+      entityType: d.kind,
+      entityId: d.id,
+      read: i > 0,
+      createdAt: `${d.date}T10:12:00.000Z`,
+    });
   });
-  out.push({
-    id: uid('ntf'),
-    companyId: PRIMARY_COMPANY_ID,
-    kind: 'compliance',
-    title: 'E-invoice generated',
-    body: 'IRN received from the IRP for your latest B2B invoice.',
-    entityType: 'compliance',
-    read: true,
-    createdAt: `${daysAgo(1)}T10:12:00.000Z`,
-  });
+
+  const failed = docs.find((d) => d.compliance?.eInvoice?.status === 'failed');
+  if (failed) {
+    out.push({
+      id: uid('ntf'),
+      companyId: failed.companyId,
+      kind: 'eInvoice',
+      title: 'IRN not generated',
+      body: failed.compliance?.eInvoice?.errors?.[0]?.message ?? 'The IRP rejected this invoice.',
+      entityType: failed.kind,
+      entityId: failed.id,
+      read: false,
+      createdAt: `${failed.date}T10:20:00.000Z`,
+    });
+  }
+
+  const expiring = docs.find((d) => d.compliance?.eWayBill?.status === 'generated');
+  if (expiring) {
+    out.push({
+      id: uid('ntf'),
+      companyId: expiring.companyId,
+      kind: 'eWayBill',
+      title: 'E-way bill in transit',
+      body: `${expiring.compliance?.eWayBill?.ewbNo} is valid until ${expiring.compliance?.eWayBill?.validUpto?.slice(0, 10)}.`,
+      entityType: expiring.kind,
+      entityId: expiring.id,
+      read: false,
+      createdAt: nowISO(),
+    });
+  }
   out.push({
     id: uid('ntf'),
     companyId: PRIMARY_COMPANY_ID,
@@ -689,21 +599,6 @@ export function seedAudit(docs: BusinessDocument[], payments: Payment[]): AuditE
     });
   });
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function seedSyncQueue(): SyncQueueEntry[] {
-  return [
-    {
-      id: uid('sq'),
-      label: 'Expense EXP/26-27/0025 — Fuel',
-      entityType: 'expense',
-      entityId: 'pending_1',
-      action: 'create',
-      status: 'pending',
-      attempts: 1,
-      queuedAt: nowISO(),
-    },
-  ];
 }
 
 export function seedAttachments(): Attachment[] {

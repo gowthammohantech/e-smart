@@ -2,20 +2,20 @@ import {
   Address,
   Branch,
   Company,
-  DeviceSession,
-  ExpenseCategory,
-  ExchangeRate,
   Item,
   NumberingSeries,
   Party,
   PaymentAccount,
   TaxCategory,
+  Transporter,
   User,
 } from '@/types';
 import { fromMajor, zero } from '@/lib/money';
 import { addDaysISO, today } from '@/lib/date';
 import { DEFAULT_PREFIXES, defaultSeries } from '@/domain/numbering';
-import { INDIAN_STATES, expenseCategories, gstCategories } from './masters';
+import { gstinChecksum } from '@/domain/gst/gstin';
+import { stateNameOf } from '@/domain/gst/stateCodes';
+import { gstCategories } from './masters';
 import { makeRng } from './rng';
 
 export const ACCOUNT_ID = 'acct_elixir_demo';
@@ -29,10 +29,10 @@ function addr(line1: string, city: string, stateCode: string, postalCode: string
   return {
     line1,
     city,
-    state: INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? 'Maharashtra',
+    state: stateNameOf(stateCode),
     stateCode,
     postalCode,
-    country: 'IN',
+    country: 'India',
   };
 }
 
@@ -60,11 +60,15 @@ export function seedCompanies(): Company[] {
       website: 'vertextraders.in',
       taxRegistration: {
         regime: 'GST',
-        identifier: '27AABCV1234F1Z5',
+        // Check digit computed, not invented — isValidGstin recomputes it.
+        identifier: '27AABCV1234F1ZO',
         identifierLabel: 'GSTIN',
         registered: true,
         compositionScheme: false,
         placeOfSupplyStateCode: '27',
+        turnoverSlab: '10crTo50cr',
+        eInvoiceEnabled: true,
+        eWayBillEnabled: true,
       },
       fiscalYearStartMonth: 4,
       createdAt: daysAgo(420),
@@ -82,11 +86,16 @@ export function seedCompanies(): Company[] {
       phone: '+91 80456 77120',
       taxRegistration: {
         regime: 'GST',
-        identifier: '29AACFA9876P1ZK',
+        identifier: '29AACFA9876P1ZH',
         identifierLabel: 'GSTIN',
         registered: true,
         compositionScheme: false,
         placeOfSupplyStateCode: '29',
+        // Deliberately under the threshold, so the "not applicable" path is
+        // visible by switching companies.
+        turnoverSlab: 'under5cr',
+        eInvoiceEnabled: true,
+        eWayBillEnabled: true,
       },
       fiscalYearStartMonth: 4,
       createdAt: daysAgo(180),
@@ -179,16 +188,8 @@ export function seedUsers(): User[] {
   ];
 }
 
-export function seedDevices(): DeviceSession[] {
-  return [
-    { id: 'dev_1', label: 'iPhone 15 Pro', platform: 'iOS 18.2', lastActiveAt: new Date().toISOString(), current: true, location: 'Mumbai, IN' },
-    { id: 'dev_2', label: 'Pixel 8', platform: 'Android 15', lastActiveAt: daysAgo(2), current: false, location: 'Pune, IN' },
-    { id: 'dev_3', label: 'iPad Air', platform: 'iPadOS 18.1', lastActiveAt: daysAgo(11), current: false, location: 'Mumbai, IN' },
-  ];
-}
-
 /* ------------------------------------------------------------------ */
-/* Parties                                                             */
+/* Customers                                                           */
 /* ------------------------------------------------------------------ */
 
 const CUSTOMER_SEED: [string, string, string, string, number][] = [
@@ -206,17 +207,6 @@ const CUSTOMER_SEED: [string, string, string, string, number][] = [
   ['Zenith Corporate', 'Sneha Kulkarni', '09', '201301', 60],
 ];
 
-const SUPPLIER_SEED: [string, string, string, string, number][] = [
-  ['Precision Components', 'Ramesh Gupta', '24', '390002', 30],
-  ['Global Packaging Co', 'Hardik Patel', '27', '400093', 15],
-  ['Nexus Wholesale', 'Sanjay Bhat', '29', '560058', 30],
-  ['Apex Steel Works', 'Mohit Jain', '08', '302017', 45],
-  ['Urban Logistics', 'Feroz Khan', '27', '400059', 7],
-  ['Delta Paper Mills', 'Ravi Verma', '23', '452001', 30],
-  ['Sigma Fasteners', 'Kiran Rao', '33', '641004', 21],
-  ['Orion Electricals', 'Naveen Reddy', '36', '500032', 30],
-];
-
 function cityFor(stateCode: string): string {
   const map: Record<string, string> = {
     '27': 'Mumbai', '29': 'Bengaluru', '33': 'Chennai', '07': 'New Delhi',
@@ -226,9 +216,16 @@ function cityFor(stateCode: string): string {
   return map[stateCode] ?? 'Mumbai';
 }
 
+/**
+ * Build a GSTIN that passes its own check digit.
+ *
+ * The digit is not decoration — isValidGstin recomputes it, and a fabricated
+ * one would make every seeded customer fail e-invoice validation with 3029.
+ */
 function gstinFor(stateCode: string, i: number): string {
   const pan = `AAB${String.fromCharCode(67 + (i % 20))}${String(1000 + i * 7).slice(0, 4)}${String.fromCharCode(65 + (i % 26))}`;
-  return `${stateCode}${pan}1Z${String.fromCharCode(65 + (i % 26))}`;
+  const body = `${stateCode}${pan}1Z`;
+  return body + gstinChecksum(body);
 }
 
 export function seedParties(): Party[] {
@@ -238,14 +235,14 @@ export function seedParties(): Party[] {
     out.push({
       id: `cus_${i + 1}`,
       companyId: PRIMARY_COMPANY_ID,
-      kind: 'customer',
       name,
       code: `C-${String(i + 1).padStart(3, '0')}`,
       displayName: contact,
+      // Every fifth customer is unregistered, so the B2C path has data.
       taxId: i % 5 === 4 ? undefined : gstinFor(stateCode, i),
+      gstRegistrationType: i % 5 === 4 ? 'unregistered' : 'regular',
       email: `${name.toLowerCase().replace(/[^a-z]/g, '')}@example.in`,
       phone: `+91 9${String(8000000000 + i * 1234567).slice(1, 10)}`,
-      currency: 'INR',
       billingAddress: addr(`${10 + i} Commerce Lane`, cityFor(stateCode), stateCode, pin),
       creditLimit: i % 3 === 0 ? fromMajor(500000, 'INR') : undefined,
       openingBalance: i % 4 === 0 ? fromMajor(rng.int(2000, 25000), 'INR') : zero('INR'),
@@ -255,84 +252,40 @@ export function seedParties(): Party[] {
     });
   });
 
-  // One export customer to exercise the multi-currency paths.
+  // An SEZ unit, so the SEZ supply type has somewhere to come from.
   out.push({
     id: 'cus_13',
     companyId: PRIMARY_COMPANY_ID,
-    kind: 'customer',
-    name: 'Harbour Supplies FZE',
+    name: 'Harbour Supplies (SEZ)',
     code: 'C-013',
-    displayName: 'Omar Al Balushi',
-    email: 'accounts@harboursupplies.ae',
-    phone: '+971 50 442 8890',
-    currency: 'AED',
-    billingAddress: {
-      line1: 'Warehouse 12, Jebel Ali Free Zone',
-      city: 'Dubai',
-      state: 'Dubai',
-      postalCode: '17000',
-      country: 'AE',
-    },
-    openingBalance: zero('AED'),
+    displayName: 'Omar Balan',
+    taxId: gstinFor('27', 71),
+    gstRegistrationType: 'sez',
+    email: 'accounts@harboursupplies.in',
+    phone: '+91 98200 44889',
+    billingAddress: addr('Unit 12, SEEPZ SEZ', 'Mumbai', '27', '400096'),
+    openingBalance: zero('INR'),
     paymentTermsDays: 30,
     status: 'active',
     createdAt: daysAgo(150),
   });
 
-  SUPPLIER_SEED.forEach(([name, contact, stateCode, pin, terms], i) => {
-    out.push({
-      id: `sup_${i + 1}`,
-      companyId: PRIMARY_COMPANY_ID,
-      kind: 'supplier',
-      name,
-      code: `S-${String(i + 1).padStart(3, '0')}`,
-      displayName: contact,
-      taxId: gstinFor(stateCode, i + 40),
-      email: `purchase@${name.toLowerCase().replace(/[^a-z]/g, '')}.in`,
-      phone: `+91 9${String(7000000000 + i * 987654).slice(1, 10)}`,
-      currency: 'INR',
-      billingAddress: addr(`${20 + i} Industrial Estate`, cityFor(stateCode), stateCode, pin),
-      openingBalance: zero('INR'),
-      paymentTermsDays: terms,
-      status: 'active',
-      createdAt: daysAgo(380 - i * 15),
-    });
-  });
-
-  // Second company gets its own isolated book of contacts.
+  // Second company gets its own isolated book of customers.
   out.push({
     id: 'cus_a1',
     companyId: SECOND_COMPANY_ID,
-    kind: 'customer',
     name: 'Lumen Brand Works',
     code: 'C-001',
     displayName: 'Tara Sen',
-    taxId: '29AADCL5544K1Z2',
+    taxId: gstinFor('29', 88),
+    gstRegistrationType: 'regular',
     email: 'finance@lumenbrand.works',
     phone: '+91 90190 22110',
-    currency: 'INR',
     billingAddress: addr('3 Residency Road', 'Bengaluru', '29', '560025'),
     openingBalance: zero('INR'),
     paymentTermsDays: 30,
     status: 'active',
     createdAt: daysAgo(120),
-  });
-  out.push({
-    id: 'sup_a1',
-    companyId: SECOND_COMPANY_ID,
-    kind: 'supplier',
-    name: 'Inkline Print House',
-    code: 'S-001',
-    displayName: 'Girish Kamath',
-    taxId: '29AAECI7788M1ZP',
-    email: 'orders@inkline.in',
-    phone: '+91 99001 55220',
-    currency: 'INR',
-    billingAddress: addr('40 Mysore Road', 'Bengaluru', '29', '560026'),
-    openingBalance: zero('INR'),
-    paymentTermsDays: 15,
-    status: 'active',
-    createdAt: daysAgo(110),
   });
 
   return out;
@@ -378,22 +331,16 @@ const ITEM_SEED: [string, string, number, number, string, string, string, boolea
 ];
 
 export function seedItems(): Item[] {
-  const items: Item[] = ITEM_SEED.map(([name, sku, sale, purchase, unit, tax, hsn, track], i) => ({
+  const items: Item[] = ITEM_SEED.map(([name, sku, sale, , unit, tax, hsn, track], i) => ({
     id: `itm_${i + 1}`,
     companyId: PRIMARY_COMPANY_ID,
     sku,
     name,
-    description: track ? undefined : 'Service — no stock tracking.',
     type: track ? 'goods' : 'service',
     unit,
     salePrice: fromMajor(sale, 'INR'),
-    purchasePrice: fromMajor(purchase, 'INR'),
     taxCategoryId: tax,
     hsnCode: hsn,
-    barcode: track ? `89${String(10000000000 + i * 137).slice(0, 11)}` : undefined,
-    trackInventory: track,
-    openingStock: track ? rng.int(20, 300) : 0,
-    reorderLevel: track ? rng.int(10, 40) : 0,
     status: i === 27 ? 'inactive' : 'active',
     createdAt: daysAgo(390 - i * 8),
   }));
@@ -406,12 +353,8 @@ export function seedItems(): Item[] {
     type: 'service',
     unit: 'NOS',
     salePrice: fromMajor(185000, 'INR'),
-    purchasePrice: zero('INR'),
     taxCategoryId: 'tax_18',
     hsnCode: '998391',
-    trackInventory: false,
-    openingStock: 0,
-    reorderLevel: 0,
     status: 'active',
     createdAt: daysAgo(115),
   });
@@ -423,46 +366,23 @@ export function seedTaxCategories(): TaxCategory[] {
   return [...gstCategories(PRIMARY_COMPANY_ID), ...gstCategories(SECOND_COMPANY_ID).map((c) => ({ ...c, id: `${c.id}_a` }))];
 }
 
-export function seedExpenseCategories(): ExpenseCategory[] {
+export function seedTransporters(): Transporter[] {
   return [
-    ...expenseCategories(PRIMARY_COMPANY_ID),
-    ...expenseCategories(SECOND_COMPANY_ID).map((c) => ({ ...c, id: `${c.id}_a` })),
+    { id: 'trn_1', companyId: PRIMARY_COMPANY_ID, name: 'Gati Logistics', transporterId: gstinFor('27', 51), phone: '+91 22 6789 1000', status: 'active' },
+    { id: 'trn_2', companyId: PRIMARY_COMPANY_ID, name: 'Safexpress', transporterId: gstinFor('07', 52), phone: '+91 11 4567 2000', status: 'active' },
+    { id: 'trn_3', companyId: PRIMARY_COMPANY_ID, name: 'VRL Roadlines', transporterId: gstinFor('29', 53), phone: '+91 80 2345 3000', status: 'active' },
+    { id: 'trn_a1', companyId: SECOND_COMPANY_ID, name: 'Blue Dart', transporterId: gstinFor('29', 54), phone: '+91 80 6677 4000', status: 'active' },
   ];
 }
 
 export function seedPaymentAccounts(): PaymentAccount[] {
   return [
-    { id: 'acc_cash', companyId: PRIMARY_COMPANY_ID, name: 'Cash in hand', type: 'cash', currency: 'INR', openingBalance: fromMajor(45000, 'INR'), isDefault: false },
-    { id: 'acc_hdfc', companyId: PRIMARY_COMPANY_ID, name: 'HDFC Current — 8842', type: 'bank', currency: 'INR', accountNumber: 'XXXX8842', openingBalance: fromMajor(1250000, 'INR'), isDefault: true },
-    { id: 'acc_icici', companyId: PRIMARY_COMPANY_ID, name: 'ICICI Current — 3310', type: 'bank', currency: 'INR', accountNumber: 'XXXX3310', openingBalance: fromMajor(380000, 'INR'), isDefault: false },
-    { id: 'acc_upi', companyId: PRIMARY_COMPANY_ID, name: 'UPI wallet', type: 'wallet', currency: 'INR', openingBalance: fromMajor(18500, 'INR'), isDefault: false },
-    { id: 'acc_a_bank', companyId: SECOND_COMPANY_ID, name: 'Axis Current — 7701', type: 'bank', currency: 'INR', accountNumber: 'XXXX7701', openingBalance: fromMajor(420000, 'INR'), isDefault: true },
+    { id: 'acc_cash', companyId: PRIMARY_COMPANY_ID, name: 'Cash in hand', type: 'cash', openingBalance: fromMajor(45000, 'INR'), isDefault: false },
+    { id: 'acc_hdfc', companyId: PRIMARY_COMPANY_ID, name: 'HDFC Current — 8842', type: 'bank', accountNumber: 'XXXX8842', openingBalance: fromMajor(1250000, 'INR'), isDefault: true },
+    { id: 'acc_icici', companyId: PRIMARY_COMPANY_ID, name: 'ICICI Current — 3310', type: 'bank', accountNumber: 'XXXX3310', openingBalance: fromMajor(380000, 'INR'), isDefault: false },
+    { id: 'acc_upi', companyId: PRIMARY_COMPANY_ID, name: 'UPI wallet', type: 'wallet', openingBalance: fromMajor(18500, 'INR'), isDefault: false },
+    { id: 'acc_a_bank', companyId: SECOND_COMPANY_ID, name: 'Axis Current — 7701', type: 'bank', accountNumber: 'XXXX7701', openingBalance: fromMajor(420000, 'INR'), isDefault: true },
   ];
-}
-
-export function seedExchangeRates(): ExchangeRate[] {
-  const base: ExchangeRate[] = [];
-  const pairs: [string, string, number][] = [
-    ['AED', 'INR', 23.85],
-    ['USD', 'INR', 87.4],
-    ['EUR', 'INR', 94.2],
-    ['GBP', 'INR', 110.6],
-    ['SGD', 'INR', 64.8],
-  ];
-  pairs.forEach(([from, to, rate], i) => {
-    [0, 30, 60, 120].forEach((d, j) => {
-      base.push({
-        id: `fx_${from}_${j}`,
-        companyId: PRIMARY_COMPANY_ID,
-        from,
-        to,
-        rate: Number((rate * (1 - j * 0.004 + (i % 3) * 0.001)).toFixed(4)),
-        effectiveFrom: daysAgo(d),
-        source: j === 0 ? 'provider' : 'manual',
-      });
-    });
-  });
-  return base;
 }
 
 export function seedNumberingSeries(): NumberingSeries[] {

@@ -86,8 +86,7 @@ export function summarizeAging(
   baseCurrency: string,
   dueSoonDays = 7,
 ): AgingSummary {
-  const toBase = (o: OutstandingDoc) =>
-    money(Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), baseCurrency);
+  const toBase = (o: OutstandingDoc) => money(o.outstanding.minor, baseCurrency);
 
   const buckets = AGING_BUCKETS.map((b) => {
     const rows = outstanding.filter((o) => o.bucket === b.key);
@@ -121,13 +120,10 @@ export function partyBalance(
   const invoiced = sum(
     docs
       .filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status))
-      .map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
+      .map((d) => money(d.totals.grandTotal.minor, baseCurrency)),
     baseCurrency,
   );
-  const received = sum(
-    payments.map((p) => money(Math.round(p.amount.minor * (p.exchangeRate || 1)), baseCurrency)),
-    baseCurrency,
-  );
+  const received = sum(payments.map((p) => money(p.amount.minor, baseCurrency)), baseCurrency);
   return subtract(add(money(openingBalance.minor, baseCurrency), invoiced), received);
 }
 

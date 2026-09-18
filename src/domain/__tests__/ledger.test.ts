@@ -102,11 +102,4 @@ describe('receivables (FRD 18)', () => {
     expect(summary.dueSoon.minor).toBe(100000);
     expect(summary.buckets.find((b) => b.key === 'd1_30')?.count).toBe(1);
   });
-
-  it('converts foreign-currency outstanding into the base currency', () => {
-    const fx = invoice({ id: 'fx', currency: 'AED', exchangeRate: 23.85, totals: { grandTotal: fromMajor('1000', 'AED') } as never });
-    const summary = summarizeAging(buildOutstanding([fx], []), 'INR');
-    expect(summary.total.currency).toBe('INR');
-    expect(summary.total.minor).toBe(Math.round(100000 * 23.85));
-  });
 });
