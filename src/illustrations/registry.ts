@@ -16,7 +16,6 @@ export const ILLUSTRATIONS = {
   /* Heroes — animated */
   welcome: require('../../assets/illustrations/welcome.gif'),
   'setup-complete': require('../../assets/illustrations/setup-complete.gif'),
-  scanning: require('../../assets/illustrations/scanning.gif'),
   'empty-dashboard': require('../../assets/illustrations/empty-dashboard.gif'),
 
   /* Full-size empty states */
@@ -25,19 +24,14 @@ export const ILLUSTRATIONS = {
   'search-idle': require('../../assets/illustrations/search-idle.png'),
   'search-empty': require('../../assets/illustrations/search-empty.png'),
   'single-location': require('../../assets/illustrations/single-location.png'),
-  'no-scan-result': require('../../assets/illustrations/no-scan-result.png'),
-  'unknown-report': require('../../assets/illustrations/unknown-report.png'),
-  offline: require('../../assets/illustrations/offline.png'),
 
   /* Compact empty states */
   'no-documents': require('../../assets/illustrations/no-documents.png'),
   'no-contacts': require('../../assets/illustrations/no-contacts.png'),
   'no-items': require('../../assets/illustrations/no-items.png'),
-  'no-expenses': require('../../assets/illustrations/no-expenses.png'),
   'no-payments': require('../../assets/illustrations/no-payments.png'),
   'all-settled': require('../../assets/illustrations/all-settled.png'),
   'no-notifications': require('../../assets/illustrations/no-notifications.png'),
-  'no-movements': require('../../assets/illustrations/no-movements.png'),
 } satisfies Record<string, ImageSourcePropType>;
 
 export type IllustrationName = keyof typeof ILLUSTRATIONS;

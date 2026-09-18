@@ -85,7 +85,7 @@ export default function Notifications() {
             <EmptyState
               illustration="no-notifications" icon="bell-check-outline"
               title={filter === 'unread' ? 'Nothing unread' : 'No notifications'}
-              message="Invoices sent, payments received, overdue reminders and stock alerts land here."
+              message="Invoices sent, payments received, overdue reminders and GST portal replies land here."
               compact
             />
           </Card>

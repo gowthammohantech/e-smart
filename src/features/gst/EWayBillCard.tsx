@@ -21,7 +21,7 @@ import { ErrorList } from './ErrorList';
 
 const STATUS_TONE = {
   notApplicable: 'neutral',
-  pending: 'info',
+  pending: 'warning',
   generated: 'success',
   cancelled: 'neutral',
   expired: 'warning',
@@ -30,7 +30,7 @@ const STATUS_TONE = {
 
 const STATUS_LABEL = {
   notApplicable: 'Not required',
-  pending: 'Pending',
+  pending: 'Required',
   generated: 'In transit',
   cancelled: 'Cancelled',
   expired: 'Expired',
@@ -66,12 +66,21 @@ export function EWayBillCard({ document: doc }: { document: BusinessDocument }) 
   const record = doc.compliance?.eWayBill;
   const now = nowISO();
   const expired = record?.status === 'generated' && isExpired(record.validUpto, now);
-  const status = expired ? 'expired' : record?.status ?? 'notApplicable';
 
   const applicability = useMemo(
     () => (party ? ewbApplicability({ company, party, doc, items }) : null),
     [company, party, doc, items],
   );
+
+  // With no bill yet, the badge has to state whether one is owed — saying
+  // "not required" above a line explaining that it is required reads as a bug.
+  const status = expired
+    ? 'expired'
+    : record?.ewbNo || record?.status === 'failed'
+      ? record.status
+      : applicability?.applicable
+        ? 'pending'
+        : 'notApplicable';
 
   if (!party) return null;
 

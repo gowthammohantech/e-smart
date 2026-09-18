@@ -11,7 +11,7 @@ import { Illustration } from '@/components/Illustration';
 const HIGHLIGHTS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string; body: string }[] = [
   { icon: 'file-document-edit-outline', title: 'Invoice in under a minute', body: 'GST-ready invoices you can share on WhatsApp straight away.' },
   { icon: 'cash-clock', title: 'Know who owes you', body: 'Live receivables, aging buckets and one-tap reminders.' },
-  { icon: 'package-variant-closed', title: 'Stock that stays honest', body: 'Every sale and purchase updates your stock automatically.' },
+  { icon: 'shield-check-outline', title: 'GST that files itself', body: 'IRNs, e-way bills and a GSTR-1 that is ready before you are.' },
 ];
 
 export default function Welcome() {
@@ -41,8 +41,7 @@ export default function Welcome() {
           </View>
           <Text variant="h1">Elixir Books Smart</Text>
           <Text variant="body" tone="muted" style={{ lineHeight: 22 }}>
-            Run the money side of your business from your phone — invoices, payments, purchases and stock, without the
-            accounting jargon.
+            Sell, invoice and stay GST-compliant from your phone — without the accounting jargon.
           </Text>
         </View>
 

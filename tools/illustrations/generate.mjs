@@ -21,7 +21,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../../assets/illustrations');
 
 /** Names rendered as looping GIFs; everything else is a PNG. */
-const ANIMATED = new Set(['welcome', 'setup-complete', 'scanning', 'empty-dashboard']);
+const ANIMATED = new Set(['welcome', 'setup-complete', 'empty-dashboard']);
 const FRAMES = 12;
 const PNG_SCALE = 2; // 800x600 — plenty for a 220pt hero on a 3x screen
 const GIF_SCALE = 1; // GIFs stay small; 400x300 is ample at display size

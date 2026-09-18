@@ -24,7 +24,6 @@ resolves each name to the filename, so replacing the file replaces the art.
 |---|---|---|
 | `welcome.gif` | Sign-in welcome screen | "business deal", "startup life" |
 | `setup-complete.gif` | End of the onboarding wizard | "completed", "celebration" |
-| `scanning.gif` | OCR capture, barcode scan | "scan", "image upload" |
 | `empty-dashboard.gif` | Home, before the business has any data | "data analysis", "dashboard" |
 
 ### Full-size empty states — PNG
@@ -36,9 +35,6 @@ resolves each name to the filename, so replacing the file replaces the art.
 | `search-idle.png` | Global search before typing | "search", "searching" |
 | `search-empty.png` | Global search with no matches | "no results", "not found" |
 | `single-location.png` | Branch transfer with only one branch | "warehouse", "location" |
-| `no-scan-result.png` | OCR review opened with nothing scanned | "empty", "scan" |
-| `unknown-report.png` | An unrecognised report route | "analysis", "questions" |
-| `offline.png` | Sync status while offline | "offline", "no connection" |
 
 ### Compact empty states — PNG
 
@@ -47,11 +43,9 @@ resolves each name to the filename, so replacing the file replaces the art.
 | `no-documents.png` | Empty invoice / quote / bill lists, Home and tab recents | "add file", "documents" |
 | `no-contacts.png` | Contacts tab with no customers or suppliers | "add user", "contacts" |
 | `no-items.png` | Inventory and opening stock with no items | "empty box", "products" |
-| `no-expenses.png` | Expense list with nothing recorded | "receipt", "expenses" |
 | `no-payments.png` | Payment lists and party payment history | "wallet", "payment" |
 | `all-settled.png` | Receivables and payables with nothing outstanding, sync queue clear | "completed", "done" |
 | `no-notifications.png` | Notifications, all caught up | "notification", "bell" |
-| `no-movements.png` | Stock movement ledger with no entries | "transfer", "exchange" |
 
 ## Regenerating the placeholders
 

@@ -122,8 +122,8 @@ export function ReportShell({
           </Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {company?.name} · {formatDate(scope.filters.range.from)} to {formatDate(scope.filters.range.to)} ·{' '}
-            {branch?.name ?? 'all branches'} · presented in {company?.baseCurrency}, foreign-currency documents converted at
-            the rate stored on each document.
+            {branch?.name ?? 'all branches'} · presented in {company?.baseCurrency}. Drafts and cancelled documents are
+            excluded.
           </Text>
           {subtitle ? (
             <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>

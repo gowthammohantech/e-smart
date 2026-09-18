@@ -35,7 +35,7 @@ export default function About() {
           </Text>
           <Badge label="Prototype build 1.0.0" tone="info" />
           <Text variant="caption" tone="muted" center style={{ maxWidth: 280, lineHeight: 18 }}>
-            Everyday business management from a phone — invoices, payments, purchases and stock, without ERP complexity.
+            Sales and GST compliance from a phone — invoices, e-invoices and e-way bills, without ERP complexity.
           </Text>
         </Card>
 
@@ -63,8 +63,10 @@ export default function About() {
             A note on this build
           </Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 19 }}>
-            This is a UI prototype. Every screen is driven by a seeded local dataset — calculations, tax splits, stock
-            movements and aging are real, but nothing is sent to a server and no compliance filing actually happens.
+            This is a UI prototype. Every screen runs on a seeded local dataset. The tax splits, the GSTIN check digit,
+            the IRN hash, the cancellation windows and the e-way bill validity rules are real implementations — but both
+            GST portals are local mocks, the QR is signed with a demo key rather than NIC&apos;s, and nothing is ever
+            sent to a server.
           </Text>
         </Card>
       </ScrollView>

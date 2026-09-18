@@ -78,7 +78,7 @@ export function ReportSection({ title, children }: { title: string; children: Re
   );
 }
 
-/** Simple aligned table used by the tax and stock reports. */
+/** Simple aligned table used by the sales and GSTR-1 reports. */
 export function DataTable({
   headers,
   rows,

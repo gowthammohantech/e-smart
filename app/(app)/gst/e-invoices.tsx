@@ -12,6 +12,7 @@ import { Screen } from '@/components/Screen';
 import { useEInvoiceQueue, useParties } from '@/store/selectors';
 import { BusinessDocument } from '@/types';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
+import { detailRouteFor } from '@/features/documents/DocumentEditor';
 import { formatMoney } from '@/lib/format';
 import { formatDate } from '@/lib/date';
 
@@ -90,7 +91,7 @@ export default function EInvoiceRegister() {
             {rows.map((d, i) => (
               <Pressable
                 key={d.id}
-                onPress={() => router.push(`/(app)/documents/${d.id}` as never)}
+                onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
                 accessibilityRole="button"
                 accessibilityLabel={`${d.number}, ${nameOf(d.partyId)}`}
                 style={({ pressed }) => ({

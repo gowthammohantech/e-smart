@@ -175,7 +175,7 @@ export default function GlobalSearch() {
               illustration="search-idle"
               icon="magnify"
               title="Search everything"
-              message="Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in."
+              message="Find an invoice number, a customer, an item's SKU, a payment reference — or an IRN or e-way bill number. Results respect the business you're in."
             />
           )
         ) : results.length === 0 ? (

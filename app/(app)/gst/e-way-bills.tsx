@@ -12,6 +12,7 @@ import { Screen } from '@/components/Screen';
 import { useEWayBillQueue, useParties } from '@/store/selectors';
 import { remainingHours } from '@/domain/gst/eway/validity';
 import { formatVehicleNumber } from '@/domain/gst/eway/vehicle';
+import { detailRouteFor } from '@/features/documents/DocumentEditor';
 import { formatMoney } from '@/lib/format';
 import { formatDate, nowISO } from '@/lib/date';
 
@@ -86,7 +87,7 @@ export default function EWayBillRegister() {
               return (
                 <Pressable
                   key={d.id}
-                  onPress={() => router.push(`/(app)/documents/${d.id}` as never)}
+                  onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
                   accessibilityRole="button"
                   accessibilityLabel={`E-way bill ${ewb.ewbNo}`}
                   style={({ pressed }) => ({

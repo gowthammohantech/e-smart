@@ -66,7 +66,8 @@ export default function NumberingStep() {
 
       <Card variant="flat">
         <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
-          Quotes, purchase bills, payments and expenses each get their own series with matching settings. You can tune
+          Quotations, sales orders, delivery notes, credit notes and payments each get their own series with matching
+          settings. You can tune
           them individually in Settings → Numbering.
         </Text>
       </Card>

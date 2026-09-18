@@ -222,7 +222,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
             {outstanding.minor > 0 ? (
               <Button
-                title={doc.kind === 'invoice' ? 'Record payment' : 'Pay supplier'}
+                title="Record payment"
                 icon={doc.kind === 'invoice' ? 'cash-plus' : 'cash-minus'}
                 onPress={() =>
                   router.push(

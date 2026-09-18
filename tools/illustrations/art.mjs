@@ -81,19 +81,6 @@ export const SCENES = {
       <path d="M128 78l8 14M300 72l-9 14M214 56v16" stroke="${P.warn}" stroke-width="5" stroke-linecap="round"/>
     </g>`,
 
-  scanning: (f) => `
-    ${blob(0.12)}
-    ${ground()}
-    ${card(142, 74, 116, 150, 10)}
-    ${line(160, 102, 60, P.lineSoft)}
-    ${line(160, 122, 80)}
-    ${line(160, 142, 52)}
-    ${line(160, 178, 80, P.accentSoft, 7)}
-    <rect x="130" y="${(90 + 110 * f).toFixed(1)}" width="140" height="5" rx="2.5" fill="${P.accent}"/>
-    <rect x="130" y="${(90 + 110 * f).toFixed(1)}" width="140" height="26" fill="${P.accent}" opacity="0.14"/>
-    <path d="M118 74v-14h16M282 74v-14h-16M118 224v14h16M282 224v14h-16"
-          stroke="${P.accent}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
-
   'empty-dashboard': (f) => {
     const bars = [34, 58, 44, 76, 62];
     return `
@@ -157,25 +144,6 @@ export const SCENES = {
     </g>
     <path d="M290 172v26M277 185h26" stroke="${P.accent}" stroke-width="5" stroke-linecap="round"/>`,
 
-  'no-scan-result': () => `
-    ${blob(0.1)}
-    ${card(142, 84, 116, 140, 10)}
-    <path d="M118 84v-14h16M282 84v-14h-16M118 224v14h16M282 224v14h-16"
-          stroke="${P.lineSoft}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    <path d="M168 154h64" stroke="${P.lineSoft}" stroke-width="6" stroke-linecap="round"/>
-    <circle cx="200" cy="120" r="18" fill="none" stroke="${P.line}" stroke-width="5"/>
-    <path d="M200 112v10M200 130v2" stroke="${P.line}" stroke-width="5" stroke-linecap="round"/>`,
-
-  'unknown-report': () => `
-    ${blob(0.1)}
-    ${card(132, 76, 136, 148, 10)}
-    <path d="M154 196v-34M182 196v-56M210 196v-24M238 196v-70"
-          stroke="${P.lineSoft}" stroke-width="12" stroke-linecap="round"/>
-    <circle cx="272" cy="96" r="26" fill="${P.warn}"/>
-    <path d="M272 84v16M272 108v3" stroke="#fff" stroke-width="5" stroke-linecap="round"/>`,
-
-  /* ---- compact scenes ---- */
-
   'no-documents': () => `
     ${blob(0.1)}
     ${card(150, 78, 100, 128, 9)}
@@ -198,13 +166,6 @@ export const SCENES = {
     <path d="M128 134l72 38 72-38M200 172v72" fill="none" stroke="${P.line}" stroke-width="5" stroke-linejoin="round"/>
     <path d="M164 115l72 38" stroke="${P.accent}" stroke-width="5" stroke-linecap="round"/>`,
 
-  'no-expenses': () => `
-    ${blob(0.1)}
-    <path d="M148 80h104v150l-17-12-18 12-17-12-18 12-17-12-17 12z" fill="${P.paper}" stroke="${P.line}" stroke-width="5" stroke-linejoin="round"/>
-    ${line(170, 116, 60)}
-    ${line(170, 138, 44)}
-    ${line(170, 160, 56, P.accentSoft)}`,
-
   'no-payments': () => `
     ${blob(0.1)}
     <rect x="124" y="108" width="152" height="94" rx="10" fill="${P.paper}" stroke="${P.line}" stroke-width="5"/>
@@ -226,18 +187,6 @@ export const SCENES = {
     <circle cx="246" cy="98" r="16" fill="${P.good}"/>
     <path d="M239 98l5 5 9-10" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
 
-  'no-movements': () => `
-    ${blob(0.1)}
-    <path d="M150 122h74l-18-18M250 182h-74l18 18" fill="none" stroke="${P.accent}"
-          stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-    ${line(150, 154, 100, P.lineSoft, 5)}
-    <circle cx="200" cy="154" r="9" fill="${P.paper}" stroke="${P.line}" stroke-width="4"/>`,
-
-  offline: () => `
-    ${blob(0.1)}
-    <path d="M146 176a34 34 0 016-67 48 48 0 0192-12 34 34 0 016 79z"
-          fill="${P.paper}" stroke="${P.line}" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M154 96l104 104" stroke="${P.warn}" stroke-width="8" stroke-linecap="round"/>`,
 };
 
 export const VIEWBOX = { W, H };

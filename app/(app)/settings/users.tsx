@@ -23,7 +23,7 @@ import { uid } from '@/lib/id';
 const ROLES: { value: UserRole; label: string; description: string }[] = [
   { value: 'owner', label: 'Owner', description: 'Full access, including billing and deleting the business.' },
   { value: 'admin', label: 'Admin', description: 'Everything except billing and deleting the business.' },
-  { value: 'accountant', label: 'Accountant', description: 'Invoices, bills, payments, expenses and reports.' },
+  { value: 'accountant', label: 'Accountant', description: 'Invoices, payments, GST filings and reports.' },
   { value: 'sales', label: 'Sales', description: 'Quotes, invoices, customers and payments received.' },
   { value: 'viewer', label: 'Viewer', description: 'Read-only access to documents and reports.' },
 ];

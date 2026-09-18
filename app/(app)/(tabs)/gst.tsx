@@ -24,6 +24,7 @@ import { summarizeTax } from '@/domain/reports';
 import { formatGstin } from '@/domain/gst/gstin';
 import { stateNameOf } from '@/domain/gst/stateCodes';
 import { remainingHours } from '@/domain/gst/eway/validity';
+import { detailRouteFor } from '@/features/documents/DocumentEditor';
 import { formatDate, nowISO, resolveRange } from '@/lib/date';
 
 /**
@@ -156,7 +157,7 @@ export default function GstTab() {
               return (
                 <Pressable
                   key={d.id}
-                  onPress={() => router.push(`/(app)/documents/${d.id}` as never)}
+                  onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
                   accessibilityRole="button"
                   accessibilityLabel={d.number}
                   style={({ pressed }) => ({
