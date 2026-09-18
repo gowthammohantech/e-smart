@@ -5,6 +5,8 @@ import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { formatDate } from '@/lib/date';
 import { money } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
+import { formatGstin } from '@/domain/gst/gstin';
+import { amountInWords } from '@/lib/format';
 
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -34,17 +36,20 @@ export function buildDocumentHtml({
   branchName?: string;
 }): string {
   const label = DOCUMENT_LABELS[doc.kind].singular.toUpperCase();
-  const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
+  const currency = doc.totals.grandTotal.currency;
+  const components = flattenTaxComponents(doc.totals.taxLines, currency);
   const pos = INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name;
+  const eInvoice = doc.compliance?.eInvoice;
+  const eWayBill = doc.compliance?.eWayBill;
 
   const rows = doc.lines
     .map((line, i) => {
-      const gross = money(Math.round(line.unitPrice.minor * line.quantity), doc.currency);
+      const gross = money(Math.round(line.unitPrice.minor * line.quantity), currency);
       const discount =
         line.discountValue > 0
           ? line.discountMode === 'percent'
             ? formatPercent(line.discountValue)
-            : formatMoney(money(line.discountValue * 100, doc.currency))
+            : formatMoney(money(line.discountValue * 100, currency))
           : '—';
       return `<tr>
         <td class="num">${i + 1}</td>
@@ -126,6 +131,9 @@ export function buildDocumentHtml({
   .sign .line { margin-top: 42px; border-top: 1px solid #E2E8F1; display: inline-block; padding-top: 5px; min-width: 190px; }
   .foot { margin-top: 26px; text-align: center; color: #5A6478; font-size: 10px; }
   .badge { display: inline-block; padding: 3px 9px; border-radius: 99px; background: rgba(0,122,255,0.10); color: #007AFF; font-size: 10px; font-weight: 700; }
+  .mono { font-family: 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 10px; word-break: break-all; }
+  .words { margin-top: 14px; padding: 10px 12px; border: 1px solid #E4E7EE; border-radius: 8px; }
+  .compliance { margin-top: 12px; padding: 10px 12px; background: #F6F8FB; border-radius: 8px; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -156,14 +164,14 @@ export function buildDocumentHtml({
       <div class="cap">Bill to</div>
       <div class="name">${esc(party?.name)}</div>
       <div class="muted">${addressBlock(party?.billingAddress)}</div>
-      ${party?.taxId ? `<div style="margin-top:4px"><strong>GSTIN:</strong> ${esc(party.taxId)}</div>` : ''}
+      ${party?.taxId ? `<div style="margin-top:4px"><strong>GSTIN:</strong> ${esc(formatGstin(party.taxId))}</div>` : '<div style="margin-top:4px" class="muted">Unregistered (URP)</div>'}
       ${party?.phone ? `<div class="muted">${esc(party.phone)}</div>` : ''}
+      ${party?.shippingAddress ? `<div class="cap" style="margin-top:10px">Ship to</div><div class="muted">${addressBlock(party.shippingAddress)}</div>` : ''}
     </div>
     <div>
       ${pos ? `<div class="cap">Place of supply</div><div>${esc(pos)}</div>` : ''}
       ${doc.reference ? `<div class="cap" style="margin-top:10px">Reference</div><div>${esc(doc.reference)}</div>` : ''}
-      ${doc.supplierDocNumber ? `<div class="cap" style="margin-top:10px">Supplier document</div><div>${esc(doc.supplierDocNumber)}</div>` : ''}
-      ${doc.currency !== (company?.baseCurrency ?? 'INR') ? `<div class="cap" style="margin-top:10px">Currency</div><div>${esc(doc.currency)} @ ${doc.exchangeRate.toFixed(4)} ${esc(company?.baseCurrency)}</div>` : ''}
+      ${doc.reverseCharge ? `<div class="cap" style="margin-top:10px">Reverse charge</div><div>Yes — tax payable by the recipient</div>` : ''}
     </div>
   </div>
 
@@ -184,7 +192,29 @@ export function buildDocumentHtml({
 
   <table class="totals"><tbody>${totalRows}</tbody></table>
 
-  ${doc.compliance?.irn ? `<div style="margin-top:14px"><span class="badge">E-INVOICE</span> <span class="muted">IRN ${esc(doc.compliance.irn)}</span></div>` : ''}
+  <div class="words"><span class="cap">Amount in words</span><div>${esc(amountInWords(doc.totals.grandTotal))}</div></div>
+
+  ${
+    eInvoice?.status === 'generated'
+      ? `<div class="compliance">
+           <div class="cap">E-invoice</div>
+           <div><strong>IRN</strong> <span class="mono">${esc(eInvoice.irn)}</span></div>
+           <div><strong>Ack no.</strong> ${esc(eInvoice.ackNo)} &nbsp;·&nbsp; <strong>Ack date</strong> ${esc(eInvoice.ackDate)}</div>
+         </div>`
+      : ''
+  }
+
+  ${
+    eWayBill?.status === 'generated'
+      ? `<div class="compliance">
+           <div class="cap">E-way bill</div>
+           <div><strong>No.</strong> <span class="mono">${esc(eWayBill.ewbNo)}</span> &nbsp;·&nbsp; <strong>Valid until</strong> ${esc(
+             eWayBill.validUpto ? formatDate(eWayBill.validUpto.slice(0, 10)) : '',
+           )}</div>
+           ${eWayBill.partB?.vehicleNo ? `<div><strong>Vehicle</strong> ${esc(eWayBill.partB.vehicleNo)} &nbsp;·&nbsp; ${eWayBill.distanceKm} km</div>` : ''}
+         </div>`
+      : ''
+  }
 
   <div class="notes">
     <div>

@@ -78,7 +78,7 @@ export function DocumentListView({
       if (filters.partyId && d.partyId !== filters.partyId) return false;
       if (filters.range !== 'all' && !inRange(d.date, range)) return false;
       if (q) {
-        const haystack = `${d.number} ${nameOf(d.partyId)} ${d.reference ?? ''} ${d.supplierDocNumber ?? ''}`.toLowerCase();
+        const haystack = `${d.number} ${nameOf(d.partyId)} ${d.reference ?? ''} ${d.compliance?.eInvoice?.irn ?? ''} ${d.compliance?.eWayBill?.ewbNo ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -88,10 +88,7 @@ export function DocumentListView({
   const total = useMemo(
     () =>
       filtered.length
-        ? sum(
-            filtered.map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
-            baseCurrency,
-          )
+        ? sum(filtered.map((d) => money(d.totals.grandTotal.minor, baseCurrency)), baseCurrency)
         : zero(baseCurrency),
     [filtered, baseCurrency],
   );

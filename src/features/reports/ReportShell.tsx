@@ -195,10 +195,10 @@ export function ReportShell({
       <SelectSheet
         visible={partyOpen}
         onClose={() => setPartyOpen(false)}
-        title="Contact"
+        title="Customer"
         options={[
-          { value: '', label: 'All contacts' },
-          ...parties.map((p) => ({ value: p.id, label: p.name, description: p.kind })),
+          { value: '', label: 'All customers' },
+          ...parties.map((p) => ({ value: p.id, label: p.name, description: p.code })),
         ]}
         value={scope.filters.partyId ?? ''}
         onSelect={(v) => onScopeChange({ ...scope, filters: { ...scope.filters, partyId: v || null } })}
@@ -210,7 +210,7 @@ export function ReportShell({
 export function useReportScope(initial: DateRangePreset = 'thisFY') {
   const [scope, setScope] = useState<ReportScope>({
     preset: initial,
-    filters: { range: resolveRange(initial), branchId: null, partyId: null, currency: null },
+    filters: { range: resolveRange(initial), branchId: null, partyId: null },
   });
   return { scope, setScope };
 }

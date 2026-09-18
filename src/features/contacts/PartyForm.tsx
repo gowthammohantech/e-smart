@@ -8,9 +8,9 @@ import { Button } from '@/components/Button';
 import { AmountField, PickerField, SwitchField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
-import { Party, PartyKind } from '@/types';
+import { GstRegistrationType, Party } from '@/types';
 import { INDIAN_STATES } from '@/data/masters';
-import { CURRENCIES } from '@/lib/currencies';
+import { GST_REGISTRATION_LABELS } from '@/domain/gst/supplyType';
 import { fromMajor, toMajor, zero } from '@/lib/money';
 import { uid } from '@/lib/id';
 import { nowISO } from '@/lib/date';
@@ -20,14 +20,14 @@ import { useBaseCurrency, useParties } from '@/store/selectors';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 
-export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
+export function PartyForm({ party }: { party?: Party }) {
   const t = useTheme();
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
   const baseCurrency = useBaseCurrency();
-  const existing = useParties(kind);
+  const existing = useParties();
   const saveParty = useAppStore((s) => s.saveParty);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
@@ -36,7 +36,9 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [taxId, setTaxId] = useState(party?.taxId ?? '');
   const [email, setEmail] = useState(party?.email ?? '');
   const [phone, setPhone] = useState(party?.phone ?? '');
-  const [currency, setCurrency] = useState(party?.currency ?? baseCurrency);
+  const [registrationType, setRegistrationType] = useState<GstRegistrationType>(
+    party?.gstRegistrationType ?? 'regular',
+  );
   const [terms, setTerms] = useState(party?.paymentTermsDays ?? 30);
   const [creditLimit, setCreditLimit] = useState(party?.creditLimit ? String(toMajor(party.creditLimit)) : '');
   const [openingBalance, setOpeningBalance] = useState(
@@ -53,11 +55,11 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [active, setActive] = useState((party?.status ?? 'active') === 'active');
 
   const [stateOpen, setStateOpen] = useState(false);
-  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId'>>({});
 
-  const label = kind === 'customer' ? 'Customer' : 'Supplier';
+  const label = 'Customer';
 
   const save = () => {
     const next: Errors<'name' | 'email' | 'phone' | 'taxId'> = {
@@ -70,28 +72,25 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (hasErrors(next)) return;
 
     const stateName = INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? '';
-    const nextCode =
-      party?.code ??
-      `${kind === 'customer' ? 'C' : 'S'}-${String(existing.length + 1).padStart(3, '0')}`;
+    const nextCode = party?.code ?? `C-${String(existing.length + 1).padStart(3, '0')}`;
 
     const record: Party = {
-      id: party?.id ?? uid(kind === 'customer' ? 'cus' : 'sup'),
+      id: party?.id ?? uid('cus'),
       companyId: party?.companyId ?? activeCompanyId,
-      kind,
       name: name.trim(),
       code: nextCode,
       displayName: contact.trim() || undefined,
       taxId: taxId.trim().toUpperCase() || undefined,
+      gstRegistrationType: taxId.trim() ? registrationType : 'unregistered',
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
-      currency,
       billingAddress: {
         line1: line1.trim(),
         city: city.trim(),
         state: stateName,
         stateCode: stateCode || undefined,
         postalCode: postalCode.trim(),
-        country: 'IN',
+        country: 'India',
       },
       shippingAddress: sameShipping
         ? undefined
@@ -101,10 +100,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
             state: stateName,
             stateCode: stateCode || undefined,
             postalCode: postalCode.trim(),
-            country: 'IN',
+            country: 'India',
           },
-      creditLimit: creditLimit ? fromMajor(creditLimit, currency) : undefined,
-      openingBalance: openingBalance ? fromMajor(openingBalance, currency) : zero(currency),
+      creditLimit: creditLimit ? fromMajor(creditLimit, baseCurrency) : undefined,
+      openingBalance: openingBalance ? fromMajor(openingBalance, baseCurrency) : zero(baseCurrency),
       paymentTermsDays: terms,
       notes: notes.trim() || undefined,
       status: active ? 'active' : 'inactive',
@@ -114,7 +113,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     saveParty(record);
     toast.show(party ? `${label} updated` : `${label} added`, 'success');
     if (party) router.back();
-    else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${record.id}` : `/(app)/contacts/suppliers/${record.id}`);
+    else router.replace(`/(app)/contacts/customers/${record.id}` as never);
   };
 
   return (
@@ -134,8 +133,17 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           autoCapitalize="characters"
           icon="card-account-details-outline"
           error={errors.taxId}
-          hint="Leave blank for unregistered contacts."
+          hint="Leave blank for an unregistered buyer — the invoice then reports as B2C."
         />
+        {taxId.trim() ? (
+          <PickerField
+            label="Registration type"
+            value={GST_REGISTRATION_LABELS[registrationType]}
+            onPress={() => setRegistrationOpen(true)}
+            icon="shield-account-outline"
+            hint="Decides the supply type on the e-invoice."
+          />
+        ) : null}
         <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
         <TextField label="Email" value={email} onChangeText={setEmail} placeholder="accounts@business.com" keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
 
@@ -166,21 +174,18 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>
           Trading terms
         </Text>
-        <PickerField label="Currency" value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />
         <PickerField label="Payment terms" value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />
-        {kind === 'customer' ? (
-          <AmountField label="Credit limit" value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint="Optional. Used to warn you before invoicing beyond it." />
-        ) : null}
+        <AmountField label="Credit limit" value={creditLimit} onChangeValue={setCreditLimit} currency={baseCurrency} hint="Optional. Used to warn you before invoicing beyond it." />
         <AmountField
           label="Opening balance"
           value={openingBalance}
           onChangeValue={setOpeningBalance}
-          currency={currency}
-          hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
+          currency={baseCurrency}
+          hint="What they already owed you when you started."
         />
 
         <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Internal notes" multiline />
-        <SwitchField label="Active" description="Inactive contacts stay in your records but are hidden from pickers." value={active} onValueChange={setActive} />
+        <SwitchField label="Active" description="Inactive customers stay in your records but are hidden from pickers." value={active} onValueChange={setActive} />
       </ScrollView>
 
       <View
@@ -204,12 +209,19 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         onSelect={setStateCode}
       />
       <SelectSheet
-        visible={currencyOpen}
-        onClose={() => setCurrencyOpen(false)}
-        title="Currency"
-        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
-        value={currency}
-        onSelect={setCurrency}
+        visible={registrationOpen}
+        onClose={() => setRegistrationOpen(false)}
+        title="GST registration"
+        searchable={false}
+        options={(['regular', 'composition', 'sez', 'overseas'] as GstRegistrationType[]).map((v) => ({
+          value: v,
+          label: GST_REGISTRATION_LABELS[v],
+        }))}
+        value={registrationType}
+        onSelect={(v) => {
+          setRegistrationType(v as GstRegistrationType);
+          setRegistrationOpen(false);
+        }}
       />
       <SelectSheet
         visible={termsOpen}

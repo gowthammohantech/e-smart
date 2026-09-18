@@ -18,10 +18,8 @@ import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Avatar } from '@/components/Avatar';
 
-import { DocumentKind, DocumentLine } from '@/types';
+import { DocStatus, DocumentKind, DocumentLine } from '@/types';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
-import { resolveRate } from '@/domain/fx';
-import { CURRENCIES } from '@/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { addDaysISO } from '@/lib/date';
 import { fromMajor, money, toMajor } from '@/lib/money';
@@ -32,7 +30,6 @@ import {
   useActiveCompany,
   useBaseCurrency,
   useBranches,
-  useExchangeRates,
   useItems,
   useParties,
   useTaxCategories,
@@ -52,8 +49,6 @@ const STEPS = [
   { key: 'extras', label: 'Tax & terms' },
   { key: 'review', label: 'Review' },
 ] as const;
-
-const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
 
 export function DocumentEditor({
   kind,
@@ -75,9 +70,7 @@ export function DocumentEditor({
   const baseCurrency = useBaseCurrency();
   const branches = useBranches();
   const taxCategories = useTaxCategories();
-  const exchangeRates = useExchangeRates();
-  const isPurchase = PURCHASE_KINDS.includes(kind);
-  const parties = useParties(isPurchase ? 'supplier' : 'customer');
+  const parties = useParties();
   const items = useItems({ activeOnly: true });
 
   const createDocument = useAppStore((s) => s.createDocument);
@@ -96,7 +89,7 @@ export function DocumentEditor({
     [company],
   );
 
-  const { draft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
+  const { draft, patch, addLine, updateLine, removeLine, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
@@ -130,16 +123,11 @@ export function DocumentEditor({
   const pickParty = (id: string) => {
     const p = parties.find((x) => x.id === id);
     if (!p) return;
-    const rate = resolveRate(exchangeRates, p.currency, baseCurrency, draft.date);
     patch({
       partyId: id,
-      placeOfSupplyStateCode: p.billingAddress.stateCode,
-      currency: p.currency,
-      exchangeRate: p.currency === baseCurrency ? 1 : rate,
-      dueDate:
-        kind === 'invoice' || kind === 'purchaseBill'
-          ? addDaysISO(draft.date, p.paymentTermsDays)
-          : draft.dueDate,
+      // The shipping address wins, because that is where the supply lands.
+      placeOfSupplyStateCode: p.shippingAddress?.stateCode ?? p.billingAddress.stateCode,
+      dueDate: kind === 'invoice' ? addDaysISO(draft.date, p.paymentTermsDays) : draft.dueDate,
     });
   };
 
@@ -152,8 +140,6 @@ export function DocumentEditor({
       date: draft.date,
       dueDate: draft.dueDate,
       validUntil: draft.validUntil,
-      currency: draft.currency,
-      exchangeRate: draft.exchangeRate,
       lines: draft.lines,
       documentDiscountMode: draft.documentDiscountMode,
       documentDiscountValue: draft.documentDiscountValue,
@@ -162,8 +148,8 @@ export function DocumentEditor({
       notes: draft.notes || undefined,
       terms: draft.terms || undefined,
       reference: draft.reference || undefined,
-      supplierDocNumber: draft.supplierDocNumber || undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
+      reverseCharge: draft.reverseCharge,
       branchId: draft.branchId ?? activeBranchId ?? undefined,
       attachmentIds: draft.attachmentIds,
     };
@@ -177,18 +163,16 @@ export function DocumentEditor({
     if (!id) return;
 
     if (finalize) {
-      const target =
+      const target: DocStatus =
         kind === 'quote'
           ? 'sent'
-          : kind === 'salesOrder' || kind === 'purchaseOrder'
+          : kind === 'salesOrder'
             ? 'confirmed'
             : kind === 'delivery'
               ? 'delivered'
-              : kind === 'goodsReceipt'
-                ? 'received'
-                : kind === 'salesReturn' || kind === 'purchaseReturn'
-                  ? 'approved'
-                  : 'issued';
+              : kind === 'salesReturn'
+                ? 'approved'
+                : 'issued';
       setDocumentStatus(id, target);
     }
 
@@ -204,7 +188,7 @@ export function DocumentEditor({
       <Pressable
         onPress={() => setPartyOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={party ? `Change ${isPurchase ? 'supplier' : 'customer'}` : `Select ${isPurchase ? 'supplier' : 'customer'}`}
+        accessibilityLabel={party ? 'Change customer' : 'Select customer'}
       >
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
           {party ? (
@@ -219,7 +203,7 @@ export function DocumentEditor({
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
                   <Badge label={`${party.paymentTermsDays}d terms`} tone="neutral" size="sm" />
-                  {party.currency !== baseCurrency ? <Badge label={party.currency} tone="info" size="sm" /> : null}
+                  {party.taxId ? null : <Badge label="B2C" tone="warning" size="sm" />}
                 </View>
               </View>
             </>
@@ -239,7 +223,7 @@ export function DocumentEditor({
               </View>
               <View style={{ flex: 1 }}>
                 <Text variant="body" weight="600">
-                  Select {isPurchase ? 'supplier' : 'customer'}
+                  Select customer
                 </Text>
                 <Text variant="caption" tone="muted">
                   Search your contacts or add a new one
@@ -253,7 +237,7 @@ export function DocumentEditor({
 
       <DateField label={`${label.singular} date`} value={draft.date} onChange={(date) => patch({ date })} required />
 
-      {kind === 'invoice' || kind === 'purchaseBill' ? (
+      {kind === 'invoice' ? (
         <DateField
           label="Due date"
           value={draft.dueDate ?? addDaysISO(draft.date, 30)}
@@ -267,16 +251,6 @@ export function DocumentEditor({
           label="Valid until"
           value={draft.validUntil ?? addDaysISO(draft.date, 15)}
           onChange={(validUntil) => patch({ validUntil })}
-        />
-      ) : null}
-
-      {isPurchase ? (
-        <TextField
-          label="Supplier document number"
-          value={draft.supplierDocNumber}
-          onChangeText={(supplierDocNumber) => patch({ supplierDocNumber })}
-          placeholder="Their bill number"
-          icon="pound"
         />
       ) : null}
 
@@ -302,21 +276,12 @@ export function DocumentEditor({
         />
       ) : null}
 
-      <PickerField
-        label="Currency"
-        value={`${draft.currency}${draft.currency !== baseCurrency ? ` · 1 ${draft.currency} = ${draft.exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
-        onPress={() => setCurrencyOpen(true)}
-        icon="cash-multiple"
-      />
-
-      {draft.currency !== baseCurrency ? (
-        <TextField
-          label={`Exchange rate (1 ${draft.currency} → ${baseCurrency})`}
-          value={String(draft.exchangeRate)}
-          onChangeText={(v) => patch({ exchangeRate: Number(v.replace(/[^0-9.]/g, '')) || 0 })}
-          keyboardType="decimal-pad"
-          icon="swap-horizontal"
-          hint="The rate is stored on the document so it stays reproducible."
+      {taxContext.regime === 'GST' ? (
+        <SwitchField
+          label="Reverse charge"
+          description="Tax is payable by the recipient rather than by you."
+          value={draft.reverseCharge}
+          onValueChange={(reverseCharge) => patch({ reverseCharge })}
         />
       ) : null}
     </View>
@@ -342,7 +307,7 @@ export function DocumentEditor({
           {draft.lines.map((line, i) => {
             const lineTotal = money(
               Math.round(line.unitPrice.minor * line.quantity * (1 - (line.discountMode === 'percent' ? line.discountValue / 100 : 0))),
-              draft.currency,
+              baseCurrency,
             );
             return (
               <Pressable
@@ -366,7 +331,7 @@ export function DocumentEditor({
                   <Text variant="caption" tone="muted">
                     {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
                     {line.discountValue > 0
-                      ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, draft.currency))}`
+                      ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, baseCurrency))}`
                       : ''}
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
@@ -391,9 +356,7 @@ export function DocumentEditor({
         <Card>
           <TotalsPanel
             totals={totals}
-            currency={draft.currency}
-            baseCurrency={baseCurrency}
-            exchangeRate={draft.exchangeRate}
+            currency={baseCurrency}
             compact
           />
         </Card>
@@ -411,7 +374,7 @@ export function DocumentEditor({
           <Segmented
             options={[
               { value: 'percent', label: '%' },
-              { value: 'amount', label: draft.currency },
+              { value: 'amount', label: baseCurrency },
             ]}
             value={draft.documentDiscountMode}
             onChange={(v) => patch({ documentDiscountMode: v as 'percent' | 'amount' })}
@@ -437,9 +400,9 @@ export function DocumentEditor({
         value={chargesText}
         onChangeValue={(v) => {
           setChargesText(v);
-          patch({ charges: fromMajor(v || '0', draft.currency) });
+          patch({ charges: fromMajor(v || '0', baseCurrency) });
         }}
-        currency={draft.currency}
+        currency={baseCurrency}
         hint="Freight, packing or installation added to the total."
       />
 
@@ -469,9 +432,7 @@ export function DocumentEditor({
       <Card>
         <TotalsPanel
           totals={totals}
-          currency={draft.currency}
-          baseCurrency={baseCurrency}
-          exchangeRate={draft.exchangeRate}
+          currency={baseCurrency}
           compact
         />
       </Card>
@@ -496,7 +457,7 @@ export function DocumentEditor({
         <View style={{ height: 1, backgroundColor: t.c.line }} />
 
         {[
-          { label: isPurchase ? 'Supplier' : 'Customer', value: party?.name ?? '—' },
+          { label: 'Customer', value: party?.name ?? '—' },
           { label: 'Date', value: draft.date },
           ...(draft.dueDate ? [{ label: 'Due', value: draft.dueDate }] : []),
           ...(draft.validUntil ? [{ label: 'Valid until', value: draft.validUntil }] : []),
@@ -517,18 +478,15 @@ export function DocumentEditor({
       <Card>
         <TotalsPanel
           totals={totals}
-          currency={draft.currency}
-          baseCurrency={baseCurrency}
-          exchangeRate={draft.exchangeRate}
+          currency={baseCurrency}
         />
       </Card>
 
       <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
         <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
         <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-          Finalising assigns a permanent number that is never reused
-          {kind === 'invoice' || kind === 'delivery' ? ' and posts stock movements for tracked items' : ''}. Drafts can
-          still be edited freely.
+          Finalising assigns a permanent number that is never reused, and makes the document eligible for the IRP.
+          Drafts can still be edited freely.
         </Text>
       </Card>
     </View>
@@ -598,25 +556,25 @@ export function DocumentEditor({
       <SelectSheet
         visible={partyOpen}
         onClose={() => setPartyOpen(false)}
-        title={isPurchase ? 'Select supplier' : 'Select customer'}
+        title="Select customer"
         options={parties.map((p) => ({
           value: p.id,
           label: p.name,
           description: [p.displayName, p.taxId, p.phone].filter(Boolean).join(' · '),
-          trailing: p.currency !== baseCurrency ? p.currency : undefined,
+          trailing: p.taxId ? undefined : 'B2C',
         }))}
         value={draft.partyId}
         onSelect={pickParty}
-        searchPlaceholder={isPurchase ? 'Search suppliers' : 'Search customers'}
+        searchPlaceholder="Search customers"
         footer={
           <Button
-            title={isPurchase ? 'Add new supplier' : 'Add new customer'}
+            title="Add new customer"
             variant="secondary"
             icon="plus"
             fullWidth
             onPress={() => {
               setPartyOpen(false);
-              router.push(isPurchase ? '/(app)/contacts/suppliers/new' : '/(app)/contacts/customers/new');
+              router.push('/(app)/contacts/customers/new' as never);
             }}
           />
         }
@@ -629,12 +587,12 @@ export function DocumentEditor({
         options={items.map((i) => ({
           value: i.id,
           label: i.name,
-          description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
+          description: `${i.sku} · ${formatMoney(i.salePrice)} / ${i.unit}`,
           trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
         }))}
         onSelect={(id) => {
           const item = items.find((i) => i.id === id);
-          if (item) addLine(lineFromItem(item, isPurchase, taxCategories));
+          if (item) addLine(lineFromItem(item, taxCategories));
         }}
         searchPlaceholder="Search by name or SKU"
         footer={
@@ -645,7 +603,7 @@ export function DocumentEditor({
               icon="pencil-plus-outline"
               style={{ flex: 1 }}
               onPress={() => {
-                const line = blankLine(draft.currency, taxCategories);
+                const line = blankLine(baseCurrency, taxCategories);
                 addLine(line);
                 setItemOpen(false);
                 setEditingLine(line);
@@ -662,17 +620,6 @@ export function DocumentEditor({
               }}
             />
           </View>
-        }
-      />
-
-      <SelectSheet
-        visible={currencyOpen}
-        onClose={() => setCurrencyOpen(false)}
-        title="Document currency"
-        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
-        value={draft.currency}
-        onSelect={(code) =>
-          setCurrency(code, code === baseCurrency ? 1 : resolveRate(exchangeRates, code, baseCurrency, draft.date))
         }
       />
 
@@ -699,7 +646,7 @@ export function DocumentEditor({
       <LineEditorSheet
         visible={!!editingLine}
         line={editingLine}
-        currency={draft.currency}
+        currency={baseCurrency}
         taxCategories={taxCategories}
         taxContext={{ ...taxContext, placeOfSupplyStateCode: draft.placeOfSupplyStateCode }}
         onClose={() => setEditingLine(null)}
@@ -730,10 +677,6 @@ export function detailRouteFor(kind: DocumentKind, id: string): string {
     salesOrder: '/(app)/sales/orders',
     delivery: '/(app)/sales/deliveries',
     salesReturn: '/(app)/sales/returns',
-    purchaseOrder: '/(app)/purchases/orders',
-    goodsReceipt: '/(app)/purchases/receipts',
-    purchaseBill: '/(app)/purchases/bills',
-    purchaseReturn: '/(app)/purchases/returns',
   };
   return `${map[kind]}/${id}`;
 }

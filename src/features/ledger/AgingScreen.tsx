@@ -19,20 +19,18 @@ import { AgingBucketKey } from '@/domain/receivables';
 import { formatMoney } from '@/lib/format';
 import { formatDate } from '@/lib/date';
 import { money, sum, zero } from '@/lib/money';
-import { useBaseCurrency, useParties, usePayables, useReceivables } from '@/store/selectors';
+import { useBaseCurrency, useParties, useReceivables } from '@/store/selectors';
 
 type Mode = 'all' | 'overdue' | 'dueSoon';
 
-export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
+export function AgingScreen() {
   const t = useTheme();
   const router = useRouter();
   const toast = useToast();
 
   const baseCurrency = useBaseCurrency();
   const parties = useParties();
-  const receivables = useReceivables();
-  const payables = usePayables();
-  const data = kind === 'receivable' ? receivables : payables;
+  const data = useReceivables();
 
   const [mode, setMode] = useState<Mode>('all');
   const [bucket, setBucket] = useState<AgingBucketKey | null>(null);
@@ -53,7 +51,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     () =>
       rows.length
         ? sum(
-            rows.map((o) => money(Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), baseCurrency)),
+            rows.map((o) => money(o.outstanding.minor, baseCurrency)),
             baseCurrency,
           )
         : zero(baseCurrency),
@@ -66,7 +64,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     rows.forEach((o) => {
       const cur = map.get(o.document.partyId) ?? { total: 0, count: 0, oldest: 0 };
       map.set(o.document.partyId, {
-        total: cur.total + Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)),
+        total: cur.total + o.outstanding.minor,
         count: cur.count + 1,
         oldest: Math.max(cur.oldest, o.daysOverdue),
       });
@@ -76,7 +74,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
       .sort((a, b) => b.total - a.total);
   }, [rows]);
 
-  const isReceivable = kind === 'receivable';
+  const isReceivable = true;
   const reminderParty = reminderFor ? partyOf(reminderFor) : undefined;
   const reminderRows = reminderFor ? rows.filter((o) => o.document.partyId === reminderFor) : [];
 
@@ -85,7 +83,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
         .map((o) => o.document.number)
         .join(', ')} totalling ${formatMoney(
         money(
-          reminderRows.reduce((a, o) => a + Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), 0),
+          reminderRows.reduce((a, o) => a + o.outstanding.minor, 0),
           baseCurrency,
         ),
       )} ${reminderRows.length === 1 ? 'is' : 'are'} still open. Could you let us know when payment is planned? Thank you.`

@@ -43,19 +43,14 @@ function Row({
 export function TotalsPanel({
   totals,
   currency,
-  baseCurrency,
-  exchangeRate,
   compact,
 }: {
   totals: DocumentTotals;
   currency: string;
-  baseCurrency?: string;
-  exchangeRate?: number;
   compact?: boolean;
 }) {
   const t = useTheme();
   const components = flattenTaxComponents(totals.taxLines, currency);
-  const showFx = !!baseCurrency && baseCurrency !== currency;
 
   return (
     <View style={{ gap: compact ? 6 : 8 }}>
@@ -84,12 +79,6 @@ export function TotalsPanel({
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 4 }} />
 
       <Row label="Total" value={formatMoney(totals.grandTotal)} bold />
-
-      {showFx ? (
-        <Text variant="micro" tone="muted" style={{ textAlign: 'right' }}>
-          ≈ {formatMoney(totals.grandTotalBase)} at 1 {currency} = {exchangeRate?.toFixed(4)} {baseCurrency}
-        </Text>
-      ) : null}
     </View>
   );
 }

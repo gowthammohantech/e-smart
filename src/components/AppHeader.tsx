@@ -28,7 +28,6 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const unread = useUnreadCount();
   const offline = useUiStore((s) => s.offlineMode);
-  const pendingSync = useAppStore((s) => s.syncQueue.length);
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -115,9 +114,6 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         </Pressable>
 
         {offline ? <Badge label="Offline" tone="warning" icon="cloud-off-outline" size="sm" /> : null}
-        {!offline && pendingSync > 0 ? (
-          <Badge label={`${pendingSync} queued`} tone="info" icon="sync" size="sm" />
-        ) : null}
 
         {iconButton('magnify', 'Search', () => router.push('/(app)/search'))}
         {iconButton('bell-outline', 'Notifications', () => router.push('/(app)/notifications'), unread)}

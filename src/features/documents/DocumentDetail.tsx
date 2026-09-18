@@ -17,12 +17,14 @@ import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@/types';
-import { DOCUMENT_LABELS, STATUS_META, isFinalized, nextStatuses } from '@/domain/documentStates';
+import { DOCUMENT_LABELS, MOVEMENT_KINDS, STATUS_META, isFinalized, nextStatuses } from '@/domain/documentStates';
 import { outstandingOf } from '@/domain/receivables';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { daysBetween, formatDate, today } from '@/lib/date';
 import { money } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
+import { EInvoiceCard } from '@/features/gst/EInvoiceCard';
+import { EWayBillCard } from '@/features/gst/EWayBillCard';
 import { buildDocumentHtml } from './documentHtml';
 
 import { useAppStore } from '@/store/appStore';
@@ -59,7 +61,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const label = DOCUMENT_LABELS[doc.kind];
   const branch = branches.find((b) => b.id === doc.branchId);
-  const isPayable = doc.kind === 'invoice' || doc.kind === 'purchaseBill';
+  const isPayable = doc.kind === 'invoice';
 
   const relatedPayments = useMemo(
     () => allPayments.filter((p) => p.allocations.some((a) => a.documentId === doc.id)),
@@ -67,7 +69,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   );
 
   const outstanding = useMemo(() => outstandingOf(doc, allPayments), [doc, allPayments]);
-  const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
+  const currency = doc.totals.grandTotal.currency;
+  const paid = money(doc.totals.grandTotal.minor - outstanding.minor, currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
   const shareDocument = async () => {
@@ -117,19 +120,13 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         : doc.kind === 'delivery'
           ? [{ target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' }]
           : doc.kind === 'invoice'
-            ? [{ target: 'salesReturn', label: 'Create a return', icon: 'keyboard-return' }]
-            : doc.kind === 'purchaseOrder'
-              ? [
-                  { target: 'goodsReceipt', label: 'Create goods receipt', icon: 'package-down' },
-                  { target: 'purchaseBill', label: 'Convert to bill', icon: 'file-document-outline' },
-                ]
-              : doc.kind === 'goodsReceipt'
-                ? [{ target: 'purchaseBill', label: 'Convert to bill', icon: 'file-document-outline' }]
-                : doc.kind === 'purchaseBill'
-                  ? [{ target: 'purchaseReturn', label: 'Create a return', icon: 'package-up' }]
-                  : [];
+            ? [{ target: 'salesReturn', label: 'Create a credit note', icon: 'keyboard-return' }]
+            : [];
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
+  const showsCompliance =
+    company.taxRegistration?.regime === 'GST' &&
+    (doc.kind === 'invoice' || doc.kind === 'salesReturn' || MOVEMENT_KINDS.includes(doc.kind));
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -165,14 +162,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           <View style={{ height: 1, backgroundColor: t.c.line }} />
 
           <Pressable
-            onPress={() =>
-              party &&
-              router.push(
-                party.kind === 'customer'
-                  ? `/(app)/contacts/customers/${party.id}`
-                  : `/(app)/contacts/suppliers/${party.id}`,
-              )
-            }
+            onPress={() => party && router.push(`/(app)/contacts/customers/${party.id}` as never)}
             accessibilityRole="button"
             accessibilityLabel={`Open ${party?.name ?? 'contact'}`}
             style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
@@ -192,12 +182,11 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
             {doc.dueDate ? <Badge label={`Due ${formatDate(doc.dueDate, 'dd MMM')}`} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
             {doc.validUntil ? <Badge label={`Valid to ${formatDate(doc.validUntil, 'dd MMM')}`} tone="neutral" /> : null}
-            {doc.currency !== baseCurrency ? <Badge label={`${doc.currency} @ ${doc.exchangeRate.toFixed(2)}`} tone="info" /> : null}
             {doc.placeOfSupplyStateCode ? (
               <Badge label={`PoS ${INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode}`} tone="neutral" />
             ) : null}
             {doc.reference ? <Badge label={`Ref ${doc.reference}`} tone="neutral" /> : null}
-            {doc.supplierDocNumber ? <Badge label={`Their no. ${doc.supplierDocNumber}`} tone="neutral" /> : null}
+            {doc.reverseCharge ? <Badge label="Reverse charge" tone="warning" /> : null}
           </View>
         </Card>
 
@@ -271,7 +260,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                 <Text variant="caption" tone="muted">
                   {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
                   {line.discountValue > 0
-                    ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, doc.currency))}`
+                    ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, currency))}`
                     : ''}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
@@ -280,7 +269,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                 </View>
               </View>
               <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-                {formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}
+                {formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), currency))}
               </Text>
             </View>
           ))}
@@ -288,12 +277,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
         {/* Totals */}
         <Card style={{ marginTop: t.spacing.md }}>
-          <TotalsPanel
-            totals={doc.totals}
-            currency={doc.currency}
-            baseCurrency={baseCurrency}
-            exchangeRate={doc.exchangeRate}
-          />
+          <TotalsPanel totals={doc.totals} currency={currency} />
         </Card>
 
         {/* Payments */}
@@ -341,38 +325,16 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           </>
         ) : null}
 
-        {/* Compliance */}
-        {doc.compliance ? (
+        {/* GST compliance */}
+        {showsCompliance ? (
           <>
             <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Compliance
+              GST compliance
             </Text>
-            <Card style={{ gap: t.spacing.md }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text variant="small">E-invoice</Text>
-                <Badge
-                  label={doc.compliance.eInvoiceStatus === 'generated' ? 'IRN generated' : doc.compliance.eInvoiceStatus ?? 'Not applicable'}
-                  tone={doc.compliance.eInvoiceStatus === 'generated' ? 'success' : doc.compliance.eInvoiceStatus === 'failed' ? 'danger' : 'neutral'}
-                />
-              </View>
-              {doc.compliance.irn ? (
-                <View style={{ gap: 3 }}>
-                  <Text variant="caption" tone="muted">
-                    IRN
-                  </Text>
-                  <Text variant="mono" numberOfLines={2}>
-                    {doc.compliance.irn}
-                  </Text>
-                </View>
-              ) : null}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text variant="small">E-way bill</Text>
-                <Badge
-                  label={doc.compliance.ewayBillNumber ?? doc.compliance.ewayBillStatus ?? 'Not applicable'}
-                  tone={doc.compliance.ewayBillNumber ? 'success' : 'neutral'}
-                />
-              </View>
-            </Card>
+            <View style={{ gap: t.spacing.md }}>
+              {doc.kind === 'invoice' || doc.kind === 'salesReturn' ? <EInvoiceCard document={doc} /> : null}
+              {MOVEMENT_KINDS.includes(doc.kind) ? <EWayBillCard document={doc} /> : null}
+            </View>
           </>
         ) : null}
 

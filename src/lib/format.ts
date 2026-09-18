@@ -97,3 +97,49 @@ export function pluralize(n: number, singular: string, plural?: string): string 
 export function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
 }
+
+const ONES = [
+  '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+function twoDigits(n: number): string {
+  if (n < 20) return ONES[n];
+  const tens = TENS[Math.floor(n / 10)];
+  const ones = ONES[n % 10];
+  return ones ? `${tens}-${ones}` : tens;
+}
+
+/**
+ * Amounts in words, on the Indian scale — a statutory line on a tax invoice,
+ * and the reason it reads "one lakh twenty thousand" rather than "120 thousand".
+ */
+export function amountInWords(m: Money): string {
+  const whole = Math.floor(Math.abs(m.minor) / 100);
+  const paise = Math.abs(m.minor) % 100;
+
+  const say = (n: number): string => {
+    if (n === 0) return '';
+    const parts: string[] = [];
+    const crore = Math.floor(n / 10_000_000);
+    const lakh = Math.floor((n % 10_000_000) / 100_000);
+    const thousand = Math.floor((n % 100_000) / 1000);
+    const hundred = Math.floor((n % 1000) / 100);
+    const rest = n % 100;
+
+    if (crore) parts.push(`${say(crore)} crore`);
+    if (lakh) parts.push(`${twoDigits(lakh)} lakh`);
+    if (thousand) parts.push(`${twoDigits(thousand)} thousand`);
+    if (hundred) parts.push(`${ONES[hundred]} hundred`);
+    if (rest) parts.push(`${parts.length ? 'and ' : ''}${twoDigits(rest)}`);
+    return parts.join(' ');
+  };
+
+  const unit = m.currency === 'INR' ? 'rupees' : m.currency;
+  const sub = m.currency === 'INR' ? 'paise' : 'cents';
+  const head = whole === 0 ? 'zero' : say(whole);
+  const tail = paise > 0 ? ` and ${twoDigits(paise)} ${sub}` : '';
+  const sentence = `${head} ${unit}${tail} only`;
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}

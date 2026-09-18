@@ -9,19 +9,18 @@ import { Avatar } from '@/components/Avatar';
 import { SearchBar } from '@/components/SearchBar';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
-import { PaymentDirection } from '@/types';
 import { PAYMENT_METHOD_LABELS } from '@/data/masters';
 import { formatMoney } from '@/lib/format';
 import { DATE_RANGE_PRESETS, DateRangePreset, formatDate, inRange, resolveRange } from '@/lib/date';
 import { money, sum, zero } from '@/lib/money';
 import { useBaseCurrency, useParties, usePayments } from '@/store/selectors';
 
-export function PaymentListView({ direction }: { direction: PaymentDirection }) {
+export function PaymentListView() {
   const t = useTheme();
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  const payments = usePayments(direction);
+  const payments = usePayments();
   const parties = useParties();
 
   const [query, setQuery] = useState('');
@@ -46,7 +45,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
     () =>
       filtered.length
         ? sum(
-            filtered.map((p) => money(Math.round(p.amount.minor * (p.exchangeRate || 1)), baseCurrency)),
+            filtered.map((p) => money(p.amount.minor, baseCurrency)),
             baseCurrency,
           )
         : zero(baseCurrency),
@@ -90,7 +89,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
           <Text variant="caption" tone="muted">
             {filtered.length} payments
           </Text>
-          <Text variant="caption" weight="700" tone={direction === 'received' ? 'good' : 'bad'}>
+          <Text variant="caption" weight="700" tone="good">
             {formatMoney(total)}
           </Text>
         </View>
@@ -105,7 +104,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
               title="No payments"
               message={payments.length === 0 ? 'Record one to see it here.' : 'Nothing matches this filter.'}
               actionLabel={payments.length === 0 ? 'Record payment' : undefined}
-              onAction={payments.length === 0 ? () => router.push(`/(app)/payments/new?direction=${direction}`) : undefined}
+              onAction={payments.length === 0 ? () => router.push('/(app)/payments/new' as never) : undefined}
               compact
             />
           ) : (
@@ -135,7 +134,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Text variant="body" weight="700" tone={direction === 'received' ? 'good' : 'bad'}>
+                  <Text variant="body" weight="700" tone="good">
                     {formatMoney(p.amount)}
                   </Text>
                   {p.unallocated.minor > 0 ? (
@@ -150,7 +149,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         </Card>
       </ScrollView>
 
-      <Fab icon="plus" onPress={() => router.push(`/(app)/payments/new?direction=${direction}`)} />
+      <Fab icon="plus" onPress={() => router.push('/(app)/payments/new' as never)} />
     </View>
   );
 }

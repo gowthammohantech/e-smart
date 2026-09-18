@@ -35,13 +35,8 @@ export function ItemForm({ item }: { item?: Item }) {
   const [description, setDescription] = useState(item?.description ?? '');
   const [unit, setUnit] = useState(item?.unit ?? 'PCS');
   const [salePrice, setSalePrice] = useState(item ? String(toMajor(item.salePrice)) : '');
-  const [purchasePrice, setPurchasePrice] = useState(item ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
-  const [barcode, setBarcode] = useState(item?.barcode ?? '');
-  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? true);
-  const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
-  const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
 
   const [unitOpen, setUnitOpen] = useState(false);
@@ -49,6 +44,12 @@ export function ItemForm({ item }: { item?: Item }) {
   const [errors, setErrors] = useState<Errors<'name' | 'sku'>>({});
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
+
+  // The portal's rule, surfaced while typing rather than at submission.
+  const hsnError =
+    hsnCode.trim() && !/^\d{4}$|^\d{6}$|^\d{8}$/.test(hsnCode.trim())
+      ? 'HSN must be 4, 6 or 8 digits'
+      : undefined;
 
   const save = () => {
     const next: Errors<'name' | 'sku'> = { name: required(name, 'Item name') };
@@ -68,13 +69,8 @@ export function ItemForm({ item }: { item?: Item }) {
       type,
       unit,
       salePrice: salePrice ? fromMajor(salePrice, baseCurrency) : zero(baseCurrency),
-      purchasePrice: purchasePrice ? fromMajor(purchasePrice, baseCurrency) : zero(baseCurrency),
       taxCategoryId,
       hsnCode: hsnCode.trim() || undefined,
-      barcode: barcode.trim() || undefined,
-      trackInventory: type === 'goods' ? trackInventory : false,
-      openingStock: Number(openingStock) || 0,
-      reorderLevel: Number(reorderLevel) || 0,
       imageUri: item?.imageUri,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
@@ -99,10 +95,7 @@ export function ItemForm({ item }: { item?: Item }) {
             { value: 'service', label: 'Service' },
           ]}
           value={type}
-          onChange={(v) => {
-            setType(v as ItemType);
-            if (v === 'service') setTrackInventory(false);
-          }}
+          onChange={(v) => setType(v as ItemType)}
         />
 
         <TextField label="Name" value={name} onChangeText={setName} placeholder="What you're selling" error={errors.name} required icon="tag-outline" />
@@ -117,10 +110,7 @@ export function ItemForm({ item }: { item?: Item }) {
         />
         <TextField label="Description" value={description} onChangeText={setDescription} placeholder="Shown on documents" multiline />
 
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <AmountField label="Sale price" value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
-          <AmountField label="Purchase price" value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
-        </View>
+        <AmountField label="Sale price" value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} />
 
         <PickerField label="Unit" value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" />
         <PickerField
@@ -136,43 +126,13 @@ export function ItemForm({ item }: { item?: Item }) {
           placeholder={type === 'goods' ? '84821011' : '998719'}
           keyboardType="number-pad"
           icon="numeric"
-          hint="Required on GST invoices above the turnover threshold."
+          hint={
+            type === 'goods'
+              ? 'Four, six or eight digits. The IRP rejects an invoice without it.'
+              : 'Six-digit SAC. The IRP rejects an invoice without it.'
+          }
+          error={hsnError}
         />
-
-        {type === 'goods' ? (
-          <>
-            <TextField label="Barcode" value={barcode} onChangeText={setBarcode} placeholder="Scan or type" icon="barcode-scan" />
-            <SwitchField
-              label="Track stock"
-              description="Sales and purchases will move this item's stock automatically."
-              value={trackInventory}
-              onValueChange={setTrackInventory}
-            />
-            {trackInventory ? (
-              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                <TextField
-                  label="Opening stock"
-                  value={openingStock}
-                  onChangeText={(v) => setOpeningStock(v.replace(/[^0-9.]/g, ''))}
-                  placeholder="0"
-                  keyboardType="decimal-pad"
-                  containerStyle={{ flex: 1 }}
-                  editable={!item}
-                  hint={item ? 'Use a stock adjustment to change this.' : undefined}
-                />
-                <TextField
-                  label="Reorder level"
-                  value={reorderLevel}
-                  onChangeText={(v) => setReorderLevel(v.replace(/[^0-9.]/g, ''))}
-                  placeholder="0"
-                  keyboardType="decimal-pad"
-                  containerStyle={{ flex: 1 }}
-                  hint="Alerts you below this."
-                />
-              </View>
-            ) : null}
-          </>
-        ) : null}
 
         <SwitchField label="Active" description="Inactive items are hidden when creating documents." value={active} onValueChange={setActive} />
       </ScrollView>

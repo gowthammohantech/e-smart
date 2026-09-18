@@ -101,3 +101,11 @@ export const SUPPLY_TYPE_LABELS: Record<SupplyType, string> = {
   EXPWOP: 'Export under LUT',
   DEXP: 'Deemed export',
 };
+
+export const GST_REGISTRATION_LABELS: Record<GstRegistrationType, string> = {
+  regular: 'Regular',
+  composition: 'Composition scheme',
+  unregistered: 'Unregistered',
+  sez: 'SEZ unit',
+  overseas: 'Overseas',
+};
