@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Elixir Books Smart",
+    "slug": "elixir-books-smart",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "elixirsmart",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E121A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elixir.bookssmart",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan receipts, supplier bills and barcodes.",
+        "NSPhotoLibraryUsageDescription": "Attach receipts and your business logo to records."
+      }
+    },
+    "android": {
+      "package": "com.elixir.bookssmart",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#0E121A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
+    },
+    "web": { "favicon": "./assets/favicon.png", "bundler": "metro" },
+    "plugins": [
+      "expo-router",
+      ["expo-image-picker", { "photosPermission": "Attach receipts and your business logo." }],
+      ["expo-camera", { "cameraPermission": "Scan receipts, bills and barcodes." }],
+      "expo-splash-screen",
+      "expo-web-browser"
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}
