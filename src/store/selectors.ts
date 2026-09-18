@@ -3,7 +3,11 @@ import { useAppStore } from './appStore';
 import {
   BusinessDocument,
   Company,
+  ComplianceSettings,
   DocumentKind,
+  EInvoiceStatus,
+  EwayBill,
+  EwayBillStatus,
   Expense,
   Item,
   Party,
@@ -14,6 +18,10 @@ import { Money, money, sum, zero } from '@/lib/money';
 import { buildOutstanding, summarizeAging } from '@/domain/receivables';
 import { stockMap } from '@/domain/stockLedger';
 import { PURCHASE_KINDS, SALES_KINDS } from '@/domain/documentStates';
+import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@/domain/ewayBill';
+import { isEInvoiceApplicable } from '@/domain/eInvoice';
+import { defaultComplianceSettings } from '@/data/seed';
+import { nowISO } from '@/lib/date';
 
 /**
  * Every read below is scoped by the active company, which is how the
@@ -267,4 +275,149 @@ export function usePurchaseDocuments() {
 /** Total of a money list guarded against an empty array. */
 export function totalOf(values: Money[], currency: string): Money {
   return values.length ? sum(values, currency) : zero(currency);
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Compliance (FRD 16)                                                 */
+/* ------------------------------------------------------------------ */
+
+export function useComplianceSettings(): ComplianceSettings {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const rows = useAppStore((s) => s.complianceSettings);
+  const baseCurrency = useBaseCurrency();
+  return useMemo(
+    () => rows.find((r) => r.companyId === companyId) ?? defaultComplianceSettings(companyId, baseCurrency),
+    [rows, companyId, baseCurrency],
+  );
+}
+
+/**
+ * Company-scoped e-way bills, newest first.
+ *
+ * `expired` is derived here from a single reading of the clock, so a screen
+ * left open across midnight keeps its last answer until something else makes
+ * it render. That matches how the rest of the app treats "today" and is
+ * deliberately not worth a timer.
+ */
+export function useEwayBills(filter?: { status?: EwayBillStatus; documentId?: string }): EwayBill[] {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const bills = useAppStore((s) => s.ewayBills);
+  const status = filter?.status;
+  const documentId = filter?.documentId;
+
+  return useMemo(() => {
+    const now = nowISO();
+    return bills
+      .filter((b) => b.companyId === companyId)
+      .filter((b) => (documentId ? b.documentId === documentId : true))
+      .filter((b) => (status ? ewayBillStatusAt(b, now) === status : true))
+      .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
+  }, [bills, companyId, status, documentId]);
+}
+
+export function useEwayBill(id: string | undefined): EwayBill | undefined {
+  return useAppStore((s) => s.ewayBills.find((b) => b.id === id));
+}
+
+export function useEwayBillsForDocument(documentId: string | undefined): EwayBill[] {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const bills = useAppStore((s) => s.ewayBills);
+  return useMemo(
+    () =>
+      bills
+        .filter((b) => b.companyId === companyId && b.documentId === documentId)
+        .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)),
+    [bills, companyId, documentId],
+  );
+}
+
+/** The newest bill on a document that has not been cancelled. */
+export function useActiveEwayBill(documentId: string | undefined): EwayBill | undefined {
+  const bills = useEwayBillsForDocument(documentId);
+  return useMemo(() => bills.find((b) => b.status !== 'cancelled'), [bills]);
+}
+
+/** Documents this company can report, with their current e-invoice state. */
+export function useEInvoiceDocuments(status?: EInvoiceStatus): BusinessDocument[] {
+  const documents = useDocuments(['invoice', 'salesReturn']);
+  const company = useActiveCompany();
+  const settings = useComplianceSettings();
+  const parties = useAppStore((s) => s.parties);
+  const items = useAppStore((s) => s.items);
+
+  return useMemo(() => {
+    const now = nowISO();
+    return documents.filter((doc) => {
+      const applicable = isEInvoiceApplicable({
+        document: doc,
+        company,
+        buyer: parties.find((p) => p.id === doc.partyId),
+        settings,
+        items,
+        now,
+      }).applicable;
+      const current = doc.compliance?.eInvoiceStatus ?? (applicable ? 'pending' : 'notApplicable');
+      if (!applicable && current === 'notApplicable') return false;
+      return status ? current === status : true;
+    });
+  }, [documents, company, settings, parties, items, status]);
+}
+
+export type ComplianceSummary = {
+  eInvoice: Record<EInvoiceStatus, number>;
+  eway: Record<EwayBillStatus, number>;
+  expiringSoon: number;
+  /** Documents that need a bill and do not yet have a live one. */
+  ewayOutstanding: number;
+};
+
+export function useComplianceSummary(): ComplianceSummary {
+  const documents = useEInvoiceDocuments();
+  const allDocuments = useDocuments();
+  const bills = useEwayBills();
+  const settings = useComplianceSettings();
+  const items = useAppStore((s) => s.items);
+
+  return useMemo(() => {
+    const now = nowISO();
+    const eInvoice: Record<EInvoiceStatus, number> = {
+      notApplicable: 0,
+      pending: 0,
+      generated: 0,
+      cancelled: 0,
+      failed: 0,
+    };
+    documents.forEach((d) => {
+      eInvoice[d.compliance?.eInvoiceStatus ?? 'pending'] += 1;
+    });
+
+    const eway: Record<EwayBillStatus, number> = { active: 0, expired: 0, cancelled: 0 };
+    let expiringSoon = 0;
+    bills.forEach((b) => {
+      const status = ewayBillStatusAt(b, now);
+      eway[status] += 1;
+      if (status === 'active' && hoursUntilExpiry(b, now) <= 24) expiringSoon += 1;
+    });
+
+    const live = new Set(
+      bills.filter((b) => ewayBillStatusAt(b, now) === 'active').map((b) => b.documentId),
+    );
+    const ewayOutstanding = allDocuments.filter(
+      (d) => isEwayBillRequired({ document: d, items, settings }).required && !live.has(d.id),
+    ).length;
+
+    return { eInvoice, eway, expiringSoon, ewayOutstanding };
+  }, [documents, allDocuments, bills, items, settings]);
+}
+
+/** Live bills close to running out, for the hub's warning banner. */
+export function useExpiringEwayBills(withinHours = 24): EwayBill[] {
+  const bills = useEwayBills();
+  return useMemo(() => {
+    const now = nowISO();
+    return bills
+      .filter((b) => ewayBillStatusAt(b, now) === 'active' && hoursUntilExpiry(b, now) <= withinHours)
+      .sort((a, b) => a.validUpto.localeCompare(b.validUpto));
+  }, [bills, withinHours]);
 }

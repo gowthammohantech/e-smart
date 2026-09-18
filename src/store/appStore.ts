@@ -8,11 +8,20 @@ import {
   AppNotification,
   Branch,
   BusinessDocument,
+  CancelReasonCode,
   Company,
+  ComplianceInfo,
+  ComplianceIssue,
+  ComplianceSettings,
   DeviceSession,
   DocStatus,
   DocumentKind,
   DocumentLine,
+  EwayBill,
+  EwayBillPartBUpdate,
+  EwayExtendReasonCode,
+  EwayPlace,
+  EwaySubSupplyType,
   ExchangeRate,
   Expense,
   ExpenseCategory,
@@ -26,7 +35,9 @@ import {
   StockMovement,
   SyncQueueEntry,
   TaxCategory,
+  TransportMode,
   User,
+  VehicleType,
 } from '@/types';
 import { Money, zero } from '@/lib/money';
 import { nowISO, today } from '@/lib/date';
@@ -34,17 +45,46 @@ import { uid } from '@/lib/id';
 import { calculateDocument } from '@/domain/lineCalc';
 import { formatNumber } from '@/domain/numbering';
 import { initialStatus, isFinalized } from '@/domain/documentStates';
+import {
+  EInvoiceContext,
+  blockingIssues,
+  buildIrpPayload,
+  canCancelEInvoice,
+  isEInvoiceApplicable,
+  mainHsnCodeOf,
+  validateEInvoice,
+} from '@/domain/eInvoice';
+import {
+  buildEwbPayload,
+  canCancelEwayBill,
+  canUpdatePartB,
+  ewayDocTypeFor,
+  isEwayBillRequired,
+  subSupplyTypeFor,
+  validatePartA,
+  validatePartB,
+} from '@/domain/ewayBill';
+import {
+  IrpSimulation,
+  cancelEwayBillAtPortal,
+  cancelIrn,
+  extendEwayBillAtPortal,
+  submitEwayBill,
+  submitInvoice,
+} from '@/domain/irpAdapter';
 import { INTEGRATIONS } from '@/data/masters';
 import {
   ACCOUNT_ID,
   CURRENT_USER_ID,
   PRIMARY_COMPANY_ID,
+  defaultComplianceSettings,
   seedBranches,
   seedCompanies,
   seedDevices,
   seedExchangeRates,
   seedExpenseCategories,
   seedItems,
+  seedComplianceSettings,
   seedNumberingSeries,
   seedParties,
   seedPaymentAccounts,
@@ -54,6 +94,7 @@ import {
 import {
   seedAttachments,
   seedAudit,
+  seedCompliance,
   seedDocuments,
   seedExpenses,
   seedNotifications,
@@ -84,6 +125,8 @@ export type AppData = {
   auditEvents: AuditEvent[];
   syncQueue: SyncQueueEntry[];
   integrations: Integration[];
+  complianceSettings: ComplianceSettings[];
+  ewayBills: EwayBill[];
 };
 
 export type Session = {
@@ -101,7 +144,14 @@ export function buildSeedData(): AppData {
   const items = seedItems();
   const taxCategories = seedTaxCategories();
   const series = seedNumberingSeries();
-  const documents = seedDocuments({ items, parties, taxCategories, series });
+  const complianceSettings = seedComplianceSettings();
+  const { documents, ewayBills } = seedCompliance(
+    seedDocuments({ items, parties, taxCategories, series }),
+    companies,
+    parties,
+    branches,
+    complianceSettings,
+  );
   const payments = seedPayments(documents, series);
   const expenses = seedExpenses(series);
   const stockMovements = seedStockMovements(items, documents);
@@ -135,10 +185,12 @@ export function buildSeedData(): AppData {
     expenses,
     stockMovements,
     attachments: seedAttachments(),
-    notifications: seedNotifications(documents, payments),
-    auditEvents: seedAudit(documents, payments),
+    notifications: seedNotifications(documents, payments, ewayBills),
+    auditEvents: seedAudit(documents, payments, ewayBills),
     syncQueue: seedSyncQueue(),
     integrations: INTEGRATIONS.map((i) => ({ ...i })),
+    complianceSettings,
+    ewayBills,
   };
 }
 
@@ -207,6 +259,18 @@ type Actions = {
   markAllNotificationsRead: () => void;
   clearNotifications: () => void;
   toggleIntegration: (id: string) => void;
+
+  /* compliance */
+  saveComplianceSettings: (settings: ComplianceSettings) => void;
+  generateEInvoice: (documentId: string, opts?: { simulation?: IrpSimulation }) => ComplianceResult;
+  cancelEInvoice: (documentId: string, reasonCode: CancelReasonCode, remark?: string) => ComplianceResult;
+  generateEwayBill: (input: NewEwayBillInput) => ComplianceResult & { ewayBillId?: string };
+  updateEwayBillPartB: (
+    id: string,
+    update: Omit<EwayBillPartBUpdate, 'id' | 'updatedAt' | 'updatedBy'>,
+  ) => ComplianceResult;
+  extendEwayBill: (id: string, args: ExtendEwayBillInput) => ComplianceResult;
+  cancelEwayBill: (id: string, reasonCode: CancelReasonCode, remark?: string) => ComplianceResult;
   retrySync: (id: string) => void;
   clearSyncQueue: () => void;
 
@@ -245,6 +309,36 @@ export type AppState = AppData & {
   activeCompanyId: string;
   activeBranchId: string | null;
 } & Actions;
+
+export type ComplianceResult = { ok: boolean; issues: ComplianceIssue[] };
+
+export type NewEwayBillInput = {
+  documentId: string;
+  subSupplyType: EwaySubSupplyType;
+  subSupplyDescription?: string;
+  transactionType: 1 | 2 | 3 | 4;
+  from: EwayPlace;
+  to: EwayPlace;
+  transporterId?: string;
+  transporterName?: string;
+  transportMode: TransportMode;
+  vehicleNumber?: string;
+  vehicleType: VehicleType;
+  transportDocNumber?: string;
+  transportDocDate?: string;
+  distanceKm: number;
+  simulation?: IrpSimulation;
+};
+
+export type ExtendEwayBillInput = {
+  remainingDistanceKm: number;
+  reasonCode: EwayExtendReasonCode;
+  remark?: string;
+  transitType: 'inTransit' | 'inMovement';
+  currentPlace: string;
+  currentPincode: string;
+  currentStateCode: string;
+};
 
 const emptySession: Session = { userId: null, authenticated: false, onboardingComplete: false };
 
@@ -379,6 +473,124 @@ export const useAppStore = create<AppState>()(
           });
         });
         if (moves.length) set({ stockMovements: [...get().stockMovements, ...moves] });
+      };
+
+      /* -------------------------------------------------------------- */
+      /* compliance helpers                                             */
+      /* -------------------------------------------------------------- */
+
+      const settingsFor = (companyId: string): ComplianceSettings =>
+        get().complianceSettings.find((c) => c.companyId === companyId) ??
+        defaultComplianceSettings(companyId, companyOf(companyId)?.baseCurrency ?? 'INR');
+
+      const eInvoiceContextFor = (doc: BusinessDocument): EInvoiceContext | null => {
+        const s = get();
+        const company = companyOf(doc.companyId);
+        if (!company) return null;
+        return {
+          document: doc,
+          company,
+          buyer: s.parties.find((p) => p.id === doc.partyId),
+          settings: settingsFor(doc.companyId),
+          items: s.items.filter((i) => i.companyId === doc.companyId),
+          existingIrns: s.documents
+            .filter((d) => d.companyId === doc.companyId && d.id !== doc.id && !!d.compliance?.irn)
+            .map((d) => d.compliance!.irn!),
+          now: nowISO(),
+        };
+      };
+
+      /**
+       * Write compliance state without going through `updateDocument`: a
+       * reported IRN must not recalculate totals, consume a number, or land in
+       * the audit trail as an ordinary edit.
+       */
+      const writeCompliance = (documentId: string, patch: Partial<ComplianceInfo>) => {
+        set({
+          documents: get().documents.map((d) =>
+            d.id === documentId
+              ? { ...d, compliance: { ...d.compliance, ...patch }, updatedAt: nowISO() }
+              : d,
+          ),
+        });
+      };
+
+      const fail = (issues: ComplianceIssue[]): ComplianceResult => ({ ok: false, issues });
+
+      /**
+       * Report a freshly finalised document, where the company has asked for
+       * that to happen automatically.
+       *
+       * An e-way bill is only raised here when the settings carry enough to
+       * raise one without asking — which for road transport they never do,
+       * because nobody can configure a vehicle number in advance. In that case
+       * the document is marked pending and the user is prompted, rather than a
+       * bill being invented with a blank Part-B.
+       */
+      const autoReportCompliance = (documentId: string) => {
+        const doc = get().documents.find((d) => d.id === documentId);
+        if (!doc) return;
+        const settings = settingsFor(doc.companyId);
+
+        if (settings.autoGenerateEInvoiceOnFinalise) {
+          const ctx = eInvoiceContextFor(doc);
+          if (ctx && isEInvoiceApplicable(ctx).applicable) get().generateEInvoice(documentId);
+        }
+
+        if (!settings.autoGenerateEwayBillOnFinalise) return;
+
+        const items = get().items.filter((i) => i.companyId === doc.companyId);
+        if (!isEwayBillRequired({ document: doc, items, settings }).required) return;
+
+        const company = companyOf(doc.companyId);
+        const buyer = get().parties.find((p) => p.id === doc.partyId);
+        const branch = get().branches.find((b) => b.id === doc.branchId);
+        const canRaiseUnattended =
+          settings.defaultTransportMode !== 'road' && !!settings.defaultTransporterId;
+
+        if (!company || !buyer || !branch || !canRaiseUnattended) {
+          writeCompliance(documentId, { ewayBillStatus: 'pending' });
+          notify(
+            'compliance',
+            'E-way bill needed',
+            `${doc.number} needs a vehicle number before a bill can be raised.`,
+            doc.kind,
+            doc.id,
+          );
+          return;
+        }
+
+        const shipTo = buyer.shippingAddress ?? buyer.billingAddress;
+        get().generateEwayBill({
+          documentId,
+          subSupplyType: subSupplyTypeFor(doc.kind),
+          transactionType: 1,
+          from: {
+            legalName: company.legalName ?? company.name,
+            gstin: company.taxRegistration?.identifier ?? 'URP',
+            address1: branch.address.line1,
+            address2: branch.address.line2,
+            place: branch.address.city,
+            pincode: branch.address.postalCode,
+            stateCode: branch.address.stateCode ?? '',
+          },
+          to: {
+            legalName: buyer.name,
+            gstin: buyer.taxId ?? 'URP',
+            address1: shipTo.line1,
+            address2: shipTo.line2,
+            place: shipTo.city,
+            pincode: shipTo.postalCode,
+            stateCode: shipTo.stateCode ?? '',
+          },
+          transporterId: settings.defaultTransporterId,
+          transporterName: settings.defaultTransporterName,
+          transportMode: settings.defaultTransportMode,
+          vehicleType: settings.defaultVehicleType,
+          transportDocNumber: `AUTO/${doc.number}`,
+          transportDocDate: doc.date,
+          distanceKm: settings.defaultDistanceKm,
+        });
       };
 
       const seed = buildSeedData();
@@ -732,6 +944,7 @@ export const useAppStore = create<AppState>()(
                       ? 'received'
                       : 'issued';
           get().setDocumentStatus(id, target);
+          autoReportCompliance(id);
         },
 
         removeDocument: (id) => {
@@ -939,6 +1152,463 @@ export const useAppStore = create<AppState>()(
           set({
             integrations: get().integrations.map((i) => (i.id === id ? { ...i, connected: !i.connected } : i)),
           }),
+        /* ------------------------------------------------------------ */
+        /* compliance (FRD 16)                                          */
+        /* ------------------------------------------------------------ */
+
+        saveComplianceSettings: (settings) => {
+          const exists = get().complianceSettings.some((c) => c.companyId === settings.companyId);
+          const next = { ...settings, updatedAt: nowISO() };
+          set({
+            complianceSettings: exists
+              ? get().complianceSettings.map((c) => (c.companyId === settings.companyId ? next : c))
+              : [next, ...get().complianceSettings],
+          });
+          audit('updated', 'complianceSettings', settings.companyId, 'E-invoicing & e-way bill');
+        },
+
+        generateEInvoice: (documentId, opts) => {
+          const doc = get().documents.find((d) => d.id === documentId);
+          if (!doc) return fail([]);
+
+          const ctx = eInvoiceContextFor(doc);
+          if (!ctx) return fail([]);
+
+          const applicability = isEInvoiceApplicable(ctx);
+          if (!applicability.applicable) {
+            writeCompliance(documentId, {
+              eInvoiceStatus: 'notApplicable',
+              lastMessage: applicability.reason,
+            });
+            return fail([
+              { code: 'NA', field: 'document', message: applicability.reason, severity: 'blocking' },
+            ]);
+          }
+
+          const issues = validateEInvoice(ctx);
+          const blocking = blockingIssues(issues);
+          if (blocking.length) {
+            writeCompliance(documentId, {
+              eInvoiceStatus: 'failed',
+              eInvoiceIssues: issues,
+              lastAttemptAt: nowISO(),
+              lastMessage: blocking[0].message,
+            });
+            audit('e-invoice rejected', doc.kind, doc.id, doc.number, { after: blocking[0].code });
+            notify(
+              'compliance',
+              'E-invoice rejected',
+              `${doc.number}: ${blocking[0].message}`,
+              doc.kind,
+              doc.id,
+            );
+            return fail(issues);
+          }
+
+          const response = submitInvoice({
+            payload: buildIrpPayload(ctx),
+            existingIrns: ctx.existingIrns ?? [],
+            now: ctx.now,
+            simulation: opts?.simulation,
+          });
+
+          if (!response.ok) {
+            writeCompliance(documentId, {
+              eInvoiceStatus: 'failed',
+              eInvoiceIssues: response.errors,
+              lastAttemptAt: nowISO(),
+              lastMessage: response.errors[0]?.message,
+            });
+            audit('e-invoice rejected', doc.kind, doc.id, doc.number, {
+              after: response.errors[0]?.code,
+            });
+            notify(
+              'compliance',
+              'E-invoice rejected',
+              `${doc.number}: ${response.errors[0]?.message ?? 'The portal refused the invoice'}`,
+              doc.kind,
+              doc.id,
+            );
+            return fail(response.errors);
+          }
+
+          writeCompliance(documentId, {
+            eInvoiceStatus: 'generated',
+            eInvoiceDocType: applicability.docType ?? undefined,
+            eInvoiceSupplyType: applicability.supplyType ?? undefined,
+            irn: response.irn,
+            ackNo: response.ackNo,
+            ackDate: response.ackDate,
+            signedQrPayload: response.signedQrPayload,
+            irnGeneratedAt: ctx.now,
+            irnCancelledAt: undefined,
+            irnCancelReasonCode: undefined,
+            irnCancelRemark: undefined,
+            eInvoiceIssues: issues.length ? issues : undefined,
+            lastAttemptAt: ctx.now,
+            lastMessage: undefined,
+          });
+
+          audit('generated e-invoice', doc.kind, doc.id, doc.number, { after: response.irn });
+          notify(
+            'compliance',
+            'IRN generated',
+            `${doc.number} · Ack ${response.ackNo}`,
+            doc.kind,
+            doc.id,
+          );
+          return { ok: true, issues };
+        },
+
+        cancelEInvoice: (documentId, reasonCode, remark) => {
+          const doc = get().documents.find((d) => d.id === documentId);
+          if (!doc) return fail([]);
+
+          const now = nowISO();
+          const allowed = canCancelEInvoice(doc.compliance, now);
+          if (!allowed.allowed) {
+            return fail([
+              {
+                code: 'CANCEL',
+                field: 'irn',
+                message: allowed.reason ?? 'This IRN cannot be cancelled',
+                severity: 'blocking',
+              },
+            ]);
+          }
+
+          const response = cancelIrn({
+            irn: doc.compliance!.irn!,
+            irnGeneratedAt: doc.compliance!.irnGeneratedAt!,
+            reasonCode,
+            remark,
+            now,
+          });
+          if (!response.ok) return fail(response.errors);
+
+          writeCompliance(documentId, {
+            eInvoiceStatus: 'cancelled',
+            irnCancelledAt: now,
+            irnCancelReasonCode: reasonCode,
+            irnCancelRemark: remark,
+            lastMessage: `IRN cancelled on the portal: ${response.reason.toLowerCase()}`,
+          });
+
+          audit('cancelled e-invoice', doc.kind, doc.id, doc.number, {
+            before: doc.compliance?.irn,
+            after: response.reason,
+          });
+          notify('compliance', 'IRN cancelled', `${doc.number} · ${response.reason}`, doc.kind, doc.id);
+          return { ok: true, issues: [] };
+        },
+
+        generateEwayBill: (input) => {
+          const s = get();
+          const doc = s.documents.find((d) => d.id === input.documentId);
+          if (!doc) return fail([]);
+
+          const settings = settingsFor(doc.companyId);
+          const items = s.items.filter((i) => i.companyId === doc.companyId);
+          const requirement = isEwayBillRequired({ document: doc, items, settings });
+          if (!requirement.required) {
+            return fail([
+              { code: 'EWB001', field: 'document', message: requirement.reason, severity: 'blocking' },
+            ]);
+          }
+
+          const now = nowISO();
+          const currency = doc.totals.grandTotal.currency;
+          const componentTotal = (type: 'CGST' | 'SGST' | 'IGST') =>
+            doc.totals.taxLines
+              .flatMap((l) => l.components)
+              .filter((c) => c.type === type)
+              .reduce((acc, c) => acc + c.amount.minor, 0);
+
+          const partA = validatePartA({
+            from: input.from,
+            to: input.to,
+            subSupplyType: input.subSupplyType,
+            subSupplyDescription: input.subSupplyDescription,
+            documentNumber: doc.number,
+            documentDate: doc.date,
+            consignmentValueMinor: doc.totals.grandTotal.minor,
+            mainHsnCode: mainHsnCodeOf(doc),
+          });
+          const partB = validatePartB({
+            transportMode: input.transportMode,
+            vehicleNumber: input.vehicleNumber,
+            vehicleType: input.vehicleType,
+            transporterId: input.transporterId,
+            transportDocNumber: input.transportDocNumber,
+            transportDocDate: input.transportDocDate,
+            distanceKm: input.distanceKm,
+            now,
+          });
+
+          const issues = [...partA, ...partB];
+          if (blockingIssues(issues).length) return fail(issues);
+
+          const draft = {
+            companyId: doc.companyId,
+            branchId: doc.branchId,
+            documentId: doc.id,
+            documentKind: doc.kind,
+            documentNumber: doc.number,
+            documentDate: doc.date,
+            partyId: doc.partyId,
+            docType: ewayDocTypeFor(doc.kind),
+            supplyType: 'outward' as const,
+            subSupplyType: input.subSupplyType,
+            subSupplyDescription: input.subSupplyDescription,
+            transactionType: input.transactionType,
+            from: input.from,
+            to: input.to,
+            consignmentValue: doc.totals.grandTotal,
+            taxableValue: doc.totals.taxableAmount,
+            cgst: { minor: componentTotal('CGST'), currency },
+            sgst: { minor: componentTotal('SGST'), currency },
+            igst: { minor: componentTotal('IGST'), currency },
+            mainHsnCode: mainHsnCodeOf(doc),
+            itemCount: doc.lines.length,
+            transporterId: input.transporterId,
+            transporterName: input.transporterName,
+            transportMode: input.transportMode,
+            vehicleNumber: input.vehicleNumber,
+            vehicleType: input.vehicleType,
+            transportDocNumber: input.transportDocNumber,
+            transportDocDate: input.transportDocDate,
+            distanceKm: input.distanceKm,
+            generatedAt: now,
+            generatedBy: s.session.userId ?? CURRENT_USER_ID,
+            cancelledAt: undefined,
+            cancelReasonCode: undefined,
+            cancelRemark: undefined,
+          };
+
+          const response = submitEwayBill({
+            payload: buildEwbPayload(draft),
+            vehicleType: input.vehicleType,
+            now,
+            simulation: input.simulation,
+          });
+          if (!response.ok) return fail(response.errors);
+
+          const bill: EwayBill = {
+            ...draft,
+            id: uid('ewb'),
+            ewayBillNumber: response.ewayBillNumber,
+            validFrom: response.validFrom,
+            validUpto: response.validUpto,
+            status: 'active',
+            partBUpdates: [
+              {
+                id: uid('pb'),
+                mode: input.transportMode,
+                vehicleNumber: input.vehicleNumber,
+                vehicleType: input.vehicleType,
+                transportDocNumber: input.transportDocNumber,
+                transportDocDate: input.transportDocDate,
+                fromPlace: input.from.place,
+                fromStateCode: input.from.stateCode,
+                reasonCode: '1',
+                updatedAt: now,
+                updatedBy: s.session.userId ?? CURRENT_USER_ID,
+              },
+            ],
+            extensions: [],
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          set({ ewayBills: [bill, ...get().ewayBills] });
+          writeCompliance(doc.id, {
+            ewayBillStatus: 'generated',
+            ewayBillId: bill.id,
+            ewayBillNumber: bill.ewayBillNumber,
+            ewayBillValidUpto: bill.validUpto,
+          });
+
+          audit('generated e-way bill', 'ewayBill', bill.id, bill.ewayBillNumber, { after: doc.number });
+          notify(
+            'compliance',
+            `E-way bill ${bill.ewayBillNumber}`,
+            `${doc.number} · valid until ${bill.validUpto.slice(0, 10)}`,
+            'ewayBill',
+            bill.id,
+          );
+          return { ok: true, issues, ewayBillId: bill.id };
+        },
+
+        updateEwayBillPartB: (id, update) => {
+          const s = get();
+          const bill = s.ewayBills.find((b) => b.id === id);
+          if (!bill) return fail([]);
+
+          const now = nowISO();
+          const allowed = canUpdatePartB(bill, now);
+          if (!allowed.allowed) {
+            return fail([
+              {
+                code: 'EWB210',
+                field: 'status',
+                message: allowed.reason ?? 'Part-B cannot be updated',
+                severity: 'blocking',
+              },
+            ]);
+          }
+
+          const issues = validatePartB({
+            transportMode: update.mode,
+            vehicleNumber: update.vehicleNumber,
+            vehicleType: update.vehicleType,
+            transportDocNumber: update.transportDocNumber,
+            transportDocDate: update.transportDocDate,
+            distanceKm: bill.distanceKm,
+            now,
+          });
+          if (blockingIssues(issues).length) return fail(issues);
+
+          const entry: EwayBillPartBUpdate = {
+            ...update,
+            id: uid('pb'),
+            updatedAt: now,
+            updatedBy: s.session.userId ?? CURRENT_USER_ID,
+          };
+
+          set({
+            ewayBills: get().ewayBills.map((b) =>
+              b.id === id
+                ? {
+                    ...b,
+                    transportMode: update.mode,
+                    vehicleNumber: update.vehicleNumber,
+                    vehicleType: update.vehicleType,
+                    transportDocNumber: update.transportDocNumber,
+                    transportDocDate: update.transportDocDate,
+                    partBUpdates: [...b.partBUpdates, entry],
+                    updatedAt: now,
+                  }
+                : b,
+            ),
+          });
+
+          audit('updated Part-B', 'ewayBill', bill.id, bill.ewayBillNumber, {
+            after: update.vehicleNumber ?? update.transportDocNumber,
+          });
+          return { ok: true, issues };
+        },
+
+        extendEwayBill: (id, args) => {
+          const s = get();
+          const bill = s.ewayBills.find((b) => b.id === id);
+          if (!bill) return fail([]);
+
+          const now = nowISO();
+          const response = extendEwayBillAtPortal({
+            bill,
+            remainingDistanceKm: args.remainingDistanceKm,
+            reasonCode: args.reasonCode,
+            now,
+          });
+          if (!response.ok) return fail(response.errors);
+
+          const extension = {
+            id: uid('ext'),
+            extendedAt: now,
+            extendedBy: s.session.userId ?? CURRENT_USER_ID,
+            reasonCode: args.reasonCode,
+            remark: args.remark,
+            transitType: args.transitType,
+            currentPlace: args.currentPlace,
+            currentPincode: args.currentPincode,
+            currentStateCode: args.currentStateCode,
+            remainingDistanceKm: args.remainingDistanceKm,
+            previousValidUpto: bill.validUpto,
+            newValidUpto: response.newValidUpto,
+          };
+
+          set({
+            ewayBills: get().ewayBills.map((b) =>
+              b.id === id
+                ? {
+                    ...b,
+                    validUpto: response.newValidUpto,
+                    extensions: [...b.extensions, extension],
+                    updatedAt: now,
+                  }
+                : b,
+            ),
+          });
+          writeCompliance(bill.documentId, { ewayBillValidUpto: response.newValidUpto });
+
+          audit('extended e-way bill', 'ewayBill', bill.id, bill.ewayBillNumber, {
+            before: bill.validUpto,
+            after: response.newValidUpto,
+          });
+          notify(
+            'compliance',
+            'E-way bill extended',
+            `${bill.ewayBillNumber} now runs to ${response.newValidUpto.slice(0, 10)}`,
+            'ewayBill',
+            bill.id,
+          );
+          return { ok: true, issues: [] };
+        },
+
+        cancelEwayBill: (id, reasonCode, remark) => {
+          const bill = get().ewayBills.find((b) => b.id === id);
+          if (!bill) return fail([]);
+
+          const now = nowISO();
+          const allowed = canCancelEwayBill(bill, now);
+          if (!allowed.allowed) {
+            return fail([
+              {
+                code: 'EWB220',
+                field: 'status',
+                message: allowed.reason ?? 'This bill cannot be cancelled',
+                severity: 'blocking',
+              },
+            ]);
+          }
+
+          const response = cancelEwayBillAtPortal({
+            ewayBillNumber: bill.ewayBillNumber,
+            reasonCode,
+            remark,
+            now,
+          });
+          if (!response.ok) return fail(response.errors);
+
+          set({
+            ewayBills: get().ewayBills.map((b) =>
+              b.id === id
+                ? {
+                    ...b,
+                    status: 'cancelled' as const,
+                    cancelledAt: now,
+                    cancelReasonCode: reasonCode,
+                    cancelRemark: remark,
+                    updatedAt: now,
+                  }
+                : b,
+            ),
+          });
+          writeCompliance(bill.documentId, { ewayBillStatus: 'cancelled' });
+
+          audit('cancelled e-way bill', 'ewayBill', bill.id, bill.ewayBillNumber, {
+            after: response.reason,
+          });
+          notify(
+            'compliance',
+            'E-way bill cancelled',
+            `${bill.ewayBillNumber} · ${response.reason}`,
+            'ewayBill',
+            bill.id,
+          );
+          return { ok: true, issues: [] };
+        },
+
         retrySync: (id) =>
           set({ syncQueue: get().syncQueue.filter((q) => q.id !== id) }),
         clearSyncQueue: () => set({ syncQueue: [] }),
@@ -958,11 +1628,31 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: 'ebs.data.v1',
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => {
         const { hydrated, ...rest } = s;
         void hydrated;
         return rest as AppState;
+      },
+      /**
+       * Version 2 introduced e-way bills and compliance settings, which refer
+       * to documents by id. Ids are minted with `uid()`, which is not stable
+       * across seed runs, so a saved v1 dataset and a freshly built v2 one
+       * cannot be stitched together — every seeded bill would point at a
+       * document that no longer exists. Rebuilding the demo data is the only
+       * coherent answer, and the sign-in and the active company are carried
+       * over so nobody is bounced back to the welcome screen.
+       */
+      migrate: (persisted, version) => {
+        if (version >= 2) return persisted as AppState;
+        const prior = persisted as Partial<AppState> | undefined;
+        return {
+          ...buildSeedData(),
+          session: prior?.session ?? emptySession,
+          activeCompanyId: prior?.activeCompanyId ?? PRIMARY_COMPANY_ID,
+          activeBranchId: prior?.activeBranchId ?? 'brn_mum',
+        } as AppState;
       },
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);

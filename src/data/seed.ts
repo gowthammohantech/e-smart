@@ -2,6 +2,7 @@ import {
   Address,
   Branch,
   Company,
+  ComplianceSettings,
   DeviceSession,
   ExpenseCategory,
   ExchangeRate,
@@ -13,7 +14,7 @@ import {
   User,
 } from '@/types';
 import { fromMajor, zero } from '@/lib/money';
-import { addDaysISO, today } from '@/lib/date';
+import { addDaysISO, nowISO, today } from '@/lib/date';
 import { DEFAULT_PREFIXES, defaultSeries } from '@/domain/numbering';
 import { INDIAN_STATES, expenseCategories, gstCategories } from './masters';
 import { makeRng } from './rng';
@@ -475,4 +476,56 @@ export function seedNumberingSeries(): NumberingSeries[] {
     });
   });
   return out;
+}
+
+/**
+ * Compliance configuration, one row per company (FRD 16).
+ *
+ * Kept as its own record rather than a field on `Company`, because the business
+ * profile form replaces the whole company object on save and would otherwise
+ * wipe this on an unrelated edit.
+ */
+export function defaultComplianceSettings(companyId: string, baseCurrency = 'INR'): ComplianceSettings {
+  return {
+    companyId,
+    eInvoiceEnabled: true,
+    annualTurnover: zero(baseCurrency),
+    // Mandatory for businesses at or above 5 crore of aggregate turnover.
+    eInvoiceTurnoverThreshold: fromMajor('50000000', baseCurrency),
+    reportingWindowDays: 30,
+    autoGenerateEInvoiceOnFinalise: false,
+    irpEnvironment: 'sandbox',
+    ewayBillEnabled: true,
+    // The statute sets 50,000; several states set a higher intra-state figure.
+    ewayBillThreshold: fromMajor('50000', baseCurrency),
+    autoGenerateEwayBillOnFinalise: false,
+    defaultDistanceKm: 120,
+    defaultTransportMode: 'road',
+    defaultVehicleType: 'regular',
+    updatedAt: nowISO(),
+  };
+}
+
+export function seedComplianceSettings(): ComplianceSettings[] {
+  return [
+    {
+      ...defaultComplianceSettings(PRIMARY_COMPANY_ID),
+      // Vertex trades above the threshold, so e-invoicing bites.
+      annualTurnover: fromMajor('84000000', 'INR'),
+      irpUsername: 'vertex_irp01',
+      irpClientIdMasked: 'ELX-****-9F21',
+      defaultTransporterId: '27AABCT5512M1ZQ',
+      defaultTransporterName: 'Konkan Roadlines',
+      defaultDistanceKm: 340,
+    },
+    {
+      ...defaultComplianceSettings(SECOND_COMPANY_ID),
+      // Aurora is a services business under the threshold, so switching to it
+      // shows the "not applicable" side of the same screens.
+      annualTurnover: fromMajor('14000000', 'INR'),
+      ewayBillEnabled: false,
+      irpUsername: 'aurora_irp01',
+      irpClientIdMasked: 'ELX-****-3C08',
+    },
+  ];
 }

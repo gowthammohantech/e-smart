@@ -2,10 +2,16 @@ import {
   Attachment,
   AuditEvent,
   AppNotification,
+  Branch,
   BusinessDocument,
+  Company,
+  ComplianceSettings,
   DocStatus,
+  DocumentEwayStatus,
   DocumentKind,
   DocumentLine,
+  EwayBill,
+  EwayPlace,
   Expense,
   Item,
   NumberingSeries,
@@ -20,6 +26,23 @@ import { Money, fromMajor, money, zero } from '@/lib/money';
 import { addDaysISO, nowISO, today } from '@/lib/date';
 import { calculateDocument } from '@/domain/lineCalc';
 import { formatNumber } from '@/domain/numbering';
+import {
+  EInvoiceContext,
+  buildSignedQrPayload,
+  claimsFor,
+  computeIrn,
+  fiscalYearCode,
+  isEInvoiceApplicable,
+  mainHsnCodeOf,
+  portalDateTime,
+} from '@/domain/eInvoice';
+import {
+  ewayBillStatusAt,
+  ewayDocTypeFor,
+  subSupplyTypeFor,
+  validUptoFor,
+} from '@/domain/ewayBill';
+import { ackNoFrom, ewayBillNumberFrom } from '@/domain/irpAdapter';
 import { uid } from '@/lib/id';
 import { PRIMARY_COMPANY_ID, SECOND_COMPANY_ID, CURRENT_USER_ID } from './seed';
 import { makeRng } from './rng';
@@ -129,7 +152,6 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
     const homeState = companyId === PRIMARY_COMPANY_ID ? '27' : '29';
     const pos = party.billingAddress.stateCode ?? homeState;
     const totals = totalsFor(lines, currency, exchangeRate, taxCategories, homeState, pos, currency === 'INR');
-    const isB2B = !!party.taxId;
     return {
       id: uid(kind),
       companyId,
@@ -154,14 +176,9 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
       attachmentIds: [],
       sourceDocumentId: opts.sourceId,
       totals,
-      compliance:
-        kind === 'invoice' && isB2B
-          ? {
-              eInvoiceStatus: status === 'draft' ? 'pending' : 'generated',
-              irn: status === 'draft' ? undefined : `${rng.int(10, 99)}${uid('').replace(/[^a-z0-9]/g, '').slice(0, 30)}`.slice(0, 32),
-              ewayBillStatus: 'notApplicable',
-            }
-          : undefined,
+      // Compliance is stamped on afterwards by seedCompliance, which needs the
+      // finished document to compute a real IRN from it.
+      compliance: undefined,
       createdBy: CURRENT_USER_ID,
       createdAt: `${date}T09:${String(rng.int(10, 59)).padStart(2, '0')}:00.000Z`,
       updatedAt: `${date}T09:${String(rng.int(10, 59)).padStart(2, '0')}:00.000Z`,
@@ -591,7 +608,11 @@ export function seedStockMovements(items: Item[], docs: BusinessDocument[]): Sto
 /* Notifications, audit trail, sync queue, attachments                 */
 /* ------------------------------------------------------------------ */
 
-export function seedNotifications(docs: BusinessDocument[], payments: Payment[]): AppNotification[] {
+export function seedNotifications(
+  docs: BusinessDocument[],
+  payments: Payment[],
+  ewayBills: EwayBill[] = [],
+): AppNotification[] {
   const out: AppNotification[] = [];
   const overdue = docs.filter((d) => d.kind === 'invoice' && d.status === 'overdue').slice(0, 4);
   const recentPayments = payments.filter((p) => p.direction === 'received').slice(-3);
@@ -634,16 +655,54 @@ export function seedNotifications(docs: BusinessDocument[], payments: Payment[])
     read: false,
     createdAt: nowISO(),
   });
-  out.push({
-    id: uid('ntf'),
-    companyId: PRIMARY_COMPANY_ID,
-    kind: 'compliance',
-    title: 'E-invoice generated',
-    body: 'IRN received from the IRP for your latest B2B invoice.',
-    entityType: 'compliance',
-    read: true,
-    createdAt: `${daysAgo(1)}T10:12:00.000Z`,
-  });
+  /* Compliance notifications, derived from the seeded documents and bills so
+     the list reflects what the screens actually show. */
+  const reported = docs.find((d) => d.compliance?.eInvoiceStatus === 'generated');
+  if (reported) {
+    out.push({
+      id: uid('ntf'),
+      companyId: reported.companyId,
+      kind: 'compliance',
+      title: 'IRN generated',
+      body: `${reported.number} · Ack ${reported.compliance?.ackNo}`,
+      entityType: reported.kind,
+      entityId: reported.id,
+      read: true,
+      createdAt: reported.compliance?.irnGeneratedAt ?? `${daysAgo(1)}T10:12:00.000Z`,
+    });
+  }
+
+  const rejected = docs.find((d) => d.compliance?.eInvoiceStatus === 'failed');
+  if (rejected) {
+    out.push({
+      id: uid('ntf'),
+      companyId: rejected.companyId,
+      kind: 'compliance',
+      title: 'E-invoice rejected',
+      body: `${rejected.number}: ${rejected.compliance?.eInvoiceIssues?.[0]?.message ?? 'The portal refused the invoice'}`,
+      entityType: rejected.kind,
+      entityId: rejected.id,
+      read: false,
+      createdAt: rejected.compliance?.lastAttemptAt ?? `${daysAgo(2)}T10:14:00.000Z`,
+    });
+  }
+
+  const expiring = ewayBills
+    .filter((b) => b.status === 'active')
+    .sort((a, b) => a.validUpto.localeCompare(b.validUpto))[0];
+  if (expiring) {
+    out.push({
+      id: uid('ntf'),
+      companyId: expiring.companyId,
+      kind: 'compliance',
+      title: 'E-way bill expiring soon',
+      body: `${expiring.ewayBillNumber} for ${expiring.documentNumber} runs out on ${expiring.validUpto.slice(0, 10)}.`,
+      entityType: 'ewayBill',
+      entityId: expiring.id,
+      read: false,
+      createdAt: nowISO(),
+    });
+  }
   out.push({
     id: uid('ntf'),
     companyId: PRIMARY_COMPANY_ID,
@@ -658,7 +717,11 @@ export function seedNotifications(docs: BusinessDocument[], payments: Payment[])
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function seedAudit(docs: BusinessDocument[], payments: Payment[]): AuditEvent[] {
+export function seedAudit(
+  docs: BusinessDocument[],
+  payments: Payment[],
+  ewayBills: EwayBill[] = [],
+): AuditEvent[] {
   const out: AuditEvent[] = [];
   docs.slice(0, 18).forEach((d) => {
     out.push({
@@ -688,6 +751,86 @@ export function seedAudit(docs: BusinessDocument[], payments: Payment[]): AuditE
       createdAt: p.createdAt,
     });
   });
+
+  /* Compliance events, so the audit trail carries the new vocabulary from the
+     first launch rather than only after the user reports something. */
+  const entry = (
+    action: string,
+    entityType: string,
+    entityId: string,
+    entityLabel: string,
+    createdAt: string,
+    extra: { before?: string; after?: string } = {},
+  ): AuditEvent => ({
+    id: uid('aud'),
+    companyId: PRIMARY_COMPANY_ID,
+    actorId: CURRENT_USER_ID,
+    actorName: 'Gowtham Mohan',
+    action,
+    entityType,
+    entityId,
+    entityLabel,
+    before: extra.before,
+    after: extra.after,
+    device: 'iPhone 15 Pro',
+    createdAt,
+  });
+
+  docs
+    .filter((d) => d.compliance?.eInvoiceStatus === 'generated' && d.compliance.irnGeneratedAt)
+    .slice(0, 8)
+    .forEach((d) => {
+      out.push(
+        entry('generated e-invoice', d.kind, d.id, d.number, d.compliance!.irnGeneratedAt!, {
+          after: d.compliance!.irn,
+        }),
+      );
+    });
+
+  docs
+    .filter((d) => d.compliance?.eInvoiceStatus === 'cancelled' && d.compliance.irnCancelledAt)
+    .forEach((d) => {
+      out.push(
+        entry('cancelled e-invoice', d.kind, d.id, d.number, d.compliance!.irnCancelledAt!, {
+          before: d.compliance!.irn,
+          after: 'Order cancelled',
+        }),
+      );
+    });
+
+  docs
+    .filter((d) => d.compliance?.eInvoiceStatus === 'failed' && d.compliance.lastAttemptAt)
+    .forEach((d) => {
+      out.push(
+        entry('e-invoice rejected', d.kind, d.id, d.number, d.compliance!.lastAttemptAt!, {
+          after: d.compliance!.eInvoiceIssues?.[0]?.code,
+        }),
+      );
+    });
+
+  ewayBills.forEach((b) => {
+    out.push(
+      entry('generated e-way bill', 'ewayBill', b.id, b.ewayBillNumber, b.generatedAt, {
+        after: b.documentNumber,
+      }),
+    );
+    b.extensions.forEach((e) => {
+      out.push(
+        entry('extended e-way bill', 'ewayBill', b.id, b.ewayBillNumber, e.extendedAt, {
+          before: e.previousValidUpto,
+          after: e.newValidUpto,
+        }),
+      );
+    });
+    if (b.cancelledAt) {
+      out.push(
+        entry('cancelled e-way bill', 'ewayBill', b.id, b.ewayBillNumber, b.cancelledAt, {
+          after: 'Order cancelled',
+        }),
+      );
+    }
+  });
+
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -708,4 +851,352 @@ export function seedSyncQueue(): SyncQueueEntry[] {
 
 export function seedAttachments(): Attachment[] {
   return [];
+}
+
+/* ------------------------------------------------------------------ */
+/* Compliance (FRD 16)                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Stamp e-invoice state onto the seeded documents and build the e-way bill
+ * fixtures.
+ *
+ * Every IRN here is the genuine SHA-256 of the document it sits on, so a
+ * curious user can recompute one by hand and get the same answer. The set
+ * deliberately covers the states the interface has to handle — generated,
+ * cancelled, rejected and not yet reported — and bills that are active,
+ * expiring within the day, expired and cancelled.
+ */
+export function seedCompliance(
+  docs: BusinessDocument[],
+  companies: Company[],
+  parties: Party[],
+  branches: Branch[],
+  settings: ComplianceSettings[],
+): { documents: BusinessDocument[]; ewayBills: EwayBill[] } {
+  const companyOf = (id: string) => companies.find((c) => c.id === id);
+  const partyOf = (id: string) => parties.find((p) => p.id === id);
+  const settingsOf = (id: string) => settings.find((s) => s.companyId === id);
+  const ewayBills: EwayBill[] = [];
+
+  const reportable = docs.filter(
+    (d) => d.kind === 'invoice' && d.companyId === PRIMARY_COMPANY_ID && !!partyOf(d.partyId)?.taxId,
+  );
+
+  /** One invoice is left with a line missing its HSN, so a rejection is real. */
+  const brokenId = reportable.find((d) => d.status === 'issued')?.id;
+  /** One is reported and then cancelled inside the 24-hour window. */
+  const cancelledId = reportable.find((d) => d.status === 'cancelled')?.id;
+  /** One recent invoice is left unreported, so the hub has something to chase. */
+  const pendingId = reportable.filter((d) => d.status === 'issued').slice(-1)[0]?.id;
+
+  const documents = docs.map((doc) => {
+    const company = companyOf(doc.companyId);
+    const buyer = partyOf(doc.partyId);
+    const config = settingsOf(doc.companyId);
+    if (!company || !config) return doc;
+
+    const base: EInvoiceContext = {
+      document: doc,
+      company,
+      buyer,
+      settings: config,
+      items: [],
+      existingIrns: [],
+      now: nowISO(),
+    };
+
+    const applicability = isEInvoiceApplicable(base);
+    if (!applicability.applicable) {
+      return doc.kind === 'invoice'
+        ? { ...doc, compliance: { eInvoiceStatus: 'notApplicable' as const, lastMessage: applicability.reason } }
+        : doc;
+    }
+
+    if (doc.id === pendingId) {
+      return { ...doc, compliance: { eInvoiceStatus: 'pending' as const } };
+    }
+
+    if (doc.id === brokenId) {
+      // Strip the HSN from one line so the blocking validation is genuine
+      // rather than a status someone typed in.
+      const lines = doc.lines.map((l, i) => (i === 0 ? { ...l, hsnCode: undefined } : l));
+      return {
+        ...doc,
+        lines,
+        compliance: {
+          eInvoiceStatus: 'failed' as const,
+          eInvoiceDocType: applicability.docType ?? undefined,
+          eInvoiceSupplyType: applicability.supplyType ?? undefined,
+          lastAttemptAt: `${doc.date}T10:14:00.000Z`,
+          eInvoiceIssues: [
+            {
+              code: '2176',
+              field: 'lines[0].hsnCode',
+              message: `"${doc.lines[0]?.name ?? 'The first line'}" has no HSN or SAC code`,
+              severity: 'blocking' as const,
+            },
+          ],
+          lastMessage: 'The portal rejected this invoice: HSN code is mandatory on every line',
+        },
+      };
+    }
+
+    const generatedAt = `${doc.date}T10:${String(rng.int(10, 55)).padStart(2, '0')}:00.000Z`;
+    const irn = computeIrn(
+      company.taxRegistration?.identifier ?? '',
+      applicability.docType ?? 'INV',
+      doc.number,
+      fiscalYearCode(doc.date),
+    );
+    const claims = claimsFor({ ...base, document: doc }, irn, generatedAt);
+
+    const compliance = {
+      eInvoiceStatus: 'generated' as const,
+      eInvoiceDocType: applicability.docType ?? undefined,
+      eInvoiceSupplyType: applicability.supplyType ?? undefined,
+      irn,
+      ackNo: ackNoFrom(irn, generatedAt),
+      ackDate: portalDateTime(generatedAt),
+      signedQrPayload: buildSignedQrPayload(claims),
+      irnGeneratedAt: generatedAt,
+    };
+
+    if (doc.id === cancelledId) {
+      const cancelledAt = addHoursISO(generatedAt, 3);
+      return {
+        ...doc,
+        compliance: {
+          ...compliance,
+          eInvoiceStatus: 'cancelled' as const,
+          irnCancelledAt: cancelledAt,
+          irnCancelReasonCode: '3' as const,
+          irnCancelRemark: 'The customer withdrew the order before despatch.',
+          lastMessage: 'IRN cancelled on the portal: order cancelled',
+        },
+      };
+    }
+
+    return { ...doc, compliance };
+  });
+
+  /* --- e-way bills ------------------------------------------------- */
+
+  const vertex = companyOf(PRIMARY_COMPANY_ID);
+  const mumbai = branches.find((b) => b.id === 'brn_mum');
+  const movers = documents.filter(
+    (d) =>
+      d.companyId === PRIMARY_COMPANY_ID &&
+      (d.kind === 'invoice' || d.kind === 'delivery') &&
+      d.status !== 'draft' &&
+      d.status !== 'cancelled',
+  );
+
+  if (vertex && mumbai) {
+    const from: EwayPlace = {
+      legalName: vertex.legalName ?? vertex.name,
+      gstin: vertex.taxRegistration?.identifier ?? 'URP',
+      address1: mumbai.address.line1,
+      address2: mumbai.address.line2,
+      place: mumbai.address.city,
+      pincode: mumbai.address.postalCode,
+      stateCode: mumbai.address.stateCode ?? '27',
+    };
+
+    const plan: {
+      kind: 'active' | 'expiringSoon' | 'expired' | 'cancelled' | 'odcMultiLeg' | 'rail' | 'regenerated';
+      distanceKm: number;
+      generatedDaysAgo: number;
+      vehicleType: EwayBill['vehicleType'];
+      transportMode: EwayBill['transportMode'];
+    }[] = [
+      { kind: 'active', distanceKm: 640, generatedDaysAgo: 1, vehicleType: 'regular', transportMode: 'road' },
+      { kind: 'expiringSoon', distanceKm: 150, generatedDaysAgo: 1, vehicleType: 'regular', transportMode: 'road' },
+      { kind: 'expired', distanceKm: 380, generatedDaysAgo: 12, vehicleType: 'regular', transportMode: 'road' },
+      { kind: 'cancelled', distanceKm: 210, generatedDaysAgo: 30, vehicleType: 'regular', transportMode: 'road' },
+      { kind: 'odcMultiLeg', distanceKm: 1180, generatedDaysAgo: 6, vehicleType: 'overDimensional', transportMode: 'road' },
+      { kind: 'rail', distanceKm: 1420, generatedDaysAgo: 3, vehicleType: 'regular', transportMode: 'rail' },
+      { kind: 'regenerated', distanceKm: 210, generatedDaysAgo: 30, vehicleType: 'regular', transportMode: 'road' },
+    ];
+
+    plan.forEach((entry, i) => {
+      // The regenerated bill deliberately shares a document with the cancelled
+      // one, so a document carrying more than one bill is exercised.
+      const doc = entry.kind === 'regenerated' ? movers[3] : movers[i % movers.length];
+      if (!doc) return;
+      const buyer = partyOf(doc.partyId);
+      if (!buyer) return;
+
+      const generatedAt = `${daysAgo(entry.generatedDaysAgo)}T07:${String(rng.int(10, 55)).padStart(2, '0')}:00.000Z`;
+      const to: EwayPlace = {
+        legalName: buyer.name,
+        gstin: buyer.taxId ?? 'URP',
+        address1: (buyer.shippingAddress ?? buyer.billingAddress).line1,
+        place: (buyer.shippingAddress ?? buyer.billingAddress).city,
+        pincode: (buyer.shippingAddress ?? buyer.billingAddress).postalCode,
+        stateCode: (buyer.shippingAddress ?? buyer.billingAddress).stateCode ?? '27',
+      };
+
+      const igst = doc.totals.taxLines
+        .flatMap((l) => l.components)
+        .filter((c) => c.type === 'IGST')
+        .reduce((acc, c) => acc + c.amount.minor, 0);
+      const cgst = doc.totals.taxLines
+        .flatMap((l) => l.components)
+        .filter((c) => c.type === 'CGST')
+        .reduce((acc, c) => acc + c.amount.minor, 0);
+      const sgst = doc.totals.taxLines
+        .flatMap((l) => l.components)
+        .filter((c) => c.type === 'SGST')
+        .reduce((acc, c) => acc + c.amount.minor, 0);
+
+      const currency = doc.totals.grandTotal.currency;
+      const isRail = entry.transportMode === 'rail';
+      const seed = `${doc.number}:${entry.kind}:${generatedAt}`;
+
+      const bill: EwayBill = {
+        id: uid('ewb'),
+        companyId: PRIMARY_COMPANY_ID,
+        branchId: doc.branchId,
+        ewayBillNumber: ewayBillNumberFrom(seed),
+        documentId: doc.id,
+        documentKind: doc.kind,
+        documentNumber: doc.number,
+        documentDate: doc.date,
+        partyId: doc.partyId,
+        docType: ewayDocTypeFor(doc.kind),
+        supplyType: 'outward',
+        subSupplyType: subSupplyTypeFor(doc.kind),
+        transactionType: 1,
+        from,
+        to,
+        consignmentValue: doc.totals.grandTotal,
+        taxableValue: doc.totals.taxableAmount,
+        cgst: money(cgst, currency),
+        sgst: money(sgst, currency),
+        igst: money(igst, currency),
+        mainHsnCode: mainHsnCodeOf(doc),
+        itemCount: doc.lines.length,
+        transporterId: '27AABCT5512M1ZQ',
+        transporterName: 'Konkan Roadlines',
+        transportMode: entry.transportMode,
+        vehicleNumber: isRail ? undefined : VEHICLES[i % VEHICLES.length],
+        vehicleType: entry.vehicleType,
+        transportDocNumber: isRail ? `RR/2026/${rng.int(1000, 9999)}` : undefined,
+        transportDocDate: isRail ? daysAgo(entry.generatedDaysAgo) : undefined,
+        distanceKm: entry.distanceKm,
+        generatedAt,
+        generatedBy: CURRENT_USER_ID,
+        validFrom: generatedAt,
+        validUpto: validUptoFor(generatedAt, entry.distanceKm, entry.vehicleType),
+        status: 'active',
+        partBUpdates: [],
+        extensions: [],
+        createdAt: generatedAt,
+        updatedAt: generatedAt,
+      };
+
+      if (entry.kind === 'expiringSoon') {
+        // Pull the validity in so this one always sits inside the next day,
+        // whatever date the demo data is generated on.
+        bill.validUpto = addHoursISO(nowISO(), 14);
+      }
+
+      if (entry.kind === 'cancelled') {
+        bill.status = 'cancelled';
+        bill.cancelledAt = addHoursISO(generatedAt, 4);
+        bill.cancelReasonCode = '2';
+        bill.cancelRemark = 'The consignment was held back; a fresh bill was raised.';
+      }
+
+      if (!isRail) {
+        bill.partBUpdates.push({
+          id: uid('pb'),
+          mode: 'road',
+          vehicleNumber: bill.vehicleNumber,
+          vehicleType: bill.vehicleType,
+          fromPlace: from.place,
+          fromStateCode: from.stateCode,
+          reasonCode: '1',
+          updatedAt: generatedAt,
+          updatedBy: CURRENT_USER_ID,
+        });
+      }
+
+      if (entry.kind === 'odcMultiLeg') {
+        bill.partBUpdates.push(
+          {
+            id: uid('pb'),
+            mode: 'road',
+            vehicleNumber: 'RJ14CD5678',
+            vehicleType: 'overDimensional',
+            fromPlace: 'Udaipur',
+            fromStateCode: '08',
+            reasonCode: '2',
+            remark: 'Gearbox failure on the original tractor unit.',
+            updatedAt: addHoursISO(generatedAt, 38),
+            updatedBy: CURRENT_USER_ID,
+          },
+          {
+            id: uid('pb'),
+            mode: 'road',
+            vehicleNumber: 'DL01EF9012',
+            vehicleType: 'overDimensional',
+            fromPlace: 'Jaipur',
+            fromStateCode: '08',
+            reasonCode: '3',
+            remark: 'Transhipped to the Delhi leg carrier.',
+            updatedAt: addHoursISO(generatedAt, 74),
+            updatedBy: CURRENT_USER_ID,
+          },
+        );
+
+        const previousValidUpto = bill.validUpto;
+        bill.validUpto = validUptoFor(addHoursISO(generatedAt, 80), 260, 'overDimensional');
+        bill.extensions.push({
+          id: uid('ext'),
+          extendedAt: addHoursISO(generatedAt, 80),
+          extendedBy: CURRENT_USER_ID,
+          reasonCode: '1',
+          remark: 'Highway closed by flooding near Kota.',
+          transitType: 'inTransit',
+          currentPlace: 'Jaipur',
+          currentPincode: '302001',
+          currentStateCode: '08',
+          remainingDistanceKm: 260,
+          previousValidUpto,
+          newValidUpto: bill.validUpto,
+        });
+      }
+
+      ewayBills.push(bill);
+    });
+  }
+
+  /* Mirror the latest bill onto each document it belongs to. */
+  const withEway = documents.map((doc) => {
+    const mine = ewayBills
+      .filter((b) => b.documentId === doc.id)
+      .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
+    const latest = mine[0];
+    if (!latest) return doc;
+    return {
+      ...doc,
+      compliance: {
+        ...doc.compliance,
+        ewayBillStatus: ewayBillStatusAt(latest, nowISO()) as DocumentEwayStatus,
+        ewayBillId: latest.id,
+        ewayBillNumber: latest.ewayBillNumber,
+        ewayBillValidUpto: latest.validUpto,
+      },
+    };
+  });
+
+  return { documents: withEway, ewayBills };
+}
+
+const VEHICLES = ['MH12AB1234', 'MH04CD7781', 'KA01MJ7788', 'GJ05EF2290', 'MH14GH5512', 'RJ14CD5678'];
+
+function addHoursISO(iso: string, hours: number): string {
+  return new Date(new Date(iso).getTime() + hours * 3600 * 1000).toISOString();
 }
