@@ -8,13 +8,8 @@ export const SERIES_LABELS: Record<SeriesKind, string> = {
   salesOrder: 'Sales order',
   delivery: 'Delivery note',
   invoice: 'Invoice',
-  salesReturn: 'Sales return',
-  purchaseOrder: 'Purchase order',
-  goodsReceipt: 'Goods receipt',
-  purchaseBill: 'Purchase bill',
-  purchaseReturn: 'Purchase return',
+  salesReturn: 'Credit note',
   payment: 'Payment',
-  expense: 'Expense',
 };
 
 /**
@@ -60,12 +55,7 @@ export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   salesOrder: 'SO',
   delivery: 'DN',
   salesReturn: 'CRN',
-  purchaseOrder: 'PO',
-  goodsReceipt: 'GRN',
-  purchaseBill: 'BILL',
-  purchaseReturn: 'DRN',
   payment: 'PAY',
-  expense: 'EXP',
 };
 
 export function seriesKindForDocument(kind: DocumentKind): SeriesKind {

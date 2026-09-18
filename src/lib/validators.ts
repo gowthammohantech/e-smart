@@ -1,4 +1,5 @@
-export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+import { isValidGstin } from '@/domain/gst/gstin';
+
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export const PHONE_RE = /^[+]?[0-9\s-]{7,16}$/;
 
@@ -16,12 +17,10 @@ export function validPhone(value: string | undefined): string | undefined {
   return PHONE_RE.test(value.trim()) ? undefined : 'Enter a valid phone number';
 }
 
-/** Structural GSTIN check — the checksum digit is validated server-side. */
+/** Shape and check digit. A typo in a GSTIN is caught here, not at the IRP. */
 export function validGstin(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  return GSTIN_RE.test(value.trim().toUpperCase())
-    ? undefined
-    : 'GSTIN should look like 27AABCV1234F1Z5';
+  return isValidGstin(value) ? undefined : 'That GSTIN is not valid — check the digits';
 }
 
 export function positiveNumber(value: string | number | undefined, label: string): string | undefined {

@@ -9,6 +9,7 @@ export type Address = {
   line2?: string;
   city: string;
   state: string;
+  /** GST state code, e.g. "27" for Maharashtra. Drives the CGST/SGST vs IGST split. */
   stateCode?: string;
   postalCode: string;
   country: string;
@@ -32,13 +33,21 @@ export type Company = {
   createdAt: string;
 };
 
+/** Annual aggregate turnover band. e-Invoicing is mandatory from ₹5 crore upward. */
+export type TurnoverSlab = 'under5cr' | '5crTo10cr' | '10crTo50cr' | 'over50cr';
+
 export type TaxRegistration = {
-  regime: 'GST' | 'VAT' | 'NONE';
+  regime: 'GST' | 'NONE';
+  /** GSTIN, 15 characters. */
   identifier?: string;
   identifierLabel: string;
   registered: boolean;
   compositionScheme?: boolean;
+  /** Home state code — the state the business is registered in. */
   placeOfSupplyStateCode?: string;
+  turnoverSlab?: TurnoverSlab;
+  eInvoiceEnabled?: boolean;
+  eWayBillEnabled?: boolean;
 };
 
 export type Branch = {
@@ -67,37 +76,34 @@ export type User = {
   lastActiveAt?: string;
 };
 
-export type DeviceSession = {
-  id: string;
-  label: string;
-  platform: string;
-  lastActiveAt: string;
-  current: boolean;
-  location?: string;
-};
-
 /* ------------------------------------------------------------------ */
-/* Parties                                                             */
+/* Customers                                                           */
 /* ------------------------------------------------------------------ */
 
-export type PartyKind = 'customer' | 'supplier';
+/** How the buyer is registered under GST — decides the supply type on a sale. */
+export type GstRegistrationType =
+  | 'regular'
+  | 'composition'
+  | 'unregistered'
+  | 'sez'
+  | 'overseas';
 
 export type Party = {
   id: string;
   companyId: string;
-  kind: PartyKind;
   name: string;
   code: string;
   displayName?: string;
+  /** GSTIN for a registered buyer. */
   taxId?: string;
+  gstRegistrationType: GstRegistrationType;
   email?: string;
   phone?: string;
-  currency: string;
   billingAddress: Address;
   shippingAddress?: Address;
   creditLimit?: Money;
+  /** Positive opening balance means the customer owes us. */
   openingBalance: Money;
-  /** Positive opening balance means the party owes us (customer) / we owe them (supplier). */
   paymentTermsDays: number;
   notes?: string;
   status: 'active' | 'inactive';
@@ -119,13 +125,9 @@ export type Item = {
   type: ItemType;
   unit: string;
   salePrice: Money;
-  purchasePrice: Money;
   taxCategoryId: string;
+  /** HSN for goods, SAC for services. Mandatory on an e-invoice. */
   hsnCode?: string;
-  barcode?: string;
-  trackInventory: boolean;
-  openingStock: number;
-  reorderLevel: number;
   imageUri?: string;
   status: 'active' | 'inactive';
   createdAt: string;
@@ -137,7 +139,7 @@ export type Unit = { id: string; code: string; name: string; decimals: number };
 /* Tax engine (FRD 15)                                                 */
 /* ------------------------------------------------------------------ */
 
-export type TaxType = 'GST' | 'CGST' | 'SGST' | 'IGST' | 'VAT' | 'CESS' | 'NONE';
+export type TaxType = 'GST' | 'CGST' | 'SGST' | 'IGST' | 'CESS' | 'NONE';
 
 export type TaxCategory = {
   id: string;
@@ -168,33 +170,10 @@ export type TaxLine = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Currency (FRD 6)                                                    */
-/* ------------------------------------------------------------------ */
-
-export type ExchangeRate = {
-  id: string;
-  companyId: string;
-  from: string;
-  to: string;
-  rate: number;
-  effectiveFrom: string;
-  source: 'manual' | 'provider';
-};
-
-/* ------------------------------------------------------------------ */
 /* Documents                                                           */
 /* ------------------------------------------------------------------ */
 
-export type DocumentKind =
-  | 'quote'
-  | 'salesOrder'
-  | 'delivery'
-  | 'invoice'
-  | 'salesReturn'
-  | 'purchaseOrder'
-  | 'goodsReceipt'
-  | 'purchaseBill'
-  | 'purchaseReturn';
+export type DocumentKind = 'quote' | 'salesOrder' | 'delivery' | 'invoice' | 'salesReturn';
 
 export type DocStatus =
   | 'draft'
@@ -212,9 +191,7 @@ export type DocStatus =
   | 'overdue'
   | 'requested'
   | 'approved'
-  | 'processed'
-  | 'received'
-  | 'billed';
+  | 'processed';
 
 export type DiscountMode = 'percent' | 'amount';
 
@@ -245,8 +222,6 @@ export type DocumentTotals = {
   charges: Money;
   roundOff: Money;
   grandTotal: Money;
-  /** Grand total converted into the company base currency at the stored rate. */
-  grandTotalBase: Money;
 };
 
 export type BusinessDocument = {
@@ -261,16 +236,15 @@ export type BusinessDocument = {
   dueDate?: string;
   validUntil?: string;
   reference?: string;
-  /** Supplier's own bill number on purchase documents. */
-  supplierDocNumber?: string;
-  currency: string;
-  exchangeRate: number;
   lines: DocumentLine[];
   documentDiscountMode: DiscountMode;
   documentDiscountValue: number;
   charges: Money;
   applyRoundOff: boolean;
+  /** State code the supply is made to. Defaults from the shipping address. */
   placeOfSupplyStateCode?: string;
+  /** Tax payable by the recipient instead of the supplier. */
+  reverseCharge?: boolean;
   notes?: string;
   terms?: string;
   attachmentIds: string[];
@@ -283,19 +257,142 @@ export type BusinessDocument = {
   updatedAt: string;
 };
 
-export type ComplianceInfo = {
-  eInvoiceStatus?: 'notApplicable' | 'pending' | 'generated' | 'failed';
+/* ------------------------------------------------------------------ */
+/* GST compliance: e-invoice and e-way bill                            */
+/* ------------------------------------------------------------------ */
+
+/** An error as the IRP / NIC portal reports it: a numeric code and a message. */
+export type IrpError = { code: string; message: string };
+
+export type EInvoiceStatus =
+  | 'notApplicable'
+  | 'pending'
+  | 'generated'
+  | 'cancelled'
+  | 'failed';
+
+/** Cancellation reasons the IRP accepts, by code. */
+export type EInvoiceCancelReason = '1' | '2' | '3' | '4';
+
+export type EInvoiceRecord = {
+  status: EInvoiceStatus;
+  /** 64-character hash returned by the IRP. */
   irn?: string;
-  ewayBillStatus?: 'notApplicable' | 'pending' | 'generated' | 'failed';
-  ewayBillNumber?: string;
-  lastMessage?: string;
+  ackNo?: string;
+  ackDate?: string;
+  /** The content the IRP signs into the QR code. */
+  signedQrPayload?: string;
+  generatedAt?: string;
+  cancelledAt?: string;
+  cancelReasonCode?: EInvoiceCancelReason;
+  cancelRemarks?: string;
+  errors?: IrpError[];
+};
+
+export type EWayBillStatus =
+  | 'notApplicable'
+  | 'pending'
+  | 'generated'
+  | 'cancelled'
+  | 'expired'
+  | 'failed';
+
+/** 1 Road, 2 Rail, 3 Air, 4 Ship. */
+export type TransportMode = '1' | '2' | '3' | '4';
+
+/** R regular, O over-dimensional cargo. */
+export type VehicleType = 'R' | 'O';
+
+export type EwbSupplyType = 'O' | 'I';
+
+export type EwbSubSupplyType =
+  | '1' // Supply
+  | '2' // Import
+  | '3' // Export
+  | '4' // Job work
+  | '5' // For own use
+  | '8' // Sales return
+  | '12'; // Others
+
+export type EwbPartA = {
+  supplyType: EwbSupplyType;
+  subSupplyType: EwbSubSupplyType;
+  docType: 'INV' | 'CHL' | 'CRN';
+  docNo: string;
+  docDate: string;
+  fromGstin: string;
+  fromTradeName: string;
+  fromAddress: string;
+  fromPlace: string;
+  fromPincode: string;
+  fromStateCode: string;
+  toGstin: string;
+  toTradeName: string;
+  toAddress: string;
+  toPlace: string;
+  toPincode: string;
+  toStateCode: string;
+  totalValue: number;
+  cgstValue: number;
+  sgstValue: number;
+  igstValue: number;
+  cessValue: number;
+  totInvValue: number;
+  itemList: {
+    productName: string;
+    hsnCode: string;
+    quantity: number;
+    unit: string;
+    taxableAmount: number;
+    taxRate: number;
+  }[];
+};
+
+export type EwbPartB = {
+  transMode: TransportMode;
+  transporterId?: string;
+  transporterName?: string;
+  transDocNo?: string;
+  transDocDate?: string;
+  vehicleNo?: string;
+  vehicleType: VehicleType;
+};
+
+export type EWayBillRecord = {
+  status: EWayBillStatus;
+  /** 12-digit e-way bill number. */
+  ewbNo?: string;
+  ewbDate?: string;
+  validUpto?: string;
+  distanceKm?: number;
+  cargo?: 'regular' | 'odc';
+  partA?: EwbPartA;
+  partB?: EwbPartB;
+  generatedAt?: string;
+  cancelledAt?: string;
+  cancelReason?: string;
+  errors?: IrpError[];
+};
+
+export type ComplianceInfo = {
+  eInvoice?: EInvoiceRecord;
+  eWayBill?: EWayBillRecord;
+};
+
+/** Transporter master, for the Part-B of an e-way bill. */
+export type Transporter = {
+  id: string;
+  companyId: string;
+  name: string;
+  /** 15-character GSTIN or TRANSIN. */
+  transporterId: string;
+  phone?: string;
+  status: 'active' | 'inactive';
 };
 
 /* ------------------------------------------------------------------ */
 /* Payments (FRD 12)                                                   */
 /* ------------------------------------------------------------------ */
-
-export type PaymentDirection = 'received' | 'paid';
 
 export type PaymentMethod = 'cash' | 'bank' | 'upi' | 'card' | 'cheque' | 'wallet' | 'other';
 
@@ -310,19 +407,15 @@ export type Payment = {
   companyId: string;
   branchId: string;
   number: string;
-  direction: PaymentDirection;
   partyId: string;
   date: string;
   amount: Money;
-  currency: string;
-  exchangeRate: number;
   method: PaymentMethod;
   reference?: string;
   accountId: string;
   allocations: PaymentAllocation[];
-  /** Unallocated part of the payment, held as an advance against the party. */
+  /** Unallocated part of the payment, held as an advance against the customer. */
   unallocated: Money;
-  fxGainLoss?: Money;
   notes?: string;
   attachmentIds: string[];
   createdBy: string;
@@ -334,80 +427,9 @@ export type PaymentAccount = {
   companyId: string;
   name: string;
   type: 'cash' | 'bank' | 'wallet';
-  currency: string;
   accountNumber?: string;
   openingBalance: Money;
   isDefault: boolean;
-};
-
-/* ------------------------------------------------------------------ */
-/* Expenses (FRD 14)                                                   */
-/* ------------------------------------------------------------------ */
-
-export type ExpenseCategory = {
-  id: string;
-  companyId: string;
-  name: string;
-  icon: string;
-  color: string;
-};
-
-export type RecurrenceFrequency = 'none' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
-
-export type Expense = {
-  id: string;
-  companyId: string;
-  branchId: string;
-  number: string;
-  categoryId: string;
-  supplierId?: string;
-  date: string;
-  amount: Money;
-  currency: string;
-  exchangeRate: number;
-  taxCategoryId?: string;
-  taxAmount: Money;
-  taxInclusive: boolean;
-  accountId: string;
-  method: PaymentMethod;
-  reference?: string;
-  notes?: string;
-  billable: boolean;
-  recurrence: RecurrenceFrequency;
-  nextRecurrenceDate?: string;
-  attachmentIds: string[];
-  createdBy: string;
-  createdAt: string;
-};
-
-/* ------------------------------------------------------------------ */
-/* Inventory (FRD 13)                                                  */
-/* ------------------------------------------------------------------ */
-
-export type StockMovementType =
-  | 'opening'
-  | 'purchaseReceipt'
-  | 'salesIssue'
-  | 'salesReturn'
-  | 'purchaseReturn'
-  | 'transferIn'
-  | 'transferOut'
-  | 'adjustment';
-
-export type StockMovement = {
-  id: string;
-  companyId: string;
-  branchId: string;
-  itemId: string;
-  type: StockMovementType;
-  quantity: number;
-  unitCost: Money;
-  date: string;
-  referenceId?: string;
-  referenceNumber?: string;
-  notes?: string;
-  createdBy: string;
-  createdAt: string;
 };
 
 /* ------------------------------------------------------------------ */
@@ -430,9 +452,8 @@ export type NotificationKind =
   | 'invoiceSent'
   | 'paymentReceived'
   | 'invoiceOverdue'
-  | 'lowStock'
-  | 'compliance'
-  | 'syncFailure'
+  | 'eInvoice'
+  | 'eWayBill'
   | 'system';
 
 export type AppNotification = {
@@ -465,7 +486,7 @@ export type AuditEvent = {
 export type NumberingSeries = {
   id: string;
   companyId: string;
-  kind: DocumentKind | 'payment' | 'expense';
+  kind: DocumentKind | 'payment';
   prefix: string;
   nextNumber: number;
   padding: number;
@@ -474,25 +495,11 @@ export type NumberingSeries = {
   resetPolicy: 'never' | 'yearly' | 'monthly';
 };
 
-export type SyncStatus = 'synced' | 'pending' | 'failed' | 'offline';
-
-export type SyncQueueEntry = {
-  id: string;
-  label: string;
-  entityType: string;
-  entityId: string;
-  action: string;
-  status: SyncStatus;
-  attempts: number;
-  lastError?: string;
-  queuedAt: string;
-};
-
 export type Integration = {
   id: string;
   name: string;
   description: string;
   icon: string;
-  category: 'payments' | 'compliance' | 'messaging' | 'accounting' | 'storage';
+  category: 'payments' | 'compliance' | 'messaging' | 'accounting';
   connected: boolean;
 };

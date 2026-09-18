@@ -38,10 +38,11 @@ export function allocatedTo(documentId: string, payments: Payment[]): Money | nu
 }
 
 export function outstandingOf(doc: BusinessDocument, payments: Payment[]): Money {
-  const allocated = allocatedTo(doc.id, payments) ?? zero(doc.currency);
-  const paid = money(allocated.minor, doc.currency);
+  const currency = doc.totals.grandTotal.currency;
+  const allocated = allocatedTo(doc.id, payments) ?? zero(currency);
+  const paid = money(allocated.minor, currency);
   const remaining = subtract(doc.totals.grandTotal, paid);
-  return remaining.minor < 0 ? zero(doc.currency) : remaining;
+  return remaining.minor < 0 ? zero(currency) : remaining;
 }
 
 export function bucketFor(daysOverdue: number): AgingBucketKey {
@@ -57,12 +58,13 @@ export function buildOutstanding(
   return docs
     .filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status))
     .map((document) => {
-      const allocated = allocatedTo(document.id, payments) ?? zero(document.currency);
+      const currency = document.totals.grandTotal.currency;
+      const allocated = allocatedTo(document.id, payments) ?? zero(currency);
       const outstanding = outstandingOf(document, payments);
       const daysOverdue = document.dueDate ? daysBetween(document.dueDate, asOf) : 0;
       return {
         document,
-        allocated: money(allocated.minor, document.currency),
+        allocated: money(allocated.minor, currency),
         outstanding,
         daysOverdue,
         bucket: bucketFor(daysOverdue),

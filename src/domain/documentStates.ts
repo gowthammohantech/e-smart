@@ -19,8 +19,6 @@ export const STATUS_META: Record<DocStatus, { label: string; tone: StatusTone }>
   requested: { label: 'Requested', tone: 'neutral' },
   approved: { label: 'Approved', tone: 'info' },
   processed: { label: 'Processed', tone: 'success' },
-  received: { label: 'Received', tone: 'success' },
-  billed: { label: 'Billed', tone: 'success' },
 };
 
 /** Legal transitions per FRD 9. */
@@ -53,27 +51,6 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     approved: ['processed'],
     processed: [],
   },
-  purchaseOrder: {
-    draft: ['confirmed', 'cancelled'],
-    confirmed: ['received', 'cancelled'],
-    received: [],
-  },
-  goodsReceipt: {
-    draft: ['received', 'cancelled'],
-    received: ['billed'],
-  },
-  purchaseBill: {
-    draft: ['issued', 'cancelled'],
-    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
-    partiallyPaid: ['paid', 'overdue'],
-    overdue: ['partiallyPaid', 'paid'],
-    paid: [],
-  },
-  purchaseReturn: {
-    requested: ['approved', 'cancelled'],
-    approved: ['processed'],
-    processed: [],
-  },
 };
 
 export function nextStatuses(kind: DocumentKind, status: DocStatus): DocStatus[] {
@@ -85,8 +62,7 @@ export function canTransition(kind: DocumentKind, from: DocStatus, to: DocStatus
 }
 
 export function initialStatus(kind: DocumentKind): DocStatus {
-  if (kind === 'salesReturn' || kind === 'purchaseReturn') return 'requested';
-  return 'draft';
+  return kind === 'salesReturn' ? 'requested' : 'draft';
 }
 
 /** A finalized document is locked from editing and its number is permanent. */
@@ -98,22 +74,20 @@ export function isCancelled(status: DocStatus): boolean {
   return status === 'cancelled' || status === 'rejected';
 }
 
-/** Documents that create a receivable / payable. */
+/** Documents that create a receivable. */
 export function isPayableDocument(kind: DocumentKind): boolean {
-  return kind === 'invoice' || kind === 'purchaseBill';
+  return kind === 'invoice';
 }
 
 export const DOCUMENT_LABELS: Record<DocumentKind, { singular: string; plural: string }> = {
   quote: { singular: 'Quotation', plural: 'Quotations' },
   salesOrder: { singular: 'Sales order', plural: 'Sales orders' },
   delivery: { singular: 'Delivery note', plural: 'Delivery notes' },
-  invoice: { singular: 'Invoice', plural: 'Invoices' },
-  salesReturn: { singular: 'Sales return', plural: 'Sales returns' },
-  purchaseOrder: { singular: 'Purchase order', plural: 'Purchase orders' },
-  goodsReceipt: { singular: 'Goods receipt', plural: 'Goods receipts' },
-  purchaseBill: { singular: 'Purchase bill', plural: 'Purchase bills' },
-  purchaseReturn: { singular: 'Purchase return', plural: 'Purchase returns' },
+  invoice: { singular: 'Tax invoice', plural: 'Invoices' },
+  salesReturn: { singular: 'Credit note', plural: 'Credit notes' },
 };
 
 export const SALES_KINDS: DocumentKind[] = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn'];
-export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
+
+/** Document kinds that move goods, and so may need an e-way bill. */
+export const MOVEMENT_KINDS: DocumentKind[] = ['delivery', 'invoice', 'salesReturn'];

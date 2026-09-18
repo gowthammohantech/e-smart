@@ -32,8 +32,6 @@ function doc(lines: DocumentLine[], over: Partial<Parameters<typeof calculateDoc
   return calculateDocument({
     lines,
     currency: 'INR',
-    baseCurrency: 'INR',
-    exchangeRate: 1,
     documentDiscountMode: 'percent',
     documentDiscountValue: 0,
     charges: zero('INR'),
@@ -127,12 +125,6 @@ describe('document totals', () => {
     expect(totals.grandTotal.minor % 100).toBe(0);
   });
 
-  it('converts the grand total into the base currency at the stored rate', () => {
-    const totals = doc([line()], { currency: 'AED', baseCurrency: 'INR', exchangeRate: 23.85 });
-    expect(totals.grandTotal.currency).toBe('AED');
-    expect(totals.grandTotalBase.currency).toBe('INR');
-    expect(totals.grandTotalBase.minor).toBe(Math.round(totals.grandTotal.minor * 23.85));
-  });
 
   it('produces an empty but valid result for a document with no lines', () => {
     const totals = doc([]);

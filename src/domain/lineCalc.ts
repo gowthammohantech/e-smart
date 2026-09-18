@@ -23,8 +23,6 @@ import { TaxContext, splitTax } from './taxEngine';
 export type LineCalcInput = {
   lines: DocumentLine[];
   currency: string;
-  baseCurrency: string;
-  exchangeRate: number;
   documentDiscountMode: DiscountMode;
   documentDiscountValue: number;
   charges: Money;
@@ -99,8 +97,6 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
   const {
     lines,
     currency,
-    baseCurrency,
-    exchangeRate,
     documentDiscountMode,
     documentDiscountValue,
     charges,
@@ -157,11 +153,6 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
     ? roundToWholeUnit(beforeRounding)
     : { rounded: beforeRounding, adjustment: zero(currency) };
 
-  const grandTotalBase =
-    currency === baseCurrency
-      ? money(rounded.minor, baseCurrency)
-      : money(Math.round(rounded.minor * (exchangeRate || 1)), baseCurrency);
-
   return {
     subtotal,
     lineDiscount,
@@ -172,7 +163,6 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
     charges: chargesInCurrency,
     roundOff: adjustment,
     grandTotal: rounded,
-    grandTotalBase,
   };
 }
 
