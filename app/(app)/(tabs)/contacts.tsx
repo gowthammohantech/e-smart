@@ -95,7 +95,7 @@ export default function ContactsTab() {
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>
           <Card padded={false}>
             <EmptyState
-              icon="account-group-outline"
+              illustration="no-contacts" icon="account-group-outline"
               title={parties.length === 0 ? `No ${tab === 'customer' ? 'customers' : 'suppliers'} yet` : 'No matches'}
               message={
                 parties.length === 0

@@ -200,7 +200,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {tab === 'activity' ? (
           <Card padded={false}>
             {outstanding.length === 0 ? (
-              <EmptyState icon="check-all" title="All settled" message="Nothing is outstanding right now." compact />
+              <EmptyState illustration="all-settled" icon="check-all" title="All settled" message="Nothing is outstanding right now." compact />
             ) : (
               outstanding.map((o, i) => (
                 <DocumentRow
@@ -237,7 +237,7 @@ export function PartyDetail({ party }: { party: Party }) {
               ))}
             {history.all.length === 0 ? (
               <Card padded={false}>
-                <EmptyState icon="file-outline" title="No documents yet" compact />
+                <EmptyState illustration="no-documents" icon="file-outline" title="No documents yet" compact />
               </Card>
             ) : null}
           </View>
@@ -246,7 +246,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {tab === 'payments' ? (
           <Card padded={false}>
             {partyPayments.length === 0 ? (
-              <EmptyState icon="cash-remove" title="No payments yet" compact />
+              <EmptyState illustration="no-payments" icon="cash-remove" title="No payments yet" compact />
             ) : (
               partyPayments.map((p, i) => (
                 <Pressable

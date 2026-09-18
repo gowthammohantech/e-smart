@@ -15,7 +15,7 @@ export default function EditSupplier() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Edit' }} />
-        <EmptyState icon="account-off-outline" title="Not found" />
+        <EmptyState illustration="not-found" icon="account-off-outline" title="Not found" />
       </View>
     );
   }

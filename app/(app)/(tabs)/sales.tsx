@@ -145,6 +145,7 @@ export default function SalesTab() {
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState
+              illustration="no-documents"
               icon="file-document-outline"
               title="No invoices yet"
               actionLabel="New invoice"

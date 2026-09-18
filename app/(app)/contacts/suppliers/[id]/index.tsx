@@ -15,7 +15,7 @@ export default function SupplierDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Supplier' }} />
-        <EmptyState icon="account-off-outline" title="Not found" message="This contact may have been deleted." />
+        <EmptyState illustration="not-found" icon="account-off-outline" title="Not found" message="This contact may have been deleted." />
       </View>
     );
   }

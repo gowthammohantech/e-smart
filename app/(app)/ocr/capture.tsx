@@ -8,6 +8,7 @@ import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Segmented } from '@/components/Field';
+import { Illustration } from '@/components/Illustration';
 import { useToast } from '@/components/Toast';
 import { mockExtract, useOcrStore } from '@/features/ocr/ocrStore';
 
@@ -77,7 +78,7 @@ export default function OcrCapture() {
               borderColor: t.c.line,
             }}
           >
-            <MaterialCommunityIcons name={busy ? 'progress-clock' : 'camera-outline'} size={44} color={t.c.primary} />
+            <Illustration name="scanning" size="hero" />
             <Text variant="title" weight="600">
               {busy ? 'Reading the bill…' : 'Take a photo'}
             </Text>

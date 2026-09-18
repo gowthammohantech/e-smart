@@ -15,6 +15,7 @@ import { DocumentRow } from '@/components/DocumentRow';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/Badge';
 import { Fab } from '@/components/Fab';
+import { Illustration } from '@/components/Illustration';
 import { Sheet } from '@/components/Sheet';
 import {
   useBaseCurrency,
@@ -128,6 +129,78 @@ export default function Home() {
   );
 
   const netThisMonth = subtract(monthSales, monthExpenses);
+
+  // A business created moments ago has nothing to summarise — a wall of zeroes
+  // and empty charts reads as broken, so show a first-run block instead.
+  const isFirstRun = invoices.length === 0 && payments.length === 0 && expenses.length === 0;
+
+  if (isFirstRun) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+        <AppHeader />
+        <Screen bottomInset={80}>
+          <View style={{ alignItems: 'center', gap: t.spacing.md, paddingTop: t.spacing.xl }}>
+            <Illustration name="empty-dashboard" size="hero" />
+            <Text variant="h2" center>
+              Let&apos;s get you started
+            </Text>
+            <Text variant="small" tone="muted" center style={{ maxWidth: 300, lineHeight: 20 }}>
+              Raise your first invoice and this dashboard fills in — sales, collections, what you&apos;re owed and where
+              the money goes.
+            </Text>
+          </View>
+
+          <View style={{ marginTop: t.spacing.xxl, marginHorizontal: -t.spacing.lg, paddingLeft: t.spacing.lg }}>
+            <QuickActions />
+          </View>
+
+          <SectionHeader title="First steps" />
+          <Card padded={false}>
+            {[
+              { label: 'Add a customer', icon: 'account-plus-outline' as const, route: '/(app)/contacts/customers/new' },
+              { label: 'Add a product or service', icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
+              { label: 'Create your first invoice', icon: 'file-document-edit-outline' as const, route: '/(app)/sales/invoices/new' },
+            ].map((step, i, arr) => (
+              <Pressable
+                key={step.label}
+                onPress={() => router.push(step.route as never)}
+                accessibilityRole="button"
+                accessibilityLabel={step.label}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: t.spacing.md,
+                  padding: t.spacing.lg,
+                  borderBottomWidth: i < arr.length - 1 ? 0.5 : 0,
+                  borderBottomColor: t.c.line,
+                  backgroundColor: pressed ? t.c.card2 : 'transparent',
+                })}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: t.radius.sm,
+                    backgroundColor: t.c.chip,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialCommunityIcons name={step.icon} size={19} color={t.c.primary} />
+                </View>
+                <Text variant="body" weight="500" style={{ flex: 1 }}>
+                  {step.label}
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+              </Pressable>
+            ))}
+          </Card>
+        </Screen>
+
+        <Fab icon="plus" label="Invoice" onPress={() => router.push('/(app)/sales/invoices/new')} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -294,6 +367,7 @@ export default function Home() {
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState
+              illustration="no-documents"
               icon="file-document-outline"
               title="No invoices yet"
               message="Create your first invoice and it will show up here."

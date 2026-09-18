@@ -189,7 +189,7 @@ export function DocumentListView({
         <Card padded={false}>
           {filtered.length === 0 ? (
             <EmptyState
-              icon="file-search-outline"
+              illustration="no-documents" icon="file-search-outline"
               title={documents.length === 0 ? `No ${label.plural.toLowerCase()} yet` : 'Nothing matches'}
               message={
                 documents.length === 0

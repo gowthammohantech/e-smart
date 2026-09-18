@@ -319,7 +319,8 @@ export default function NewPayment() {
               <EmptyState icon="account-search-outline" title="Pick a contact first" compact />
             ) : outstanding.length === 0 ? (
               <EmptyState
-                icon="check-all"
+                illustration="all-settled"
+              icon="check-all"
                 title="Nothing outstanding"
                 message="This payment will be held as an advance against the contact."
                 compact

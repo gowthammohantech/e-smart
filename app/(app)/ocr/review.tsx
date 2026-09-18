@@ -43,7 +43,8 @@ export default function OcrReview() {
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Review' }} />
         <EmptyState
-          icon="text-recognition"
+          illustration="no-scan-result"
+              icon="text-recognition"
           title="Nothing scanned yet"
           message="Capture a bill first and the extracted fields will appear here."
           actionLabel="Scan a bill"

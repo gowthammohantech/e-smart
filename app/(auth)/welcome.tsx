@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
+import { Illustration } from '@/components/Illustration';
 
 const HIGHLIGHTS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string; body: string }[] = [
   { icon: 'file-document-edit-outline', title: 'Invoice in under a minute', body: 'GST-ready invoices you can share on WhatsApp straight away.' },
@@ -20,19 +21,23 @@ export default function Welcome() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg, paddingTop: insets.top + t.spacing.xxxl, paddingHorizontal: t.spacing.xl, paddingBottom: insets.bottom + t.spacing.xl }}>
-      <View style={{ flex: 1, gap: t.spacing.xxxl }}>
+      <View style={{ flex: 1, gap: t.spacing.xxl }}>
+        <View style={{ alignItems: 'center' }}>
+          <Illustration name="welcome" size="hero" />
+        </View>
+
         <View style={{ gap: t.spacing.md }}>
           <View
             style={{
-              width: 56,
-              height: 56,
+              width: 46,
+              height: 46,
               borderRadius: t.radius.lg,
               backgroundColor: t.c.primary,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons name="chart-box-outline" size={30} color={t.c.onPrimary} />
+            <MaterialCommunityIcons name="chart-box-outline" size={25} color={t.c.onPrimary} />
           </View>
           <Text variant="h1">Elixir Books Smart</Text>
           <Text variant="body" tone="muted" style={{ lineHeight: 22 }}>
@@ -41,7 +46,7 @@ export default function Welcome() {
           </Text>
         </View>
 
-        <View style={{ gap: t.spacing.xl }}>
+        <View style={{ gap: t.spacing.lg }}>
           {HIGHLIGHTS.map((h) => (
             <View key={h.title} style={{ flexDirection: 'row', gap: t.spacing.lg, alignItems: 'flex-start' }}>
               <View

@@ -80,7 +80,7 @@ export default function StockMovements() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>
           {filtered.length === 0 ? (
-            <EmptyState icon="swap-vertical" title="No movements" message="Stock movements appear as you buy, sell and adjust." compact />
+            <EmptyState illustration="no-movements" icon="swap-vertical" title="No movements" message="Stock movements appear as you buy, sell and adjust." compact />
           ) : (
             filtered.slice(0, 200).map((m, i) => {
               const item = nameOf(m.itemId);

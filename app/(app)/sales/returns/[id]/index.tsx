@@ -15,7 +15,7 @@ export default function SalesReturnDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Sales return' }} />
-        <EmptyState icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
       </View>
     );
   }

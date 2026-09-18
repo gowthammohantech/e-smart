@@ -15,7 +15,7 @@ export default function EditItem() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Edit item' }} />
-        <EmptyState icon="package-variant-closed-remove" title="Not found" />
+        <EmptyState illustration="not-found" icon="package-variant-closed-remove" title="Not found" />
       </View>
     );
   }

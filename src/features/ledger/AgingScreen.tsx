@@ -150,7 +150,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
         {byParty.length === 0 ? (
           <Card padded={false}>
-            <EmptyState icon="check-all" title="Nothing outstanding" message={isReceivable ? 'Every invoice has been settled.' : 'You are all paid up.'} compact />
+            <EmptyState illustration="all-settled" icon="check-all" title="Nothing outstanding" message={isReceivable ? 'Every invoice has been settled.' : 'You are all paid up.'} compact />
           </Card>
         ) : (
           byParty.map((group) => {

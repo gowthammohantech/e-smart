@@ -100,6 +100,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         <Card padded={false}>
           {filtered.length === 0 ? (
             <EmptyState
+              illustration="no-payments"
               icon="cash-remove"
               title="No payments"
               message={payments.length === 0 ? 'Record one to see it here.' : 'Nothing matches this filter.'}

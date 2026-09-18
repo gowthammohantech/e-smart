@@ -56,7 +56,7 @@ export default function ItemDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Item' }} />
-        <EmptyState icon="package-variant-closed-remove" title="Not found" message="This item may have been deleted." />
+        <EmptyState illustration="not-found" icon="package-variant-closed-remove" title="Not found" message="This item may have been deleted." />
       </View>
     );
   }
@@ -176,7 +176,7 @@ export default function ItemDetail() {
             </Text>
             <Card padded={false}>
               {ledger.length === 0 ? (
-                <EmptyState icon="swap-vertical" title="No movements yet" compact />
+                <EmptyState illustration="no-movements" icon="swap-vertical" title="No movements yet" compact />
               ) : (
                 ledger.slice(0, 20).map((row, i) => {
                   const delta = signedQuantity(row.movement);

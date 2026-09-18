@@ -15,7 +15,7 @@ export default function GoodsReceiptDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Goods receipt' }} />
-        <EmptyState icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
       </View>
     );
   }

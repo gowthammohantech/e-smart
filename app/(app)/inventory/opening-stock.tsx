@@ -83,7 +83,7 @@ export default function OpeningStock() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>
           {filtered.length === 0 ? (
-            <EmptyState icon="package-variant" title="No stock-tracked items" compact />
+            <EmptyState illustration="no-items" icon="package-variant" title="No stock-tracked items" compact />
           ) : (
             filtered.map((item, i) => (
               <View

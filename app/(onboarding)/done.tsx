@@ -7,6 +7,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { Illustration } from '@/components/Illustration';
 import { useAppStore } from '@/store/appStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { COUNTRIES } from '@/data/masters';
@@ -98,18 +99,7 @@ export default function Done() {
     >
       <View style={{ flex: 1, gap: t.spacing.xxl }}>
         <View style={{ alignItems: 'center', gap: t.spacing.lg }}>
-          <View
-            style={{
-              width: 76,
-              height: 76,
-              borderRadius: 38,
-              backgroundColor: t.c.goodSoft,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MaterialCommunityIcons name="check-bold" size={36} color={t.c.good} />
-          </View>
+          <Illustration name="setup-complete" size="hero" />
           <View style={{ gap: 6 }}>
             <Text variant="h2" center>
               {draft.name || 'Your business'} is ready

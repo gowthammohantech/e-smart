@@ -4,9 +4,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
+import { Illustration } from './Illustration';
+import { IllustrationName } from '@/illustrations/registry';
 
 export function EmptyState({
   icon = 'inbox-outline',
+  illustration,
   title,
   message,
   actionLabel,
@@ -14,6 +17,8 @@ export function EmptyState({
   compact,
 }: {
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  /** Shown instead of the icon. Small in-sheet states are better off with the icon. */
+  illustration?: IllustrationName;
   title: string;
   message?: string;
   actionLabel?: string;
@@ -22,19 +27,23 @@ export function EmptyState({
 }) {
   const t = useTheme();
   return (
-    <View style={{ alignItems: 'center', paddingVertical: compact ? t.spacing.xxl : t.spacing.xxxl * 1.5, gap: t.spacing.md }}>
-      <View
-        style={{
-          width: compact ? 52 : 68,
-          height: compact ? 52 : 68,
-          borderRadius: compact ? 26 : 34,
-          backgroundColor: t.c.card2,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <MaterialCommunityIcons name={icon} size={compact ? 24 : 32} color={t.c.muted} />
-      </View>
+    <View style={{ alignItems: 'center', paddingVertical: compact ? t.spacing.xxl : t.spacing.xxxl * 1.2, gap: t.spacing.md }}>
+      {illustration ? (
+        <Illustration name={illustration} size={compact ? 'compact' : 'full'} />
+      ) : (
+        <View
+          style={{
+            width: compact ? 52 : 68,
+            height: compact ? 52 : 68,
+            borderRadius: compact ? 26 : 34,
+            backgroundColor: t.c.card2,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <MaterialCommunityIcons name={icon} size={compact ? 24 : 32} color={t.c.muted} />
+        </View>
+      )}
       <Text variant={compact ? 'body' : 'title'} weight="600" center>
         {title}
       </Text>

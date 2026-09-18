@@ -152,6 +152,7 @@ export default function ExpensesList() {
         <Card padded={false}>
           {filtered.length === 0 ? (
             <EmptyState
+              illustration="no-expenses"
               icon="receipt-text-outline"
               title="No expenses"
               message={expenses.length === 0 ? 'Record your first expense to track where the money goes.' : 'Nothing matches this filter.'}

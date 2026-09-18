@@ -52,7 +52,8 @@ export default function StockTransfer() {
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Branch transfer' }} />
         <EmptyState
-          icon="warehouse"
+          illustration="single-location"
+              icon="warehouse"
           title="You only have one location"
           message="Add a second branch under Settings to move stock between locations."
           actionLabel="Add a branch"

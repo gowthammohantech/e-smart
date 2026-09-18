@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { ListRow } from '@/components/ListRow';
+import { ILLUSTRATION_CREDIT } from '@/illustrations/registry';
 
 export default function About() {
   const t = useTheme();
@@ -45,6 +46,13 @@ export default function About() {
         </Card>
 
         <Card padded={false}>
+          <ListRow
+            title={ILLUSTRATION_CREDIT.label}
+            subtitle="Free illustrations, used under the Storyset licence"
+            icon="palette-outline"
+            chevron
+            onPress={() => Linking.openURL(ILLUSTRATION_CREDIT.url).catch(() => {})}
+          />
           <ListRow title="Privacy policy" icon="shield-account-outline" chevron onPress={() => Linking.openURL('https://example.com/privacy').catch(() => {})} />
           <ListRow title="Terms of service" icon="file-document-outline" chevron onPress={() => Linking.openURL('https://example.com/terms').catch(() => {})} />
           <ListRow title="Contact support" icon="lifebuoy" chevron onPress={() => Linking.openURL('mailto:support@example.com').catch(() => {})} divider={false} />

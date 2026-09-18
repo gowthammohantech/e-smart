@@ -23,7 +23,7 @@ export default function ForgotPassword() {
     return (
       <AuthShell title="Check your inbox" subtitle={`We sent reset instructions to ${email}.`}>
         <EmptyState
-          icon="email-check-outline"
+          illustration="mail-sent" icon="email-check-outline"
           title="Reset link sent"
           message="Open the link on this device to choose a new password. It expires in 30 minutes."
           actionLabel="Back to sign in"

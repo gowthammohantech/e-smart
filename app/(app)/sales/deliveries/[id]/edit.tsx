@@ -17,7 +17,7 @@ export default function EditDelivery() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Edit' }} />
-        <EmptyState icon="file-remove-outline" title="Not found" />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" />
       </View>
     );
   }

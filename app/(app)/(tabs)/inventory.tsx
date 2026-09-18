@@ -102,6 +102,7 @@ export default function InventoryTab() {
         <Card padded={false}>
           {filtered.length === 0 ? (
             <EmptyState
+              illustration="no-items"
               icon="package-variant"
               title="Nothing here"
               message={items.length === 0 ? 'Add your first item to start tracking stock.' : 'No items match this filter.'}

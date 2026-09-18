@@ -142,6 +142,7 @@ export default function PurchasesTab() {
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState
+              illustration="no-documents"
               icon="file-document-outline"
               title="No purchase bills yet"
               actionLabel="Record a bill"

@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { ListRow } from '@/components/ListRow';
 import { SwitchField } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
+import { Illustration } from '@/components/Illustration';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useUiStore } from '@/store/uiStore';
@@ -33,22 +34,7 @@ export default function SyncStatus() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              backgroundColor: offline ? t.c.warnSoft : queue.length ? t.c.chip : t.c.goodSoft,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MaterialCommunityIcons
-              name={offline ? 'cloud-off-outline' : queue.length ? 'cloud-sync-outline' : 'cloud-check-outline'}
-              size={27}
-              color={offline ? t.c.warn : queue.length ? t.c.primary : t.c.good}
-            />
-          </View>
+          <Illustration name={offline ? 'offline' : 'all-settled'} size="full" />
           <Text variant="title" weight="700">
             {offline ? 'Working offline' : queue.length ? `${queue.length} waiting to sync` : 'Everything is synced'}
           </Text>
@@ -64,7 +50,7 @@ export default function SyncStatus() {
         </Text>
         <Card padded={false}>
           {queue.length === 0 ? (
-            <EmptyState icon="cloud-check-outline" title="Nothing queued" message="Every change has reached the server." compact />
+            <EmptyState illustration="all-settled" icon="cloud-check-outline" title="Nothing queued" message="Every change has reached the server." compact />
           ) : (
             queue.map((q, i) => (
               <ListRow

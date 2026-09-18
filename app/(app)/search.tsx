@@ -189,13 +189,14 @@ export default function GlobalSearch() {
             </>
           ) : (
             <EmptyState
+              illustration="search-idle"
               icon="magnify"
               title="Search everything"
               message="Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in."
             />
           )
         ) : results.length === 0 ? (
-          <EmptyState icon="magnify-close" title="No matches" message={`Nothing in ${'this business'} matches "${query}".`} />
+          <EmptyState illustration="search-empty" icon="magnify-close" title="No matches" message={`Nothing in ${'this business'} matches "${query}".`} />
         ) : (
           grouped.map(([group, rows]) => (
             <View key={group} style={{ marginBottom: t.spacing.lg }}>

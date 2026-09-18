@@ -60,7 +60,7 @@ export default function LowStock() {
 
         <Card padded={false}>
           {rows.length === 0 ? (
-            <EmptyState icon="check-all" title="Everything is stocked" message="No item is at or below its reorder level." compact />
+            <EmptyState illustration="all-settled" icon="check-all" title="Everything is stocked" message="No item is at or below its reorder level." compact />
           ) : (
             rows.map((r, i) => {
               const shortfall = Math.max(0, r.item.reorderLevel * 2 - r.onHand);

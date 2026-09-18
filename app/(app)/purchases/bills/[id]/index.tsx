@@ -15,7 +15,7 @@ export default function PurchaseBillDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Purchase bill' }} />
-        <EmptyState icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
       </View>
     );
   }

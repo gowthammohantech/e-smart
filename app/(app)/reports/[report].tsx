@@ -113,7 +113,7 @@ export default function Report() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Report' }} />
-        <EmptyState icon="chart-box-outline" title="Unknown report" message="Pick a report from the Reports tab." />
+        <EmptyState illustration="unknown-report" icon="chart-box-outline" title="Unknown report" message="Pick a report from the Reports tab." />
       </View>
     );
   }

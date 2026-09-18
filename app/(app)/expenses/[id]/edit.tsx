@@ -15,7 +15,7 @@ export default function EditExpense() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Edit expense' }} />
-        <EmptyState icon="receipt-text-outline" title="Not found" />
+        <EmptyState illustration="not-found" icon="receipt-text-outline" title="Not found" />
       </View>
     );
   }

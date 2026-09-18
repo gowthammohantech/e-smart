@@ -36,7 +36,7 @@ export default function ExpenseDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Expense' }} />
-        <EmptyState icon="receipt-text-outline" title="Not found" message="This expense may have been deleted." />
+        <EmptyState illustration="not-found" icon="receipt-text-outline" title="Not found" message="This expense may have been deleted." />
       </View>
     );
   }

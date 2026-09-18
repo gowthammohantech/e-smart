@@ -53,7 +53,10 @@ src/
   domain/                 pure calculation engines, no React
   store/                  zustand stores + company-scoped selectors
   data/                   seed dataset
+  illustrations/          illustration registry (name → asset)
   lib/                    money, formatting, dates, validators
+assets/illustrations/     the artwork, plus how to replace it
+tools/illustrations/      script that draws the placeholder art
 ```
 
 ### The domain layer
@@ -97,6 +100,21 @@ stay reserved for state and are never reused as a series colour; aging buckets
 use a single-hue sequential ramp because the buckets are ordered severity, not
 identity.
 
+### Illustrations
+
+Empty states, first-run screens and confirmation moments are illustrated rather
+than left to a lone icon. `src/illustrations/registry.ts` maps a semantic name
+(`not-found`, `all-settled`, `welcome`…) to a file in `assets/illustrations/`,
+and `EmptyState` takes an `illustration` prop, so a screen asks for meaning
+rather than a filename. Four hero moments — welcome, setup complete, scanning
+and the empty dashboard — are animated GIFs; the rest are PNG. Small in-sheet
+empty states deliberately keep their icon, because illustrations turn to mush
+at that size.
+
+The shipped files are placeholders drawn in the Storyset **Rafiki** style.
+Replacing one with the real download keeps its filename, so no code changes are
+needed — `assets/illustrations/README.md` lists what belongs in each file.
+
 ## What's covered
 
 Auth (email, phone OTP, Google) · five-step onboarding that creates a real
@@ -113,6 +131,14 @@ users and roles, taxes, currencies, numbering, accounts, categories,
 integrations, backup and export, audit trail, sync, devices, appearance and
 plan.
 
+## Credits
+
+Illustrations by [Storyset](https://storyset.com), used under their free
+licence, which requires attribution — the app credits them on
+**Settings → About**. The files currently in the repo are placeholders in the
+Rafiki style; see `assets/illustrations/README.md` for how to swap in the real
+downloads.
+
 ## Known limits
 
 This is deliberately a prototype:
@@ -124,3 +150,5 @@ This is deliberately a prototype:
 - The assistant answers from the local store with rule-based logic, not a model.
 - E-invoice and e-way bill statuses are illustrative — no IRP integration.
 - Google sign-in signs straight into the demo account.
+- The illustrations are placeholders, not the real Storyset artwork — the
+  environment this was built in cannot reach storyset.com.

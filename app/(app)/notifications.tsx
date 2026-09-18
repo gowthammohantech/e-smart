@@ -85,7 +85,7 @@ export default function Notifications() {
         {rows.length === 0 ? (
           <Card padded={false}>
             <EmptyState
-              icon="bell-check-outline"
+              illustration="no-notifications" icon="bell-check-outline"
               title={filter === 'unread' ? 'Nothing unread' : 'No notifications'}
               message="Invoices sent, payments received, overdue reminders and stock alerts land here."
               compact

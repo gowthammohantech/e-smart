@@ -35,7 +35,7 @@ export default function PaymentDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: 'Payment' }} />
-        <EmptyState icon="cash-remove" title="Not found" message="This payment may have been deleted." />
+        <EmptyState illustration="not-found" icon="cash-remove" title="Not found" message="This payment may have been deleted." />
       </View>
     );
   }

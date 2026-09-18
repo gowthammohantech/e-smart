@@ -8,6 +8,7 @@ import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { TextField } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
+import { Illustration } from '@/components/Illustration';
 import { useItems, useStockLevels } from '@/store/selectors';
 import { formatMoney, formatQty } from '@/lib/format';
 
@@ -42,7 +43,7 @@ export default function ScanBarcode() {
           }}
           variant="flat"
         >
-          <MaterialCommunityIcons name="barcode-scan" size={44} color={t.c.primary} />
+          <Illustration name="scanning" size="full" />
           <Text variant="body" weight="600">
             Point the camera at a barcode
           </Text>
@@ -84,6 +85,7 @@ export default function ScanBarcode() {
           ) : (
             <Card variant="flat">
               <EmptyState
+                illustration="search-empty"
                 icon="barcode-off"
                 title="No item with that code"
                 message="Add the barcode to an existing item, or create a new one."
