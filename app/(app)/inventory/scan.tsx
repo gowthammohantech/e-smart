@@ -6,7 +6,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
-import { Button } from '@/components/Button';
 import { TextField } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
 import { useItems, useStockLevels } from '@/store/selectors';

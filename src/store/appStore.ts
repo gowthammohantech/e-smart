@@ -28,7 +28,7 @@ import {
   TaxCategory,
   User,
 } from '@/types';
-import { Money, money, zero } from '@/lib/money';
+import { Money, zero } from '@/lib/money';
 import { nowISO, today } from '@/lib/date';
 import { uid } from '@/lib/id';
 import { calculateDocument } from '@/domain/lineCalc';

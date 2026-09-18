@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback} from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -27,7 +27,10 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const [query, setQuery] = useState('');
   const [range, setRange] = useState<DateRangePreset>('all');
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown';
+  const nameOf = useCallback(
+    (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown',
+    [parties],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -37,7 +40,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
       if (!q) return true;
       return `${p.number} ${nameOf(p.partyId)} ${p.reference ?? ''}`.toLowerCase().includes(q);
     });
-  }, [payments, query, range, parties]);
+  }, [payments, query, range, nameOf]);
 
   const total = useMemo(
     () =>

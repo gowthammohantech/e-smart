@@ -2,13 +2,12 @@ import React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useTheme , ThemeMode } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { StatRow, StatTile } from '@/components/StatTile';
 import { useUiStore } from '@/store/uiStore';
-import { ThemeMode } from '@/theme/ThemeProvider';
 import { fromMajor } from '@/lib/money';
 import { useBaseCurrency } from '@/store/selectors';
 

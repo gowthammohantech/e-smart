@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useCallback} from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,10 +6,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
-import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { useToast } from '@/components/Toast';
 import {
   useBaseCurrency,
   useDocuments,
@@ -44,7 +42,6 @@ const SUGGESTIONS = [
 export default function Assistant() {
   const t = useTheme();
   const router = useRouter();
-  const toast = useToast();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -67,7 +64,10 @@ export default function Assistant() {
     },
   ]);
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown';
+  const nameOf = useCallback(
+    (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown',
+    [parties],
+  );
 
   const answer = useMemo(
     () =>
@@ -142,7 +142,7 @@ export default function Assistant() {
           text: "I can help with receivables, sales figures, stock levels and spend. Try asking who owes you the most, how sales are doing this month, or what's low on stock.",
         };
       },
-    [receivables, invoices, items, stock, expenses, payables, baseCurrency, parties],
+    [receivables, invoices, items, stock, expenses, payables, baseCurrency, nameOf],
   );
 
   const send = (text: string) => {
@@ -237,7 +237,7 @@ export default function Assistant() {
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, marginTop: t.spacing.md }}>
           <MaterialCommunityIcons name="shield-lock-outline" size={19} color={t.c.muted} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-            The assistant reads only the business you're signed into, and never creates, finalises or deletes a record
+            The assistant reads only the business you&apos;re signed into, and never creates, finalises or deletes a record
             without you confirming it.
           </Text>
         </Card>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback} from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -59,7 +59,10 @@ export function DocumentListView({
   const [filters, setFilters] = useState<DocumentListFilters>(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown';
+  const nameOf = useCallback(
+    (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown',
+    [parties],
+  );
 
   const availableStatuses = useMemo(() => {
     const set = new Set<DocStatus>();
@@ -80,7 +83,7 @@ export function DocumentListView({
       }
       return true;
     });
-  }, [documents, filters, parties]);
+  }, [documents, filters, nameOf]);
 
   const total = useMemo(
     () =>

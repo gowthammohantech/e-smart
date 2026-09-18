@@ -1,8 +1,7 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleProp, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleProp, View, ViewStyle , Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
 

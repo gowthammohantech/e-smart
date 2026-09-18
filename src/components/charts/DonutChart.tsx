@@ -90,13 +90,13 @@ export function DonutChart({
   // A 2px surface gap keeps adjacent fills from touching.
   const gapDeg = shown.length > 1 ? 1.6 : 0;
 
-  let cursor = 0;
-  const arcs = shown.map((s, i) => {
-    const sweep = (s.value.minor / total) * 360;
+  // Each slice starts where the sum of the preceding sweeps ends.
+  const sweeps = shown.map((s) => (s.value.minor / total) * 360);
+  const arcs = shown.map((slice, index) => {
+    const cursor = sweeps.slice(0, index).reduce((a, b) => a + b, 0);
     const start = cursor + gapDeg / 2;
-    const end = cursor + sweep - gapDeg / 2;
-    cursor += sweep;
-    return { slice: s, start, end: Math.max(start + 0.4, end), index: i };
+    const end = cursor + sweeps[index] - gapDeg / 2;
+    return { slice, index, start, end: Math.max(start + 0.4, end) };
   });
 
   const active = selected != null ? shown[selected] : null;

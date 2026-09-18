@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { EmptyState } from '@/components/EmptyState';
-import { AmountField, PickerField, Segmented, TextField } from '@/components/Field';
+import { AmountField, PickerField, TextField } from '@/components/Field';
 import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
@@ -60,9 +60,10 @@ export default function NewPayment() {
   const [accountId, setAccountId] = useState(accounts.find((a) => a.isDefault)?.id ?? accounts[0]?.id ?? '');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [currency, setCurrency] = useState(baseCurrency);
-  const [exchangeRate, setExchangeRate] = useState(1);
+  const [seeded, setSeeded] = useState(false);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
+  /** Set only when the user overrides the resolved settlement rate. */
+  const [rateOverride, setRateOverride] = useState<number | null>(null);
 
   const [partyOpen, setPartyOpen] = useState(false);
   const [methodOpen, setMethodOpen] = useState(false);
@@ -77,22 +78,23 @@ export default function NewPayment() {
     return buildOutstanding(docs, existingPayments).sort((a, b) => a.document.date.localeCompare(b.document.date));
   }, [openDocs, existingPayments, partyId]);
 
-  useEffect(() => {
-    if (!party) return;
-    setCurrency(party.currency);
-    setExchangeRate(party.currency === baseCurrency ? 1 : resolveRate(exchangeRates, party.currency, baseCurrency, date));
-  }, [party, baseCurrency, exchangeRates, date]);
+  // A payment settles in the party's currency, at the rate effective on the
+  // payment date unless the user says otherwise.
+  const currency = party?.currency ?? baseCurrency;
+  const resolvedRate = useMemo(
+    () => (currency === baseCurrency ? 1 : resolveRate(exchangeRates, currency, baseCurrency, date)),
+    [currency, baseCurrency, exchangeRates, date],
+  );
+  const exchangeRate = rateOverride ?? resolvedRate;
 
-  // Pre-select the invoice we were opened from.
-  useEffect(() => {
-    if (!params.documentId || outstanding.length === 0) return;
-    const row = outstanding.find((o) => o.document.id === params.documentId);
-    if (row && !allocations[row.document.id]) {
-      setAllocations({ [row.document.id]: String(toMajor(row.outstanding)) });
-      setAmountText(String(toMajor(row.outstanding)));
-    }
-    // Only runs once the list is first available for this document.
-  }, [params.documentId, outstanding]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Seed the allocation from the invoice we were opened from, on the first
+  // render where that invoice is actually in the outstanding list.
+  const prefill = params.documentId ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
+  if (prefill && !seeded) {
+    setSeeded(true);
+    setAllocations({ [prefill.document.id]: String(toMajor(prefill.outstanding)) });
+    setAmountText(String(toMajor(prefill.outstanding)));
+  }
 
   const amount = fromMajor(amountText || '0', currency);
   const allocatedTotal = useMemo(
@@ -285,7 +287,7 @@ export default function NewPayment() {
           <TextField
             label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
             value={String(exchangeRate)}
-            onChangeText={(v) => setExchangeRate(Number(v.replace(/[^0-9.]/g, '')) || 0)}
+            onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
             keyboardType="decimal-pad"
             icon="swap-horizontal"
             hint="A rate different from the invoice rate produces an FX gain or loss."
@@ -444,6 +446,7 @@ export default function NewPayment() {
         onSelect={(id) => {
           setPartyId(id);
           setAllocations({});
+          setRateOverride(null);
         }}
       />
       <SelectSheet

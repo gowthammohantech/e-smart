@@ -16,7 +16,7 @@ import {
   SyncQueueEntry,
   TaxCategory,
 } from '@/types';
-import { Money, fromMajor, money, subtract, sum, zero } from '@/lib/money';
+import { Money, fromMajor, money, zero } from '@/lib/money';
 import { addDaysISO, nowISO, today } from '@/lib/date';
 import { calculateDocument } from '@/domain/lineCalc';
 import { formatNumber } from '@/domain/numbering';

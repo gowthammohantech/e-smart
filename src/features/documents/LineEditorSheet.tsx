@@ -1,30 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Sheet } from '@/components/Sheet';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
-import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@/components/Field';
+import { AmountField, PickerField, Segmented, SwitchField, TextField , QuantityStepper } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
-import { QuantityStepper } from '@/components/Field';
 import { DocumentLine, TaxCategory } from '@/types';
 import { formatMoney, formatPercent } from '@/lib/format';
-import { fromMajor, money, toMajor } from '@/lib/money';
+import { fromMajor, toMajor } from '@/lib/money';
 import { calculateLine } from '@/domain/lineCalc';
 import { TaxContext } from '@/domain/taxEngine';
 import { UNITS } from '@/data/masters';
 
-/** Edit one document line: quantity, price, discount and tax treatment. */
-export function LineEditorSheet({
-  visible,
-  line,
-  currency,
-  taxCategories,
-  taxContext,
-  onClose,
-  onSave,
-  onRemove,
-}: {
+type EditorProps = {
   visible: boolean;
   line: DocumentLine | null;
   currency: string;
@@ -33,31 +22,41 @@ export function LineEditorSheet({
   onClose: () => void;
   onSave: (patch: Partial<DocumentLine>) => void;
   onRemove?: () => void;
-}) {
+};
+
+/**
+ * Edit one document line: quantity, price, discount and tax treatment.
+ *
+ * The form is keyed on the line id so switching lines remounts it with fresh
+ * initial values, rather than syncing props into state inside an effect.
+ */
+export function LineEditorSheet(props: EditorProps) {
+  if (!props.line) return null;
+  return <LineEditorForm key={props.line.id} {...props} />;
+}
+
+function LineEditorForm({
+  visible,
+  line,
+  currency,
+  taxCategories,
+  taxContext,
+  onClose,
+  onSave,
+  onRemove,
+}: EditorProps) {
   const t = useTheme();
 
-  const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [unit, setUnit] = useState('NOS');
-  const [price, setPrice] = useState('0');
-  const [discountMode, setDiscountMode] = useState<'percent' | 'amount'>('percent');
-  const [discountValue, setDiscountValue] = useState('0');
-  const [taxCategoryId, setTaxCategoryId] = useState('');
-  const [taxInclusive, setTaxInclusive] = useState(false);
+  const [name, setName] = useState(line?.name ?? '');
+  const [quantity, setQuantity] = useState(line?.quantity ?? 1);
+  const [unit, setUnit] = useState(line?.unit ?? 'NOS');
+  const [price, setPrice] = useState(line ? String(toMajor(line.unitPrice)) : '0');
+  const [discountMode, setDiscountMode] = useState<'percent' | 'amount'>(line?.discountMode ?? 'percent');
+  const [discountValue, setDiscountValue] = useState(String(line?.discountValue ?? 0));
+  const [taxCategoryId, setTaxCategoryId] = useState(line?.taxCategoryId ?? '');
+  const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-
-  useEffect(() => {
-    if (!line) return;
-    setName(line.name);
-    setQuantity(line.quantity);
-    setUnit(line.unit);
-    setPrice(String(toMajor(line.unitPrice)));
-    setDiscountMode(line.discountMode);
-    setDiscountValue(String(line.discountValue));
-    setTaxCategoryId(line.taxCategoryId);
-    setTaxInclusive(line.taxInclusive);
-  }, [line]);
 
   if (!line) return null;
 

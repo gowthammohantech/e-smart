@@ -3,7 +3,6 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
-import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';

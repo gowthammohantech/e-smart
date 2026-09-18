@@ -14,7 +14,7 @@ import { Fab } from '@/components/Fab';
 import { Badge } from '@/components/Badge';
 import { useBaseCurrency, useDocuments, useParties, usePayments } from '@/store/selectors';
 import { buildOutstanding } from '@/domain/receivables';
-import { money, sum, zero } from '@/lib/money';
+import { money } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
 
 type Tab = 'customer' | 'supplier';

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -44,8 +44,10 @@ export function Sheet({
 }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const translate = useRef(new Animated.Value(600)).current;
-  const fade = useRef(new Animated.Value(0)).current;
+  // Lazy state rather than a ref, so the animated values are never read
+  // during render.
+  const [translate] = useState(() => new Animated.Value(600));
+  const [fade] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     if (visible) {

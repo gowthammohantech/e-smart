@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback} from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -27,7 +27,7 @@ export default function StockMovements() {
   const [query, setQuery] = useState('');
   const [type, setType] = useState<StockMovementType | 'all'>('all');
 
-  const nameOf = (id: string) => items.find((i) => i.id === id);
+  const nameOf = useCallback((id: string) => items.find((i) => i.id === id), [items]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -39,7 +39,7 @@ export default function StockMovements() {
         return `${item?.name ?? ''} ${item?.sku ?? ''} ${m.referenceNumber ?? ''} ${m.notes ?? ''}`.toLowerCase().includes(q);
       })
       .sort((a, b) => (b.date === a.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
-  }, [movements, query, type, items]);
+  }, [movements, query, type, nameOf]);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

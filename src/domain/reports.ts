@@ -6,8 +6,7 @@ import {
   Party,
   Payment,
   StockMovement,
-  TaxCategory,
-} from '@/types';
+  } from '@/types';
 import { Money, add, money, subtract, sum, zero } from '@/lib/money';
 import { DateRange, inRange, monthKey } from '@/lib/date';
 import { stockOnHand, stockValue } from './stockLedger';

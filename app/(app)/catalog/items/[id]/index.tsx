@@ -23,7 +23,7 @@ import {
 import { MOVEMENT_LABELS, isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { formatDate } from '@/lib/date';
-import { money, multiply } from '@/lib/money';
+import { multiply } from '@/lib/money';
 
 export default function ItemDetail() {
   const t = useTheme();

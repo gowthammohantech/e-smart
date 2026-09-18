@@ -39,6 +39,8 @@ export default function BackupExport() {
 
   const [busy, setBusy] = useState(false);
   const [confirmExport, setConfirmExport] = useState(false);
+  // Captured once so the render stays pure.
+  const [lastBackupAt] = useState(() => new Date(Date.now() - 6 * 3600 * 1000).toISOString());
 
   const counts = useMemo(
     () => [
@@ -108,7 +110,7 @@ export default function BackupExport() {
         </Card>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          What's included
+          What&apos;s included
         </Text>
         <Card padded={false}>
           {counts.map((c, i) => (
@@ -143,7 +145,7 @@ export default function BackupExport() {
             <Badge label="Nightly" tone="success" size="sm" />
           </View>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Last backup {formatDateTime(new Date(Date.now() - 6 * 3600 * 1000).toISOString())}. Financial records subject to
+            Last backup {formatDateTime(lastBackupAt)}. Financial records subject to
             statutory retention are kept even if you remove them from this device.
           </Text>
         </Card>

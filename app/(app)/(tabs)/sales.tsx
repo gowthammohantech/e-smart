@@ -5,7 +5,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { AppHeader } from '@/components/AppHeader';
 import { SectionHeader } from '@/components/Screen';
 import { Card } from '@/components/Card';
-import { Text } from '@/components/Text';
 import { StatRow, StatTile } from '@/components/StatTile';
 import { HubTiles } from '@/components/HubTiles';
 import { DocumentRow } from '@/components/DocumentRow';

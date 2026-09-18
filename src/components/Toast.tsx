@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Animated, View } from 'react-native';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -14,11 +14,10 @@ const ToastContext = createContext<{ show: (text: string, tone?: ToastTone) => v
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [message, setMessage] = useState<ToastMessage | null>(null);
-  const counter = useRef(0);
 
   const show = useCallback((text: string, tone: ToastTone = 'info') => {
-    counter.current += 1;
-    setMessage({ id: counter.current, text, tone });
+    // The id only has to be unique enough to key a remount.
+    setMessage({ id: Date.now(), text, tone });
   }, []);
 
   return (
@@ -32,7 +31,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 function ToastView({ message, onDone }: { message: ToastMessage; onDone: () => void }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const anim = useRef(new Animated.Value(0)).current;
+  const [anim] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.sequence([

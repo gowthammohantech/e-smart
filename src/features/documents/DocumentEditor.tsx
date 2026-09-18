@@ -23,8 +23,8 @@ import { DOCUMENT_LABELS } from '@/domain/documentStates';
 import { resolveRate } from '@/domain/fx';
 import { CURRENCIES } from '@/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { addDaysISO, today } from '@/lib/date';
-import { fromMajor, money, toMajor, zero } from '@/lib/money';
+import { addDaysISO } from '@/lib/date';
+import { fromMajor, money, toMajor } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
 
 import { useAppStore } from '@/store/appStore';

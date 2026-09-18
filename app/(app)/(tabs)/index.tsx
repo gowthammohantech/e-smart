@@ -8,7 +8,7 @@ import { Screen, SectionHeader } from '@/components/Screen';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { StatRow, StatTile } from '@/components/StatTile';
-import { QuickActions } from '@/components/QuickActions';
+import { QuickActions , quickActions } from '@/components/QuickActions';
 import { BarChart } from '@/components/charts/BarChart';
 import { AgingBars } from '@/components/charts/AgingBars';
 import { DocumentRow } from '@/components/DocumentRow';
@@ -16,7 +16,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/Badge';
 import { Fab } from '@/components/Fab';
 import { Sheet } from '@/components/Sheet';
-import { quickActions } from '@/components/QuickActions';
 import {
   useBaseCurrency,
   useCurrentUser,
@@ -29,7 +28,7 @@ import {
   useReceivables,
   useStockLevels,
 } from '@/store/selectors';
-import { money, subtract, sum, zero } from '@/lib/money';
+import { money, subtract, sum } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
 import { inRange, lastNMonths, monthLabel, resolveRange } from '@/lib/date';
 import { isLowStock } from '@/domain/stockLedger';
@@ -139,7 +138,7 @@ export default function Home() {
           {greeting()}, {user?.name?.split(' ')[0] ?? 'there'}
         </Text>
         <Text variant="small" tone="muted">
-          Here's how the business is doing this month.
+          Here&apos;s how the business is doing this month.
         </Text>
 
         <View style={{ marginTop: t.spacing.xl, marginHorizontal: -t.spacing.lg, paddingLeft: t.spacing.lg }}>
