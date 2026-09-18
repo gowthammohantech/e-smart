@@ -44,6 +44,8 @@ import {
   extendEwayBillAtPortal,
   submitInvoice,
 } from '@/domain/irpAdapter';
+import { seedParties } from '@/data/seed';
+import { GSTIN_RE } from '@/lib/validators';
 import {
   Address,
   BusinessDocument,
@@ -1145,5 +1147,33 @@ describe('e-way bill Part-A (FRD 16)', () => {
 
   it('demands a known state code at both ends', () => {
     expect(partA({ from: place({ stateCode: '99' }) })).toContain('from.stateCode');
+  });
+});
+
+
+/* ------------------------------------------------------------------ */
+/* The demo data has to satisfy the same rules                         */
+/* ------------------------------------------------------------------ */
+
+describe('seeded parties (FRD 16)', () => {
+  it('gives every registered party a structurally valid GSTIN', () => {
+    // Without this the demo contradicts itself: seeded invoices carry an IRN,
+    // and generating one on the invoice beside them is refused for a malformed
+    // buyer GSTIN.
+    const bad = seedParties()
+      .filter((p) => p.taxId)
+      .filter((p) => !GSTIN_RE.test(p.taxId!))
+      .map((p) => `${p.name}: ${p.taxId}`);
+    expect(bad).toEqual([]);
+  });
+
+  it('makes every GSTIN fifteen characters', () => {
+    seedParties()
+      .filter((p) => p.taxId)
+      .forEach((p) => expect(p.taxId).toHaveLength(15));
+  });
+
+  it('leaves some parties unregistered, so the B2C path is exercised', () => {
+    expect(seedParties().some((p) => !p.taxId)).toBe(true);
   });
 });

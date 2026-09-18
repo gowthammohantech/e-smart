@@ -227,9 +227,15 @@ function cityFor(stateCode: string): string {
   return map[stateCode] ?? 'Mumbai';
 }
 
+/**
+ * A structurally valid GSTIN: two state digits, a ten-character PAN
+ * (five letters, four digits, a letter), an entity number, a literal Z and a
+ * check character.
+ */
 function gstinFor(stateCode: string, i: number): string {
-  const pan = `AAB${String.fromCharCode(67 + (i % 20))}${String(1000 + i * 7).slice(0, 4)}${String.fromCharCode(65 + (i % 26))}`;
-  return `${stateCode}${pan}1Z${String.fromCharCode(65 + (i % 26))}`;
+  const letter = (n: number) => String.fromCharCode(65 + (n % 26));
+  const pan = `AABC${letter(2 + i)}${String(1000 + i * 7).slice(0, 4)}${letter(i)}`;
+  return `${stateCode}${pan}1Z${letter(i)}`;
 }
 
 export function seedParties(): Party[] {
