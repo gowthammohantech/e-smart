@@ -16,6 +16,7 @@ import {
   useDocuments,
   useParties,
   usePayments,
+  useComplianceSummary,
   useReceivables,
 } from '@/store/selectors';
 import { money, sum } from '@/lib/money';
@@ -35,6 +36,7 @@ export default function SalesTab() {
   const payments = usePayments('received');
   const receivables = useReceivables();
   const customers = useParties('customer');
+  const compliance = useComplianceSummary();
 
   const month = resolveRange('thisMonth');
 
@@ -133,6 +135,7 @@ export default function SalesTab() {
             { key: 'deliveries', label: 'Delivery notes', icon: 'truck-outline', route: '/(app)/sales/deliveries', count: deliveries.length },
             { key: 'returns', label: 'Sales returns', icon: 'keyboard-return', route: '/(app)/sales/returns', count: returns.length },
             { key: 'payments', label: 'Payments in', icon: 'cash-plus', route: '/(app)/payments/received', count: payments.length },
+            { key: 'compliance', label: 'E-invoices', icon: 'shield-check-outline', route: '/(app)/compliance', count: compliance.eInvoice.generated },
           ]}
         />
 

@@ -1,10 +1,12 @@
-import { BusinessDocument, Company, Party } from '@/types';
+import { BusinessDocument, Company, EwayBill, Party } from '@/types';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
 import { flattenTaxComponents } from '@/domain/lineCalc';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { formatDate } from '@/lib/date';
 import { money } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
+import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '@/lib/qr';
+import { E_INVOICE_CANCEL_REASONS } from '@/domain/eInvoice';
 
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -27,11 +29,13 @@ export function buildDocumentHtml({
   company,
   party,
   branchName,
+  ewayBill,
 }: {
   document: BusinessDocument;
   company?: Company;
   party?: Party;
   branchName?: string;
+  ewayBill?: EwayBill;
 }): string {
   const label = DOCUMENT_LABELS[doc.kind].singular.toUpperCase();
   const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
@@ -126,9 +130,16 @@ export function buildDocumentHtml({
   .sign .line { margin-top: 42px; border-top: 1px solid #E2E8F1; display: inline-block; padding-top: 5px; min-width: 190px; }
   .foot { margin-top: 26px; text-align: center; color: #5A6478; font-size: 10px; }
   .badge { display: inline-block; padding: 3px 9px; border-radius: 99px; background: rgba(0,122,255,0.10); color: #007AFF; font-size: 10px; font-weight: 700; }
+  .einv { display: flex; gap: 18px; margin-top: 16px; padding: 12px 14px; border: 1px solid #E2E8F1; border-radius: 6px; page-break-inside: avoid; }
+  .einv-qr svg { display: block; }
+  .einv-body { flex: 1; }
+  .einv-grid { display: flex; gap: 26px; margin-top: 9px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; line-height: 1.5; word-break: break-all; letter-spacing: 0.2px; }
+  .cancelled-strip { margin-bottom: 14px; padding: 8px 12px; border-radius: 5px; background: rgba(255,59,48,0.10); color: #C62F26; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; }
 </style>
 </head>
 <body>
+  ${cancelledStrip(doc)}
   <div class="head">
     <div>
       <div class="brand">${esc(company?.name)}</div>
@@ -184,7 +195,7 @@ export function buildDocumentHtml({
 
   <table class="totals"><tbody>${totalRows}</tbody></table>
 
-  ${doc.compliance?.irn ? `<div style="margin-top:14px"><span class="badge">E-INVOICE</span> <span class="muted">IRN ${esc(doc.compliance.irn)}</span></div>` : ''}
+  ${eInvoiceBlock(doc, ewayBill)}
 
   <div class="notes">
     <div>
@@ -201,4 +212,65 @@ export function buildDocumentHtml({
   <div class="foot">Generated with Elixir Books Smart</div>
 </body>
 </html>`;
+}
+
+
+/**
+ * The e-invoice block on a printed document (FRD 16).
+ *
+ * The IRN, the acknowledgement number, the acknowledgement date and the signed
+ * QR are all required on a printed e-invoice, and the e-way bill number must
+ * appear on the document travelling with the consignment — so none of this is
+ * decoration that can be dropped to save room.
+ */
+function eInvoiceBlock(doc: BusinessDocument, ewayBill?: EwayBill): string {
+  const c = doc.compliance;
+  const reported = c?.eInvoiceStatus === 'generated' || c?.eInvoiceStatus === 'cancelled';
+  if (!reported || !c?.irn) return '';
+
+  // The QR is generated markup, not user content, so it must reach the page as
+  // SVG rather than being escaped like every other value interpolated here.
+  let qr = '';
+  if (c.signedQrPayload) {
+    try {
+      // Printed a little over the floor, because paper and camera angles are
+      // less forgiving than a screen.
+      qr = qrSvgString(qrMatrix(c.signedQrPayload, 'M'), {
+        size: MIN_READABLE_QR_SIZE + 20,
+        quietZone: 4,
+      });
+    } catch {
+      qr = '';
+    }
+  }
+
+  const ewb = ewayBill
+    ? `<div class="einv-grid">
+        <div><div class="cap">E-way bill no.</div><div>${esc(ewayBill.ewayBillNumber)}</div></div>
+        <div><div class="cap">Valid until</div><div>${esc(formatDate(ewayBill.validUpto.slice(0, 10)))}</div></div>
+      </div>`
+    : '';
+
+  return `<div class="einv">
+    ${qr ? `<div class="einv-qr">${qr}</div>` : ''}
+    <div class="einv-body">
+      <span class="badge">E-INVOICE</span>
+      <div class="cap" style="margin-top:9px">IRN</div>
+      <div class="mono">${esc(c.irn)}</div>
+      <div class="einv-grid">
+        <div><div class="cap">Ack no.</div><div>${esc(c.ackNo)}</div></div>
+        <div><div class="cap">Ack date</div><div>${esc(c.ackDate)}</div></div>
+      </div>
+      ${ewb}
+    </div>
+  </div>`;
+}
+
+/** A cancelled IRN must be obvious on the page; printing one silently misleads. */
+function cancelledStrip(doc: BusinessDocument): string {
+  const c = doc.compliance;
+  if (c?.eInvoiceStatus !== 'cancelled') return '';
+  const reason = c.irnCancelReasonCode ? E_INVOICE_CANCEL_REASONS[c.irnCancelReasonCode] : 'cancelled';
+  const on = c.irnCancelledAt ? ` on ${formatDate(c.irnCancelledAt.slice(0, 10))}` : '';
+  return `<div class="cancelled-strip">IRN CANCELLED — ${esc(reason)}${esc(on)}</div>`;
 }

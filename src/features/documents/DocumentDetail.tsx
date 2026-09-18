@@ -28,12 +28,18 @@ import { buildDocumentHtml } from './documentHtml';
 import { useAppStore } from '@/store/appStore';
 import {
   useActiveCompany,
+  useActiveEwayBill,
   useBaseCurrency,
   useBranches,
+  useComplianceSettings,
   useParty,
   usePayments,
 } from '@/store/selectors';
 import { detailRouteFor } from './DocumentEditor';
+import { ComplianceCard } from '@/features/compliance/ComplianceCard';
+import { EInvoiceSheet } from '@/features/compliance/EInvoiceSheet';
+import { canCancelEInvoice, isEInvoiceApplicable } from '@/domain/eInvoice';
+import { isEwayBillRequired } from '@/domain/ewayBill';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
@@ -45,6 +51,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const branches = useBranches();
   const party = useParty(doc.partyId);
   const allPayments = usePayments();
+  const ewayBill = useActiveEwayBill(doc.id);
+  const complianceSettings = useComplianceSettings();
+  const storeItems = useAppStore((s) => s.items);
 
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
   const removeDocument = useAppStore((s) => s.removeDocument);
@@ -55,7 +64,26 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const [statusOpen, setStatusOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [complianceSheet, setComplianceSheet] = useState<'generate' | 'cancel' | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const eInvoiceApplicable = useMemo(
+    () =>
+      isEInvoiceApplicable({
+        document: doc,
+        company,
+        buyer: party,
+        settings: complianceSettings,
+        items: storeItems,
+        now: new Date().toISOString(),
+      }).applicable,
+    [doc, company, party, complianceSettings, storeItems],
+  );
+  const ewayRequired = useMemo(
+    () => isEwayBillRequired({ document: doc, items: storeItems, settings: complianceSettings }).required,
+    [doc, storeItems, complianceSettings],
+  );
+  const canCancelIrn = canCancelEInvoice(doc.compliance, new Date().toISOString()).allowed;
 
   const label = DOCUMENT_LABELS[doc.kind];
   const branch = branches.find((b) => b.id === doc.branchId);
@@ -78,6 +106,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         company,
         party,
         branchName: branch?.name,
+        ewayBill,
       });
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
@@ -342,39 +371,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         ) : null}
 
         {/* Compliance */}
-        {doc.compliance ? (
-          <>
-            <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Compliance
-            </Text>
-            <Card style={{ gap: t.spacing.md }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text variant="small">E-invoice</Text>
-                <Badge
-                  label={doc.compliance.eInvoiceStatus === 'generated' ? 'IRN generated' : doc.compliance.eInvoiceStatus ?? 'Not applicable'}
-                  tone={doc.compliance.eInvoiceStatus === 'generated' ? 'success' : doc.compliance.eInvoiceStatus === 'failed' ? 'danger' : 'neutral'}
-                />
-              </View>
-              {doc.compliance.irn ? (
-                <View style={{ gap: 3 }}>
-                  <Text variant="caption" tone="muted">
-                    IRN
-                  </Text>
-                  <Text variant="mono" numberOfLines={2}>
-                    {doc.compliance.irn}
-                  </Text>
-                </View>
-              ) : null}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text variant="small">E-way bill</Text>
-                <Badge
-                  label={doc.compliance.ewayBillNumber ?? doc.compliance.ewayBillStatus ?? 'Not applicable'}
-                  tone={doc.compliance.ewayBillNumber ? 'success' : 'neutral'}
-                />
-              </View>
-            </Card>
-          </>
-        ) : null}
+        <ComplianceCard document={doc} />
 
         {/* Notes */}
         {doc.notes || doc.terms ? (
@@ -439,6 +436,17 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
             ? [{ label: 'Share as PDF', icon: 'file-pdf-box' as const, onPress: shareDocument }]
             : [{ label: 'Edit', icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
           { label: 'Preview document', icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
+          ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'
+            ? [{ label: 'Generate e-invoice', icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
+            : []),
+          ...(canCancelIrn
+            ? [{ label: 'Cancel IRN', icon: 'shield-off-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('cancel'); } }]
+            : []),
+          ...(ewayBill
+            ? [{ label: 'View e-way bill', icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
+            : ewayRequired
+              ? [{ label: 'Generate e-way bill', icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
+              : []),
           ...conversions.map((c) => ({ label: c.label, icon: c.icon, onPress: () => convert(c.target) })),
           { label: 'Duplicate', icon: 'content-duplicate' as const, onPress: () => {
             const id = duplicateDocument(doc.id);
@@ -535,6 +543,15 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           toast.show('Document cancelled', 'success');
         }}
       />
+
+      {complianceSheet ? (
+        <EInvoiceSheet
+          visible
+          onClose={() => setComplianceSheet(null)}
+          document={doc}
+          mode={complianceSheet}
+        />
+      ) : null}
     </View>
   );
 }

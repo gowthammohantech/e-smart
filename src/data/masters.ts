@@ -95,8 +95,8 @@ export function expenseCategories(companyId: string): ExpenseCategory[] {
 export const INTEGRATIONS: Integration[] = [
   { id: 'int_razorpay', name: 'Razorpay', description: 'Collect invoice payments online.', icon: 'credit-card-outline', category: 'payments', connected: true },
   { id: 'int_upi', name: 'UPI / QR', description: 'Show a UPI QR code on every invoice.', icon: 'qrcode', category: 'payments', connected: true },
-  { id: 'int_einvoice', name: 'GST e-Invoice (IRP)', description: 'Generate IRN and signed QR for B2B invoices.', icon: 'shield-check-outline', category: 'compliance', connected: true },
-  { id: 'int_eway', name: 'E-way bill', description: 'Generate e-way bills for goods movement.', icon: 'truck-fast-outline', category: 'compliance', connected: false },
+  { id: 'int_einvoice', name: 'GST e-Invoice (IRP)', description: 'Generate IRN and signed QR for B2B invoices.', icon: 'shield-check-outline', category: 'compliance', connected: true, configRoute: '/(app)/settings/e-invoicing' },
+  { id: 'int_eway', name: 'E-way bill', description: 'Generate e-way bills for goods movement.', icon: 'truck-fast-outline', category: 'compliance', connected: true, configRoute: '/(app)/settings/e-invoicing' },
   { id: 'int_whatsapp', name: 'WhatsApp Business', description: 'Send invoices and reminders on WhatsApp.', icon: 'whatsapp', category: 'messaging', connected: true },
   { id: 'int_sms', name: 'SMS gateway', description: 'Payment reminders over SMS.', icon: 'message-text-outline', category: 'messaging', connected: false },
   { id: 'int_tally', name: 'Tally export', description: 'Export vouchers into Tally.', icon: 'file-export-outline', category: 'accounting', connected: false },

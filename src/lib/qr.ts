@@ -524,6 +524,18 @@ export function qrMatrix(text: string, ecc: QrEcc = 'M'): QrMatrix {
   return qrMatrixAt(text, ecc, version);
 }
 
+/**
+ * The smallest a symbol can be drawn and still be read, in points or CSS pixels.
+ *
+ * A reader needs roughly a millimetre and a half of symbol per module before it
+ * stops resolving them, and the GST signed payload runs past 650 bytes — a
+ * version-21 symbol, 101 modules square. Measured against a reader on a
+ * one-to-one display, 160 fails and 180 passes. Below the floor the code
+ * renders perfectly and scans not at all, which is the worst of both worlds —
+ * so this is a floor, not a suggestion.
+ */
+export const MIN_READABLE_QR_SIZE = 180;
+
 /** An SVG path covering every dark module as a 1x1 square on the module grid. */
 export function qrSvgPath(matrix: QrMatrix): string {
   const parts: string[] = [];
@@ -543,8 +555,13 @@ export function qrSvgString(
   const { size = 132, quietZone = 4, dark = '#000000', light = '#FFFFFF' } = opts;
   const extent = matrix.length + quietZone * 2;
   return (
+    // No shape-rendering hint: asking for crisp edges makes the renderer snap
+    // every module to the pixel grid, and at the fractional scale a real
+    // layout produces that quantises some modules a pixel wider than others.
+    // The code still looks perfect and stops decoding. Anti-aliasing keeps the
+    // module centres where a reader expects them.
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" ` +
-    `viewBox="0 0 ${extent} ${extent}" shape-rendering="crispEdges">` +
+    `viewBox="0 0 ${extent} ${extent}">` +
     `<rect width="${extent}" height="${extent}" fill="${light}"/>` +
     `<g transform="translate(${quietZone} ${quietZone})">` +
     `<path d="${qrSvgPath(matrix)}" fill="${dark}"/>` +

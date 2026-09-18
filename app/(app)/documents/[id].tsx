@@ -12,7 +12,13 @@ import { useToast } from '@/components/Toast';
 import { buildDocumentHtml } from '@/features/documents/documentHtml';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
 import { formatMoney } from '@/lib/format';
-import { useActiveCompany, useBranches, useDocument, useParty } from '@/store/selectors';
+import {
+  useActiveCompany,
+  useActiveEwayBill,
+  useBranches,
+  useDocument,
+  useParty,
+} from '@/store/selectors';
 
 export default function DocumentPreview() {
   const t = useTheme();
@@ -24,11 +30,21 @@ export default function DocumentPreview() {
   const company = useActiveCompany();
   const party = useParty(doc?.partyId);
   const branches = useBranches();
+  const ewayBill = useActiveEwayBill(doc?.id);
   const [busy, setBusy] = useState(false);
 
   const html = useMemo(
-    () => (doc ? buildDocumentHtml({ document: doc, company, party, branchName: branches.find((b) => b.id === doc.branchId)?.name }) : ''),
-    [doc, company, party, branches],
+    () =>
+      doc
+        ? buildDocumentHtml({
+            document: doc,
+            company,
+            party,
+            branchName: branches.find((b) => b.id === doc.branchId)?.name,
+            ewayBill,
+          })
+        : '',
+    [doc, company, party, branches, ewayBill],
   );
 
   if (!doc) {

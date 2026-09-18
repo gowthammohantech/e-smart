@@ -75,10 +75,43 @@ tested without rendering anything:
 | `stockLedger.ts` | Current stock derived from an immutable movement list; never stored as a mutable counter. |
 | `fx.ts` | Effective-dated rates, the rate stored on each document, and gain/loss on settlement. |
 | `reports.ts` | The nine PRD reports. |
+| `eInvoice.ts` | Who must report, the portal's blocking validations, the NIC schema 1.1 payload, the IRN, the signed QR and the 24-hour cancellation window. |
+| `ewayBill.ts` | When a consignment needs a bill, how long it stays valid, and the windows for extending, cancelling and updating Part-B. |
+| `irpAdapter.ts` | Stands in for the portal. Takes an explicit `now`, reads no clock and draws no random number, so a request always answers the same way. |
 
 `npm test` covers the parts that would be expensive to get wrong: rounding,
 inclusive vs exclusive tax, the CGST/SGST/IGST split, allocation without losing
-a paisa, aging buckets, stock derivation and FX settlement.
+a paisa, aging buckets, stock derivation, FX settlement, and the compliance
+boundaries — the 200 km and 20 km validity steps, midnight expiry, and the
+24-hour and 8-hour windows.
+
+### E-invoicing and e-way bills
+
+The compliance area is as real as the rest of the domain layer, short of the
+network:
+
+- The **IRN** is the genuine SHA-256 of the supplier GSTIN, document type,
+  document number and financial year. Anyone holding those four public fields
+  can recompute it and check it against the invoice — which is the point of the
+  scheme, and why `src/lib/hash.ts` is a real digest rather than a stand-in.
+- The **signed QR** is a JWS carrying the ten claims the portal specifies, drawn
+  by a QR encoder in `src/lib/qr.ts` (byte mode, all four error-correction
+  levels, versions 1 to 40, all eight masks scored against the four penalty
+  rules). The payload runs to about 700 bytes, which lands around version 21.
+  The code scans; it is verified by a decoder written independently against the
+  standard.
+- **Validation** is the portal's own list — HSN on every line, a structurally
+  valid GSTIN at both ends, IGST against the place of supply, totals within a
+  rupee, a document number of at most 16 characters, the reporting window — and
+  every finding is reported at once rather than one per attempt.
+- **E-way bill validity** is one day per 200 km, or one per 20 km for
+  over-dimensional cargo, always expiring at midnight. Extension opens eight
+  hours before expiry and closes eight hours after. Cancellation, for both an
+  IRN and a bill, closes at 24 hours.
+
+The signature inside the QR is the one piece that cannot be real: it is derived
+from the signing input rather than produced with the portal's private key, and
+is marked as such in the code.
 
 ### Data and state
 
@@ -122,7 +155,10 @@ company · Home dashboard · quotations, sales orders, delivery notes, invoices,
 sales returns · purchase orders, goods receipts, purchase bills, purchase
 returns · expenses with recurrence and receipts · payments in and out with
 multi-invoice allocation, advances and FX settlement · receivables and payables
-with aging and reminders · items, stock adjustments, branch transfers, opening
+with aging and reminders · e-invoicing with IRN, acknowledgement and a
+scannable signed QR, cancellation inside the 24-hour window, and a compliance
+register · e-way bills with Part-A and Part-B, distance-based validity,
+extension and cancellation · items, stock adjustments, branch transfers, opening
 stock, low stock, barcode lookup · customers and suppliers with full history ·
 nine reports with filters and CSV export · invoice PDF preview and share ·
 global search · notifications · OCR capture and review · an assistant that
@@ -148,7 +184,8 @@ This is deliberately a prototype:
 - OCR returns a fixed plausible extraction so the review step can be
   demonstrated; no image is actually read.
 - The assistant answers from the local store with rule-based logic, not a model.
-- E-invoice and e-way bill statuses are illustrative — no IRP integration.
+- Nothing is reported to a real Invoice Registration Portal. The rules are
+  real; only the network hop is simulated (see below).
 - Google sign-in signs straight into the demo account.
 - The illustrations are placeholders, not the real Storyset artwork — the
   environment this was built in cannot reach storyset.com.

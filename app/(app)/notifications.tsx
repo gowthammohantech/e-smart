@@ -48,7 +48,8 @@ export default function Notifications() {
     if (entityType === 'invoice' && entityId) return `/(app)/sales/invoices/${entityId}`;
     if (entityType === 'payment' && entityId) return `/(app)/payments/${entityId}`;
     if (entityType === 'inventory') return '/(app)/inventory/low-stock';
-    if (entityType === 'compliance') return '/(app)/settings/integrations';
+    if (entityType === 'ewayBill') return entityId ? `/(app)/compliance/eway/${entityId}` : '/(app)/compliance';
+    if (entityType === 'compliance') return '/(app)/compliance';
     if (entityType === 'system') return '/(app)/reports/tax-summary';
     return null;
   };

@@ -13,7 +13,12 @@ import { Badge } from '@/components/Badge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
-import { useActiveCompany, useCurrentUser, useUnreadCount } from '@/store/selectors';
+import {
+  useActiveCompany,
+  useComplianceSummary,
+  useCurrentUser,
+  useUnreadCount,
+} from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
 
 type Entry = {
@@ -34,6 +39,7 @@ export default function MoreTab() {
   const signOut = useAppStore((s) => s.signOut);
   const resetDemoData = useAppStore((s) => s.resetDemoData);
   const offline = useUiStore((s) => s.offlineMode);
+  const complianceSummary = useComplianceSummary();
 
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -74,6 +80,15 @@ export default function MoreTab() {
     {
       title: 'Data & compliance',
       entries: [
+        {
+          label: 'GST compliance',
+          icon: 'shield-check-outline',
+          route: '/(app)/compliance',
+          badge: complianceSummary.eInvoice.failed
+            ? String(complianceSummary.eInvoice.failed)
+            : undefined,
+        },
+        { label: 'E-invoicing & e-way bill', icon: 'qrcode', route: '/(app)/settings/e-invoicing' },
         { label: 'Integrations', icon: 'puzzle-outline', route: '/(app)/settings/integrations' },
         { label: 'Backup & export', icon: 'database-export-outline', route: '/(app)/settings/backup' },
         { label: 'Audit trail', icon: 'history', route: '/(app)/settings/audit' },

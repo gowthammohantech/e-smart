@@ -1,4 +1,5 @@
 import {
+  MIN_READABLE_QR_SIZE,
   QrEcc,
   QrMatrix,
   alignmentPatternPositions,
@@ -556,6 +557,17 @@ describe('QR round trip (FRD 16)', () => {
   });
 });
 
+describe('QR readability (FRD 16)', () => {
+  it('keeps at least 1.75 units per module for a signed-payload symbol', () => {
+    // Measured against a reader on a one-to-one display: a version-21 symbol
+    // fails at 160 units and passes at 180, though it renders perfectly at
+    // both. Every place the app draws a signed QR sizes itself from this
+    // constant, so this guards all three against being trimmed to fit.
+    const modules = sizeOfVersion(smallestVersionFor(700, 'M'));
+    expect(MIN_READABLE_QR_SIZE / modules).toBeGreaterThanOrEqual(1.75);
+  });
+});
+
 describe('QR SVG output (FRD 16)', () => {
   it('emits one subpath per dark module', () => {
     const m = qrMatrixAt('hi', 'M', 1);
@@ -566,6 +578,13 @@ describe('QR SVG output (FRD 16)', () => {
   it('sizes the viewBox for the matrix plus two quiet zones', () => {
     const m = qrMatrixAt('hi', 'M', 1);
     expect(qrSvgString(m, { quietZone: 4 })).toContain('viewBox="0 0 29 29"');
+  });
+
+  it('asks for no crisp-edge rendering', () => {
+    // Snapping modules to the pixel grid at a fractional scale widens some by a
+    // pixel and stops readers decoding a dense symbol, while leaving it looking
+    // perfect. Verified against a reader, not assumed.
+    expect(qrSvgString(qrMatrixAt('hi', 'M', 1))).not.toContain('shape-rendering');
   });
 
   it('carries the requested pixel size and colours', () => {

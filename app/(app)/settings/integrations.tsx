@@ -1,6 +1,6 @@
 import React from 'react';
-import { ScrollView, Switch, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
@@ -21,6 +21,7 @@ const GROUPS: { key: Integration['category']; title: string; blurb: string }[] =
 export default function Integrations() {
   const t = useTheme();
   const toast = useToast();
+  const router = useRouter();
 
   const integrations = useAppStore((s) => s.integrations);
   const toggleIntegration = useAppStore((s) => s.toggleIntegration);
@@ -87,6 +88,20 @@ export default function Integrations() {
                       <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
                         {i.description}
                       </Text>
+                      {i.configRoute ? (
+                        <Pressable
+                          onPress={() => router.push(i.configRoute as never)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Configure ${i.name}`}
+                          hitSlop={6}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+                        >
+                          <Text variant="caption" tone="primary" weight="600">
+                            Configure
+                          </Text>
+                          <MaterialCommunityIcons name="chevron-right" size={14} color={t.c.primary} />
+                        </Pressable>
+                      ) : null}
                     </View>
                     <Switch
                       value={i.connected}
