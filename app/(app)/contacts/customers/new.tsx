@@ -6,7 +6,7 @@ export default function NewCustomer() {
   return (
     <>
       <Stack.Screen options={{ title: 'New customer' }} />
-      <PartyForm kind="customer" />
+      <PartyForm />
     </>
   );
 }

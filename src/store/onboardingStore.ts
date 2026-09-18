@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Address } from '@/types';
+import { Address, TurnoverSlab } from '@/types';
 import { today } from '@/lib/date';
 
 export type OnboardingDraft = {
@@ -10,12 +10,11 @@ export type OnboardingDraft = {
   address: Address;
   email: string;
   phone: string;
-  country: string;
-  baseCurrency: string;
   fiscalYearStartMonth: number;
   taxRegistered: boolean;
   taxIdentifier: string;
   compositionScheme: boolean;
+  turnoverSlab: TurnoverSlab;
   invoicePrefix: string;
   invoiceNextNumber: string;
   includeFiscalYear: boolean;
@@ -28,7 +27,7 @@ const emptyAddress: Address = {
   state: '',
   stateCode: '',
   postalCode: '',
-  country: 'IN',
+  country: 'India',
 };
 
 type OnboardingState = {
@@ -45,12 +44,11 @@ const initial: OnboardingDraft = {
   address: emptyAddress,
   email: '',
   phone: '',
-  country: 'IN',
-  baseCurrency: 'INR',
   fiscalYearStartMonth: 4,
   taxRegistered: true,
   taxIdentifier: '',
   compositionScheme: false,
+  turnoverSlab: 'under5cr',
   invoicePrefix: 'INV',
   invoiceNextNumber: '1',
   includeFiscalYear: true,
@@ -66,10 +64,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
 export const ONBOARDING_STEPS = [
   { key: 'business', label: 'Business' },
-  { key: 'country', label: 'Country' },
-  { key: 'tax', label: 'Tax' },
+  { key: 'tax', label: 'GST' },
   { key: 'numbering', label: 'Numbering' },
-  { key: 'branches', label: 'Branches' },
 ] as const;
 
 export function stepIndex(key: string): number {

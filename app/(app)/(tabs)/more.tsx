@@ -14,7 +14,6 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useCurrentUser, useUnreadCount } from '@/store/selectors';
-import { useUiStore } from '@/store/uiStore';
 
 type Entry = {
   label: string;
@@ -33,27 +32,34 @@ export default function MoreTab() {
   const unread = useUnreadCount();
   const signOut = useAppStore((s) => s.signOut);
   const resetDemoData = useAppStore((s) => s.resetDemoData);
-  const offline = useUiStore((s) => s.offlineMode);
 
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
   const groups: { title: string; entries: Entry[] }[] = [
     {
-      title: 'Money',
+      title: 'Sales',
       entries: [
+        { label: 'Customers', icon: 'account-group-outline', route: '/(app)/contacts' },
+        { label: 'Items & services', icon: 'tag-outline', route: '/(app)/catalog/items/new' },
         { label: 'Receivables', icon: 'clock-alert-outline', route: '/(app)/receivables' },
-        { label: 'Payables', icon: 'file-clock-outline', route: '/(app)/payables' },
         { label: 'Payments received', icon: 'cash-plus', route: '/(app)/payments/received' },
-        { label: 'Payments made', icon: 'cash-minus', route: '/(app)/payments/made' },
-        { label: 'Expenses', icon: 'receipt-text-outline', route: '/(app)/expenses' },
+        { label: 'Sales summary', icon: 'chart-box-outline', route: '/(app)/reports/sales' },
+      ],
+    },
+    {
+      title: 'GST',
+      entries: [
+        { label: 'GST settings', icon: 'shield-check-outline', route: '/(app)/settings/gst' },
+        { label: 'E-invoices', icon: 'file-certificate-outline', route: '/(app)/gst/e-invoices' },
+        { label: 'E-way bills', icon: 'truck-fast-outline', route: '/(app)/gst/e-way-bills' },
+        { label: 'GSTR-1', icon: 'file-send-outline', route: '/(app)/gst/gstr1' },
+        { label: 'Transporters', icon: 'truck-outline', route: '/(app)/settings/transporters' },
       ],
     },
     {
       title: 'Tools',
       entries: [
-        { label: 'Scan a bill or receipt', icon: 'text-recognition', route: '/(app)/ocr/capture' },
-        { label: 'Ask the assistant', icon: 'robot-outline', route: '/(app)/assistant' },
         { label: 'Global search', icon: 'magnify', route: '/(app)/search' },
         { label: 'Notifications', icon: 'bell-outline', route: '/(app)/notifications', badge: unread ? String(unread) : undefined },
       ],
@@ -62,29 +68,17 @@ export default function MoreTab() {
       title: 'Business setup',
       entries: [
         { label: 'Business profile', icon: 'domain', route: '/(app)/settings/company' },
-        { label: 'Branches', icon: 'warehouse', route: '/(app)/settings/branches' },
         { label: 'Users & roles', icon: 'account-multiple-outline', route: '/(app)/settings/users' },
-        { label: 'Taxes', icon: 'percent-outline', route: '/(app)/settings/taxes' },
-        { label: 'Currencies & rates', icon: 'currency-usd', route: '/(app)/settings/currencies' },
+        { label: 'Tax slabs', icon: 'percent-outline', route: '/(app)/settings/taxes' },
         { label: 'Document numbering', icon: 'numeric', route: '/(app)/settings/numbering' },
         { label: 'Payment accounts', icon: 'bank-outline', route: '/(app)/settings/accounts' },
-        { label: 'Expense categories', icon: 'shape-outline', route: '/(app)/settings/expense-categories' },
-      ],
-    },
-    {
-      title: 'Data & compliance',
-      entries: [
         { label: 'Integrations', icon: 'puzzle-outline', route: '/(app)/settings/integrations' },
-        { label: 'Backup & export', icon: 'database-export-outline', route: '/(app)/settings/backup' },
-        { label: 'Audit trail', icon: 'history', route: '/(app)/settings/audit' },
-        { label: 'Sync status', icon: 'sync', route: '/(app)/settings/sync', badge: offline ? 'Offline' : undefined },
       ],
     },
     {
       title: 'Account',
       entries: [
-        { label: 'Devices & sessions', icon: 'cellphone-link', route: '/(app)/settings/devices' },
-        { label: 'Plan & billing', icon: 'credit-card-outline', route: '/(app)/settings/plan' },
+        { label: 'Audit trail', icon: 'history', route: '/(app)/settings/audit' },
         { label: 'Appearance', icon: 'theme-light-dark', route: '/(app)/settings/appearance' },
         { label: 'About', icon: 'information-outline', route: '/(app)/settings/about' },
       ],

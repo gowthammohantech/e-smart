@@ -15,7 +15,6 @@ import {
   DocumentLine,
   EInvoiceCancelReason,
   EwbPartB,
-  Integration,
   IrpError,
   Item,
   NotificationKind,
@@ -27,6 +26,7 @@ import {
   Transporter,
   User,
 } from '@/types';
+
 import { Money, zero } from '@/lib/money';
 import { nowISO, today } from '@/lib/date';
 import { uid } from '@/lib/id';
@@ -39,48 +39,12 @@ import { IrpAckRecord, createMockIrp } from '@/domain/gst/einvoice/mockIrp';
 import { ewbApplicability } from '@/domain/gst/eway/applicability';
 import { buildPartA } from '@/domain/gst/eway/buildPartA';
 import { EwbRecord, createMockEwb } from '@/domain/gst/eway/mockEwb';
-import { CargoType, isExpired } from '@/domain/gst/eway/validity';
-import { INTEGRATIONS } from '@/data/masters';
-import {
-  ACCOUNT_ID,
-  CURRENT_USER_ID,
-  PRIMARY_COMPANY_ID,
-  seedBranches,
-  seedCompanies,
-  seedItems,
-  seedNumberingSeries,
-  seedParties,
-  seedPaymentAccounts,
-  seedTaxCategories,
-  seedTransporters,
-  seedUsers,
-} from '@/data/seed';
-import {
-  seedAttachments,
-  seedAudit,
-  seedDocuments,
-  seedNotifications,
-  seedPayments,
-} from '@/data/seedTransactions';
+import { CargoType } from '@/domain/gst/eway/validity';
+import { CURRENT_USER_ID, PRIMARY_COMPANY_ID } from '@/data/seed';
+import { AppData, buildSeedData } from '@/data/buildSeedData';
 
-export type AppData = {
-  accountId: string;
-  users: User[];
-  companies: Company[];
-  branches: Branch[];
-  parties: Party[];
-  items: Item[];
-  taxCategories: TaxCategory[];
-  paymentAccounts: PaymentAccount[];
-  transporters: Transporter[];
-  numberingSeries: NumberingSeries[];
-  documents: BusinessDocument[];
-  payments: Payment[];
-  attachments: Attachment[];
-  notifications: AppNotification[];
-  auditEvents: AuditEvent[];
-  integrations: Integration[];
-};
+export type { AppData };
+export { buildSeedData };
 
 export type Session = {
   userId: string | null;
@@ -88,46 +52,6 @@ export type Session = {
   onboardingComplete: boolean;
   signedInAt?: string;
 };
-
-export function buildSeedData(): AppData {
-  const companies = seedCompanies();
-  const branches = seedBranches();
-  const users = seedUsers();
-  const parties = seedParties();
-  const items = seedItems();
-  const taxCategories = seedTaxCategories();
-  const series = seedNumberingSeries();
-  const documents = seedDocuments({ items, parties, taxCategories, series, companies });
-  const payments = seedPayments(documents, series);
-
-  // Advance each series past the numbers the seed data already consumed.
-  const advanced = series.map((s) => {
-    const used =
-      s.kind === 'payment'
-        ? payments.filter((p) => p.companyId === s.companyId).length
-        : documents.filter((d) => d.companyId === s.companyId && d.kind === s.kind).length;
-    return { ...s, nextNumber: used + 1 };
-  });
-
-  return {
-    accountId: ACCOUNT_ID,
-    users,
-    companies,
-    branches,
-    parties,
-    items,
-    taxCategories,
-    paymentAccounts: seedPaymentAccounts(),
-    transporters: seedTransporters(),
-    numberingSeries: advanced,
-    documents,
-    payments,
-    attachments: seedAttachments(),
-    notifications: seedNotifications(documents, payments),
-    auditEvents: seedAudit(documents, payments),
-    integrations: INTEGRATIONS.map((i) => ({ ...i })),
-  };
-}
 
 type Actions = {
   /* session */

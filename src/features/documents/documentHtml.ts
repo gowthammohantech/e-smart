@@ -1,12 +1,11 @@
 import { BusinessDocument, Company, Party } from '@/types';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
 import { flattenTaxComponents } from '@/domain/lineCalc';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
+import { amountInWords, formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { formatDate } from '@/lib/date';
 import { money } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
 import { formatGstin } from '@/domain/gst/gstin';
-import { amountInWords } from '@/lib/format';
 
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);

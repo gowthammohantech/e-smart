@@ -223,7 +223,9 @@ function cityFor(stateCode: string): string {
  * one would make every seeded customer fail e-invoice validation with 3029.
  */
 function gstinFor(stateCode: string, i: number): string {
-  const pan = `AAB${String.fromCharCode(67 + (i % 20))}${String(1000 + i * 7).slice(0, 4)}${String.fromCharCode(65 + (i % 26))}`;
+  // A PAN is exactly five letters, four digits and a letter.
+  const letter = (n: number) => String.fromCharCode(65 + (n % 26));
+  const pan = `AAB${letter(i)}${letter(i * 3 + 7)}${String(1000 + ((i * 7) % 9000)).slice(0, 4)}${letter(i * 5 + 11)}`;
   const body = `${stateCode}${pan}1Z`;
   return body + gstinChecksum(body);
 }

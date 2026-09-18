@@ -6,7 +6,7 @@ export default function Receivables() {
   return (
     <>
       <Stack.Screen options={{ title: 'Receivables' }} />
-      <AgingScreen kind="receivable" />
+      <AgingScreen />
     </>
   );
 }

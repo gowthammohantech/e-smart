@@ -15,9 +15,8 @@ import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 
-import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@/types';
+import { Payment, PaymentAllocation, PaymentMethod } from '@/types';
 import { buildOutstanding } from '@/domain/receivables';
-import { resolveRate, settlementGainLoss } from '@/domain/fx';
 import { PAYMENT_METHOD_LABELS } from '@/data/masters';
 import { formatMoney } from '@/lib/format';
 import { formatDate, today } from '@/lib/date';
@@ -25,14 +24,7 @@ import { Money, fromMajor, money, subtract, toMajor, zero } from '@/lib/money';
 import { uid } from '@/lib/id';
 
 import { useAppStore } from '@/store/appStore';
-import {
-  useBaseCurrency,
-  useDocuments,
-  useExchangeRates,
-  useParties,
-  usePaymentAccounts,
-  usePayments,
-} from '@/store/selectors';
+import { useBaseCurrency, useDocuments, useParties, usePaymentAccounts, usePayments } from '@/store/selectors';
 
 export default function NewPayment() {
   const t = useTheme();
@@ -40,15 +32,13 @@ export default function NewPayment() {
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
-  const params = useLocalSearchParams<{ direction?: string; partyId?: string; documentId?: string }>();
-  const direction: PaymentDirection = params.direction === 'paid' ? 'paid' : 'received';
+  const params = useLocalSearchParams<{ partyId?: string; documentId?: string }>();
 
   const baseCurrency = useBaseCurrency();
-  const parties = useParties(direction === 'received' ? 'customer' : 'supplier');
+  const parties = useParties();
   const accounts = usePaymentAccounts();
-  const exchangeRates = useExchangeRates();
-  const openDocs = useDocuments(direction === 'received' ? 'invoice' : 'purchaseBill');
-  const existingPayments = usePayments(direction);
+  const openDocs = useDocuments('invoice');
+  const existingPayments = usePayments();
   const savePayment = useAppStore((s) => s.savePayment);
   const activeBranchId = useAppStore((s) => s.activeBranchId);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
@@ -63,7 +53,6 @@ export default function NewPayment() {
   const [seeded, setSeeded] = useState(false);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
   /** Set only when the user overrides the resolved settlement rate. */
-  const [rateOverride, setRateOverride] = useState<number | null>(null);
 
   const [partyOpen, setPartyOpen] = useState(false);
   const [methodOpen, setMethodOpen] = useState(false);
@@ -78,14 +67,7 @@ export default function NewPayment() {
     return buildOutstanding(docs, existingPayments).sort((a, b) => a.document.date.localeCompare(b.document.date));
   }, [openDocs, existingPayments, partyId]);
 
-  // A payment settles in the party's currency, at the rate effective on the
-  // payment date unless the user says otherwise.
-  const currency = party?.currency ?? baseCurrency;
-  const resolvedRate = useMemo(
-    () => (currency === baseCurrency ? 1 : resolveRate(exchangeRates, currency, baseCurrency, date)),
-    [currency, baseCurrency, exchangeRates, date],
-  );
-  const exchangeRate = rateOverride ?? resolvedRate;
+  const currency = baseCurrency;
 
   // Seed the allocation from the invoice we were opened from, on the first
   // render where that invoice is actually in the outstanding list.
@@ -141,24 +123,6 @@ export default function NewPayment() {
     });
   };
 
-  const fxGainLoss = useMemo(() => {
-    if (currency === baseCurrency) return undefined;
-    const rows = outstanding.filter((o) => allocations[o.document.id]);
-    if (rows.length === 0) return undefined;
-    const total = rows.reduce(
-      (acc, o) =>
-        acc +
-        settlementGainLoss(
-          fromMajor(allocations[o.document.id] || '0', currency),
-          o.document.exchangeRate,
-          exchangeRate,
-          baseCurrency,
-        ).minor,
-      0,
-    );
-    return money(total, baseCurrency);
-  }, [outstanding, allocations, currency, baseCurrency, exchangeRate]);
-
   const canSave = !!partyId && amount.minor > 0 && !overAllocated && !!accountId;
 
   const save = () => {
@@ -177,18 +141,14 @@ export default function NewPayment() {
       companyId: activeCompanyId,
       branchId: activeBranchId ?? 'brn_mum',
       number: '',
-      direction,
       partyId,
       date,
       amount,
-      currency,
-      exchangeRate,
       method,
       reference: reference || undefined,
       accountId,
       allocations: allocationRows,
       unallocated: unallocated.minor > 0 ? unallocated : zero(currency),
-      fxGainLoss,
       notes: notes || undefined,
       attachmentIds: [],
       createdBy: '',
@@ -196,7 +156,7 @@ export default function NewPayment() {
     };
 
     const id = savePayment(payment);
-    toast.show(direction === 'received' ? 'Payment recorded' : 'Payment made', 'success');
+    toast.show('Payment recorded', 'success');
     router.replace(`/(app)/payments/${id}`);
   };
 
@@ -205,7 +165,7 @@ export default function NewPayment() {
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Stack.Screen options={{ title: direction === 'received' ? 'Receive payment' : 'Make payment' }} />
+      <Stack.Screen options={{ title: 'Receive payment' }} />
 
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
@@ -241,7 +201,7 @@ export default function NewPayment() {
                   <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
                 </View>
                 <Text variant="body" weight="600" style={{ flex: 1 }}>
-                  Select {direction === 'received' ? 'customer' : 'supplier'}
+                  Select customer
                 </Text>
               </>
             )}
@@ -268,7 +228,7 @@ export default function NewPayment() {
         />
 
         <PickerField
-          label={direction === 'received' ? 'Deposit into' : 'Pay from'}
+          label="Deposit into"
           value={accounts.find((a) => a.id === accountId)?.name}
           onPress={() => setAccountOpen(true)}
           icon="bank-outline"
@@ -282,17 +242,6 @@ export default function NewPayment() {
           placeholder="UTR, cheque number…"
           icon="pound"
         />
-
-        {currency !== baseCurrency ? (
-          <TextField
-            label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
-            value={String(exchangeRate)}
-            onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
-            keyboardType="decimal-pad"
-            icon="swap-horizontal"
-            hint="A rate different from the invoice rate produces an FX gain or loss."
-          />
-        ) : null}
 
         {/* Allocation */}
         <View style={{ gap: t.spacing.sm }}>
@@ -405,16 +354,6 @@ export default function NewPayment() {
               {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
             </Text>
           </View>
-          {fxGainLoss && fxGainLoss.minor !== 0 ? (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text variant="caption" tone="muted">
-                FX {fxGainLoss.minor >= 0 ? 'gain' : 'loss'}
-              </Text>
-              <Text variant="caption" weight="600" tone={fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
-                {formatMoney(fxGainLoss, { signed: true })}
-              </Text>
-            </View>
-          ) : null}
         </Card>
 
         <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Internal note" multiline />
@@ -430,7 +369,7 @@ export default function NewPayment() {
         }}
       >
         <Button
-          title={direction === 'received' ? 'Record payment' : 'Record payment made'}
+          title="Record payment"
           onPress={save}
           disabled={!canSave}
           fullWidth
@@ -441,13 +380,12 @@ export default function NewPayment() {
       <SelectSheet
         visible={partyOpen}
         onClose={() => setPartyOpen(false)}
-        title={direction === 'received' ? 'Select customer' : 'Select supplier'}
+        title="Select customer"
         options={parties.map((p) => ({ value: p.id, label: p.name, description: p.phone ?? p.email ?? p.code }))}
         value={partyId}
         onSelect={(id) => {
           setPartyId(id);
           setAllocations({});
-          setRateOverride(null);
         }}
       />
       <SelectSheet
@@ -462,7 +400,7 @@ export default function NewPayment() {
       <SelectSheet
         visible={accountOpen}
         onClose={() => setAccountOpen(false)}
-        title={direction === 'received' ? 'Deposit into' : 'Pay from'}
+        title="Deposit into"
         options={accounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
         value={accountId}
         onSelect={setAccountId}

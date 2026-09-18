@@ -41,7 +41,7 @@ export default function BusinessStep() {
     };
     setErrors(nextErrors);
     if (hasErrors(nextErrors)) return;
-    router.push('/(onboarding)/country');
+    router.push('/(onboarding)/tax');
   };
 
   return (

@@ -10,10 +10,7 @@ type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 const TABS: { name: string; title: string; icon: IconName; activeIcon: IconName }[] = [
   { name: 'index', title: 'Home', icon: 'home-outline', activeIcon: 'home' },
   { name: 'sales', title: 'Sell', icon: 'trending-up', activeIcon: 'trending-up' },
-  { name: 'purchases', title: 'Buy', icon: 'cart-outline', activeIcon: 'cart' },
-  { name: 'inventory', title: 'Stock', icon: 'package-variant-closed', activeIcon: 'package-variant' },
-  { name: 'contacts', title: 'People', icon: 'account-group-outline', activeIcon: 'account-group' },
-  { name: 'reports', title: 'Reports', icon: 'chart-box-outline', activeIcon: 'chart-box' },
+  { name: 'gst', title: 'GST', icon: 'shield-check-outline', activeIcon: 'shield-check' },
   { name: 'more', title: 'More', icon: 'dots-horizontal-circle-outline', activeIcon: 'dots-horizontal-circle' },
 ];
 

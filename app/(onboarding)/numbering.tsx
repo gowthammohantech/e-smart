@@ -26,8 +26,8 @@ export default function NumberingStep() {
       subtitle="Finalised numbers are never reused, so pick a format you're happy with."
       steps={ONBOARDING_STEPS}
       currentStep={3}
-      onPrimary={() => router.push('/(onboarding)/branches')}
-      onSkip={() => router.push('/(onboarding)/branches')}
+      onPrimary={() => router.push('/(onboarding)/done')}
+      onSkip={() => router.push('/(onboarding)/done')}
     >
       <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>
         <Text variant="caption" tone="muted">

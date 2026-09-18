@@ -30,7 +30,6 @@ import { buildDocumentHtml } from './documentHtml';
 import { useAppStore } from '@/store/appStore';
 import {
   useActiveCompany,
-  useBaseCurrency,
   useBranches,
   useParty,
   usePayments,
@@ -43,7 +42,6 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const toast = useToast();
 
   const company = useActiveCompany();
-  const baseCurrency = useBaseCurrency();
   const branches = useBranches();
   const party = useParty(doc.partyId);
   const allPayments = usePayments();

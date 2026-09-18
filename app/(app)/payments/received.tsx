@@ -6,7 +6,7 @@ export default function PaymentsReceived() {
   return (
     <>
       <Stack.Screen options={{ title: 'Payments received' }} />
-      <PaymentListView direction="received" />
+      <PaymentListView />
     </>
   );
 }

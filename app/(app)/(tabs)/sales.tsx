@@ -32,9 +32,9 @@ export default function SalesTab() {
   const orders = useDocuments('salesOrder');
   const deliveries = useDocuments('delivery');
   const returns = useDocuments('salesReturn');
-  const payments = usePayments('received');
+  const payments = usePayments();
   const receivables = useReceivables();
-  const customers = useParties('customer');
+  const customers = useParties();
 
   const month = resolveRange('thisMonth');
 
@@ -43,7 +43,7 @@ export default function SalesTab() {
       sum(
         invoices
           .filter((d) => inRange(d.date, month) && !['draft', 'cancelled'].includes(d.status))
-          .map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
+          .map((d) => money(d.totals.grandTotal.minor, baseCurrency)),
         baseCurrency,
       ),
     [invoices, month, baseCurrency],
@@ -54,7 +54,7 @@ export default function SalesTab() {
       sum(
         payments
           .filter((p) => inRange(p.date, month))
-          .map((p) => money(Math.round(p.amount.minor * (p.exchangeRate || 1)), baseCurrency)),
+          .map((p) => money(p.amount.minor, baseCurrency)),
         baseCurrency,
       ),
     [payments, month, baseCurrency],
@@ -65,7 +65,7 @@ export default function SalesTab() {
     invoices
       .filter((d) => !['draft', 'cancelled'].includes(d.status))
       .forEach((d) => {
-        map.set(d.partyId, (map.get(d.partyId) ?? 0) + Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)));
+        map.set(d.partyId, (map.get(d.partyId) ?? 0) + d.totals.grandTotal.minor);
       });
     return Array.from(map.entries())
       .map(([id, minor]) => ({
@@ -131,12 +131,12 @@ export default function SalesTab() {
             { key: 'quotes', label: 'Quotations', icon: 'file-percent-outline', route: '/(app)/sales/quotes', count: quotes.length },
             { key: 'orders', label: 'Sales orders', icon: 'clipboard-list-outline', route: '/(app)/sales/orders', count: orders.length },
             { key: 'deliveries', label: 'Delivery notes', icon: 'truck-outline', route: '/(app)/sales/deliveries', count: deliveries.length },
-            { key: 'returns', label: 'Sales returns', icon: 'keyboard-return', route: '/(app)/sales/returns', count: returns.length },
+            { key: 'returns', label: 'Credit notes', icon: 'keyboard-return', route: '/(app)/sales/returns', count: returns.length },
             { key: 'payments', label: 'Payments in', icon: 'cash-plus', route: '/(app)/payments/received', count: payments.length },
           ]}
         />
 
-        <SectionHeader title="Top customers" action="Contacts" onAction={() => router.push('/(app)/(tabs)/contacts')} />
+        <SectionHeader title="Top customers" action="Customers" onAction={() => router.push('/(app)/contacts' as never)} />
         <Card>
           <RankedBars rows={topCustomers} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel="No sales recorded yet" />
         </Card>

@@ -100,7 +100,6 @@ export function DocumentEditor({
   const [step, setStep] = useState(0);
   const [partyOpen, setPartyOpen] = useState(false);
   const [itemOpen, setItemOpen] = useState(false);
-  const [currencyOpen, setCurrencyOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);

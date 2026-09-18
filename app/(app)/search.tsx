@@ -9,17 +9,10 @@ import { Badge } from '@/components/Badge';
 import { SearchBar } from '@/components/SearchBar';
 import { EmptyState } from '@/components/EmptyState';
 import { useUiStore } from '@/store/uiStore';
-import {
-  useDocuments,
-  useExpenses,
-  useItems,
-  useParties,
-  usePayments,
-  useStockLevels,
-} from '@/store/selectors';
+import { useDocuments, useItems, useParties, usePayments } from '@/store/selectors';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
-import { formatMoney, formatQty } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 import { formatDate } from '@/lib/date';
 
 type Result = {
@@ -46,8 +39,6 @@ export default function GlobalSearch() {
   const items = useItems();
   const documents = useDocuments();
   const payments = usePayments();
-  const expenses = useExpenses();
-  const stock = useStockLevels();
 
   const results = useMemo<Result[]>(() => {
     const q = query.trim().toLowerCase();
@@ -58,24 +49,24 @@ export default function GlobalSearch() {
       if (`${p.name} ${p.displayName ?? ''} ${p.code} ${p.phone ?? ''} ${p.email ?? ''} ${p.taxId ?? ''}`.toLowerCase().includes(q)) {
         out.push({
           id: p.id,
-          group: p.kind === 'customer' ? 'Customers' : 'Suppliers',
+          group: 'Customers',
           title: p.name,
-          subtitle: `${p.code}${p.phone ? ` · ${p.phone}` : ''}`,
-          icon: p.kind === 'customer' ? 'account-outline' : 'truck-outline',
-          route: p.kind === 'customer' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`,
+          subtitle: `${p.code}${p.taxId ? ` · ${p.taxId}` : p.phone ? ` · ${p.phone}` : ''}`,
+          icon: 'account-outline',
+          route: `/(app)/contacts/customers/${p.id}`,
         });
       }
     });
 
     items.forEach((i) => {
-      if (`${i.name} ${i.sku} ${i.barcode ?? ''} ${i.hsnCode ?? ''}`.toLowerCase().includes(q)) {
+      if (`${i.name} ${i.sku} ${i.hsnCode ?? ''}`.toLowerCase().includes(q)) {
         out.push({
           id: i.id,
           group: 'Items',
           title: i.name,
           subtitle: `${i.sku} · ${formatMoney(i.salePrice)}`,
-          trailing: i.trackInventory ? `${formatQty(stock[i.id] ?? 0)} ${i.unit}` : 'Service',
-          icon: i.trackInventory ? 'package-variant-closed' : 'hammer-wrench',
+          trailing: i.hsnCode ? `${i.type === 'goods' ? 'HSN' : 'SAC'} ${i.hsnCode}` : undefined,
+          icon: i.type === 'goods' ? 'package-variant-closed' : 'hammer-wrench',
           route: `/(app)/catalog/items/${i.id}`,
         });
       }
@@ -83,12 +74,18 @@ export default function GlobalSearch() {
 
     documents.forEach((d) => {
       const partyName = parties.find((p) => p.id === d.partyId)?.name ?? '';
-      if (`${d.number} ${partyName} ${d.reference ?? ''} ${d.supplierDocNumber ?? ''}`.toLowerCase().includes(q)) {
+      const irn = d.compliance?.eInvoice?.irn ?? '';
+      const ewb = d.compliance?.eWayBill?.ewbNo ?? '';
+      if (`${d.number} ${partyName} ${d.reference ?? ''} ${irn} ${ewb}`.toLowerCase().includes(q)) {
         out.push({
           id: d.id,
           group: DOCUMENT_LABELS[d.kind].plural,
           title: d.number,
-          subtitle: `${partyName} · ${formatDate(d.date, 'dd MMM')}`,
+          subtitle: irn && q.length >= 6 && irn.includes(q)
+            ? `IRN ${irn.slice(0, 20)}…`
+            : ewb && ewb.includes(q)
+              ? `E-way bill ${ewb}`
+              : `${partyName} · ${formatDate(d.date, 'dd MMM')}`,
           trailing: formatMoney(d.totals.grandTotal),
           icon: 'file-document-outline',
           route: detailRouteFor(d.kind, d.id),
@@ -105,28 +102,14 @@ export default function GlobalSearch() {
           title: p.number,
           subtitle: `${partyName} · ${formatDate(p.date, 'dd MMM')}`,
           trailing: formatMoney(p.amount),
-          icon: p.direction === 'received' ? 'cash-plus' : 'cash-minus',
+          icon: 'cash-plus',
           route: `/(app)/payments/${p.id}`,
         });
       }
     });
 
-    expenses.forEach((e) => {
-      if (`${e.number} ${e.notes ?? ''} ${e.reference ?? ''}`.toLowerCase().includes(q)) {
-        out.push({
-          id: e.id,
-          group: 'Expenses',
-          title: e.number,
-          subtitle: `${e.notes ?? 'Expense'} · ${formatDate(e.date, 'dd MMM')}`,
-          trailing: formatMoney(e.amount),
-          icon: 'receipt-text-outline',
-          route: `/(app)/expenses/${e.id}`,
-        });
-      }
-    });
-
     return out.slice(0, 60);
-  }, [query, parties, items, documents, payments, expenses, stock]);
+  }, [query, parties, items, documents, payments]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Result[]>();

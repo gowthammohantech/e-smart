@@ -1,42 +1,37 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, SectionList, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
-import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { Avatar } from '@/components/Avatar';
 import { SearchBar } from '@/components/SearchBar';
-import { Segmented } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
 import { Badge } from '@/components/Badge';
 import { useBaseCurrency, useDocuments, useParties, usePayments } from '@/store/selectors';
+import { formatGstin } from '@/domain/gst/gstin';
 import { buildOutstanding } from '@/domain/receivables';
 import { money } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
 
-type Tab = 'customer' | 'supplier';
-
-export default function ContactsTab() {
+export default function CustomersScreen() {
   const t = useTheme();
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  const [tab, setTab] = useState<Tab>('customer');
   const [query, setQuery] = useState('');
 
-  const parties = useParties(tab);
-  const documents = useDocuments(tab === 'customer' ? 'invoice' : 'purchaseBill');
-  const payments = usePayments(tab === 'customer' ? 'received' : 'paid');
+  const parties = useParties();
+  const documents = useDocuments('invoice');
+  const payments = usePayments();
 
   const outstandingByParty = useMemo(() => {
     const rows = buildOutstanding(documents, payments);
     const map: Record<string, number> = {};
     rows.forEach((r) => {
-      map[r.document.partyId] =
-        (map[r.document.partyId] ?? 0) + Math.round(r.outstanding.minor * (r.document.exchangeRate || 1));
+      map[r.document.partyId] = (map[r.document.partyId] ?? 0) + r.outstanding.minor;
     });
     return map;
   }, [documents, payments]);
@@ -69,24 +64,16 @@ export default function ContactsTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="Contacts" subtitle="Customers and suppliers" />
+      <Stack.Screen options={{ title: 'Customers' }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md, paddingBottom: t.spacing.md }}>
-        <Segmented
-          options={[
-            { value: 'customer', label: 'Customers' },
-            { value: 'supplier', label: 'Suppliers' },
-          ]}
-          value={tab}
-          onChange={(v) => setTab(v as Tab)}
-        />
-        <SearchBar value={query} onChangeText={setQuery} placeholder={`Search ${tab === 'customer' ? 'customers' : 'suppliers'}`} />
+        <SearchBar value={query} onChangeText={setQuery} placeholder="Search customers or GSTIN" />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
-            {filtered.length} {tab === 'customer' ? 'customers' : 'suppliers'}
+            {filtered.length} customers
           </Text>
-          <Text variant="caption" weight="600" tone={tab === 'customer' ? 'warn' : 'bad'}>
-            {formatMoney(totalOutstanding)} {tab === 'customer' ? 'receivable' : 'payable'}
+          <Text variant="caption" weight="600" tone="warn">
+            {formatMoney(totalOutstanding)} receivable
           </Text>
         </View>
       </View>
@@ -96,18 +83,14 @@ export default function ContactsTab() {
           <Card padded={false}>
             <EmptyState
               illustration="no-contacts" icon="account-group-outline"
-              title={parties.length === 0 ? `No ${tab === 'customer' ? 'customers' : 'suppliers'} yet` : 'No matches'}
+              title={parties.length === 0 ? 'No customers yet' : 'No matches'}
               message={
                 parties.length === 0
                   ? 'Add one now, or they get created as you invoice.'
                   : 'Try a different search term.'
               }
-              actionLabel={parties.length === 0 ? 'Add contact' : undefined}
-              onAction={
-                parties.length === 0
-                  ? () => router.push(tab === 'customer' ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
-                  : undefined
-              }
+              actionLabel={parties.length === 0 ? 'Add a customer' : undefined}
+              onAction={parties.length === 0 ? () => router.push('/(app)/contacts/customers/new' as never) : undefined}
               compact
             />
           </Card>
@@ -128,13 +111,7 @@ export default function ContactsTab() {
             const outstanding = outstandingByParty[p.id] ?? 0;
             return (
               <Pressable
-                onPress={() =>
-                  router.push(
-                    tab === 'customer'
-                      ? `/(app)/contacts/customers/${p.id}`
-                      : `/(app)/contacts/suppliers/${p.id}`,
-                  )
-                }
+                onPress={() => router.push(`/(app)/contacts/customers/${p.id}` as never)}
                 accessibilityRole="button"
                 accessibilityLabel={p.name}
                 style={({ pressed }) => ({
@@ -156,20 +133,20 @@ export default function ContactsTab() {
                       {p.name}
                     </Text>
                     {p.status === 'inactive' ? <Badge label="Inactive" tone="neutral" size="sm" /> : null}
-                    {p.currency !== baseCurrency ? <Badge label={p.currency} tone="info" size="sm" /> : null}
+                    {p.taxId ? null : <Badge label="B2C" tone="warning" size="sm" />}
                   </View>
                   <Text variant="caption" tone="muted" numberOfLines={1}>
-                    {p.phone ?? p.email ?? p.code}
+                    {p.taxId ? formatGstin(p.taxId) : p.phone ?? p.email ?? p.code}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
                   {outstanding > 0 ? (
                     <>
-                      <Text variant="small" weight="700" tone={tab === 'customer' ? 'warn' : 'bad'}>
+                      <Text variant="small" weight="700" tone="warn">
                         {formatMoney(money(outstanding, baseCurrency))}
                       </Text>
                       <Text variant="micro" tone="muted">
-                        {tab === 'customer' ? 'owes you' : 'you owe'}
+                        owes you
                       </Text>
                     </>
                   ) : (
@@ -185,12 +162,7 @@ export default function ContactsTab() {
         />
       )}
 
-      <Fab
-        icon="account-plus"
-        onPress={() =>
-          router.push(tab === 'customer' ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
-        }
-      />
+      <Fab icon="account-plus" onPress={() => router.push('/(app)/contacts/customers/new' as never)} />
     </View>
   );
 }

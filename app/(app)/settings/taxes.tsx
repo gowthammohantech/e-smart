@@ -41,7 +41,7 @@ export default function TaxSettings() {
   const regime = company?.taxRegistration?.regime ?? 'NONE';
 
   const open = (c?: TaxCategory) => {
-    setEditing(c ?? ({ id: '', companyId: company.id, name: '', rate: 0, type: regime === 'VAT' ? 'VAT' : 'GST', effectiveFrom: today() } as TaxCategory));
+    setEditing(c ?? ({ id: '', companyId: company.id, name: '', rate: 0, type: 'GST', effectiveFrom: today() } as TaxCategory));
     setName(c?.name ?? '');
     setRate(c ? String(c.rate) : '');
     setEffectiveFrom(c?.effectiveFrom ?? today());

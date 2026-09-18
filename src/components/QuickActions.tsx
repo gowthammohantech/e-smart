@@ -13,13 +13,13 @@ type Action = {
   color?: string;
 };
 
-/** The six quick actions named in the PRD. */
+/** The six quick actions on Home. */
 export function quickActions(primary: string): Action[] {
   return [
     { key: 'invoice', label: 'New invoice', icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', color: primary },
     { key: 'quote', label: 'New quote', icon: 'file-percent-outline', route: '/(app)/sales/quotes/new' },
-    { key: 'receive', label: 'Receive payment', icon: 'cash-plus', route: '/(app)/payments/new?direction=received' },
-    { key: 'expense', label: 'Add expense', icon: 'receipt-text-outline', route: '/(app)/expenses/new' },
+    { key: 'receive', label: 'Receive payment', icon: 'cash-plus', route: '/(app)/payments/new' },
+    { key: 'einvoice', label: 'E-invoices', icon: 'shield-check-outline', route: '/(app)/gst/e-invoices' },
     { key: 'customer', label: 'Add customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new' },
     { key: 'item', label: 'Add item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new' },
   ];

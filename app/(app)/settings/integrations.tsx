@@ -15,7 +15,6 @@ const GROUPS: { key: Integration['category']; title: string; blurb: string }[] =
   { key: 'compliance', title: 'Compliance', blurb: 'Government filings and document generation.' },
   { key: 'messaging', title: 'Messaging', blurb: 'How invoices and reminders reach your customers.' },
   { key: 'accounting', title: 'Accounting', blurb: 'Hand data to your accountant in their format.' },
-  { key: 'storage', title: 'Storage & backup', blurb: 'Where copies of your documents are kept.' },
 ];
 
 export default function Integrations() {

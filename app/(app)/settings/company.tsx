@@ -5,14 +5,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
-import { PickerField, SwitchField, TextField } from '@/components/Field';
+import { PickerField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany } from '@/store/selectors';
-import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@/data/masters';
-import { CURRENCIES } from '@/lib/currencies';
-import { Errors, hasErrors, required, validEmail, validGstin } from '@/lib/validators';
+import { Card } from '@/components/Card';
+import { BUSINESS_TYPES, INDIAN_STATES } from '@/data/masters';
+import { formatGstin } from '@/domain/gst/gstin';
+import { Errors, hasErrors, required, validEmail } from '@/lib/validators';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -35,24 +36,18 @@ export default function CompanySettings() {
   const [city, setCity] = useState(company?.address.city ?? '');
   const [stateCode, setStateCode] = useState(company?.address.stateCode ?? '');
   const [postalCode, setPostalCode] = useState(company?.address.postalCode ?? '');
-  const [taxRegistered, setTaxRegistered] = useState(!!company?.taxRegistration?.registered);
-  const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
-  const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
 
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'taxId'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email'>>({});
 
-  const country = COUNTRIES.find((c) => c.code === company?.country);
-  const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = () => {
-    const next: Errors<'name' | 'email' | 'taxId'> = {
+    const next: Errors<'name' | 'email'> = {
       name: required(name, 'Business name'),
       email: validEmail(email),
-      taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
     };
     setErrors(next);
     if (hasErrors(next) || !company) return;
@@ -74,14 +69,8 @@ export default function CompanySettings() {
         stateCode: stateCode || undefined,
         postalCode: postalCode.trim(),
       },
-      taxRegistration: {
-        regime: country?.regime ?? 'NONE',
-        identifier: taxId.trim().toUpperCase() || undefined,
-        identifierLabel: country?.taxIdLabel ?? 'Tax number',
-        registered: taxRegistered,
-        compositionScheme: composition,
-        placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
-      },
+      // GST registration lives on its own screen, so it is edited in one place.
+      taxRegistration: company.taxRegistration,
     });
     toast.show('Business profile updated', 'success');
     router.back();
@@ -117,29 +106,19 @@ export default function CompanySettings() {
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
           Tax and fiscal year
         </Text>
-        <PickerField label="Country" value={country?.name} onPress={() => {}} icon="earth" hint="Country and base currency are fixed once a business has transactions." />
-        <PickerField label="Base currency" value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" />
         <PickerField label="Financial year starts" value={MONTHS[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" />
 
-        <SwitchField label={`Registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`} value={taxRegistered} onValueChange={setTaxRegistered} />
-        {taxRegistered ? (
-          <>
-            <TextField
-              label={country?.taxIdLabel ?? 'Tax number'}
-              value={taxId}
-              onChangeText={(v) => setTaxId(v.toUpperCase())}
-              autoCapitalize="characters"
-              icon="card-account-details-outline"
-              error={errors.taxId}
-            />
-            <SwitchField
-              label="Composition scheme"
-              description="Invoices are raised without a tax breakdown."
-              value={composition}
-              onValueChange={setComposition}
-            />
-          </>
-        ) : null}
+        <Card variant="flat" onPress={() => router.push('/(app)/settings/gst' as never)} style={{ gap: 4 }}>
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+            GST registration
+          </Text>
+          <Text variant="body" weight="600">
+            {company.taxRegistration?.identifier ? formatGstin(company.taxRegistration.identifier) : 'Not registered'}
+          </Text>
+          <Text variant="caption" tone="muted">
+            GSTIN, turnover and the two portals are edited in GST settings.
+          </Text>
+        </Card>
       </ScrollView>
 
       <View

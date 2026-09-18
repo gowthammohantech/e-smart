@@ -19,9 +19,8 @@ const META: Record<NotificationKind, { icon: keyof typeof MaterialCommunityIcons
   invoiceSent: { icon: 'send-outline', tone: 'info' },
   paymentReceived: { icon: 'cash-check', tone: 'success' },
   invoiceOverdue: { icon: 'alert-circle-outline', tone: 'danger' },
-  lowStock: { icon: 'package-variant', tone: 'warning' },
-  compliance: { icon: 'shield-check-outline', tone: 'info' },
-  syncFailure: { icon: 'cloud-alert', tone: 'danger' },
+  eInvoice: { icon: 'shield-check-outline', tone: 'info' },
+  eWayBill: { icon: 'truck-fast-outline', tone: 'info' },
   system: { icon: 'information-outline', tone: 'neutral' },
 };
 
@@ -46,10 +45,9 @@ export default function Notifications() {
   const routeFor = (entityType?: string, entityId?: string): string | null => {
     if (!entityType) return null;
     if (entityType === 'invoice' && entityId) return `/(app)/sales/invoices/${entityId}`;
+    if (entityType === 'salesReturn' && entityId) return `/(app)/sales/returns/${entityId}`;
     if (entityType === 'payment' && entityId) return `/(app)/payments/${entityId}`;
-    if (entityType === 'inventory') return '/(app)/inventory/low-stock';
-    if (entityType === 'compliance') return '/(app)/settings/integrations';
-    if (entityType === 'system') return '/(app)/reports/tax-summary';
+    if (entityType === 'system') return '/(app)/gst/gstr1';
     return null;
   };
 

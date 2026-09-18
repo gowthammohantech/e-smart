@@ -177,7 +177,7 @@ export function AgingScreen() {
                       key={o.document.id}
                       onPress={() =>
                         router.push(
-                          isReceivable ? `/(app)/sales/invoices/${o.document.id}` : `/(app)/purchases/bills/${o.document.id}`,
+                          `/(app)/sales/invoices/${o.document.id}` as never,
                         )
                       }
                       accessibilityRole="button"

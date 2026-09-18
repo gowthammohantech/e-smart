@@ -1,6 +1,6 @@
 import { B2CL_THRESHOLD_MINOR, gstr1Summary } from '@/domain/gst/returns';
 import { fromMajor } from '@/lib/money';
-import { BUYER_KA_GSTIN, ITEMS, company, invoice, line, party } from './gstFixtures';
+import { ITEMS, company, invoice, line, party } from './gstFixtures';
 
 const KA_ADDRESS = {
   line1: '4 Residency Road',

@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
-import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '@/store/selectors';
+import { useParty, usePayment, usePaymentAccounts } from '@/store/selectors';
 import { PAYMENT_METHOD_LABELS } from '@/data/masters';
 import { formatMoney } from '@/lib/format';
 import { formatDate, formatDateTime } from '@/lib/date';
@@ -26,7 +26,6 @@ export default function PaymentDetail() {
   const payment = usePayment(id);
   const party = useParty(payment?.partyId);
   const accounts = usePaymentAccounts();
-  const baseCurrency = useBaseCurrency();
   const removePayment = useAppStore((s) => s.removePayment);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -40,7 +39,6 @@ export default function PaymentDetail() {
     );
   }
 
-  const isIn = payment.direction === 'received';
   const account = accounts.find((a) => a.id === payment.accountId);
 
   return (
@@ -54,18 +52,18 @@ export default function PaymentDetail() {
               width: 56,
               height: 56,
               borderRadius: 28,
-              backgroundColor: isIn ? t.c.goodSoft : t.c.badSoft,
+              backgroundColor: t.c.goodSoft,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons name={isIn ? 'arrow-down' : 'arrow-up'} size={27} color={isIn ? t.c.good : t.c.bad} />
+            <MaterialCommunityIcons name="arrow-down" size={27} color={t.c.good} />
           </View>
-          <Text variant="h1" weight="700" tone={isIn ? 'good' : 'bad'}>
+          <Text variant="h1" weight="700" tone="good">
             {formatMoney(payment.amount)}
           </Text>
           <Text variant="small" tone="muted">
-            {isIn ? 'Received from' : 'Paid to'} {party?.name ?? 'Unknown'}
+            Received from {party?.name ?? 'Unknown'}
           </Text>
           <Badge label={payment.number} tone="neutral" />
         </Card>
@@ -74,11 +72,8 @@ export default function PaymentDetail() {
           {[
             { label: 'Date', value: formatDate(payment.date) },
             { label: 'Method', value: PAYMENT_METHOD_LABELS[payment.method] },
-            { label: isIn ? 'Deposited into' : 'Paid from', value: account?.name ?? '—' },
+            { label: 'Deposited into', value: account?.name ?? '—' },
             ...(payment.reference ? [{ label: 'Reference', value: payment.reference }] : []),
-            ...(payment.currency !== baseCurrency
-              ? [{ label: 'Exchange rate', value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
-              : []),
             { label: 'Recorded', value: formatDateTime(payment.createdAt) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
@@ -94,9 +89,7 @@ export default function PaymentDetail() {
 
         {party ? (
           <Card
-            onPress={() =>
-              router.push(party.kind === 'customer' ? `/(app)/contacts/customers/${party.id}` : `/(app)/contacts/suppliers/${party.id}`)
-            }
+            onPress={() => router.push(`/(app)/contacts/customers/${party.id}` as never)}
             style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
           >
             <Avatar name={party.name} size={40} />
@@ -129,7 +122,7 @@ export default function PaymentDetail() {
                 key={a.documentId}
                 onPress={() =>
                   router.push(
-                    isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`,
+                    `/(app)/sales/invoices/${a.documentId}` as never,
                   )
                 }
                 accessibilityRole="button"
@@ -162,17 +155,6 @@ export default function PaymentDetail() {
             <MaterialCommunityIcons name="wallet-outline" size={20} color={t.c.warn} />
             <Text variant="small" style={{ flex: 1 }}>
               {formatMoney(payment.unallocated)} is unallocated and available as an advance.
-            </Text>
-          </Card>
-        ) : null}
-
-        {payment.fxGainLoss && payment.fxGainLoss.minor !== 0 ? (
-          <Card style={{ marginTop: t.spacing.md, flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text variant="small" tone="muted">
-              FX {payment.fxGainLoss.minor >= 0 ? 'gain' : 'loss'} on settlement
-            </Text>
-            <Text variant="small" weight="700" tone={payment.fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
-              {formatMoney(payment.fxGainLoss, { signed: true })}
             </Text>
           </Card>
         ) : null}

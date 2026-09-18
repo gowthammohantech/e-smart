@@ -23,7 +23,7 @@ export default function EditCustomer() {
   return (
     <>
       <Stack.Screen options={{ title: `Edit ${party.name}` }} />
-      <PartyForm kind="customer" party={party} />
+      <PartyForm party={party} />
     </>
   );
 }

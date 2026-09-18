@@ -10,7 +10,6 @@ import { Card } from '@/components/Card';
 import { Illustration } from '@/components/Illustration';
 import { useAppStore } from '@/store/appStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { COUNTRIES } from '@/data/masters';
 import { uid } from '@/lib/id';
 
 const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; body: string }[] = [
@@ -34,26 +33,27 @@ export default function Done() {
 
   const finish = (goToInvoice: boolean) => {
     setBusy(true);
-    const country = COUNTRIES.find((c) => c.code === draft.country);
-
     const companyId = createCompany({
       name: draft.name || 'My business',
       legalName: draft.legalName || undefined,
       logoUri: draft.logoUri,
       businessType: draft.businessType,
-      country: draft.country,
-      baseCurrency: draft.baseCurrency,
+      country: 'IN',
+      baseCurrency: 'INR',
       address: draft.address,
       email: draft.email || undefined,
       phone: draft.phone || undefined,
       fiscalYearStartMonth: draft.fiscalYearStartMonth,
       taxRegistration: {
-        regime: country?.regime ?? 'NONE',
+        regime: draft.taxRegistered ? 'GST' : 'NONE',
         identifier: draft.taxIdentifier || undefined,
-        identifierLabel: country?.taxIdLabel ?? 'Tax number',
+        identifierLabel: 'GSTIN',
         registered: draft.taxRegistered,
         compositionScheme: draft.compositionScheme,
         placeOfSupplyStateCode: draft.address.stateCode,
+        turnoverSlab: draft.turnoverSlab,
+        eInvoiceEnabled: true,
+        eWayBillEnabled: true,
       },
     });
 

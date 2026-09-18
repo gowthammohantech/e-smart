@@ -13,7 +13,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { PaymentAccount } from '@/types';
 import { useAppStore } from '@/store/appStore';
-import { useActiveCompany, useBaseCurrency, useExpenses, usePaymentAccounts, usePayments } from '@/store/selectors';
+import { useActiveCompany, useBaseCurrency, usePaymentAccounts, usePayments } from '@/store/selectors';
 import { formatMoney } from '@/lib/format';
 import { fromMajor, money, toMajor } from '@/lib/money';
 import { uid } from '@/lib/id';
@@ -26,7 +26,6 @@ export default function AccountSettings() {
   const baseCurrency = useBaseCurrency();
   const accounts = usePaymentAccounts();
   const payments = usePayments();
-  const expenses = useExpenses();
   const savePaymentAccount = useAppStore((s) => s.savePaymentAccount);
   const removePaymentAccount = useAppStore((s) => s.removePaymentAccount);
 
@@ -38,23 +37,18 @@ export default function AccountSettings() {
   const [openingBalance, setOpeningBalance] = useState('');
   const [isDefault, setIsDefault] = useState(false);
 
-  /** Running balance: opening + money in − money out − expenses paid from it. */
+  /** Running balance: opening balance plus every payment banked into it. */
   const balances = useMemo(() => {
     const map: Record<string, number> = {};
     accounts.forEach((a) => {
       map[a.id] = a.openingBalance.minor;
     });
     payments.forEach((p) => {
-      const delta = Math.round(p.amount.minor * (p.exchangeRate || 1));
       if (map[p.accountId] === undefined) return;
-      map[p.accountId] += p.direction === 'received' ? delta : -delta;
-    });
-    expenses.forEach((e) => {
-      if (map[e.accountId] === undefined) return;
-      map[e.accountId] -= Math.round(e.amount.minor * (e.exchangeRate || 1));
+      map[p.accountId] += p.amount.minor;
     });
     return map;
-  }, [accounts, payments, expenses]);
+  }, [accounts, payments]);
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 
@@ -75,7 +69,6 @@ export default function AccountSettings() {
       companyId: company.id,
       name: name.trim(),
       type,
-      currency: baseCurrency,
       accountNumber: accountNumber.trim() || undefined,
       openingBalance: fromMajor(openingBalance || '0', baseCurrency),
       isDefault,
@@ -179,7 +172,7 @@ export default function AccountSettings() {
             <TextField label="Account number" value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
           ) : null}
           <AmountField label="Opening balance" value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
-          <SwitchField label="Use as default" description="Pre-selected when recording payments and expenses." value={isDefault} onValueChange={setIsDefault} />
+          <SwitchField label="Use as default" description="Pre-selected when recording a payment." value={isDefault} onValueChange={setIsDefault} />
         </View>
       </Sheet>
 

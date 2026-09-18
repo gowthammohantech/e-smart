@@ -19,20 +19,17 @@ import { Illustration } from '@/components/Illustration';
 import { Sheet } from '@/components/Sheet';
 import {
   useBaseCurrency,
+  useComplianceSummary,
   useCurrentUser,
   useDocuments,
-  useExpenses,
-  useItems,
   useParties,
-  usePayables,
   usePayments,
   useReceivables,
-  useStockLevels,
 } from '@/store/selectors';
-import { money, subtract, sum } from '@/lib/money';
+import { money, sum } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
 import { inRange, lastNMonths, monthLabel, resolveRange } from '@/lib/date';
-import { isLowStock } from '@/domain/stockLedger';
+import { summarizeTax } from '@/domain/reports';
 
 export default function Home() {
   const t = useTheme();
@@ -43,12 +40,10 @@ export default function Home() {
   const invoices = useDocuments('invoice');
   const quotes = useDocuments('quote');
   const payments = usePayments();
-  const expenses = useExpenses();
-  const items = useItems({ activeOnly: true });
-  const stock = useStockLevels();
-  const customers = useParties('customer');
+  const customers = useParties();
   const receivables = useReceivables();
-  const payables = usePayables();
+  const compliance = useComplianceSummary();
+  const allDocuments = useDocuments();
 
   const [actionsOpen, setActionsOpen] = useState(false);
 
@@ -58,42 +53,28 @@ export default function Home() {
     const live = invoices.filter(
       (d) => inRange(d.date, thisMonth) && !['draft', 'cancelled'].includes(d.status),
     );
-    return sum(
-      live.map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
-      baseCurrency,
-    );
+    return sum(live.map((d) => money(d.totals.grandTotal.minor, baseCurrency)), baseCurrency);
   }, [invoices, thisMonth, baseCurrency]);
 
-  const monthExpenses = useMemo(() => {
-    const live = expenses.filter((e) => inRange(e.date, thisMonth));
-    return sum(
-      live.map((e) => money(Math.round(e.amount.minor * (e.exchangeRate || 1)), baseCurrency)),
-      baseCurrency,
-    );
-  }, [expenses, thisMonth, baseCurrency]);
-
   const monthCollected = useMemo(() => {
-    const live = payments.filter((p) => p.direction === 'received' && inRange(p.date, thisMonth));
-    return sum(
-      live.map((p) => money(Math.round(p.amount.minor * (p.exchangeRate || 1)), baseCurrency)),
-      baseCurrency,
-    );
+    const live = payments.filter((p) => inRange(p.date, thisMonth));
+    return sum(live.map((p) => money(p.amount.minor, baseCurrency)), baseCurrency);
   }, [payments, thisMonth, baseCurrency]);
+
+  const monthTax = useMemo(
+    () => summarizeTax(allDocuments, baseCurrency, { range: thisMonth }),
+    [allDocuments, baseCurrency, thisMonth],
+  );
 
   const salesTrend = useMemo(() => {
     const keys = lastNMonths(6);
     return keys.map((key) => {
       const total = invoices
         .filter((d) => d.date.startsWith(key) && !['draft', 'cancelled'].includes(d.status))
-        .reduce((acc, d) => acc + Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), 0);
+        .reduce((acc, d) => acc + d.totals.grandTotal.minor, 0);
       return { label: monthLabel(key), value: money(total, baseCurrency) };
     });
   }, [invoices, baseCurrency]);
-
-  const lowStockItems = useMemo(
-    () => items.filter((i) => isLowStock(i, stock[i.id] ?? 0)),
-    [items, stock],
-  );
 
   const overdueInvoices = useMemo(
     () =>
@@ -120,7 +101,9 @@ export default function Home() {
     { icon: 'alert-circle-outline', label: 'Overdue invoices', count: receivables.outstanding.filter((o) => o.daysOverdue > 0).length, route: '/(app)/receivables', tone: 'danger' },
     { icon: 'file-document-outline', label: 'Draft invoices', count: draftInvoices.length, route: '/(app)/sales/invoices', tone: 'warning' },
     { icon: 'file-percent-outline', label: 'Quotes awaiting reply', count: openQuotes.length, route: '/(app)/sales/quotes', tone: 'info' },
-    { icon: 'package-variant', label: 'Items low on stock', count: lowStockItems.length, route: '/(app)/inventory/low-stock', tone: 'warning' },
+    { icon: 'alert-circle-outline', label: 'Invoices the IRP rejected', count: compliance.failed, route: '/(app)/gst/e-invoices', tone: 'danger' },
+    { icon: 'clock-alert-outline', label: 'E-way bills expiring today', count: compliance.ewbExpiringToday, route: '/(app)/gst/e-way-bills', tone: 'warning' },
+    { icon: 'truck-remove-outline', label: 'E-way bills expired', count: compliance.ewbExpired, route: '/(app)/gst/e-way-bills', tone: 'danger' },
   ] as AttentionItem[]).filter((a) => a.count > 0);
 
   const recent = useMemo(
@@ -128,11 +111,9 @@ export default function Home() {
     [invoices],
   );
 
-  const netThisMonth = subtract(monthSales, monthExpenses);
-
   // A business created moments ago has nothing to summarise — a wall of zeroes
   // and empty charts reads as broken, so show a first-run block instead.
-  const isFirstRun = invoices.length === 0 && payments.length === 0 && expenses.length === 0;
+  const isFirstRun = invoices.length === 0 && payments.length === 0;
 
   if (isFirstRun) {
     return (
@@ -226,7 +207,7 @@ export default function Home() {
               value={monthSales}
               icon="trending-up"
               caption={`${invoices.filter((d) => inRange(d.date, thisMonth) && d.status !== 'draft').length} invoices`}
-              onPress={() => router.push('/(app)/reports/sales-summary')}
+              onPress={() => router.push('/(app)/reports/sales' as never)}
             />
             <StatTile
               label="Collected"
@@ -234,30 +215,29 @@ export default function Home() {
               tone="good"
               icon="cash-check"
               caption="Payments received"
-              onPress={() => router.push('/(app)/payments/received')}
+              onPress={() => router.push('/(app)/payments/received' as never)}
             />
           </StatRow>
           <StatRow>
             <StatTile
-              label="Expenses"
-              value={monthExpenses}
-              tone="warn"
-              icon="receipt-text-outline"
-              caption={`${expenses.filter((e) => inRange(e.date, thisMonth)).length} entries`}
-              onPress={() => router.push('/(app)/expenses')}
+              label="GST charged"
+              value={monthTax.outwardTotal}
+              icon="percent-outline"
+              caption="Output tax this month"
+              onPress={() => router.push('/(app)/gst/gstr1' as never)}
             />
             <StatTile
-              label="Net"
-              value={netThisMonth}
-              tone={netThisMonth.minor >= 0 ? 'good' : 'bad'}
-              icon="scale-balance"
-              caption="Sales less expenses"
-              onPress={() => router.push('/(app)/reports/profit')}
+              label="IRNs generated"
+              value={String(compliance.registered)}
+              tone={compliance.failed ? 'bad' : 'good'}
+              icon="shield-check-outline"
+              caption={compliance.failed ? `${compliance.failed} rejected` : 'All accepted'}
+              onPress={() => router.push('/(app)/gst/e-invoices' as never)}
             />
           </StatRow>
         </View>
 
-        <SectionHeader title="Sales trend" action="Reports" onAction={() => router.push('/(app)/reports/sales-summary')} />
+        <SectionHeader title="Sales trend" action="Reports" onAction={() => router.push('/(app)/reports/sales' as never)} />
         <Card>
           <BarChart data={salesTrend} caption="Invoiced value, last 6 months" />
         </Card>
@@ -288,23 +268,25 @@ export default function Home() {
           />
         </Card>
 
-        <SectionHeader title="You owe" action="View all" onAction={() => router.push('/(app)/payables')} />
+        <SectionHeader title="Goods in transit" action="E-way bills" onAction={() => router.push('/(app)/gst/e-way-bills' as never)} />
         <Card
-          onPress={() => router.push('/(app)/payables')}
+          onPress={() => router.push('/(app)/gst/e-way-bills' as never)}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <View style={{ gap: 3 }}>
             <Text variant="caption" tone="muted">
-              Total payable
+              Live e-way bills
             </Text>
             <Text variant="h3" weight="700">
-              {formatMoney(payables.summary.total)}
+              {compliance.ewbActive}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Badge label={`${formatMoney(payables.summary.overdue)} overdue`} tone="danger" size="sm" />
+            {compliance.ewbExpiringToday > 0 ? (
+              <Badge label={`${compliance.ewbExpiringToday} expire today`} tone="warning" size="sm" />
+            ) : null}
             <Text variant="micro" tone="muted">
-              {payables.outstanding.length} open bills
+              {compliance.ewbExpired > 0 ? `${compliance.ewbExpired} expired` : 'None expired'}
             </Text>
           </View>
         </Card>
