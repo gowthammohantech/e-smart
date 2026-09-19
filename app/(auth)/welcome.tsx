@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
-import { WelcomeHero } from '@/components/WelcomeHero';
+import { WelcomeScene } from '@/components/welcome/WelcomeScene';
 import { WelcomeBackdrop } from '@/components/WelcomeBackdrop';
 import { BrandLogo } from '@/components/BrandLogo';
 
@@ -26,11 +26,23 @@ export default function Welcome() {
     >
       <WelcomeBackdrop />
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.spacing.xxl }}>
-        <WelcomeHero />
+        <WelcomeScene />
         <View style={{ gap: t.spacing.md, alignItems: 'center' }}>
+          <View
+            style={{
+              paddingVertical: t.spacing.xs,
+              paddingHorizontal: t.spacing.md,
+              borderRadius: t.radius.pill,
+              backgroundColor: t.c.chip,
+            }}
+          >
+            <Text variant="micro" tone="primary">
+              ✦ AI-assisted by Lixi
+            </Text>
+          </View>
           <BrandLogo height={72} />
-          <Text variant="body" tone="muted" center style={{ lineHeight: 22, maxWidth: 280 }}>
-            Invoices, payments and stock — simple, from your phone.
+          <Text variant="body" tone="muted" center style={{ lineHeight: 22, maxWidth: 300 }}>
+            Invoices, payments and stock — with Lixi, your AI assistant, keeping an eye on the books.
           </Text>
         </View>
       </View>
