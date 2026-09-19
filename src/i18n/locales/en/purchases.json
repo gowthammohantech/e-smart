@@ -33,5 +33,20 @@
     "attachReceipt": "Attach receipt",
     "scanInstead": "Scan with OCR instead",
     "paymentMethod": "Payment method"
+  },
+  "expense": {
+    "billable": "Billable",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete this expense?",
+    "deleteMessage": "It will be removed from your reports and tax summary. This cannot be undone.",
+    "deleted": "Expense deleted",
+    "notes": "Notes",
+    "search": "Search expenses",
+    "totalSpent": "Total spent",
+    "inputTax": "Input tax",
+    "claimable": "Claimable",
+    "noExpenses": "No expenses",
+    "allCategories": "All categories"
   }
 }

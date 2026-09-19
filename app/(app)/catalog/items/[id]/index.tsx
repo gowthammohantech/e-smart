@@ -29,7 +29,7 @@ import { multiply } from '@/lib/money';
 
 export default function ItemDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'nav']);
+  const { t: tr } = useTranslation(['common', 'inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -110,7 +110,7 @@ export default function ItemDetail() {
                 <Badge label={item.type === 'goods' ? 'Product' : 'Service'} tone="neutral" size="sm" />
                 <Badge label={formatPercent(category?.rate ?? 0)} tone="info" size="sm" />
                 {item.hsnCode ? <Badge label={`HSN ${item.hsnCode}`} tone="neutral" size="sm" /> : null}
-                {item.status === 'inactive' ? <Badge label="Inactive" tone="warning" size="sm" /> : null}
+                {item.status === 'inactive' ? <Badge label={tr('inventory:detail.inactive')} tone="warning" size="sm" /> : null}
               </View>
             </View>
           </View>
@@ -124,9 +124,9 @@ export default function ItemDetail() {
         <View style={{ height: t.spacing.md }} />
 
         <StatRow>
-          <StatTile label="Sale price" value={item.salePrice} icon="tag-outline" caption={`per ${item.unit}`} />
+          <StatTile label={tr('inventory:detail.salePrice')} value={item.salePrice} icon="tag-outline" caption={`per ${item.unit}`} />
           <StatTile
-            label="Margin"
+            label={tr('inventory:detail.margin')}
             value={item.purchasePrice.minor > 0 ? formatPercent(margin) : '—'}
             tone={margin > 0 ? 'good' : 'default'}
             icon="trending-up"
@@ -139,23 +139,21 @@ export default function ItemDetail() {
             <View style={{ height: t.spacing.md }} />
             <StatRow>
               <StatTile
-                label="In stock"
+                label={tr('inventory:detail.inStock')}
                 value={`${formatQty(onHand)} ${item.unit}`}
                 tone={onHand <= 0 ? 'bad' : low ? 'warn' : 'good'}
                 icon="warehouse"
                 caption={item.reorderLevel > 0 ? `reorder at ${formatQty(item.reorderLevel)}` : undefined}
               />
-              <StatTile label="Stock value" value={value} icon="cash" caption={`${formatQty(soldQty)} sold all-time`} />
+              <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={`${formatQty(soldQty)} sold all-time`} />
             </StatRow>
           </>
         ) : null}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-          Pricing
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('inventory:detail.pricing')}</Text>
         <Card style={{ gap: t.spacing.md }}>
           {[
-            { label: 'Sale price', value: `${formatMoney(item.salePrice)} / ${item.unit}` },
+            { label: tr('inventory:detail.salePrice'), value: `${formatMoney(item.salePrice)} / ${item.unit}` },
             { label: 'Purchase price', value: `${formatMoney(item.purchasePrice)} / ${item.unit}` },
             { label: 'Tax category', value: category?.name ?? '—' },
             {
@@ -176,12 +174,10 @@ export default function ItemDetail() {
 
         {item.trackInventory && hasInventory ? (
           <>
-            <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Stock movements
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('inventory:detail.stockMovements')}</Text>
             <Card padded={false}>
               {ledger.length === 0 ? (
-                <EmptyState illustration="no-movements" icon="swap-vertical" title="No movements yet" compact />
+                <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:detail.noMovements')} compact />
               ) : (
                 ledger.slice(0, 20).map((row, i) => {
                   const delta = signedQuantity(row.movement);
@@ -245,8 +241,8 @@ export default function ItemDetail() {
           gap: t.spacing.md,
         }}
       >
-        <Button title="Edit" icon="pencil-outline" onPress={() => router.push(`/(app)/catalog/items/${item.id}/edit`)} style={{ flex: 1 }} />
-        <Button title="Actions" variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
+        <Button title={tr('inventory:detail.edit')} icon="pencil-outline" onPress={() => router.push(`/(app)/catalog/items/${item.id}/edit`)} style={{ flex: 1 }} />
+        <Button title={tr('inventory:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
       </View>
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={item.name}>
@@ -288,14 +284,14 @@ export default function ItemDetail() {
       <ConfirmDialog
         visible={confirmDelete}
         title={`Delete ${item.name}?`}
-        message="Documents that already use this item keep their own copy of the details. This cannot be undone."
-        confirmLabel="Delete"
+        message={tr('inventory:detail.deleteMessage')}
+        confirmLabel={tr('inventory:detail.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           removeItem(item.id);
           setConfirmDelete(false);
-          toast.show('Item deleted', 'success');
+          toast.show(tr('inventory:detail.deleted'), 'success');
           router.back();
         }}
       />

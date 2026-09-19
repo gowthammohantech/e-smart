@@ -20,7 +20,7 @@ import { dateRangeLabel, paymentMethodLabel } from '@/i18n/labels';
 
 export default function ExpensesList() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -69,7 +69,7 @@ export default function ExpensesList() {
       <Stack.Screen options={{ title: tr('nav:title.expenses') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search expenses" />
+        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('purchases:expense.search')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
           {DATE_RANGE_PRESET_KEYS.map((p) => {
             const active = range === p;
@@ -99,8 +99,8 @@ export default function ExpensesList() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <StatRow>
-          <StatTile label="Total spent" value={total} tone="warn" icon="receipt-text-outline" caption={`${filtered.length} entries`} />
-          <StatTile label="Input tax" value={taxTotal} icon="percent-outline" caption="Claimable" />
+          <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={`${filtered.length} entries`} />
+          <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} />
         </StatRow>
 
         {slices.length > 0 ? (
@@ -122,9 +122,7 @@ export default function ExpensesList() {
               borderColor: t.c.line,
             }}
           >
-            <Text variant="caption" weight="600" style={{ color: !categoryId ? t.c.onPrimary : t.c.muted }}>
-              All categories
-            </Text>
+            <Text variant="caption" weight="600" style={{ color: !categoryId ? t.c.onPrimary : t.c.muted }}>{tr('purchases:expense.allCategories')}</Text>
           </Pressable>
           {categories.map((c) => {
             const active = categoryId === c.id;
@@ -156,7 +154,7 @@ export default function ExpensesList() {
             <EmptyState
               illustration="no-expenses"
               icon="receipt-text-outline"
-              title="No expenses"
+              title={tr('purchases:expense.noExpenses')}
               message={expenses.length === 0 ? 'Record your first expense to track where the money goes.' : 'Nothing matches this filter.'}
               actionLabel={expenses.length === 0 ? 'Add expense' : undefined}
               onAction={expenses.length === 0 ? () => router.push('/(app)/expenses/new') : undefined}

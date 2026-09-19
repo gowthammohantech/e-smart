@@ -18,7 +18,7 @@ import { multiply } from '@/lib/money';
 
 export default function LowStock() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
   const items = useItems({ activeOnly: true });
@@ -49,12 +49,12 @@ export default function LowStock() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <StatRow>
-          <StatTile label="Need attention" value={String(rows.length)} tone="warn" icon="alert-outline" caption={`${report.outCount} out of stock`} />
+          <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={`${report.outCount} out of stock`} />
           <StatTile
-            label="Restock cost"
+            label={tr('inventory:lowStock.restockCost')}
             value={{ minor: suggestedValue, currency: baseCurrency }}
             icon="cart-outline"
-            caption="To reach 2× reorder level"
+            caption={tr('inventory:lowStock.restockCaption')}
           />
         </StatRow>
 
@@ -62,7 +62,7 @@ export default function LowStock() {
 
         <Card padded={false}>
           {rows.length === 0 ? (
-            <EmptyState illustration="all-settled" icon="check-all" title="Everything is stocked" message="No item is at or below its reorder level." compact />
+            <EmptyState illustration="all-settled" icon="check-all" title={tr('inventory:lowStock.allStocked')} message={tr('inventory:lowStock.allStockedBody')} compact />
           ) : (
             rows.map((r, i) => {
               const shortfall = Math.max(0, r.item.reorderLevel * 2 - r.onHand);
@@ -107,7 +107,7 @@ export default function LowStock() {
                       {formatQty(r.onHand)}
                     </Text>
                     {r.onHand <= 0 ? (
-                      <Badge label="Out" tone="danger" size="sm" />
+                      <Badge label={tr('inventory:lowStock.out')} tone="danger" size="sm" />
                     ) : (
                       <Text variant="micro" tone="muted">
                         buy {formatQty(shortfall)} ≈ {formatMoney(multiply(r.item.purchasePrice, shortfall))}
@@ -135,7 +135,7 @@ export default function LowStock() {
             backgroundColor: t.c.paper,
           }}
         >
-          <Button title="Raise a purchase order" icon="cart-plus" onPress={() => router.push('/(app)/purchases/orders/new')} fullWidth size="lg" />
+          <Button title={tr('inventory:lowStock.raisePo')} icon="cart-plus" onPress={() => router.push('/(app)/purchases/orders/new')} fullWidth size="lg" />
         </View>
       ) : null}
     </View>

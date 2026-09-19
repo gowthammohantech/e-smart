@@ -19,7 +19,7 @@ import { formatMoney, formatQty } from '@/lib/format';
  */
 export default function ScanBarcode() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
   const items = useItems();
@@ -46,15 +46,11 @@ export default function ScanBarcode() {
           variant="flat"
         >
           <Illustration name="scanning" size="full" />
-          <Text variant="body" weight="600">
-            Point the camera at a barcode
-          </Text>
-          <Text variant="caption" tone="muted" center style={{ maxWidth: 260, lineHeight: 18 }}>
-            Camera scanning runs on a real device. In this prototype you can type or pick a code below.
-          </Text>
+          <Text variant="body" weight="600">{tr('inventory:scan.pointCamera')}</Text>
+          <Text variant="caption" tone="muted" center style={{ maxWidth: 260, lineHeight: 18 }}>{tr('inventory:scan.prototypeNote')}</Text>
         </Card>
 
-        <TextField label="Barcode" value={code} onChangeText={setCode} placeholder="Enter or paste a code" icon="barcode" autoFocus />
+        <TextField label={tr('inventory:scan.barcode')} value={code} onChangeText={setCode} placeholder={tr('inventory:scan.barcodePlaceholder')} icon="barcode" autoFocus />
 
         {code.trim().length > 0 ? (
           match ? (
@@ -89,9 +85,9 @@ export default function ScanBarcode() {
               <EmptyState
                 illustration="search-empty"
                 icon="barcode-off"
-                title="No item with that code"
-                message="Add the barcode to an existing item, or create a new one."
-                actionLabel="Create item"
+                title={tr('inventory:scan.noItem')}
+                message={tr('inventory:scan.noItemBody')}
+                actionLabel={tr('inventory:scan.createItem')}
                 onAction={() => router.push('/(app)/catalog/items/new')}
                 compact
               />
@@ -99,9 +95,7 @@ export default function ScanBarcode() {
           )
         ) : null}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          Try one of these
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('inventory:scan.tryOne')}</Text>
         <Card padded={false}>
           {withBarcodes.slice(0, 8).map((i, idx) => (
             <Pressable
@@ -127,7 +121,7 @@ export default function ScanBarcode() {
                   {i.barcode}
                 </Text>
               </View>
-              <Badge label="Use" tone="info" size="sm" />
+              <Badge label={tr('inventory:scan.use')} tone="info" size="sm" />
             </Pressable>
           ))}
         </Card>

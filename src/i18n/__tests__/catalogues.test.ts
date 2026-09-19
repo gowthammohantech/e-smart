@@ -40,7 +40,7 @@ function params(value: string): string[] {
  * catch that, because a copy-pasted English value has a perfectly valid key.
  */
 const TA_LATIN_ALLOWLIST =
-  /^(GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|B2B|B2C|FY|PDF|OTP|CSV|QR|UPI|OCR|SKU|HSN|PO|SEZ|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E)$/;
+  /^(GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|B2B|B2C|FY|PDF|OTP|CSV|QR|UPI|OCR|SKU|HSN|PO|SEZ|UTR|LR|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E)$/;
 
 function suspiciousLatin(value: string): string[] {
   const withoutParams = value

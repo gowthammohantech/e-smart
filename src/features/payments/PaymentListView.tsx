@@ -19,7 +19,7 @@ import { useBaseCurrency, useParties, usePayments } from '@/store/selectors';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -58,7 +58,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search by number, contact or reference" />
+        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('sales:list.search')} />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -104,7 +104,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             <EmptyState
               illustration="no-payments"
               icon="cash-remove"
-              title="No payments"
+              title={tr('sales:list.none')}
               message={payments.length === 0 ? 'Record one to see it here.' : 'Nothing matches this filter.'}
               actionLabel={payments.length === 0 ? 'Record payment' : undefined}
               onAction={payments.length === 0 ? () => router.push(`/(app)/payments/new?direction=${direction}`) : undefined}
@@ -141,7 +141,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                     {formatMoney(p.amount)}
                   </Text>
                   {p.unallocated.minor > 0 ? (
-                    <Badge label="Advance" tone="warning" size="sm" />
+                    <Badge label={tr('sales:list.advance')} tone="warning" size="sm" />
                   ) : (
                     <Badge label={`${p.allocations.length} applied`} tone="neutral" size="sm" />
                   )}

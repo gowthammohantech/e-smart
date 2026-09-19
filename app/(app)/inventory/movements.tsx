@@ -19,7 +19,7 @@ const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIs
 
 export default function StockMovements() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
   const movements = useStockMovements();
@@ -48,7 +48,7 @@ export default function StockMovements() {
       <Stack.Screen options={{ title: tr('nav:title.stockMovements') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search by item or reference" />
+        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:movements.search')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
           {TYPES.map((ty) => {
             const active = type === ty;
@@ -82,7 +82,7 @@ export default function StockMovements() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>
           {filtered.length === 0 ? (
-            <EmptyState illustration="no-movements" icon="swap-vertical" title="No movements" message="Stock movements appear as you buy, sell and adjust." compact />
+            <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />
           ) : (
             filtered.slice(0, 200).map((m, i) => {
               const item = nameOf(m.itemId);

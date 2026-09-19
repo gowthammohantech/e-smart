@@ -21,7 +21,7 @@ import { today } from '@/lib/date';
 
 export default function StockTransfer() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -56,9 +56,9 @@ export default function StockTransfer() {
         <EmptyState
           illustration="single-location"
               icon="warehouse"
-          title="You only have one location"
-          message="Add a second branch under Settings to move stock between locations."
-          actionLabel="Add a branch"
+          title={tr('inventory:transfer.oneLocation')}
+          message={tr('inventory:transfer.oneLocationBody')}
+          actionLabel={tr('inventory:transfer.addBranch')}
           onAction={() => router.push('/(app)/settings/branches')}
         />
       </View>
@@ -75,7 +75,7 @@ export default function StockTransfer() {
         showsVerticalScrollIndicator={false}
       >
         <PickerField
-          label="Item"
+          label={tr('inventory:transfer.item')}
           value={item ? `${item.name} (${item.sku})` : undefined}
           onPress={() => setItemOpen(true)}
           icon="package-variant-closed"
@@ -84,7 +84,7 @@ export default function StockTransfer() {
 
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: t.spacing.md }}>
           <PickerField
-            label="From"
+            label={tr('inventory:transfer.from')}
             value={branches.find((b) => b.id === fromBranchId)?.name}
             onPress={() => setFromOpen(true)}
             containerStyle={{ flex: 1 }}
@@ -94,7 +94,7 @@ export default function StockTransfer() {
             <MaterialCommunityIcons name="arrow-right" size={20} color={t.c.muted} />
           </View>
           <PickerField
-            label="To"
+            label={tr('inventory:transfer.to')}
             value={branches.find((b) => b.id === toBranchId)?.name}
             onPress={() => setToOpen(true)}
             containerStyle={{ flex: 1 }}
@@ -103,7 +103,7 @@ export default function StockTransfer() {
         </View>
 
         <TextField
-          label="Quantity"
+          label={tr('inventory:transfer.quantity')}
           value={quantity}
           onChangeText={(v) => setQuantity(v.replace(/[^0-9.]/g, ''))}
           placeholder="0"
@@ -114,8 +114,8 @@ export default function StockTransfer() {
           required
         />
 
-        <DateField label="Date" value={date} onChange={setDate} />
-        <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Vehicle, driver, LR number…" multiline />
+        <DateField label={tr('inventory:transfer.date')} value={date} onChange={setDate} />
+        <TextField label={tr('inventory:transfer.notes')} value={notes} onChangeText={setNotes} placeholder={tr('inventory:transfer.notesPlaceholder')} multiline />
 
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
@@ -137,11 +137,11 @@ export default function StockTransfer() {
         }}
       >
         <Button
-          title="Transfer stock"
+          title={tr('inventory:transfer.submit')}
           onPress={() => {
             if (!canSave || !itemId) return;
             transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
-            toast.show('Stock transferred', 'success');
+            toast.show(tr('inventory:transfer.done'), 'success');
             router.back();
           }}
           disabled={!canSave}
@@ -153,7 +153,7 @@ export default function StockTransfer() {
       <SelectSheet
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
-        title="Select item"
+        title={tr('inventory:transfer.selectItem')}
         options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku }))}
         value={itemId}
         onSelect={setItemId}
@@ -161,7 +161,7 @@ export default function StockTransfer() {
       <SelectSheet
         visible={fromOpen}
         onClose={() => setFromOpen(false)}
-        title="From branch"
+        title={tr('inventory:transfer.fromBranch')}
         options={branches.map((b) => ({ value: b.id, label: b.name, description: b.code }))}
         value={fromBranchId}
         onSelect={setFromBranchId}
@@ -170,7 +170,7 @@ export default function StockTransfer() {
       <SelectSheet
         visible={toOpen}
         onClose={() => setToOpen(false)}
-        title="To branch"
+        title={tr('inventory:transfer.toBranch')}
         options={branches.filter((b) => b.id !== fromBranchId).map((b) => ({ value: b.id, label: b.name, description: b.code }))}
         value={toBranchId}
         onSelect={setToBranchId}

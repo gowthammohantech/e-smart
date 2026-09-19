@@ -39,7 +39,7 @@ import {
 
 export default function NewPayment() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['domain', 'sales']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -218,7 +218,7 @@ export default function NewPayment() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel="Select contact">
+        <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             {party ? (
               <>
@@ -256,7 +256,7 @@ export default function NewPayment() {
         </Pressable>
 
         <AmountField
-          label="Amount"
+          label={tr('sales:payment.amount')}
           value={amountText}
           onChangeValue={setAmountText}
           currency={currency}
@@ -264,10 +264,10 @@ export default function NewPayment() {
           required
         />
 
-        <DateField label="Payment date" value={date} onChange={setDate} required />
+        <DateField label={tr('sales:payment.date')} value={date} onChange={setDate} required />
 
         <PickerField
-          label="Payment method"
+          label={tr('sales:payment.method')}
           value={paymentMethodLabel(tr, method)}
           onPress={() => setMethodOpen(true)}
           icon="credit-card-outline"
@@ -282,10 +282,10 @@ export default function NewPayment() {
         />
 
         <TextField
-          label="Reference"
+          label={tr('sales:payment.reference')}
           value={reference}
           onChangeText={setReference}
-          placeholder="UTR, cheque number…"
+          placeholder={tr('sales:payment.referencePlaceholder')}
           icon="pound"
         />
 
@@ -296,39 +296,33 @@ export default function NewPayment() {
             onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
             keyboardType="decimal-pad"
             icon="swap-horizontal"
-            hint="A rate different from the invoice rate produces an FX gain or loss."
+            hint={tr('sales:payment.fxHint')}
           />
         ) : null}
 
         {/* Allocation */}
         <View style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Apply to
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <Pressable onPress={autoAllocate} hitSlop={6} accessibilityRole="button" accessibilityLabel="Auto allocate">
-                <Text variant="caption" tone="primary" weight="600">
-                  Auto-allocate
-                </Text>
+              <Pressable onPress={autoAllocate} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.autoAllocate')}>
+                <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.autoAllocateShort')}</Text>
               </Pressable>
-              <Pressable onPress={payFull} hitSlop={6} accessibilityRole="button" accessibilityLabel="Pay everything">
-                <Text variant="caption" tone="primary" weight="600">
-                  Pay all
-                </Text>
+              <Pressable onPress={payFull} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.payEverything')}>
+                <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.payAll')}</Text>
               </Pressable>
             </View>
           </View>
 
           <Card padded={false}>
             {!partyId ? (
-              <EmptyState icon="account-search-outline" title="Pick a contact first" compact />
+              <EmptyState icon="account-search-outline" title={tr('sales:payment.pickContact')} compact />
             ) : outstanding.length === 0 ? (
               <EmptyState
                 illustration="all-settled"
               icon="check-all"
-                title="Nothing outstanding"
-                message="This payment will be held as an advance against the contact."
+                title={tr('sales:payment.nothingOutstanding')}
+                message={tr('sales:payment.advanceHint')}
                 compact
               />
             ) : (
@@ -377,7 +371,7 @@ export default function NewPayment() {
                         value={allocations[o.document.id]}
                         onChangeValue={(v) => setAllocations((a) => ({ ...a, [o.document.id]: v }))}
                         currency={currency}
-                        label="Applying"
+                        label={tr('sales:payment.applying')}
                       />
                     ) : null}
                   </View>
@@ -423,7 +417,7 @@ export default function NewPayment() {
           ) : null}
         </Card>
 
-        <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Internal note" multiline />
+        <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />
       </ScrollView>
 
       <View
@@ -459,7 +453,7 @@ export default function NewPayment() {
       <SelectSheet
         visible={methodOpen}
         onClose={() => setMethodOpen(false)}
-        title="Payment method"
+        title={tr('sales:payment.method')}
         options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
         value={method}
         onSelect={(v) => setMethod(v as PaymentMethod)}

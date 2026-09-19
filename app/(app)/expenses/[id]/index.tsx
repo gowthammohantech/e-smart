@@ -20,7 +20,7 @@ import { subtract } from '@/lib/money';
 
 export default function ExpenseDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases']);
   const router = useRouter();
   const toast = useToast();
 
@@ -78,7 +78,7 @@ export default function ExpenseDetail() {
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <Badge label={expense.number} tone="neutral" />
             {expense.recurrence !== 'none' ? <Badge label={expense.recurrence} tone="info" /> : null}
-            {expense.billable ? <Badge label="Billable" tone="warning" /> : null}
+            {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
           </View>
         </Card>
 
@@ -111,9 +111,7 @@ export default function ExpenseDetail() {
 
         {expense.notes ? (
           <Card style={{ marginTop: t.spacing.md, gap: 4 }}>
-            <Text variant="caption" tone="muted" weight="600">
-              Notes
-            </Text>
+            <Text variant="caption" tone="muted" weight="600">{tr('purchases:expense.notes')}</Text>
             <Text variant="small" style={{ lineHeight: 20 }}>
               {expense.notes}
             </Text>
@@ -145,21 +143,21 @@ export default function ExpenseDetail() {
           gap: t.spacing.md,
         }}
       >
-        <Button title="Edit" icon="pencil-outline" onPress={() => router.push(`/(app)/expenses/${expense.id}/edit`)} style={{ flex: 1 }} />
-        <Button title="Delete" variant="danger" icon="trash-can-outline" onPress={() => setConfirmDelete(true)} style={{ flex: 1 }} />
+        <Button title={tr('purchases:expense.edit')} icon="pencil-outline" onPress={() => router.push(`/(app)/expenses/${expense.id}/edit`)} style={{ flex: 1 }} />
+        <Button title={tr('purchases:expense.delete')} variant="danger" icon="trash-can-outline" onPress={() => setConfirmDelete(true)} style={{ flex: 1 }} />
       </View>
 
       <ConfirmDialog
         visible={confirmDelete}
-        title="Delete this expense?"
-        message="It will be removed from your reports and tax summary. This cannot be undone."
-        confirmLabel="Delete"
+        title={tr('purchases:expense.deleteTitle')}
+        message={tr('purchases:expense.deleteMessage')}
+        confirmLabel={tr('purchases:expense.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           removeExpense(expense.id);
           setConfirmDelete(false);
-          toast.show('Expense deleted', 'success');
+          toast.show(tr('purchases:expense.deleted'), 'success');
           router.back();
         }}
       />

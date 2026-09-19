@@ -24,7 +24,7 @@ import {
 
 export default function DocumentPreview() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
   const language = useResolvedLanguage();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -74,7 +74,7 @@ export default function DocumentPreview() {
         await Share.share({ message: `${label} ${doc.number} — ${formatMoney(doc.totals.grandTotal)}` });
       }
     } catch {
-      toast.show('Could not generate the PDF on this device', 'error');
+      toast.show(tr('sales:print.pdfFailed'), 'error');
     } finally {
       setBusy(false);
     }
@@ -104,13 +104,13 @@ export default function DocumentPreview() {
         }}
       >
         <Button
-          title="Print"
+          title={tr('sales:print.print')}
           variant="ghost"
           icon="printer-outline"
-          onPress={() => Print.printAsync({ html }).catch(() => toast.show('Printing is not available here', 'error'))}
+          onPress={() => Print.printAsync({ html }).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'))}
           style={{ flex: 1 }}
         />
-        <Button title="Share PDF" icon="share-variant" onPress={share} loading={busy} style={{ flex: 1 }} />
+        <Button title={tr('sales:print.sharePdf')} icon="share-variant" onPress={share} loading={busy} style={{ flex: 1 }} />
       </View>
       {Platform.OS === 'web' ? null : null}
     </View>

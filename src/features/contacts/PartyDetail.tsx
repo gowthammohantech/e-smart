@@ -32,7 +32,7 @@ type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
 export function PartyDetail({ party }: { party: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['contacts', 'domain']);
   const router = useRouter();
   const toast = useToast();
 
@@ -147,7 +147,7 @@ export function PartyDetail({ party }: { party: Party }) {
               ) : null}
               <View style={{ flexDirection: 'row', gap: 5, marginTop: 3, flexWrap: 'wrap' }}>
                 <Badge label={party.code} tone="neutral" size="sm" />
-                {party.status === 'inactive' ? <Badge label="Inactive" tone="warning" size="sm" /> : null}
+                {party.status === 'inactive' ? <Badge label={tr('contacts:detail.inactive')} tone="warning" size="sm" /> : null}
                 {party.currency !== baseCurrency ? <Badge label={party.currency} tone="info" size="sm" /> : null}
               </View>
             </View>
@@ -202,7 +202,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {tab === 'activity' ? (
           <Card padded={false}>
             {outstanding.length === 0 ? (
-              <EmptyState illustration="all-settled" icon="check-all" title="All settled" message="Nothing is outstanding right now." compact />
+              <EmptyState illustration="all-settled" icon="check-all" title={tr('contacts:detail.allSettled')} message={tr('contacts:detail.allSettledBody')} compact />
             ) : (
               outstanding.map((o, i) => (
                 <DocumentRow
@@ -239,7 +239,7 @@ export function PartyDetail({ party }: { party: Party }) {
               ))}
             {history.all.length === 0 ? (
               <Card padded={false}>
-                <EmptyState illustration="no-documents" icon="file-outline" title="No documents yet" compact />
+                <EmptyState illustration="no-documents" icon="file-outline" title={tr('contacts:detail.noDocuments')} compact />
               </Card>
             ) : null}
           </View>
@@ -248,7 +248,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {tab === 'payments' ? (
           <Card padded={false}>
             {partyPayments.length === 0 ? (
-              <EmptyState illustration="no-payments" icon="cash-remove" title="No payments yet" compact />
+              <EmptyState illustration="no-payments" icon="cash-remove" title={tr('contacts:detail.noPayments')} compact />
             ) : (
               partyPayments.map((p, i) => (
                 <Pressable
@@ -341,7 +341,7 @@ export function PartyDetail({ party }: { party: Party }) {
           onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
           style={{ flex: 1 }}
         />
-        <Button title="Actions" variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
+        <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
       </View>
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={party.name}>
@@ -351,7 +351,7 @@ export function PartyDetail({ party }: { party: Party }) {
             ? [
                 { label: 'New invoice', icon: 'file-document-edit-outline' as const, onPress: () => router.push('/(app)/sales/invoices/new') },
                 { label: 'New quotation', icon: 'file-percent-outline' as const, onPress: () => router.push('/(app)/sales/quotes/new') },
-                { label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => { setActionsOpen(false); toast.show('Reminder queued for WhatsApp', 'success'); } },
+                { label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => { setActionsOpen(false); toast.show(tr('contacts:detail.reminderQueued'), 'success'); } },
               ]
             : [{ label: 'New purchase bill', icon: 'cart-outline' as const, onPress: () => router.push('/(app)/purchases/bills/new') }]),
           { label: 'Delete contact', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
@@ -381,14 +381,14 @@ export function PartyDetail({ party }: { party: Party }) {
       <ConfirmDialog
         visible={confirmDelete}
         title={`Delete ${party.name}?`}
-        message="Their documents stay in your books, but the contact is removed from your list. This cannot be undone."
-        confirmLabel="Delete"
+        message={tr('contacts:detail.deleteMessage')}
+        confirmLabel={tr('contacts:detail.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           removeParty(party.id);
           setConfirmDelete(false);
-          toast.show('Contact deleted', 'success');
+          toast.show(tr('contacts:detail.deleted'), 'success');
           router.back();
         }}
       />

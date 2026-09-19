@@ -43,5 +43,13 @@
       "eInvoiceRejected": "E-invoices rejected",
       "ewbExpiring": "E-way bills expiring in 24 h"
     }
+  },
+  "shell": {
+    "exportCsv": "Export as CSV",
+    "dateRange": "Date range",
+    "branch": "Branch",
+    "contact": "Contact",
+    "exportCancelled": "Export was cancelled",
+    "basis": "Report basis"
   }
 }

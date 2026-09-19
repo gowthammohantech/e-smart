@@ -32,5 +32,17 @@
     "activeHint": "Inactive contacts stay in your records but are hidden from pickers.",
     "billingAddress": "Billing address",
     "tradingTerms": "Trading terms"
+  },
+  "detail": {
+    "inactive": "Inactive",
+    "allSettled": "All settled",
+    "allSettledBody": "Nothing is outstanding right now.",
+    "noDocuments": "No documents yet",
+    "noPayments": "No payments yet",
+    "actions": "Actions",
+    "deleteMessage": "Their documents stay in your books, but the contact is removed from your list. This cannot be undone.",
+    "delete": "Delete",
+    "reminderQueued": "Reminder queued for WhatsApp",
+    "deleted": "Contact deleted"
   }
 }

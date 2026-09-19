@@ -83,5 +83,58 @@
     "quantity": "Quantity",
     "discount": "Discount",
     "lineTotal": "Line total"
+  },
+  "payment": {
+    "selectContact": "Select contact",
+    "amount": "Amount",
+    "date": "Payment date",
+    "method": "Payment method",
+    "reference": "Reference",
+    "referencePlaceholder": "UTR, cheque number…",
+    "fxHint": "A rate different from the invoice rate produces an FX gain or loss.",
+    "autoAllocate": "Auto allocate",
+    "payEverything": "Pay everything",
+    "pickContact": "Pick a contact first",
+    "nothingOutstanding": "Nothing outstanding",
+    "advanceHint": "This payment will be held as an advance against the contact.",
+    "applying": "Applying",
+    "notes": "Notes",
+    "notesPlaceholder": "Internal note",
+    "applyTo": "Apply to",
+    "autoAllocateShort": "Auto-allocate",
+    "payAll": "Pay all",
+    "heldAsAdvance": "Held as an advance",
+    "advanceBody": "Nothing was allocated, so the full amount sits against the contact.",
+    "deletePayment": "Delete payment",
+    "deleteTitle": "Delete this payment?",
+    "deleteMessage": "Any invoice it was applied to will go back to being outstanding. This cannot be undone.",
+    "delete": "Delete",
+    "deleted": "Payment deleted",
+    "appliedTo": "Applied to"
+  },
+  "aging": {
+    "overdue": "Overdue",
+    "clearBucket": "Clear bucket filter",
+    "nothingOutstanding": "Nothing outstanding",
+    "remind": "Remind",
+    "sendReminder": "Send a reminder",
+    "whatsapp": "WhatsApp",
+    "email": "Email",
+    "openedWhatsapp": "Reminder opened in WhatsApp",
+    "openedEmail": "Reminder opened in email",
+    "aging": "Aging",
+    "clear": "Clear",
+    "reminderNote": "The message is prepared for you — you send it yourself, so nothing leaves the app without your say-so."
+  },
+  "list": {
+    "search": "Search by number, contact or reference",
+    "none": "No payments",
+    "advance": "Advance"
+  },
+  "print": {
+    "print": "Print",
+    "sharePdf": "Share PDF",
+    "pdfFailed": "Could not generate the PDF on this device",
+    "printUnavailable": "Printing is not available here"
   }
 }

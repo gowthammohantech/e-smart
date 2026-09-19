@@ -33,5 +33,81 @@
     "reorderHint": "Alerts you below this.",
     "active": "Active",
     "activeHint": "Inactive items are hidden when creating documents."
+  },
+  "detail": {
+    "inactive": "Inactive",
+    "salePrice": "Sale price",
+    "margin": "Margin",
+    "inStock": "In stock",
+    "stockValue": "Stock value",
+    "noMovements": "No movements yet",
+    "edit": "Edit",
+    "actions": "Actions",
+    "deleteMessage": "Documents that already use this item keep their own copy of the details. This cannot be undone.",
+    "delete": "Delete",
+    "deleted": "Item deleted",
+    "pricing": "Pricing",
+    "stockMovements": "Stock movements"
+  },
+  "transfer": {
+    "oneLocation": "You only have one location",
+    "oneLocationBody": "Add a second branch under Settings to move stock between locations.",
+    "addBranch": "Add a branch",
+    "item": "Item",
+    "from": "From",
+    "to": "To",
+    "quantity": "Quantity",
+    "date": "Date",
+    "notes": "Notes",
+    "notesPlaceholder": "Vehicle, driver, LR number…",
+    "submit": "Transfer stock",
+    "selectItem": "Select item",
+    "fromBranch": "From branch",
+    "toBranch": "To branch",
+    "done": "Stock transferred"
+  },
+  "adjust": {
+    "item": "Item",
+    "branch": "Branch",
+    "quantity": "Quantity",
+    "reason": "Reason",
+    "reasonPlaceholder": "Why is this changing?",
+    "date": "Date",
+    "submit": "Save adjustment",
+    "selectItem": "Select item",
+    "done": "Stock adjusted",
+    "newStock": "New stock",
+    "negativeWarning": "This would take stock negative. Check the quantity before saving."
+  },
+  "scan": {
+    "barcode": "Barcode",
+    "barcodePlaceholder": "Enter or paste a code",
+    "noItem": "No item with that code",
+    "noItemBody": "Add the barcode to an existing item, or create a new one.",
+    "createItem": "Create item",
+    "use": "Use",
+    "pointCamera": "Point the camera at a barcode",
+    "prototypeNote": "Camera scanning runs on a real device. In this prototype you can type or pick a code below.",
+    "tryOne": "Try one of these"
+  },
+  "lowStock": {
+    "needAttention": "Need attention",
+    "restockCost": "Restock cost",
+    "restockCaption": "To reach 2× reorder level",
+    "allStocked": "Everything is stocked",
+    "allStockedBody": "No item is at or below its reorder level.",
+    "out": "Out",
+    "raisePo": "Raise a purchase order"
+  },
+  "opening": {
+    "asOn": "As on",
+    "search": "Search items",
+    "noTracked": "No stock-tracked items",
+    "submit": "Save opening stock"
+  },
+  "movements": {
+    "search": "Search by item or reference",
+    "none": "No movements",
+    "noneBody": "Stock movements appear as you buy, sell and adjust."
   }
 }

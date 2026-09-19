@@ -20,7 +20,7 @@ import { formatDate, formatDateTime } from '@/lib/date';
 
 export default function PaymentDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
   const router = useRouter();
   const toast = useToast();
 
@@ -114,15 +114,13 @@ export default function PaymentDetail() {
           </Card>
         ) : null}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-          Applied to
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:payment.appliedTo')}</Text>
         <Card padded={false}>
           {payment.allocations.length === 0 ? (
             <EmptyState
               icon="wallet-outline"
-              title="Held as an advance"
-              message="Nothing was allocated, so the full amount sits against the contact."
+              title={tr('sales:payment.heldAsAdvance')}
+              message={tr('sales:payment.advanceBody')}
               compact
             />
           ) : (
@@ -181,9 +179,7 @@ export default function PaymentDetail() {
 
         {payment.notes ? (
           <Card style={{ marginTop: t.spacing.md, gap: 4 }}>
-            <Text variant="caption" tone="muted" weight="600">
-              Notes
-            </Text>
+            <Text variant="caption" tone="muted" weight="600">{tr('sales:payment.notes')}</Text>
             <Text variant="small" style={{ lineHeight: 20 }}>
               {payment.notes}
             </Text>
@@ -205,7 +201,7 @@ export default function PaymentDetail() {
         }}
       >
         <Button
-          title="Delete payment"
+          title={tr('sales:payment.deletePayment')}
           variant="danger"
           icon="trash-can-outline"
           onPress={() => setConfirmDelete(true)}
@@ -215,15 +211,15 @@ export default function PaymentDetail() {
 
       <ConfirmDialog
         visible={confirmDelete}
-        title="Delete this payment?"
-        message="Any invoice it was applied to will go back to being outstanding. This cannot be undone."
-        confirmLabel="Delete"
+        title={tr('sales:payment.deleteTitle')}
+        message={tr('sales:payment.deleteMessage')}
+        confirmLabel={tr('sales:payment.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           removePayment(payment.id);
           setConfirmDelete(false);
-          toast.show('Payment deleted', 'success');
+          toast.show(tr('sales:payment.deleted'), 'success');
           router.back();
         }}
       />

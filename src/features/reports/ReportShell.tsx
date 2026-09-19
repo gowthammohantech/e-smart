@@ -42,7 +42,7 @@ export function ReportShell({
   exportRows?: () => string;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common']);
+  const { t: tr } = useTranslation(['common', 'reports']);
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
@@ -68,7 +68,7 @@ export function ReportShell({
     try {
       await Share.share({ message: exportRows(), title: `${title} export` });
     } catch {
-      toast.show('Export was cancelled', 'error');
+      toast.show(tr('reports:shell.exportCancelled'), 'error');
     }
   };
 
@@ -122,9 +122,7 @@ export function ReportShell({
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: 4 }}>
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-            Report basis
-          </Text>
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {company?.name} · {formatDate(scope.filters.range.from)} to {formatDate(scope.filters.range.to)} ·{' '}
             {branch?.name ?? 'all branches'} · presented in {company?.baseCurrency}, foreign-currency documents converted at
@@ -154,11 +152,11 @@ export function ReportShell({
             backgroundColor: t.c.paper,
           }}
         >
-          <Button title="Export as CSV" icon="file-export-outline" variant="secondary" onPress={doExport} fullWidth />
+          <Button title={tr('reports:shell.exportCsv')} icon="file-export-outline" variant="secondary" onPress={doExport} fullWidth />
         </View>
       ) : null}
 
-      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="Date range">
+      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={tr('reports:shell.dateRange')}>
         {DATE_RANGE_PRESET_KEYS.map((p) => (
           <Pressable
             key={p}
@@ -187,7 +185,7 @@ export function ReportShell({
       <SelectSheet
         visible={branchOpen}
         onClose={() => setBranchOpen(false)}
-        title="Branch"
+        title={tr('reports:shell.branch')}
         options={[
           { value: '', label: 'All branches' },
           ...branches.map((b) => ({ value: b.id, label: b.name, description: b.code })),
@@ -200,7 +198,7 @@ export function ReportShell({
       <SelectSheet
         visible={partyOpen}
         onClose={() => setPartyOpen(false)}
-        title="Contact"
+        title={tr('reports:shell.contact')}
         options={[
           { value: '', label: 'All contacts' },
           ...parties.map((p) => ({ value: p.id, label: p.name, description: p.kind })),

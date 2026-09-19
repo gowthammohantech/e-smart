@@ -18,7 +18,7 @@ import { today } from '@/lib/date';
 
 export default function StockAdjust() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -66,7 +66,7 @@ export default function StockAdjust() {
       date,
       notes: reason || undefined,
     });
-    toast.show('Stock adjusted', 'success');
+    toast.show(tr('inventory:adjust.done'), 'success');
     router.back();
   };
 
@@ -80,7 +80,7 @@ export default function StockAdjust() {
         showsVerticalScrollIndicator={false}
       >
         <PickerField
-          label="Item"
+          label={tr('inventory:adjust.item')}
           value={item ? `${item.name} (${item.sku})` : undefined}
           onPress={() => setItemOpen(true)}
           icon="package-variant-closed"
@@ -88,7 +88,7 @@ export default function StockAdjust() {
         />
 
         {branches.length > 1 ? (
-          <PickerField label="Branch" value={branches.find((b) => b.id === branchId)?.name} onPress={() => setBranchOpen(true)} icon="warehouse" />
+          <PickerField label={tr('inventory:adjust.branch')} value={branches.find((b) => b.id === branchId)?.name} onPress={() => setBranchOpen(true)} icon="warehouse" />
         ) : null}
 
         <Segmented
@@ -104,7 +104,7 @@ export default function StockAdjust() {
         />
 
         <TextField
-          label="Quantity"
+          label={tr('inventory:adjust.quantity')}
           value={quantity}
           onChangeText={(v) => setQuantity(v.replace(/[^0-9.]/g, ''))}
           placeholder="0"
@@ -120,9 +120,9 @@ export default function StockAdjust() {
           required
         />
 
-        <PickerField label="Reason" value={reason || undefined} placeholder="Why is this changing?" onPress={() => setReasonOpen(true)} icon="comment-question-outline" />
+        <PickerField label={tr('inventory:adjust.reason')} value={reason || undefined} placeholder={tr('inventory:adjust.reasonPlaceholder')} onPress={() => setReasonOpen(true)} icon="comment-question-outline" />
 
-        <DateField label="Date" value={date} onChange={setDate} />
+        <DateField label={tr('inventory:adjust.date')} value={date} onChange={setDate} />
 
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
@@ -141,17 +141,13 @@ export default function StockAdjust() {
             ))}
             <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text variant="body" weight="700">
-                New stock
-              </Text>
+              <Text variant="body" weight="700">{tr('inventory:adjust.newStock')}</Text>
               <Text variant="body" weight="700" tone={resulting < 0 ? 'bad' : 'good'}>
                 {formatQty(resulting)} {item.unit}
               </Text>
             </View>
             {resulting < 0 ? (
-              <Text variant="caption" tone="bad">
-                This would take stock negative. Check the quantity before saving.
-              </Text>
+              <Text variant="caption" tone="bad">{tr('inventory:adjust.negativeWarning')}</Text>
             ) : null}
           </Card>
         ) : null}
@@ -166,13 +162,13 @@ export default function StockAdjust() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Save adjustment" onPress={save} disabled={!canSave} fullWidth size="lg" />
+        <Button title={tr('inventory:adjust.submit')} onPress={save} disabled={!canSave} fullWidth size="lg" />
       </View>
 
       <SelectSheet
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
-        title="Select item"
+        title={tr('inventory:adjust.selectItem')}
         options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: `${formatQty(stock[i.id] ?? 0)} ${i.unit}` }))}
         value={itemId}
         onSelect={setItemId}
@@ -180,7 +176,7 @@ export default function StockAdjust() {
       <SelectSheet
         visible={branchOpen}
         onClose={() => setBranchOpen(false)}
-        title="Branch"
+        title={tr('inventory:adjust.branch')}
         options={branches.map((b) => ({ value: b.id, label: b.name, description: b.code }))}
         value={branchId}
         onSelect={setBranchId}
@@ -189,7 +185,7 @@ export default function StockAdjust() {
       <SelectSheet
         visible={reasonOpen}
         onClose={() => setReasonOpen(false)}
-        title="Reason"
+        title={tr('inventory:adjust.reason')}
         options={REASONS.map((r) => ({ value: r, label: r }))}
         value={reason}
         onSelect={setReason}

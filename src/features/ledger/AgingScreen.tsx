@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -25,6 +26,7 @@ type Mode = 'all' | 'overdue' | 'dueSoon';
 
 export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['sales']);
   const router = useRouter();
   const toast = useToast();
 
@@ -101,19 +103,15 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
             icon="scale-balance"
             caption={`${data.outstanding.length} open documents`}
           />
-          <StatTile label="Overdue" value={data.summary.overdue} tone="bad" icon="alert-circle-outline" caption={`Due soon ${formatMoney(data.summary.dueSoon)}`} />
+          <StatTile label={tr('sales:aging.overdue')} value={data.summary.overdue} tone="bad" icon="alert-circle-outline" caption={`Due soon ${formatMoney(data.summary.dueSoon)}`} />
         </StatRow>
 
         <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Aging
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:aging.aging')}</Text>
             {bucket ? (
-              <Pressable onPress={() => setBucket(null)} hitSlop={6} accessibilityRole="button" accessibilityLabel="Clear bucket filter">
-                <Text variant="caption" tone="primary" weight="600">
-                  Clear
-                </Text>
+              <Pressable onPress={() => setBucket(null)} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:aging.clearBucket')}>
+                <Text variant="caption" tone="primary" weight="600">{tr('sales:aging.clear')}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -129,7 +127,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
         <Segmented
           options={[
             { value: 'all', label: 'All' },
-            { value: 'overdue', label: 'Overdue' },
+            { value: 'overdue', label: tr('sales:aging.overdue') },
             { value: 'dueSoon', label: 'Due soon' },
           ]}
           value={mode}
@@ -150,7 +148,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
         {byParty.length === 0 ? (
           <Card padded={false}>
-            <EmptyState illustration="all-settled" icon="check-all" title="Nothing outstanding" message={isReceivable ? 'Every invoice has been settled.' : 'You are all paid up.'} compact />
+            <EmptyState illustration="all-settled" icon="check-all" title={tr('sales:aging.nothingOutstanding')} message={isReceivable ? 'Every invoice has been settled.' : 'You are all paid up.'} compact />
           </Card>
         ) : (
           byParty.map((group) => {
@@ -212,7 +210,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
                 <View style={{ flexDirection: 'row', gap: t.spacing.md, padding: t.spacing.lg, paddingTop: t.spacing.sm }}>
                   {isReceivable ? (
-                    <Button title="Remind" variant="ghost" icon="bell-ring-outline" size="sm" onPress={() => setReminderFor(group.id)} style={{ flex: 1 }} />
+                    <Button title={tr('sales:aging.remind')} variant="ghost" icon="bell-ring-outline" size="sm" onPress={() => setReminderFor(group.id)} style={{ flex: 1 }} />
                   ) : null}
                   <Button
                     title={isReceivable ? 'Record payment' : 'Pay'}
@@ -231,23 +229,23 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
       <Sheet
         visible={!!reminderFor}
         onClose={() => setReminderFor(null)}
-        title="Send a reminder"
+        title={tr('sales:aging.sendReminder')}
         subtitle={reminderParty?.name}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <Button
-              title="WhatsApp"
+              title={tr('sales:aging.whatsapp')}
               icon="whatsapp"
               style={{ flex: 1 }}
               onPress={() => {
                 const phone = (reminderParty?.phone ?? '').replace(/[^0-9]/g, '');
                 Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(reminderText)}`).catch(() => {});
                 setReminderFor(null);
-                toast.show('Reminder opened in WhatsApp', 'success');
+                toast.show(tr('sales:aging.openedWhatsapp'), 'success');
               }}
             />
             <Button
-              title="Email"
+              title={tr('sales:aging.email')}
               variant="secondary"
               icon="email-outline"
               style={{ flex: 1 }}
@@ -256,7 +254,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                   `mailto:${reminderParty?.email ?? ''}?subject=${encodeURIComponent('Payment reminder')}&body=${encodeURIComponent(reminderText)}`,
                 ).catch(() => {});
                 setReminderFor(null);
-                toast.show('Reminder opened in email', 'success');
+                toast.show(tr('sales:aging.openedEmail'), 'success');
               }}
             />
           </View>
@@ -268,9 +266,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
               {reminderText}
             </Text>
           </Card>
-          <Text variant="caption" tone="muted">
-            The message is prepared for you — you send it yourself, so nothing leaves the app without your say-so.
-          </Text>
+          <Text variant="caption" tone="muted">{tr('sales:aging.reminderNote')}</Text>
         </View>
       </Sheet>
     </View>

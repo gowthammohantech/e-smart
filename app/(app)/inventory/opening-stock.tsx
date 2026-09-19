@@ -20,7 +20,7 @@ import { today } from '@/lib/date';
 
 export default function OpeningStock() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -78,14 +78,14 @@ export default function OpeningStock() {
             affect your sales or purchase figures.
           </Text>
         </Card>
-        <DateField label="As on" value={date} onChange={setDate} />
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search items" />
+        <DateField label={tr('inventory:opening.asOn')} value={date} onChange={setDate} />
+        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:opening.search')} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>
           {filtered.length === 0 ? (
-            <EmptyState illustration="no-items" icon="package-variant" title="No stock-tracked items" compact />
+            <EmptyState illustration="no-items" icon="package-variant" title={tr('inventory:opening.noTracked')} compact />
           ) : (
             filtered.map((item, i) => (
               <View
@@ -142,7 +142,7 @@ export default function OpeningStock() {
             {formatMoney(money(totalValue, baseCurrency))}
           </Text>
         </View>
-        <Button title="Save opening stock" onPress={save} disabled={entered.length === 0} fullWidth size="lg" />
+        <Button title={tr('inventory:opening.submit')} onPress={save} disabled={entered.length === 0} fullWidth size="lg" />
       </View>
     </View>
   );
