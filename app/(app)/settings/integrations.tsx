@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ const GROUPS: { key: Integration['category']; title: string; blurb: string }[] =
 
 export default function Integrations() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const toast = useToast();
   const router = useRouter();
 
@@ -28,7 +30,7 @@ export default function Integrations() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Integrations' }} />
+      <Stack.Screen options={{ title: tr('nav:title.integrations') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>

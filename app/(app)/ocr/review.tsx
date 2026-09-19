@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,7 @@ function confidenceTone(c: number): 'success' | 'warning' | 'danger' {
 
 export default function OcrReview() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -41,7 +43,7 @@ export default function OcrReview() {
   if (!result) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <Stack.Screen options={{ title: 'Review' }} />
+        <Stack.Screen options={{ title: tr('nav:title.review') }} />
         <EmptyState
           illustration="no-scan-result"
               icon="text-recognition"
@@ -60,7 +62,7 @@ export default function OcrReview() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Review extraction' }} />
+      <Stack.Screen options={{ title: tr('nav:title.reviewExtraction') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         {result.imageUri ? (

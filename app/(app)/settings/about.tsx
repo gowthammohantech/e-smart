@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Linking, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -11,10 +12,11 @@ import { ILLUSTRATION_CREDIT } from '@/illustrations/registry';
 
 export default function About() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'About' }} />
+      <Stack.Screen options={{ title: tr('nav:title.about') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
         <Card style={{ alignItems: 'center', gap: t.spacing.md, paddingVertical: t.spacing.xxl }}>

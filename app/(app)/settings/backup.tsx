@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, Share, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -25,6 +26,7 @@ import { formatDateTime } from '@/lib/date';
 
 export default function BackupExport() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -93,7 +95,7 @@ export default function BackupExport() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Backup & export' }} />
+      <Stack.Screen options={{ title: tr('nav:title.backupAndExport') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: t.spacing.sm }}>

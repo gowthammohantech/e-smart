@@ -89,5 +89,35 @@
     "createdDraft": "Created a draft {{kind, lowercase}}",
     "shareTitle": "{{kind}} {{number}}",
     "shareMessage": "{{kind}} {{number}} — {{amount}}"
+  },
+  "component": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "search": "Search",
+    "clearSearch": "Clear search",
+    "close": "Close",
+    "create": "Create",
+    "offline": "Offline",
+    "notifications": "Notifications",
+    "business": "Business",
+    "allBranches": "All branches",
+    "switchBranch": "Switch branch. Current: {{branch}}"
+  },
+  "totals": {
+    "subtotal": "Subtotal",
+    "lineDiscounts": "Line discounts",
+    "taxableValue": "Taxable value",
+    "discountOnTotal": "Discount on total",
+    "otherCharges": "Other charges",
+    "roundOff": "Round off",
+    "total": "Total"
+  },
+  "quickAction": {
+    "newInvoice": "New invoice",
+    "newQuote": "New quote",
+    "receivePayment": "Receive payment",
+    "addExpense": "Add expense",
+    "addCustomer": "Add customer",
+    "addItem": "Add item"
   }
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Dimensions,
@@ -56,6 +57,7 @@ export function Sheet({
   contentStyle,
 }: Props) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const insets = useSafeAreaInsets();
   // Lazy state rather than a ref, so the animated values are never read
   // during render.
@@ -110,7 +112,7 @@ export function Sheet({
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <Animated.View style={{ flex: 1, backgroundColor: t.c.overlay, opacity: fade }}>
-        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close" accessibilityRole="button" />
+        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel={tr('common:component.close')} accessibilityRole="button" />
       </Animated.View>
 
       <Animated.View
@@ -161,7 +163,7 @@ export function Sheet({
               onPress={onClose}
               hitSlop={10}
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel={tr('common:component.close')}
               style={{
                 width: 30,
                 height: 30,

@@ -19,7 +19,7 @@ import { useBaseCurrency, useParties, usePayments } from '@/store/selectors';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['common', 'domain']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();

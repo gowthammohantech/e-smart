@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import { formatMoney, formatQty } from '@/lib/format';
  */
 export default function ScanBarcode() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
 
   const items = useItems();
@@ -29,7 +31,7 @@ export default function ScanBarcode() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Scan barcode' }} />
+      <Stack.Screen options={{ title: tr('nav:title.scanBarcode') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <Card

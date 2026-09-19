@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback} from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIs
 
 export default function StockMovements() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
 
   const movements = useStockMovements();
@@ -43,7 +45,7 @@ export default function StockMovements() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Stock movements' }} />
+      <Stack.Screen options={{ title: tr('nav:title.stockMovements') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search by item or reference" />

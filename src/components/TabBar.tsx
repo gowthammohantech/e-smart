@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, Keyboard, LayoutChangeEvent, Platform, Pressable, View } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -43,6 +44,7 @@ export function TabBar({
   lixiNudge = 0,
 }: TabBarProps & { visible: readonly string[]; lixiNudge?: number }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [width, setWidth] = useState(0);
@@ -103,7 +105,7 @@ export function TabBar({
         onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
         accessibilityRole="tab"
         accessibilityState={{ selected: focused }}
-        accessibilityLabel={badge ? `${label}, ${badge} new` : label}
+        accessibilityLabel={badge ? tr('nav:tabBadgeA11y', { label, count: badge }) : label}
         style={{ flex: 1, height: BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 3 }}
       >
         <View>
@@ -129,7 +131,26 @@ export function TabBar({
             </View>
           ) : null}
         </View>
-        <Text style={{ color, fontSize: 10, fontWeight: focused ? '700' : '600' }}>{label}</Text>
+        {/* Tamil labels run 30-40% longer than English and there are up to
+            seven of them. `adjustsFontSizeToFit` is iOS-only, so Android
+            relies on the nine-grapheme budget the catalogue test enforces;
+            `includeFontPadding` reclaims the few pixels Tamil ascender
+            metrics would otherwise eat. */}
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="clip"
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={{
+            color,
+            fontSize: 10,
+            fontWeight: focused ? '700' : '600',
+            textAlign: 'center',
+            includeFontPadding: false,
+          }}
+        >
+          {label}
+        </Text>
       </Pressable>
     );
   };

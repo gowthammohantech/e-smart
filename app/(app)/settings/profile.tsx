@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/valid
 
 export default function Profile() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -47,7 +49,7 @@ export default function Profile() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: 'Your profile' }} />
+      <Stack.Screen options={{ title: tr('nav:title.yourProfile') }} />
 
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}

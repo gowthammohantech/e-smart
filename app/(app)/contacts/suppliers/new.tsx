@@ -1,11 +1,13 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { PartyForm } from '@/features/contacts/PartyForm';
 
 export default function NewSupplier() {
+  const { t: tr } = useTranslation(['nav']);
   return (
     <>
-      <Stack.Screen options={{ title: 'New supplier' }} />
+      <Stack.Screen options={{ title: tr('nav:title.newSupplier') }} />
       <PartyForm kind="supplier" />
     </>
   );

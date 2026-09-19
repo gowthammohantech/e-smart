@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -28,6 +29,7 @@ import { multiply } from '@/lib/money';
 
 export default function ItemDetail() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -58,7 +60,7 @@ export default function ItemDetail() {
   if (!item) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <Stack.Screen options={{ title: 'Item' }} />
+        <Stack.Screen options={{ title: tr('nav:title.item') }} />
         <EmptyState illustration="not-found" icon="package-variant-closed-remove" title="Not found" message="This item may have been deleted." />
       </View>
     );

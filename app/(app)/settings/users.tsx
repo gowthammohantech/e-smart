@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -30,6 +31,7 @@ const ROLES: { value: UserRole; label: string; description: string }[] = [
 
 export default function UserSettings() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -81,7 +83,7 @@ export default function UserSettings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Users & roles' }} />
+      <Stack.Screen options={{ title: tr('nav:title.usersAndRoles') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import { formatRelative } from '@/lib/date';
 
 export default function Devices() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const toast = useToast();
 
   const devices = useAppStore((s) => s.devices);
@@ -23,7 +25,7 @@ export default function Devices() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Devices & sessions' }} />
+      <Stack.Screen options={{ title: tr('nav:title.devicesAndSessions') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>

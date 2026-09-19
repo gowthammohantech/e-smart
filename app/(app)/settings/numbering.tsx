@@ -27,7 +27,7 @@ const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
 
 export default function NumberingSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['domain', 'nav']);
   const toast = useToast();
 
   const series = useNumberingSeries();
@@ -77,7 +77,7 @@ export default function NumberingSettings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Document numbering' }} />
+      <Stack.Screen options={{ title: tr('nav:title.documentNumbering') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>

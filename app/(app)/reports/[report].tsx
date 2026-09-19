@@ -57,7 +57,7 @@ const TITLES: Record<string, { title: string; subtitle?: string }> = {
 
 export default function Report() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['domain', 'nav']);
   const { report } = useLocalSearchParams<{ report: string }>();
   const key = String(report);
   const meta = TITLES[key];
@@ -122,7 +122,7 @@ export default function Report() {
   if (!meta) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <Stack.Screen options={{ title: 'Report' }} />
+        <Stack.Screen options={{ title: tr('nav:title.report') }} />
         <EmptyState illustration="unknown-report" icon="chart-box-outline" title="Unknown report" message="Pick a report from the Reports tab." />
       </View>
     );

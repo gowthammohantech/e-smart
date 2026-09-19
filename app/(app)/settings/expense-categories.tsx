@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -19,6 +20,7 @@ import { uid } from '@/lib/id';
 
 export default function ExpenseCategorySettings() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -48,7 +50,7 @@ export default function ExpenseCategorySettings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Expense categories' }} />
+      <Stack.Screen options={{ title: tr('nav:title.expenseCategories') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>

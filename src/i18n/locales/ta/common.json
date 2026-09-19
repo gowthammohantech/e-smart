@@ -89,5 +89,35 @@
     "createdDraft": "{{kind}} வரைவு உருவாக்கப்பட்டது",
     "shareTitle": "{{kind}} {{number}}",
     "shareMessage": "{{kind}} {{number}} — {{amount}}"
+  },
+  "component": {
+    "confirm": "உறுதிப்படுத்து",
+    "cancel": "ரத்து",
+    "search": "தேடு",
+    "clearSearch": "தேடலை அழி",
+    "close": "மூடு",
+    "create": "உருவாக்கு",
+    "offline": "இணையம் இல்லை",
+    "notifications": "அறிவிப்புகள்",
+    "business": "வணிகம்",
+    "allBranches": "அனைத்துக் கிளைகள்",
+    "switchBranch": "கிளையை மாற்று. தற்போது: {{branch}}"
+  },
+  "totals": {
+    "subtotal": "கூட்டுத்தொகை",
+    "lineDiscounts": "வரிசைத் தள்ளுபடிகள்",
+    "taxableValue": "வரி விதிக்கத்தக்க மதிப்பு",
+    "discountOnTotal": "மொத்தத்தில் தள்ளுபடி",
+    "otherCharges": "பிற கட்டணங்கள்",
+    "roundOff": "முழுமையாக்கல்",
+    "total": "மொத்தம்"
+  },
+  "quickAction": {
+    "newInvoice": "புதிய விலைப்பட்டியல்",
+    "newQuote": "புதிய விலை மதிப்பீடு",
+    "receivePayment": "கட்டணம் பெறு",
+    "addExpense": "செலவு சேர்",
+    "addCustomer": "வாடிக்கையாளர் சேர்",
+    "addItem": "பொருள் சேர்"
   }
 }

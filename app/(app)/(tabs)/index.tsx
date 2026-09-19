@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -41,6 +42,7 @@ import { openLixi } from '@/features/lixi/open';
 
 export default function Home() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common', 'nav']);
   const router = useRouter();
   const pullToLixi = useUiStore((s) => s.lixiAccess.pullDown);
 
@@ -432,7 +434,7 @@ export default function Home() {
       <Fab icon="plus" onPress={() => setActionsOpen(true)} bottom={0} />
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title="Create">
-        {quickActions(t.c.primary).filter((a) => canOpen(a.route)).map((a) => (
+        {quickActions(tr, t.c.primary).filter((a) => canOpen(a.route)).map((a) => (
           <Pressable
             key={a.key}
             onPress={() => {

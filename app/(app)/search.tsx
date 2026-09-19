@@ -37,7 +37,7 @@ type Result = {
 /** Global search across every record the active company owns. */
 export default function GlobalSearch() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['domain', 'nav']);
   const router = useRouter();
 
   const [query, setQuery] = useState('');
@@ -140,7 +140,7 @@ export default function GlobalSearch() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Search' }} />
+      <Stack.Screen options={{ title: tr('nav:title.search') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md }}>
         <SearchBar

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -15,6 +16,7 @@ import { fromMajor, toMajor } from '@/lib/money';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -42,7 +44,7 @@ export default function EInvoicingSettings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'E-invoicing & e-way bill' }} />
+      <Stack.Screen options={{ title: tr('nav:title.eInvoicingAndEWayBill') }} />
 
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }}

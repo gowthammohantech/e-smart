@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,8 +14,8 @@ export function ConfirmDialog({
   visible,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   destructive,
   onConfirm,
   onCancel,
@@ -31,6 +32,7 @@ export function ConfirmDialog({
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
@@ -85,9 +87,9 @@ export function ConfirmDialog({
           ) : null}
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md, marginTop: t.spacing.sm }}>
-            <Button title={cancelLabel} variant="ghost" onPress={onCancel} style={{ flex: 1 }} />
+            <Button title={cancelLabel ?? tr('common:component.cancel')} variant="ghost" onPress={onCancel} style={{ flex: 1 }} />
             <Button
-              title={confirmLabel}
+              title={confirmLabel ?? tr('common:component.confirm')}
               variant={destructive ? 'danger' : 'primary'}
               onPress={onConfirm}
               style={{ flex: 1 }}

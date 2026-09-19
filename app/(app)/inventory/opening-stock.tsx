@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ import { today } from '@/lib/date';
 
 export default function OpeningStock() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -67,7 +69,7 @@ export default function OpeningStock() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Opening stock' }} />
+      <Stack.Screen options={{ title: tr('nav:title.openingStock') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
         <Card variant="flat">

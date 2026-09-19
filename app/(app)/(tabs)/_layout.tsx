@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Platform, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { BottomTabBar } from 'expo-router/build/react-navigation/bottom-tabs';
@@ -16,15 +17,20 @@ import { TabSwipe } from '@/components/TabSwipe';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
-const TABS: { name: string; title: string; icon: IconName; activeIcon: IconName }[] = [
-  { name: 'index', title: 'Home', icon: 'home-outline', activeIcon: 'home' },
-  { name: 'sales', title: 'Sell', icon: 'trending-up', activeIcon: 'trending-up' },
-  { name: 'purchases', title: 'Buy', icon: 'cart-outline', activeIcon: 'cart' },
-  { name: 'inventory', title: 'Stock', icon: 'package-variant-closed', activeIcon: 'package-variant' },
-  { name: 'gst', title: 'GST', icon: 'shield-check-outline', activeIcon: 'shield-check' },
-  { name: 'contacts', title: 'People', icon: 'account-group-outline', activeIcon: 'account-group' },
-  { name: 'reports', title: 'Reports', icon: 'chart-box-outline', activeIcon: 'chart-box' },
-  { name: 'more', title: 'More', icon: 'dots-horizontal-circle-outline', activeIcon: 'dots-horizontal-circle' },
+/**
+ * Tab names are resolved at render, not stored here, so the bar follows a
+ * language switch. Labels are held to nine graphemes by the catalogue test:
+ * seven can show at once at fontSize 10, and `adjustsFontSizeToFit` is iOS-only.
+ */
+const TABS: { name: string; icon: IconName; activeIcon: IconName }[] = [
+  { name: 'index', icon: 'home-outline', activeIcon: 'home' },
+  { name: 'sales', icon: 'trending-up', activeIcon: 'trending-up' },
+  { name: 'purchases', icon: 'cart-outline', activeIcon: 'cart' },
+  { name: 'inventory', icon: 'package-variant-closed', activeIcon: 'package-variant' },
+  { name: 'gst', icon: 'shield-check-outline', activeIcon: 'shield-check' },
+  { name: 'contacts', icon: 'account-group-outline', activeIcon: 'account-group' },
+  { name: 'reports', icon: 'chart-box-outline', activeIcon: 'chart-box' },
+  { name: 'more', icon: 'dots-horizontal-circle-outline', activeIcon: 'dots-horizontal-circle' },
 ];
 
 /** Which tabs each plan shows, in bar order. The rest stay routable but unlisted. */
@@ -46,6 +52,7 @@ const VISIBLE = {
  */
 export default function TabsLayout() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const unread = useUnreadCount();
   const access = useUiStore((s) => s.lixiAccess);
   const markHintLearned = useUiStore((s) => s.markLixiHintLearned);
@@ -57,7 +64,18 @@ export default function TabsLayout() {
   const lixiNudge = compliance.eInvoice.failed + compliance.expiringSoon;
   const moduleSet = useModuleSet();
   const visible: readonly string[] = VISIBLE[moduleSet];
-  const swipeTabs = useMemo(() => visible.flatMap((name) => TABS.filter((tab) => tab.name === name)), [visible]);
+  // The swipe peek names the neighbouring tab, so it needs the label too.
+  // Rebuilt on a language change, or the peek keeps the old language's word.
+  const swipeTabs = useMemo(
+    () =>
+      visible.flatMap((name) =>
+        TABS.filter((tab) => tab.name === name).map((tab) => ({
+          ...tab,
+          title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
+        })),
+      ),
+    [visible, tr],
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -106,7 +124,7 @@ export default function TabsLayout() {
             name={tab.name}
             options={{
               href: visible.includes(tab.name) ? undefined : null,
-              title: tab.title,
+              title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
               tabBarBadge: tab.name === 'more' && unread > 0 ? unread : undefined,
               tabBarBadgeStyle: { backgroundColor: t.c.bad, fontSize: 10 },
               tabBarIcon: ({ color, focused }) => (

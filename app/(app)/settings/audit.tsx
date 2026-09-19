@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
 
 export default function AuditTrail() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const events = useAuditEvents();
   const [query, setQuery] = useState('');
 
@@ -36,7 +38,7 @@ export default function AuditTrail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Audit trail' }} />
+      <Stack.Screen options={{ title: tr('nav:title.auditTrail') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search the trail" />

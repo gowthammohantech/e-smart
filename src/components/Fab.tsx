@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +19,7 @@ export function Fab({
   bottom?: number;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const insets = useSafeAreaInsets();
 
   return (
@@ -28,7 +30,7 @@ export function Fab({
           onPress();
         }}
         accessibilityRole="button"
-        accessibilityLabel={label ?? 'Create'}
+        accessibilityLabel={label ?? tr('common:component.create')}
         style={({ pressed }) => [
           {
             height: 56,

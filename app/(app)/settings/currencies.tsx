@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -23,6 +24,7 @@ import { uid } from '@/lib/id';
 
 export default function CurrencySettings() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -75,7 +77,7 @@ export default function CurrencySettings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Currencies & rates' }} />
+      <Stack.Screen options={{ title: tr('nav:title.currenciesAndRates') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: t.spacing.sm }}>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -9,6 +10,7 @@ import { useDocument } from '@/store/selectors';
 
 export default function EditSalesOrder() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const document = useDocument(id);
@@ -16,7 +18,7 @@ export default function EditSalesOrder() {
   if (!document) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <Stack.Screen options={{ title: 'Edit' }} />
+        <Stack.Screen options={{ title: tr('nav:title.edit') }} />
         <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" />
       </View>
     );
@@ -24,7 +26,7 @@ export default function EditSalesOrder() {
 
   return (
     <>
-      <Stack.Screen options={{ title: `Edit ${document.number}` }} />
+      <Stack.Screen options={{ title: tr('nav:title.editNamed', { name: document.number }) }} />
       <DocumentEditor
         kind="salesOrder"
         documentId={document.id}

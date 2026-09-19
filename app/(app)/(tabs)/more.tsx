@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -32,6 +33,7 @@ type Entry = {
 
 export default function MoreTab() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav', 'common']);
   const router = useRouter();
   const toast = useToast();
 
@@ -53,74 +55,74 @@ export default function MoreTab() {
     ...(moduleSet === 'sales'
       ? [
           {
-            title: 'Sales',
+            title: tr('nav:more.group.sales'),
             entries: [
-              { label: 'Customers', icon: 'account-group-outline', route: '/(app)/(tabs)/contacts' },
-              { label: 'Items & services', icon: 'package-variant', route: '/(app)/catalog/items' },
-              { label: 'Reports', icon: 'chart-box-outline', route: '/(app)/(tabs)/reports' },
+              { label: tr('nav:more.entry.customers'), icon: 'account-group-outline', route: '/(app)/(tabs)/contacts' },
+              { label: tr('nav:more.entry.itemsAndServices'), icon: 'package-variant', route: '/(app)/catalog/items' },
+              { label: tr('nav:more.entry.reports'), icon: 'chart-box-outline', route: '/(app)/(tabs)/reports' },
             ] as Entry[],
           },
         ]
       : []),
     {
-      title: 'Money',
+      title: tr('nav:more.group.money'),
       entries: [
-        { label: 'Receivables', icon: 'clock-alert-outline', route: '/(app)/receivables' },
-        { label: 'Payables', icon: 'file-clock-outline', route: '/(app)/payables' },
-        { label: 'Payments received', icon: 'cash-plus', route: '/(app)/payments/received' },
-        { label: 'Payments made', icon: 'cash-minus', route: '/(app)/payments/made' },
-        { label: 'Expenses', icon: 'receipt-text-outline', route: '/(app)/expenses' },
+        { label: tr('nav:more.entry.receivables'), icon: 'clock-alert-outline', route: '/(app)/receivables' },
+        { label: tr('nav:more.entry.payables'), icon: 'file-clock-outline', route: '/(app)/payables' },
+        { label: tr('nav:more.entry.paymentsReceived'), icon: 'cash-plus', route: '/(app)/payments/received' },
+        { label: tr('nav:more.entry.paymentsMade'), icon: 'cash-minus', route: '/(app)/payments/made' },
+        { label: tr('nav:more.entry.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses' },
       ],
     },
     {
-      title: 'Tools',
+      title: tr('nav:more.group.tools'),
       entries: [
-        { label: 'Scan a bill or receipt', icon: 'text-recognition', route: '/(app)/ocr/capture' },
-        { label: 'Ask Lixi', icon: 'creation', route: '/(app)/lixi' },
-        { label: 'Global search', icon: 'magnify', route: '/(app)/search' },
-        { label: 'Notifications', icon: 'bell-outline', route: '/(app)/notifications', badge: unread ? String(unread) : undefined },
+        { label: tr('nav:more.entry.scanBill'), icon: 'text-recognition', route: '/(app)/ocr/capture' },
+        { label: tr('nav:more.entry.askLixi'), icon: 'creation', route: '/(app)/lixi' },
+        { label: tr('nav:more.entry.globalSearch'), icon: 'magnify', route: '/(app)/search' },
+        { label: tr('nav:more.entry.notifications'), icon: 'bell-outline', route: '/(app)/notifications', badge: unread ? String(unread) : undefined },
       ],
     },
     {
-      title: 'Business setup',
+      title: tr('nav:more.group.businessSetup'),
       entries: [
-        { label: 'Business profile', icon: 'domain', route: '/(app)/settings/company' },
-        { label: 'Branches', icon: 'warehouse', route: '/(app)/settings/branches' },
-        { label: 'Users & roles', icon: 'account-multiple-outline', route: '/(app)/settings/users' },
-        { label: 'Taxes', icon: 'percent-outline', route: '/(app)/settings/taxes' },
-        { label: 'Currencies & rates', icon: 'currency-usd', route: '/(app)/settings/currencies' },
-        { label: 'Document numbering', icon: 'numeric', route: '/(app)/settings/numbering' },
-        { label: 'Payment accounts', icon: 'bank-outline', route: '/(app)/settings/accounts' },
-        { label: 'Expense categories', icon: 'shape-outline', route: '/(app)/settings/expense-categories' },
+        { label: tr('nav:more.entry.businessProfile'), icon: 'domain', route: '/(app)/settings/company' },
+        { label: tr('nav:more.entry.branches'), icon: 'warehouse', route: '/(app)/settings/branches' },
+        { label: tr('nav:more.entry.usersAndRoles'), icon: 'account-multiple-outline', route: '/(app)/settings/users' },
+        { label: tr('nav:more.entry.taxes'), icon: 'percent-outline', route: '/(app)/settings/taxes' },
+        { label: tr('nav:more.entry.currenciesAndRates'), icon: 'currency-usd', route: '/(app)/settings/currencies' },
+        { label: tr('nav:more.entry.documentNumbering'), icon: 'numeric', route: '/(app)/settings/numbering' },
+        { label: tr('nav:more.entry.paymentAccounts'), icon: 'bank-outline', route: '/(app)/settings/accounts' },
+        { label: tr('nav:more.entry.expenseCategories'), icon: 'shape-outline', route: '/(app)/settings/expense-categories' },
       ],
     },
     {
-      title: 'Data & compliance',
+      title: tr('nav:more.group.dataCompliance'),
       entries: [
         {
-          label: 'GST compliance',
+          label: tr('nav:more.entry.gstCompliance'),
           icon: 'shield-check-outline',
           route: '/(app)/compliance',
           badge: complianceSummary.eInvoice.failed
             ? String(complianceSummary.eInvoice.failed)
             : undefined,
         },
-        { label: 'GSTR-1', icon: 'file-send-outline', route: '/(app)/gst/gstr1' },
-        { label: 'E-invoicing & e-way bill', icon: 'qrcode', route: '/(app)/settings/e-invoicing' },
-        { label: 'Transporters', icon: 'truck-outline', route: '/(app)/settings/transporters' },
-        { label: 'Integrations', icon: 'puzzle-outline', route: '/(app)/settings/integrations' },
-        { label: 'Backup & export', icon: 'database-export-outline', route: '/(app)/settings/backup' },
-        { label: 'Audit trail', icon: 'history', route: '/(app)/settings/audit' },
-        { label: 'Sync status', icon: 'sync', route: '/(app)/settings/sync', badge: offline ? 'Offline' : undefined },
+        { label: tr('nav:more.entry.gstr1'), icon: 'file-send-outline', route: '/(app)/gst/gstr1' },
+        { label: tr('nav:more.entry.eInvoicing'), icon: 'qrcode', route: '/(app)/settings/e-invoicing' },
+        { label: tr('nav:more.entry.transporters'), icon: 'truck-outline', route: '/(app)/settings/transporters' },
+        { label: tr('nav:more.entry.integrations'), icon: 'puzzle-outline', route: '/(app)/settings/integrations' },
+        { label: tr('nav:more.entry.backupAndExport'), icon: 'database-export-outline', route: '/(app)/settings/backup' },
+        { label: tr('nav:more.entry.auditTrail'), icon: 'history', route: '/(app)/settings/audit' },
+        { label: tr('nav:more.entry.syncStatus'), icon: 'sync', route: '/(app)/settings/sync', badge: offline ? tr('common:component.offline') : undefined },
       ],
     },
     {
-      title: 'Account',
+      title: tr('nav:more.group.account'),
       entries: [
-        { label: 'Devices & sessions', icon: 'cellphone-link', route: '/(app)/settings/devices' },
-        { label: 'Plan & billing', icon: 'credit-card-outline', route: '/(app)/settings/plan' },
-        { label: 'Appearance & language', icon: 'theme-light-dark', route: '/(app)/settings/appearance' },
-        { label: 'About', icon: 'information-outline', route: '/(app)/settings/about' },
+        { label: tr('nav:more.entry.devicesAndSessions'), icon: 'cellphone-link', route: '/(app)/settings/devices' },
+        { label: tr('nav:more.entry.planAndBilling'), icon: 'credit-card-outline', route: '/(app)/settings/plan' },
+        { label: tr('nav:more.entry.appearanceAndLanguage'), icon: 'theme-light-dark', route: '/(app)/settings/appearance' },
+        { label: tr('nav:more.entry.about'), icon: 'information-outline', route: '/(app)/settings/about' },
       ],
     },
   ];
@@ -130,7 +132,7 @@ export default function MoreTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="More" subtitle="Settings and tools" />
+      <AppHeader title={tr('nav:more.header.title')} subtitle={tr('nav:more.header.subtitle')} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 40 }}
@@ -173,17 +175,17 @@ export default function MoreTab() {
           </View>
         ))}
 
-        <SectionHeader title="Prototype" />
+        <SectionHeader title={tr('nav:more.group.prototype')} />
         <Card padded={false}>
           <ListRow
-            title="Reset demo data"
-            subtitle="Restore the sample business to its original state"
+            title={tr('nav:more.reset.row')}
+            subtitle={tr('nav:more.reset.rowSubtitle')}
             icon="restore"
             iconColor={t.c.warn}
             onPress={() => setConfirmReset(true)}
           />
           <ListRow
-            title="Sign out"
+            title={tr('nav:more.signOut.row')}
             icon="logout"
             iconColor={t.c.bad}
             destructive
@@ -193,29 +195,29 @@ export default function MoreTab() {
         </Card>
 
         <Text variant="micro" tone="muted" center style={{ marginTop: t.spacing.xl }}>
-          Elixir Books Smart · prototype build 1.0.0
+          {tr('nav:more.build', { version: '1.0.0' })}
         </Text>
       </ScrollView>
 
       <ConfirmDialog
         visible={confirmReset}
-        title="Reset demo data?"
-        message="Everything you've created in this prototype will be replaced with the original sample business. This cannot be undone."
-        confirmLabel="Reset"
+        title={tr('nav:more.reset.title')}
+        message={tr('nav:more.reset.message')}
+        confirmLabel={tr('nav:more.reset.confirm')}
         destructive
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => {
           resetDemoData();
           setConfirmReset(false);
-          toast.show('Demo data restored', 'success');
+          toast.show(tr('nav:more.reset.done'), 'success');
         }}
       />
 
       <ConfirmDialog
         visible={confirmSignOut}
-        title="Sign out?"
-        message="You can sign back in with the same demo credentials at any time."
-        confirmLabel="Sign out"
+        title={tr('nav:more.signOut.title')}
+        message={tr('nav:more.signOut.message')}
+        confirmLabel={tr('nav:more.signOut.confirm')}
         destructive
         icon="logout"
         onCancel={() => setConfirmSignOut(false)}

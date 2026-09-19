@@ -20,7 +20,7 @@ import { subtract } from '@/lib/money';
 
 export default function ExpenseDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['domain', 'nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -37,7 +37,7 @@ export default function ExpenseDetail() {
   if (!expense) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <Stack.Screen options={{ title: 'Expense' }} />
+        <Stack.Screen options={{ title: tr('nav:title.expense') }} />
         <EmptyState illustration="not-found" icon="receipt-text-outline" title="Not found" message="This expense may have been deleted." />
       </View>
     );

@@ -20,7 +20,7 @@ import { dateRangeLabel, paymentMethodLabel } from '@/i18n/labels';
 
 export default function ExpensesList() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -66,7 +66,7 @@ export default function ExpensesList() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Expenses' }} />
+      <Stack.Screen options={{ title: tr('nav:title.expenses') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search expenses" />

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ import { useUiStore } from '@/store/uiStore';
  */
 export function AppHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -99,28 +101,30 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text variant="title" weight="700" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {title ?? company?.name ?? 'Business'}
+              {title ?? company?.name ?? tr('common:component.business')}
             </Text>
             {!title ? <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} /> : null}
           </View>
           <Pressable
             onPress={() => setBranchOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Switch branch. Current: ${branch?.name ?? 'All branches'}`}
+            accessibilityLabel={tr('common:component.switchBranch', {
+              branch: branch?.name ?? tr('common:component.allBranches'),
+            })}
           >
             <Text variant="caption" tone="muted" numberOfLines={1}>
-              {subtitle ?? `${branch?.name ?? 'All branches'} · ${company?.baseCurrency ?? ''}`}
+              {subtitle ?? `${branch?.name ?? tr('common:component.allBranches')} · ${company?.baseCurrency ?? ''}`}
             </Text>
           </Pressable>
         </Pressable>
 
-        {offline ? <Badge label="Offline" tone="warning" icon="cloud-off-outline" size="sm" /> : null}
+        {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" /> : null}
         {!offline && pendingSync > 0 ? (
           <Badge label={`${pendingSync} queued`} tone="info" icon="sync" size="sm" />
         ) : null}
 
-        {iconButton('magnify', 'Search', () => router.push('/(app)/search'))}
-        {iconButton('bell-outline', 'Notifications', () => router.push('/(app)/notifications'), unread)}
+        {iconButton('magnify', tr('common:component.search'), () => router.push('/(app)/search'))}
+        {iconButton('bell-outline', tr('common:component.notifications'), () => router.push('/(app)/notifications'), unread)}
       </View>
 
       <SelectSheet

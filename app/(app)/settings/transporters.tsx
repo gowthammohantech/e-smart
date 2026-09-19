@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import { uid } from '@/lib/id';
 /** The transporter master, used for Part-B of an e-way bill. */
 export default function TransportersSettings() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const toast = useToast();
 
   const transporters = useTransporters();
@@ -65,7 +67,7 @@ export default function TransportersSettings() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Transporters' }} />
+      <Stack.Screen options={{ title: tr('nav:title.transporters') }} />
       <Screen bottomInset={80}>
         {transporters.length === 0 ? (
           <Card padded={false}>

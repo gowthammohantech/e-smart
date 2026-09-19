@@ -1,8 +1,10 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { Translate } from '@/i18n/labels';
 import { Text } from './Text';
 import { useCanOpen } from '@/store/selectors';
 
@@ -14,23 +16,25 @@ type Action = {
   color?: string;
 };
 
-/** The six quick actions named in the PRD. */
-export function quickActions(primary: string): Action[] {
+/** The six quick actions named in the PRD. Takes the translator, since it is
+ * called outside a component as well as inside one. */
+export function quickActions(tr: Translate, primary: string): Action[] {
   return [
-    { key: 'invoice', label: 'New invoice', icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', color: primary },
-    { key: 'quote', label: 'New quote', icon: 'file-percent-outline', route: '/(app)/sales/quotes/new' },
-    { key: 'receive', label: 'Receive payment', icon: 'cash-plus', route: '/(app)/payments/new?direction=received' },
-    { key: 'expense', label: 'Add expense', icon: 'receipt-text-outline', route: '/(app)/expenses/new' },
-    { key: 'customer', label: 'Add customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new' },
-    { key: 'item', label: 'Add item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new' },
+    { key: 'invoice', label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', color: primary },
+    { key: 'quote', label: tr('common:quickAction.newQuote'), icon: 'file-percent-outline', route: '/(app)/sales/quotes/new' },
+    { key: 'receive', label: tr('common:quickAction.receivePayment'), icon: 'cash-plus', route: '/(app)/payments/new?direction=received' },
+    { key: 'expense', label: tr('common:quickAction.addExpense'), icon: 'receipt-text-outline', route: '/(app)/expenses/new' },
+    { key: 'customer', label: tr('common:quickAction.addCustomer'), icon: 'account-plus-outline', route: '/(app)/contacts/customers/new' },
+    { key: 'item', label: tr('common:quickAction.addItem'), icon: 'tag-plus-outline', route: '/(app)/catalog/items/new' },
   ];
 }
 
 export function QuickActions() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const router = useRouter();
   const canOpen = useCanOpen();
-  const actions = quickActions(t.c.primary).filter((a) => canOpen(a.route));
+  const actions = quickActions(tr, t.c.primary).filter((a) => canOpen(a.route));
 
   return (
     <ScrollView

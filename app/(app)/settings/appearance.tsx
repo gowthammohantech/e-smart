@@ -103,7 +103,7 @@ function RadioRow({ label, description, icon, active, last, onPress }: RadioRowP
 
 export default function Appearance() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['settings']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const baseCurrency = useBaseCurrency();
   const themeMode = useUiStore((s) => s.themeMode);
   const setThemeMode = useUiStore((s) => s.setThemeMode);
@@ -117,7 +117,7 @@ export default function Appearance() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Appearance' }} />
+      <Stack.Screen options={{ title: tr('nav:title.appearance') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>
@@ -135,15 +135,15 @@ export default function Appearance() {
         </Card>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          {tr('language.sectionLabel')}
+          {tr('settings:language.sectionLabel')}
         </Text>
 
         <Card padded={false}>
           {LANGUAGE_OPTIONS.map((o, i) => (
             <RadioRow
               key={o.value}
-              label={o.value === 'system' ? tr('language.matchDevice') : o.label}
-              description={o.value === 'system' ? tr('language.matchDeviceHint') : o.description}
+              label={o.value === 'system' ? tr('settings:language.matchDevice') : o.label}
+              description={o.value === 'system' ? tr('settings:language.matchDeviceHint') : o.description}
               icon={o.icon}
               active={language === o.value}
               last={i === LANGUAGE_OPTIONS.length - 1}
@@ -153,7 +153,7 @@ export default function Appearance() {
         </Card>
 
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-          {tr('language.note')}
+          {tr('settings:language.note')}
         </Text>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>

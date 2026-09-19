@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
@@ -54,36 +55,37 @@ export function TotalsPanel({
   compact?: boolean;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const components = flattenTaxComponents(totals.taxLines, currency);
   const showFx = !!baseCurrency && baseCurrency !== currency;
 
   return (
     <View style={{ gap: compact ? 6 : 8 }}>
-      <Row label="Subtotal" value={formatMoney(totals.subtotal)} />
+      <Row label={tr('common:totals.subtotal')} value={formatMoney(totals.subtotal)} />
 
       {!isZero(totals.lineDiscount) ? (
-        <Row label="Line discounts" value={`− ${formatMoney(totals.lineDiscount)}`} tone="good" />
+        <Row label={tr('common:totals.lineDiscounts')} value={`− ${formatMoney(totals.lineDiscount)}`} tone="good" />
       ) : null}
 
-      <Row label="Taxable value" value={formatMoney(totals.taxableAmount)} />
+      <Row label={tr('common:totals.taxableValue')} value={formatMoney(totals.taxableAmount)} />
 
       {components.map((c) => (
         <Row key={c.label} label={c.label} value={formatMoney(c.amount)} />
       ))}
 
       {!isZero(totals.documentDiscount) ? (
-        <Row label="Discount on total" value={`− ${formatMoney(totals.documentDiscount)}`} tone="good" />
+        <Row label={tr('common:totals.discountOnTotal')} value={`− ${formatMoney(totals.documentDiscount)}`} tone="good" />
       ) : null}
 
-      {!isZero(totals.charges) ? <Row label="Other charges" value={formatMoney(totals.charges)} /> : null}
+      {!isZero(totals.charges) ? <Row label={tr('common:totals.otherCharges')} value={formatMoney(totals.charges)} /> : null}
 
       {!isZero(totals.roundOff) ? (
-        <Row label="Round off" value={formatMoney(totals.roundOff, { signed: true })} />
+        <Row label={tr('common:totals.roundOff')} value={formatMoney(totals.roundOff, { signed: true })} />
       ) : null}
 
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 4 }} />
 
-      <Row label="Total" value={formatMoney(totals.grandTotal)} bold />
+      <Row label={tr('common:totals.total')} value={formatMoney(totals.grandTotal)} bold />
 
       {showFx ? (
         <Text variant="micro" tone="muted" style={{ textAlign: 'right' }}>
