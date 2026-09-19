@@ -1,1 +1,195 @@
-{}
+{
+  "greet": {
+    "named": "Hi {{name}}, I'm Lixi.",
+    "anon": "Hi, I'm Lixi.",
+    "headsUp": "Heads up: {{flags}}.",
+    "tidy": "Your books look tidy today.",
+    "promise": "I read your books but never change them without asking."
+  },
+  "flag": {
+    "overdueInvoice_one": "{{count}} overdue invoice",
+    "overdueInvoice_other": "{{count}} overdue invoices",
+    "gstItem_one": "{{count}} GST item",
+    "gstItem_other": "{{count}} GST items",
+    "lowStock_one": "{{count}} item low on stock",
+    "lowStock_other": "{{count}} items low on stock"
+  },
+  "suggestion": {
+    "sales": "How are sales this month?",
+    "owed": "Who owes me money?",
+    "gst": "Anything wrong with GST?",
+    "stock": "What is low on stock?",
+    "spend": "What did I spend last month?",
+    "draftInvoice": "Draft a new invoice"
+  },
+  "tabQuestion": {
+    "index": "How is business this month?",
+    "sales": "Any drafts or quotes waiting?",
+    "purchases": "What do I owe suppliers?",
+    "inventory": "What is low on stock?",
+    "contacts": "Top customers",
+    "reports": "What did I spend last month?",
+    "gst": "Anything wrong with GST?",
+    "more": "Anything wrong with GST?"
+  },
+  "empty": {
+    "ask": "Ask me anything about your books."
+  },
+  "doc": {
+    "summary": "{{kind}} {{number}} for {{party}}, dated {{date}}. It's {{status, lowercase}}.",
+    "unknownParty": "an unknown party",
+    "total": "Total",
+    "eInvoice": "E-invoice",
+    "open": "Open {{number}}"
+  },
+  "create": {
+    "confirm": "Open \"{{label}}\"?",
+    "quote": "I can open a fresh quotation for you to fill in.",
+    "purchaseOrder": "I can open a purchase order for you to fill in.",
+    "purchaseBill": "I can open a purchase bill; you add the supplier and lines.",
+    "expense": "I can open a new expense for you.",
+    "payment": "I can open a payment receipt so you can record what came in.",
+    "supplier": "I can open a new supplier for you.",
+    "customer": "I can open a new customer; the GSTIN fills in their state.",
+    "item": "I can open a new item; give it an HSN/SAC so GST lands on the right slab.",
+    "invoice": "I can open a new tax invoice. I won't finalise it for you — you'll pick the customer and items and issue it yourself.",
+    "labelQuote": "New quote",
+    "labelPurchaseOrder": "New purchase order",
+    "labelPurchaseBill": "New purchase bill",
+    "labelExpense": "Record expense",
+    "labelPayment": "Receive payment",
+    "labelSupplier": "Add supplier",
+    "labelCustomer": "Add customer",
+    "labelItem": "Add item",
+    "labelInvoice": "New invoice"
+  },
+  "party": {
+    "squareSupplier": "You're square with {{party}}.",
+    "paidUp": "{{party}} is fully paid up.",
+    "youOwe_one": "You owe {{party}} {{amount}} on {{count}} bill{{late}}.",
+    "youOwe_other": "You owe {{party}} {{amount}} on {{count}} bills{{late}}.",
+    "latePart": ", {{count}} past due",
+    "owesYou_one": "{{party}} owes you {{amount}} across {{count}} invoice{{late}}.",
+    "owesYou_other": "{{party}} owes you {{amount}} across {{count}} invoices{{late}}.",
+    "overduePart": ", {{count}} of them overdue",
+    "billedToYou": "Billed to you",
+    "billed": "Billed",
+    "outstanding": "Outstanding",
+    "bills": "Bills",
+    "invoices": "Invoices",
+    "openParty": "Open {{party}}"
+  },
+  "gst": {
+    "clear_one": "All clear. {{count}} IRN registered and nothing waiting on the portal. You've charged {{tax}} GST this month.",
+    "clear_other": "All clear. {{count}} IRNs registered and nothing waiting on the portal. You've charged {{tax}} GST this month.",
+    "rejected_one": "The IRP rejected {{count}} invoice — fix and resubmit before filing.",
+    "rejected_other": "The IRP rejected {{count}} invoices — fix and resubmit before filing.",
+    "expiring_one": "{{count}} e-way bill runs out within a day; extend if the goods are still moving.",
+    "expiring_other": "{{count}} e-way bills run out within a day; extend if the goods are still moving.",
+    "missing_one": "{{count}} document needs an e-way bill and doesn't have one.",
+    "missing_other": "{{count}} documents need an e-way bill and don't have one.",
+    "thisMonth": "GST this month",
+    "irns": "IRNs",
+    "rejectedStat": "Rejected",
+    "awaiting": "Awaiting IRN",
+    "liveEwb": "Live EWBs",
+    "expiredEwb": "Expired EWBs",
+    "action": "GST compliance"
+  },
+  "payables": {
+    "none": "You don't owe any supplier right now.",
+    "summary_one": "You owe suppliers {{amount}} on {{count}} bill{{late}}.{{next}}",
+    "summary_other": "You owe suppliers {{amount}} on {{count}} bills{{late}}.{{next}}",
+    "latePart": ", {{amount}} of it past due",
+    "nextPart": " Next up: {{party}} on {{number}}{{due}}.",
+    "duePart": ", due {{date}}",
+    "payable": "Payable",
+    "pastDue": "Past due",
+    "dueSoon": "Due in 7 days",
+    "action": "Payables"
+  },
+  "receivables": {
+    "none": "Nobody owes you anything right now. Nice.",
+    "summary": "{{amount}} is still to come in{{late}}.{{worst}}",
+    "latePart": ", and {{amount}} of it is overdue",
+    "worstPart": " Biggest: {{party}} on {{number}}, {{days}} days late.",
+    "outstanding": "Outstanding",
+    "overdue": "Overdue",
+    "invoices": "Invoices",
+    "action": "Receivables"
+  },
+  "stock": {
+    "low_one": "{{count}} item is at or below the reorder level.",
+    "low_other": "{{count}} items are at or below the reorder level.",
+    "none": "Nothing is below its reorder level right now.",
+    "action": "Low stock"
+  },
+  "spend": {
+    "summary_one": "{{period}} you spent {{amount}} across {{count}} expense. You also owe suppliers {{payable}}.",
+    "summary_other": "{{period}} you spent {{amount}} across {{count}} expenses. You also owe suppliers {{payable}}.",
+    "thisMonth": "This month",
+    "lastMonth": "Last month",
+    "spent": "Spent",
+    "expenses": "Expenses",
+    "owedToSuppliers": "Owed to suppliers",
+    "action": "Expense report"
+  },
+  "top": {
+    "none": "No invoices yet, so no leaderboard. Raise the first one and I'll start counting.",
+    "leads": "{{party}} leads your sales. Here are your top {{count}}:",
+    "about": "About {{party}}"
+  },
+  "drafts": {
+    "none": "Nothing half-done. Every invoice is issued and no quote is waiting.",
+    "summary": "{{drafts}} to finish and {{quotes}} awaiting a reply, worth {{amount}}.",
+    "draftInvoice_one": "{{count}} draft invoice",
+    "draftInvoice_other": "{{count}} draft invoices",
+    "quote_one": "{{count}} quote",
+    "quote_other": "{{count}} quotes",
+    "invoices": "Invoices",
+    "quotes": "Quotes"
+  },
+  "sales": {
+    "summary_one": "You've invoiced {{amount}} {{period}} across {{count}} invoice — about {{average}} each — and collected {{received}}.",
+    "summary_other": "You've invoiced {{amount}} {{period}} across {{count}} invoices — about {{average}} each — and collected {{received}}.",
+    "none": "No invoices {{period}} yet.{{collected}}",
+    "collectedPart": " You did collect {{amount}}.",
+    "periodToday": "today",
+    "periodLastMonth": "last month",
+    "periodLast7": "in the last 7 days",
+    "periodThisFy": "this financial year",
+    "periodThisMonth": "this month",
+    "invoiced": "Invoiced",
+    "collected": "Collected",
+    "invoices": "Invoices",
+    "action": "Sales report"
+  },
+  "thanks": {
+    "reply": "Anytime. I am one tap away in the middle of the bar."
+  },
+  "fallback": {
+    "text": "I didn't catch that. I'm best with sales, who owes you, what you owe, stock, spending, GST and e-way bills — or give me a document number or a party's name."
+  },
+  "upsell": {
+    "text": "{{module}} isn't part of {{plan}}, so I have nothing to read there. {{fullPlan}} adds buying, stock and expenses to the same books.",
+    "seePlans": "See plans"
+  },
+  "ui": {
+    "closeLixi": "Close Lixi",
+    "newChat": "Start a new chat",
+    "inputPlaceholder": "Ask Lixi about sales, dues, GST…",
+    "messageLixi": "Message Lixi",
+    "send": "Send",
+    "openOnlyNote": "Lixi only opens the screen — you decide what gets saved.",
+    "open": "Open",
+    "thinking": "Lixi is thinking",
+    "prompt": "What can I dig up?",
+    "gotIt": "Got it",
+    "gotItA11y": "Got it, don't show this tip again"
+  },
+  "hint": {
+    "swipeTabs": "Swipe left or right to switch tabs",
+    "swipeUp": "Swipe up on the bar to ask Lixi",
+    "holdTab": "Hold any tab to ask Lixi about it"
+  }
+}

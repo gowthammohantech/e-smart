@@ -1,11 +1,14 @@
 import { BusinessDocument, DocumentKind, Expense, Party, Payment, PlanTier } from '@/types';
 import { Money, money, sum, zero } from '@/lib/money';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, listJoin } from '@/lib/format';
 import { DateRange, DateRangePreset, inRange, resolveRange } from '@/lib/date';
 import { AgingSummary, OutstandingDoc } from '@/domain/receivables';
-import { documentKindLabel, moduleLabel, statusLabel, type Translate } from '@/i18n/labels';
+import { documentKindLabel, keyLabel, moduleLabel, statusLabel, type Translate } from '@/i18n/labels';
+import { E_INVOICE_STATUS_META } from '@/features/compliance/complianceMeta';
 import { FULL_PLAN, Module, canOpen, hasModule, planInfo } from '@/domain/plan';
 import i18n from '@/i18n';
+import type { LanguageCode } from '@/i18n/config';
+import { type IntentId, stemsFor } from './keywords';
 
 /**
  * Lixi, the in-app assistant. The prototype has no server, so Lixi reads the
@@ -47,10 +50,10 @@ export type LixiContext = {
  * module stays free of React and a test can pass a translator that echoes its
  * key instead of asserting on prose.
  */
-export type LixiDeps = { t: Translate };
+export type LixiDeps = { t: Translate; lang: LanguageCode };
 
 /** The live translator, read at call time so a language switch is picked up. */
-export const liveDeps = (): LixiDeps => ({ t: i18n.t });
+export const liveDeps = (): LixiDeps => ({ t: i18n.t, lang: (i18n.language as LanguageCode) ?? 'en' });
 
 export type LixiStat = { label: string; value: string; tone?: 'good' | 'warn' | 'bad' };
 
@@ -85,65 +88,92 @@ function has(q: string, ...words: string[]) {
   return words.some((w) => q.includes(w));
 }
 
-function plural(n: number, one: string, many = `${one}s`) {
-  return `${n} ${n === 1 ? one : many}`;
+/**
+ * Tamil input needs normalising before anything is compared: several IMEs
+ * emit decomposed sequences, and without NFC every Tamil question falls
+ * straight through to "I didn't catch that" — which presents as "Tamil
+ * doesn't work at all" rather than as a bug in one intent.
+ *
+ * `toLowerCase` is a harmless no-op on Tamil, which has no case.
+ */
+function normalise(input: string): string {
+  return input.normalize('NFC').toLowerCase().trim();
+}
+
+/** Whether a question hits an intent, in English or the active language. */
+function hits(q: string, intent: IntentId, deps: LixiDeps): boolean {
+  return has(q, ...stemsFor(intent, deps.lang));
 }
 
 /** The starter prompts shown before the first message. */
-const SUGGESTIONS: { text: string; module?: Module }[] = [
-  { text: 'How are sales this month?' },
-  { text: 'Who owes me money?' },
-  { text: 'Anything wrong with GST?' },
-  { text: 'What is low on stock?', module: 'inventory' },
-  { text: 'What did I spend last month?', module: 'expenses' },
-  { text: 'Draft a new invoice' },
+const SUGGESTIONS: { key: string; module?: Module }[] = [
+  { key: 'lixi:suggestion.sales' },
+  { key: 'lixi:suggestion.owed' },
+  { key: 'lixi:suggestion.gst' },
+  { key: 'lixi:suggestion.stock', module: 'inventory' },
+  { key: 'lixi:suggestion.spend', module: 'expenses' },
+  { key: 'lixi:suggestion.draftInvoice' },
 ];
 
-export function lixiSuggestions(plan: PlanTier = 'pro'): string[] {
-  return SUGGESTIONS.filter((s) => !s.module || hasModule(plan, s.module)).map((s) => s.text);
+export function lixiSuggestions(plan: PlanTier = 'pro', deps: LixiDeps = liveDeps()): string[] {
+  return SUGGESTIONS.filter((s) => !s.module || hasModule(plan, s.module)).map((s) => deps.t(s.key));
 }
 
 /**
  * What Lixi is asked when a tab is held down: the question that tab's screen
  * most often raises. Keys are the tab route names.
  */
-export const TAB_QUESTIONS: Record<string, string> = {
-  index: 'How is business this month?',
-  sales: 'Any drafts or quotes waiting?',
-  purchases: 'What do I owe suppliers?',
-  inventory: 'What is low on stock?',
-  contacts: 'Top customers',
-  reports: 'What did I spend last month?',
-  gst: 'Anything wrong with GST?',
-  more: 'Anything wrong with GST?',
+const TAB_QUESTION_KEYS: Record<string, string> = {
+  index: 'lixi:tabQuestion.index',
+  sales: 'lixi:tabQuestion.sales',
+  purchases: 'lixi:tabQuestion.purchases',
+  inventory: 'lixi:tabQuestion.inventory',
+  contacts: 'lixi:tabQuestion.contacts',
+  reports: 'lixi:tabQuestion.reports',
+  gst: 'lixi:tabQuestion.gst',
+  more: 'lixi:tabQuestion.more',
 };
 
+/** The tabs that have a held-tab question. */
+export const LIXI_TABS = Object.keys(TAB_QUESTION_KEYS);
+
+/** The question a held tab asks, in the active language. */
+export function tabQuestion(tab: string, deps: LixiDeps = liveDeps()): string | undefined {
+  const key = TAB_QUESTION_KEYS[tab];
+  return key ? deps.t(key) : undefined;
+}
+
 export function greet(ctx: LixiContext, deps: LixiDeps = liveDeps()): LixiReply {
+  const { t } = deps;
   const first = ctx.userName?.split(' ')[0];
   const gst = ctx.compliance.failed + ctx.compliance.ewbExpiringSoon;
   const overdue = ctx.receivables.outstanding.filter((o) => o.daysOverdue > 0).length;
   const low = hasModule(ctx.plan ?? 'pro', 'inventory') ? ctx.lowStock.length : 0;
   const flags = [
-    overdue ? plural(overdue, 'overdue invoice') : null,
-    gst ? plural(gst, 'GST item') : null,
-    low ? plural(low, 'item') + ' low on stock' : null,
-  ].filter(Boolean);
-  const heads = flags.length ? `Heads up: ${flags.join(', ')}.` : 'Your books look tidy today.';
-  return {
-    text: `Hi${first ? ` ${first}` : ''}, I'm Lixi. ${heads} I read your books but never change them without asking.`,
-  };
+    overdue ? t('lixi:flag.overdueInvoice', { count: overdue }) : null,
+    gst ? t('lixi:flag.gstItem', { count: gst }) : null,
+    low ? t('lixi:flag.lowStock', { count: low }) : null,
+  ].filter((f): f is string => Boolean(f));
+  const heads = flags.length ? t('lixi:greet.headsUp', { flags: listJoin(flags) }) : t('lixi:greet.tidy');
+  const hello = first ? t('lixi:greet.named', { name: first }) : t('lixi:greet.anon');
+  return { text: `${hello} ${heads} ${t('lixi:greet.promise')}` };
 }
 
 /** Routes for the forms Lixi can open, each confirmed first. */
-const CREATE: { words: string[]; label: string; route: string; icon: string; text: string }[] = [
-  { words: ['quote', 'quotation', 'estimate'], label: 'New quote', route: '/(app)/sales/quotes/new', icon: 'file-percent-outline', text: 'I can open a fresh quotation for you to fill in.' },
-  { words: ['purchase order', ' po'], label: 'New purchase order', route: '/(app)/purchases/orders/new', icon: 'cart-plus', text: 'I can open a purchase order for you to fill in.' },
-  { words: ['bill', 'purchase'], label: 'New purchase bill', route: '/(app)/purchases/bills/new', icon: 'file-document-outline', text: 'I can open a purchase bill; you add the supplier and lines.' },
-  { words: ['expense', 'spend'], label: 'Record expense', route: '/(app)/expenses/new', icon: 'receipt-text-outline', text: 'I can open a new expense for you.' },
-  { words: ['payment', 'receipt', 'receive'], label: 'Receive payment', route: '/(app)/payments/new', icon: 'cash-plus', text: "I can open a payment receipt so you can record what came in." },
-  { words: ['supplier', 'vendor'], label: 'Add supplier', route: '/(app)/contacts/suppliers/new', icon: 'account-plus-outline', text: 'I can open a new supplier for you.' },
-  { words: ['customer', 'client'], label: 'Add customer', route: '/(app)/contacts/customers/new', icon: 'account-plus-outline', text: 'I can open a new customer; the GSTIN fills in their state.' },
-  { words: ['item', 'product', 'service'], label: 'Add item', route: '/(app)/catalog/items/new', icon: 'tag-plus-outline', text: 'I can open a new item; give it an HSN/SAC so GST lands on the right slab.' },
+/**
+ * Routes for the forms Lixi can open, each confirmed first. `words` stays in
+ * English here and is matched alongside the Tamil stems in `keywords.ts`,
+ * because these are matched as substrings, not translated.
+ */
+const CREATE: { words: string[]; labelKey: string; route: string; icon: string; textKey: string }[] = [
+  { words: ['quote', 'quotation', 'estimate', 'மதிப்பீடு'], labelKey: 'lixi:create.labelQuote', route: '/(app)/sales/quotes/new', icon: 'file-percent-outline', textKey: 'lixi:create.quote' },
+  { words: ['purchase order', ' po', 'கொள்முதல் ஆர்டர்'], labelKey: 'lixi:create.labelPurchaseOrder', route: '/(app)/purchases/orders/new', icon: 'cart-plus', textKey: 'lixi:create.purchaseOrder' },
+  { words: ['bill', 'purchase', 'பில்', 'கொள்முதல்'], labelKey: 'lixi:create.labelPurchaseBill', route: '/(app)/purchases/bills/new', icon: 'file-document-outline', textKey: 'lixi:create.purchaseBill' },
+  { words: ['expense', 'spend', 'செலவ'], labelKey: 'lixi:create.labelExpense', route: '/(app)/expenses/new', icon: 'receipt-text-outline', textKey: 'lixi:create.expense' },
+  { words: ['payment', 'receipt', 'receive', 'கட்டண', 'ரசீது'], labelKey: 'lixi:create.labelPayment', route: '/(app)/payments/new', icon: 'cash-plus', textKey: 'lixi:create.payment' },
+  { words: ['supplier', 'vendor', 'சப்ளையர்'], labelKey: 'lixi:create.labelSupplier', route: '/(app)/contacts/suppliers/new', icon: 'account-plus-outline', textKey: 'lixi:create.supplier' },
+  { words: ['customer', 'client', 'வாடிக்கையாள'], labelKey: 'lixi:create.labelCustomer', route: '/(app)/contacts/customers/new', icon: 'account-plus-outline', textKey: 'lixi:create.customer' },
+  { words: ['item', 'product', 'service', 'பொருள்', 'சேவை'], labelKey: 'lixi:create.labelItem', route: '/(app)/catalog/items/new', icon: 'tag-plus-outline', textKey: 'lixi:create.item' },
 ];
 
 /**
@@ -151,16 +181,20 @@ const CREATE: { words: string[]; label: string; route: string; icon: string; tex
  * answers below match them. Payables is checked first for the same reason
  * it is below: "I owe" would otherwise read as receivables.
  */
-const GATED_TOPICS: { module: Module; test: (q: string) => boolean }[] = [
-  { module: 'payables', test: (q) => /\b(i|we) owe\b|payable|supplier|vendor|bills? due|to pay\b/.test(q) },
-  { module: 'inventory', test: (q) => has(q, 'stock', 'inventory', 'reorder', 'running out', 'run out') },
-  { module: 'expenses', test: (q) => has(q, 'spend', 'spent', 'expense', 'cost') },
+const GATED_TOPICS: { module: Module; intent: IntentId }[] = [
+  { module: 'payables', intent: 'payables' },
+  { module: 'inventory', intent: 'stock' },
+  { module: 'expenses', intent: 'spend' },
 ];
 
 function upsell(module: Module, plan: PlanTier, deps: LixiDeps): LixiReply {
   return {
-    text: `${moduleLabel(deps.t, module)} isn't part of ${planInfo(plan).name}, so I have nothing to read there. ${planInfo(FULL_PLAN).name} adds buying, stock and expenses to the same books.`,
-    actions: [{ type: 'route', label: 'See plans', route: '/(app)/settings/plan', icon: 'star-circle-outline' }],
+    text: deps.t('lixi:upsell.text', {
+      module: moduleLabel(deps.t, module),
+      plan: planInfo(plan).name,
+      fullPlan: planInfo(FULL_PLAN).name,
+    }),
+    actions: [{ type: 'route', label: deps.t('lixi:upsell.seePlans'), route: '/(app)/settings/plan', icon: 'star-circle-outline' }],
   };
 }
 
@@ -182,7 +216,7 @@ export function answer(input: string, ctx: LixiContext, deps: LixiDeps = liveDep
       return upsell(target.route.includes('/expenses/') ? 'expenses' : 'purchases', plan, deps);
     }
     if (!creating) {
-      const topic = GATED_TOPICS.find((g) => !hasModule(plan, g.module) && g.test(q));
+      const topic = GATED_TOPICS.find((g) => !hasModule(plan, g.module) && hits(q, g.intent, deps));
       if (topic) return upsell(topic.module, plan, deps);
     }
   }
@@ -195,11 +229,12 @@ export function answer(input: string, ctx: LixiContext, deps: LixiDeps = liveDep
 }
 
 function answerFromBooks(input: string, ctx: LixiContext, deps: LixiDeps): LixiReply {
-  const q = input.toLowerCase().trim();
+  const { t } = deps;
+  const q = normalise(input);
   const { currency } = ctx;
   const invoices = ctx.documents.filter((d) => d.kind === 'invoice');
 
-  if (!q) return { text: 'Ask me anything about your books.' };
+  if (!q) return { text: t('lixi:empty.ask') };
 
   // A document number wins over every keyword: "INV-0042" should just open it.
   const byNumber = ctx.documents.find((d) => d.number && q.includes(d.number.toLowerCase()));
@@ -209,37 +244,47 @@ function answerFromBooks(input: string, ctx: LixiContext, deps: LixiDeps): LixiR
     return {
       // `byNumber.status` used to be interpolated raw here, which printed the
       // code ("partiallyPaid") rather than the label.
-      text: `${documentKindLabel(deps.t, byNumber.kind, 1)} ${byNumber.number} for ${party?.name ?? 'an unknown party'}, dated ${byNumber.date}. It's ${statusLabel(deps.t, byNumber.status).toLowerCase()}.`,
+      text: t('lixi:doc.summary', {
+        kind: documentKindLabel(t, byNumber.kind, 1),
+        number: byNumber.number,
+        party: party?.name ?? t('lixi:doc.unknownParty'),
+        date: byNumber.date,
+        status: statusLabel(t, byNumber.status),
+      }),
       stats: [
-        { label: 'Total', value: fmt(byNumber.totals.grandTotal) },
+        { label: t('lixi:doc.total'), value: fmt(byNumber.totals.grandTotal) },
         ...(irn && irn !== 'notApplicable'
-          ? [{ label: 'E-invoice', value: irn, tone: irn === 'generated' ? 'good' : irn === 'failed' ? 'bad' : undefined } as LixiStat]
+          ? [{ label: t('lixi:doc.eInvoice'), value: keyLabel(t, E_INVOICE_STATUS_META[irn].labelKey), tone: irn === 'generated' ? 'good' : irn === 'failed' ? 'bad' : undefined } as LixiStat]
           : []),
       ],
-      actions: [{ type: 'document', label: `Open ${byNumber.number}`, kind: byNumber.kind, id: byNumber.id }],
+      actions: [{ type: 'document', label: t('lixi:doc.open', { number: byNumber.number }), kind: byNumber.kind, id: byNumber.id }],
     };
   }
 
   // Creating things: Lixi opens the form, the person fills it in and saves.
-  if (has(q, 'new ', 'create', 'make', 'draft a', 'raise', 'add ', 'record ')) {
+  if (hits(q, 'create', deps)) {
     const target = CREATE.find((c) => has(q, ...c.words));
     const pick = target ?? {
-      label: 'New invoice',
+      labelKey: 'lixi:create.labelInvoice',
       route: '/(app)/sales/invoices/new',
       icon: 'file-document-edit-outline',
-      text: "I can open a new tax invoice. I won't finalise it for you — you'll pick the customer and items and issue it yourself.",
+      textKey: 'lixi:create.invoice',
     };
+    const label = t(pick.labelKey);
     return {
-      text: pick.text,
-      actions: [{ type: 'route', label: pick.label, route: pick.route, icon: pick.icon, confirm: `Open "${pick.label}"?` }],
+      text: t(pick.textKey),
+      actions: [{ type: 'route', label, route: pick.route, icon: pick.icon, confirm: t('lixi:create.confirm', { label }) }],
     };
   }
 
   // A customer or supplier named in the question.
+  // Substring matching throughout: building a RegExp from a party name threw
+  // on anything with a regex character in it ("C++ Ltd"), and `\b` never
+  // matched a Tamil name in the first place.
   const party = ctx.parties.find((p) => {
     const name = p.name.toLowerCase();
-    const first = name.split(' ')[0].replace(/[^a-z0-9]/g, '');
-    return q.includes(name) || (first.length > 3 && new RegExp(`\\b${first}\\b`).test(q));
+    const first = name.split(' ')[0];
+    return q.includes(name) || (first.length > 3 && q.includes(first));
   });
   if (party) {
     const supplier = party.kind === 'supplier';
@@ -251,53 +296,63 @@ function answerFromBooks(input: string, ctx: LixiContext, deps: LixiDeps): LixiR
     const text =
       due.length === 0
         ? supplier
-          ? `You're square with ${party.name}.`
-          : `${party.name} is fully paid up.`
+          ? t('lixi:party.squareSupplier', { party: party.name })
+          : t('lixi:party.paidUp', { party: party.name })
         : supplier
-          ? `You owe ${party.name} ${fmt(dueTotal)} on ${plural(due.length, 'bill')}${late.length ? `, ${late.length} past due` : ''}.`
-          : `${party.name} owes you ${fmt(dueTotal)} across ${plural(due.length, 'invoice')}${late.length ? `, ${late.length} of them overdue` : ''}.`;
+          ? t('lixi:party.youOwe', {
+              party: party.name,
+              amount: fmt(dueTotal),
+              count: due.length,
+              late: late.length ? t('lixi:party.latePart', { count: late.length }) : '',
+            })
+          : t('lixi:party.owesYou', {
+              party: party.name,
+              amount: fmt(dueTotal),
+              count: due.length,
+              late: late.length ? t('lixi:party.overduePart', { count: late.length }) : '',
+            });
     return {
       text,
       stats: [
-        { label: supplier ? 'Billed to you' : 'Billed', value: fmt(docsTotal(theirs, currency)) },
-        { label: 'Outstanding', value: fmt(dueTotal), tone: late.length ? 'bad' : due.length ? 'warn' : 'good' },
-        { label: supplier ? 'Bills' : 'Invoices', value: String(theirs.length) },
+        { label: t(supplier ? 'lixi:party.billedToYou' : 'lixi:party.billed'), value: fmt(docsTotal(theirs, currency)) },
+        { label: t('lixi:party.outstanding'), value: fmt(dueTotal), tone: late.length ? 'bad' : due.length ? 'warn' : 'good' },
+        { label: t(supplier ? 'lixi:party.bills' : 'lixi:party.invoices'), value: String(theirs.length) },
       ],
       actions: [
-        { type: 'route', label: `Open ${party.name}`, route: `/(app)/contacts/${supplier ? 'suppliers' : 'customers'}/${party.id}` },
+        { type: 'route', label: t('lixi:party.openParty', { party: party.name }), route: `/(app)/contacts/${supplier ? 'suppliers' : 'customers'}/${party.id}` },
       ],
     };
   }
 
   // GST and compliance.
-  if (has(q, 'gst', 'e-invoice', 'einvoice', 'irn', 'irp', 'e-way', 'eway', 'way bill', 'compliance', 'tax', 'gstr')) {
+  if (hits(q, 'gst', deps)) {
     const { failed, generated, pending, ewbActive, ewbExpiringSoon, ewbExpired, ewbMissing } = ctx.compliance;
     const problems = failed + ewbExpiringSoon + ewbMissing;
     return {
       text:
         problems === 0
-          ? `All clear. ${plural(generated, 'IRN')} registered and nothing waiting on the portal. You've charged ${fmt(ctx.monthTax)} GST this month.`
+          ? t('lixi:gst.clear', { count: generated, tax: fmt(ctx.monthTax) })
           : [
-              failed ? `The IRP rejected ${plural(failed, 'invoice')} — fix and resubmit before filing.` : null,
-              ewbExpiringSoon ? `${plural(ewbExpiringSoon, 'e-way bill')} run${ewbExpiringSoon === 1 ? 's' : ''} out within a day; extend if the goods are still moving.` : null,
-              ewbMissing ? `${plural(ewbMissing, 'document')} need${ewbMissing === 1 ? 's' : ''} an e-way bill and ${ewbMissing === 1 ? "doesn't" : "don't"} have one.` : null,
+              failed ? t('lixi:gst.rejected', { count: failed }) : null,
+              ewbExpiringSoon ? t('lixi:gst.expiring', { count: ewbExpiringSoon }) : null,
+              ewbMissing ? t('lixi:gst.missing', { count: ewbMissing }) : null,
             ]
               .filter(Boolean)
               .join(' '),
       stats: [
-        { label: 'GST this month', value: fmt(ctx.monthTax) },
-        { label: 'IRNs', value: String(generated), tone: 'good' },
-        { label: 'Rejected', value: String(failed), tone: failed ? 'bad' : 'good' },
-        { label: 'Awaiting IRN', value: String(pending), tone: pending ? 'warn' : 'good' },
-        { label: 'Live EWBs', value: String(ewbActive) },
-        { label: 'Expired EWBs', value: String(ewbExpired) },
+        { label: t('lixi:gst.thisMonth'), value: fmt(ctx.monthTax) },
+        { label: t('lixi:gst.irns'), value: String(generated), tone: 'good' },
+        { label: t('lixi:gst.rejectedStat'), value: String(failed), tone: failed ? 'bad' : 'good' },
+        { label: t('lixi:gst.awaiting'), value: String(pending), tone: pending ? 'warn' : 'good' },
+        { label: t('lixi:gst.liveEwb'), value: String(ewbActive) },
+        { label: t('lixi:gst.expiredEwb'), value: String(ewbExpired) },
       ],
-      actions: [{ type: 'route', label: 'GST compliance', route: '/(app)/compliance', icon: 'shield-check-outline' }],
+      actions: [{ type: 'route', label: t('lixi:gst.action'), route: '/(app)/compliance', icon: 'shield-check-outline' }],
     };
   }
 
   // What I owe suppliers — checked before receivables, since both say "owe".
-  if (/\b(i|we) owe\b|payable|supplier|vendor|bills? due|to pay\b/.test(q)) {
+  if (hits(q, 'payables', deps)) {
     const open = ctx.payables.outstanding.filter((o) => o.outstanding.minor > 0);
     const late = open.filter((o) => o.daysOverdue > 0).sort((a, b) => b.outstanding.minor - a.outstanding.minor);
     const next = [...open].sort((a, b) => (a.document.dueDate ?? '').localeCompare(b.document.dueDate ?? ''))[0];
@@ -305,19 +360,30 @@ function answerFromBooks(input: string, ctx: LixiContext, deps: LixiDeps): LixiR
     return {
       text:
         open.length === 0
-          ? "You don't owe any supplier right now."
-          : `You owe suppliers ${fmt(ctx.payables.summary.total)} on ${plural(open.length, 'bill')}${late.length ? `, ${fmt(ctx.payables.summary.overdue)} of it past due` : ''}.${next ? ` Next up: ${nextName} on ${next.document.number}${next.document.dueDate ? `, due ${next.document.dueDate}` : ''}.` : ''}`,
+          ? t('lixi:payables.none')
+          : t('lixi:payables.summary', {
+              count: open.length,
+              amount: fmt(ctx.payables.summary.total),
+              late: late.length ? t('lixi:payables.latePart', { amount: fmt(ctx.payables.summary.overdue) }) : '',
+              next: next
+                ? t('lixi:payables.nextPart', {
+                    party: nextName,
+                    number: next.document.number,
+                    due: next.document.dueDate ? t('lixi:payables.duePart', { date: next.document.dueDate }) : '',
+                  })
+                : '',
+            }),
       stats: [
-        { label: 'Payable', value: fmt(ctx.payables.summary.total) },
-        { label: 'Past due', value: fmt(ctx.payables.summary.overdue), tone: late.length ? 'bad' : 'good' },
-        { label: 'Due in 7 days', value: fmt(ctx.payables.summary.dueSoon), tone: 'warn' },
+        { label: t('lixi:payables.payable'), value: fmt(ctx.payables.summary.total) },
+        { label: t('lixi:payables.pastDue'), value: fmt(ctx.payables.summary.overdue), tone: late.length ? 'bad' : 'good' },
+        { label: t('lixi:payables.dueSoon'), value: fmt(ctx.payables.summary.dueSoon), tone: 'warn' },
       ],
-      actions: [{ type: 'route', label: 'Payables', route: '/(app)/payables', icon: 'file-clock-outline' }],
+      actions: [{ type: 'route', label: t('lixi:payables.action'), route: '/(app)/payables', icon: 'file-clock-outline' }],
     };
   }
 
   // Money owed to me.
-  if (has(q, 'owe', 'outstanding', 'receivable', 'due', 'overdue', 'pending', 'collect', 'unpaid')) {
+  if (hits(q, 'receivables', deps)) {
     const open = ctx.receivables.outstanding.filter((o) => o.outstanding.minor > 0);
     const late = open.filter((o) => o.daysOverdue > 0).sort((a, b) => b.outstanding.minor - a.outstanding.minor);
     const worst = late[0];
@@ -325,86 +391,118 @@ function answerFromBooks(input: string, ctx: LixiContext, deps: LixiDeps): LixiR
     return {
       text:
         open.length === 0
-          ? 'Nobody owes you anything right now. Nice.'
-          : `${fmt(ctx.receivables.summary.total)} is still to come in${late.length ? `, and ${fmt(ctx.receivables.summary.overdue)} of it is overdue` : ''}.${worst ? ` Biggest: ${worstName} on ${worst.document.number}, ${worst.daysOverdue} days late.` : ''}`,
+          ? t('lixi:receivables.none')
+          : t('lixi:receivables.summary', {
+              amount: fmt(ctx.receivables.summary.total),
+              late: late.length ? t('lixi:receivables.latePart', { amount: fmt(ctx.receivables.summary.overdue) }) : '',
+              worst: worst
+                ? t('lixi:receivables.worstPart', {
+                    party: worstName,
+                    number: worst.document.number,
+                    days: worst.daysOverdue,
+                  })
+                : '',
+            }),
       stats: [
-        { label: 'Outstanding', value: fmt(ctx.receivables.summary.total) },
-        { label: 'Overdue', value: fmt(ctx.receivables.summary.overdue), tone: late.length ? 'bad' : 'good' },
-        { label: 'Invoices', value: String(open.length) },
+        { label: t('lixi:receivables.outstanding'), value: fmt(ctx.receivables.summary.total) },
+        { label: t('lixi:receivables.overdue'), value: fmt(ctx.receivables.summary.overdue), tone: late.length ? 'bad' : 'good' },
+        { label: t('lixi:receivables.invoices'), value: String(open.length) },
       ],
       actions: [
-        { type: 'route', label: 'Receivables', route: '/(app)/receivables', icon: 'clock-alert-outline' },
-        ...(worst ? [{ type: 'document', label: `Open ${worst.document.number}`, kind: worst.document.kind, id: worst.document.id } as LixiAction] : []),
+        { type: 'route', label: t('lixi:receivables.action'), route: '/(app)/receivables', icon: 'clock-alert-outline' },
+        ...(worst ? [{ type: 'document', label: t('lixi:doc.open', { number: worst.document.number }), kind: worst.document.kind, id: worst.document.id } as LixiAction] : []),
       ],
     };
   }
 
   // Stock.
-  if (has(q, 'stock', 'inventory', 'reorder', 'running out', 'run out')) {
+  if (hits(q, 'stock', deps)) {
     const low = ctx.lowStock;
     return {
-      text: low.length
-        ? `${plural(low.length, 'item')} ${low.length === 1 ? 'is' : 'are'} at or below the reorder level.`
-        : 'Nothing is below its reorder level right now.',
+      text: low.length ? t('lixi:stock.low', { count: low.length }) : t('lixi:stock.none'),
       stats: low.slice(0, 4).map((i) => ({ label: i.name, value: `${i.onHand} ${i.unit}`, tone: i.onHand <= 0 ? 'bad' : 'warn' }) as LixiStat),
-      actions: [{ type: 'route', label: 'Low stock', route: '/(app)/inventory/low-stock', icon: 'package-variant' }],
+      actions: [{ type: 'route', label: t('lixi:stock.action'), route: '/(app)/inventory/low-stock', icon: 'package-variant' }],
     };
   }
 
   // Spending.
-  if (has(q, 'spend', 'spent', 'expense', 'cost')) {
-    const preset: DateRangePreset = has(q, 'this month') ? 'thisMonth' : 'lastMonth';
-    const label = preset === 'thisMonth' ? 'This month' : 'Last month';
+  if (hits(q, 'spend', deps)) {
+    const preset: DateRangePreset = has(q, 'this month', 'இந்த மாத') ? 'thisMonth' : 'lastMonth';
+    const label = t(preset === 'thisMonth' ? 'lixi:spend.thisMonth' : 'lixi:spend.lastMonth');
     const range = resolveRange(preset);
     const rows = ctx.expenses.filter((e) => inRange(e.date, range));
     const spent = total(rows.map((e) => toBase(e.amount, e.exchangeRate, currency)), currency);
     return {
-      text: `${label} you spent ${fmt(spent)} across ${plural(rows.length, 'expense')}. You also owe suppliers ${fmt(ctx.payables.summary.total)}.`,
+      text: t('lixi:spend.summary', {
+        period: label,
+        amount: fmt(spent),
+        count: rows.length,
+        payable: fmt(ctx.payables.summary.total),
+      }),
       stats: [
-        { label: 'Spent', value: fmt(spent) },
-        { label: 'Expenses', value: String(rows.length) },
-        { label: 'Owed to suppliers', value: fmt(ctx.payables.summary.total), tone: 'warn' },
+        { label: t('lixi:spend.spent'), value: fmt(spent) },
+        { label: t('lixi:spend.expenses'), value: String(rows.length) },
+        { label: t('lixi:spend.owedToSuppliers'), value: fmt(ctx.payables.summary.total), tone: 'warn' },
       ],
-      actions: [{ type: 'route', label: 'Expense report', route: '/(app)/reports/expense-summary', icon: 'chart-bar' }],
+      actions: [{ type: 'route', label: t('lixi:spend.action'), route: '/(app)/reports/expense-summary', icon: 'chart-bar' }],
     };
   }
 
   // Best customers.
-  if (has(q, 'top', 'best', 'biggest', 'customers', 'who buys')) {
+  if (hits(q, 'topCustomers', deps)) {
     const byParty = new Map<string, number>();
     invoices
       .filter(LIVE)
       .forEach((d) => byParty.set(d.partyId, (byParty.get(d.partyId) ?? 0) + toBase(d.totals.grandTotal, d.exchangeRate, currency).minor));
     const ranked = [...byParty.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-    if (!ranked.length) return { text: "No invoices yet, so no leaderboard. Raise the first one and I'll start counting." };
-    const nameOf = (id: string) => ctx.parties.find((p) => p.id === id)?.name ?? 'Unknown';
+    if (!ranked.length) return { text: t('lixi:top.none') };
+    const nameOf = (id: string) => ctx.parties.find((p) => p.id === id)?.name ?? t('common:placeholder.unknown');
     return {
-      text: `${nameOf(ranked[0][0])} leads your sales. Here are your top ${ranked.length}:`,
+      text: t('lixi:top.leads', { party: nameOf(ranked[0][0]), count: ranked.length }),
       stats: ranked.map(([id, minor]) => ({ label: nameOf(id), value: fmt(money(minor, currency)) })),
-      actions: ranked.map(([id]) => ({ type: 'ask', label: `About ${nameOf(id)}`, question: nameOf(id) }) as LixiAction),
+      actions: ranked.map(([id]) => ({ type: 'ask', label: t('lixi:top.about', { party: nameOf(id) }), question: nameOf(id) }) as LixiAction),
     };
   }
 
   // Drafts and quotes waiting.
-  if (has(q, 'draft', 'quote', 'quotation', 'unfinished')) {
+  if (hits(q, 'drafts', deps)) {
     const drafts = invoices.filter((d) => d.status === 'draft');
     const quotes = ctx.documents.filter((d) => d.kind === 'quote' && d.status === 'sent');
     return {
       text:
         drafts.length + quotes.length === 0
-          ? 'Nothing half-done. Every invoice is issued and no quote is waiting.'
-          : `${plural(drafts.length, 'draft invoice')} to finish and ${plural(quotes.length, 'quote')} awaiting a reply, worth ${fmt(docsTotal(quotes, currency))}.`,
+          ? t('lixi:drafts.none')
+          : t('lixi:drafts.summary', {
+              drafts: t('lixi:drafts.draftInvoice', { count: drafts.length }),
+              quotes: t('lixi:drafts.quote', { count: quotes.length }),
+              amount: fmt(docsTotal(quotes, currency)),
+            }),
       actions: [
-        { type: 'route', label: 'Invoices', route: '/(app)/sales/invoices' },
-        { type: 'route', label: 'Quotes', route: '/(app)/sales/quotes' },
+        { type: 'route', label: t('lixi:drafts.invoices'), route: '/(app)/sales/invoices' },
+        { type: 'route', label: t('lixi:drafts.quotes'), route: '/(app)/sales/quotes' },
       ],
     };
   }
 
   // Sales, with a period.
-  if (has(q, 'sale', 'sold', 'revenue', 'turnover', 'income', 'business', 'how am i', 'how are', 'doing', 'summary', 'today', 'month', 'week', 'year')) {
-    const preset: DateRangePreset = has(q, 'today') ? 'today' : has(q, 'last month') ? 'lastMonth' : has(q, 'week') ? 'last7' : has(q, 'year', 'fy') ? 'thisFY' : 'thisMonth';
-    const label = ({ today: 'today', lastMonth: 'last month', last7: 'in the last 7 days', thisFY: 'this financial year' } as Record<string, string>)[preset] ?? 'this month';
+  if (hits(q, 'sales', deps) || has(q, 'today', 'month', 'week', 'year', 'இன்று', 'மாத', 'வார', 'ஆண்ட')) {
+    const preset: DateRangePreset = has(q, 'today', 'இன்று')
+      ? 'today'
+      : has(q, 'last month', 'கடந்த மாத')
+        ? 'lastMonth'
+        : has(q, 'week', 'வார')
+          ? 'last7'
+          : has(q, 'year', 'fy', 'ஆண்ட', 'நிதியாண்')
+            ? 'thisFY'
+            : 'thisMonth';
+    const label = t(
+      ({
+        today: 'lixi:sales.periodToday',
+        lastMonth: 'lixi:sales.periodLastMonth',
+        last7: 'lixi:sales.periodLast7',
+        thisFY: 'lixi:sales.periodThisFy',
+      } as Record<string, string>)[preset] ?? 'lixi:sales.periodThisMonth',
+    );
     const range: DateRange = resolveRange(preset);
     const sold = invoices.filter((d) => LIVE(d) && inRange(d.date, range));
     const invoiced = docsTotal(sold, currency);
@@ -414,23 +512,32 @@ function answerFromBooks(input: string, ctx: LixiContext, deps: LixiDeps): LixiR
     );
     return {
       text: sold.length
-        ? `You've invoiced ${fmt(invoiced)} ${label} across ${plural(sold.length, 'invoice')} — about ${fmt(money(Math.round(invoiced.minor / sold.length), currency))} each — and collected ${fmt(received)}.`
-        : `No invoices ${label} yet.${received.minor ? ` You did collect ${fmt(received)}.` : ''}`,
+        ? t('lixi:sales.summary', {
+            amount: fmt(invoiced),
+            period: label,
+            count: sold.length,
+            average: fmt(money(Math.round(invoiced.minor / sold.length), currency)),
+            received: fmt(received),
+          })
+        : t('lixi:sales.none', {
+            period: label,
+            collected: received.minor ? t('lixi:sales.collectedPart', { amount: fmt(received) }) : '',
+          }),
       stats: [
-        { label: 'Invoiced', value: fmt(invoiced) },
-        { label: 'Collected', value: fmt(received), tone: 'good' },
-        { label: 'Invoices', value: String(sold.length) },
+        { label: t('lixi:sales.invoiced'), value: fmt(invoiced) },
+        { label: t('lixi:sales.collected'), value: fmt(received), tone: 'good' },
+        { label: t('lixi:sales.invoices'), value: String(sold.length) },
       ],
-      actions: [{ type: 'route', label: 'Sales report', route: '/(app)/reports/sales-summary', icon: 'chart-bar' }],
+      actions: [{ type: 'route', label: t('lixi:sales.action'), route: '/(app)/reports/sales-summary', icon: 'chart-bar' }],
     };
   }
 
-  if (/\b(hi|hello|hey|namaste)\b/.test(q)) return greet(ctx);
+  if (hits(q, 'greeting', deps)) return greet(ctx, deps);
 
-  if (has(q, 'thank', 'thanks', 'great', 'cool')) return { text: 'Anytime. I am one tap away in the middle of the bar.' };
+  if (hits(q, 'thanks', deps)) return { text: t('lixi:thanks.reply') };
 
   return {
-    text: "I didn't catch that. I'm best with sales, who owes you, what you owe, stock, spending, GST and e-way bills — or give me a document number or a party's name.",
-    actions: lixiSuggestions(ctx.plan).slice(0, 3).map((label) => ({ type: 'ask', label }) as LixiAction),
+    text: t('lixi:fallback.text'),
+    actions: lixiSuggestions(ctx.plan, deps).slice(0, 3).map((label) => ({ type: 'ask', label }) as LixiAction),
   };
 }

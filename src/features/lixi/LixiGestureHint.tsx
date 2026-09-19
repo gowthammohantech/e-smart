@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { keyLabel } from '@/i18n/labels';
 import { Animated, AppState, Keyboard, Pressable, View } from 'react-native';
 import { useIsFocused } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -6,7 +8,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { LixiHintKey, useUiStore } from '@/store/uiStore';
 import { LixiOrb } from './LixiOrb';
-import { HINT_EVERY_MS, HINT_FIRST_MS, HINT_SHOW_MS, HINT_TEXT, nextHint } from './hints';
+import { HINT_EVERY_MS, HINT_FIRST_MS, HINT_SHOW_MS, HINT_TEXT_KEY, nextHint } from './hints';
 
 /**
  * A tip that floats above the tab bar every few minutes, taking turns between
@@ -22,6 +24,7 @@ import { HINT_EVERY_MS, HINT_FIRST_MS, HINT_SHOW_MS, HINT_TEXT, nextHint } from 
  */
 export function LixiGestureHint({ bottom }: { bottom: number }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['lixi']);
   const focused = useIsFocused();
   const learned = useUiStore((s) => s.lixiHintsLearned);
   const access = useUiStore((s) => s.lixiAccess);
@@ -139,12 +142,12 @@ export function LixiGestureHint({ bottom }: { bottom: number }) {
           <MaterialCommunityIcons name="gesture-tap-hold" size={18} color={t.c.primary} />
         )}
         <Text variant="caption" weight="600">
-          {HINT_TEXT[rendered]}
+          {keyLabel(tr, HINT_TEXT_KEY[rendered])}
         </Text>
         <Pressable
           onPress={() => markLearned(rendered)}
           accessibilityRole="button"
-          accessibilityLabel="Got it, don't show this tip again"
+          accessibilityLabel={tr('lixi:ui.gotItA11y')}
           hitSlop={8}
           style={({ pressed }) => ({
             paddingHorizontal: 10,
@@ -154,7 +157,7 @@ export function LixiGestureHint({ bottom }: { bottom: number }) {
           })}
         >
           <Text variant="caption" weight="700" style={{ color: t.c.primary }}>
-            Got it
+            {tr('lixi:ui.gotIt')}
           </Text>
         </Pressable>
       </View>

@@ -11,7 +11,7 @@ import { LixiSwipeUp } from '@/features/lixi/LixiSwipeUp';
 import { LixiFloatingOrb } from '@/features/lixi/LixiFloatingOrb';
 import { LixiGestureHint } from '@/features/lixi/LixiGestureHint';
 import { openLixi } from '@/features/lixi/open';
-import { TAB_QUESTIONS } from '@/features/lixi/brain';
+import { tabQuestion } from '@/features/lixi/brain';
 import { TabBar } from '@/components/TabBar';
 import { TabSwipe } from '@/components/TabSwipe';
 
@@ -114,7 +114,7 @@ export default function TabsLayout() {
           tabLongPress: () => {
             if (!access.holdTab) return;
             markHintLearned('holdTab');
-            openLixi(TAB_QUESTIONS[route.name]);
+            openLixi(tabQuestion(route.name));
           },
         })}
       >

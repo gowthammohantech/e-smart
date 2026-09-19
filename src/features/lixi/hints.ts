@@ -5,10 +5,11 @@ export const HINT_FIRST_MS = 20_000;
 export const HINT_EVERY_MS = 3 * 60_000;
 export const HINT_SHOW_MS = 6_000;
 
-export const HINT_TEXT: Record<LixiHintKey, string> = {
-  swipeTabs: 'Swipe left or right to switch tabs',
-  swipeUp: 'Swipe up on the bar to ask Lixi',
-  holdTab: 'Hold any tab to ask Lixi about it',
+/** The tip for each gesture. Words live in `lixi:hint.*`. */
+export const HINT_TEXT_KEY: Record<LixiHintKey, string> = {
+  swipeTabs: 'lixi:hint.swipeTabs',
+  swipeUp: 'lixi:hint.swipeUp',
+  holdTab: 'lixi:hint.holdTab',
 };
 
 const ORDER: LixiHintKey[] = ['swipeTabs', 'swipeUp', 'holdTab'];

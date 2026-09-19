@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
   Animated,
@@ -45,6 +46,7 @@ const THINK_MS = 650;
 
 export default function LixiChat() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['lixi']);
   const router = useRouter();
   // Set when Lixi was opened by holding a tab: the question to answer first.
   const { ask } = useLocalSearchParams<{ ask?: string }>();
@@ -157,7 +159,7 @@ export default function LixiChat() {
           onPress={() => router.back()}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Close Lixi"
+          accessibilityLabel={tr('lixi:ui.closeLixi')}
           style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.c.card, alignItems: 'center', justifyContent: 'center' }}
         >
           <MaterialCommunityIcons name="chevron-down" size={24} color={t.c.text} />
@@ -176,7 +178,7 @@ export default function LixiChat() {
             onPress={() => setMessages([])}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="Start a new chat"
+            accessibilityLabel={tr('lixi:ui.newChat')}
           >
             <MaterialCommunityIcons name="broom" size={22} color={t.c.muted} />
           </Pressable>
@@ -193,9 +195,7 @@ export default function LixiChat() {
         {messages.length === 0 ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.spacing.lg, paddingVertical: t.spacing.xxl }}>
             <LixiOrb size={96} />
-            <Text variant="h3" center>
-              What can I dig up?
-            </Text>
+            <Text variant="h3" center>{tr('lixi:ui.prompt')}</Text>
             <Text tone="muted" center style={{ maxWidth: 300 }}>
               {intro.text}
             </Text>
@@ -229,12 +229,12 @@ export default function LixiChat() {
           value={draft}
           onChangeText={setDraft}
           onSubmitEditing={() => send(draft)}
-          placeholder="Ask Lixi about sales, dues, GST…"
+          placeholder={tr('lixi:ui.inputPlaceholder')}
           placeholderTextColor={t.c.muted}
           returnKeyType="send"
           submitBehavior="submit"
           multiline
-          accessibilityLabel="Message Lixi"
+          accessibilityLabel={tr('lixi:ui.messageLixi')}
           style={{
             flex: 1,
             minHeight: 44,
@@ -254,7 +254,7 @@ export default function LixiChat() {
           onPress={() => send(draft)}
           disabled={!draft.trim() || thinking}
           accessibilityRole="button"
-          accessibilityLabel="Send"
+          accessibilityLabel={tr('lixi:ui.send')}
           style={({ pressed }) => ({
             width: 44,
             height: 44,
@@ -272,8 +272,8 @@ export default function LixiChat() {
       <ConfirmDialog
         visible={!!pending}
         title={pending?.confirm ?? ''}
-        message="Lixi only opens the screen — you decide what gets saved."
-        confirmLabel="Open"
+        message={tr('lixi:ui.openOnlyNote')}
+        confirmLabel={tr('lixi:ui.open')}
         onCancel={() => setPending(null)}
         onConfirm={() => {
           const route = pending?.route;
@@ -397,6 +397,7 @@ function LixiBubble({ reply, onAction }: { reply: LixiReply; onAction: (a: LixiA
 
 function TypingDots() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['lixi']);
   const [phase] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
@@ -409,7 +410,7 @@ function TypingDots() {
 
   return (
     <View
-      accessibilityLabel="Lixi is thinking"
+      accessibilityLabel={tr('lixi:ui.thinking')}
       style={{
         alignSelf: 'flex-start',
         marginLeft: 34,

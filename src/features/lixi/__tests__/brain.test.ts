@@ -11,7 +11,9 @@ import {
 import { seedCompliance, seedDocuments, seedExpenses, seedPayments } from '@/data/seedTransactions';
 import { buildOutstanding, summarizeAging } from '@/domain/receivables';
 import { zero } from '@/lib/money';
-import { answer, greet, LixiContext, TAB_QUESTIONS } from '../brain';
+import i18n from '@/i18n';
+import { LANGUAGE_CODES } from '@/i18n/config';
+import { answer, greet, LIXI_TABS, LixiContext, lixiSuggestions, tabQuestion } from '../brain';
 
 /** Lixi answers from the books, so run it against the demo book, built the way the store builds it. */
 function contextFor(): LixiContext {
@@ -121,8 +123,76 @@ describe('Lixi', () => {
   });
 
   it('has a real answer for every tab you can hold', () => {
-    Object.entries(TAB_QUESTIONS).forEach(([tab, question]) => {
+    LIXI_TABS.forEach((tab) => {
+      const question = tabQuestion(tab)!;
       expect({ tab, text: answer(question, ctx).text }).not.toMatchObject({ text: expect.stringMatching(/didn't catch/) });
     });
+  });
+});
+
+/**
+ * The safety net for the Tamil assistant. A chip can be translated while its
+ * Tamil keyword stem is never added, and nothing else would notice until a
+ * person taps it and gets "I didn't catch that". So every canned prompt is
+ * asked back, in every language.
+ */
+describe('Lixi in Tamil', () => {
+  const ctx = { ...contextFor(), plan: 'pro' } as unknown as Parameters<typeof answer>[1];
+
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it.each(LANGUAGE_CODES)('answers every starter prompt in %s', async (lang) => {
+    await i18n.changeLanguage(lang);
+    for (const prompt of lixiSuggestions('pro')) {
+      const reply = answer(prompt, ctx);
+      expect({ lang, prompt, text: reply.text }).not.toMatchObject({
+        text: expect.stringMatching(/didn't catch|புரியவில்லை/),
+      });
+    }
+  });
+
+  it.each(LANGUAGE_CODES)('answers every held-tab question in %s', async (lang) => {
+    await i18n.changeLanguage(lang);
+    for (const tab of LIXI_TABS) {
+      const reply = answer(tabQuestion(tab)!, ctx);
+      expect({ lang, tab, text: reply.text }).not.toMatchObject({
+        text: expect.stringMatching(/didn't catch|புரியவில்லை/),
+      });
+    }
+  });
+
+  it('answers a Tamil question in Tamil', async () => {
+    await i18n.changeLanguage('ta');
+    const reply = answer('இருப்பு என்ன?', ctx);
+    expect(reply.text).not.toMatch(/புரியவில்லை/);
+    expect(reply.text).toMatch(/[\u0B80-\u0BFF]/);
+  });
+
+  /**
+   * Code-switching is the norm: "GST", "stock" and "invoice" all appear in
+   * Tamil speech, so an English word typed on a Tamil device must still work.
+   */
+  it('still understands English while set to Tamil', async () => {
+    await i18n.changeLanguage('ta');
+    const reply = answer('what is low on stock?', ctx);
+    expect(reply.text).not.toMatch(/புரியவில்லை/);
+    expect(reply.text).toMatch(/[\u0B80-\u0BFF]/);
+  });
+
+  /** Several Tamil IMEs emit decomposed sequences; NFC is what makes them match. */
+  it('matches a decomposed Tamil question', async () => {
+    await i18n.changeLanguage('ta');
+    const decomposed = 'இருப்பு என்ன?'.normalize('NFD');
+    expect(answer(decomposed, ctx).text).toBe(answer('இருப்பு என்ன?', ctx).text);
+  });
+
+  it('does not throw on a party name containing regex characters', () => {
+    const tricky = {
+      ...ctx,
+      parties: [{ id: 'p1', name: 'C++ Ltd', kind: 'customer' }],
+    } as unknown as Parameters<typeof answer>[1];
+    expect(() => answer('C++ Ltd', tricky)).not.toThrow();
   });
 });
