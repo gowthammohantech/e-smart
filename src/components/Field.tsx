@@ -98,7 +98,10 @@ export function TextField({
           borderWidth: 1,
           borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
-          minHeight: 48,
+          // Tamil's below-line vowel signs need a few more pixels. The extra
+          // goes on the box rather than as `lineHeight` on the TextInput,
+          // which mis-centres the caret on Android.
+          minHeight: t.script === 'tamil' ? 52 : 48,
         }}
       >
         {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null}
@@ -109,7 +112,7 @@ export function TextField({
               color: t.c.text,
               fontSize: t.fontSize.body,
               paddingVertical: multiline ? t.spacing.md : t.spacing.sm,
-              minHeight: multiline ? 92 : undefined,
+              minHeight: multiline ? (t.script === 'tamil' ? 100 : 92) : undefined,
               textAlignVertical: multiline ? 'top' : 'center',
             },
             style,

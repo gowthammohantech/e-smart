@@ -25,7 +25,7 @@ import {
 import { PAYMENT_METHODS } from '@/data/masters';
 import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { monthLabel } from '@/lib/date';
+import { monthLabel, monthLabelNarrow } from '@/lib/date';
 import { toMajor } from '@/lib/money';
 
 import {
@@ -129,7 +129,7 @@ export default function Report() {
   }
 
   const monthBars = (rows: { key: string; value: { minor: number; currency: string } }[]) =>
-    rows.map((r) => ({ label: monthLabel(r.key), value: r.value }));
+    rows.map((r) => ({ label: monthLabelNarrow(r.key), value: r.value }));
 
   let body: React.ReactNode = null;
   let exportRows: (() => string) | undefined;
@@ -389,7 +389,7 @@ export default function Report() {
         <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
             <BarChart
-              data={paymentSummary.byMonth.map((m) => ({ label: monthLabel(m.key), value: m.received }))}
+              data={paymentSummary.byMonth.map((m) => ({ label: monthLabelNarrow(m.key), value: m.received }))}
               caption={tr('reports:detail.moneyReceived')}
               color={t.c.good}
             />

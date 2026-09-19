@@ -7,13 +7,24 @@ import {
   palettes,
   radius,
   spacing,
+  typeMetrics,
 } from './tokens';
 import { useUiStore } from '@/store/uiStore';
+import { useResolvedLanguage } from '@/i18n/I18nProvider';
+import { Script, scriptOf } from '@/i18n/config';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
 export type Theme = {
   scheme: 'light' | 'dark';
+  /** The script the active language is written in; drives the type metrics. */
+  script: Script;
+  type: {
+    /** Letter spacing for this script. Tamil gets none. */
+    tracking: (px: number) => number;
+    /** Line height for this script, or undefined to leave the platform default. */
+    lineHeight: (size: number) => number | undefined;
+  };
   c: ColorTokens;
   spacing: typeof spacing;
   radius: typeof radius;
@@ -29,10 +40,17 @@ export type Theme = {
 
 const ThemeContext = createContext<Theme | null>(null);
 
-function buildTheme(scheme: 'light' | 'dark'): Theme {
+function buildTheme(scheme: 'light' | 'dark', script: Script): Theme {
   const c = palettes[scheme];
+  const metrics = typeMetrics[script];
   return {
     scheme,
+    script,
+    type: {
+      // `|| 0` normalises -0, which multiplying a negative by zero produces.
+      tracking: (px) => px * metrics.tracking || 0,
+      lineHeight: (size) => (metrics.lineHeight ? Math.round(size * metrics.lineHeight) : undefined),
+    },
     c,
     spacing,
     radius,
@@ -65,7 +83,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const scheme: 'light' | 'dark' =
     mode === 'system' ? (systemScheme === 'light' ? 'light' : 'dark') : mode;
 
-  const theme = useMemo(() => buildTheme(scheme), [scheme]);
+  // The type scale is tuned for Latin, so it follows the language as well as
+  // the colour scheme. This is why I18nProvider mounts outside ThemeProvider.
+  const script = scriptOf(useResolvedLanguage());
+
+  const theme = useMemo(() => buildTheme(scheme, script), [scheme, script]);
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }

@@ -123,3 +123,17 @@ export const fontWeight = {
 /** Minimum touch target required by the PRD accessibility principles. */
 export const HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 export const MIN_TOUCH = 44;
+
+/**
+ * Per-script adjustments to the type scale, which is tuned for Latin.
+ *
+ * Tamil carries vowel signs above and below the line (ி ீ ை ொ), so it needs
+ * more leading than RN's default and none of the negative tracking the
+ * display sizes use — at −0.8 the marks collide with the letters they belong
+ * to. Latin keeps `lineHeight: null`, which leaves the platform default in
+ * place, so English rendering is unchanged to the pixel.
+ */
+export const typeMetrics = {
+  latin: { lineHeight: null, tracking: 1 },
+  tamil: { lineHeight: 1.5, tracking: 0 },
+} as const;

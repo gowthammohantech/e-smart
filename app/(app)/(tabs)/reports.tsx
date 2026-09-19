@@ -22,7 +22,7 @@ import {
   useStockMovements,
 } from '@/store/selectors';
 import { profitSnapshot, summarizeStock } from '@/domain/reports';
-import { resolveRange, lastNMonths, monthLabel } from '@/lib/date';
+import { lastNMonths, monthLabelNarrow, resolveRange } from '@/lib/date';
 import { money } from '@/lib/money';
 import { formatMoney, formatPercent } from '@/lib/format';
 
@@ -74,7 +74,7 @@ export default function ReportsTab() {
     const keys = lastNMonths(6);
     return keys.map((key) => {
       const row = profit.byMonth.find((m) => m.key === key);
-      return { label: monthLabel(key), value: row?.profit ?? money(0, baseCurrency) };
+      return { label: monthLabelNarrow(key), value: row?.profit ?? money(0, baseCurrency) };
     });
   }, [profit.byMonth, baseCurrency]);
 

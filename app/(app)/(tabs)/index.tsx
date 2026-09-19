@@ -35,7 +35,7 @@ import {
 } from '@/store/selectors';
 import { money, subtract, sum } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
-import { inRange, lastNMonths, monthLabel, resolveRange } from '@/lib/date';
+import { inRange, lastNMonths, monthLabelNarrow, resolveRange } from '@/lib/date';
 import { isLowStock } from '@/domain/stockLedger';
 import { useUiStore } from '@/store/uiStore';
 import { openLixi } from '@/features/lixi/open';
@@ -97,7 +97,7 @@ export default function Home() {
       const total = invoices
         .filter((d) => d.date.startsWith(key) && !['draft', 'cancelled'].includes(d.status))
         .reduce((acc, d) => acc + Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), 0);
-      return { label: monthLabel(key), value: money(total, baseCurrency) };
+      return { label: monthLabelNarrow(key), value: money(total, baseCurrency) };
     });
   }, [invoices, baseCurrency]);
 

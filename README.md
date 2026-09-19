@@ -51,6 +51,7 @@ src/
   components/             primitives, form kit, charts
   features/               screen-level composites (documents, contacts, …)
   domain/                 pure calculation engines, no React
+  i18n/                   the message catalogues, and the code that resolves them
   store/                  zustand stores + company-scoped selectors
   data/                   seed dataset
   illustrations/          illustration registry (name → asset)
@@ -75,6 +76,7 @@ tested without rendering anything:
 | `stockLedger.ts` | Current stock derived from an immutable movement list; never stored as a mutable counter. |
 | `fx.ts` | Effective-dated rates, the rate stored on each document, and gain/loss on settlement. |
 | `reports.ts` | The nine PRD reports. |
+| `plan.ts` | What each tier unlocks, and which routes and reports a plan can open. Prices and gating only — the words live in the catalogue. |
 | `eInvoice.ts` | Who must report, the portal's blocking validations, the NIC schema 1.1 payload, the IRN, the signed QR and the 24-hour cancellation window. |
 | `ewayBill.ts` | When a consignment needs a bill, how long it stays valid, and the windows for extending, cancelling and updating Part-B. |
 | `irpAdapter.ts` | Stands in for the portal. Takes an explicit `now`, reads no clock and draws no random number, so a request always answers the same way. |
@@ -113,10 +115,60 @@ The signature inside the QR is the one piece that cannot be real: it is derived
 from the signing input rather than produced with the portal's private key, and
 is marked as such in the code.
 
+### Language
+
+The app ships in English and Tamil. English is the default; a fresh install
+follows the device where it can, and anyone upgrading stays on English rather
+than having the language change under them. The switch is under
+**Settings → Appearance & language**.
+
+Copy lives in `src/i18n/locales/{en,ta}`, fifteen namespaces per language,
+resolved through i18next. Three rules keep it honest:
+
+- **The domain layer never sees a translator.** `src/domain` returns a code and
+  a tone — `STATUS_TONE`, a plan's feature slugs, a `ComplianceIssue`'s
+  `messageKey` — and the words are resolved where they are displayed. The pure
+  functions stay testable without a catalogue.
+- **One key per whole sentence.** Nothing is assembled from translated
+  fragments, because Tamil word order differs: `formatDateTime` moved its
+  joining word out of the date pattern, and the English-grammar patches in
+  Lixi (`run${n === 1 ? 's' : ''}`) became CLDR plurals.
+- **Digits stay ASCII.** Tamil numerals are archaic and never used in Indian
+  commerce, so `₹1,23,456.00` is identical in both languages and only the
+  lakh/crore word is translated. Statutory tokens — GST, GSTIN, HSN, IRN,
+  CGST/SGST/IGST — stay Latin, because that is how they appear on a filing.
+
+`npm test` enforces the parts a reviewer cannot eyeball: that both catalogues
+carry the same keys, the same interpolation parameters and paired plural forms;
+that no Tamil value is still its untranslated English source; that every
+document status, kind, series and module resolves in both languages; and that
+tab labels fit the nine-grapheme budget the bar allows. `node tools/i18n/report.mjs`
+lists any user-facing literal still outside the catalogue.
+
+Two things are deliberately not translated, and the reporter says so rather
+than counting them as work left: the product name, and the "TAX INVOICE" drawn
+inside the welcome artwork.
+
+**Printed invoices are bilingual.** Under Tamil each field label and column
+header reads in Tamil with the English term beneath it, because a GST invoice
+is read by officers and by counterparties in other states. Values — amounts,
+GSTIN, HSN, IRN, dates — render once, in Latin. An English PDF is unchanged.
+
+Adding a language is a folder under `src/i18n/locales` and one entry in
+`SUPPORTED_LANGUAGES`. Note that Tamil's plural rule matches English (`one` at
+n = 1 only); Hindi's does not — it counts zero as singular — so the
+`_one`/`_other` split is worth re-reading when it lands.
+
 ### Data and state
 
 `src/store/appStore.ts` holds every entity in a Zustand store persisted to
-AsyncStorage, so anything created in the prototype survives a restart. Reads go
+AsyncStorage, so anything created in the prototype survives a restart. Fields
+that a person picks from a fixed list store a stable slug rather than the
+English label they saw — `Company.businessType` learned this the hard way, and
+a migration maps the labels that shipped. Seeded master data the user can then
+edit (tax categories, expense categories) is written in whatever language was
+active at onboarding and is their data from then on; it does not follow a later
+language switch. Reads go
 through `src/store/selectors.ts`, which scopes them by the active company —
 that is how company isolation is enforced here.
 
@@ -164,8 +216,9 @@ nine reports with filters and CSV export · invoice PDF preview and share ·
 global search · notifications · OCR capture and review · an assistant that
 reads the books but confirms before acting · settings for company, branches,
 users and roles, taxes, currencies, numbering, accounts, categories,
-integrations, backup and export, audit trail, sync, devices, appearance and
-plan.
+integrations, backup and export, audit trail, sync, devices, appearance,
+language and plan · the whole interface in English and Tamil, including
+printed invoices and the assistant.
 
 ## Credits
 
