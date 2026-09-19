@@ -38,7 +38,7 @@ const VIEWS: { value: View_; label: string }[] = [
  */
 export default function Gstr1Report() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['compliance', 'nav']);
   const { scope, setScope } = useReportScope('thisMonth');
   const [view, setView] = useState<View_>('b2b');
 
@@ -126,7 +126,7 @@ export default function Gstr1Report() {
       <Stack.Screen options={{ title: tr('nav:title.gstr1') }} />
       <ReportShell
         title="GSTR-1"
-        subtitle="Outward supplies"
+        subtitle={tr('compliance:gstr1.outwardSupplies')}
         scope={scope}
         onScopeChange={setScope}
         exportRows={exportRows}
@@ -158,8 +158,8 @@ export default function Gstr1Report() {
             <EmptyState
               illustration="no-documents"
               icon="file-send-outline"
-              title="Nothing in this table"
-              message="No document in the selected period falls into it."
+              title={tr('compliance:gstr1.emptyTable')}
+              message={tr('compliance:gstr1.emptyTableBody')}
               compact
             />
           </Card>

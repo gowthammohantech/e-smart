@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -7,6 +8,7 @@ import { ComplianceHub } from '@/features/compliance/ComplianceHub';
 
 export default function Compliance() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
 
   return (
@@ -16,7 +18,7 @@ export default function Compliance() {
           title: 'GST compliance',
           headerRight: () => (
             <Button
-              title="Settings"
+              title={tr('compliance:hub.settings')}
               variant="ghost"
               size="sm"
               icon="cog-outline"

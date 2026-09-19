@@ -136,5 +136,30 @@
     "sharePdf": "PDF பகிர்",
     "pdfFailed": "இந்தச் சாதனத்தில் PDF உருவாக்க முடியவில்லை",
     "printUnavailable": "இங்கே அச்சிடும் வசதி இல்லை"
+  },
+  "pdf": {
+    "billTo": "பில் பெறுநர்",
+    "gstin": "GSTIN",
+    "placeOfSupply": "வழங்கல் இடம்",
+    "reference": "குறிப்பு",
+    "supplierDocument": "சப்ளையர் ஆவணம்",
+    "currency": "நாணயம்",
+    "description": "விவரம்",
+    "qty": "அளவு",
+    "rate": "விலை",
+    "disc": "தள்ளுபடி",
+    "tax": "வரி",
+    "amount": "தொகை",
+    "subtotal": "கூட்டுத்தொகை",
+    "taxableValue": "வரி விதிக்கத்தக்க மதிப்பு",
+    "roundOff": "முழுமையாக்கல்",
+    "total": "மொத்தம்",
+    "notes": "குறிப்புகள்",
+    "authorisedSignatory": "அங்கீகரிக்கப்பட்ட கையொப்பமிடுநர்",
+    "generatedWith": "Elixir Books Smart மூலம் உருவாக்கப்பட்டது",
+    "ewbNo": "இ-வே பில் எண்",
+    "validUntil": "செல்லுபடி முடிவு",
+    "ackNo": "ஒப்புகை எண்",
+    "ackDate": "ஒப்புகைத் தேதி"
   }
 }

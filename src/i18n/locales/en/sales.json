@@ -136,5 +136,30 @@
     "sharePdf": "Share PDF",
     "pdfFailed": "Could not generate the PDF on this device",
     "printUnavailable": "Printing is not available here"
+  },
+  "pdf": {
+    "billTo": "Bill to",
+    "gstin": "GSTIN",
+    "placeOfSupply": "Place of supply",
+    "reference": "Reference",
+    "supplierDocument": "Supplier document",
+    "currency": "Currency",
+    "description": "Description",
+    "qty": "Qty",
+    "rate": "Rate",
+    "disc": "Disc.",
+    "tax": "Tax",
+    "amount": "Amount",
+    "subtotal": "Subtotal",
+    "taxableValue": "Taxable value",
+    "roundOff": "Round off",
+    "total": "Total",
+    "notes": "Notes",
+    "authorisedSignatory": "Authorised signatory",
+    "generatedWith": "Generated with Elixir Books Smart",
+    "ewbNo": "E-way bill no.",
+    "validUntil": "Valid until",
+    "ackNo": "Ack no.",
+    "ackDate": "Ack date"
   }
 }

@@ -45,3 +45,12 @@ export function paymentMethodLabel(t: Translate, method: string): string {
 export function dateRangeLabel(t: Translate, preset: string): string {
   return t(`common:dateRange.${preset}`);
 }
+
+/**
+ * Resolves a key a data table carries — a compliance status's `labelKey`, a
+ * filter's, a nav entry's. The key is a value, not a literal, so it meets the
+ * same boundary as the helpers above.
+ */
+export function keyLabel(t: Translate, key: string): string {
+  return t(key);
+}

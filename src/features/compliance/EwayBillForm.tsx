@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -42,6 +43,7 @@ import { formatMoney } from '@/lib/format';
  */
 export function EwayBillForm({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
   const toast = useToast();
   const company = useActiveCompany();
@@ -122,7 +124,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
     setBusy(false);
 
     if (outcome.ok && outcome.ewayBillId) {
-      toast.show('E-way bill generated', 'success');
+      toast.show(tr('compliance:ewb.generated'), 'success');
       router.replace(`/(app)/compliance/eway/${outcome.ewayBillId}`);
       return;
     }
@@ -146,36 +148,34 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
       >
         {/* ---------------- Part-A ---------------- */}
         <Card style={{ gap: t.spacing.sm }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Consignment
-          </Text>
-          <Row label="Document" value={doc.number} />
-          <Row label="Dated" value={formatDate(doc.date)} />
-          <Row label="Value" value={formatMoney(doc.totals.grandTotal)} />
-          <Row label="Lines" value={String(doc.lines.length)} />
-          <Row label="Main HSN" value={mainHsnCodeOf(doc) ?? '—'} />
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.consignment')}</Text>
+          <Row label={tr('compliance:ewb.document')} value={doc.number} />
+          <Row label={tr('compliance:ewb.dated')} value={formatDate(doc.date)} />
+          <Row label={tr('compliance:ewb.value')} value={formatMoney(doc.totals.grandTotal)} />
+          <Row label={tr('compliance:ewb.lines')} value={String(doc.lines.length)} />
+          <Row label={tr('compliance:ewb.mainHsn')} value={mainHsnCodeOf(doc) ?? '—'} />
         </Card>
 
         <View style={{ height: t.spacing.md }} />
 
         <PickerField
-          label="Sub-supply type"
+          label={tr('compliance:ewb.subSupplyType')}
           value={EWAY_SUB_SUPPLY_TYPES[subSupplyType].label}
           onPress={() => setSubSupplyOpen(true)}
           icon="tag-outline"
         />
         {subSupplyType === 'others' ? (
           <TextField
-            label="Describe the sub-supply"
+            label={tr('compliance:ewb.describeSubSupply')}
             required
             value={subSupplyDescription}
             onChangeText={setSubSupplyDescription}
             error={errors.subSupplyDescription}
-            placeholder="What is moving, and why"
+            placeholder={tr('compliance:ewb.whatMoving')}
           />
         ) : null}
 
-        <SectionHeader title="From" />
+        <SectionHeader title={tr('compliance:ewb.from')} />
         <PlaceFields
           place={from}
           onChange={setFrom}
@@ -184,7 +184,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           onPickState={() => setStateSheet('from')}
         />
 
-        <SectionHeader title="To" />
+        <SectionHeader title={tr('compliance:ewb.to')} />
         <PlaceFields
           place={to}
           onChange={setTo}
@@ -194,31 +194,29 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         />
 
         {/* ---------------- Part-B ---------------- */}
-        <SectionHeader title="Transport" />
+        <SectionHeader title={tr('compliance:ewb.transport')} />
 
         {transporters.length ? (
           <PickerField
-            label="Saved transporter"
+            label={tr('compliance:ewb.savedTransporter')}
             value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-            placeholder="Pick one, or type the details below"
+            placeholder={tr('compliance:ewb.pickOrType')}
             onPress={() => setTransporterOpen(true)}
             icon="truck-outline"
           />
         ) : null}
         <TextField
-          label="Transporter ID"
+          label={tr('compliance:ewb.transporterId')}
           value={transporterId}
           onChangeText={setTransporterId}
           autoCapitalize="characters"
           error={errors.transporterId}
           placeholder="15-character GSTIN or TRANSIN"
         />
-        <TextField label="Transporter name" value={transporterName} onChangeText={setTransporterName} />
+        <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
 
         <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Mode
-          </Text>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
           <Segmented
             options={[
               { value: 'road', label: 'Road' },
@@ -232,9 +230,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         </View>
 
         <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Cargo
-          </Text>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.cargo')}</Text>
           <Segmented
             options={[
               { value: 'regular', label: 'Regular' },
@@ -247,7 +243,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
         {byRoad ? (
           <TextField
-            label="Vehicle number"
+            label={tr('compliance:ewb.vehicleNumber')}
             required
             value={vehicleNumber}
             onChangeText={(v) => setVehicleNumber(normalizeVehicleNumber(v))}
@@ -259,15 +255,15 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         ) : (
           <>
             <TextField
-              label="Transport document number"
+              label={tr('compliance:ewb.transportDocNumber')}
               required
               value={transportDocNumber}
               onChangeText={setTransportDocNumber}
               error={errors.transportDocNumber}
-              placeholder="Railway receipt, airway bill or bill of lading"
+              placeholder={tr('compliance:ewb.transportDocHint')}
             />
             <DateField
-              label="Transport document date"
+              label={tr('compliance:ewb.transportDocDate')}
               required
               value={transportDocDate}
               onChange={setTransportDocDate}
@@ -277,7 +273,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         )}
 
         <TextField
-          label="Approximate distance"
+          label={tr('compliance:ewb.approxDistance')}
           required
           value={distanceKm}
           onChangeText={setDistanceKm}
@@ -318,7 +314,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         }}
       >
         <Button
-          title="Generate e-way bill"
+          title={tr('compliance:ewb.generate')}
           icon="truck-fast-outline"
           loading={busy}
           onPress={submit}
@@ -329,7 +325,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
       <SelectSheet
         visible={subSupplyOpen}
         onClose={() => setSubSupplyOpen(false)}
-        title="Sub-supply type"
+        title={tr('compliance:ewb.subSupplyType')}
         options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
           value: key,
           label: EWAY_SUB_SUPPLY_TYPES[key].label,
@@ -345,7 +341,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
       <SelectSheet
         visible={transporterOpen}
         onClose={() => setTransporterOpen(false)}
-        title="Transporter"
+        title={tr('compliance:ewb.transporter')}
         options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
         value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
         onSelect={(id) => {
@@ -386,10 +382,11 @@ function PlaceFields({
   prefix: 'from' | 'to';
   onPickState: () => void;
 }) {
+  const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
   return (
     <>
       <TextField
-        label="Legal name"
+        label={tr('compliance:ewb.legalName')}
         value={place.legalName}
         onChangeText={(v) => onChange({ ...place, legalName: v })}
         error={errors[`${prefix}.legalName`]}
@@ -401,22 +398,22 @@ function PlaceFields({
         autoCapitalize="characters"
         autoCorrect={false}
         error={errors[`${prefix}.gstin`]}
-        hint="URP if the party is not registered"
+        hint={tr('compliance:ewb.urpHint')}
       />
       <TextField
-        label="Address"
+        label={tr('compliance:ewb.address')}
         value={place.address1}
         onChangeText={(v) => onChange({ ...place, address1: v })}
         error={errors[`${prefix}.address1`]}
       />
       <TextField
-        label="Place"
+        label={tr('compliance:ewb.place')}
         value={place.place}
         onChangeText={(v) => onChange({ ...place, place: v })}
         error={errors[`${prefix}.place`]}
       />
       <TextField
-        label="PIN code"
+        label={tr('compliance:ewb.pinCode')}
         value={place.pincode}
         onChangeText={(v) => onChange({ ...place, pincode: v })}
         keyboardType="number-pad"
@@ -424,9 +421,9 @@ function PlaceFields({
         error={errors[`${prefix}.pincode`]}
       />
       <PickerField
-        label="State"
+        label={tr('compliance:ewb.state')}
         value={place.stateCode ? stateName(place.stateCode) : undefined}
-        placeholder="Choose a state"
+        placeholder={tr('compliance:ewb.chooseState')}
         onPress={onPickState}
         icon="map-marker-outline"
         error={errors[`${prefix}.stateCode`]}

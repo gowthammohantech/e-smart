@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { keyLabel } from '@/i18n/labels';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -30,6 +32,7 @@ import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complia
  */
 export function ComplianceCard({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
   const company = useActiveCompany();
   const settings = useComplianceSettings();
@@ -83,18 +86,14 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
           textTransform: 'uppercase',
           letterSpacing: 0.8,
         }}
-      >
-        Compliance
-      </Text>
+      >{tr('compliance:einv.compliance')}</Text>
 
       <Card style={{ gap: t.spacing.lg }}>
         {/* ---------------- e-invoice ---------------- */}
         <View style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="small" weight="600">
-              E-invoice
-            </Text>
-            <Badge label={eInvoiceMeta.label} tone={eInvoiceMeta.tone} icon={eInvoiceMeta.icon} />
+            <Text variant="small" weight="600">{tr('compliance:einv.eInvoice')}</Text>
+            <Badge label={keyLabel(tr, eInvoiceMeta.labelKey)} tone={eInvoiceMeta.tone} icon={eInvoiceMeta.icon} />
           </View>
 
           {eInvoiceStatus === 'notApplicable' ? (
@@ -123,15 +122,11 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
                 </View>
                 <View style={{ flexDirection: 'row', gap: t.spacing.lg }}>
                   <View style={{ gap: 2 }}>
-                    <Text variant="caption" tone="muted">
-                      Ack No.
-                    </Text>
+                    <Text variant="caption" tone="muted">{tr('compliance:einv.ackNo')}</Text>
                     <Text variant="micro">{doc.compliance.ackNo ?? '—'}</Text>
                   </View>
                   <View style={{ gap: 2 }}>
-                    <Text variant="caption" tone="muted">
-                      Ack date
-                    </Text>
+                    <Text variant="caption" tone="muted">{tr('compliance:einv.ackDate')}</Text>
                     <Text variant="micro">{doc.compliance.ackDate?.slice(0, 10) ?? '—'}</Text>
                   </View>
                 </View>
@@ -183,7 +178,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
           {eInvoiceStatus === 'generated' ? (
             <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
               <Button
-                title="View"
+                title={tr('compliance:einv.view')}
                 icon="qrcode"
                 size="sm"
                 variant="ghost"
@@ -192,7 +187,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
               />
               {cancellation.allowed ? (
                 <Button
-                  title="Cancel IRN"
+                  title={tr('compliance:einv.cancelIrnShort')}
                   icon="shield-off-outline"
                   size="sm"
                   variant="ghost"
@@ -216,11 +211,9 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
         {/* ---------------- e-way bill ---------------- */}
         <View style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="small" weight="600">
-              E-way bill
-            </Text>
+            <Text variant="small" weight="600">{tr('compliance:einv.ewayBill')}</Text>
             {billMeta ? (
-              <Badge label={billMeta.label} tone={expiringSoon ? 'warning' : billMeta.tone} icon={billMeta.icon} />
+              <Badge label={keyLabel(tr, billMeta.labelKey)} tone={expiringSoon ? 'warning' : billMeta.tone} icon={billMeta.icon} />
             ) : (
               <Badge
                 label={requirement.required ? 'Not raised' : 'Not required'}
@@ -253,7 +246,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
                 <Text variant="caption" tone={expiringSoon ? 'warn' : 'muted'}>
                   {billStatus === 'cancelled'
                     ? `Cancelled ${bill.cancelledAt ? formatDate(bill.cancelledAt.slice(0, 10)) : ''}`
-                    : `Valid until ${formatDate(bill.validUpto.slice(0, 10))} · ${expiryPhrase(hours)}`}
+                    : `Valid until ${formatDate(bill.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hours)}`}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />

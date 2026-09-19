@@ -16,7 +16,7 @@ import { fromMajor, toMajor } from '@/lib/money';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['compliance', 'nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -39,7 +39,7 @@ export default function EInvoicingSettings() {
       eInvoiceTurnoverThreshold: fromMajor(threshold || '0', currency),
       ewayBillThreshold: fromMajor(ewayThreshold || '0', currency),
     });
-    toast.show('Compliance settings saved', 'success');
+    toast.show(tr('compliance:settings.saved'), 'success');
   };
 
   return (
@@ -59,17 +59,17 @@ export default function EInvoicingSettings() {
         </Card>
 
         {/* ---------------- e-invoice ---------------- */}
-        <SectionLabel>E-invoice</SectionLabel>
+        <SectionLabel>{tr('compliance:settings.eInvoice')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
           <SwitchField
-            label="Report invoices to the portal"
-            description="B2B invoices and credit notes get an IRN and a signed QR."
+            label={tr('compliance:settings.reportInvoices')}
+            description={tr('compliance:settings.reportInvoicesHint')}
             value={draft.eInvoiceEnabled}
             onValueChange={(v) => patch({ eInvoiceEnabled: v })}
           />
           <SwitchField
-            label="Report on finalising"
-            description="Generate the IRN as soon as an invoice is issued, without asking."
+            label={tr('compliance:settings.reportOnFinalise')}
+            description={tr('compliance:settings.reportOnFinaliseHint')}
             value={draft.autoGenerateEInvoiceOnFinalise}
             onValueChange={(v) => patch({ autoGenerateEInvoiceOnFinalise: v })}
             disabled={!draft.eInvoiceEnabled}
@@ -79,49 +79,47 @@ export default function EInvoicingSettings() {
         <View style={{ height: t.spacing.md }} />
 
         <AmountField
-          label="Aggregate annual turnover"
+          label={tr('compliance:settings.turnover')}
           value={turnover}
           onChangeValue={setTurnover}
           currency={currency}
-          hint="What the business turns over in a year, across all its registrations."
+          hint={tr('compliance:settings.turnoverHint')}
         />
         <AmountField
-          label="Mandatory above"
+          label={tr('compliance:settings.mandatoryAbove')}
           value={threshold}
           onChangeValue={setThreshold}
           currency={currency}
-          hint="E-invoicing has applied at 5 crore since August 2023."
+          hint={tr('compliance:settings.mandatoryHint')}
         />
         <TextField
-          label="Reporting window"
+          label={tr('compliance:settings.window')}
           value={String(draft.reportingWindowDays)}
           onChangeText={(v) => patch({ reportingWindowDays: Number(v) || 0 })}
           keyboardType="number-pad"
           suffix="days"
-          hint="The portal refuses an invoice older than this."
+          hint={tr('compliance:settings.windowHint')}
         />
 
-        <SectionLabel>Portal credentials</SectionLabel>
+        <SectionLabel>{tr('compliance:settings.portalCredentials')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
           <TextField
-            label="Portal username"
+            label={tr('compliance:settings.portalUsername')}
             value={draft.irpUsername ?? ''}
             onChangeText={(v) => patch({ irpUsername: v })}
             autoCapitalize="none"
             autoCorrect={false}
           />
           <TextField
-            label="GSP client ID"
+            label={tr('compliance:settings.gspClientId')}
             value={draft.irpClientIdMasked ?? ''}
             onChangeText={(v) => patch({ irpClientIdMasked: v })}
             autoCapitalize="characters"
             autoCorrect={false}
-            hint="Stored masked, and never sent anywhere. Do not put a real credential in a prototype."
+            hint={tr('compliance:settings.credentialHint')}
           />
           <View style={{ gap: t.spacing.sm, marginTop: t.spacing.xs }}>
-            <Text variant="caption" tone="muted" weight="600">
-              Environment
-            </Text>
+            <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.environment')}</Text>
             <Segmented
               options={[
                 { value: 'sandbox', label: 'Sandbox' },
@@ -138,17 +136,17 @@ export default function EInvoicingSettings() {
         </Card>
 
         {/* ---------------- e-way bill ---------------- */}
-        <SectionLabel>E-way bill</SectionLabel>
+        <SectionLabel>{tr('compliance:settings.ewayBill')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
           <SwitchField
-            label="Raise e-way bills"
-            description="For goods moving on an invoice or a delivery note."
+            label={tr('compliance:settings.raiseEwb')}
+            description={tr('compliance:settings.raiseEwbHint')}
             value={draft.ewayBillEnabled}
             onValueChange={(v) => patch({ ewayBillEnabled: v })}
           />
           <SwitchField
-            label="Raise on finalising"
-            description="Only possible when the defaults below are enough to fill Part-B; road consignments still need a vehicle number, so you will be prompted."
+            label={tr('compliance:settings.raiseOnFinalise')}
+            description={tr('compliance:settings.raiseOnFinaliseHint')}
             value={draft.autoGenerateEwayBillOnFinalise}
             onValueChange={(v) => patch({ autoGenerateEwayBillOnFinalise: v })}
             disabled={!draft.ewayBillEnabled}
@@ -158,26 +156,26 @@ export default function EInvoicingSettings() {
         <View style={{ height: t.spacing.md }} />
 
         <AmountField
-          label="Required above"
+          label={tr('compliance:settings.requiredAbove')}
           value={ewayThreshold}
           onChangeValue={setEwayThreshold}
           currency={currency}
-          hint="The statute sets 50,000. Several states set a higher figure for movement within the state."
+          hint={tr('compliance:settings.requiredHint')}
         />
         <TextField
-          label="Default transporter ID"
+          label={tr('compliance:settings.defaultTransporterId')}
           value={draft.defaultTransporterId ?? ''}
           onChangeText={(v) => patch({ defaultTransporterId: v })}
           autoCapitalize="characters"
           autoCorrect={false}
         />
         <TextField
-          label="Default transporter"
+          label={tr('compliance:settings.defaultTransporter')}
           value={draft.defaultTransporterName ?? ''}
           onChangeText={(v) => patch({ defaultTransporterName: v })}
         />
         <TextField
-          label="Default distance"
+          label={tr('compliance:settings.defaultDistance')}
           value={String(draft.defaultDistanceKm)}
           onChangeText={(v) => patch({ defaultDistanceKm: Number(v) || 0 })}
           keyboardType="number-pad"
@@ -185,9 +183,7 @@ export default function EInvoicingSettings() {
         />
 
         <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Default mode
-          </Text>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.defaultMode')}</Text>
           <Segmented
             options={[
               { value: 'road', label: 'Road' },
@@ -201,9 +197,7 @@ export default function EInvoicingSettings() {
         </View>
 
         <View style={{ gap: t.spacing.sm }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Default cargo
-          </Text>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.defaultCargo')}</Text>
           <Segmented
             options={[
               { value: 'regular', label: 'Regular' },
@@ -215,24 +209,24 @@ export default function EInvoicingSettings() {
         </View>
 
         {/* ---------------- state ---------------- */}
-        <SectionLabel>Where things stand</SectionLabel>
+        <SectionLabel>{tr('compliance:settings.whereThingsStand')}</SectionLabel>
         <Card padded={false}>
           <ListRow
-            title="Reported invoices"
+            title={tr('compliance:settings.reportedInvoices')}
             meta={String(summary.eInvoice.generated)}
             icon="shield-check-outline"
             divider
             onPress={() => router.push('/(app)/compliance')}
           />
           <ListRow
-            title="Rejected or unreported"
+            title={tr('compliance:settings.rejectedOrUnreported')}
             meta={String(summary.eInvoice.failed + summary.eInvoice.pending)}
             icon="alert-circle-outline"
             divider
             onPress={() => router.push('/(app)/compliance')}
           />
           <ListRow
-            title="Active e-way bills"
+            title={tr('compliance:settings.activeEwb')}
             meta={String(summary.eway.active)}
             icon="truck-fast-outline"
             onPress={() => router.push('/(app)/compliance')}
@@ -253,7 +247,7 @@ export default function EInvoicingSettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Save" icon="check" onPress={onSave} fullWidth />
+        <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
       </View>
     </View>
   );

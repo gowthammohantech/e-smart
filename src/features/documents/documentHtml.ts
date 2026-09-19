@@ -8,6 +8,29 @@ import { INDIAN_STATES } from '@/data/masters';
 import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '@/lib/qr';
 import { E_INVOICE_CANCEL_REASONS } from '@/domain/eInvoice';
 import type { LanguageCode } from '@/i18n/config';
+import i18n from '@/i18n';
+
+/**
+ * A field label on the printed document. Under Tamil it reads in Tamil with
+ * the English underneath in a muted span: a GST invoice is a legal document,
+ * read by officers and by counterparties in other states, so the English term
+ * has to stay visible. Under English the second half is omitted, which keeps
+ * an English PDF byte-identical to what it was before.
+ *
+ * Values — amounts, GSTIN, HSN, IRN, dates — are never doubled up; only the
+ * labels are.
+ */
+function bilingual(t: Translate, language: LanguageCode): (key: string) => string {
+  const en: Translate = i18n.getFixedT('en', null);
+  return (key) => {
+    const primary = esc(t(key));
+    if (language === 'en') return primary;
+    const secondary = esc(en(key));
+    return secondary && secondary !== primary
+      ? `${primary} <span class="alt">${secondary}</span>`
+      : primary;
+  };
+}
 
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -48,6 +71,8 @@ export function buildDocumentHtml({
   // something.
   const kindName = documentKindLabel(t, doc.kind, 1);
   const label = language === 'en' ? kindName.toUpperCase() : kindName;
+
+  const bi = bilingual(t, language);
   const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
   const pos = INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name;
 
@@ -79,14 +104,14 @@ export function buildDocumentHtml({
     `<tr class="${strong ? 'grand' : ''}"><td>${esc(name)}</td><td class="num">${value}</td></tr>`;
 
   const totalRows = [
-    totalRow('Subtotal', formatMoney(doc.totals.subtotal)),
+    totalRow(bi('sales:pdf.subtotal'), formatMoney(doc.totals.subtotal)),
     doc.totals.lineDiscount.minor > 0 ? totalRow('Line discounts', `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
-    totalRow('Taxable value', formatMoney(doc.totals.taxableAmount)),
+    totalRow(bi('sales:pdf.taxableValue'), formatMoney(doc.totals.taxableAmount)),
     ...components.map((c) => totalRow(c.label, formatMoney(c.amount))),
     doc.totals.documentDiscount.minor > 0 ? totalRow('Discount on total', `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
     doc.totals.charges.minor > 0 ? totalRow('Other charges', formatMoney(doc.totals.charges)) : '',
-    doc.totals.roundOff.minor !== 0 ? totalRow('Round off', formatMoney(doc.totals.roundOff, { signed: true })) : '',
-    totalRow('Total', formatMoney(doc.totals.grandTotal), true),
+    doc.totals.roundOff.minor !== 0 ? totalRow(bi('sales:pdf.roundOff'), formatMoney(doc.totals.roundOff, { signed: true })) : '',
+    totalRow(bi('sales:pdf.total'), formatMoney(doc.totals.grandTotal), true),
   ]
     .filter(Boolean)
     .join('');
@@ -100,7 +125,12 @@ export function buildDocumentHtml({
 <style>
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* The Tamil faces sit after the Latin ones, so Latin text is unchanged and
+       Tamil glyphs come from the platform font rather than rendering as tofu.
+       Both print WebViews subset-embed what they use into the PDF, so no
+       webfont is shipped. */
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+                 "Noto Sans Tamil", "Tamil Sangam MN", Latha, sans-serif;
     color: #0E121A;
     margin: 0;
     padding: 28px;
@@ -144,11 +174,15 @@ export function buildDocumentHtml({
   .einv-qr svg { display: block; }
   .einv-body { flex: 1; }
   .einv-grid { display: flex; gap: 26px; margin-top: 9px; }
+  /* The English term printed under a Tamil label. */
+  .alt { display: block; font-size: 8px; font-weight: 400; letter-spacing: 0.3px; opacity: 0.66; text-transform: none; }
+  /* Tamil marks sit above and below the line and clip at the Latin leading. */
+  body.ta { line-height: 1.62; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; line-height: 1.5; word-break: break-all; letter-spacing: 0.2px; }
   .cancelled-strip { margin-bottom: 14px; padding: 8px 12px; border-radius: 5px; background: rgba(255,59,48,0.10); color: #C62F26; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; }
 </style>
 </head>
-<body>
+<body class="${language}">
   ${cancelledStrip(doc)}
   <div class="head">
     <div>
@@ -174,17 +208,17 @@ export function buildDocumentHtml({
 
   <div class="parties">
     <div>
-      <div class="cap">Bill to</div>
+      <div class="cap">${bi('sales:pdf.billTo')}</div>
       <div class="name">${esc(party?.name)}</div>
       <div class="muted">${addressBlock(party?.billingAddress)}</div>
-      ${party?.taxId ? `<div style="margin-top:4px"><strong>GSTIN:</strong> ${esc(party.taxId)}</div>` : ''}
+      ${party?.taxId ? `<div style="margin-top:4px"><strong>${esc(t('sales:pdf.gstin'))}:</strong> ${esc(party.taxId)}</div>` : ''}
       ${party?.phone ? `<div class="muted">${esc(party.phone)}</div>` : ''}
     </div>
     <div>
-      ${pos ? `<div class="cap">Place of supply</div><div>${esc(pos)}</div>` : ''}
-      ${doc.reference ? `<div class="cap" style="margin-top:10px">Reference</div><div>${esc(doc.reference)}</div>` : ''}
-      ${doc.supplierDocNumber ? `<div class="cap" style="margin-top:10px">Supplier document</div><div>${esc(doc.supplierDocNumber)}</div>` : ''}
-      ${doc.currency !== (company?.baseCurrency ?? 'INR') ? `<div class="cap" style="margin-top:10px">Currency</div><div>${esc(doc.currency)} @ ${doc.exchangeRate.toFixed(4)} ${esc(company?.baseCurrency)}</div>` : ''}
+      ${pos ? `<div class="cap">${bi('sales:pdf.placeOfSupply')}</div><div>${esc(pos)}</div>` : ''}
+      ${doc.reference ? `<div class="cap" style="margin-top:10px">${bi('sales:pdf.reference')}</div><div>${esc(doc.reference)}</div>` : ''}
+      ${doc.supplierDocNumber ? `<div class="cap" style="margin-top:10px">${bi('sales:pdf.supplierDocument')}</div><div>${esc(doc.supplierDocNumber)}</div>` : ''}
+      ${doc.currency !== (company?.baseCurrency ?? 'INR') ? `<div class="cap" style="margin-top:10px">${bi('sales:pdf.currency')}</div><div>${esc(doc.currency)} @ ${doc.exchangeRate.toFixed(4)} ${esc(company?.baseCurrency)}</div>` : ''}
     </div>
   </div>
 
@@ -192,12 +226,12 @@ export function buildDocumentHtml({
     <thead>
       <tr>
         <th style="width:26px">#</th>
-        <th>Description</th>
-        <th class="num">Qty</th>
-        <th class="num">Rate</th>
-        <th class="num">Disc.</th>
-        <th class="num">Tax</th>
-        <th class="num">Amount</th>
+        <th>${bi('sales:pdf.description')}</th>
+        <th class="num">${bi('sales:pdf.qty')}</th>
+        <th class="num">${bi('sales:pdf.rate')}</th>
+        <th class="num">${bi('sales:pdf.disc')}</th>
+        <th class="num">${bi('sales:pdf.tax')}</th>
+        <th class="num">${bi('sales:pdf.amount')}</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -205,11 +239,11 @@ export function buildDocumentHtml({
 
   <table class="totals"><tbody>${totalRows}</tbody></table>
 
-  ${eInvoiceBlock(doc, ewayBill)}
+  ${eInvoiceBlock(doc, bi, ewayBill)}
 
   <div class="notes">
     <div>
-      ${doc.notes ? `<div class="cap">Notes</div><div>${esc(doc.notes)}</div>` : ''}
+      ${doc.notes ? `<div class="cap">${bi('sales:pdf.notes')}</div><div>${esc(doc.notes)}</div>` : ''}
       ${doc.terms ? `<div class="cap" style="margin-top:12px">Terms &amp; conditions</div><div class="muted">${esc(doc.terms)}</div>` : ''}
     </div>
   </div>
@@ -219,7 +253,7 @@ export function buildDocumentHtml({
     <div class="line muted">Authorised signatory</div>
   </div>
 
-  <div class="foot">Generated with Elixir Books Smart</div>
+  <div class="foot">${esc(t('sales:pdf.generatedWith'))}</div>
 </body>
 </html>`;
 }
@@ -233,7 +267,7 @@ export function buildDocumentHtml({
  * appear on the document travelling with the consignment — so none of this is
  * decoration that can be dropped to save room.
  */
-function eInvoiceBlock(doc: BusinessDocument, ewayBill?: EwayBill): string {
+function eInvoiceBlock(doc: BusinessDocument, bi: (key: string) => string, ewayBill?: EwayBill): string {
   const c = doc.compliance;
   const reported = c?.eInvoiceStatus === 'generated' || c?.eInvoiceStatus === 'cancelled';
   if (!reported || !c?.irn) return '';
@@ -256,8 +290,8 @@ function eInvoiceBlock(doc: BusinessDocument, ewayBill?: EwayBill): string {
 
   const ewb = ewayBill
     ? `<div class="einv-grid">
-        <div><div class="cap">E-way bill no.</div><div>${esc(ewayBill.ewayBillNumber)}</div></div>
-        <div><div class="cap">Valid until</div><div>${esc(formatDate(ewayBill.validUpto.slice(0, 10)))}</div></div>
+        <div><div class="cap">${bi('sales:pdf.ewbNo')}</div><div>${esc(ewayBill.ewayBillNumber)}</div></div>
+        <div><div class="cap">${bi('sales:pdf.validUntil')}</div><div>${esc(formatDate(ewayBill.validUpto.slice(0, 10)))}</div></div>
       </div>`
     : '';
 
@@ -268,8 +302,8 @@ function eInvoiceBlock(doc: BusinessDocument, ewayBill?: EwayBill): string {
       <div class="cap" style="margin-top:9px">IRN</div>
       <div class="mono">${esc(c.irn)}</div>
       <div class="einv-grid">
-        <div><div class="cap">Ack no.</div><div>${esc(c.ackNo)}</div></div>
-        <div><div class="cap">Ack date</div><div>${esc(c.ackDate)}</div></div>
+        <div><div class="cap">${bi('sales:pdf.ackNo')}</div><div>${esc(c.ackNo)}</div></div>
+        <div><div class="cap">${bi('sales:pdf.ackDate')}</div><div>${esc(c.ackDate)}</div></div>
       </div>
       ${ewb}
     </div>

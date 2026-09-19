@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { keyLabel } from '@/i18n/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -29,19 +31,20 @@ import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complia
 
 type Tab = 'eInvoice' | 'eway';
 
-const E_INVOICE_FILTERS: { key: EInvoiceStatus | 'all'; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'generated', label: 'Reported' },
-  { key: 'pending', label: 'Not reported' },
-  { key: 'failed', label: 'Rejected' },
-  { key: 'cancelled', label: 'Cancelled' },
+/** Filter keys, in order. Names resolve from `compliance:filter.*` at render. */
+const E_INVOICE_FILTERS: { key: EInvoiceStatus | 'all'; labelKey: string }[] = [
+  { key: 'all', labelKey: 'compliance:filter.all' },
+  { key: 'generated', labelKey: 'compliance:filter.reported' },
+  { key: 'pending', labelKey: 'compliance:filter.notReported' },
+  { key: 'failed', labelKey: 'compliance:filter.rejected' },
+  { key: 'cancelled', labelKey: 'compliance:filter.cancelled' },
 ];
 
-const EWAY_FILTERS: { key: EwayBillStatus | 'all'; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'expired', label: 'Expired' },
-  { key: 'cancelled', label: 'Cancelled' },
+const EWAY_FILTERS: { key: EwayBillStatus | 'all'; labelKey: string }[] = [
+  { key: 'all', labelKey: 'compliance:filter.all' },
+  { key: 'active', labelKey: 'compliance:filter.active' },
+  { key: 'expired', labelKey: 'compliance:filter.expired' },
+  { key: 'cancelled', labelKey: 'compliance:filter.cancelled' },
 ];
 
 /**
@@ -51,6 +54,7 @@ const EWAY_FILTERS: { key: EwayBillStatus | 'all'; label: string }[] = [
  */
 export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.ReactNode; bottomInset?: number } = {}) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
 
   const [tab, setTab] = useState<Tab>('eInvoice');
@@ -119,14 +123,14 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       {tab === 'eInvoice' ? (
         <StatRow>
           <StatTile
-            label="Reported"
+            label={tr('compliance:hub.reported')}
             value={String(summary.eInvoice.generated)}
             icon="shield-check-outline"
             tone="good"
             caption={`${summary.eInvoice.cancelled} cancelled`}
           />
           <StatTile
-            label="Needs attention"
+            label={tr('compliance:hub.needsAttention')}
             value={String(summary.eInvoice.pending + summary.eInvoice.failed)}
             icon="alert-circle-outline"
             tone={summary.eInvoice.failed ? 'bad' : 'warn'}
@@ -136,13 +140,13 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       ) : (
         <StatRow>
           <StatTile
-            label="Active bills"
+            label={tr('compliance:hub.activeBills')}
             value={String(summary.eway.active)}
             icon="truck-fast-outline"
             tone="good"
           />
           <StatTile
-            label="Expiring in 24 h"
+            label={tr('compliance:hub.expiring24h')}
             value={String(summary.expiringSoon)}
             icon="clock-alert-outline"
             tone={summary.expiringSoon ? 'warn' : 'default'}
@@ -177,9 +181,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
 
       {!settings.eInvoiceEnabled && tab === 'eInvoice' ? (
         <Card variant="flat" style={{ marginTop: t.spacing.md }}>
-          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            E-invoicing is switched off for this business. Turn it on under Settings to report invoices.
-          </Text>
+          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('compliance:hub.switchedOff')}</Text>
         </Card>
       ) : null}
 
@@ -215,7 +217,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
               }}
             >
               <Text variant="caption" weight="600" tone={active ? 'onPrimary' : 'muted'}>
-                {f.label}
+                {keyLabel(tr, f.labelKey)}
               </Text>
             </Pressable>
           );
@@ -238,7 +240,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
                       ? `IRN ${d.compliance.irn.slice(0, 12)}…`
                       : formatMoney(d.totals.grandTotal)
                   }
-                  right={<Badge label={meta.label} tone={meta.tone} size="sm" />}
+                  right={<Badge label={keyLabel(tr, meta.labelKey)} tone={meta.tone} size="sm" />}
                   divider={i < eInvoiceRows.length - 1}
                   onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
                 />
@@ -248,7 +250,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         ) : (
           <EmptyState
             illustration="no-documents"
-            title="Nothing here"
+            title={tr('compliance:hub.nothingHere')}
             message={
               query
                 ? 'No invoice matches that search.'
@@ -271,9 +273,9 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
                 meta={
                   status === 'cancelled'
                     ? `Cancelled${b.cancelledAt ? ` ${formatDate(b.cancelledAt.slice(0, 10))}` : ''}`
-                    : `${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(hours)}`
+                    : `${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hours)}`
                 }
-                right={<Badge label={meta.label} tone={soon ? 'warning' : meta.tone} size="sm" />}
+                right={<Badge label={keyLabel(tr, meta.labelKey)} tone={soon ? 'warning' : meta.tone} size="sm" />}
                 divider={i < ewayRows.length - 1}
                 onPress={() => router.push(`/(app)/compliance/eway/${b.id}`)}
               />
@@ -283,7 +285,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       ) : (
         <EmptyState
           illustration="no-documents"
-          title="No e-way bills"
+          title={tr('compliance:hub.noEwayBills')}
           message={
             query
               ? 'No bill matches that search.'

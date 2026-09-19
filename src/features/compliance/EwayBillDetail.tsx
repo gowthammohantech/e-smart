@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { keyLabel } from '@/i18n/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -46,6 +48,7 @@ type Entry =
 
 export function EwayBillDetail({ bill }: { bill: EwayBill }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
   const toast = useToast();
 
@@ -116,15 +119,13 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
         <Card style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View style={{ gap: 4 }}>
-              <Text variant="caption" tone="muted">
-                E-way bill number
-              </Text>
+              <Text variant="caption" tone="muted">{tr('compliance:ewb.number')}</Text>
               <Text variant="h3" style={{ letterSpacing: 1 }}>
                 {bill.ewayBillNumber}
               </Text>
             </View>
             <Badge
-              label={meta.label}
+              label={keyLabel(tr, meta.labelKey)}
               tone={status === 'active' && hours <= 24 ? 'warning' : meta.tone}
               icon={meta.icon}
             />
@@ -132,22 +133,18 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
 
           <View style={{ flexDirection: 'row', gap: t.spacing.xl }}>
             <View style={{ gap: 2 }}>
-              <Text variant="caption" tone="muted">
-                Valid from
-              </Text>
+              <Text variant="caption" tone="muted">{tr('compliance:ewb.validFrom')}</Text>
               <Text variant="small">{formatDate(bill.validFrom.slice(0, 10))}</Text>
             </View>
             <View style={{ gap: 2 }}>
-              <Text variant="caption" tone="muted">
-                Valid until
-              </Text>
+              <Text variant="caption" tone="muted">{tr('compliance:ewb.validUntil')}</Text>
               <Text variant="small">{formatDate(bill.validUpto.slice(0, 10))}</Text>
             </View>
           </View>
 
           {status !== 'cancelled' ? (
             <Text variant="caption" tone={hours <= 24 ? 'warn' : 'muted'}>
-              {expiryPhrase(hours)} · midnight expiry, per rule 138(10)
+              {expiryPhrase(tr, hours)} · midnight expiry, per rule 138(10)
             </Text>
           ) : (
             <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
@@ -185,21 +182,21 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
           ) : null}
         </Card>
 
-        <SectionLabel>Consignment</SectionLabel>
+        <SectionLabel>{tr('compliance:ewb.consignment')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
-          <Row label="Supply" value={EWAY_SUB_SUPPLY_TYPES[bill.subSupplyType].label} />
-          <Row label="Document type" value={bill.docType} />
-          <Row label="Taxable value" value={formatMoney(bill.taxableValue)} />
-          <Row label="Total value" value={formatMoney(bill.consignmentValue)} />
-          <Row label="Main HSN" value={bill.mainHsnCode ?? '—'} />
-          <Row label="Lines" value={String(bill.itemCount)} />
+          <Row label={tr('compliance:ewb.supply')} value={EWAY_SUB_SUPPLY_TYPES[bill.subSupplyType].label} />
+          <Row label={tr('compliance:ewb.documentType')} value={bill.docType} />
+          <Row label={tr('compliance:ewb.taxableValue')} value={formatMoney(bill.taxableValue)} />
+          <Row label={tr('compliance:ewb.totalValue')} value={formatMoney(bill.consignmentValue)} />
+          <Row label={tr('compliance:ewb.mainHsn')} value={bill.mainHsnCode ?? '—'} />
+          <Row label={tr('compliance:ewb.lines')} value={String(bill.itemCount)} />
         </Card>
 
-        <SectionLabel>Route</SectionLabel>
+        <SectionLabel>{tr('compliance:ewb.route')}</SectionLabel>
         <Card style={{ gap: t.spacing.md }}>
-          <Leg title="From" place={bill.from} />
+          <Leg title={tr('compliance:ewb.from')} place={bill.from} />
           <View style={{ height: 1, backgroundColor: t.c.line }} />
-          <Leg title="To" place={bill.to} />
+          <Leg title={tr('compliance:ewb.to')} place={bill.to} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="map-marker-distance" size={16} color={t.c.muted} />
             <Text variant="caption" tone="muted">
@@ -208,21 +205,21 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
           </View>
         </Card>
 
-        <SectionLabel>Transport</SectionLabel>
+        <SectionLabel>{tr('compliance:ewb.transport')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
-          <Row label="Mode" value={EWAY_TRANSPORT_MODES[bill.transportMode].label} />
-          <Row label="Cargo" value={EWAY_VEHICLE_TYPES[bill.vehicleType].label} />
-          {bill.vehicleNumber ? <Row label="Vehicle" value={bill.vehicleNumber} /> : null}
+          <Row label={tr('compliance:ewb.mode')} value={EWAY_TRANSPORT_MODES[bill.transportMode].label} />
+          <Row label={tr('compliance:ewb.cargo')} value={EWAY_VEHICLE_TYPES[bill.vehicleType].label} />
+          {bill.vehicleNumber ? <Row label={tr('compliance:ewb.vehicle')} value={bill.vehicleNumber} /> : null}
           {bill.transportDocNumber ? (
-            <Row label="Transport document" value={bill.transportDocNumber} />
+            <Row label={tr('compliance:ewb.transportDocument')} value={bill.transportDocNumber} />
           ) : null}
-          {bill.transporterName ? <Row label="Transporter" value={bill.transporterName} /> : null}
-          {bill.transporterId ? <Row label="Transporter ID" value={bill.transporterId} /> : null}
+          {bill.transporterName ? <Row label={tr('compliance:ewb.transporter')} value={bill.transporterName} /> : null}
+          {bill.transporterId ? <Row label={tr('compliance:ewb.transporterId')} value={bill.transporterId} /> : null}
         </Card>
 
         {history.length ? (
           <>
-            <SectionLabel>History</SectionLabel>
+            <SectionLabel>{tr('compliance:ewb.history')}</SectionLabel>
             <Card padded={false}>
               {history.map((entry, i) => (
                 <View
@@ -275,7 +272,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
       >
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <Button
-            title="Update Part-B"
+            title={tr('compliance:ewb.updatePartB')}
             icon="truck-outline"
             variant="secondary"
             disabled={!partB.allowed}
@@ -283,7 +280,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
             style={{ flex: 1 }}
           />
           <Button
-            title="Extend"
+            title={tr('compliance:ewb.extend')}
             icon="clock-plus-outline"
             variant="ghost"
             disabled={!extension.allowed}
@@ -293,7 +290,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
         </View>
         {cancellation.allowed ? (
           <Button
-            title="Cancel this bill"
+            title={tr('compliance:ewb.cancelBill')}
             icon="close-octagon-outline"
             variant="ghost"
             onPress={() => setCancelOpen(true)}
@@ -319,7 +316,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
           const outcome = updatePartB(bill.id, update);
           setBusy(false);
           if (outcome.ok) {
-            toast.show('Part-B updated', 'success');
+            toast.show(tr('compliance:ewb.partBUpdated'), 'success');
             setPartBOpen(false);
           } else {
             toast.show(outcome.issues[0]?.message ?? 'Part-B could not be updated', 'error');
@@ -337,7 +334,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
           const outcome = extend(bill.id, args);
           setBusy(false);
           if (outcome.ok) {
-            toast.show('Validity extended', 'success');
+            toast.show(tr('compliance:ewb.validityExtended'), 'success');
             setExtendOpen(false);
           } else {
             toast.show(outcome.issues[0]?.message ?? 'The bill could not be extended', 'error');
@@ -357,9 +354,9 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
 
       <ConfirmDialog
         visible={pendingCancel !== null}
-        title="Cancel this e-way bill?"
-        message="The bill will be withdrawn from the portal. Goods already in transit must not move against a cancelled bill."
-        confirmLabel="Cancel the bill"
+        title={tr('compliance:ewb.cancelTitle')}
+        message={tr('compliance:ewb.cancelMessage')}
+        confirmLabel={tr('compliance:ewb.cancelConfirm')}
         destructive
         onCancel={() => setPendingCancel(null)}
         onConfirm={() => {
@@ -367,7 +364,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
           setPendingCancel(null);
           if (!args) return;
           const outcome = cancel(bill.id, args.code, args.remark);
-          if (outcome.ok) toast.show('E-way bill cancelled', 'success');
+          if (outcome.ok) toast.show(tr('compliance:ewb.cancelled'), 'success');
           else toast.show(outcome.issues[0]?.message ?? 'The bill could not be cancelled', 'error');
         }}
       />
@@ -453,6 +450,7 @@ function PartBSheet({
   }) => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
   const [mode, setMode] = useState<TransportMode>(bill.transportMode);
   const [vehicleNumber, setVehicleNumber] = useState(bill.vehicleNumber ?? '');
   const [docNumber, setDocNumber] = useState(bill.transportDocNumber ?? '');
@@ -464,11 +462,11 @@ function PartBSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Update Part-B"
+      title={tr('compliance:ewb.updatePartB')}
       subtitle={bill.ewayBillNumber}
       footer={
         <Button
-          title="Save Part-B"
+          title={tr('compliance:ewb.savePartB')}
           loading={busy}
           onPress={() =>
             onSubmit({
@@ -506,7 +504,7 @@ function PartBSheet({
 
         {mode === 'road' ? (
           <TextField
-            label="Vehicle number"
+            label={tr('compliance:ewb.vehicleNumber')}
             required
             value={vehicleNumber}
             onChangeText={(v) => setVehicleNumber(normalizeVehicleNumber(v))}
@@ -516,19 +514,17 @@ function PartBSheet({
           />
         ) : (
           <TextField
-            label="Transport document number"
+            label={tr('compliance:ewb.transportDocNumber')}
             required
             value={docNumber}
             onChangeText={setDocNumber}
           />
         )}
 
-        <TextField label="Leg starts from" value={fromPlace} onChangeText={setFromPlace} />
+        <TextField label={tr('compliance:ewb.legStarts')} value={fromPlace} onChangeText={setFromPlace} />
 
         <View style={{ gap: t.spacing.sm }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Reason
-          </Text>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.reason')}</Text>
           <Segmented
             options={(Object.keys(EWAY_PART_B_REASONS) as EwayPartBReasonCode[]).map((code) => ({
               value: code,
@@ -540,7 +536,7 @@ function PartBSheet({
           />
         </View>
 
-        <TextField label="Remark" value={remark} onChangeText={setRemark} multiline />
+        <TextField label={tr('compliance:ewb.remark')} value={remark} onChangeText={setRemark} multiline />
       </View>
     </Sheet>
   );
@@ -568,6 +564,7 @@ function ExtendSheet({
   }) => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
   const [remaining, setRemaining] = useState('');
   const [reasonCode, setReasonCode] = useState<EwayExtendReasonCode>('3');
   const [remark, setRemark] = useState('');
@@ -579,11 +576,11 @@ function ExtendSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Extend validity"
+      title={tr('compliance:ewb.extendValidity')}
       subtitle={bill.ewayBillNumber}
       footer={
         <Button
-          title="Extend"
+          title={tr('compliance:ewb.extend')}
           loading={busy}
           disabled={!(Number(remaining) > 0)}
           onPress={() =>
@@ -608,7 +605,7 @@ function ExtendSheet({
         </Text>
 
         <TextField
-          label="Distance still to cover"
+          label={tr('compliance:ewb.distanceLeft')}
           required
           value={remaining}
           onChangeText={setRemaining}
@@ -625,9 +622,9 @@ function ExtendSheet({
           onChange={setTransitType}
         />
 
-        <TextField label="Where the goods are now" value={place} onChangeText={setPlace} />
+        <TextField label={tr('compliance:ewb.whereNow')} value={place} onChangeText={setPlace} />
         <TextField
-          label="PIN code"
+          label={tr('compliance:ewb.pinCode')}
           value={pincode}
           onChangeText={setPincode}
           keyboardType="number-pad"
@@ -635,9 +632,7 @@ function ExtendSheet({
         />
 
         <View style={{ gap: t.spacing.sm }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Reason
-          </Text>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.reason')}</Text>
           {(Object.keys(EWAY_EXTEND_REASONS) as EwayExtendReasonCode[]).map((code) => (
             <Pressable
               key={code}
@@ -664,7 +659,7 @@ function ExtendSheet({
           ))}
         </View>
 
-        <TextField label="Remark" value={remark} onChangeText={setRemark} multiline />
+        <TextField label={tr('compliance:ewb.remark')} value={remark} onChangeText={setRemark} multiline />
       </View>
     </Sheet>
   );
@@ -682,6 +677,7 @@ function CancelSheet({
   onSubmit: (code: CancelReasonCode, remark?: string) => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
   const [reasonCode, setReasonCode] = useState<CancelReasonCode>('2');
   const [remark, setRemark] = useState('');
 
@@ -689,10 +685,10 @@ function CancelSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Cancel the e-way bill"
+      title={tr('compliance:ewb.cancelEwb')}
       footer={
         <Button
-          title="Continue"
+          title={tr('compliance:ewb.continue')}
           variant="danger"
           onPress={() => onSubmit(reasonCode, remark.trim() || undefined)}
           fullWidth
@@ -730,7 +726,7 @@ function CancelSheet({
           </Pressable>
         ))}
 
-        <TextField label="Remark" value={remark} onChangeText={setRemark} multiline />
+        <TextField label={tr('compliance:ewb.remark')} value={remark} onChangeText={setRemark} multiline />
       </View>
     </Sheet>
   );

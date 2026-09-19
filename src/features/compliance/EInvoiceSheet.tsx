@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { keyLabel } from '@/i18n/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -50,6 +52,7 @@ export function EInvoiceSheet({
   mode: 'generate' | 'cancel';
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const toast = useToast();
   const company = useActiveCompany();
   const settings = useComplianceSettings();
@@ -100,7 +103,7 @@ export function EInvoiceSheet({
     setBusy(false);
     setResult(outcome.issues);
     if (outcome.ok) {
-      toast.show('IRN generated', 'success');
+      toast.show(tr('compliance:einv.generated'), 'success');
       onClose();
     } else {
       toast.show(outcome.issues[0]?.message ?? 'The portal refused the invoice', 'error');
@@ -112,7 +115,7 @@ export function EInvoiceSheet({
     const outcome = cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined);
     setBusy(false);
     if (outcome.ok) {
-      toast.show('IRN cancelled', 'success');
+      toast.show(tr('compliance:einv.cancelled'), 'success');
       onClose();
     } else {
       toast.show(outcome.issues[0]?.message ?? 'The IRN could not be cancelled', 'error');
@@ -127,11 +130,11 @@ export function EInvoiceSheet({
       <Sheet
         visible={visible}
         onClose={onClose}
-        title="Cancel the IRN"
+        title={tr('compliance:einv.cancelIrn')}
         subtitle={doc.number}
         footer={
           <Button
-            title="Cancel the IRN"
+            title={tr('compliance:einv.cancelIrn')}
             variant="danger"
             icon="shield-off-outline"
             loading={busy}
@@ -158,9 +161,7 @@ export function EInvoiceSheet({
           )}
 
           <View style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone="muted" weight="600">
-              Reason
-            </Text>
+            <Text variant="caption" tone="muted" weight="600">{tr('compliance:einv.reason')}</Text>
             {(Object.keys(E_INVOICE_CANCEL_REASONS) as CancelReasonCode[]).map((code) => (
               <Pressable
                 key={code}
@@ -188,7 +189,7 @@ export function EInvoiceSheet({
           </View>
 
           <TextField
-            label="Remark"
+            label={tr('compliance:einv.remark')}
             required={needsRemark}
             value={remark}
             onChangeText={setRemark}
@@ -221,7 +222,7 @@ export function EInvoiceSheet({
               </Text>
             ) : null}
             <Button
-              title="Generate IRN"
+              title={tr('compliance:einv.generateIrn')}
               icon="shield-check-outline"
               loading={busy}
               disabled={blocking.length > 0}
@@ -237,7 +238,7 @@ export function EInvoiceSheet({
           <Text variant="small" weight="600">
             {applicability.applicable ? E_INVOICE_SUPPLY_TYPES[applicability.supplyType!] : 'Not reportable'}
           </Text>
-          <Badge label={meta.label} tone={meta.tone} icon={meta.icon} />
+          <Badge label={keyLabel(tr, meta.labelKey)} tone={meta.tone} icon={meta.icon} />
         </View>
 
         {!applicability.applicable ? (
@@ -263,26 +264,22 @@ export function EInvoiceSheet({
             </View>
             <View style={{ flexDirection: 'row', gap: t.spacing.xl, alignSelf: 'stretch' }}>
               <View style={{ gap: 3 }}>
-                <Text variant="caption" tone="muted">
-                  Ack No.
-                </Text>
+                <Text variant="caption" tone="muted">{tr('compliance:einv.ackNo')}</Text>
                 <Text variant="small">{doc.compliance?.ackNo}</Text>
               </View>
               <View style={{ gap: 3 }}>
-                <Text variant="caption" tone="muted">
-                  Ack date
-                </Text>
+                <Text variant="caption" tone="muted">{tr('compliance:einv.ackDate')}</Text>
                 <Text variant="small">{doc.compliance?.ackDate}</Text>
               </View>
             </View>
             <Button
-              title="Copy IRN"
+              title={tr('compliance:einv.copyIrn')}
               variant="ghost"
               size="sm"
               icon="content-copy"
               onPress={async () => {
                 await Clipboard.setStringAsync(doc.compliance?.irn ?? '');
-                toast.show('IRN copied', 'success');
+                toast.show(tr('compliance:einv.copied'), 'success');
               }}
               fullWidth
             />
@@ -298,22 +295,18 @@ export function EInvoiceSheet({
               emptyMessage="Every portal check passes."
             />
             {warnings.length ? (
-              <IssueList title="Worth knowing" issues={warnings} tone="warn" />
+              <IssueList title={tr('compliance:einv.worthKnowing')} issues={warnings} tone="warn" />
             ) : null}
 
             <Card style={{ gap: t.spacing.sm }}>
-              <Text variant="caption" tone="muted" weight="600">
-                What will be reported
-              </Text>
-              <Row label="Document type" value={applicability.docType ?? '—'} />
-              <Row label="Place of supply" value={doc.placeOfSupplyStateCode ?? '—'} />
-              <Row label="Lines" value={String(doc.lines.length)} />
-              <Row label="Invoice value" value={formatMoney(doc.totals.grandTotal)} />
+              <Text variant="caption" tone="muted" weight="600">{tr('compliance:einv.willReport')}</Text>
+              <Row label={tr('compliance:einv.documentType')} value={applicability.docType ?? '—'} />
+              <Row label={tr('compliance:einv.placeOfSupply')} value={doc.placeOfSupplyStateCode ?? '—'} />
+              <Row label={tr('compliance:einv.lines')} value={String(doc.lines.length)} />
+              <Row label={tr('compliance:einv.invoiceValue')} value={formatMoney(doc.totals.grandTotal)} />
               {projectedIrn ? (
                 <View style={{ gap: 3, marginTop: t.spacing.xs }}>
-                  <Text variant="caption" tone="muted">
-                    The IRN this will produce
-                  </Text>
+                  <Text variant="caption" tone="muted">{tr('compliance:einv.irnProduced')}</Text>
                   <Text variant="mono" tone="muted" style={{ lineHeight: 16 }}>
                     {projectedIrn}
                   </Text>
@@ -328,9 +321,7 @@ export function EInvoiceSheet({
                   size={18}
                   color={t.c.muted}
                 />
-                <Text variant="caption" tone="muted" weight="600">
-                  The payload sent to the portal
-                </Text>
+                <Text variant="caption" tone="muted" weight="600">{tr('compliance:einv.payload')}</Text>
               </View>
             </Pressable>
             {showPayload && payload ? (
@@ -345,8 +336,8 @@ export function EInvoiceSheet({
 
             {settings.irpEnvironment === 'sandbox' ? (
               <SwitchField
-                label="Simulate a portal rejection"
-                description="Sandbox only, so the rejected state can be seen without breaking the invoice."
+                label={tr('compliance:einv.simulateRejection')}
+                description={tr('compliance:einv.sandboxHint')}
                 value={simulateFailure}
                 onValueChange={setSimulateFailure}
               />
@@ -355,7 +346,7 @@ export function EInvoiceSheet({
         ) : null}
 
         {result && result.length && !reported ? (
-          <IssueList title="Last attempt" issues={result} tone="bad" />
+          <IssueList title={tr('compliance:einv.lastAttempt')} issues={result} tone="bad" />
         ) : null}
       </View>
     </Sheet>

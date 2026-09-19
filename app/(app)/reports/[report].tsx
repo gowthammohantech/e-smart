@@ -57,7 +57,7 @@ const TITLES: Record<string, { title: string; subtitle?: string }> = {
 
 export default function Report() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'nav']);
+  const { t: tr } = useTranslation(['domain', 'nav', 'reports']);
   const { report } = useLocalSearchParams<{ report: string }>();
   const key = String(report);
   const meta = TITLES[key];
@@ -123,7 +123,7 @@ export default function Report() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.report') }} />
-        <EmptyState illustration="unknown-report" icon="chart-box-outline" title="Unknown report" message="Pick a report from the Reports tab." />
+        <EmptyState illustration="unknown-report" icon="chart-box-outline" title={tr('reports:detail.unknown')} message={tr('reports:detail.unknownBody')} />
       </View>
     );
   }
@@ -144,12 +144,12 @@ export default function Report() {
           value={data.total}
           caption={`${data.count} documents · avg ${formatMoney({ minor: data.count ? Math.round(data.total.minor / data.count) : 0, currency: baseCurrency })}`}
         />
-        <ReportSection title="By month">
+        <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
             <BarChart data={monthBars(data.byMonth)} caption={isSales ? 'Invoiced value' : 'Purchase value'} />
           </Card>
         </ReportSection>
-        <ReportSection title="Breakdown">
+        <ReportSection title={tr('reports:detail.breakdown')}>
           <KeyFigures
             rows={[
               { label: 'Taxable value', value: formatMoney(data.taxable) },
@@ -167,7 +167,7 @@ export default function Report() {
             />
           </Card>
         </ReportSection>
-        <ReportSection title="Top items">
+        <ReportSection title={tr('reports:detail.topItems')}>
           <Card>
             <RankedBars
               rows={data.byItem.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: `${formatQty(r.count)} units` }))}
@@ -176,7 +176,7 @@ export default function Report() {
           </Card>
         </ReportSection>
         {branches.length > 1 ? (
-          <ReportSection title="By branch">
+          <ReportSection title={tr('reports:detail.byBranch')}>
             <Card>
               <RankedBars rows={data.byBranch} colorFor={(i) => seriesColor(t.scheme, i)} />
             </Card>
@@ -201,18 +201,18 @@ export default function Report() {
   if (key === 'expense-summary') {
     body = (
       <>
-        <HeroFigure label="Total spent" value={expenseSummary.total} tone="warn" caption={`${expenseSummary.count} entries · input tax ${formatMoney(expenseSummary.tax)}`} />
-        <ReportSection title="By category">
+        <HeroFigure label={tr('reports:detail.totalSpent')} value={expenseSummary.total} tone="warn" caption={`${expenseSummary.count} entries · input tax ${formatMoney(expenseSummary.tax)}`} />
+        <ReportSection title={tr('reports:detail.byCategory')}>
           <Card>
             <DonutChart slices={expenseSummary.byCategory.map((c) => ({ label: c.label, value: c.value }))} centerLabel="Total" />
           </Card>
         </ReportSection>
-        <ReportSection title="By month">
+        <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
-            <BarChart data={monthBars(expenseSummary.byMonth)} caption="Expense value" color={t.c.warn} />
+            <BarChart data={monthBars(expenseSummary.byMonth)} caption={tr('reports:detail.expenseValue')} color={t.c.warn} />
           </Card>
         </ReportSection>
-        <ReportSection title="Detail">
+        <ReportSection title={tr('reports:detail.detail')}>
           <DataTable
             headers={['Category', 'Entries', 'Amount']}
             rows={expenseSummary.byCategory.map((c) => [c.label, c.count, formatMoney(c.value)])}
@@ -244,12 +244,12 @@ export default function Report() {
           tone={data.summary.overdue.minor > 0 ? 'warn' : undefined}
           caption={`${data.outstanding.length} open · ${formatMoney(data.summary.overdue)} overdue`}
         />
-        <ReportSection title="Aging">
+        <ReportSection title={tr('reports:detail.aging')}>
           <Card>
             <AgingBars buckets={data.summary.buckets.map((b) => ({ key: b.key, label: b.label, amount: b.amount, count: b.count }))} />
           </Card>
         </ReportSection>
-        <ReportSection title="Detail">
+        <ReportSection title={tr('reports:detail.detail')}>
           <DataTable
             headers={['Document', 'Days', 'Outstanding']}
             rows={data.outstanding
@@ -280,8 +280,8 @@ export default function Report() {
   if (key === 'stock') {
     body = (
       <>
-        <HeroFigure label="Stock value" value={stock.totalValue} caption={`${stock.trackedCount} tracked items · ${stock.lowCount} low · ${stock.outCount} out`} />
-        <ReportSection title="Most valuable">
+        <HeroFigure label={tr('reports:detail.stockValue')} value={stock.totalValue} caption={`${stock.trackedCount} tracked items · ${stock.lowCount} low · ${stock.outCount} out`} />
+        <ReportSection title={tr('reports:detail.mostValuable')}>
           <Card>
             <RankedBars
               rows={stock.rows.slice(0, 8).map((r) => ({
@@ -293,7 +293,7 @@ export default function Report() {
             />
           </Card>
         </ReportSection>
-        <ReportSection title="All tracked items">
+        <ReportSection title={tr('reports:detail.allTracked')}>
           <DataTable
             headers={['Item', 'On hand', 'Value']}
             rows={stock.rows.map((r) => [r.item.name, `${formatQty(r.onHand)} ${r.item.unit}`, formatMoney(r.value)])}
@@ -313,17 +313,15 @@ export default function Report() {
     body = (
       <>
         <HeroFigure
-          label="Net tax payable"
+          label={tr('reports:detail.netTaxPayable')}
           value={tax.netPayable}
           tone={tax.netPayable.minor > 0 ? 'bad' : 'good'}
           caption={`Output ${formatMoney(tax.outwardTotal)} less input ${formatMoney(tax.inwardTotal)}`}
         />
-        <ReportSection title="Outward supplies (sales)">
+        <ReportSection title={tr('reports:detail.outwardSupplies')}>
           {tax.outward.length === 0 ? (
             <Card>
-              <Text variant="small" tone="muted">
-                No taxable sales in this period.
-              </Text>
+              <Text variant="small" tone="muted">{tr('reports:detail.noTaxableSales')}</Text>
             </Card>
           ) : (
             <DataTable
@@ -339,12 +337,10 @@ export default function Report() {
             />
           )}
         </ReportSection>
-        <ReportSection title="Inward supplies (purchases)">
+        <ReportSection title={tr('reports:detail.inwardSupplies')}>
           {tax.inward.length === 0 ? (
             <Card>
-              <Text variant="small" tone="muted">
-                No taxable purchases in this period.
-              </Text>
+              <Text variant="small" tone="muted">{tr('reports:detail.noTaxablePurchases')}</Text>
             </Card>
           ) : (
             <DataTable
@@ -360,7 +356,7 @@ export default function Report() {
             />
           )}
         </ReportSection>
-        <ReportSection title="Summary">
+        <ReportSection title={tr('reports:detail.summary')}>
           <KeyFigures
             rows={[
               { label: 'Output tax on sales', value: formatMoney(tax.outwardTotal) },
@@ -385,26 +381,26 @@ export default function Report() {
     body = (
       <>
         <HeroFigure
-          label="Net cash movement"
+          label={tr('reports:detail.netCash')}
           value={paymentSummary.net}
           tone={paymentSummary.net.minor >= 0 ? 'good' : 'bad'}
           caption={`In ${formatMoney(paymentSummary.received)} · out ${formatMoney(paymentSummary.paid)}`}
         />
-        <ReportSection title="By month">
+        <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
             <BarChart
               data={paymentSummary.byMonth.map((m) => ({ label: monthLabel(m.key), value: m.received }))}
-              caption="Money received"
+              caption={tr('reports:detail.moneyReceived')}
               color={t.c.good}
             />
           </Card>
         </ReportSection>
-        <ReportSection title="By method">
+        <ReportSection title={tr('reports:detail.byMethod')}>
           <Card>
             <DonutChart slices={paymentSummary.byMethod.map((m) => ({ label: m.label, value: m.value }))} centerLabel="All payments" />
           </Card>
         </ReportSection>
-        <ReportSection title="By account">
+        <ReportSection title={tr('reports:detail.byAccount')}>
           <Card>
             <RankedBars rows={paymentSummary.byAccount} colorFor={(i) => seriesColor(t.scheme, i)} />
           </Card>
@@ -429,28 +425,28 @@ export default function Report() {
     body = (
       <>
         <HeroFigure
-          label="Net profit"
+          label={tr('reports:detail.netProfit')}
           value={profit.netProfit}
           tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
           caption={`${formatPercent(profit.margin)} of revenue`}
         />
-        <ReportSection title="By month">
+        <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
-            <BarChart data={monthBars(profit.byMonth.map((m) => ({ key: m.key, value: m.profit })))} caption="Net profit" />
+            <BarChart data={monthBars(profit.byMonth.map((m) => ({ key: m.key, value: m.profit })))} caption={tr('reports:detail.netProfit')} />
           </Card>
         </ReportSection>
-        <ReportSection title="How it adds up">
+        <ReportSection title={tr('reports:detail.howItAddsUp')}>
           <KeyFigures
             rows={[
               { label: 'Revenue (taxable value)', value: formatMoney(profit.revenue) },
               { label: 'Cost of goods sold', value: `− ${formatMoney(profit.costOfGoods)}` },
               { label: 'Gross profit', value: formatMoney(profit.grossProfit), tone: 'good' },
               { label: 'Operating expenses', value: `− ${formatMoney(profit.expenses)}`, tone: 'warn' },
-              { label: 'Net profit', value: formatMoney(profit.netProfit), tone: profit.netProfit.minor >= 0 ? 'good' : 'bad' },
+              { label: tr('reports:detail.netProfit'), value: formatMoney(profit.netProfit), tone: profit.netProfit.minor >= 0 ? 'good' : 'bad' },
             ]}
           />
         </ReportSection>
-        <ReportSection title="Monthly detail">
+        <ReportSection title={tr('reports:detail.monthlyDetail')}>
           <DataTable
             headers={['Month', 'Revenue', 'Cost', 'Profit']}
             rows={profit.byMonth.map((m) => [
