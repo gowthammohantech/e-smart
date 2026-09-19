@@ -23,7 +23,7 @@ import { uid } from '@/lib/id';
 /** The transporter master, used for Part-B of an e-way bill. */
 export default function TransportersSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const transporters = useTransporters();
@@ -74,21 +74,21 @@ export default function TransportersSettings() {
             <EmptyState
               illustration="no-contacts"
               icon="truck-outline"
-              title="No transporters yet"
-              message="Add the carriers you use, so Part-B is a pick rather than a retype."
-              actionLabel="Add a transporter"
+              title={tr('settings:transporters.none')}
+              message={tr('settings:transporters.noneBody')}
+              actionLabel={tr('settings:transporters.add')}
               onAction={() => open()}
               compact
             />
           </Card>
         ) : (
           <Card padded={false}>
-            {transporters.map((tr, i) => (
+            {transporters.map((transporter, i) => (
               <Pressable
-                key={tr.id}
-                onPress={() => open(tr)}
+                key={transporter.id}
+                onPress={() => open(transporter)}
                 accessibilityRole="button"
-                accessibilityLabel={tr.name}
+                accessibilityLabel={transporter.name}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -102,13 +102,13 @@ export default function TransportersSettings() {
                 <MaterialCommunityIcons name="truck-outline" size={20} color={t.c.muted} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text variant="body" weight="600">
-                    {tr.name}
+                    {transporter.name}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    {formatGstin(tr.transporterId)}
+                    {formatGstin(transporter.transporterId)}
                   </Text>
                 </View>
-                {tr.status === 'inactive' ? <Badge label="Inactive" tone="neutral" size="sm" /> : null}
+                {transporter.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : null}
                 <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
               </Pressable>
             ))}
@@ -124,16 +124,16 @@ export default function TransportersSettings() {
         title={editing ? 'Edit transporter' : 'Add a transporter'}
         footer={
           <View style={{ gap: t.spacing.sm }}>
-            <Button title="Save" fullWidth onPress={save} />
+            <Button title={tr('settings:transporters.save')} fullWidth onPress={save} />
             {editing ? (
               <Button
-                title="Delete"
+                title={tr('settings:transporters.delete')}
                 variant="ghost"
                 fullWidth
                 onPress={() => {
                   removeTransporter(editing.id);
                   setSheetOpen(false);
-                  toast.show('Transporter removed', 'success');
+                  toast.show(tr('settings:transporters.removed'), 'success');
                 }}
               />
             ) : null}
@@ -141,18 +141,18 @@ export default function TransportersSettings() {
         }
       >
         <View style={{ gap: t.spacing.md }}>
-          <TextField label="Name" required value={name} onChangeText={setName} placeholder="Gati Logistics" />
+          <TextField label={tr('settings:transporters.name')} required value={name} onChangeText={setName} placeholder={tr('settings:transporters.namePlaceholder')} />
           <TextField
-            label="Transporter ID"
+            label={tr('settings:transporters.id')}
             required
             value={transporterId}
             onChangeText={(v) => setTransporterId(v.toUpperCase())}
             placeholder="27AABCT5512M1Z6"
             autoCapitalize="characters"
             error={error}
-            hint="A GSTIN, or a TRANSIN if the carrier is not registered."
+            hint={tr('settings:transporters.idHint')}
           />
-          <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+91 22 6789 1000" />
+          <TextField label={tr('settings:transporters.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+91 22 6789 1000" />
         </View>
       </Sheet>
     </>

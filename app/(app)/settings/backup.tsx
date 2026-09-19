@@ -26,7 +26,7 @@ import { formatDateTime } from '@/lib/date';
 
 export default function BackupExport() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -84,9 +84,9 @@ export default function BackupExport() {
         message: payload.length > 40000 ? `${payload.slice(0, 40000)}\n… truncated for sharing` : payload,
         title: `${company.name} export`,
       });
-      toast.show('Export package prepared', 'success');
+      toast.show(tr('settings:backup.prepared'), 'success');
     } catch {
-      toast.show('Export was cancelled', 'error');
+      toast.show(tr('settings:backup.cancelled'), 'error');
     } finally {
       setBusy(false);
       setConfirmExport(false);
@@ -130,21 +130,17 @@ export default function BackupExport() {
           ))}
         </Card>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          Formats
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:backup.formats')}</Text>
         <Card padded={false}>
-          <ListRow title="Machine-readable JSON" subtitle="Full records, ready to import elsewhere" icon="code-json" chevron onPress={() => setConfirmExport(true)} />
-          <ListRow title="Per-report CSV" subtitle="Open any report and export it individually" icon="file-delimited-outline" chevron divider={false} />
+          <ListRow title={tr('settings:backup.json')} subtitle={tr('settings:backup.jsonHint')} icon="code-json" chevron onPress={() => setConfirmExport(true)} />
+          <ListRow title={tr('settings:backup.csv')} subtitle={tr('settings:backup.csvHint')} icon="file-delimited-outline" chevron divider={false} />
         </Card>
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="cloud-check-outline" size={19} color={t.c.good} />
-            <Text variant="small" weight="600">
-              Automatic backup
-            </Text>
-            <Badge label="Nightly" tone="success" size="sm" />
+            <Text variant="small" weight="600">{tr('settings:backup.automatic')}</Text>
+            <Badge label={tr('settings:backup.nightly')} tone="success" size="sm" />
           </View>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             Last backup {formatDateTime(lastBackupAt)}. Financial records subject to
@@ -166,14 +162,14 @@ export default function BackupExport() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Export this business" icon="database-export-outline" onPress={() => setConfirmExport(true)} loading={busy} fullWidth size="lg" />
+        <Button title={tr('settings:backup.export')} icon="database-export-outline" onPress={() => setConfirmExport(true)} loading={busy} fullWidth size="lg" />
       </View>
 
       <ConfirmDialog
         visible={confirmExport}
-        title="Export company data?"
-        message="The package contains customer details and financial records. Share it only with people who should see them."
-        confirmLabel="Export"
+        title={tr('settings:backup.exportTitle')}
+        message={tr('settings:backup.exportMessage')}
+        confirmLabel={tr('settings:backup.exportConfirm')}
         icon="database-export-outline"
         onCancel={() => setConfirmExport(false)}
         onConfirm={doExport}

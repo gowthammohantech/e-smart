@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -21,6 +22,7 @@ const ORB = { x: 312, y: 46 };
  */
 export function WelcomeScene() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['auth']);
   const p = useScenePalette();
   const { width: winW, height: winH } = useWindowDimensions();
   const { bob, twinkle } = useLoopPhase();
@@ -73,10 +75,10 @@ export function WelcomeScene() {
         }}
       >
         <Text variant="caption" style={{ fontSize: 11 }}>
-          3 invoices due · ₹12,400
+          {tr('auth:welcome.mockDue', { count: 3, amount: '₹12,400' })}
         </Text>
         <Text variant="caption" tone="primary" weight="700" style={{ fontSize: 11 }}>
-          Send reminders?
+          {tr('auth:welcome.mockCta')}
         </Text>
       </Animated.View>
 
@@ -163,6 +165,9 @@ function Phone({ p }: { p: ScenePalette }) {
     <G>
       <Rect x={176} y={96} width={72} height={130} rx={13} fill={p.phone} />
       <Rect x={181} y={104} width={62} height={114} rx={8} fill={p.paper} />
+      {/* Artwork, not copy: this is the drawn invoice inside a 62px-wide
+          phone at fontSize 7. Tamil would not fit, and "TAX INVOICE" is the
+          statutory document title, which stays English on real invoices too. */}
       <SvgText x={188} y={118} fontSize={7} fontWeight="700" fill={p.primary}>
         TAX INVOICE
       </SvgText>

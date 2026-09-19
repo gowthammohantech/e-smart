@@ -76,9 +76,7 @@ export default function TaxStep() {
           ) : null}
 
           <Card variant="flat" style={{ gap: t.spacing.md }}>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Default tax slabs
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('onboarding:tax.defaultSlabs')}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
               {(isGst ? [0, 5, 12, 18, 28] : [0, 5, 20]).map((r) => (
                 <Badge key={r} label={`${country?.regime === 'VAT' ? 'VAT' : 'GST'} ${r}%`} tone={r === 18 ? 'info' : 'neutral'} />
@@ -91,9 +89,7 @@ export default function TaxStep() {
         </>
       ) : (
         <Card variant="flat">
-          <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
-            Your invoices will be raised without a tax breakdown. You can register later without losing any history.
-          </Text>
+          <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>{tr('onboarding:tax.unregisteredNote')}</Text>
         </Card>
       )}
     </WizardShell>

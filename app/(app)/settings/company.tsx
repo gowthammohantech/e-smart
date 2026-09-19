@@ -19,7 +19,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 export default function CompanySettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -85,7 +85,7 @@ export default function CompanySettings() {
         placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
       },
     });
-    toast.show('Business profile updated', 'success');
+    toast.show(tr('settings:company.saved'), 'success');
     router.back();
   };
 
@@ -98,30 +98,26 @@ export default function CompanySettings() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <TextField label="Business name" value={name} onChangeText={setName} error={errors.name} required icon="domain" />
-        <TextField label="Legal name" value={legalName} onChangeText={setLegalName} placeholder="As registered" />
-        <PickerField label="Business type" value={businessType} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
+        <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
+        <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} />
+        <PickerField label={tr('settings:company.type')} value={businessType} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
 
-        <TextField label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
-        <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
-        <TextField label="Website" value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />
+        <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
+        <TextField label={tr('settings:company.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
+        <TextField label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          Registered address
-        </Text>
-        <TextField label="Address" value={line1} onChangeText={setLine1} icon="map-marker-outline" />
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>
+        <TextField label={tr('settings:company.address')} value={line1} onChangeText={setLine1} icon="map-marker-outline" />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <TextField label="City" value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
+          <TextField label={tr('settings:company.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
           <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" containerStyle={{ flex: 1 }} />
         </View>
-        <PickerField label="State" value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" />
+        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" />
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          Tax and fiscal year
-        </Text>
-        <PickerField label="Country" value={country?.name} onPress={() => {}} icon="earth" hint="Country and base currency are fixed once a business has transactions." />
-        <PickerField label="Base currency" value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" />
-        <PickerField label="Financial year starts" value={MONTHS[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" />
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
+        <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} />
+        <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" />
+        <PickerField label={tr('settings:company.fyStarts')} value={MONTHS[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" />
 
         <SwitchField label={`Registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`} value={taxRegistered} onValueChange={setTaxRegistered} />
         {taxRegistered ? (
@@ -135,8 +131,8 @@ export default function CompanySettings() {
               error={errors.taxId}
             />
             <SwitchField
-              label="Composition scheme"
-              description="Invoices are raised without a tax breakdown."
+              label={tr('settings:company.composition')}
+              description={tr('settings:company.compositionHint')}
               value={composition}
               onValueChange={setComposition}
             />
@@ -153,12 +149,12 @@ export default function CompanySettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Save changes" onPress={save} fullWidth size="lg" />
+        <Button title={tr('settings:company.save')} onPress={save} fullWidth size="lg" />
       </View>
 
-      <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title="Business type" options={BUSINESS_TYPES.map((b) => ({ value: b, label: b }))} value={businessType} onSelect={setBusinessType} />
-      <SelectSheet visible={stateOpen} onClose={() => setStateOpen(false)} title="State" options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))} value={stateCode} onSelect={setStateCode} />
-      <SelectSheet visible={fyOpen} onClose={() => setFyOpen(false)} title="Financial year starts" options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} value={String(fyMonth)} onSelect={(v) => setFyMonth(Number(v))} searchable={false} />
+      <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: b }))} value={businessType} onSelect={setBusinessType} />
+      <SelectSheet visible={stateOpen} onClose={() => setStateOpen(false)} title={tr('settings:company.state')} options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))} value={stateCode} onSelect={setStateCode} />
+      <SelectSheet visible={fyOpen} onClose={() => setFyOpen(false)} title={tr('settings:company.fyStarts')} options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} value={String(fyMonth)} onSelect={(v) => setFyMonth(Number(v))} searchable={false} />
     </KeyboardAvoidingView>
   );
 }

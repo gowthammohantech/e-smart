@@ -22,7 +22,7 @@ const STEPS = [
 
 export default function OcrCapture() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -49,7 +49,7 @@ export default function OcrCapture() {
       run(result.assets[0]?.uri);
     } catch {
       // Camera is unavailable in the simulator and on web — still demo the flow.
-      toast.show('Camera unavailable here, using a sample bill', 'info');
+      toast.show(tr('inventory:ocr.cameraUnavailable'), 'info');
       run(undefined);
     }
   };
@@ -68,7 +68,7 @@ export default function OcrCapture() {
           onChange={(v) => setKind(v as 'expense' | 'purchaseBill')}
         />
 
-        <Pressable onPress={() => pick(true)} accessibilityRole="button" accessibilityLabel="Take a photo" disabled={busy}>
+        <Pressable onPress={() => pick(true)} accessibilityRole="button" accessibilityLabel={tr('inventory:ocr.takePhoto')} disabled={busy}>
           <Card
             variant="flat"
             style={{
@@ -91,13 +91,11 @@ export default function OcrCapture() {
         </Pressable>
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Button title="Choose from gallery" variant="ghost" icon="image-outline" onPress={() => pick(false)} style={{ flex: 1 }} disabled={busy} />
-          <Button title="Use a sample" variant="secondary" icon="file-find-outline" onPress={() => run(undefined)} style={{ flex: 1 }} loading={busy} />
+          <Button title={tr('inventory:ocr.fromGallery')} variant="ghost" icon="image-outline" onPress={() => pick(false)} style={{ flex: 1 }} disabled={busy} />
+          <Button title={tr('inventory:ocr.useSample')} variant="secondary" icon="file-find-outline" onPress={() => run(undefined)} style={{ flex: 1 }} loading={busy} />
         </View>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>
-          How it works
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('inventory:ocr.howItWorks')}</Text>
         <Card padded={false}>
           {STEPS.map((s, i) => (
             <View
@@ -136,9 +134,7 @@ export default function OcrCapture() {
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <MaterialCommunityIcons name="shield-check-outline" size={19} color={t.c.good} />
-          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-            Nothing is saved until you confirm it. Low-confidence fields are flagged so you can correct them first.
-          </Text>
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.howItWorksBody')}</Text>
         </Card>
       </ScrollView>
     </View>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -53,6 +54,7 @@ export function DonutChart({
   maxSlices?: number;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const [selected, setSelected] = useState<number | null>(null);
 
   const sorted = slices.filter((s) => s.value.minor > 0).sort((a, b) => b.value.minor - a.value.minor);
@@ -77,9 +79,7 @@ export function DonutChart({
   if (total <= 0) {
     return (
       <View style={{ height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <Text variant="small" tone="muted">
-          No data for this period
-        </Text>
+        <Text variant="small" tone="muted">{tr('common:component.noChartData')}</Text>
       </View>
     );
   }

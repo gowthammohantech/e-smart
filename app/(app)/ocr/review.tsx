@@ -26,7 +26,7 @@ function confidenceTone(c: number): 'success' | 'warning' | 'danger' {
 
 export default function OcrReview() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -47,9 +47,9 @@ export default function OcrReview() {
         <EmptyState
           illustration="no-scan-result"
               icon="text-recognition"
-          title="Nothing scanned yet"
-          message="Capture a bill first and the extracted fields will appear here."
-          actionLabel="Scan a bill"
+          title={tr('inventory:ocr.nothingScanned')}
+          message={tr('inventory:ocr.nothingScannedBody')}
+          actionLabel={tr('inventory:ocr.scanBill')}
           onAction={() => router.replace('/(app)/ocr/capture')}
         />
       </View>
@@ -72,9 +72,7 @@ export default function OcrReview() {
         ) : (
           <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             <MaterialCommunityIcons name="file-document-outline" size={22} color={t.c.muted} />
-            <Text variant="small" tone="muted" style={{ flex: 1 }}>
-              Sample bill used — no image was captured on this device.
-            </Text>
+            <Text variant="small" tone="muted" style={{ flex: 1 }}>{tr('inventory:ocr.sampleUsed')}</Text>
           </Card>
         )}
 
@@ -99,9 +97,7 @@ export default function OcrReview() {
           </Text>
         </Card>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          Extracted fields
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('inventory:ocr.extractedFields')}</Text>
 
         {result.fields.map((f) => (
           <View key={f.key} style={{ gap: 6 }}>
@@ -121,9 +117,7 @@ export default function OcrReview() {
 
         {result.lines.length > 0 ? (
           <>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Line items
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('inventory:ocr.lineItems')}</Text>
             <Card padded={false}>
               {result.lines.map((l, i) => (
                 <View
@@ -159,9 +153,7 @@ export default function OcrReview() {
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
-          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-            Saving opens a pre-filled form — nothing is written to your books until you finish it yourself.
-          </Text>
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.saveNote')}</Text>
         </Card>
       </ScrollView>
 
@@ -180,19 +172,17 @@ export default function OcrReview() {
         }}
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text variant="caption" tone="muted">
-            Extracted total
-          </Text>
+          <Text variant="caption" tone="muted">{tr('inventory:ocr.extractedTotal')}</Text>
           <Text variant="title" weight="700">
             {formatMoney(total)}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Button title="Rescan" variant="ghost" onPress={() => router.replace('/(app)/ocr/capture')} style={{ flex: 1 }} />
+          <Button title={tr('inventory:ocr.rescan')} variant="ghost" onPress={() => router.replace('/(app)/ocr/capture')} style={{ flex: 1 }} />
           <Button
             title={isExpense ? 'Create expense' : 'Create bill'}
             onPress={() => {
-              toast.show('Fields carried into the form', 'success');
+              toast.show(tr('inventory:ocr.carriedFields'), 'success');
               router.replace(isExpense ? '/(app)/expenses/new' : '/(app)/purchases/bills/new');
             }}
             style={{ flex: 2 }}

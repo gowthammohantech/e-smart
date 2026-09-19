@@ -19,7 +19,7 @@ import { formatRelative } from '@/lib/date';
 
 export default function SyncStatus() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const queue = useAppStore((s) => s.syncQueue);
@@ -47,12 +47,10 @@ export default function SyncStatus() {
           </Text>
         </Card>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          Queue
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:sync.queue')}</Text>
         <Card padded={false}>
           {queue.length === 0 ? (
-            <EmptyState illustration="all-settled" icon="cloud-check-outline" title="Nothing queued" message="Every change has reached the server." compact />
+            <EmptyState illustration="all-settled" icon="cloud-check-outline" title={tr('settings:sync.none')} message={tr('settings:sync.noneBody')} compact />
           ) : (
             queue.map((q, i) => (
               <ListRow
@@ -66,7 +64,7 @@ export default function SyncStatus() {
                 right={<Badge label={q.status} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />}
                 onPress={() => {
                   retrySync(q.id);
-                  toast.show('Synced', 'success');
+                  toast.show(tr('settings:sync.synced'), 'success');
                 }}
               />
             ))
@@ -75,31 +73,29 @@ export default function SyncStatus() {
 
         {queue.length > 0 ? (
           <Button
-            title="Retry all"
+            title={tr('settings:sync.retryAll')}
             variant="secondary"
             icon="sync"
             style={{ marginTop: t.spacing.md }}
             onPress={() => {
               clearSyncQueue();
-              toast.show('All changes synced', 'success');
+              toast.show(tr('settings:sync.allSynced'), 'success');
             }}
             fullWidth
           />
         ) : null}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          Prototype controls
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:sync.prototypeControls')}</Text>
         <Card>
           <SwitchField
-            label="Simulate offline"
-            description="Shows the offline badge and queues new work instead of syncing it."
+            label={tr('settings:sync.simulateOffline')}
+            description={tr('settings:sync.offlineHint')}
             value={offline}
             onValueChange={setOffline}
           />
           <SwitchField
-            label="Simulate network latency"
-            description="Adds a short delay with loading states so slow connections can be demonstrated."
+            label={tr('settings:sync.simulateLatency')}
+            description={tr('settings:sync.latencyHint')}
             value={simulateLatency}
             onValueChange={setSimulateLatency}
           />
@@ -107,9 +103,7 @@ export default function SyncStatus() {
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
           <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
-          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-            Conflicts are surfaced for you to resolve rather than being overwritten silently.
-          </Text>
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('settings:sync.conflictNote')}</Text>
         </Card>
       </ScrollView>
     </View>

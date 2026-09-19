@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ export function AuthShell({
   hideBack?: boolean;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -42,7 +44,7 @@ export function AuthShell({
             onPress={() => router.back()}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={tr('common:component.goBack')}
             style={{
               width: 38,
               height: 38,

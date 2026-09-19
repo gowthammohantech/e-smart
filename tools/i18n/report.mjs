@@ -44,6 +44,15 @@ for (const root of ROOTS) walk(root);
 // Seed fixtures are demo data, and state names are legal names — neither is copy.
 const EXCLUDED = /src\/(data\/seed|data\/seedTransactions|domain\/stateCodes|i18n\/)/;
 
+/**
+ * Deliberately untranslated, with the reason. Anything else showing up here
+ * is work left to do.
+ */
+const KEPT_ENGLISH = new Set([
+  'Elixir Books', // the product name
+  'TAX INVOICE', // drawn inside the welcome artwork at fontSize 7; also the statutory title
+]);
+
 const rows = [];
 let total = 0;
 for (const file of files) {
@@ -56,6 +65,7 @@ for (const file of files) {
       const value = (m[2] ?? m[1]).trim();
       if (!/[A-Za-z]/.test(value)) continue;
       if (SKIP.some((s) => s.test(value))) continue;
+      if (KEPT_ENGLISH.has(value)) continue;
       hits.add(value);
     }
   }

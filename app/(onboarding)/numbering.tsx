@@ -32,9 +32,7 @@ export default function NumberingStep() {
       onSkip={() => router.push(nextStepRoute('numbering', draft.plan))}
     >
       <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>
-        <Text variant="caption" tone="muted">
-          Your next invoice will be
-        </Text>
+        <Text variant="caption" tone="muted">{tr('onboarding:numbering.nextWillBe')}</Text>
         <Text variant="h2" weight="700" style={{ color: t.c.primary, fontVariant: ['tabular-nums'] }}>
           {preview}
         </Text>

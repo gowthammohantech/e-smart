@@ -14,7 +14,7 @@
   },
   "form": {
     "name": "Name",
-    "namePlaceholder": "What you",
+    "namePlaceholder": "What you sell",
     "sku": "SKU / item code",
     "skuHint": "Auto-generated if left blank",
     "description": "Description",
@@ -32,7 +32,9 @@
     "reorderLevel": "Reorder level",
     "reorderHint": "Alerts you below this.",
     "active": "Active",
-    "activeHint": "Inactive items are hidden when creating documents."
+    "activeHint": "Inactive items are hidden when creating documents.",
+    "namePlaceholderFull": "What you're selling",
+    "trackStockHintFull": "Sales and purchases will move this item's stock automatically."
   },
   "detail": {
     "inactive": "Inactive",
@@ -109,5 +111,27 @@
     "search": "Search by item or reference",
     "none": "No movements",
     "noneBody": "Stock movements appear as you buy, sell and adjust."
+  },
+  "ocr": {
+    "nothingScanned": "Nothing scanned yet",
+    "nothingScannedBody": "Capture a bill first and the extracted fields will appear here.",
+    "scanBill": "Scan a bill",
+    "rescan": "Rescan",
+    "carriedFields": "Fields carried into the form",
+    "sampleUsed": "Sample bill used — no image was captured on this device.",
+    "extractedFields": "Extracted fields",
+    "lineItems": "Line items",
+    "saveNote": "Saving opens a pre-filled form — nothing is written to your books until you finish it yourself.",
+    "extractedTotal": "Extracted total",
+    "takePhoto": "Take a photo",
+    "fromGallery": "Choose from gallery",
+    "useSample": "Use a sample",
+    "cameraUnavailable": "Camera unavailable here, using a sample bill",
+    "howItWorks": "How it works",
+    "howItWorksBody": "Nothing is saved until you confirm it. Low-confidence fields are flagged so you can correct them first."
+  },
+  "catalog": {
+    "search": "Search by name, SKU or HSN",
+    "service": "Service"
   }
 }

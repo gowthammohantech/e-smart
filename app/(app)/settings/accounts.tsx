@@ -21,7 +21,7 @@ import { uid } from '@/lib/id';
 
 export default function AccountSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -92,15 +92,11 @@ export default function AccountSettings() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: 5, paddingVertical: t.spacing.xl }}>
-          <Text variant="caption" tone="muted">
-            Cash and bank balance
-          </Text>
+          <Text variant="caption" tone="muted">{tr('settings:accounts.cashAndBank')}</Text>
           <Text variant="h1" weight="700" tone={totalCash >= 0 ? 'default' : 'bad'}>
             {formatMoney(money(totalCash, baseCurrency))}
           </Text>
-          <Text variant="caption" tone="muted">
-            Opening balances plus everything recorded since
-          </Text>
+          <Text variant="caption" tone="muted">{tr('settings:accounts.cashCaption')}</Text>
         </Card>
 
         <View style={{ height: t.spacing.lg }} />
@@ -118,7 +114,7 @@ export default function AccountSettings() {
                   <Text variant="small" weight="700">
                     {formatMoney(money(balances[a.id] ?? 0, baseCurrency))}
                   </Text>
-                  {a.isDefault ? <Badge label="Default" tone="info" size="sm" /> : null}
+                  {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                 </View>
               }
               onPress={() => open(a)}
@@ -141,7 +137,7 @@ export default function AccountSettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Add account" icon="plus" onPress={() => open()} fullWidth size="lg" />
+        <Button title={tr('settings:accounts.add')} icon="plus" onPress={() => open()} fullWidth size="lg" />
       </View>
 
       <Sheet
@@ -152,7 +148,7 @@ export default function AccountSettings() {
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id && accounts.length > 1 ? (
               <Button
-                title="Delete"
+                title={tr('settings:accounts.delete')}
                 variant="danger"
                 style={{ flex: 1 }}
                 onPress={() => {
@@ -162,7 +158,7 @@ export default function AccountSettings() {
                 }}
               />
             ) : null}
-            <Button title="Save" onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button title={tr('settings:accounts.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
           </View>
         }
       >
@@ -176,26 +172,26 @@ export default function AccountSettings() {
             value={type}
             onChange={(v) => setType(v as PaymentAccount['type'])}
           />
-          <TextField label="Account name" value={name} onChangeText={setName} placeholder="e.g. HDFC Current" icon="bank-outline" required />
+          <TextField label={tr('settings:accounts.name')} value={name} onChangeText={setName} placeholder={tr('settings:accounts.namePlaceholder')} icon="bank-outline" required />
           {type === 'bank' ? (
-            <TextField label="Account number" value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
+            <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
           ) : null}
-          <AmountField label="Opening balance" value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
-          <SwitchField label="Use as default" description="Pre-selected when recording payments and expenses." value={isDefault} onValueChange={setIsDefault} />
+          <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
+          <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />
         </View>
       </Sheet>
 
       <ConfirmDialog
         visible={!!confirmDelete}
         title={`Delete ${confirmDelete?.name}?`}
-        message="Payments already recorded against it keep their reference. This cannot be undone."
-        confirmLabel="Delete"
+        message={tr('settings:accounts.deleteMessage')}
+        confirmLabel={tr('settings:accounts.delete')}
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
           if (confirmDelete) removePaymentAccount(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show('Account deleted', 'success');
+          toast.show(tr('settings:accounts.deleted'), 'success');
         }}
       />
     </View>

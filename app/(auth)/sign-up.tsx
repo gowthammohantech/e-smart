@@ -49,7 +49,7 @@ export default function SignUp() {
         label={tr('auth:signUp.email')}
         value={email}
         onChangeText={setEmail}
-        placeholder="you@business.com"
+        placeholder={tr('auth:signUp.emailPlaceholder')}
         keyboardType="email-address"
         autoCapitalize="none"
         icon="email-outline"
@@ -93,12 +93,8 @@ export default function SignUp() {
       <Button title={tr('auth:signUp.submit')} onPress={submit} loading={busy} fullWidth size="lg" />
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.sm }}>
-        <Text variant="small" tone="muted">
-          Already have an account?
-        </Text>
-        <Text variant="small" tone="primary" weight="600" onPress={() => router.replace('/(auth)/sign-in')}>
-          Sign in
-        </Text>
+        <Text variant="small" tone="muted">{tr('auth:signUp.haveAccount')}</Text>
+        <Text variant="small" tone="primary" weight="600" onPress={() => router.replace('/(auth)/sign-in')}>{tr('auth:signUp.signIn')}</Text>
       </View>
     </AuthShell>
   );

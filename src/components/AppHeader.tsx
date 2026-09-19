@@ -130,8 +130,8 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
       <SelectSheet
         visible={switcherOpen}
         onClose={() => setSwitcherOpen(false)}
-        title="Switch business"
-        subtitle="Each business keeps its own books, numbering and reports."
+        title={tr('common:business.switch')}
+        subtitle={tr('common:business.switchHint')}
         options={companies.map((c) => ({
           value: c.id,
           label: c.name,
@@ -146,7 +146,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
       <SelectSheet
         visible={branchOpen}
         onClose={() => setBranchOpen(false)}
-        title="Branch"
+        title={tr('common:business.branch')}
         options={branches.map((b) => ({
           value: b.id,
           label: b.name,

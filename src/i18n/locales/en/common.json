@@ -101,7 +101,14 @@
     "notifications": "Notifications",
     "business": "Business",
     "allBranches": "All branches",
-    "switchBranch": "Switch branch. Current: {{branch}}"
+    "switchBranch": "Switch branch. Current: {{branch}}",
+    "clear": "Clear",
+    "done": "Done",
+    "noMatches": "No matches",
+    "goBack": "Go back",
+    "skip": "Skip",
+    "noChartData": "No data for this period",
+    "quantity": "Quantity"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -133,5 +140,38 @@
     "expense": "This expense may have been deleted.",
     "item": "This item may have been deleted.",
     "payment": "This payment may have been deleted."
+  },
+  "notifications": {
+    "markAllRead": "Mark all read",
+    "emptyBody": "Invoices sent, payments received, overdue reminders and stock alerts land here.",
+    "deliveryNote": "Delivered in-app · push, email and WhatsApp are configured under Integrations",
+    "clearAll": "Clear all",
+    "clearTitle": "Clear all notifications?",
+    "clearMessage": "They will be removed from this business",
+    "clear": "Clear",
+    "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched."
+  },
+  "search": {
+    "placeholder": "Invoices, contacts, items, payments…",
+    "clearHistory": "Clear history",
+    "title": "Search everything",
+    "subtitle": "Find an invoice number, a customer, an item",
+    "noMatches": "No matches",
+    "recent": "Recent searches",
+    "clear": "Clear",
+    "subtitleFull": "Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in."
+  },
+  "filters": {
+    "title": "Filters",
+    "reset": "Reset",
+    "apply": "Apply",
+    "clearParty": "Clear party filter",
+    "dateRange": "Date range",
+    "status": "Status"
+  },
+  "business": {
+    "switch": "Switch business",
+    "switchHint": "Each business keeps its own books, numbering and reports.",
+    "branch": "Branch"
   }
 }

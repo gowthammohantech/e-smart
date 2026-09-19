@@ -184,5 +184,11 @@
     "defaultMode": "Default mode",
     "defaultCargo": "Default cargo",
     "whereThingsStand": "Where things stand"
+  },
+  "notFound": {
+    "ewbTitle": "E-way bill not found",
+    "ewbBody": "It may have been removed, or it belongs to another business.",
+    "docTitle": "Document not found",
+    "docBody": "The document this bill was to be raised against is no longer here."
   }
 }

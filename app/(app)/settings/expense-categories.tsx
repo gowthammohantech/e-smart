@@ -20,7 +20,7 @@ import { uid } from '@/lib/id';
 
 export default function ExpenseCategorySettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -92,7 +92,7 @@ export default function ExpenseCategorySettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Add category" icon="plus" onPress={() => open()} fullWidth size="lg" />
+        <Button title={tr('settings:categories.add')} icon="plus" onPress={() => open()} fullWidth size="lg" />
       </View>
 
       <Sheet
@@ -103,7 +103,7 @@ export default function ExpenseCategorySettings() {
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
               <Button
-                title="Delete"
+                title={tr('settings:categories.delete')}
                 variant="danger"
                 style={{ flex: 1 }}
                 onPress={() => {
@@ -114,11 +114,11 @@ export default function ExpenseCategorySettings() {
               />
             ) : null}
             <Button
-              title="Save"
+              title={tr('settings:categories.save')}
               onPress={() => {
                 if (!editing || !name.trim()) return;
                 saveExpenseCategory({ ...editing, id: editing.id || uid('cat'), companyId: company.id, name: name.trim() });
-                toast.show('Category saved', 'success');
+                toast.show(tr('settings:categories.saved'), 'success');
                 setEditing(null);
               }}
               disabled={!name.trim()}
@@ -128,21 +128,21 @@ export default function ExpenseCategorySettings() {
         }
       >
         <View style={{ padding: t.spacing.lg }}>
-          <TextField label="Category name" value={name} onChangeText={setName} placeholder="e.g. Fuel" icon="shape-outline" required />
+          <TextField label={tr('settings:categories.name')} value={name} onChangeText={setName} placeholder={tr('settings:categories.namePlaceholder')} icon="shape-outline" required />
         </View>
       </Sheet>
 
       <ConfirmDialog
         visible={!!confirmDelete}
         title={`Delete ${confirmDelete?.name}?`}
-        message="Expenses already in this category keep their reference but will show as uncategorised."
-        confirmLabel="Delete"
+        message={tr('settings:categories.deleteMessage')}
+        confirmLabel={tr('settings:categories.delete')}
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
           if (confirmDelete) removeExpenseCategory(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show('Category deleted', 'success');
+          toast.show(tr('settings:categories.deleted'), 'success');
         }}
       />
     </View>

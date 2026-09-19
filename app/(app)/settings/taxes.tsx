@@ -23,7 +23,7 @@ import { uid } from '@/lib/id';
 
 export default function TaxSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -90,7 +90,7 @@ export default function TaxSettings() {
 
         <Card padded={false}>
           {categories.length === 0 ? (
-            <EmptyState icon="percent-outline" title="No tax rates" compact />
+            <EmptyState icon="percent-outline" title={tr('settings:taxes.none')} compact />
           ) : (
             categories.map((c, i) => (
               <ListRow
@@ -110,9 +110,7 @@ export default function TaxSettings() {
 
         {regime === 'GST' ? (
           <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md }}>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              How a rate is applied
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:taxes.howApplied')}</Text>
             {[
               { label: 'Within your state', value: 'CGST + SGST, split evenly' },
               { label: 'Other states', value: 'IGST at the full rate' },
@@ -144,7 +142,7 @@ export default function TaxSettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Add tax rate" icon="plus" onPress={() => open()} fullWidth size="lg" />
+        <Button title={tr('settings:taxes.add')} icon="plus" onPress={() => open()} fullWidth size="lg" />
       </View>
 
       <Sheet
@@ -155,7 +153,7 @@ export default function TaxSettings() {
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
               <Button
-                title="Delete"
+                title={tr('settings:taxes.delete')}
                 variant="danger"
                 style={{ flex: 1 }}
                 onPress={() => {
@@ -165,14 +163,14 @@ export default function TaxSettings() {
                 }}
               />
             ) : null}
-            <Button title="Save" onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button title={tr('settings:taxes.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
           </View>
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <TextField label="Name" value={name} onChangeText={setName} placeholder="e.g. GST 18%" required />
+          <TextField label={tr('settings:taxes.name')} value={name} onChangeText={setName} placeholder={tr('settings:taxes.namePlaceholder')} required />
           <TextField
-            label="Rate (%)"
+            label={tr('settings:taxes.rate')}
             value={rate}
             onChangeText={(v) => setRate(v.replace(/[^0-9.]/g, ''))}
             keyboardType="decimal-pad"
@@ -180,22 +178,22 @@ export default function TaxSettings() {
             icon="percent-outline"
             required
           />
-          <DateField label="Effective from" value={effectiveFrom} onChange={setEffectiveFrom} hint="Documents dated before this keep their original rate." />
-          <TextField label="Description" value={description} onChangeText={setDescription} placeholder="What this slab covers" multiline />
+          <DateField label={tr('settings:taxes.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:taxes.effectiveHint')} />
+          <TextField label={tr('settings:taxes.description')} value={description} onChangeText={setDescription} placeholder={tr('settings:taxes.descriptionPlaceholder')} multiline />
         </View>
       </Sheet>
 
       <ConfirmDialog
         visible={!!confirmDelete}
         title={`Delete ${confirmDelete?.name}?`}
-        message="Existing documents keep the rate they were issued with. Items using it will need a new rate."
-        confirmLabel="Delete"
+        message={tr('settings:taxes.deleteMessage')}
+        confirmLabel={tr('settings:taxes.delete')}
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
           if (confirmDelete) removeTaxCategory(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show('Tax rate deleted', 'success');
+          toast.show(tr('settings:taxes.deleted'), 'success');
         }}
       />
     </View>

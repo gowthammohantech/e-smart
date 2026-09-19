@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -8,6 +9,7 @@ import { useEwayBill } from '@/store/selectors';
 
 export default function EwayBillScreen() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const bill = useEwayBill(id);
 
@@ -19,8 +21,8 @@ export default function EwayBillScreen() {
       ) : (
         <EmptyState
           illustration="not-found"
-          title="E-way bill not found"
-          message="It may have been removed, or it belongs to another business."
+          title={tr('compliance:notFound.ewbTitle')}
+          message={tr('compliance:notFound.ewbBody')}
         />
       )}
     </View>

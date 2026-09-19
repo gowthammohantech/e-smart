@@ -107,9 +107,7 @@ export default function Done() {
             <Text variant="h2" center>
               {tr('onboarding:done.readyTitle', { business: draft.name || tr('onboarding:done.fallbackBusiness') })}
             </Text>
-            <Text variant="small" tone="muted" center style={{ lineHeight: 20 }}>
-              Tax slabs, numbering and your first location are all set up.
-            </Text>
+            <Text variant="small" tone="muted" center style={{ lineHeight: 20 }}>{tr('onboarding:done.allSet')}</Text>
           </View>
         </View>
 

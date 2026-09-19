@@ -92,7 +92,7 @@ export default function BusinessStep() {
         label={tr('onboarding:business.name')}
         value={draft.name}
         onChangeText={(v) => set({ name: v })}
-        placeholder="e.g. Vertex Traders"
+        placeholder={tr('onboarding:business.namePlaceholder')}
         error={errors.name}
         required
       />
@@ -157,7 +157,7 @@ export default function BusinessStep() {
         label={tr('onboarding:business.email')}
         value={draft.email}
         onChangeText={(v) => set({ email: v })}
-        placeholder="accounts@business.com"
+        placeholder={tr('onboarding:business.emailPlaceholder')}
         keyboardType="email-address"
         autoCapitalize="none"
         icon="email-outline"
@@ -185,7 +185,7 @@ export default function BusinessStep() {
         visible={planOpen}
         onClose={() => setPlanOpen(false)}
         title={tr('onboarding:business.planSheetTitle')}
-        subtitle="You can change this later in Settings"
+        subtitle={tr('onboarding:business.changeLater')}
         options={PLANS.map((p) => ({
           value: p.key,
           label: p.name,
@@ -198,7 +198,7 @@ export default function BusinessStep() {
         visible={stateOpen}
         onClose={() => setStateOpen(false)}
         title={tr('onboarding:business.stateSheetTitle')}
-        subtitle="Where your business is registered"
+        subtitle={tr('onboarding:business.addressSubtitle')}
         options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
         value={draft.address.stateCode}
         onSelect={(code) => {

@@ -106,9 +106,7 @@ export default function Otp() {
           </Text>
         ) : (
           <Pressable onPress={() => setSeconds(30)} accessibilityRole="button">
-            <Text variant="small" tone="primary" weight="600">
-              Resend code
-            </Text>
+            <Text variant="small" tone="primary" weight="600">{tr('auth:otp.resend')}</Text>
           </Pressable>
         )}
       </View>

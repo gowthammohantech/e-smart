@@ -17,7 +17,7 @@ import { formatNumber } from '@/domain/numbering';
 import { seriesLabel } from '@/i18n/labels';
 import { useAppStore } from '@/store/appStore';
 import { useBranches, useNumberingSeries } from '@/store/selectors';
-import { today } from '@/lib/date';
+import { today, financialYearOf } from '@/lib/date';
 
 const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
   never: 'Never reset',
@@ -27,7 +27,7 @@ const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
 
 export default function NumberingSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'nav']);
+  const { t: tr } = useTranslation(['domain', 'nav', 'settings']);
   const toast = useToast();
 
   const series = useNumberingSeries();
@@ -108,13 +108,11 @@ export default function NumberingSettings() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing ? seriesLabel(tr, editing.kind) : ''}
-        footer={<Button title="Save" onPress={save} fullWidth />}
+        footer={<Button title={tr('settings:numbering.save')} onPress={save} fullWidth />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>
-            <Text variant="caption" tone="muted">
-              Next number will be
-            </Text>
+            <Text variant="caption" tone="muted">{tr('settings:numbering.nextWillBe')}</Text>
             <Text variant="h3" weight="700" style={{ color: t.c.primary, fontVariant: ['tabular-nums'] }}>
               {draft ? formatNumber(draft, { date: today(), branchCode }) : ''}
             </Text>
@@ -122,14 +120,14 @@ export default function NumberingSettings() {
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <TextField
-              label="Prefix"
+              label={tr('settings:numbering.prefix')}
               value={prefix}
               onChangeText={(v) => setPrefix(v.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
               autoCapitalize="characters"
               containerStyle={{ flex: 1 }}
             />
             <TextField
-              label="Next number"
+              label={tr('settings:numbering.nextNumber')}
               value={nextNumber}
               onChangeText={(v) => setNextNumber(v.replace(/[^0-9]/g, ''))}
               keyboardType="number-pad"
@@ -138,29 +136,36 @@ export default function NumberingSettings() {
           </View>
 
           <TextField
-            label="Digits"
+            label={tr('settings:numbering.digits')}
             value={padding}
             onChangeText={(v) => setPadding(v.replace(/[^0-9]/g, '').slice(0, 1))}
             keyboardType="number-pad"
             hint="0001 uses four digits."
           />
 
-          <SwitchField label="Include financial year" description="Adds 26-27 to the number." value={includeFy} onValueChange={setIncludeFy} />
           <SwitchField
-            label="Include branch code"
-            description="Useful when several locations issue documents."
+            label={tr('settings:numbering.includeFy')}
+            // The year used to be hardcoded as "26-27", which would have been
+            // wrong from April. It comes from the same helper the numbers do.
+            description={tr('settings:numbering.fyHint', { fy: financialYearOf(today()).label.replace('FY ', '') })}
+            value={includeFy}
+            onValueChange={setIncludeFy}
+          />
+          <SwitchField
+            label={tr('settings:numbering.includeBranch')}
+            description={tr('settings:numbering.branchHint')}
             value={includeBranch}
             onValueChange={setIncludeBranch}
             disabled={branches.length < 2}
           />
-          <PickerField label="Reset policy" value={RESET_LABELS[resetPolicy]} onPress={() => setResetOpen(true)} icon="restart" />
+          <PickerField label={tr('settings:numbering.resetPolicy')} value={RESET_LABELS[resetPolicy]} onPress={() => setResetOpen(true)} icon="restart" />
         </View>
       </Sheet>
 
       <SelectSheet
         visible={resetOpen}
         onClose={() => setResetOpen(false)}
-        title="Reset policy"
+        title={tr('settings:numbering.resetPolicy')}
         options={(Object.keys(RESET_LABELS) as NumberingSeries['resetPolicy'][]).map((k) => ({ value: k, label: RESET_LABELS[k] }))}
         value={resetPolicy}
         onSelect={(v) => setResetPolicy(v as NumberingSeries['resetPolicy'])}

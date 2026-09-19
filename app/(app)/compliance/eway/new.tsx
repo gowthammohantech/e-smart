@@ -9,7 +9,7 @@ import { useDocument } from '@/store/selectors';
 
 export default function NewEwayBill() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['compliance', 'nav']);
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const document = useDocument(documentId);
 
@@ -21,8 +21,8 @@ export default function NewEwayBill() {
       ) : (
         <EmptyState
           illustration="not-found"
-          title="Document not found"
-          message="The document this bill was to be raised against is no longer here."
+          title={tr('compliance:notFound.docTitle')}
+          message={tr('compliance:notFound.docBody')}
         />
       )}
     </View>

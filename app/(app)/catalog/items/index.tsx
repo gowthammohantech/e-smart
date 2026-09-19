@@ -18,7 +18,7 @@ import { formatMoney } from '@/lib/format';
  */
 export default function ItemList() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const items = useItems();
   const [query, setQuery] = useState('');
@@ -36,7 +36,7 @@ export default function ItemList() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search by name, SKU or HSN" />
+        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
         {filtered.length === 0 ? (
           <EmptyState
             illustration="no-items"
@@ -53,7 +53,7 @@ export default function ItemList() {
                 title={item.name}
                 subtitle={`${item.sku}${item.hsnCode ? ` · HSN ${item.hsnCode}` : ''}`}
                 meta={`${formatMoney(item.salePrice)} / ${item.unit}`}
-                right={item.type === 'service' ? <Badge label="Service" tone="neutral" size="sm" /> : undefined}
+                right={item.type === 'service' ? <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" /> : undefined}
                 divider={i < filtered.length - 1}
                 onPress={() => router.push(`/(app)/catalog/items/${item.id}`)}
               />

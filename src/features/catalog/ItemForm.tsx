@@ -109,7 +109,7 @@ export function ItemForm({ item }: { item?: Item }) {
           }}
         />
 
-        <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder="What you're selling" error={errors.name} required icon="tag-outline" />
+        <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
         <TextField
           label={tr('inventory:form.sku')}
           value={sku}
@@ -149,7 +149,7 @@ export function ItemForm({ item }: { item?: Item }) {
             {hasInventory ? (
             <SwitchField
               label={tr('inventory:form.trackStock')}
-              description="Sales and purchases will move this item's stock automatically."
+              description={tr('inventory:form.trackStockHintFull')}
               value={trackInventory}
               onValueChange={setTrackInventory}
             />

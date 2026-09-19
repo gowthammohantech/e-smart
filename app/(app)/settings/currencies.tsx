@@ -24,7 +24,7 @@ import { uid } from '@/lib/id';
 
 export default function CurrencySettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -71,7 +71,7 @@ export default function CurrencySettings() {
       effectiveFrom,
       source: 'manual',
     });
-    toast.show('Exchange rate saved', 'success');
+    toast.show(tr('settings:currencies.saved'), 'success');
     setEditing(null);
   };
 
@@ -81,9 +81,7 @@ export default function CurrencySettings() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: t.spacing.sm }}>
-          <Text variant="caption" tone="muted">
-            Base currency
-          </Text>
+          <Text variant="caption" tone="muted">{tr('settings:currencies.baseCurrency')}</Text>
           <Text variant="h3" weight="700">
             {currencyMeta(baseCurrency).name} ({baseCurrency})
           </Text>
@@ -93,13 +91,11 @@ export default function CurrencySettings() {
           </Text>
         </Card>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          Exchange rates
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:currencies.rates')}</Text>
 
         <Card padded={false}>
           {pairs.length === 0 ? (
-            <EmptyState icon="currency-usd-off" title="No rates yet" message="Add a rate to invoice in another currency." compact />
+            <EmptyState icon="currency-usd-off" title={tr('settings:currencies.none')} message={tr('settings:currencies.noneBody')} compact />
           ) : (
             pairs.map((p, i) => (
               <ListRow
@@ -122,9 +118,7 @@ export default function CurrencySettings() {
           )}
         </Card>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          Rate history
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:currencies.history')}</Text>
         <Card padded={false}>
           {rates.slice(0, 12).map((r, i) => (
             <ListRow
@@ -153,7 +147,7 @@ export default function CurrencySettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Add exchange rate" icon="plus" onPress={() => open()} fullWidth size="lg" />
+        <Button title={tr('settings:currencies.add')} icon="plus" onPress={() => open()} fullWidth size="lg" />
       </View>
 
       <Sheet
@@ -164,22 +158,22 @@ export default function CurrencySettings() {
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
               <Button
-                title="Delete"
+                title={tr('settings:currencies.delete')}
                 variant="danger"
                 style={{ flex: 1 }}
                 onPress={() => {
                   if (editing.id) removeExchangeRate(editing.id);
                   setEditing(null);
-                  toast.show('Rate deleted', 'success');
+                  toast.show(tr('settings:currencies.deleted'), 'success');
                 }}
               />
             ) : null}
-            <Button title="Save" onPress={save} disabled={!Number(rate)} style={{ flex: 2 }} />
+            <Button title={tr('settings:currencies.save')} onPress={save} disabled={!Number(rate)} style={{ flex: 2 }} />
           </View>
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <PickerField label="Currency" value={`${currencyMeta(from).name} (${from})`} onPress={() => setFromOpen(true)} icon="cash-multiple" />
+          <PickerField label={tr('settings:currencies.currency')} value={`${currencyMeta(from).name} (${from})`} onPress={() => setFromOpen(true)} icon="cash-multiple" />
           <TextField
             label={`Rate (1 ${from} → ${baseCurrency})`}
             value={rate}
@@ -189,14 +183,14 @@ export default function CurrencySettings() {
             icon="swap-horizontal"
             required
           />
-          <DateField label="Effective from" value={effectiveFrom} onChange={setEffectiveFrom} hint="Documents dated on or after this use the new rate." />
+          <DateField label={tr('settings:currencies.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:currencies.effectiveHint')} />
         </View>
       </Sheet>
 
       <SelectSheet
         visible={fromOpen}
         onClose={() => setFromOpen(false)}
-        title="Currency"
+        title={tr('settings:currencies.currency')}
         options={CURRENCIES.filter((c) => c.code !== baseCurrency).map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
         value={from}
         onSelect={setFrom}

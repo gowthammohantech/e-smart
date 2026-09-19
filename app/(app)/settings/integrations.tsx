@@ -21,7 +21,7 @@ const GROUPS: { key: Integration['category']; title: string; blurb: string }[] =
 
 export default function Integrations() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
   const router = useRouter();
 
@@ -85,7 +85,7 @@ export default function Integrations() {
                         <Text variant="body" weight="600">
                           {i.name}
                         </Text>
-                        {i.connected ? <Badge label="Connected" tone="success" size="sm" /> : null}
+                        {i.connected ? <Badge label={tr('settings:integrations.connected')} tone="success" size="sm" /> : null}
                       </View>
                       <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
                         {i.description}
@@ -98,9 +98,7 @@ export default function Integrations() {
                           hitSlop={6}
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
                         >
-                          <Text variant="caption" tone="primary" weight="600">
-                            Configure
-                          </Text>
+                          <Text variant="caption" tone="primary" weight="600">{tr('settings:integrations.configure')}</Text>
                           <MaterialCommunityIcons name="chevron-right" size={14} color={t.c.primary} />
                         </Pressable>
                       ) : null}

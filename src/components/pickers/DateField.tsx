@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -29,6 +30,7 @@ export function DateField({
   maximumDate?: Date;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Date>(() => (value ? parseDate(value) : new Date()));
 
@@ -92,7 +94,7 @@ export function DateField({
           scroll={false}
           footer={
             <Button
-              title="Done"
+              title={tr('common:component.done')}
               onPress={() => {
                 onChange(toISODate(draft));
                 setOpen(false);

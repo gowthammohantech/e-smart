@@ -41,7 +41,7 @@ export default function ForgotPassword() {
         label={tr('auth:forgot.email')}
         value={email}
         onChangeText={setEmail}
-        placeholder="you@business.com"
+        placeholder={tr('auth:forgot.emailPlaceholder')}
         keyboardType="email-address"
         autoCapitalize="none"
         icon="email-outline"

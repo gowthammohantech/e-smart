@@ -40,7 +40,11 @@
     "email": "Business email",
     "phone": "Business phone",
     "planSheetTitle": "Plan",
-    "stateSheetTitle": "State"
+    "stateSheetTitle": "State",
+    "namePlaceholder": "e.g. Vertex Traders",
+    "emailPlaceholder": "accounts@business.com",
+    "changeLater": "You can change this later in Settings",
+    "addressSubtitle": "Where your business is registered"
   },
   "country": {
     "title": "Country and currency",
@@ -62,14 +66,17 @@
     "numberPlaceholder": "Registration number",
     "stateHint": "The first two digits set your home state for CGST/SGST vs IGST.",
     "composition": "Composition scheme",
-    "compositionHint": "Turn on if you file under the composition scheme — invoices will not show a tax breakdown."
+    "compositionHint": "Turn on if you file under the composition scheme — invoices will not show a tax breakdown.",
+    "defaultSlabs": "Default tax slabs",
+    "unregisteredNote": "Your invoices will be raised without a tax breakdown. You can register later without losing any history."
   },
   "numbering": {
     "title": "Invoice numbering",
     "subtitle": "Finalised numbers are never reused, so pick a format you're happy with.",
     "prefix": "Prefix",
     "startFrom": "Start from",
-    "includeFy": "Include financial year"
+    "includeFy": "Include financial year",
+    "nextWillBe": "Your next invoice will be"
   },
   "branches": {
     "title": "Locations",
@@ -80,7 +87,9 @@
     "code": "Code",
     "city": "City",
     "cityPlaceholder": "Pune",
-    "add": "Add branch"
+    "add": "Add branch",
+    "namePlaceholder": "e.g. Pune warehouse",
+    "headOffice": "Head office"
   },
   "done": {
     "readyTitle": "{{business}} is ready",
@@ -96,7 +105,8 @@
       "itemsBody": "Set prices and tax once, reuse everywhere.",
       "invoiceLabel": "Raise your first invoice",
       "invoiceBody": "Share it on WhatsApp in seconds."
-    }
+    },
+    "allSet": "Tax slabs, numbering and your first location are all set up."
   },
   "stepProgress": "Step {{current}} of {{total}} · {{step}}"
 }

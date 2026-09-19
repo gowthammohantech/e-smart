@@ -66,7 +66,7 @@ export default function SignIn() {
             label={tr('auth:signIn.email')}
             value={email}
             onChangeText={setEmail}
-            placeholder="you@business.com"
+            placeholder={tr('auth:signIn.emailPlaceholder')}
             keyboardType="email-address"
             autoCapitalize="none"
             icon="email-outline"
@@ -117,12 +117,8 @@ export default function SignIn() {
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.lg }}>
-        <Text variant="small" tone="muted">
-          New here?
-        </Text>
-        <Text variant="small" tone="primary" weight="600" onPress={() => router.replace('/(auth)/sign-up')}>
-          Create an account
-        </Text>
+        <Text variant="small" tone="muted">{tr('auth:signIn.newHere')}</Text>
+        <Text variant="small" tone="primary" weight="600" onPress={() => router.replace('/(auth)/sign-up')}>{tr('auth:signIn.createAccount')}</Text>
       </View>
     </AuthShell>
   );

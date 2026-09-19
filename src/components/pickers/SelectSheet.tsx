@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -46,6 +47,7 @@ export function SelectSheet({
   footer?: React.ReactNode;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const [query, setQuery] = useState('');
 
   const showSearch = searchable && options.length > 6;
@@ -79,7 +81,7 @@ export function SelectSheet({
     >
 
       {filtered.length === 0 ? (
-        <EmptyState icon="magnify" title="No matches" message={emptyMessage} compact />
+        <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage} compact />
       ) : (
         filtered.map((o) => {
           const selected = o.value === value;

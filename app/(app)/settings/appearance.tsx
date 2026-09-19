@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { statusLabel } from '@/i18n/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -103,7 +104,7 @@ function RadioRow({ label, description, icon, active, last, onPress }: RadioRowP
 
 export default function Appearance() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['domain', 'nav', 'settings']);
   const baseCurrency = useBaseCurrency();
   const themeMode = useUiStore((s) => s.themeMode);
   const setThemeMode = useUiStore((s) => s.setThemeMode);
@@ -158,9 +159,7 @@ export default function Appearance() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
           <LixiMark size={20} />
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-            Ways to open Lixi
-          </Text>
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:appearance.lixiWays')}</Text>
         </View>
 
         <Card style={{ gap: t.spacing.xs }}>
@@ -180,39 +179,44 @@ export default function Appearance() {
             <Pressable
               onPress={() => {
                 resetLixiHints();
-                toast.show('Gesture tips will show again above the tab bar', 'success');
+                toast.show(tr('settings:appearance.tipsReset'), 'success');
               }}
               accessibilityRole="button"
               hitSlop={8}
               style={{ alignSelf: 'flex-start', marginTop: t.spacing.xs }}
             >
-              <Text variant="caption" weight="700" style={{ color: t.c.primary }}>
-                Show gesture tips again
-              </Text>
+              <Text variant="caption" weight="700" style={{ color: t.c.primary }}>{tr('settings:appearance.showTipsAgain')}</Text>
             </Pressable>
           ) : null}
         </Card>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          Preview
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:appearance.preview')}</Text>
 
         <StatRow>
-          <StatTile label="Sales" value={fromMajor(482500, baseCurrency)} icon="trending-up" caption="12 invoices" />
-          <StatTile label="Overdue" value={fromMajor(64300, baseCurrency)} tone="bad" icon="alert-circle-outline" caption="3 invoices" />
+          <StatTile
+            label={tr('settings:appearance.sampleSales')}
+            value={fromMajor(482500, baseCurrency)}
+            icon="trending-up"
+            caption={tr('settings:appearance.sampleInvoices', { count: 12 })}
+          />
+          <StatTile
+            label={tr('settings:appearance.sampleOverdue')}
+            value={fromMajor(64300, baseCurrency)}
+            tone="bad"
+            icon="alert-circle-outline"
+            caption={tr('settings:appearance.sampleInvoices', { count: 3 })}
+          />
         </StatRow>
 
         <Card style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', gap: t.spacing.sm, flexWrap: 'wrap' }}>
-            <Badge label="Paid" tone="success" />
-            <Badge label="Partly paid" tone="warning" />
-            <Badge label="Overdue" tone="danger" />
-            <Badge label="Draft" tone="neutral" />
-            <Badge label="Issued" tone="info" />
+            <Badge label={statusLabel(tr, 'paid')} tone="success" />
+            <Badge label={statusLabel(tr, 'partiallyPaid')} tone="warning" />
+            <Badge label={statusLabel(tr, 'overdue')} tone="danger" />
+            <Badge label={statusLabel(tr, 'draft')} tone="neutral" />
+            <Badge label={statusLabel(tr, 'issued')} tone="info" />
           </View>
-          <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
-            Status colours stay reserved for state, so they never double as chart series colours.
-          </Text>
+          <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>{tr('settings:appearance.statusColourNote')}</Text>
         </Card>
       </ScrollView>
     </View>

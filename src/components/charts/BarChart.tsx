@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -26,15 +27,14 @@ export function BarChart({
   color?: string;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const [selected, setSelected] = useState<number | null>(null);
   const barColor = color ?? t.c.primary;
 
   if (data.length === 0) {
     return (
       <View style={{ height, alignItems: 'center', justifyContent: 'center' }}>
-        <Text variant="small" tone="muted">
-          No data for this period
-        </Text>
+        <Text variant="small" tone="muted">{tr('common:component.noChartData')}</Text>
       </View>
     );
   }

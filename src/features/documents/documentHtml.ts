@@ -250,7 +250,7 @@ export function buildDocumentHtml({
 
   <div class="sign">
     <div class="muted">For ${esc(company?.name)}</div>
-    <div class="line muted">Authorised signatory</div>
+    <div class="line muted">${bi('sales:pdf.authorisedSignatory')}</div>
   </div>
 
   <div class="foot">${esc(t('sales:pdf.generatedWith'))}</div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Pressable,
   StyleProp,
@@ -235,6 +236,7 @@ export function PickerField({
   onClear?: () => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
       <Pressable
@@ -259,7 +261,7 @@ export function PickerField({
           {value ?? placeholder}
         </Text>
         {clearable && value ? (
-          <Pressable onPress={onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear">
+          <Pressable onPress={onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.clear')}>
             <MaterialCommunityIcons name="close-circle" size={17} color={t.c.muted} />
           </Pressable>
         ) : (
@@ -398,6 +400,7 @@ export function QuantityStepper({
   decimals?: number;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const btn = (icon: 'minus' | 'plus', delta: number, label: string) => (
     <Pressable
       onPress={() => onChange(Math.max(min, Number((value + delta).toFixed(decimals))))}
@@ -430,7 +433,7 @@ export function QuantityStepper({
           onChange(Number.isFinite(n) ? n : min);
         }}
         keyboardType="decimal-pad"
-        accessibilityLabel="Quantity"
+        accessibilityLabel={tr('common:component.quantity')}
         style={{
           minWidth: 52,
           textAlign: 'center',

@@ -18,7 +18,7 @@ import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/valid
 
 export default function Profile() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -43,7 +43,7 @@ export default function Profile() {
     setErrors(next);
     if (hasErrors(next) || !user) return;
     saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.trim() || undefined });
-    toast.show('Profile updated', 'success');
+    toast.show(tr('settings:profile.saved'), 'success');
     router.back();
   };
 
@@ -64,13 +64,11 @@ export default function Profile() {
           <Badge label={user?.role ?? 'owner'} tone="info" />
         </Card>
 
-        <TextField label="Name" value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
-        <TextField label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />
-        <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="cellphone" error={errors.phone} />
+        <TextField label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
+        <TextField label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />
+        <TextField label={tr('settings:profile.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="cellphone" error={errors.phone} />
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          Your businesses
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:profile.yourBusinesses')}</Text>
         <Card padded={false}>
           {companies.map((c, i) => (
             <ListRow
@@ -79,7 +77,7 @@ export default function Profile() {
               subtitle={`${c.businessType} · ${c.baseCurrency}`}
               icon="domain"
               divider={i < companies.length - 1}
-              right={c.id === activeCompanyId ? <Badge label="Active" tone="success" size="sm" /> : undefined}
+              right={c.id === activeCompanyId ? <Badge label={tr('settings:profile.active')} tone="success" size="sm" /> : undefined}
               onPress={() => {
                 setActiveCompany(c.id);
                 toast.show(`Switched to ${c.name}`, 'success');
@@ -98,7 +96,7 @@ export default function Profile() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Save changes" onPress={save} fullWidth size="lg" />
+        <Button title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
       </View>
     </KeyboardAvoidingView>
   );

@@ -20,7 +20,7 @@ import { uid } from '@/lib/id';
 
 export default function BranchSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -78,7 +78,7 @@ export default function BranchSettings() {
 
         <Card padded={false}>
           {branches.length === 0 ? (
-            <EmptyState icon="warehouse" title="No branches yet" compact />
+            <EmptyState icon="warehouse" title={tr('settings:branches.none')} compact />
           ) : (
             branches.map((b, i) => (
               <ListRow
@@ -88,7 +88,7 @@ export default function BranchSettings() {
                 meta={`${docCount(b.id)} documents`}
                 icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
                 divider={i < branches.length - 1}
-                right={b.isPrimary ? <Badge label="Primary" tone="info" size="sm" /> : undefined}
+                right={b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : undefined}
                 onPress={() => open(b)}
                 onLongPress={() => (b.isPrimary ? undefined : setConfirmDelete(b))}
                 chevron
@@ -111,7 +111,7 @@ export default function BranchSettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Add branch" icon="plus" onPress={() => open()} fullWidth size="lg" />
+        <Button title={tr('settings:branches.add')} icon="plus" onPress={() => open()} fullWidth size="lg" />
       </View>
 
       <Sheet
@@ -122,7 +122,7 @@ export default function BranchSettings() {
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id && !editing.isPrimary ? (
               <Button
-                title="Delete"
+                title={tr('settings:branches.delete')}
                 variant="danger"
                 style={{ flex: 1 }}
                 onPress={() => {
@@ -132,32 +132,32 @@ export default function BranchSettings() {
                 }}
               />
             ) : null}
-            <Button title="Save" onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button title={tr('settings:branches.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
           </View>
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <TextField label="Branch name" value={name} onChangeText={setName} placeholder="e.g. Pune warehouse" icon="warehouse" required />
+          <TextField label={tr('settings:branches.name')} value={name} onChangeText={setName} placeholder={tr('settings:branches.namePlaceholder')} icon="warehouse" required />
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            <TextField label="Code" value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" containerStyle={{ flex: 1 }} />
-            <TextField label="City" value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
+            <TextField label={tr('settings:branches.code')} value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" containerStyle={{ flex: 1 }} />
+            <TextField label={tr('settings:branches.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
           </View>
-          <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
-          <SwitchField label="Primary branch" description="Used as the default on new documents." value={isPrimary} onValueChange={setIsPrimary} />
+          <TextField label={tr('settings:branches.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
+          <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} />
         </View>
       </Sheet>
 
       <ConfirmDialog
         visible={!!confirmDelete}
         title={`Delete ${confirmDelete?.name}?`}
-        message="Documents already recorded against this branch keep their reference. This cannot be undone."
-        confirmLabel="Delete"
+        message={tr('settings:branches.deleteMessage')}
+        confirmLabel={tr('settings:branches.delete')}
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
           if (confirmDelete) removeBranch(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show('Branch deleted', 'success');
+          toast.show(tr('settings:branches.deleted'), 'success');
         }}
       />
     </View>

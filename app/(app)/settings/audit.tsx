@@ -23,7 +23,7 @@ const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
 
 export default function AuditTrail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const events = useAuditEvents();
   const [query, setQuery] = useState('');
 
@@ -41,7 +41,7 @@ export default function AuditTrail() {
       <Stack.Screen options={{ title: tr('nav:title.auditTrail') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search the trail" />
+        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('settings:audit.search')} />
         <Text variant="caption" tone="muted">
           {filtered.length} events · append-only, newest first
         </Text>
@@ -50,7 +50,7 @@ export default function AuditTrail() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>
           {filtered.length === 0 ? (
-            <EmptyState icon="history" title="Nothing recorded" message="Actions you take are logged here." compact />
+            <EmptyState icon="history" title={tr('settings:audit.none')} message={tr('settings:audit.noneBody')} compact />
           ) : (
             filtered.slice(0, 150).map((e, i) => (
               <View
@@ -83,9 +83,7 @@ export default function AuditTrail() {
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
           <MaterialCommunityIcons name="lock-outline" size={19} color={t.c.muted} />
-          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-            Audit records cannot be edited or deleted from the app. Export them with your company backup for your records.
-          </Text>
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('settings:audit.note')}</Text>
         </Card>
       </ScrollView>
     </View>

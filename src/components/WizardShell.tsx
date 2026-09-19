@@ -36,7 +36,7 @@ export function WizardShell({
   onSkip?: () => void;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding']);
+  const { t: tr } = useTranslation(['common', 'onboarding']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -59,7 +59,7 @@ export function WizardShell({
               onPress={() => router.back()}
               hitSlop={10}
               accessibilityRole="button"
-              accessibilityLabel="Go back"
+              accessibilityLabel={tr('common:component.goBack')}
               style={{
                 width: 36,
                 height: 36,
@@ -75,10 +75,8 @@ export function WizardShell({
             <View style={{ width: 36 }} />
           )}
           {onSkip ? (
-            <Pressable onPress={onSkip} hitSlop={8} accessibilityRole="button" accessibilityLabel="Skip">
-              <Text variant="small" tone="muted" weight="600">
-                Skip
-              </Text>
+            <Pressable onPress={onSkip} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.skip')}>
+              <Text variant="small" tone="muted" weight="600">{tr('common:component.skip')}</Text>
             </Pressable>
           ) : null}
         </View>

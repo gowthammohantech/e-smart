@@ -37,7 +37,7 @@ type Result = {
 /** Global search across every record the active company owns. */
 export default function GlobalSearch() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'nav']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
   const router = useRouter();
 
   const [query, setQuery] = useState('');
@@ -146,7 +146,7 @@ export default function GlobalSearch() {
         <SearchBar
           value={query}
           onChangeText={setQuery}
-          placeholder="Invoices, contacts, items, payments…"
+          placeholder={tr('common:search.placeholder')}
           autoFocus
           onSubmitEditing={() => pushSearch(query)}
         />
@@ -157,13 +157,9 @@ export default function GlobalSearch() {
           history.length > 0 ? (
             <>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: t.spacing.sm }}>
-                <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                  Recent searches
-                </Text>
-                <Pressable onPress={clearHistory} hitSlop={6} accessibilityRole="button" accessibilityLabel="Clear history">
-                  <Text variant="caption" tone="primary" weight="600">
-                    Clear
-                  </Text>
+                <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('common:search.recent')}</Text>
+                <Pressable onPress={clearHistory} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('common:search.clearHistory')}>
+                  <Text variant="caption" tone="primary" weight="600">{tr('common:search.clear')}</Text>
                 </Pressable>
               </View>
               <Card padded={false}>
@@ -195,12 +191,12 @@ export default function GlobalSearch() {
             <EmptyState
               illustration="search-idle"
               icon="magnify"
-              title="Search everything"
-              message="Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in."
+              title={tr('common:search.title')}
+              message={tr('common:search.subtitleFull')}
             />
           )
         ) : results.length === 0 ? (
-          <EmptyState illustration="search-empty" icon="magnify-close" title="No matches" message={`Nothing in ${'this business'} matches "${query}".`} />
+          <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={`Nothing in ${'this business'} matches "${query}".`} />
         ) : (
           grouped.map(([group, rows]) => (
             <View key={group} style={{ marginBottom: t.spacing.lg }}>

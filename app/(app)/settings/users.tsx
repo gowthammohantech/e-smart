@@ -31,7 +31,7 @@ const ROLES: { value: UserRole; label: string; description: string }[] = [
 
 export default function UserSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -98,7 +98,7 @@ export default function UserSettings() {
               right={
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
                   <Badge label={ROLES.find((r) => r.value === u.role)?.label ?? u.role} tone={u.role === 'owner' ? 'info' : 'neutral'} size="sm" />
-                  {u.status === 'invited' ? <Badge label="Invited" tone="warning" size="sm" /> : null}
+                  {u.status === 'invited' ? <Badge label={tr('settings:users.invited')} tone="warning" size="sm" /> : null}
                 </View>
               }
               onPress={() => open(u)}
@@ -107,9 +107,7 @@ export default function UserSettings() {
           ))}
         </Card>
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          What each role can do
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:users.rolesHeading')}</Text>
         <Card style={{ gap: t.spacing.md }}>
           {ROLES.map((r) => (
             <View key={r.value} style={{ gap: 3 }}>
@@ -137,7 +135,7 @@ export default function UserSettings() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title="Invite someone" icon="account-plus-outline" onPress={() => open()} fullWidth size="lg" />
+        <Button title={tr('settings:users.invite')} icon="account-plus-outline" onPress={() => open()} fullWidth size="lg" />
       </View>
 
       <Sheet
@@ -148,7 +146,7 @@ export default function UserSettings() {
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id && editing.role !== 'owner' ? (
               <Button
-                title="Remove"
+                title={tr('settings:users.remove')}
                 variant="danger"
                 style={{ flex: 1 }}
                 onPress={() => {
@@ -163,9 +161,9 @@ export default function UserSettings() {
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <TextField label="Name" value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
+          <TextField label={tr('settings:users.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
           <TextField
-            label="Email"
+            label={tr('settings:users.email')}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -176,7 +174,7 @@ export default function UserSettings() {
             editable={!editing?.id}
           />
           <PickerField
-            label="Role"
+            label={tr('settings:users.role')}
             value={ROLES.find((r) => r.value === role)?.label}
             onPress={() => setRoleOpen(true)}
             icon="shield-account-outline"
@@ -188,7 +186,7 @@ export default function UserSettings() {
       <SelectSheet
         visible={roleOpen}
         onClose={() => setRoleOpen(false)}
-        title="Role"
+        title={tr('settings:users.role')}
         options={ROLES.map((r) => ({ value: r.value, label: r.label, description: r.description }))}
         value={role}
         onSelect={(v) => setRole(v as UserRole)}
@@ -198,14 +196,14 @@ export default function UserSettings() {
       <ConfirmDialog
         visible={!!confirmRemove}
         title={`Remove ${confirmRemove?.name}?`}
-        message="They immediately lose access to this business. Documents they created stay in your books."
-        confirmLabel="Remove"
+        message={tr('settings:users.removeMessage')}
+        confirmLabel={tr('settings:users.remove')}
         destructive
         onCancel={() => setConfirmRemove(null)}
         onConfirm={() => {
           if (confirmRemove) removeUser(confirmRemove.id);
           setConfirmRemove(null);
-          toast.show('User removed', 'success');
+          toast.show(tr('settings:users.removed'), 'success');
         }}
       />
     </View>

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ const META: Record<NotificationKind, { icon: keyof typeof MaterialCommunityIcons
 
 export default function Notifications() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const router = useRouter();
 
   const notifications = useNotifications();
@@ -61,10 +63,8 @@ export default function Notifications() {
           title: 'Notifications',
           headerRight: () =>
             unread > 0 ? (
-              <Pressable onPress={markAllRead} hitSlop={8} accessibilityRole="button" accessibilityLabel="Mark all read">
-                <Text variant="small" tone="primary" weight="600">
-                  Mark all read
-                </Text>
+              <Pressable onPress={markAllRead} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:notifications.markAllRead')}>
+                <Text variant="small" tone="primary" weight="600">{tr('common:notifications.markAllRead')}</Text>
               </Pressable>
             ) : null,
         }}
@@ -88,7 +88,7 @@ export default function Notifications() {
             <EmptyState
               illustration="no-notifications" icon="bell-check-outline"
               title={filter === 'unread' ? 'Nothing unread' : 'No notifications'}
-              message="Invoices sent, payments received, overdue reminders and stock alerts land here."
+              message={tr('common:notifications.emptyBody')}
               compact
             />
           </Card>
@@ -167,7 +167,7 @@ export default function Notifications() {
         )}
 
         <View style={{ height: t.spacing.lg }} />
-        <Badge label="Delivered in-app · push, email and WhatsApp are configured under Integrations" tone="neutral" />
+        <Badge label={tr('common:notifications.deliveryNote')} tone="neutral" />
       </ScrollView>
 
       {notifications.length > 0 ? (
@@ -184,15 +184,15 @@ export default function Notifications() {
             backgroundColor: t.c.paper,
           }}
         >
-          <Button title="Clear all" variant="ghost" icon="notification-clear-all" onPress={() => setConfirmClear(true)} fullWidth />
+          <Button title={tr('common:notifications.clearAll')} variant="ghost" icon="notification-clear-all" onPress={() => setConfirmClear(true)} fullWidth />
         </View>
       ) : null}
 
       <ConfirmDialog
         visible={confirmClear}
-        title="Clear all notifications?"
-        message="They will be removed from this business's list. The underlying records are untouched."
-        confirmLabel="Clear"
+        title={tr('common:notifications.clearTitle')}
+        message={tr('common:notifications.clearMessageFull')}
+        confirmLabel={tr('common:notifications.clear')}
         destructive
         onCancel={() => setConfirmClear(false)}
         onConfirm={() => {

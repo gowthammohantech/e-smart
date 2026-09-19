@@ -121,7 +121,7 @@ export function DocumentListView({
               onPress={() => setFilterOpen(true)}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Filters"
+              accessibilityLabel={tr('common:filters.title')}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
               <MaterialCommunityIcons
@@ -226,24 +226,22 @@ export function DocumentListView({
       <Sheet
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
-        title="Filters"
+        title={tr('common:filters.title')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <Button
-              title="Reset"
+              title={tr('common:filters.reset')}
               variant="ghost"
               onPress={() => setFilters(DEFAULT_FILTERS)}
               style={{ flex: 1 }}
             />
-            <Button title="Apply" onPress={() => setFilterOpen(false)} style={{ flex: 1 }} />
+            <Button title={tr('common:filters.apply')} onPress={() => setFilterOpen(false)} style={{ flex: 1 }} />
           </View>
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.xl }}>
           <View style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Date range
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('common:filters.dateRange')}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
               {DATE_RANGE_PRESET_KEYS.map((p) => {
                 const active = filters.range === p;
@@ -272,9 +270,7 @@ export function DocumentListView({
           </View>
 
           <View style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Status
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('common:filters.status')}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
               {availableStatuses.map((s) => {
                 const active = filters.statuses.includes(s);
@@ -289,7 +285,7 @@ export function DocumentListView({
 
           {filters.partyId ? (
             <Button
-              title="Clear party filter"
+              title={tr('common:filters.clearParty')}
               variant="ghost"
               onPress={() => setFilters((f) => ({ ...f, partyId: null }))}
             />

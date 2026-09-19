@@ -16,7 +16,7 @@ import { formatRelative } from '@/lib/date';
 
 export default function Devices() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
   const devices = useAppStore((s) => s.devices);
@@ -29,9 +29,7 @@ export default function Devices() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
-          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Signing a device out revokes its session immediately — it cannot keep using the app with a cached token.
-          </Text>
+          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('settings:devices.revokeNote')}</Text>
         </Card>
 
         <Card padded={false}>
@@ -45,11 +43,9 @@ export default function Devices() {
               divider={i < devices.length - 1}
               right={
                 d.current ? (
-                  <Badge label="This device" tone="success" size="sm" />
+                  <Badge label={tr('settings:devices.thisDevice')} tone="success" size="sm" />
                 ) : (
-                  <Text variant="caption" tone="bad" weight="600">
-                    Sign out
-                  </Text>
+                  <Text variant="caption" tone="bad" weight="600">{tr('settings:devices.signOut')}</Text>
                 )
               }
               onPress={d.current ? undefined : () => setConfirmRevoke(d)}
@@ -59,23 +55,21 @@ export default function Devices() {
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
           <MaterialCommunityIcons name="shield-key-outline" size={19} color={t.c.muted} />
-          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-            Session tokens are held in the platform keychain, never in plain storage.
-          </Text>
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('settings:devices.keychainNote')}</Text>
         </Card>
       </ScrollView>
 
       <ConfirmDialog
         visible={!!confirmRevoke}
         title={`Sign out ${confirmRevoke?.label}?`}
-        message="That device will need to sign in again to reach your books."
-        confirmLabel="Sign out"
+        message={tr('settings:devices.signOutMessage')}
+        confirmLabel={tr('settings:devices.signOut')}
         destructive
         onCancel={() => setConfirmRevoke(null)}
         onConfirm={() => {
           if (confirmRevoke) revokeDevice(confirmRevoke.id);
           setConfirmRevoke(null);
-          toast.show('Device signed out', 'success');
+          toast.show(tr('settings:devices.signedOut'), 'success');
         }}
       />
     </View>

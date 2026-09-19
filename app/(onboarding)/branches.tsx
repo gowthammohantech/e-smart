@@ -44,9 +44,7 @@ export default function BranchesStep() {
       <Card variant="flat" style={{ gap: t.spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
         <MaterialCommunityIcons name="office-building-outline" size={20} color={t.c.primary} />
         <View style={{ flex: 1 }}>
-          <Text variant="body" weight="600">
-            Head office
-          </Text>
+          <Text variant="body" weight="600">{tr('onboarding:branches.headOffice')}</Text>
           <Text variant="caption" tone="muted">
             {draft.address.city || tr('onboarding:branches.primary')} · created automatically
           </Text>
@@ -77,7 +75,7 @@ export default function BranchesStep() {
       ))}
 
       <View style={{ gap: t.spacing.md }}>
-        <TextField label={tr('onboarding:branches.name')} value={name} onChangeText={setName} placeholder="e.g. Pune warehouse" icon="warehouse" />
+        <TextField label={tr('onboarding:branches.name')} value={name} onChangeText={setName} placeholder={tr('onboarding:branches.namePlaceholder')} icon="warehouse" />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <TextField
             label={tr('onboarding:branches.code')}
