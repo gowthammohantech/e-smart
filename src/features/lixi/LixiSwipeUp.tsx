@@ -5,6 +5,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { LixiOrb } from './LixiOrb';
 import { openLixi } from './open';
+import { useUiStore } from '@/store/uiStore';
 
 /** How far up the finger must travel before letting go opens Lixi. */
 const THRESHOLD = 72;
@@ -38,7 +39,11 @@ export function LixiSwipeUp({ enabled, children }: { enabled: boolean; children:
           setArmed(up >= THRESHOLD);
         },
         onPanResponderRelease: (_, g) => {
-          if (-g.dy >= THRESHOLD) openLixi();
+          if (-g.dy >= THRESHOLD) {
+            // Once someone has done it, the swipe tip has nothing left to teach.
+            useUiStore.getState().markLixiHintLearned('swipeUp');
+            openLixi();
+          }
           setArmed(false);
           Animated.spring(lift, { toValue: 0, useNativeDriver: true, damping: 16, stiffness: 200 }).start();
         },

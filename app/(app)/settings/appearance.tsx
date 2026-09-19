@@ -12,6 +12,7 @@ import { SwitchField } from '@/components/Field';
 import { LixiMark } from '@/features/lixi/LixiOrb';
 import { fromMajor } from '@/lib/money';
 import { useBaseCurrency } from '@/store/selectors';
+import { useToast } from '@/components/Toast';
 
 const LIXI_WAYS: { key: keyof LixiAccess; label: string; description: string }[] = [
   { key: 'holdTab', label: 'Hold a tab', description: 'Press and hold any tab; Lixi opens already answering about it.' },
@@ -33,6 +34,9 @@ export default function Appearance() {
   const setThemeMode = useUiStore((s) => s.setThemeMode);
   const lixiAccess = useUiStore((s) => s.lixiAccess);
   const setLixiAccess = useUiStore((s) => s.setLixiAccess);
+  const hintsLearned = useUiStore((s) => s.lixiHintsLearned);
+  const resetLixiHints = useUiStore((s) => s.resetLixiHints);
+  const toast = useToast();
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -105,6 +109,21 @@ export default function Appearance() {
           <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.xs }}>
             With every way off, Lixi is still under More → Ask Lixi.
           </Text>
+          {hintsLearned.swipeUp || hintsLearned.holdTab ? (
+            <Pressable
+              onPress={() => {
+                resetLixiHints();
+                toast.show('Gesture tips will show again above the tab bar', 'success');
+              }}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={{ alignSelf: 'flex-start', marginTop: t.spacing.xs }}
+            >
+              <Text variant="caption" weight="700" style={{ color: t.c.primary }}>
+                Show gesture tips again
+              </Text>
+            </Pressable>
+          ) : null}
         </Card>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>

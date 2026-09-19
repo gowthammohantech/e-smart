@@ -8,6 +8,10 @@ export type RecentEntry = { id: string; kind: string; label: string; at: string 
 /** The gestures that open Lixi, each switchable in Settings → Appearance. */
 export type LixiAccess = { holdTab: boolean; swipeUp: boolean; floatingOrb: boolean; pullDown: boolean };
 
+/** The tab-bar gestures that get a periodic tip. */
+export type LixiHintKey = 'swipeUp' | 'holdTab';
+export type LixiHintsLearned = Record<LixiHintKey, boolean>;
+
 /** Where the floating Lixi orb was last parked: an edge, and its top as a fraction of the screen. */
 export type LixiOrbSpot = { side: 'left' | 'right'; y: number };
 
@@ -38,6 +42,11 @@ type UiState = {
 
   lixiOrbSpot: LixiOrbSpot;
   setLixiOrbSpot: (spot: LixiOrbSpot) => void;
+
+  /** Gesture tips the person has acted on or dismissed; learned tips stop showing. */
+  lixiHintsLearned: LixiHintsLearned;
+  markLixiHintLearned: (key: LixiHintKey) => void;
+  resetLixiHints: () => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -77,6 +86,13 @@ export const useUiStore = create<UiState>()(
 
       lixiOrbSpot: { side: 'right', y: 0.62 },
       setLixiOrbSpot: (lixiOrbSpot) => set({ lixiOrbSpot }),
+
+      lixiHintsLearned: { swipeUp: false, holdTab: false },
+      markLixiHintLearned: (key) => {
+        if (get().lixiHintsLearned[key]) return;
+        set({ lixiHintsLearned: { ...get().lixiHintsLearned, [key]: true } });
+      },
+      resetLixiHints: () => set({ lixiHintsLearned: { swipeUp: false, holdTab: false } }),
     }),
     {
       name: 'ebs.ui.v1',

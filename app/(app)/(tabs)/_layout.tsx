@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { BottomTabBar } from 'expo-router/build/react-navigation/bottom-tabs';
@@ -8,6 +8,7 @@ import { useComplianceSummary, useModuleSet, useUnreadCount } from '@/store/sele
 import { useUiStore } from '@/store/uiStore';
 import { LixiSwipeUp } from '@/features/lixi/LixiSwipeUp';
 import { LixiFloatingOrb } from '@/features/lixi/LixiFloatingOrb';
+import { LixiGestureHint } from '@/features/lixi/LixiGestureHint';
 import { openLixi } from '@/features/lixi/open';
 import { TAB_QUESTIONS } from '@/features/lixi/brain';
 import { TabBar } from '@/components/TabBar';
@@ -43,6 +44,9 @@ export default function TabsLayout() {
   const t = useTheme();
   const unread = useUnreadCount();
   const access = useUiStore((s) => s.lixiAccess);
+  const markHintLearned = useUiStore((s) => s.markLixiHintLearned);
+  // The bar's height, measured, so the gesture tip can sit just above it.
+  const [barHeight, setBarHeight] = useState(0);
   const compliance = useComplianceSummary();
   // Lixi raises its hand for what costs money if it waits. An expired bill
   // is a finished trip, so it doesn't count.
@@ -54,13 +58,15 @@ export default function TabsLayout() {
     <View style={{ flex: 1 }}>
       <Tabs
         tabBar={(props) => (
-          <LixiSwipeUp enabled={access.swipeUp}>
-            {moduleSet === 'sales' ? (
-              <TabBar {...props} visible={visible} lixiNudge={lixiNudge} />
-            ) : (
-              <BottomTabBar {...props} />
-            )}
-          </LixiSwipeUp>
+          <View onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}>
+            <LixiSwipeUp enabled={access.swipeUp}>
+              {moduleSet === 'sales' ? (
+                <TabBar {...props} visible={visible} lixiNudge={lixiNudge} />
+              ) : (
+                <BottomTabBar {...props} />
+              )}
+            </LixiSwipeUp>
+          </View>
         )}
         screenOptions={{
           headerShown: false,
@@ -78,7 +84,9 @@ export default function TabsLayout() {
         }}
         screenListeners={({ route }) => ({
           tabLongPress: () => {
-            if (access.holdTab) openLixi(TAB_QUESTIONS[route.name]);
+            if (!access.holdTab) return;
+            markHintLearned('holdTab');
+            openLixi(TAB_QUESTIONS[route.name]);
           },
         })}
       >
@@ -99,6 +107,7 @@ export default function TabsLayout() {
         ))}
       </Tabs>
 
+      {barHeight > 0 ? <LixiGestureHint bottom={barHeight} /> : null}
       {access.floatingOrb && moduleSet === 'full' ? <LixiFloatingOrb nudge={lixiNudge} /> : null}
     </View>
   );
