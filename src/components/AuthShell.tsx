@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
+import { BrandLogo } from './BrandLogo';
 
 export function AuthShell({
   title,
@@ -56,6 +57,9 @@ export function AuthShell({
         ) : null}
 
         <View style={{ gap: t.spacing.sm }}>
+          <View style={{ marginBottom: t.spacing.sm }}>
+            <BrandLogo height={36} />
+          </View>
           <Text variant="h2">{title}</Text>
           {subtitle ? (
             <Text variant="body" tone="muted" style={{ lineHeight: 21 }}>

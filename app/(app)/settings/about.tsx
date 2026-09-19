@@ -1,8 +1,8 @@
 import React from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
@@ -18,18 +18,7 @@ export default function About() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
         <Card style={{ alignItems: 'center', gap: t.spacing.md, paddingVertical: t.spacing.xxl }}>
-          <View
-            style={{
-              width: 62,
-              height: 62,
-              borderRadius: t.radius.lg,
-              backgroundColor: t.c.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MaterialCommunityIcons name="chart-box-outline" size={32} color={t.c.onPrimary} />
-          </View>
+          <BrandLogo height={64} />
           <Text variant="h3" weight="700">
             Elixir Books Smart
           </Text>

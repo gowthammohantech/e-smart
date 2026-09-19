@@ -1,9 +1,8 @@
 import React from 'react';
-import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '@/theme/ThemeProvider';
-import { useUnreadCount } from '@/store/selectors';
+import { useComplianceSummary, useUnreadCount } from '@/store/selectors';
+import { TabBar } from '@/components/TabBar';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -15,25 +14,15 @@ const TABS: { name: string; title: string; icon: IconName; activeIcon: IconName 
 ];
 
 export default function TabsLayout() {
-  const t = useTheme();
   const unread = useUnreadCount();
+  const compliance = useComplianceSummary();
+  // Lixi raises its hand for the things that cost money if they wait.
+  const lixiNudge = compliance.failed + compliance.ewbExpiringToday + compliance.ewbExpired;
 
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: t.c.primary,
-        tabBarInactiveTintColor: t.c.muted,
-        tabBarStyle: {
-          backgroundColor: t.c.paper,
-          borderTopColor: t.c.line,
-          borderTopWidth: 0.5,
-          height: Platform.OS === 'ios' ? 84 : 62,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
-        tabBarHideOnKeyboard: true,
-      }}
+      tabBar={(props) => <TabBar {...props} lixiNudge={lixiNudge} />}
+      screenOptions={{ headerShown: false }}
     >
       {TABS.map((tab) => (
         <Tabs.Screen
@@ -42,7 +31,6 @@ export default function TabsLayout() {
           options={{
             title: tab.title,
             tabBarBadge: tab.name === 'more' && unread > 0 ? unread : undefined,
-            tabBarBadgeStyle: { backgroundColor: t.c.bad, fontSize: 10 },
             tabBarIcon: ({ color, focused }) => (
               <MaterialCommunityIcons name={focused ? tab.activeIcon : tab.icon} size={23} color={color} />
             ),

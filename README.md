@@ -44,7 +44,13 @@ search that matches on IRN and e-way bill number · notifications · audit trail
 · settings for the company, GST registration, tax slabs, numbering, payment
 accounts, transporters and users.
 
-Four tabs: **Home · Sell · GST · More**.
+Four tabs: **Home · Sell · GST · More**, split around **Lixi**, the assistant
+in the middle of the bar. Lixi has no model behind it. It works out what you're
+asking and answers from the same company-scoped books the screens use: sales
+for a period, who owes you, a customer by name, GST and e-way bill problems, or
+a document by its number. Each answer comes with buttons that open the relevant
+screen. A count on the orb means the IRP rejected an invoice or an e-way bill is
+expiring.
 
 ## What's in the demo data
 

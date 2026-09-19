@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { WelcomeHero } from '@/components/WelcomeHero';
 import { WelcomeBackdrop } from '@/components/WelcomeBackdrop';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export default function Welcome() {
   const t = useTheme();
@@ -26,10 +27,8 @@ export default function Welcome() {
       <WelcomeBackdrop />
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.spacing.xxl }}>
         <WelcomeHero />
-        <View style={{ gap: t.spacing.sm, alignItems: 'center' }}>
-          <Text variant="h1" center>
-            Elixir Books Smart
-          </Text>
+        <View style={{ gap: t.spacing.md, alignItems: 'center' }}>
+          <BrandLogo height={72} />
           <Text variant="body" tone="muted" center style={{ lineHeight: 22, maxWidth: 280 }}>
             Sell, invoice and stay GST-compliant from your phone.
           </Text>
