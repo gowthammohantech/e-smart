@@ -9,7 +9,7 @@ import { useExpense } from '@/store/selectors';
 
 export default function EditExpense() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const expense = useExpense(id);
 
@@ -17,7 +17,7 @@ export default function EditExpense() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.editExpense') }} />
-        <EmptyState illustration="not-found" icon="receipt-text-outline" title="Not found" />
+        <EmptyState illustration="not-found" icon="receipt-text-outline" title={tr('common:notFound.title')} />
       </View>
     );
   }

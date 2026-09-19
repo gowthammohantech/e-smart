@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -25,6 +26,7 @@ import { inRange, resolveRange } from '@/lib/date';
 
 export default function PurchasesTab() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['purchases']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -80,7 +82,7 @@ export default function PurchasesTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="Purchases" subtitle="Orders, bills, expenses and payments out" />
+      <AppHeader title={tr('purchases:hub.title')} subtitle={tr('purchases:hub.subtitle')} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
@@ -88,13 +90,13 @@ export default function PurchasesTab() {
       >
         <StatRow>
           <StatTile
-            label="Purchases this month"
+            label={tr('purchases:hub.thisMonth')}
             value={monthPurchases}
             icon="cart-outline"
             onPress={() => router.push('/(app)/purchases/bills')}
           />
           <StatTile
-            label="Expenses"
+            label={tr('purchases:hub.expenses')}
             value={monthExpenses}
             tone="warn"
             icon="receipt-text-outline"
@@ -106,14 +108,14 @@ export default function PurchasesTab() {
 
         <StatRow>
           <StatTile
-            label="Payable"
+            label={tr('purchases:hub.payable')}
             value={payables.summary.total}
             icon="file-clock-outline"
             caption={`${payables.outstanding.length} open bills`}
             onPress={() => router.push('/(app)/payables')}
           />
           <StatTile
-            label="Overdue"
+            label={tr('purchases:hub.overdue')}
             value={payables.summary.overdue}
             tone="bad"
             icon="alert-circle-outline"
@@ -121,31 +123,31 @@ export default function PurchasesTab() {
           />
         </StatRow>
 
-        <SectionHeader title="Purchase documents" />
+        <SectionHeader title={tr('purchases:hub.documents')} />
         <HubTiles
           tiles={[
             { key: 'bills', label: 'Purchase bills', icon: 'file-document-outline', route: '/(app)/purchases/bills', count: bills.length },
             { key: 'orders', label: 'Purchase orders', icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: orders.length },
             { key: 'receipts', label: 'Goods receipts', icon: 'package-down', route: '/(app)/purchases/receipts', count: receipts.length },
             { key: 'returns', label: 'Purchase returns', icon: 'package-up', route: '/(app)/purchases/returns', count: returns.length },
-            { key: 'expenses', label: 'Expenses', icon: 'receipt-text-outline', route: '/(app)/expenses', count: expenses.length },
+            { key: 'expenses', label: tr('purchases:hub.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses', count: expenses.length },
             { key: 'payments', label: 'Payments out', icon: 'cash-minus', route: '/(app)/payments/made', count: payments.length },
           ]}
         />
 
-        <SectionHeader title="Where the money goes" action="Report" onAction={() => router.push('/(app)/reports/expense-summary')} />
+        <SectionHeader title={tr('purchases:hub.whereMoneyGoes')} action="Report" onAction={() => router.push('/(app)/reports/expense-summary')} />
         <Card>
           <DonutChart slices={expenseSlices} centerLabel="Last 90 days" />
         </Card>
 
-        <SectionHeader title="Recent bills" action="See all" onAction={() => router.push('/(app)/purchases/bills')} />
+        <SectionHeader title={tr('purchases:hub.recentBills')} action="See all" onAction={() => router.push('/(app)/purchases/bills')} />
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState
               illustration="no-documents"
               icon="file-document-outline"
-              title="No purchase bills yet"
-              actionLabel="Record a bill"
+              title={tr('purchases:hub.noBills')}
+              actionLabel={tr('purchases:hub.recordBill')}
               onAction={() => router.push('/(app)/purchases/bills/new')}
               compact
             />
@@ -163,7 +165,7 @@ export default function PurchasesTab() {
         </Card>
       </ScrollView>
 
-      <Fab icon="plus" label="Bill" onPress={() => router.push('/(app)/purchases/bills/new')} />
+      <Fab icon="plus" label={tr('purchases:hub.bill')} onPress={() => router.push('/(app)/purchases/bills/new')} />
     </View>
   );
 }

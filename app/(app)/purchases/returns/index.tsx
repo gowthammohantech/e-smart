@@ -20,7 +20,7 @@ export default function PurchaseReturnList() {
         documents={documents}
         kind="purchaseReturn"
         routeFor={(d) => `/(app)/purchases/returns/${d.id}`}
-        emptyAction="New purchase return"
+        emptyAction={tr('nav:title.newPurchaseReturn')}
         onEmptyAction={() => router.push('/(app)/purchases/returns/new')}
       />
       <Fab icon="plus" onPress={() => router.push('/(app)/purchases/returns/new')} />

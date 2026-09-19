@@ -9,7 +9,7 @@ import { useItem } from '@/store/selectors';
 
 export default function EditItem() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = useItem(id);
 
@@ -17,7 +17,7 @@ export default function EditItem() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.editItem') }} />
-        <EmptyState illustration="not-found" icon="package-variant-closed-remove" title="Not found" />
+        <EmptyState illustration="not-found" icon="package-variant-closed-remove" title={tr('common:notFound.title')} />
       </View>
     );
   }

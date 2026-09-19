@@ -20,7 +20,7 @@ import { formatDate, formatDateTime } from '@/lib/date';
 
 export default function PaymentDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'nav']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -37,7 +37,7 @@ export default function PaymentDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.payment') }} />
-        <EmptyState illustration="not-found" icon="cash-remove" title="Not found" message="This payment may have been deleted." />
+        <EmptyState illustration="not-found" icon="cash-remove" title={tr('common:notFound.title')} message={tr('common:notFound.payment')} />
       </View>
     );
   }

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -46,6 +47,7 @@ const REPORTS: ReportLink[] = [
 
 export default function ReportsTab() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['reports']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -78,7 +80,7 @@ export default function ReportsTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="Reports" subtitle={`Financial year to date · ${baseCurrency}`} />
+      <AppHeader title={tr('reports:hub.title')} subtitle={`Financial year to date · ${baseCurrency}`} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 40 }}
@@ -88,9 +90,9 @@ export default function ReportsTab() {
         {full ? (
           <>
         <StatRow>
-          <StatTile label="Revenue (FY)" value={profit.revenue} icon="trending-up" />
+          <StatTile label={tr('reports:hub.revenueFy')} value={profit.revenue} icon="trending-up" />
           <StatTile
-            label="Net profit"
+            label={tr('reports:hub.netProfit')}
             value={profit.netProfit}
             tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
             icon="chart-line"
@@ -101,16 +103,16 @@ export default function ReportsTab() {
         <View style={{ height: t.spacing.md }} />
 
         <StatRow>
-          <StatTile label="Receivable" value={receivables.summary.total} tone="warn" icon="clock-alert-outline" />
-          <StatTile label="Payable" value={payables.summary.total} tone="bad" icon="file-clock-outline" />
+          <StatTile label={tr('reports:hub.receivable')} value={receivables.summary.total} tone="warn" icon="clock-alert-outline" />
+          <StatTile label={tr('reports:hub.payable')} value={payables.summary.total} tone="bad" icon="file-clock-outline" />
         </StatRow>
 
-        <SectionHeader title="Monthly profit" action="Open" onAction={() => router.push('/(app)/reports/profit')} />
+        <SectionHeader title={tr('reports:hub.monthlyProfit')} action="Open" onAction={() => router.push('/(app)/reports/profit')} />
         <Card>
-          <BarChart data={trend} caption="Revenue less cost of goods and expenses" />
+          <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />
         </Card>
 
-        <SectionHeader title="Snapshot" />
+        <SectionHeader title={tr('reports:hub.snapshot')} />
         <Card style={{ gap: t.spacing.md }}>
           {[
             { label: 'Gross profit', value: formatMoney(profit.grossProfit) },
@@ -131,7 +133,7 @@ export default function ReportsTab() {
           </>
         ) : null}
 
-        <SectionHeader title="All reports" />
+        <SectionHeader title={tr('reports:hub.allReports')} />
         <Card padded={false}>
           {reports.map((r, i) => (
             <Pressable

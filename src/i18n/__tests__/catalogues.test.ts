@@ -40,14 +40,16 @@ function params(value: string): string[] {
  * catch that, because a copy-pasted English value has a perfectly valid key.
  */
 const TA_LATIN_ALLOWLIST =
-  /^(GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|B2B|B2C|FY|PDF|OTP|CSV|QR|UPI|OCR|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E)$/;
+  /^(GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|B2B|B2C|FY|PDF|OTP|CSV|QR|UPI|OCR|SKU|HSN|PO|SEZ|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E)$/;
 
 function suspiciousLatin(value: string): string[] {
   const withoutParams = value
     // `{{count}}` is Latin by definition.
     .replace(/\{\{[^}]*\}\}/g, ' ')
-    // Identifiers and format examples mix letters and digits — a GSTIN sample
-    // like 27AABCV1234F1ZO must stay verbatim. Prose words do not do this.
+    // Format examples stay verbatim in every language: an email or domain
+    // sample, and identifiers that mix letters and digits such as the GSTIN
+    // sample 27AABCV1234F1ZO. Prose words do neither.
+    .replace(/[A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, ' ')
     .replace(/\b(?=[A-Za-z]*\d)(?=\d*[A-Za-z])[A-Za-z\d]+\b/g, ' ');
   return [...withoutParams.matchAll(/[A-Za-z][A-Za-z.'-]*/g)]
     .map((m) => m[0].replace(/[.'-]+$/, ''))

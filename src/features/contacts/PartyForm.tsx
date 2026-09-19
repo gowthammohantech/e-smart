@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,7 @@ const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 
 export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['contacts']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -133,8 +135,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder="Business name" error={errors.name} required icon="domain" />
-        <TextField label="Contact person" value={contact} onChangeText={setContact} placeholder="Who you deal with" icon="account-outline" />
+        <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />
+        <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />
         <TextField
           label="GSTIN"
           value={taxId}
@@ -150,62 +152,58 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           autoCapitalize="characters"
           icon="card-account-details-outline"
           error={errors.taxId}
-          hint="Leave blank for unregistered contacts."
+          hint={tr('contacts:form.gstinHint')}
         />
         {kind === 'customer' ? (
           <PickerField
-            label="GST registration"
+            label={tr('contacts:form.gstRegistration')}
             value={GST_REGISTRATION_LABELS[registration ?? (taxId ? 'regular' : 'unregistered')]}
             onPress={() => setRegistrationOpen(true)}
             icon="shield-account-outline"
-            hint="SEZ and overseas buyers are reported differently on e-invoices."
+            hint={tr('contacts:form.sezHint')}
           />
         ) : null}
-        <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
-        <TextField label="Email" value={email} onChangeText={setEmail} placeholder="accounts@business.com" keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
+        <TextField label={tr('contacts:form.phone')} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
+        <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>
-          Billing address
-        </Text>
-        <TextField label="Address" value={line1} onChangeText={setLine1} placeholder="Street address" icon="map-marker-outline" />
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.billingAddress')}</Text>
+        <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <TextField label="City" value={city} onChangeText={setCity} placeholder="City" containerStyle={{ flex: 1 }} />
+          <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} placeholder={tr('contacts:form.city')} containerStyle={{ flex: 1 }} />
           <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
         </View>
         <PickerField
-          label="State"
+          label={tr('contacts:form.state')}
           value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
           onPress={() => setStateOpen(true)}
           icon="map-outline"
-          hint="Decides whether IGST or CGST + SGST applies on their documents."
+          hint={tr('contacts:form.stateHint')}
         />
 
-        <SwitchField label="Shipping address is the same" value={sameShipping} onValueChange={setSameShipping} />
+        <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />
         {!sameShipping ? (
           <>
-            <TextField label="Shipping address" value={shipLine1} onChangeText={setShipLine1} placeholder="Street address" icon="truck-outline" />
-            <TextField label="Shipping city" value={shipCity} onChangeText={setShipCity} placeholder="City" />
+            <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />
+            <TextField label={tr('contacts:form.shippingCity')} value={shipCity} onChangeText={setShipCity} placeholder={tr('contacts:form.city')} />
           </>
         ) : null}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>
-          Trading terms
-        </Text>
-        <PickerField label="Currency" value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />
-        <PickerField label="Payment terms" value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.tradingTerms')}</Text>
+        <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />
+        <PickerField label={tr('contacts:form.paymentTerms')} value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />
         {kind === 'customer' ? (
-          <AmountField label="Credit limit" value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint="Optional. Used to warn you before invoicing beyond it." />
+          <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
         ) : null}
         <AmountField
-          label="Opening balance"
+          label={tr('contacts:form.openingBalance')}
           value={openingBalance}
           onChangeValue={setOpeningBalance}
           currency={currency}
           hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
         />
 
-        <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Internal notes" multiline />
-        <SwitchField label="Active" description="Inactive contacts stay in your records but are hidden from pickers." value={active} onValueChange={setActive} />
+        <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />
+        <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />
       </ScrollView>
 
       <View
@@ -223,7 +221,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       <SelectSheet
         visible={stateOpen}
         onClose={() => setStateOpen(false)}
-        title="State"
+        title={tr('contacts:form.state')}
         options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
         value={stateCode}
         onSelect={setStateCode}
@@ -231,7 +229,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       <SelectSheet
         visible={registrationOpen}
         onClose={() => setRegistrationOpen(false)}
-        title="GST registration"
+        title={tr('contacts:form.gstRegistration')}
         options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k] }))}
         value={registration ?? (taxId ? 'regular' : 'unregistered')}
         onSelect={(v) => setRegistration(v as GstRegistrationType)}
@@ -239,7 +237,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       <SelectSheet
         visible={currencyOpen}
         onClose={() => setCurrencyOpen(false)}
-        title="Currency"
+        title={tr('contacts:form.currency')}
         options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
         value={currency}
         onSelect={setCurrency}
@@ -247,7 +245,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       <SelectSheet
         visible={termsOpen}
         onClose={() => setTermsOpen(false)}
-        title="Payment terms"
+        title={tr('contacts:form.paymentTerms')}
         options={TERMS.map((d) => ({ value: String(d), label: d === 0 ? 'Due on receipt' : `${d} days` }))}
         value={String(terms)}
         onSelect={(v) => setTerms(Number(v))}

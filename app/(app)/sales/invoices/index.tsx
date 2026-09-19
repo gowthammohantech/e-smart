@@ -20,7 +20,7 @@ export default function InvoiceList() {
         documents={documents}
         kind="invoice"
         routeFor={(d) => `/(app)/sales/invoices/${d.id}`}
-        emptyAction="New invoice"
+        emptyAction={tr('nav:title.newInvoice')}
         onEmptyAction={() => router.push('/(app)/sales/invoices/new')}
       />
       <Fab icon="plus" onPress={() => router.push('/(app)/sales/invoices/new')} />

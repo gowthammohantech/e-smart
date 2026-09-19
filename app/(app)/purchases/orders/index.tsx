@@ -20,7 +20,7 @@ export default function PurchaseOrderList() {
         documents={documents}
         kind="purchaseOrder"
         routeFor={(d) => `/(app)/purchases/orders/${d.id}`}
-        emptyAction="New purchase order"
+        emptyAction={tr('nav:title.newPurchaseOrder')}
         onEmptyAction={() => router.push('/(app)/purchases/orders/new')}
       />
       <Fab icon="plus" onPress={() => router.push('/(app)/purchases/orders/new')} />

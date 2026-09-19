@@ -1,1 +1,36 @@
-{}
+{
+  "hub": {
+    "inactive": "செயலற்றது",
+    "settled": "தீர்க்கப்பட்டது"
+  },
+  "form": {
+    "businessName": "வணிகப் பெயர்",
+    "contactPerson": "தொடர்பு நபர்",
+    "contactPlaceholder": "நீங்கள் பேசுபவர்",
+    "gstinHint": "பதிவு செய்யாத தொடர்புகளுக்கு இதைக் காலியாக விடுங்கள்.",
+    "gstRegistration": "GST பதிவு",
+    "sezHint": "SEZ மற்றும் வெளிநாட்டு வாங்குநர்கள் இ-இன்வாய்ஸில் வேறுவிதமாகப் பதிவாகிறார்கள்.",
+    "phone": "தொலைபேசி",
+    "email": "மின்னஞ்சல்",
+    "emailPlaceholder": "accounts@business.com",
+    "address": "முகவரி",
+    "addressPlaceholder": "தெரு முகவரி",
+    "city": "நகரம்",
+    "state": "மாநிலம்",
+    "stateHint": "அவர்களின் ஆவணங்களில் IGST-ஆ அல்லது CGST + SGST-ஆ என்பதைத் தீர்மானிக்கும்.",
+    "sameShipping": "அனுப்பும் முகவரி இதுவே",
+    "shippingAddress": "அனுப்பும் முகவரி",
+    "shippingCity": "அனுப்பும் நகரம்",
+    "currency": "நாணயம்",
+    "paymentTerms": "கட்டண நிபந்தனைகள்",
+    "creditLimit": "கடன் வரம்பு",
+    "creditLimitHint": "விருப்பம். இதைத் தாண்டி விலைப்பட்டியல் போடும் முன் எச்சரிக்கும்.",
+    "openingBalance": "தொடக்க இருப்பு",
+    "notes": "குறிப்புகள்",
+    "notesPlaceholder": "உள் குறிப்புகள்",
+    "active": "செயலில்",
+    "activeHint": "செயலற்ற தொடர்புகள் பதிவில் இருக்கும், ஆனால் தேர்வுப் பட்டியலில் தெரியாது.",
+    "billingAddress": "பில் முகவரி",
+    "tradingTerms": "வர்த்தக நிபந்தனைகள்"
+  }
+}

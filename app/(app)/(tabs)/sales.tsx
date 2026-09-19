@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -25,6 +26,7 @@ import { seriesColor } from '@/theme/chartColors';
 
 export default function SalesTab() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['sales']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -83,7 +85,7 @@ export default function SalesTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="Sales" subtitle="Quotes, orders, invoices and returns" />
+      <AppHeader title={tr('sales:hub.title')} subtitle={tr('sales:hub.subtitle')} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
@@ -91,13 +93,13 @@ export default function SalesTab() {
       >
         <StatRow>
           <StatTile
-            label="Invoiced this month"
+            label={tr('sales:hub.invoicedThisMonth')}
             value={monthTotal}
             icon="file-document-outline"
             onPress={() => router.push('/(app)/sales/invoices')}
           />
           <StatTile
-            label="Collected"
+            label={tr('sales:hub.collected')}
             value={monthCollected}
             tone="good"
             icon="cash-check"
@@ -109,7 +111,7 @@ export default function SalesTab() {
 
         <StatRow>
           <StatTile
-            label="Outstanding"
+            label={tr('sales:hub.outstanding')}
             value={receivables.summary.total}
             tone="warn"
             icon="clock-alert-outline"
@@ -117,7 +119,7 @@ export default function SalesTab() {
             onPress={() => router.push('/(app)/receivables')}
           />
           <StatTile
-            label="Overdue"
+            label={tr('sales:hub.overdue')}
             value={receivables.summary.overdue}
             tone="bad"
             icon="alert-circle-outline"
@@ -126,7 +128,7 @@ export default function SalesTab() {
           />
         </StatRow>
 
-        <SectionHeader title="Sales documents" />
+        <SectionHeader title={tr('sales:hub.documents')} />
         <HubTiles
           tiles={[
             { key: 'invoices', label: 'Invoices', icon: 'file-document-outline', route: '/(app)/sales/invoices', count: invoices.length },
@@ -139,19 +141,19 @@ export default function SalesTab() {
           ]}
         />
 
-        <SectionHeader title="Top customers" action="Contacts" onAction={() => router.push('/(app)/(tabs)/contacts')} />
+        <SectionHeader title={tr('sales:hub.topCustomers')} action="Contacts" onAction={() => router.push('/(app)/(tabs)/contacts')} />
         <Card>
           <RankedBars rows={topCustomers} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel="No sales recorded yet" />
         </Card>
 
-        <SectionHeader title="Recent invoices" action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
+        <SectionHeader title={tr('sales:hub.recentInvoices')} action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState
               illustration="no-documents"
               icon="file-document-outline"
-              title="No invoices yet"
-              actionLabel="New invoice"
+              title={tr('sales:hub.noInvoices')}
+              actionLabel={tr('sales:hub.newInvoice')}
               onAction={() => router.push('/(app)/sales/invoices/new')}
               compact
             />
@@ -169,7 +171,7 @@ export default function SalesTab() {
         </Card>
       </ScrollView>
 
-      <Fab icon="plus" label="Invoice" onPress={() => router.push('/(app)/sales/invoices/new')} />
+      <Fab icon="plus" label={tr('sales:hub.invoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />
     </View>
   );
 }

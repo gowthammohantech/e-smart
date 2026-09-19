@@ -9,7 +9,7 @@ import { useParty } from '@/store/selectors';
 
 export default function SupplierDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const party = useParty(id);
 
@@ -17,7 +17,7 @@ export default function SupplierDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.supplier') }} />
-        <EmptyState illustration="not-found" icon="account-off-outline" title="Not found" message="This contact may have been deleted." />
+        <EmptyState illustration="not-found" icon="account-off-outline" title={tr('common:notFound.title')} message={tr('common:notFound.contact')} />
       </View>
     );
   }

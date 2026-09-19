@@ -20,7 +20,7 @@ export default function DeliveryList() {
         documents={documents}
         kind="delivery"
         routeFor={(d) => `/(app)/sales/deliveries/${d.id}`}
-        emptyAction="New delivery note"
+        emptyAction={tr('nav:title.newDeliveryNote')}
         onEmptyAction={() => router.push('/(app)/sales/deliveries/new')}
       />
       <Fab icon="plus" onPress={() => router.push('/(app)/sales/deliveries/new')} />

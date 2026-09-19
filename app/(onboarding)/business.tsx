@@ -17,7 +17,7 @@ import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/valid
 
 export default function BusinessStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
+  const { t: tr } = useTranslation(['errors', 'onboarding']);
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
 

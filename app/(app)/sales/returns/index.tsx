@@ -20,7 +20,7 @@ export default function SalesReturnList() {
         documents={documents}
         kind="salesReturn"
         routeFor={(d) => `/(app)/sales/returns/${d.id}`}
-        emptyAction="New sales return"
+        emptyAction={tr('nav:title.newSalesReturn')}
         onEmptyAction={() => router.push('/(app)/sales/returns/new')}
       />
       <Fab icon="plus" onPress={() => router.push('/(app)/sales/returns/new')} />

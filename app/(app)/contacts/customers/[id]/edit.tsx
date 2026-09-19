@@ -9,7 +9,7 @@ import { useParty } from '@/store/selectors';
 
 export default function EditCustomer() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const party = useParty(id);
 
@@ -17,7 +17,7 @@ export default function EditCustomer() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.edit') }} />
-        <EmptyState illustration="not-found" icon="account-off-outline" title="Not found" />
+        <EmptyState illustration="not-found" icon="account-off-outline" title={tr('common:notFound.title')} />
       </View>
     );
   }

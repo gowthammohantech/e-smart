@@ -1,1 +1,37 @@
-{}
+{
+  "hub": {
+    "title": "Stock",
+    "subtitle": "Items, levels and movements",
+    "stockValue": "Stock value",
+    "lowStock": "Low stock",
+    "searchPlaceholder": "Search by name, SKU or barcode",
+    "scanBarcode": "Scan barcode",
+    "nothingHere": "Nothing here",
+    "out": "Out",
+    "low": "Low",
+    "service": "Service",
+    "actions": "Stock actions"
+  },
+  "form": {
+    "name": "Name",
+    "namePlaceholder": "What you",
+    "sku": "SKU / item code",
+    "skuHint": "Auto-generated if left blank",
+    "description": "Description",
+    "descriptionHint": "Shown on documents",
+    "salePrice": "Sale price",
+    "purchasePrice": "Purchase price",
+    "unit": "Unit",
+    "taxRate": "Tax rate",
+    "hsnHint": "Required on GST invoices above the turnover threshold.",
+    "barcode": "Barcode",
+    "barcodePlaceholder": "Scan or type",
+    "trackStock": "Track stock",
+    "trackStockHint": "Sales and purchases will move this item",
+    "openingStock": "Opening stock",
+    "reorderLevel": "Reorder level",
+    "reorderHint": "Alerts you below this.",
+    "active": "Active",
+    "activeHint": "Inactive items are hidden when creating documents."
+  }
+}

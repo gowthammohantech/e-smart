@@ -14,7 +14,7 @@ const DEMO_CODE = '123456';
 
 export default function Otp() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['auth', 'errors']);
+  const { t: tr } = useTranslation(['auth']);
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone?: string }>();
   const signInWithOtp = useAppStore((s) => s.signInWithOtp);

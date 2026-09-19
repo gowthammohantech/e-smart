@@ -22,7 +22,7 @@ const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey
 
 export default function Done() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
+  const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { draft, reset } = useOnboardingStore();

@@ -42,7 +42,7 @@ import { openLixi } from '@/features/lixi/open';
 
 export default function Home() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'nav']);
+  const { t: tr } = useTranslation(['common', 'reports']);
   const router = useRouter();
   const pullToLixi = useUiStore((s) => s.lixiAccess.pullDown);
 
@@ -128,12 +128,12 @@ export default function Home() {
   };
 
   const attention: AttentionItem[] = ([
-    { icon: 'alert-circle-outline', label: 'Overdue invoices', count: receivables.outstanding.filter((o) => o.daysOverdue > 0).length, route: '/(app)/receivables', tone: 'danger' },
-    { icon: 'file-document-outline', label: 'Draft invoices', count: draftInvoices.length, route: '/(app)/sales/invoices', tone: 'warning' },
-    { icon: 'file-percent-outline', label: 'Quotes awaiting reply', count: openQuotes.length, route: '/(app)/sales/quotes', tone: 'info' },
-    { icon: 'package-variant', label: 'Items low on stock', count: lowStockItems.length, route: '/(app)/inventory/low-stock', tone: 'warning' },
-    { icon: 'shield-alert-outline', label: 'E-invoices rejected', count: compliance.eInvoice.failed, route: '/(app)/compliance', tone: 'danger' },
-    { icon: 'clock-alert-outline', label: 'E-way bills expiring in 24 h', count: compliance.expiringSoon, route: '/(app)/compliance', tone: 'warning' },
+    { icon: 'alert-circle-outline', label: tr('reports:home.attn.overdueInvoices'), count: receivables.outstanding.filter((o) => o.daysOverdue > 0).length, route: '/(app)/receivables', tone: 'danger' },
+    { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: draftInvoices.length, route: '/(app)/sales/invoices', tone: 'warning' },
+    { icon: 'file-percent-outline', label: tr('reports:home.attn.openQuotes'), count: openQuotes.length, route: '/(app)/sales/quotes', tone: 'info' },
+    { icon: 'package-variant', label: tr('reports:home.attn.lowStock'), count: lowStockItems.length, route: '/(app)/inventory/low-stock', tone: 'warning' },
+    { icon: 'shield-alert-outline', label: tr('reports:home.attn.eInvoiceRejected'), count: compliance.eInvoice.failed, route: '/(app)/compliance', tone: 'danger' },
+    { icon: 'clock-alert-outline', label: tr('reports:home.attn.ewbExpiring'), count: compliance.expiringSoon, route: '/(app)/compliance', tone: 'warning' },
   ] as AttentionItem[]).filter((a) => a.count > 0 && canOpen(a.route));
 
   const recent = useMemo(
@@ -167,7 +167,7 @@ export default function Home() {
             <QuickActions />
           </View>
 
-          <SectionHeader title="First steps" />
+          <SectionHeader title={tr('reports:home.firstSteps')} />
           <Card padded={false}>
             {[
               { label: 'Add a customer', icon: 'account-plus-outline' as const, route: '/(app)/contacts/customers/new' },
@@ -210,7 +210,7 @@ export default function Home() {
           </Card>
         </Screen>
 
-        <Fab icon="plus" label="Invoice" onPress={() => router.push('/(app)/sales/invoices/new')} />
+        <Fab icon="plus" label={tr('reports:home.invoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />
       </View>
     );
   }
@@ -235,29 +235,29 @@ export default function Home() {
           <QuickActions />
         </View>
 
-        <SectionHeader title="This month" />
+        <SectionHeader title={tr('reports:home.thisMonth')} />
         <View style={{ gap: t.spacing.md }}>
           <StatRow>
             <StatTile
-              label="Sales"
+              label={tr('reports:home.sales')}
               value={monthSales}
               icon="trending-up"
               caption={`${invoices.filter((d) => inRange(d.date, thisMonth) && d.status !== 'draft').length} invoices`}
               onPress={() => router.push('/(app)/reports/sales-summary')}
             />
             <StatTile
-              label="Collected"
+              label={tr('reports:home.collected')}
               value={monthCollected}
               tone="good"
               icon="cash-check"
-              caption="Payments received"
+              caption={tr('reports:home.paymentsReceived')}
               onPress={() => router.push('/(app)/payments/received')}
             />
           </StatRow>
           {full ? (
           <StatRow>
             <StatTile
-              label="Expenses"
+              label={tr('reports:home.expenses')}
               value={monthExpenses}
               tone="warn"
               icon="receipt-text-outline"
@@ -265,18 +265,18 @@ export default function Home() {
               onPress={() => router.push('/(app)/expenses')}
             />
             <StatTile
-              label="Net"
+              label={tr('reports:home.net')}
               value={netThisMonth}
               tone={netThisMonth.minor >= 0 ? 'good' : 'bad'}
               icon="scale-balance"
-              caption="Sales less expenses"
+              caption={tr('reports:home.netCaption')}
               onPress={() => router.push('/(app)/reports/profit')}
             />
           </StatRow>
           ) : (
           <StatRow>
             <StatTile
-              label="E-invoices"
+              label={tr('reports:home.eInvoices')}
               value={String(compliance.eInvoice.generated)}
               tone="good"
               icon="shield-check-outline"
@@ -284,7 +284,7 @@ export default function Home() {
               onPress={() => router.push('/(app)/(tabs)/gst')}
             />
             <StatTile
-              label="E-way bills"
+              label={tr('reports:home.ewayBills')}
               value={String(compliance.eway.active)}
               tone={compliance.expiringSoon ? 'warn' : 'default'}
               icon="truck-fast-outline"
@@ -295,18 +295,16 @@ export default function Home() {
           )}
         </View>
 
-        <SectionHeader title="Sales trend" action="Reports" onAction={() => router.push('/(app)/reports/sales-summary')} />
+        <SectionHeader title={tr('reports:home.salesTrend')} action="Reports" onAction={() => router.push('/(app)/reports/sales-summary')} />
         <Card>
-          <BarChart data={salesTrend} caption="Invoiced value, last 6 months" />
+          <BarChart data={salesTrend} caption={tr('reports:home.salesTrendCaption')} />
         </Card>
 
-        <SectionHeader title="Money owed to you" action="View all" onAction={() => router.push('/(app)/receivables')} />
+        <SectionHeader title={tr('reports:home.owedToYou')} action="View all" onAction={() => router.push('/(app)/receivables')} />
         <Card style={{ gap: t.spacing.lg }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View style={{ gap: 3 }}>
-              <Text variant="caption" tone="muted">
-                Total receivable
-              </Text>
+              <Text variant="caption" tone="muted">{tr('reports:home.totalReceivable')}</Text>
               <Text variant="h2" weight="700">
                 {formatMoney(receivables.summary.total)}
               </Text>
@@ -328,15 +326,13 @@ export default function Home() {
 
         {full ? (
         <>
-        <SectionHeader title="You owe" action="View all" onAction={() => router.push('/(app)/payables')} />
+        <SectionHeader title={tr('reports:home.youOwe')} action="View all" onAction={() => router.push('/(app)/payables')} />
         <Card
           onPress={() => router.push('/(app)/payables')}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <View style={{ gap: 3 }}>
-            <Text variant="caption" tone="muted">
-              Total payable
-            </Text>
+            <Text variant="caption" tone="muted">{tr('reports:home.totalPayable')}</Text>
             <Text variant="h3" weight="700">
               {formatMoney(payables.summary.total)}
             </Text>
@@ -353,7 +349,7 @@ export default function Home() {
 
         {attention.length > 0 ? (
           <>
-            <SectionHeader title="Needs your attention" />
+            <SectionHeader title={tr('reports:home.attention')} />
             <Card padded={false}>
               {attention.map((a, i) => (
                 <Pressable
@@ -389,7 +385,7 @@ export default function Home() {
 
         {overdueInvoices.length > 0 ? (
           <>
-            <SectionHeader title="Chase these first" action="Receivables" onAction={() => router.push('/(app)/receivables')} />
+            <SectionHeader title={tr('reports:home.attentionCaption')} action="Receivables" onAction={() => router.push('/(app)/receivables')} />
             <Card padded={false}>
               {overdueInvoices.map((o, i) => (
                 <DocumentRow
@@ -405,15 +401,15 @@ export default function Home() {
           </>
         ) : null}
 
-        <SectionHeader title="Recent invoices" action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
+        <SectionHeader title={tr('reports:home.recentInvoices')} action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState
               illustration="no-documents"
               icon="file-document-outline"
-              title="No invoices yet"
-              message="Create your first invoice and it will show up here."
-              actionLabel="New invoice"
+              title={tr('reports:home.noInvoices')}
+              message={tr('reports:home.noInvoicesBody')}
+              actionLabel={tr('reports:home.newInvoice')}
               onAction={() => router.push('/(app)/sales/invoices/new')}
               compact
             />
@@ -433,7 +429,7 @@ export default function Home() {
 
       <Fab icon="plus" onPress={() => setActionsOpen(true)} bottom={0} />
 
-      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title="Create">
+      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('reports:home.create')}>
         {quickActions(tr, t.c.primary).filter((a) => canOpen(a.route)).map((a) => (
           <Pressable
             key={a.key}

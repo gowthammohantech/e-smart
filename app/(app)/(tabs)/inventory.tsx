@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ type Filter = 'all' | 'low' | 'out' | 'services';
 
 export default function InventoryTab() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['inventory']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -50,16 +52,16 @@ export default function InventoryTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="Stock" subtitle="Items, levels and movements" />
+      <AppHeader title={tr('inventory:hub.title')} subtitle={tr('inventory:hub.subtitle')} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
         <StatRow>
-          <StatTile label="Stock value" value={report.totalValue} icon="warehouse" caption={`${report.trackedCount} tracked items`} />
+          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={`${report.trackedCount} tracked items`} />
           <StatTile
-            label="Low stock"
+            label={tr('inventory:hub.lowStock')}
             value={String(report.lowCount)}
             tone="warn"
             icon="alert-outline"
@@ -72,13 +74,13 @@ export default function InventoryTab() {
           <SearchBar
             value={query}
             onChangeText={setQuery}
-            placeholder="Search by name, SKU or barcode"
+            placeholder={tr('inventory:hub.searchPlaceholder')}
             right={
               <Pressable
                 onPress={() => router.push('/(app)/inventory/scan')}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel="Scan barcode"
+                accessibilityLabel={tr('inventory:hub.scanBarcode')}
               >
                 <MaterialCommunityIcons name="barcode-scan" size={19} color={t.c.primary} />
               </Pressable>
@@ -87,8 +89,8 @@ export default function InventoryTab() {
           <Segmented
             options={[
               { value: 'all', label: 'All' },
-              { value: 'low', label: 'Low' },
-              { value: 'out', label: 'Out' },
+              { value: 'low', label: tr('inventory:hub.low') },
+              { value: 'out', label: tr('inventory:hub.out') },
               { value: 'services', label: 'Services' },
             ]}
             value={filter}
@@ -104,7 +106,7 @@ export default function InventoryTab() {
             <EmptyState
               illustration="no-items"
               icon="package-variant"
-              title="Nothing here"
+              title={tr('inventory:hub.nothingHere')}
               message={items.length === 0 ? 'Add your first item to start tracking stock.' : 'No items match this filter.'}
               actionLabel={items.length === 0 ? 'Add item' : undefined}
               onAction={items.length === 0 ? () => router.push('/(app)/catalog/items/new') : undefined}
@@ -168,9 +170,9 @@ export default function InventoryTab() {
                           {formatQty(onHand)}
                         </Text>
                         {onHand <= 0 ? (
-                          <Badge label="Out" tone="danger" size="sm" />
+                          <Badge label={tr('inventory:hub.out')} tone="danger" size="sm" />
                         ) : low ? (
-                          <Badge label="Low" tone="warning" size="sm" />
+                          <Badge label={tr('inventory:hub.low')} tone="warning" size="sm" />
                         ) : (
                           <Text variant="micro" tone="muted">
                             {item.unit}
@@ -178,7 +180,7 @@ export default function InventoryTab() {
                         )}
                       </>
                     ) : (
-                      <Badge label="Service" tone="neutral" size="sm" />
+                      <Badge label={tr('inventory:hub.service')} tone="neutral" size="sm" />
                     )}
                   </View>
                 </Pressable>
@@ -190,13 +192,13 @@ export default function InventoryTab() {
 
       <Fab icon="plus" onPress={() => setActionsOpen(true)} />
 
-      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title="Stock actions">
+      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('inventory:hub.actions')}>
         {[
           { label: 'Add item', icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
           { label: 'Stock adjustment', icon: 'tune' as const, route: '/(app)/inventory/adjust' },
           { label: 'Branch transfer', icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
           { label: 'Set opening stock', icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
-          { label: 'Scan barcode', icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
+          { label: tr('inventory:hub.scanBarcode'), icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
           { label: 'Stock movements', icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
         ].map((a) => (
           <Pressable

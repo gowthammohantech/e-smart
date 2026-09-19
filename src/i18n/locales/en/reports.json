@@ -1,1 +1,47 @@
-{}
+{
+  "hub": {
+    "title": "Reports",
+    "revenueFy": "Revenue (FY)",
+    "netProfit": "Net profit",
+    "receivable": "Receivable",
+    "payable": "Payable",
+    "monthlyProfit": "Monthly profit",
+    "profitCaption": "Revenue less cost of goods and expenses",
+    "snapshot": "Snapshot",
+    "allReports": "All reports"
+  },
+  "home": {
+    "firstSteps": "First steps",
+    "invoice": "Invoice",
+    "thisMonth": "This month",
+    "sales": "Sales",
+    "collected": "Collected",
+    "paymentsReceived": "Payments received",
+    "expenses": "Expenses",
+    "net": "Net",
+    "netCaption": "Sales less expenses",
+    "eInvoices": "E-invoices",
+    "ewayBills": "E-way bills",
+    "salesTrend": "Sales trend",
+    "salesTrendCaption": "Invoiced value, last 6 months",
+    "owedToYou": "Money owed to you",
+    "youOwe": "You owe",
+    "attention": "Needs your attention",
+    "attentionCaption": "Chase these first",
+    "recentInvoices": "Recent invoices",
+    "noInvoices": "No invoices yet",
+    "noInvoicesBody": "Create your first invoice and it will show up here.",
+    "newInvoice": "New invoice",
+    "create": "Create",
+    "totalReceivable": "Total receivable",
+    "totalPayable": "Total payable",
+    "attn": {
+      "overdueInvoices": "Overdue invoices",
+      "draftInvoices": "Draft invoices",
+      "openQuotes": "Quotes awaiting reply",
+      "lowStock": "Items low on stock",
+      "eInvoiceRejected": "E-invoices rejected",
+      "ewbExpiring": "E-way bills expiring in 24 h"
+    }
+  }
+}

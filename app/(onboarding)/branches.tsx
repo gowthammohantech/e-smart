@@ -13,7 +13,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@
 
 export default function BranchesStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
+  const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
 

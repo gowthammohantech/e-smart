@@ -12,7 +12,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 
 export default function Welcome() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['auth', 'errors']);
+  const { t: tr } = useTranslation(['auth']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, SectionList, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ type Tab = 'customer' | 'supplier';
 
 export default function ContactsTab() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['contacts']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -160,7 +162,7 @@ export default function ContactsTab() {
                     <Text variant="body" weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
                       {p.name}
                     </Text>
-                    {p.status === 'inactive' ? <Badge label="Inactive" tone="neutral" size="sm" /> : null}
+                    {p.status === 'inactive' ? <Badge label={tr('contacts:hub.inactive')} tone="neutral" size="sm" /> : null}
                     {p.currency !== baseCurrency ? <Badge label={p.currency} tone="info" size="sm" /> : null}
                   </View>
                   <Text variant="caption" tone="muted" numberOfLines={1}>
@@ -178,9 +180,7 @@ export default function ContactsTab() {
                       </Text>
                     </>
                   ) : (
-                    <Text variant="micro" tone="muted">
-                      Settled
-                    </Text>
+                    <Text variant="micro" tone="muted">{tr('contacts:hub.settled')}</Text>
                   )}
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />

@@ -65,7 +65,7 @@ export function DocumentEditor({
   onSaved?: (id: string) => void;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -246,9 +246,7 @@ export function DocumentEditor({
                 <Text variant="body" weight="600">
                   Select {isPurchase ? 'supplier' : 'customer'}
                 </Text>
-                <Text variant="caption" tone="muted">
-                  Search your contacts or add a new one
-                </Text>
+                <Text variant="caption" tone="muted">{tr('sales:editor.partySearch')}</Text>
               </View>
             </>
           )}
@@ -265,7 +263,7 @@ export function DocumentEditor({
 
       {kind === 'invoice' || kind === 'purchaseBill' ? (
         <DateField
-          label="Due date"
+          label={tr('sales:editor.dueDate')}
           value={draft.dueDate ?? addDaysISO(draft.date, 30)}
           onChange={(dueDate) => patch({ dueDate })}
           hint={party ? `${party.name} is on ${party.paymentTermsDays}-day terms.` : undefined}
@@ -274,7 +272,7 @@ export function DocumentEditor({
 
       {kind === 'quote' ? (
         <DateField
-          label="Valid until"
+          label={tr('sales:editor.validUntil')}
           value={draft.validUntil ?? addDaysISO(draft.date, 15)}
           onChange={(validUntil) => patch({ validUntil })}
         />
@@ -282,29 +280,29 @@ export function DocumentEditor({
 
       {isPurchase ? (
         <TextField
-          label="Supplier document number"
+          label={tr('sales:editor.supplierDocNumber')}
           value={draft.supplierDocNumber}
           onChangeText={(supplierDocNumber) => patch({ supplierDocNumber })}
-          placeholder="Their bill number"
+          placeholder={tr('sales:editor.supplierDocPlaceholder')}
           icon="pound"
         />
       ) : null}
 
       <TextField
-        label="Reference"
+        label={tr('sales:editor.reference')}
         value={draft.reference}
         onChangeText={(reference) => patch({ reference })}
-        placeholder="PO number, job name…"
+        placeholder={tr('sales:editor.referencePlaceholder')}
         icon="link-variant"
       />
 
       {branches.length > 1 ? (
-        <PickerField label="Branch" value={branch?.name} onPress={() => setBranchOpen(true)} icon="warehouse" />
+        <PickerField label={tr('sales:editor.branch')} value={branch?.name} onPress={() => setBranchOpen(true)} icon="warehouse" />
       ) : null}
 
       {taxContext.regime === 'GST' ? (
         <PickerField
-          label="Place of supply"
+          label={tr('sales:editor.placeOfSupply')}
           value={INDIAN_STATES.find((s) => s.code === draft.placeOfSupplyStateCode)?.name}
           onPress={() => setPosOpen(true)}
           icon="map-marker-outline"
@@ -315,7 +313,7 @@ export function DocumentEditor({
       {/* Multi-currency is a full-plan module; a document already in another currency still shows it. */}
       {hasFx || draft.currency !== baseCurrency ? (
         <PickerField
-          label="Currency"
+          label={tr('sales:editor.currency')}
           value={`${draft.currency}${draft.currency !== baseCurrency ? ` · 1 ${draft.currency} = ${draft.exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
           onPress={() => setCurrencyOpen(true)}
           icon="cash-multiple"
@@ -329,7 +327,7 @@ export function DocumentEditor({
           onChangeText={(v) => patch({ exchangeRate: Number(v.replace(/[^0-9.]/g, '')) || 0 })}
           keyboardType="decimal-pad"
           icon="swap-horizontal"
-          hint="The rate is stored on the document so it stays reproducible."
+          hint={tr('sales:editor.rateStored')}
         />
       ) : null}
     </View>
@@ -337,15 +335,15 @@ export function DocumentEditor({
 
   const renderItems = () => (
     <View style={{ gap: t.spacing.md }}>
-      <Button title="Add item" icon="plus" variant="secondary" onPress={() => setItemOpen(true)} fullWidth />
+      <Button title={tr('sales:editor.addItem')} icon="plus" variant="secondary" onPress={() => setItemOpen(true)} fullWidth />
 
       {draft.lines.length === 0 ? (
         <Card padded={false}>
           <EmptyState
             icon="tag-outline"
-            title="No lines yet"
-            message="Add a product or service, or create a one-off line."
-            actionLabel="Add item"
+            title={tr('sales:editor.noLines')}
+            message={tr('sales:editor.noLinesBody')}
+            actionLabel={tr('sales:editor.addItem')}
             onAction={() => setItemOpen(true)}
             compact
           />
@@ -384,7 +382,7 @@ export function DocumentEditor({
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
                     <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
-                    {line.taxInclusive ? <Badge label="Incl." tone="info" size="sm" /> : null}
+                    {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
                     {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
                   </View>
                 </View>
@@ -417,9 +415,7 @@ export function DocumentEditor({
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
       <View style={{ gap: 6 }}>
-        <Text variant="caption" tone="muted" weight="600">
-          Discount on total
-        </Text>
+        <Text variant="caption" tone="muted" weight="600">{tr('sales:editor.discountOnTotal')}</Text>
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <Segmented
             options={[
@@ -446,36 +442,36 @@ export function DocumentEditor({
       </View>
 
       <AmountField
-        label="Other charges"
+        label={tr('sales:editor.otherCharges')}
         value={chargesText}
         onChangeValue={(v) => {
           setChargesText(v);
           patch({ charges: fromMajor(v || '0', draft.currency) });
         }}
         currency={draft.currency}
-        hint="Freight, packing or installation added to the total."
+        hint={tr('sales:editor.otherChargesHint')}
       />
 
       <SwitchField
-        label="Round off the total"
-        description="Rounds the grand total to the nearest whole unit and shows the adjustment."
+        label={tr('sales:editor.roundOff')}
+        description={tr('sales:editor.roundOffHint')}
         value={draft.applyRoundOff}
         onValueChange={(applyRoundOff) => patch({ applyRoundOff })}
       />
 
       <TextField
-        label="Notes"
+        label={tr('sales:editor.notes')}
         value={draft.notes}
         onChangeText={(notes) => patch({ notes })}
-        placeholder="Visible to the customer on the document"
+        placeholder={tr('sales:editor.notesHint')}
         multiline
       />
 
       <TextField
-        label="Terms and conditions"
+        label={tr('sales:editor.terms')}
         value={draft.terms}
         onChangeText={(terms) => patch({ terms })}
-        placeholder="Payment terms, warranty…"
+        placeholder={tr('sales:editor.termsPlaceholder')}
         multiline
       />
 
@@ -512,8 +508,8 @@ export function DocumentEditor({
           { label: isPurchase ? 'Supplier' : 'Customer', value: party?.name ?? '—' },
           { label: 'Date', value: draft.date },
           ...(draft.dueDate ? [{ label: 'Due', value: draft.dueDate }] : []),
-          ...(draft.validUntil ? [{ label: 'Valid until', value: draft.validUntil }] : []),
-          { label: 'Branch', value: branch?.name ?? '—' },
+          ...(draft.validUntil ? [{ label: tr('sales:editor.validUntil'), value: draft.validUntil }] : []),
+          { label: tr('sales:editor.branch'), value: branch?.name ?? '—' },
           { label: 'Lines', value: String(draft.lines.length) },
         ].map((r) => (
           <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -577,9 +573,7 @@ export function DocumentEditor({
       >
         {draft.lines.length > 0 ? (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-            <Text variant="caption" tone="muted">
-              Total
-            </Text>
+            <Text variant="caption" tone="muted">{tr('sales:editor.total')}</Text>
             <Text variant="title" weight="700">
               {formatMoney(totals.grandTotal)}
             </Text>
@@ -588,19 +582,19 @@ export function DocumentEditor({
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           {step > 0 ? (
-            <Button title="Back" variant="ghost" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
+            <Button title={tr('sales:editor.back')} variant="ghost" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
           ) : null}
           {step < STEPS.length - 1 ? (
             <Button
-              title="Continue"
+              title={tr('sales:editor.continue')}
               onPress={() => setStep((s) => s + 1)}
               disabled={!canAdvance}
               style={{ flex: 2 }}
             />
           ) : (
             <>
-              <Button title="Save draft" variant="ghost" onPress={() => save(false)} style={{ flex: 1 }} />
-              <Button title="Finalise" onPress={() => setConfirmFinalize(true)} style={{ flex: 1 }} />
+              <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} style={{ flex: 1 }} />
+              <Button title={tr('sales:editor.finalise')} onPress={() => setConfirmFinalize(true)} style={{ flex: 1 }} />
             </>
           )}
         </View>
@@ -638,7 +632,7 @@ export function DocumentEditor({
       <SelectSheet
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
-        title="Add item"
+        title={tr('sales:editor.addItem')}
         options={items.map((i) => ({
           value: i.id,
           label: i.name,
@@ -653,7 +647,7 @@ export function DocumentEditor({
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <Button
-              title="One-off line"
+              title={tr('sales:editor.oneOffLine')}
               variant="ghost"
               icon="pencil-plus-outline"
               style={{ flex: 1 }}
@@ -665,7 +659,7 @@ export function DocumentEditor({
               }}
             />
             <Button
-              title="New item"
+              title={tr('sales:editor.newItem')}
               variant="secondary"
               icon="plus"
               style={{ flex: 1 }}
@@ -681,7 +675,7 @@ export function DocumentEditor({
       <SelectSheet
         visible={currencyOpen}
         onClose={() => setCurrencyOpen(false)}
-        title="Document currency"
+        title={tr('sales:editor.documentCurrency')}
         options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
         value={draft.currency}
         onSelect={(code) =>
@@ -692,8 +686,8 @@ export function DocumentEditor({
       <SelectSheet
         visible={posOpen}
         onClose={() => setPosOpen(false)}
-        title="Place of supply"
-        subtitle="Decides whether IGST or CGST + SGST applies"
+        title={tr('sales:editor.placeOfSupply')}
+        subtitle={tr('sales:editor.posHint')}
         options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
         value={draft.placeOfSupplyStateCode}
         onSelect={(placeOfSupplyStateCode) => patch({ placeOfSupplyStateCode })}
@@ -702,7 +696,7 @@ export function DocumentEditor({
       <SelectSheet
         visible={branchOpen}
         onClose={() => setBranchOpen(false)}
-        title="Branch"
+        title={tr('sales:editor.branch')}
         options={branches.map((b) => ({ value: b.id, label: b.name, description: b.code }))}
         value={draft.branchId ?? activeBranchId}
         onSelect={(branchId) => patch({ branchId })}
@@ -724,7 +718,7 @@ export function DocumentEditor({
         visible={confirmFinalize}
         title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
         message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
-        confirmLabel="Finalise"
+        confirmLabel={tr('sales:editor.finalise')}
         icon="check-decagram-outline"
         onCancel={() => setConfirmFinalize(false)}
         onConfirm={() => {

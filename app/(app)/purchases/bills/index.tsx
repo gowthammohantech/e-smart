@@ -20,7 +20,7 @@ export default function PurchaseBillList() {
         documents={documents}
         kind="purchaseBill"
         routeFor={(d) => `/(app)/purchases/bills/${d.id}`}
-        emptyAction="New purchase bill"
+        emptyAction={tr('nav:title.newPurchaseBill')}
         onEmptyAction={() => router.push('/(app)/purchases/bills/new')}
       />
       <Fab icon="plus" onPress={() => router.push('/(app)/purchases/bills/new')} />

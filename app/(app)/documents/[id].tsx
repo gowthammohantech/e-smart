@@ -24,7 +24,7 @@ import {
 
 export default function DocumentPreview() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'nav']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav']);
   const language = useResolvedLanguage();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -57,7 +57,7 @@ export default function DocumentPreview() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.preview') }} />
-        <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} message={tr('common:notFound.document')} />
       </View>
     );
   }

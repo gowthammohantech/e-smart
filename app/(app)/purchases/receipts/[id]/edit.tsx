@@ -10,7 +10,7 @@ import { useDocument } from '@/store/selectors';
 
 export default function EditGoodsReceipt() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const document = useDocument(id);
@@ -19,7 +19,7 @@ export default function EditGoodsReceipt() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.edit') }} />
-        <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} />
       </View>
     );
   }

@@ -14,7 +14,7 @@ import { validGstin } from '@/lib/validators';
 
 export default function TaxStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
+  const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
   const [error, setError] = useState<string | undefined>();

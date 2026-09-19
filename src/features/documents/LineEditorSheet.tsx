@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Sheet } from '@/components/Sheet';
@@ -46,6 +47,7 @@ function LineEditorForm({
   onRemove,
 }: EditorProps) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['sales']);
 
   const [name, setName] = useState(line?.name ?? '');
   const [quantity, setQuantity] = useState(line?.quantity ?? 1);
@@ -97,13 +99,13 @@ function LineEditorForm({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Edit line"
+      title={tr('sales:line.editLine')}
       subtitle={line.name || 'New line'}
       footer={
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           {onRemove ? (
             <Button
-              title="Remove"
+              title={tr('sales:line.remove')}
               variant="danger"
               icon="trash-can-outline"
               onPress={() => {
@@ -113,29 +115,25 @@ function LineEditorForm({
               style={{ flex: 1 }}
             />
           ) : null}
-          <Button title="Save line" onPress={save} style={{ flex: 2 }} />
+          <Button title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2 }} />
         </View>
       }
     >
       <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-        <TextField label="Description" value={name} onChangeText={setName} placeholder="Item or service" />
+        <TextField label={tr('sales:line.description')} value={name} onChangeText={setName} placeholder={tr('sales:line.itemOrService')} />
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'flex-end' }}>
           <View style={{ flex: 1, gap: 6 }}>
-            <Text variant="caption" tone="muted" weight="600">
-              Quantity
-            </Text>
+            <Text variant="caption" tone="muted" weight="600">{tr('sales:line.quantity')}</Text>
             <QuantityStepper value={quantity} onChange={setQuantity} min={0} decimals={2} />
           </View>
-          <PickerField label="Unit" value={unit} onPress={() => setUnitOpen(true)} containerStyle={{ width: 120 }} />
+          <PickerField label={tr('sales:line.unit')} value={unit} onPress={() => setUnitOpen(true)} containerStyle={{ width: 120 }} />
         </View>
 
-        <AmountField label="Rate" value={price} onChangeValue={setPrice} currency={currency} />
+        <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} />
 
         <View style={{ gap: 6 }}>
-          <Text variant="caption" tone="muted" weight="600">
-            Discount
-          </Text>
+          <Text variant="caption" tone="muted" weight="600">{tr('sales:line.discount')}</Text>
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <Segmented
               options={[
@@ -158,15 +156,15 @@ function LineEditorForm({
         </View>
 
         <PickerField
-          label="Tax"
+          label={tr('sales:line.tax')}
           value={category ? `${category.name} (${formatPercent(category.rate)})` : 'No tax'}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
         />
 
         <SwitchField
-          label="Rate includes tax"
-          description="Turn on when the price you quote already contains tax."
+          label={tr('sales:line.rateIncludesTax')}
+          description={tr('sales:line.inclusiveHint')}
           value={taxInclusive}
           onValueChange={setTaxInclusive}
         />
@@ -181,7 +179,7 @@ function LineEditorForm({
         >
           {[
             { label: 'Amount', value: formatMoney(preview.gross) },
-            { label: 'Discount', value: `− ${formatMoney(preview.discount)}` },
+            { label: tr('sales:line.discount'), value: `− ${formatMoney(preview.discount)}` },
             { label: 'Taxable', value: formatMoney(preview.taxable) },
             { label: `Tax (${formatPercent(category?.rate ?? 0)})`, value: formatMoney(preview.taxAmount) },
           ].map((r) => (
@@ -196,9 +194,7 @@ function LineEditorForm({
           ))}
           <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text variant="small" weight="700">
-              Line total
-            </Text>
+            <Text variant="small" weight="700">{tr('sales:line.lineTotal')}</Text>
             <Text variant="small" weight="700">
               {formatMoney(preview.total)}
             </Text>
@@ -209,7 +205,7 @@ function LineEditorForm({
       <SelectSheet
         visible={unitOpen}
         onClose={() => setUnitOpen(false)}
-        title="Unit"
+        title={tr('sales:line.unit')}
         options={UNITS.map((u) => ({ value: u.code, label: `${u.name} (${u.code})` }))}
         value={unit}
         onSelect={setUnit}
@@ -217,7 +213,7 @@ function LineEditorForm({
       <SelectSheet
         visible={taxOpen}
         onClose={() => setTaxOpen(false)}
-        title="Tax rate"
+        title={tr('sales:line.taxRate')}
         options={taxCategories.map((c) => ({
           value: c.id,
           label: c.name,

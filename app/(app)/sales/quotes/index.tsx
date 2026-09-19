@@ -20,7 +20,7 @@ export default function QuoteList() {
         documents={documents}
         kind="quote"
         routeFor={(d) => `/(app)/sales/quotes/${d.id}`}
-        emptyAction="New quotation"
+        emptyAction={tr('nav:title.newQuotation')}
         onEmptyAction={() => router.push('/(app)/sales/quotes/new')}
       />
       <Fab icon="plus" onPress={() => router.push('/(app)/sales/quotes/new')} />

@@ -46,7 +46,7 @@ import { isEwayBillRequired } from '@/domain/ewayBill';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const language = useResolvedLanguage();
   const router = useRouter();
   const toast = useToast();
@@ -132,7 +132,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       }
       if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
     } catch {
-      toast.show('Could not generate the PDF on this device', 'error');
+      toast.show(tr('sales:detail.pdfFailed'), 'error');
     } finally {
       setBusy(false);
       setActionsOpen(false);
@@ -254,9 +254,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <View style={{ gap: 3 }}>
-                <Text variant="caption" tone="muted">
-                  Outstanding
-                </Text>
+                <Text variant="caption" tone="muted">{tr('sales:detail.outstanding')}</Text>
                 <Text variant="h3" weight="700" tone={outstanding.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
                   {formatMoney(outstanding)}
                 </Text>
@@ -297,9 +295,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         ) : null}
 
         {/* Lines */}
-        <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-          Items
-        </Text>
+        <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.items')}</Text>
         <Card padded={false}>
           {doc.lines.map((line, i) => (
             <View
@@ -347,9 +343,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         {/* Payments */}
         {relatedPayments.length > 0 ? (
           <>
-            <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Payments
-            </Text>
+            <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.payments')}</Text>
             <Card padded={false}>
               {relatedPayments.map((p, i) => {
                 const alloc = p.allocations.find((a) => a.documentId === doc.id);
@@ -397,9 +391,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
             {doc.notes ? (
               <View style={{ gap: 4 }}>
-                <Text variant="caption" tone="muted" weight="600">
-                  Notes
-                </Text>
+                <Text variant="caption" tone="muted" weight="600">{tr('sales:detail.notes')}</Text>
                 <Text variant="small" style={{ lineHeight: 20 }}>
                   {doc.notes}
                 </Text>
@@ -407,9 +399,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
             ) : null}
             {doc.terms ? (
               <View style={{ gap: 4 }}>
-                <Text variant="caption" tone="muted" weight="600">
-                  Terms
-                </Text>
+                <Text variant="caption" tone="muted" weight="600">{tr('sales:detail.terms')}</Text>
                 <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
                   {doc.terms}
                 </Text>
@@ -437,15 +427,15 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       >
         {!isFinalized(doc.status) ? (
           <Button
-            title="Finalise"
+            title={tr('sales:detail.finalise')}
             icon="check-decagram-outline"
             onPress={() => setStatusOpen(true)}
             style={{ flex: 1 }}
           />
         ) : (
-          <Button title="Share" icon="share-variant" onPress={shareDocument} loading={busy} style={{ flex: 1 }} />
+          <Button title={tr('sales:detail.share')} icon="share-variant" onPress={shareDocument} loading={busy} style={{ flex: 1 }} />
         )}
-        <Button title="Actions" variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
+        <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
       </View>
 
       {/* Action sheet */}
@@ -510,7 +500,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         subtitle={tr('common:documentDetail.currently', { status: statusLabel(tr, doc.status) })}
       >
         {transitions.length === 0 ? (
-          <EmptyState icon="check-all" title="Nothing left to do" message="This document is in its final state." compact />
+          <EmptyState icon="check-all" title={tr('sales:detail.nothingLeft')} message={tr('sales:detail.nothingLeftBody')} compact />
         ) : (
           transitions.map((s: DocStatus) => (
             <Pressable
@@ -541,15 +531,15 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
       <ConfirmDialog
         visible={confirmDelete}
-        title="Delete this draft?"
-        message="Drafts are not numbered, so nothing is left behind. This cannot be undone."
-        confirmLabel="Delete"
+        title={tr('sales:detail.deleteDraftTitle')}
+        message={tr('sales:detail.deleteDraftMessage')}
+        confirmLabel={tr('sales:detail.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           removeDocument(doc.id);
           setConfirmDelete(false);
-          toast.show('Draft deleted', 'success');
+          toast.show(tr('sales:detail.draftDeleted'), 'success');
           router.back();
         }}
       />
@@ -557,14 +547,14 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       <ConfirmDialog
         visible={confirmCancel}
         title={`Cancel ${doc.number}?`}
-        message="The number stays reserved and the document is kept for your audit trail, but it no longer counts towards your books."
-        confirmLabel="Cancel document"
+        message={tr('sales:detail.cancelMessage')}
+        confirmLabel={tr('sales:detail.cancelDocument')}
         destructive
         onCancel={() => setConfirmCancel(false)}
         onConfirm={() => {
           setDocumentStatus(doc.id, 'cancelled');
           setConfirmCancel(false);
-          toast.show('Document cancelled', 'success');
+          toast.show(tr('sales:detail.documentCancelled'), 'success');
         }}
       />
 

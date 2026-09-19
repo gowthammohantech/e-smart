@@ -12,7 +12,7 @@ import { financialYearOf, today } from '@/lib/date';
 
 export default function NumberingStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
+  const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
 

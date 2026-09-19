@@ -1,1 +1,37 @@
-{}
+{
+  "hub": {
+    "title": "Purchases",
+    "subtitle": "Orders, bills, expenses and payments out",
+    "thisMonth": "Purchases this month",
+    "expenses": "Expenses",
+    "payable": "Payable",
+    "overdue": "Overdue",
+    "documents": "Purchase documents",
+    "whereMoneyGoes": "Where the money goes",
+    "recentBills": "Recent bills",
+    "noBills": "No purchase bills yet",
+    "recordBill": "Record a bill",
+    "bill": "Bill"
+  },
+  "form": {
+    "amount": "Amount",
+    "category": "Category",
+    "date": "Date",
+    "paidBy": "Paid by",
+    "paidFrom": "Paid from",
+    "supplier": "Supplier",
+    "optional": "Optional",
+    "tax": "Tax",
+    "inclusive": "Amount includes tax",
+    "reference": "Reference",
+    "referencePlaceholder": "Bill or voucher number",
+    "notes": "Notes",
+    "notesPlaceholder": "What was this for?",
+    "repeats": "Repeats",
+    "billable": "Billable to a customer",
+    "billableHint": "Flag it so you can re-charge it later.",
+    "attachReceipt": "Attach receipt",
+    "scanInstead": "Scan with OCR instead",
+    "paymentMethod": "Payment method"
+  }
+}

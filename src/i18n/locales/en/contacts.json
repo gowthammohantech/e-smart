@@ -1,1 +1,36 @@
-{}
+{
+  "hub": {
+    "inactive": "Inactive",
+    "settled": "Settled"
+  },
+  "form": {
+    "businessName": "Business name",
+    "contactPerson": "Contact person",
+    "contactPlaceholder": "Who you deal with",
+    "gstinHint": "Leave blank for unregistered contacts.",
+    "gstRegistration": "GST registration",
+    "sezHint": "SEZ and overseas buyers are reported differently on e-invoices.",
+    "phone": "Phone",
+    "email": "Email",
+    "emailPlaceholder": "accounts@business.com",
+    "address": "Address",
+    "addressPlaceholder": "Street address",
+    "city": "City",
+    "state": "State",
+    "stateHint": "Decides whether IGST or CGST + SGST applies on their documents.",
+    "sameShipping": "Shipping address is the same",
+    "shippingAddress": "Shipping address",
+    "shippingCity": "Shipping city",
+    "currency": "Currency",
+    "paymentTerms": "Payment terms",
+    "creditLimit": "Credit limit",
+    "creditLimitHint": "Optional. Used to warn you before invoicing beyond it.",
+    "openingBalance": "Opening balance",
+    "notes": "Notes",
+    "notesPlaceholder": "Internal notes",
+    "active": "Active",
+    "activeHint": "Inactive contacts stay in your records but are hidden from pickers.",
+    "billingAddress": "Billing address",
+    "tradingTerms": "Trading terms"
+  }
+}

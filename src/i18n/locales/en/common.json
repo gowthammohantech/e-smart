@@ -125,5 +125,13 @@
     "items": "What",
     "extras": "Tax & terms",
     "review": "Review"
+  },
+  "notFound": {
+    "title": "Not found",
+    "document": "This document may have been deleted.",
+    "contact": "This contact may have been deleted.",
+    "expense": "This expense may have been deleted.",
+    "item": "This item may have been deleted.",
+    "payment": "This payment may have been deleted."
   }
 }

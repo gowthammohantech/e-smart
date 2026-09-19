@@ -29,7 +29,7 @@ import { multiply } from '@/lib/money';
 
 export default function ItemDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const router = useRouter();
   const toast = useToast();
 
@@ -61,7 +61,7 @@ export default function ItemDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.item') }} />
-        <EmptyState illustration="not-found" icon="package-variant-closed-remove" title="Not found" message="This item may have been deleted." />
+        <EmptyState illustration="not-found" icon="package-variant-closed-remove" title={tr('common:notFound.title')} message={tr('common:notFound.item')} />
       </View>
     );
   }

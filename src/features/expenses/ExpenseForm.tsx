@@ -39,7 +39,7 @@ const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
 
 export function ExpenseForm({ expense }: { expense?: Expense }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain']);
+  const { t: tr } = useTranslation(['domain', 'purchases']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -144,24 +144,24 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <AmountField label="Amount" value={amountText} onChangeValue={setAmountText} currency={baseCurrency} size="lg" autoFocus={!expense} required />
+        <AmountField label={tr('purchases:form.amount')} value={amountText} onChangeValue={setAmountText} currency={baseCurrency} size="lg" autoFocus={!expense} required />
 
         <PickerField
-          label="Category"
+          label={tr('purchases:form.category')}
           value={categories.find((c) => c.id === categoryId)?.name}
           onPress={() => setCategoryOpen(true)}
           icon="shape-outline"
           required
         />
 
-        <DateField label="Date" value={date} onChange={setDate} required />
+        <DateField label={tr('purchases:form.date')} value={date} onChange={setDate} required />
 
-        <PickerField label="Paid by" value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
-        <PickerField label="Paid from" value={accounts.find((a) => a.id === accountId)?.name} onPress={() => setAccountOpen(true)} icon="bank-outline" />
+        <PickerField label={tr('purchases:form.paidBy')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
+        <PickerField label={tr('purchases:form.paidFrom')} value={accounts.find((a) => a.id === accountId)?.name} onPress={() => setAccountOpen(true)} icon="bank-outline" />
         <PickerField
-          label="Supplier"
+          label={tr('purchases:form.supplier')}
           value={suppliers.find((s) => s.id === supplierId)?.name}
-          placeholder="Optional"
+          placeholder={tr('purchases:form.optional')}
           onPress={() => setSupplierOpen(true)}
           icon="truck-outline"
           clearable
@@ -169,7 +169,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         />
 
         <PickerField
-          label="Tax"
+          label={tr('purchases:form.tax')}
           value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : 'No tax'}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
@@ -179,7 +179,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
 
         {taxRate > 0 ? (
           <>
-            <SwitchField label="Amount includes tax" value={taxInclusive} onValueChange={setTaxInclusive} />
+            <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />
             <Card variant="flat" style={{ gap: t.spacing.sm }}>
               {[
                 { label: 'Net amount', value: formatMoney(netAmount) },
@@ -199,13 +199,13 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
           </>
         ) : null}
 
-        <TextField label="Reference" value={reference} onChangeText={setReference} placeholder="Bill or voucher number" icon="pound" />
-        <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="What was this for?" multiline />
+        <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />
+        <TextField label={tr('purchases:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('purchases:form.notesPlaceholder')} multiline />
 
-        <PickerField label="Repeats" value={RECURRENCES.find((r) => r.value === recurrence)?.label} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
-        <SwitchField label="Billable to a customer" description="Flag it so you can re-charge it later." value={billable} onValueChange={setBillable} />
+        <PickerField label={tr('purchases:form.repeats')} value={RECURRENCES.find((r) => r.value === recurrence)?.label} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
+        <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
 
-        <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel="Attach receipt">
+        <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
           <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             <MaterialCommunityIcons name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
             <View style={{ flex: 1 }}>
@@ -221,7 +221,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         </Pressable>
 
         <Button
-          title="Scan with OCR instead"
+          title={tr('purchases:form.scanInstead')}
           variant="ghost"
           icon="text-recognition"
           onPress={() => router.push('/(app)/ocr/capture')}
@@ -244,7 +244,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
       <SelectSheet
         visible={categoryOpen}
         onClose={() => setCategoryOpen(false)}
-        title="Category"
+        title={tr('purchases:form.category')}
         options={categories.map((c) => ({ value: c.id, label: c.name, icon: c.icon as never }))}
         value={categoryId}
         onSelect={setCategoryId}
@@ -252,7 +252,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
       <SelectSheet
         visible={methodOpen}
         onClose={() => setMethodOpen(false)}
-        title="Payment method"
+        title={tr('purchases:form.paymentMethod')}
         options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
         value={method}
         onSelect={(v) => setMethod(v as PaymentMethod)}
@@ -261,7 +261,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
       <SelectSheet
         visible={accountOpen}
         onClose={() => setAccountOpen(false)}
-        title="Paid from"
+        title={tr('purchases:form.paidFrom')}
         options={accounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
         value={accountId}
         onSelect={setAccountId}
@@ -270,7 +270,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
       <SelectSheet
         visible={supplierOpen}
         onClose={() => setSupplierOpen(false)}
-        title="Supplier"
+        title={tr('purchases:form.supplier')}
         options={suppliers.map((s) => ({ value: s.id, label: s.name, description: s.phone ?? s.code }))}
         value={supplierId}
         onSelect={setSupplierId}
@@ -278,7 +278,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
       <SelectSheet
         visible={taxOpen}
         onClose={() => setTaxOpen(false)}
-        title="Tax"
+        title={tr('purchases:form.tax')}
         options={taxCategories.map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate) }))}
         value={taxCategoryId}
         onSelect={setTaxCategoryId}
@@ -287,7 +287,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
       <SelectSheet
         visible={recurrenceOpen}
         onClose={() => setRecurrenceOpen(false)}
-        title="Repeats"
+        title={tr('purchases:form.repeats')}
         options={RECURRENCES.map((r) => ({ value: r.value, label: r.label }))}
         value={recurrence}
         onSelect={(v) => setRecurrence(v as RecurrenceFrequency)}

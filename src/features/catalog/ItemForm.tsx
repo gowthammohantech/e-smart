@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ import { useBaseCurrency, useHasModule, useItems, useTaxCategories } from '@/sto
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['inventory']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -107,26 +109,26 @@ export function ItemForm({ item }: { item?: Item }) {
           }}
         />
 
-        <TextField label="Name" value={name} onChangeText={setName} placeholder="What you're selling" error={errors.name} required icon="tag-outline" />
+        <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder="What you're selling" error={errors.name} required icon="tag-outline" />
         <TextField
-          label="SKU / item code"
+          label={tr('inventory:form.sku')}
           value={sku}
           onChangeText={(v) => setSku(v.toUpperCase())}
-          placeholder="Auto-generated if left blank"
+          placeholder={tr('inventory:form.skuHint')}
           autoCapitalize="characters"
           icon="barcode"
           error={errors.sku}
         />
-        <TextField label="Description" value={description} onChangeText={setDescription} placeholder="Shown on documents" multiline />
+        <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <AmountField label="Sale price" value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
-          <AmountField label="Purchase price" value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
+          <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
+          <AmountField label={tr('inventory:form.purchasePrice')} value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
         </View>
 
-        <PickerField label="Unit" value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" />
+        <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" />
         <PickerField
-          label="Tax rate"
+          label={tr('inventory:form.taxRate')}
           value={category ? `${category.name} (${formatPercent(category.rate)})` : 'Select'}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
@@ -138,15 +140,15 @@ export function ItemForm({ item }: { item?: Item }) {
           placeholder={type === 'goods' ? '84821011' : '998719'}
           keyboardType="number-pad"
           icon="numeric"
-          hint="Required on GST invoices above the turnover threshold."
+          hint={tr('inventory:form.hsnHint')}
         />
 
         {type === 'goods' ? (
           <>
-            <TextField label="Barcode" value={barcode} onChangeText={setBarcode} placeholder="Scan or type" icon="barcode-scan" />
+            <TextField label={tr('inventory:form.barcode')} value={barcode} onChangeText={setBarcode} placeholder={tr('inventory:form.barcodePlaceholder')} icon="barcode-scan" />
             {hasInventory ? (
             <SwitchField
-              label="Track stock"
+              label={tr('inventory:form.trackStock')}
               description="Sales and purchases will move this item's stock automatically."
               value={trackInventory}
               onValueChange={setTrackInventory}
@@ -155,7 +157,7 @@ export function ItemForm({ item }: { item?: Item }) {
             {trackInventory && hasInventory ? (
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
                 <TextField
-                  label="Opening stock"
+                  label={tr('inventory:form.openingStock')}
                   value={openingStock}
                   onChangeText={(v) => setOpeningStock(v.replace(/[^0-9.]/g, ''))}
                   placeholder="0"
@@ -165,20 +167,20 @@ export function ItemForm({ item }: { item?: Item }) {
                   hint={item ? 'Use a stock adjustment to change this.' : undefined}
                 />
                 <TextField
-                  label="Reorder level"
+                  label={tr('inventory:form.reorderLevel')}
                   value={reorderLevel}
                   onChangeText={(v) => setReorderLevel(v.replace(/[^0-9.]/g, ''))}
                   placeholder="0"
                   keyboardType="decimal-pad"
                   containerStyle={{ flex: 1 }}
-                  hint="Alerts you below this."
+                  hint={tr('inventory:form.reorderHint')}
                 />
               </View>
             ) : null}
           </>
         ) : null}
 
-        <SwitchField label="Active" description="Inactive items are hidden when creating documents." value={active} onValueChange={setActive} />
+        <SwitchField label={tr('inventory:form.active')} description={tr('inventory:form.activeHint')} value={active} onValueChange={setActive} />
       </ScrollView>
 
       <View
@@ -196,7 +198,7 @@ export function ItemForm({ item }: { item?: Item }) {
       <SelectSheet
         visible={unitOpen}
         onClose={() => setUnitOpen(false)}
-        title="Unit"
+        title={tr('inventory:form.unit')}
         options={UNITS.map((u) => ({ value: u.code, label: u.name, trailing: u.code }))}
         value={unit}
         onSelect={setUnit}
@@ -204,7 +206,7 @@ export function ItemForm({ item }: { item?: Item }) {
       <SelectSheet
         visible={taxOpen}
         onClose={() => setTaxOpen(false)}
-        title="Tax rate"
+        title={tr('inventory:form.taxRate')}
         options={taxCategories.map((c) => ({ value: c.id, label: c.name, description: c.description, trailing: formatPercent(c.rate) }))}
         value={taxCategoryId}
         onSelect={setTaxCategoryId}

@@ -33,7 +33,7 @@ type Entry = {
 
 export default function MoreTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'common']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const router = useRouter();
   const toast = useToast();
 

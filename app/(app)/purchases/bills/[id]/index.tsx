@@ -9,7 +9,7 @@ import { useDocument } from '@/store/selectors';
 
 export default function PurchaseBillDetail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['common', 'nav']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const document = useDocument(id);
 
@@ -17,7 +17,7 @@ export default function PurchaseBillDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen options={{ title: tr('nav:title.purchaseBill') }} />
-        <EmptyState illustration="not-found" icon="file-remove-outline" title="Not found" message="This document may have been deleted." />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} message={tr('common:notFound.document')} />
       </View>
     );
   }

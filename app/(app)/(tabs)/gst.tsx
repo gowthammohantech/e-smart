@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { AppHeader } from '@/components/AppHeader';
@@ -12,11 +13,12 @@ import { useComplianceSummary } from '@/store/selectors';
  */
 export default function GstTab() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
   const summary = useComplianceSummary();
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="GST" subtitle="E-invoice, e-way bill and returns" />
+      <AppHeader title="GST" subtitle={tr('compliance:hub.subtitle')} />
       <ComplianceHub
         bottomInset={120}
         header={
