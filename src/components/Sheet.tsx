@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Keyboard,
+  KeyboardEvent,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleProp,
@@ -24,6 +28,13 @@ type Props = {
   maxHeightRatio?: number;
   scroll?: boolean;
   footer?: React.ReactNode;
+  /** Pinned above the scrolling body (e.g. a search bar). */
+  header?: React.ReactNode;
+  /**
+   * Hold the sheet at its full available height instead of sizing to content,
+   * so filtering a list doesn't collapse the sheet under the user's finger.
+   */
+  fillHeight?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
 };
 
@@ -40,6 +51,8 @@ export function Sheet({
   maxHeightRatio = 0.86,
   scroll = true,
   footer,
+  header,
+  fillHeight = false,
   contentStyle,
 }: Props) {
   const t = useTheme();
@@ -61,7 +74,37 @@ export function Sheet({
     }
   }, [visible, translate, fade]);
 
-  const maxHeight = Dimensions.get('window').height * maxHeightRatio;
+  // The Modal is edge-to-edge on both platforms, so nothing resizes it when
+  // the keyboard opens — lift the sheet ourselves.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    const ios = Platform.OS === 'ios';
+    const onChange = (e: KeyboardEvent | null) => {
+      if (ios && e) {
+        LayoutAnimation.configureNext({
+          duration: e.duration || 250,
+          update: { type: LayoutAnimation.Types.keyboard },
+        });
+      }
+      setKeyboardHeight(e ? e.endCoordinates.height : 0);
+    };
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', onChange);
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', (e) =>
+      onChange(ios ? { ...e, endCoordinates: { ...e.endCoordinates, height: 0 } } : null),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+      setKeyboardHeight(0);
+    };
+  }, [visible]);
+
+  const windowHeight = Dimensions.get('window').height;
+  const maxHeight = Math.min(
+    windowHeight * maxHeightRatio,
+    windowHeight - keyboardHeight - insets.top - t.spacing.md,
+  );
   const Body = scroll ? ScrollView : View;
 
   return (
@@ -76,14 +119,15 @@ export function Sheet({
             position: 'absolute',
             left: 0,
             right: 0,
-            bottom: 0,
+            bottom: keyboardHeight,
             maxHeight,
+            height: fillHeight ? maxHeight : undefined,
             backgroundColor: t.c.paper,
             borderTopLeftRadius: t.radius.xl,
             borderTopRightRadius: t.radius.xl,
             borderTopWidth: t.scheme === 'dark' ? 1 : 0,
             borderColor: t.c.line,
-            paddingBottom: insets.bottom,
+            paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom,
             transform: [{ translateY: translate }],
           },
           t.shadow.sheet,
@@ -132,12 +176,15 @@ export function Sheet({
           </View>
         ) : null}
 
+        {header}
+
         <Body
-          style={scroll ? { flexGrow: 0 } : undefined}
+          style={fillHeight ? { flex: 1 } : scroll ? { flexGrow: 0 } : undefined}
           contentContainerStyle={
             scroll ? [{ paddingBottom: t.spacing.lg }, contentStyle] : undefined
           }
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {children}
         </Body>

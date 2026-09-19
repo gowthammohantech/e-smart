@@ -48,6 +48,8 @@ export function SelectSheet({
   const t = useTheme();
   const [query, setQuery] = useState('');
 
+  const showSearch = searchable && options.length > 6;
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
@@ -66,12 +68,15 @@ export function SelectSheet({
       title={title}
       subtitle={subtitle}
       footer={footer}
+      fillHeight={showSearch}
+      header={
+        showSearch ? (
+          <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
+            <SearchBar value={query} onChangeText={setQuery} placeholder={searchPlaceholder} />
+          </View>
+        ) : null
+      }
     >
-      {searchable && options.length > 6 ? (
-        <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
-          <SearchBar value={query} onChangeText={setQuery} placeholder={searchPlaceholder} />
-        </View>
-      ) : null}
 
       {filtered.length === 0 ? (
         <EmptyState icon="magnify" title="No matches" message={emptyMessage} compact />
