@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
+import { useCanOpen } from '@/store/selectors';
 
 type Action = {
   key: string;
@@ -28,7 +29,8 @@ export function quickActions(primary: string): Action[] {
 export function QuickActions() {
   const t = useTheme();
   const router = useRouter();
-  const actions = quickActions(t.c.primary);
+  const canOpen = useCanOpen();
+  const actions = quickActions(t.c.primary).filter((a) => canOpen(a.route));
 
   return (
     <ScrollView

@@ -1,19 +1,10 @@
 import { ExpenseCategory, Integration, TaxCategory, Unit } from '@/types';
+import { GST_STATE_CODES } from '@/domain/stateCodes';
 
-export const INDIAN_STATES: { code: string; name: string }[] = [
-  { code: '27', name: 'Maharashtra' },
-  { code: '29', name: 'Karnataka' },
-  { code: '33', name: 'Tamil Nadu' },
-  { code: '07', name: 'Delhi' },
-  { code: '24', name: 'Gujarat' },
-  { code: '36', name: 'Telangana' },
-  { code: '32', name: 'Kerala' },
-  { code: '09', name: 'Uttar Pradesh' },
-  { code: '19', name: 'West Bengal' },
-  { code: '08', name: 'Rajasthan' },
-  { code: '23', name: 'Madhya Pradesh' },
-  { code: '03', name: 'Punjab' },
-];
+/** Every state and union territory that issues GSTINs, by name, for pickers. */
+export const INDIAN_STATES: { code: string; name: string }[] = GST_STATE_CODES.filter((s) => s.code !== '97')
+  .map(({ code, name }) => ({ code, name }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 export function stateName(code?: string): string {
   return INDIAN_STATES.find((s) => s.code === code)?.name ?? '—';

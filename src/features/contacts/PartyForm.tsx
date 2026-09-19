@@ -8,8 +8,9 @@ import { Button } from '@/components/Button';
 import { AmountField, PickerField, SwitchField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
-import { Party, PartyKind } from '@/types';
-import { INDIAN_STATES } from '@/data/masters';
+import { GstRegistrationType, Party, PartyKind } from '@/types';
+import { INDIAN_STATES, stateName as stateNameOf } from '@/data/masters';
+import { GST_REGISTRATION_LABELS } from '@/domain/eInvoice';
 import { CURRENCIES } from '@/lib/currencies';
 import { fromMajor, toMajor, zero } from '@/lib/money';
 import { uid } from '@/lib/id';
@@ -34,6 +35,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [name, setName] = useState(party?.name ?? '');
   const [contact, setContact] = useState(party?.displayName ?? '');
   const [taxId, setTaxId] = useState(party?.taxId ?? '');
+  const [registration, setRegistration] = useState<GstRegistrationType | undefined>(party?.gstRegistrationType);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
   const [email, setEmail] = useState(party?.email ?? '');
   const [phone, setPhone] = useState(party?.phone ?? '');
   const [currency, setCurrency] = useState(party?.currency ?? baseCurrency);
@@ -64,7 +67,12 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       name: required(name, `${label} name`),
       email: validEmail(email),
       phone: validPhone(phone),
-      taxId: taxId ? validGstin(taxId) : undefined,
+      taxId: taxId
+        ? validGstin(taxId) ??
+          (stateCode && taxId.trim().toUpperCase().slice(0, 2) !== stateCode
+            ? `This GSTIN is registered in ${stateNameOf(taxId.trim().slice(0, 2))}, not the state below`
+            : undefined)
+        : undefined,
     };
     setErrors(next);
     if (hasErrors(next)) return;
@@ -82,6 +90,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       code: nextCode,
       displayName: contact.trim() || undefined,
       taxId: taxId.trim().toUpperCase() || undefined,
+      gstRegistrationType: kind === 'customer' ? registration : party?.gstRegistrationType,
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       currency,
@@ -129,13 +138,29 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         <TextField
           label="GSTIN"
           value={taxId}
-          onChangeText={(v) => setTaxId(v.toUpperCase())}
-          placeholder="27AABCV1234F1Z5"
+          onChangeText={(v) => {
+            const next = v.toUpperCase();
+            setTaxId(next);
+            // The first two digits are the state; fill it in if it's still blank.
+            if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
+              setStateCode(next.slice(0, 2));
+            }
+          }}
+          placeholder="27AABCV1234F1ZO"
           autoCapitalize="characters"
           icon="card-account-details-outline"
           error={errors.taxId}
           hint="Leave blank for unregistered contacts."
         />
+        {kind === 'customer' ? (
+          <PickerField
+            label="GST registration"
+            value={GST_REGISTRATION_LABELS[registration ?? (taxId ? 'regular' : 'unregistered')]}
+            onPress={() => setRegistrationOpen(true)}
+            icon="shield-account-outline"
+            hint="SEZ and overseas buyers are reported differently on e-invoices."
+          />
+        ) : null}
         <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
         <TextField label="Email" value={email} onChangeText={setEmail} placeholder="accounts@business.com" keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
 
@@ -202,6 +227,14 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
         value={stateCode}
         onSelect={setStateCode}
+      />
+      <SelectSheet
+        visible={registrationOpen}
+        onClose={() => setRegistrationOpen(false)}
+        title="GST registration"
+        options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k] }))}
+        value={registration ?? (taxId ? 'regular' : 'unregistered')}
+        onSelect={(v) => setRegistration(v as GstRegistrationType)}
       />
       <SelectSheet
         visible={currencyOpen}

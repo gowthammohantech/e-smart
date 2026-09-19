@@ -8,8 +8,10 @@ import { WizardShell } from '@/components/WizardShell';
 import { TextField, PickerField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Text } from '@/components/Text';
-import { ONBOARDING_STEPS, useOnboardingStore } from '@/store/onboardingStore';
+import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 import { BUSINESS_TYPES, INDIAN_STATES } from '@/data/masters';
+import { PLANS, moduleSetFor, planInfo } from '@/domain/plan';
+import type { PlanTier } from '@/types';
 import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/validators';
 
 export default function BusinessStep() {
@@ -18,6 +20,7 @@ export default function BusinessStep() {
   const { draft, set, setAddress } = useOnboardingStore();
 
   const [typeOpen, setTypeOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'city' | 'state' | 'email' | 'phone'>>({});
 
@@ -41,15 +44,15 @@ export default function BusinessStep() {
     };
     setErrors(nextErrors);
     if (hasErrors(nextErrors)) return;
-    router.push('/(onboarding)/country');
+    router.push(nextStepRoute('business', draft.plan));
   };
 
   return (
     <WizardShell
       title="Tell us about your business"
       subtitle="This appears on every invoice and quote you send."
-      steps={ONBOARDING_STEPS}
-      currentStep={0}
+      steps={onboardingSteps(draft.plan)}
+      currentStep={stepIndex('business', draft.plan)}
       onPrimary={next}
     >
       <View style={{ alignItems: 'center', gap: t.spacing.sm }}>
@@ -98,6 +101,17 @@ export default function BusinessStep() {
         placeholder="As registered (optional)"
       />
       <PickerField label="Business type" value={draft.businessType} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
+      <PickerField
+        label="Plan"
+        value={planInfo(draft.plan).name}
+        onPress={() => setPlanOpen(true)}
+        icon="star-circle-outline"
+        hint={
+          moduleSetFor(draft.plan) === 'full'
+            ? 'Sales, purchases, stock and expenses, with GST compliance.'
+            : 'Sales with GST compliance. Upgrade any time for purchases and stock.'
+        }
+      />
 
       <TextField
         label="Address"
@@ -164,6 +178,19 @@ export default function BusinessStep() {
         options={BUSINESS_TYPES.map((b) => ({ value: b, label: b }))}
         value={draft.businessType}
         onSelect={(v) => set({ businessType: v })}
+      />
+      <SelectSheet
+        visible={planOpen}
+        onClose={() => setPlanOpen(false)}
+        title="Plan"
+        subtitle="You can change this later in Settings"
+        options={PLANS.map((p) => ({
+          value: p.key,
+          label: p.name,
+          trailing: moduleSetFor(p.key) === 'full' ? 'Buy & sell' : 'Sell',
+        }))}
+        value={draft.plan}
+        onSelect={(v) => set({ plan: v as PlanTier })}
       />
       <SelectSheet
         visible={stateOpen}

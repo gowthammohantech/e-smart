@@ -16,7 +16,7 @@ import {
   TransportMode,
   VehicleType,
 } from '@/types';
-import { GSTIN_RE } from '@/lib/validators';
+import { isValidGstin } from '@/domain/gstin';
 import { INDIAN_STATES } from '@/data/masters';
 
 /**
@@ -286,6 +286,11 @@ function issue(
   return { code, field, message, severity };
 }
 
+/** What a person types, as the portal wants it: capitals, no spaces or hyphens. */
+export function normalizeVehicleNumber(raw: string): string {
+  return raw.replace(/[\s-]/g, '').toUpperCase();
+}
+
 /** Field-level check in the `@/lib/validators` style: a message, or nothing. */
 export function validVehicleNumber(value: string | undefined): string | undefined {
   if (!value) return 'Enter the vehicle number';
@@ -304,7 +309,7 @@ export function validPlaceGstin(value: string | undefined): string | undefined {
   if (!value) return 'Enter the GSTIN, or URP if unregistered';
   const raw = value.trim().toUpperCase();
   if (raw === 'URP') return undefined;
-  return GSTIN_RE.test(raw) ? undefined : 'Enter a valid GSTIN, or URP if unregistered';
+  return isValidGstin(raw) ? undefined : 'Enter a valid GSTIN, or URP if unregistered';
 }
 
 export type EwayPartAInput = {
@@ -391,8 +396,9 @@ export function validatePartB(input: EwayPartBInput): ComplianceIssue[] {
     }
   }
 
-  if (input.transporterId?.trim() && input.transporterId.trim().length !== 15) {
-    out.push(issue('EWB206', 'transporterId', 'A transporter ID is 15 characters'));
+  if (input.transporterId?.trim() && !isValidGstin(input.transporterId)) {
+    // A TRANSIN has the GSTIN's shape and check digit, so one test covers both.
+    out.push(issue('EWB206', 'transporterId', 'The transporter ID is not a valid GSTIN or TRANSIN'));
   }
 
   if (!Number.isFinite(input.distanceKm) || input.distanceKm < 1) {

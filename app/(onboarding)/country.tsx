@@ -6,7 +6,7 @@ import { PickerField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
-import { ONBOARDING_STEPS, useOnboardingStore } from '@/store/onboardingStore';
+import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 import { COUNTRIES } from '@/data/masters';
 import { CURRENCIES } from '@/lib/currencies';
 
@@ -28,9 +28,9 @@ export default function CountryStep() {
     <WizardShell
       title="Country and currency"
       subtitle="Your country pack decides tax rules, invoice fields and date formats."
-      steps={ONBOARDING_STEPS}
-      currentStep={1}
-      onPrimary={() => router.push('/(onboarding)/tax')}
+      steps={onboardingSteps(draft.plan)}
+      currentStep={stepIndex('country', draft.plan)}
+      onPrimary={() => router.push(nextStepRoute('country', draft.plan))}
     >
       <PickerField
         label="Country"

@@ -16,6 +16,7 @@ import {
   useParties,
   usePayments,
   useStockLevels,
+  useCanOpen,
 } from '@/store/selectors';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
@@ -48,6 +49,7 @@ export default function GlobalSearch() {
   const payments = usePayments();
   const expenses = useExpenses();
   const stock = useStockLevels();
+  const canOpen = useCanOpen();
 
   const results = useMemo<Result[]>(() => {
     const q = query.trim().toLowerCase();
@@ -125,8 +127,8 @@ export default function GlobalSearch() {
       }
     });
 
-    return out.slice(0, 60);
-  }, [query, parties, items, documents, payments, expenses, stock]);
+    return out.filter((r) => canOpen(r.route)).slice(0, 60);
+  }, [query, parties, items, documents, payments, expenses, stock, canOpen]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Result[]>();

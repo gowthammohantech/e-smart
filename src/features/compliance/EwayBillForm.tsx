@@ -19,12 +19,13 @@ import {
   VehicleType,
 } from '@/types';
 import { useAppStore } from '@/store/appStore';
-import { useActiveCompany, useComplianceSettings } from '@/store/selectors';
+import { useActiveCompany, useComplianceSettings, useTransporters } from '@/store/selectors';
 import {
   EWAY_SUB_SUPPLY_TYPES,
   subSupplyTypeFor,
   validUptoFor,
   validityDays,
+  normalizeVehicleNumber,
 } from '@/domain/ewayBill';
 import { mainHsnCodeOf } from '@/domain/eInvoice';
 import { INDIAN_STATES, stateName } from '@/data/masters';
@@ -80,6 +81,8 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
   const [transporterId, setTransporterId] = useState(settings.defaultTransporterId ?? '');
   const [transporterName, setTransporterName] = useState(settings.defaultTransporterName ?? '');
+  const transporters = useTransporters({ activeOnly: true });
+  const [transporterOpen, setTransporterOpen] = useState(false);
   const [transportMode, setTransportMode] = useState<TransportMode>(settings.defaultTransportMode);
   const [vehicleType, setVehicleType] = useState<VehicleType>(settings.defaultVehicleType);
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -193,6 +196,15 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         {/* ---------------- Part-B ---------------- */}
         <SectionHeader title="Transport" />
 
+        {transporters.length ? (
+          <PickerField
+            label="Saved transporter"
+            value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
+            placeholder="Pick one, or type the details below"
+            onPress={() => setTransporterOpen(true)}
+            icon="truck-outline"
+          />
+        ) : null}
         <TextField
           label="Transporter ID"
           value={transporterId}
@@ -238,7 +250,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             label="Vehicle number"
             required
             value={vehicleNumber}
-            onChangeText={setVehicleNumber}
+            onChangeText={(v) => setVehicleNumber(normalizeVehicleNumber(v))}
             autoCapitalize="characters"
             autoCorrect={false}
             error={errors.vehicleNumber}
@@ -330,6 +342,21 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         searchable={false}
       />
 
+      <SelectSheet
+        visible={transporterOpen}
+        onClose={() => setTransporterOpen(false)}
+        title="Transporter"
+        options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
+        value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
+        onSelect={(id) => {
+          const picked = transporters.find((x) => x.id === id);
+          if (picked) {
+            setTransporterId(picked.transporterId);
+            setTransporterName(picked.name);
+          }
+          setTransporterOpen(false);
+        }}
+      />
       <SelectSheet
         visible={stateSheet !== null}
         onClose={() => setStateSheet(null)}

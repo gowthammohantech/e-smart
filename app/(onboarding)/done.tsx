@@ -41,6 +41,7 @@ export default function Done() {
       legalName: draft.legalName || undefined,
       logoUri: draft.logoUri,
       businessType: draft.businessType,
+      plan: draft.plan,
       country: draft.country,
       baseCurrency: draft.baseCurrency,
       address: draft.address,

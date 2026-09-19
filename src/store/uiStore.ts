@@ -72,7 +72,7 @@ export const useUiStore = create<UiState>()(
       hasSeenTour: false,
       setHasSeenTour: (hasSeenTour) => set({ hasSeenTour }),
 
-      lixiAccess: { holdTab: true, swipeUp: true, floatingOrb: true, pullDown: true },
+      lixiAccess: { holdTab: true, swipeUp: true, floatingOrb: false, pullDown: true },
       setLixiAccess: (key, on) => set({ lixiAccess: { ...get().lixiAccess, [key]: on } }),
 
       lixiOrbSpot: { side: 'right', y: 0.62 },

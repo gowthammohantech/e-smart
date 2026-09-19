@@ -273,7 +273,7 @@ describe('SHA-256 (FRD 16)', () => {
   });
 
   it('is stable across repeated calls', () => {
-    expect(sha256Hex('27AABCV1234F1Z5INV')).toBe(sha256Hex('27AABCV1234F1Z5INV'));
+    expect(sha256Hex('27AABCV1234F1ZOINV')).toBe(sha256Hex('27AABCV1234F1ZOINV'));
   });
 });
 
@@ -528,15 +528,15 @@ describe('QR round trip (FRD 16)', () => {
     const claims = base64UrlEncode(
       JSON.stringify({
         data: JSON.stringify({
-          SellerGstin: '27AABCV1234F1Z5',
-          BuyerGstin: '29AACFA9876P1ZK',
+          SellerGstin: '27AABCV1234F1ZO',
+          BuyerGstin: '29AACFA9876P1ZH',
           DocNo: 'INV/26-27/0042',
           DocTyp: 'INV',
           DocDt: '18/09/2026',
           TotInvVal: 118000.5,
           ItemCnt: 4,
           MainHsnCode: '39211900',
-          Irn: sha256Hex('27AABCV1234F1Z5INVINV/26-27/00422026-27'),
+          Irn: sha256Hex('27AABCV1234F1ZOINVINV/26-27/00422026-27'),
           IrnDt: '2026-09-18 11:24:07',
         }),
         iss: 'NIC',

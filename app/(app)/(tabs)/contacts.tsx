@@ -12,7 +12,7 @@ import { Segmented } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
 import { Badge } from '@/components/Badge';
-import { useBaseCurrency, useDocuments, useParties, usePayments } from '@/store/selectors';
+import { useBaseCurrency, useDocuments, useHasModule, useParties, usePayments } from '@/store/selectors';
 import { buildOutstanding } from '@/domain/receivables';
 import { money } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
@@ -24,7 +24,10 @@ export default function ContactsTab() {
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  const [tab, setTab] = useState<Tab>('customer');
+  const hasSuppliers = useHasModule('purchases');
+  const [pickedTab, setTab] = useState<Tab>('customer');
+  // Suppliers belong to buying; a Sales-plan company only sees customers.
+  const tab: Tab = hasSuppliers ? pickedTab : 'customer';
   const [query, setQuery] = useState('');
 
   const parties = useParties(tab);
@@ -69,17 +72,19 @@ export default function ContactsTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title="Contacts" subtitle="Customers and suppliers" />
+      <AppHeader title={hasSuppliers ? 'Contacts' : 'Customers'} subtitle={hasSuppliers ? 'Customers and suppliers' : 'Who you sell to'} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md, paddingBottom: t.spacing.md }}>
-        <Segmented
-          options={[
-            { value: 'customer', label: 'Customers' },
-            { value: 'supplier', label: 'Suppliers' },
-          ]}
-          value={tab}
-          onChange={(v) => setTab(v as Tab)}
-        />
+        {hasSuppliers ? (
+          <Segmented
+            options={[
+              { value: 'customer', label: 'Customers' },
+              { value: 'supplier', label: 'Suppliers' },
+            ]}
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
+          />
+        ) : null}
         <SearchBar value={query} onChangeText={setQuery} placeholder={`Search ${tab === 'customer' ? 'customers' : 'suppliers'}`} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">

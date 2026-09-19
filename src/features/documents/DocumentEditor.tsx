@@ -33,6 +33,7 @@ import {
   useBaseCurrency,
   useBranches,
   useExchangeRates,
+  useHasModule,
   useItems,
   useParties,
   useTaxCategories,
@@ -73,6 +74,7 @@ export function DocumentEditor({
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
+  const hasFx = useHasModule('fx');
   const branches = useBranches();
   const taxCategories = useTaxCategories();
   const exchangeRates = useExchangeRates();
@@ -302,12 +304,15 @@ export function DocumentEditor({
         />
       ) : null}
 
-      <PickerField
-        label="Currency"
-        value={`${draft.currency}${draft.currency !== baseCurrency ? ` · 1 ${draft.currency} = ${draft.exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
-        onPress={() => setCurrencyOpen(true)}
-        icon="cash-multiple"
-      />
+      {/* Multi-currency is a full-plan module; a document already in another currency still shows it. */}
+      {hasFx || draft.currency !== baseCurrency ? (
+        <PickerField
+          label="Currency"
+          value={`${draft.currency}${draft.currency !== baseCurrency ? ` · 1 ${draft.currency} = ${draft.exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
+          onPress={() => setCurrencyOpen(true)}
+          icon="cash-multiple"
+        />
+      ) : null}
 
       {draft.currency !== baseCurrency ? (
         <TextField

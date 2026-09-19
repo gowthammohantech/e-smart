@@ -16,6 +16,7 @@ import { useAppStore } from '@/store/appStore';
 import {
   useBaseCurrency,
   useDocuments,
+  useHasModule,
   useItem,
   useStockMovements,
   useTaxCategories,
@@ -34,6 +35,8 @@ export default function ItemDetail() {
   const item = useItem(id);
   const baseCurrency = useBaseCurrency();
   const movements = useStockMovements(id);
+  const hasInventory = useHasModule('inventory');
+  const hasPurchases = useHasModule('purchases');
   const taxCategories = useTaxCategories();
   const invoices = useDocuments('invoice');
   const removeItem = useAppStore((s) => s.removeItem);
@@ -129,7 +132,7 @@ export default function ItemDetail() {
           />
         </StatRow>
 
-        {item.trackInventory ? (
+        {item.trackInventory && hasInventory ? (
           <>
             <View style={{ height: t.spacing.md }} />
             <StatRow>
@@ -169,7 +172,7 @@ export default function ItemDetail() {
           ))}
         </Card>
 
-        {item.trackInventory ? (
+        {item.trackInventory && hasInventory ? (
           <>
             <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>
               Stock movements
@@ -246,14 +249,16 @@ export default function ItemDetail() {
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={item.name}>
         {[
-          ...(item.trackInventory
+          ...(item.trackInventory && hasInventory
             ? [
                 { label: 'Adjust stock', icon: 'tune' as const, onPress: () => router.push(`/(app)/inventory/adjust?itemId=${item.id}`) },
                 { label: 'Transfer between branches', icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
               ]
             : []),
           { label: 'Sell this item', icon: 'file-document-edit-outline' as const, onPress: () => router.push('/(app)/sales/invoices/new') },
-          { label: 'Buy this item', icon: 'cart-outline' as const, onPress: () => router.push('/(app)/purchases/bills/new') },
+          ...(hasPurchases
+            ? [{ label: 'Buy this item', icon: 'cart-outline' as const, onPress: () => router.push('/(app)/purchases/bills/new') }]
+            : []),
           { label: 'Delete item', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
         ].map((a) => (
           <Pressable

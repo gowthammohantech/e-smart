@@ -92,11 +92,12 @@ function company(over: Partial<Company> = {}): Company {
     email: 'books@vertex.example',
     phone: '+91 22 4000 1000',
     fiscalYearStartMonth: 4,
+    plan: 'pro',
     createdAt: '2024-04-01T00:00:00.000Z',
     ...over,
     taxRegistration: {
       regime: 'GST',
-      identifier: '27AABCV1234F1Z5',
+      identifier: '27AABCV1234F1ZO',
       identifierLabel: 'GSTIN',
       registered: true,
       placeOfSupplyStateCode: '27',
@@ -112,7 +113,7 @@ function party(over: Partial<Party> = {}): Party {
     kind: 'customer',
     name: 'Nandini Enterprises',
     code: 'CUS-001',
-    taxId: '29AACFA9876P1ZK',
+    taxId: '29AACFA9876P1ZH',
     email: 'accounts@nandini.example',
     phone: '+91 80 5000 2000',
     currency: 'INR',
@@ -237,7 +238,7 @@ function ctx(over: Partial<EInvoiceContext> = {}): EInvoiceContext {
 function place(over: Partial<EwayPlace> = {}): EwayPlace {
   return {
     legalName: 'Vertex Traders Private Limited',
-    gstin: '27AABCV1234F1Z5',
+    gstin: '27AABCV1234F1ZO',
     address1: '14 Kalbadevi Road',
     place: 'Mumbai',
     pincode: '400002',
@@ -263,7 +264,7 @@ function ewb(over: Partial<EwayBill> = {}): EwayBill {
     transactionType: 1,
     partyId: 'cus_1',
     from: place(),
-    to: place({ place: 'Bengaluru', pincode: '560001', stateCode: '29', gstin: '29AACFA9876P1ZK' }),
+    to: place({ place: 'Bengaluru', pincode: '560001', stateCode: '29', gstin: '29AACFA9876P1ZH' }),
     consignmentValue: fromMajor('118000', 'INR'),
     taxableValue: fromMajor('100000', 'INR'),
     cgst: zero('INR'),
@@ -364,6 +365,21 @@ describe('e-invoice applicability (FRD 16)', () => {
     expect(eInvoiceSupplyTypeFor(zeroRated, foreign)).toBe('EXPWOP');
   });
 
+  it('classifies an SEZ buyer as SEZWP with tax and SEZWOP without', () => {
+    const sez = party({ gstRegistrationType: 'sez' });
+    expect(eInvoiceSupplyTypeFor(invoice(), sez)).toBe('SEZWP');
+    const underLut = invoice({ totals: { ...invoice().totals, totalTax: zero('INR') } });
+    expect(eInvoiceSupplyTypeFor(underLut, sez)).toBe('SEZWOP');
+  });
+
+  it('treats an overseas buyer as an export even with an Indian address', () => {
+    expect(eInvoiceSupplyTypeFor(invoice(), party({ taxId: undefined, gstRegistrationType: 'overseas' }))).toBe('EXPWP');
+  });
+
+  it('keeps a buyer marked unregistered out of e-invoicing, GSTIN or not', () => {
+    expect(eInvoiceSupplyTypeFor(invoice(), party({ gstRegistrationType: 'unregistered' }))).toBeNull();
+  });
+
   it('treats place of supply 96 as an export', () => {
     expect(eInvoiceSupplyTypeFor(invoice({ placeOfSupplyStateCode: '96' }), party())).toBe('EXPWP');
   });
@@ -394,6 +410,24 @@ describe('e-invoice validation (FRD 16)', () => {
 
   it('blocks a malformed buyer GSTIN on a B2B supply', () => {
     expect(codes(ctx({ buyer: party({ taxId: '29AACFA' }) }))).toContain('3029');
+  });
+
+  it('blocks a buyer GSTIN whose check digit is wrong', () => {
+    expect(codes(ctx({ buyer: party({ taxId: '29AACFA9876P1ZK' }) }))).toContain('3029');
+  });
+
+  it("blocks a buyer GSTIN registered in a different state from the buyer's address (2265)", () => {
+    const moved = party({ billingAddress: address({ city: 'Mumbai', stateCode: '27' }) });
+    expect(codes(ctx({ buyer: moved }))).toContain('2265');
+  });
+
+  it('allows a place of supply other than the buyer state when their GSTIN matches their address', () => {
+    // Billed to Bengaluru, shipped to Mumbai: the place of supply is where the goods go.
+    expect(codes(ctx({ document: invoice({ placeOfSupplyStateCode: '27' }) }))).not.toContain('2265');
+  });
+
+  it('accepts a place of supply outside the old twelve-state list', () => {
+    expect(codes(ctx({ document: invoice({ placeOfSupplyStateCode: '10' }) }))).not.toContain('2228');
   });
 
   it('does not demand a buyer GSTIN on an export', () => {
@@ -514,7 +548,7 @@ describe('e-invoice validation (FRD 16)', () => {
   });
 
   it('blocks a document number already registered this financial year', () => {
-    const irn = computeIrn('27AABCV1234F1Z5', 'INV', 'INV/26-27/0042', '2026-27');
+    const irn = computeIrn('27AABCV1234F1ZO', 'INV', 'INV/26-27/0042', '2026-27');
     expect(codes(ctx({ existingIrns: [irn] }))).toContain('2150');
   });
 
@@ -556,36 +590,36 @@ describe('e-invoice validation (FRD 16)', () => {
 
 describe('IRN generation (FRD 16)', () => {
   it('is the SHA-256 of supplier GSTIN, document type, number and financial year', () => {
-    expect(computeIrn('27AABCV1234F1Z5', 'INV', 'INV/26-27/0042', '2026-27')).toBe(
-      sha256Hex('27AABCV1234F1Z5INVINV/26-27/00422026-27'),
+    expect(computeIrn('27AABCV1234F1ZO', 'INV', 'INV/26-27/0042', '2026-27')).toBe(
+      sha256Hex('27AABCV1234F1ZOINVINV/26-27/00422026-27'),
     );
   });
 
   it('is 64 lowercase hexadecimal characters', () => {
-    expect(computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0001', '2026-27')).toMatch(/^[0-9a-f]{64}$/);
+    expect(computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0001', '2026-27')).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('is stable across repeated calls', () => {
-    const a = computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0001', '2026-27');
-    const b = computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0001', '2026-27');
+    const a = computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0001', '2026-27');
+    const b = computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0001', '2026-27');
     expect(a).toBe(b);
   });
 
   it('changes when only the document number changes', () => {
-    expect(computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0001', '2026-27')).not.toBe(
-      computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0002', '2026-27'),
+    expect(computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0001', '2026-27')).not.toBe(
+      computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0002', '2026-27'),
     );
   });
 
   it('changes when only the financial year changes', () => {
-    expect(computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0001', '2026-27')).not.toBe(
-      computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0001', '2025-26'),
+    expect(computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0001', '2026-27')).not.toBe(
+      computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0001', '2025-26'),
     );
   });
 
   it('changes when only the document type changes', () => {
-    expect(computeIrn('27AABCV1234F1Z5', 'INV', 'INV/0001', '2026-27')).not.toBe(
-      computeIrn('27AABCV1234F1Z5', 'CRN', 'INV/0001', '2026-27'),
+    expect(computeIrn('27AABCV1234F1ZO', 'INV', 'INV/0001', '2026-27')).not.toBe(
+      computeIrn('27AABCV1234F1ZO', 'CRN', 'INV/0001', '2026-27'),
     );
   });
 
@@ -690,7 +724,7 @@ describe('the invoice registration portal (FRD 16)', () => {
 /* ------------------------------------------------------------------ */
 
 describe('the signed QR payload (FRD 16)', () => {
-  const irn = computeIrn('27AABCV1234F1Z5', 'INV', 'INV/26-27/0042', '2026-27');
+  const irn = computeIrn('27AABCV1234F1ZO', 'INV', 'INV/26-27/0042', '2026-27');
   const claims = () => claimsFor(ctx(), irn, NOW);
 
   it('is a three-part JWS compact serialisation', () => {
@@ -700,8 +734,8 @@ describe('the signed QR payload (FRD 16)', () => {
   it('carries the claims the portal specifies, under its own names', () => {
     const parsed = parseSignedQrPayload(buildSignedQrPayload(claims()));
     expect(parsed).toMatchObject({
-      SellerGstin: '27AABCV1234F1Z5',
-      BuyerGstin: '29AACFA9876P1ZK',
+      SellerGstin: '27AABCV1234F1ZO',
+      BuyerGstin: '29AACFA9876P1ZH',
       DocNo: 'INV/26-27/0042',
       DocTyp: 'INV',
       DocDt: '15/09/2026',
@@ -1107,7 +1141,7 @@ describe('e-way bill Part-A (FRD 16)', () => {
   const partA = (over: Partial<Parameters<typeof validatePartA>[0]> = {}) =>
     validatePartA({
       from: place(),
-      to: place({ place: 'Bengaluru', pincode: '560001', stateCode: '29', gstin: '29AACFA9876P1ZK' }),
+      to: place({ place: 'Bengaluru', pincode: '560001', stateCode: '29', gstin: '29AACFA9876P1ZH' }),
       subSupplyType: 'supply',
       documentNumber: 'INV/26-27/0042',
       documentDate: '2026-09-15',

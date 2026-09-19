@@ -9,15 +9,16 @@ import {
   EInvoiceDocType,
   EInvoiceSupplyType,
   Item,
+  GstRegistrationType,
   Party,
   TaxComponent,
   TaxLine,
 } from '@/types';
 import { toMajor } from '@/lib/money';
-import { GSTIN_RE } from '@/lib/validators';
+import { isValidGstin } from '@/domain/gstin';
 import { financialYearOf, parseDate } from '@/lib/date';
 import { base64UrlDecode, base64UrlEncode, sha256Hex } from '@/lib/hash';
-import { INDIAN_STATES } from '@/data/masters';
+import { isValidStateCode } from '@/domain/stateCodes';
 
 /**
  * GST e-invoicing (FRD 16).
@@ -121,6 +122,7 @@ export function eInvoiceDocTypeFor(kind: DocumentKind): EInvoiceDocType | null {
 
 function isExport(doc: BusinessDocument, buyer: Party | undefined): boolean {
   if (doc.placeOfSupplyStateCode === EXPORT_STATE_CODE) return true;
+  if (buyer?.gstRegistrationType === 'overseas') return true;
   const country = buyer?.billingAddress?.country;
   return !!country && country !== 'India' && country !== 'IN';
 }
@@ -130,11 +132,22 @@ function chargesTax(doc: BusinessDocument): boolean {
   return doc.totals.totalTax.minor > 0;
 }
 
+export const GST_REGISTRATION_LABELS: Record<GstRegistrationType, string> = {
+  regular: 'Regular',
+  composition: 'Composition scheme',
+  unregistered: 'Unregistered',
+  sez: 'SEZ unit or developer',
+  overseas: 'Overseas',
+};
+
 export function eInvoiceSupplyTypeFor(
   doc: BusinessDocument,
   buyer: Party | undefined,
 ): EInvoiceSupplyType | null {
   if (isExport(doc, buyer)) return chargesTax(doc) ? 'EXPWP' : 'EXPWOP';
+  // An SEZ supply is zero-rated: without tax it went under LUT or bond.
+  if (buyer?.gstRegistrationType === 'sez') return chargesTax(doc) ? 'SEZWP' : 'SEZWOP';
+  if (buyer?.gstRegistrationType === 'unregistered') return null;
   if (buyer?.taxId) return 'B2B';
   return null; // a sale to a consumer is outside e-invoicing
 }
@@ -218,20 +231,29 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
 
   /* --- parties --- */
   const sellerGstin = company.taxRegistration?.identifier?.trim().toUpperCase();
-  if (!sellerGstin || !GSTIN_RE.test(sellerGstin)) {
+  if (!sellerGstin || !isValidGstin(sellerGstin)) {
     out.push(issue('3028', 'company.taxRegistration.identifier', 'The seller GSTIN is missing or malformed'));
   }
 
   const buyerGstin = buyer?.taxId?.trim().toUpperCase();
-  if (needsBuyerGstin && (!buyerGstin || !GSTIN_RE.test(buyerGstin))) {
+  if (needsBuyerGstin && (!buyerGstin || !isValidGstin(buyerGstin))) {
     out.push(issue('3029', 'party.taxId', 'The buyer GSTIN is missing or malformed'));
+  } else if (needsBuyerGstin && buyerGstin) {
+    // The portal checks the GSTIN's state against the buyer's own state, not
+    // the place of supply: goods billed to Mumbai and shipped to Pune are fine.
+    const buyerState = buyer?.billingAddress?.stateCode;
+    if (buyerState && buyerGstin.slice(0, 2) !== buyerState) {
+      out.push(
+        issue('2265', 'party.billingAddress.stateCode', `The buyer GSTIN is registered in state ${buyerGstin.slice(0, 2)}, but their address is in ${buyerState}`),
+      );
+    }
   }
 
   /* --- place of supply --- */
   const pos = doc.placeOfSupplyStateCode;
   if (!pos) {
     out.push(issue('2227', 'placeOfSupplyStateCode', 'The place of supply is not set'));
-  } else if (pos !== EXPORT_STATE_CODE && !INDIAN_STATES.some((s) => s.code === pos)) {
+  } else if (!isValidStateCode(pos)) {
     out.push(issue('2228', 'placeOfSupplyStateCode', `${pos} is not a known state code`));
   }
 
@@ -316,7 +338,7 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
   }
 
   /* --- duplicates --- */
-  if (sellerGstin && GSTIN_RE.test(sellerGstin)) {
+  if (sellerGstin && isValidGstin(sellerGstin)) {
     const docType = eInvoiceDocTypeFor(doc.kind);
     if (docType) {
       const candidate = computeIrn(sellerGstin, docType, number, fiscalYearCode(doc.date));

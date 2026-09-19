@@ -1,11 +1,13 @@
 import { create } from 'zustand';
-import { Address } from '@/types';
+import { Address, PlanTier } from '@/types';
+import { moduleSetFor } from '@/domain/plan';
 import { today } from '@/lib/date';
 
 export type OnboardingDraft = {
   name: string;
   legalName: string;
   businessType: string;
+  plan: PlanTier;
   logoUri?: string;
   address: Address;
   email: string;
@@ -42,6 +44,7 @@ const initial: OnboardingDraft = {
   name: '',
   legalName: '',
   businessType: 'Retail shop',
+  plan: 'basic',
   address: emptyAddress,
   email: '',
   phone: '',
@@ -72,8 +75,27 @@ export const ONBOARDING_STEPS = [
   { key: 'branches', label: 'Branches' },
 ] as const;
 
-export function stepIndex(key: string): number {
-  return ONBOARDING_STEPS.findIndex((s) => s.key === key);
+export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]['key'];
+
+/**
+ * A sales-only plan sells in India and has one location, so it skips the
+ * country and branch steps: the defaults (India, INR, head office) stand.
+ */
+export function onboardingSteps(plan: PlanTier) {
+  return moduleSetFor(plan) === 'full'
+    ? ONBOARDING_STEPS
+    : ONBOARDING_STEPS.filter((s) => s.key !== 'country' && s.key !== 'branches');
+}
+
+export function stepIndex(key: OnboardingStepKey, plan: PlanTier = 'pro'): number {
+  return onboardingSteps(plan).findIndex((s) => s.key === key);
+}
+
+/** Where "Continue" goes from a step, given the plan chosen on the first one. */
+export function nextStepRoute(key: OnboardingStepKey, plan: PlanTier) {
+  const steps = onboardingSteps(plan);
+  const next = steps[steps.findIndex((s) => s.key === key) + 1];
+  return (next ? `/(onboarding)/${next.key}` : '/(onboarding)/done') as `/(onboarding)/${OnboardingStepKey | 'done'}`;
 }
 
 export { today };

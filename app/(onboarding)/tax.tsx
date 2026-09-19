@@ -7,7 +7,7 @@ import { SwitchField, TextField } from '@/components/Field';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { Badge } from '@/components/Badge';
-import { ONBOARDING_STEPS, useOnboardingStore } from '@/store/onboardingStore';
+import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 import { COUNTRIES } from '@/data/masters';
 import { validGstin } from '@/lib/validators';
 
@@ -29,17 +29,17 @@ export default function TaxStep() {
       }
     }
     setError(undefined);
-    router.push('/(onboarding)/numbering');
+    router.push(nextStepRoute('tax', draft.plan));
   };
 
   return (
     <WizardShell
       title="Tax registration"
       subtitle="You can change any of this later under Settings."
-      steps={ONBOARDING_STEPS}
-      currentStep={2}
+      steps={onboardingSteps(draft.plan)}
+      currentStep={stepIndex('tax', draft.plan)}
       onPrimary={next}
-      onSkip={() => router.push('/(onboarding)/numbering')}
+      onSkip={() => router.push(nextStepRoute('tax', draft.plan))}
     >
       <SwitchField
         label={`I'm registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`}
@@ -57,7 +57,7 @@ export default function TaxStep() {
               set({ taxIdentifier: v.toUpperCase() });
               setError(undefined);
             }}
-            placeholder={draft.country === 'IN' ? '27AABCV1234F1Z5' : 'Registration number'}
+            placeholder={draft.country === 'IN' ? '27AABCV1234F1ZO' : 'Registration number'}
             autoCapitalize="characters"
             icon="card-account-details-outline"
             error={error}

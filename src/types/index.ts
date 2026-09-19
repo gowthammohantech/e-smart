@@ -14,6 +14,9 @@ export type Address = {
   country: string;
 };
 
+/** Subscription tier. Free and Basic sell; Pro and Business run the whole business. */
+export type PlanTier = 'free' | 'basic' | 'pro' | 'business';
+
 export type Company = {
   id: string;
   accountId: string;
@@ -29,6 +32,7 @@ export type Company = {
   website?: string;
   taxRegistration?: TaxRegistration;
   fiscalYearStartMonth: number;
+  plan: PlanTier;
   createdAt: string;
 };
 
@@ -82,6 +86,19 @@ export type DeviceSession = {
 
 export type PartyKind = 'customer' | 'supplier';
 
+/** A carrier saved for Part-B of an e-way bill. */
+export type Transporter = {
+  id: string;
+  companyId: string;
+  name: string;
+  /** 15-character GSTIN, or a TRANSIN for an unregistered carrier. */
+  transporterId: string;
+  phone?: string;
+  status: 'active' | 'inactive';
+};
+
+export type GstRegistrationType = 'regular' | 'composition' | 'unregistered' | 'sez' | 'overseas';
+
 export type Party = {
   id: string;
   companyId: string;
@@ -90,6 +107,8 @@ export type Party = {
   code: string;
   displayName?: string;
   taxId?: string;
+  /** How the buyer is registered for GST. Unset reads as regular when there is a GSTIN, else unregistered. */
+  gstRegistrationType?: GstRegistrationType;
   email?: string;
   phone?: string;
   currency: string;

@@ -15,7 +15,7 @@ import { uid } from '@/lib/id';
 import { nowISO } from '@/lib/date';
 import { Errors, hasErrors, required } from '@/lib/validators';
 import { useAppStore } from '@/store/appStore';
-import { useBaseCurrency, useItems, useTaxCategories } from '@/store/selectors';
+import { useBaseCurrency, useHasModule, useItems, useTaxCategories } from '@/store/selectors';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
@@ -28,6 +28,8 @@ export function ItemForm({ item }: { item?: Item }) {
   const existing = useItems();
   const saveItem = useAppStore((s) => s.saveItem);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
+  // Without the stock module a new item starts untracked; an existing item keeps its setting.
+  const hasInventory = useHasModule('inventory');
 
   const [type, setType] = useState<ItemType>(item?.type ?? 'goods');
   const [name, setName] = useState(item?.name ?? '');
@@ -39,7 +41,7 @@ export function ItemForm({ item }: { item?: Item }) {
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
-  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? true);
+  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? hasInventory);
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
@@ -142,13 +144,15 @@ export function ItemForm({ item }: { item?: Item }) {
         {type === 'goods' ? (
           <>
             <TextField label="Barcode" value={barcode} onChangeText={setBarcode} placeholder="Scan or type" icon="barcode-scan" />
+            {hasInventory ? (
             <SwitchField
               label="Track stock"
               description="Sales and purchases will move this item's stock automatically."
               value={trackInventory}
               onValueChange={setTrackInventory}
             />
-            {trackInventory ? (
+            ) : null}
+            {trackInventory && hasInventory ? (
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
                 <TextField
                   label="Opening stock"

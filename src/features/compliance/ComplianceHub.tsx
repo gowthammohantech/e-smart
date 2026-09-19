@@ -44,8 +44,12 @@ const EWAY_FILTERS: { key: EwayBillStatus | 'all'; label: string }[] = [
   { key: 'cancelled', label: 'Cancelled' },
 ];
 
-/** The compliance register (FRD 16): everything reported, in one place. */
-export function ComplianceHub() {
+/**
+ * The compliance register (FRD 16): everything reported, in one place.
+ * `header` sits above the register inside the same scroll, which is how the
+ * GST tab puts its shortcuts on top.
+ */
+export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.ReactNode; bottomInset?: number } = {}) {
   const t = useTheme();
   const router = useRouter();
 
@@ -97,10 +101,11 @@ export function ComplianceHub() {
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 60 }}
+      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: bottomInset }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
+      {header}
       <Segmented
         options={[
           { value: 'eInvoice', label: 'E-invoices' },

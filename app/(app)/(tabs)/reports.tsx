@@ -11,6 +11,8 @@ import { StatRow, StatTile } from '@/components/StatTile';
 import { BarChart } from '@/components/charts/BarChart';
 import {
   useBaseCurrency,
+  useCanOpen,
+  useModuleSet,
   useDocuments,
   useExpenses,
   useItems,
@@ -54,6 +56,9 @@ export default function ReportsTab() {
   const receivables = useReceivables();
   const payables = usePayables();
 
+  const canOpen = useCanOpen();
+  const full = useModuleSet() === 'full';
+  const reports = REPORTS.filter((r) => canOpen(`/reports/${r.key}`));
   const range = resolveRange('thisFY');
 
   const profit = useMemo(
@@ -79,6 +84,9 @@ export default function ReportsTab() {
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Profit and stock need the buying side of the books, so the Sales plan starts at the list. */}
+        {full ? (
+          <>
         <StatRow>
           <StatTile label="Revenue (FY)" value={profit.revenue} icon="trending-up" />
           <StatTile
@@ -120,10 +128,12 @@ export default function ReportsTab() {
             </View>
           ))}
         </Card>
+          </>
+        ) : null}
 
         <SectionHeader title="All reports" />
         <Card padded={false}>
-          {REPORTS.map((r, i) => (
+          {reports.map((r, i) => (
             <Pressable
               key={r.key}
               onPress={() => router.push(`/(app)/reports/${r.key}`)}
@@ -134,7 +144,7 @@ export default function ReportsTab() {
                 alignItems: 'center',
                 gap: t.spacing.md,
                 padding: t.spacing.lg,
-                borderBottomWidth: i < REPORTS.length - 1 ? 0.5 : 0,
+                borderBottomWidth: i < reports.length - 1 ? 0.5 : 0,
                 borderBottomColor: t.c.line,
                 backgroundColor: pressed ? t.c.card2 : 'transparent',
               })}

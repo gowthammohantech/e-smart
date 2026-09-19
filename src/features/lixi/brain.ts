@@ -1,9 +1,10 @@
-import { BusinessDocument, DocumentKind, Expense, Party, Payment } from '@/types';
+import { BusinessDocument, DocumentKind, Expense, Party, Payment, PlanTier } from '@/types';
 import { Money, money, sum, zero } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
 import { DateRange, DateRangePreset, inRange, resolveRange } from '@/lib/date';
 import { AgingSummary, OutstandingDoc } from '@/domain/receivables';
 import { DOCUMENT_LABELS } from '@/domain/documentStates';
+import { FULL_PLAN, MODULE_LABELS, Module, canOpen, hasModule, planInfo } from '@/domain/plan';
 
 /**
  * Lixi, the in-app assistant. The prototype has no server, so Lixi reads the
@@ -36,6 +37,8 @@ export type LixiContext = {
   /** Output tax charged this month, already summed by the reports engine. */
   monthTax: Money;
   userName?: string;
+  /** The company's plan; Lixi doesn't answer for modules it leaves out. Defaults to the full app. */
+  plan?: PlanTier;
 };
 
 export type LixiStat = { label: string; value: string; tone?: 'good' | 'warn' | 'bad' };
@@ -76,14 +79,18 @@ function plural(n: number, one: string, many = `${one}s`) {
 }
 
 /** The starter prompts shown before the first message. */
-export const LIXI_SUGGESTIONS = [
-  'How are sales this month?',
-  'Who owes me money?',
-  'Anything wrong with GST?',
-  'What is low on stock?',
-  'What did I spend last month?',
-  'Draft a new invoice',
+const SUGGESTIONS: { text: string; module?: Module }[] = [
+  { text: 'How are sales this month?' },
+  { text: 'Who owes me money?' },
+  { text: 'Anything wrong with GST?' },
+  { text: 'What is low on stock?', module: 'inventory' },
+  { text: 'What did I spend last month?', module: 'expenses' },
+  { text: 'Draft a new invoice' },
 ];
+
+export function lixiSuggestions(plan: PlanTier = 'pro'): string[] {
+  return SUGGESTIONS.filter((s) => !s.module || hasModule(plan, s.module)).map((s) => s.text);
+}
 
 /**
  * What Lixi is asked when a tab is held down: the question that tab's screen
@@ -96,6 +103,7 @@ export const TAB_QUESTIONS: Record<string, string> = {
   inventory: 'What is low on stock?',
   contacts: 'Top customers',
   reports: 'What did I spend last month?',
+  gst: 'Anything wrong with GST?',
   more: 'Anything wrong with GST?',
 };
 
@@ -103,7 +111,7 @@ export function greet(ctx: LixiContext): LixiReply {
   const first = ctx.userName?.split(' ')[0];
   const gst = ctx.compliance.failed + ctx.compliance.ewbExpiringSoon;
   const overdue = ctx.receivables.outstanding.filter((o) => o.daysOverdue > 0).length;
-  const low = ctx.lowStock.length;
+  const low = hasModule(ctx.plan ?? 'pro', 'inventory') ? ctx.lowStock.length : 0;
   const flags = [
     overdue ? plural(overdue, 'overdue invoice') : null,
     gst ? plural(gst, 'GST item') : null,
@@ -127,7 +135,55 @@ const CREATE: { words: string[]; label: string; route: string; icon: string; tex
   { words: ['item', 'product', 'service'], label: 'Add item', route: '/(app)/catalog/items/new', icon: 'tag-plus-outline', text: 'I can open a new item; give it an HSN/SAC so GST lands on the right slab.' },
 ];
 
+/**
+ * Questions about modules the plan leaves out, matched the same way the
+ * answers below match them. Payables is checked first for the same reason
+ * it is below: "I owe" would otherwise read as receivables.
+ */
+const GATED_TOPICS: { module: Module; test: (q: string) => boolean }[] = [
+  { module: 'payables', test: (q) => /\b(i|we) owe\b|payable|supplier|vendor|bills? due|to pay\b/.test(q) },
+  { module: 'inventory', test: (q) => has(q, 'stock', 'inventory', 'reorder', 'running out', 'run out') },
+  { module: 'expenses', test: (q) => has(q, 'spend', 'spent', 'expense', 'cost') },
+];
+
+function upsell(module: Module, plan: PlanTier): LixiReply {
+  return {
+    text: `${MODULE_LABELS[module]} isn't part of ${planInfo(plan).name}, so I have nothing to read there. ${planInfo(FULL_PLAN).name} adds buying, stock and expenses to the same books.`,
+    actions: [{ type: 'route', label: 'See plans', route: '/(app)/settings/plan', icon: 'star-circle-outline' }],
+  };
+}
+
+/**
+ * Answers a question, within what the company's plan covers. A question
+ * about a module the plan leaves out gets a plain "not on your plan" rather
+ * than a zero that reads like a fact, and no reply offers a screen the plan
+ * can't open.
+ */
 export function answer(input: string, ctx: LixiContext): LixiReply {
+  const plan = ctx.plan ?? 'pro';
+  const q = input.toLowerCase().trim();
+  const creating = has(q, 'new ', 'create', 'make', 'draft a', 'raise', 'add ', 'record ');
+  const byNumber = ctx.documents.some((d) => d.number && q.includes(d.number.toLowerCase()));
+
+  if (q && !byNumber) {
+    const target = creating ? CREATE.find((c) => has(q, ...c.words)) : undefined;
+    if (target && !canOpen(plan, target.route)) {
+      return upsell(target.route.includes('/expenses/') ? 'expenses' : 'purchases', plan);
+    }
+    if (!creating) {
+      const topic = GATED_TOPICS.find((g) => !hasModule(plan, g.module) && g.test(q));
+      if (topic) return upsell(topic.module, plan);
+    }
+  }
+
+  const reply = answerFromBooks(input, ctx);
+  return {
+    ...reply,
+    actions: reply.actions?.filter((a) => a.type !== 'route' || canOpen(plan, a.route)),
+  };
+}
+
+function answerFromBooks(input: string, ctx: LixiContext): LixiReply {
   const q = input.toLowerCase().trim();
   const { currency } = ctx;
   const invoices = ctx.documents.filter((d) => d.kind === 'invoice');
@@ -362,6 +418,6 @@ export function answer(input: string, ctx: LixiContext): LixiReply {
 
   return {
     text: "I didn't catch that. I'm best with sales, who owes you, what you owe, stock, spending, GST and e-way bills — or give me a document number or a party's name.",
-    actions: LIXI_SUGGESTIONS.slice(0, 3).map((label) => ({ type: 'ask', label }) as LixiAction),
+    actions: lixiSuggestions(ctx.plan).slice(0, 3).map((label) => ({ type: 'ask', label }) as LixiAction),
   };
 }

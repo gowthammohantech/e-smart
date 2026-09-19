@@ -1077,7 +1077,7 @@ export function seedCompliance(
         igst: money(igst, currency),
         mainHsnCode: mainHsnCodeOf(doc),
         itemCount: doc.lines.length,
-        transporterId: '27AABCT5512M1ZQ',
+        transporterId: '27AABCT5512M1Z6',
         transporterName: 'Konkan Roadlines',
         transportMode: entry.transportMode,
         vehicleNumber: isRail ? undefined : VEHICLES[i % VEHICLES.length],

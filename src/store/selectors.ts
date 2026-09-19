@@ -12,7 +12,9 @@ import {
   Item,
   Party,
   Payment,
+  PlanTier,
   StockMovement,
+  Transporter,
 } from '@/types';
 import { Money, money, sum, zero } from '@/lib/money';
 import { buildOutstanding, summarizeAging } from '@/domain/receivables';
@@ -22,6 +24,7 @@ import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@/domain
 import { isEInvoiceApplicable } from '@/domain/eInvoice';
 import { defaultComplianceSettings } from '@/data/seed';
 import { nowISO } from '@/lib/date';
+import { Module, ModuleSet, canOpen, hasModule, moduleSetFor } from '@/domain/plan';
 
 /**
  * Every read below is scoped by the active company, which is how the
@@ -30,6 +33,25 @@ import { nowISO } from '@/lib/date';
 
 export function useActiveCompany(): Company {
   return useAppStore((s) => s.companies.find((c) => c.id === s.activeCompanyId) ?? s.companies[0]);
+}
+
+export function usePlan(): PlanTier {
+  return useAppStore((s) => s.companies.find((c) => c.id === s.activeCompanyId)?.plan ?? 'pro');
+}
+
+export function useModuleSet(): ModuleSet {
+  return moduleSetFor(usePlan());
+}
+
+/** Whether the active company's plan includes a module. Data exists either way. */
+export function useHasModule(module: Module): boolean {
+  return hasModule(usePlan(), module);
+}
+
+/** A filter for lists of routes: keeps what the active plan can open. */
+export function useCanOpen(): (route: string) => boolean {
+  const plan = usePlan();
+  return useMemo(() => (route: string) => canOpen(plan, route), [plan]);
 }
 
 export function useBaseCurrency(): string {
@@ -281,6 +303,18 @@ export function totalOf(values: Money[], currency: string): Money {
 /* ------------------------------------------------------------------ */
 /* Compliance (FRD 16)                                                 */
 /* ------------------------------------------------------------------ */
+
+export function useTransporters(opts: { activeOnly?: boolean } = {}): Transporter[] {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const rows = useAppStore((s) => s.transporters);
+  return useMemo(
+    () =>
+      rows
+        .filter((r) => r.companyId === companyId && (!opts.activeOnly || r.status === 'active'))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [rows, companyId, opts.activeOnly],
+  );
+}
 
 export function useComplianceSettings(): ComplianceSettings {
   const companyId = useAppStore((s) => s.activeCompanyId);

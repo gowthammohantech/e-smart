@@ -19,7 +19,10 @@ import { Illustration } from '@/components/Illustration';
 import { Sheet } from '@/components/Sheet';
 import {
   useBaseCurrency,
+  useCanOpen,
+  useComplianceSummary,
   useCurrentUser,
+  useModuleSet,
   useDocuments,
   useExpenses,
   useItems,
@@ -52,6 +55,9 @@ export default function Home() {
   const customers = useParties('customer');
   const receivables = useReceivables();
   const payables = usePayables();
+  const compliance = useComplianceSummary();
+  const canOpen = useCanOpen();
+  const full = useModuleSet() === 'full';
 
   const [actionsOpen, setActionsOpen] = useState(false);
 
@@ -124,7 +130,9 @@ export default function Home() {
     { icon: 'file-document-outline', label: 'Draft invoices', count: draftInvoices.length, route: '/(app)/sales/invoices', tone: 'warning' },
     { icon: 'file-percent-outline', label: 'Quotes awaiting reply', count: openQuotes.length, route: '/(app)/sales/quotes', tone: 'info' },
     { icon: 'package-variant', label: 'Items low on stock', count: lowStockItems.length, route: '/(app)/inventory/low-stock', tone: 'warning' },
-  ] as AttentionItem[]).filter((a) => a.count > 0);
+    { icon: 'shield-alert-outline', label: 'E-invoices rejected', count: compliance.eInvoice.failed, route: '/(app)/compliance', tone: 'danger' },
+    { icon: 'clock-alert-outline', label: 'E-way bills expiring in 24 h', count: compliance.expiringSoon, route: '/(app)/compliance', tone: 'warning' },
+  ] as AttentionItem[]).filter((a) => a.count > 0 && canOpen(a.route));
 
   const recent = useMemo(
     () => invoices.filter((d) => d.status !== 'cancelled').slice(0, 5),
@@ -244,6 +252,7 @@ export default function Home() {
               onPress={() => router.push('/(app)/payments/received')}
             />
           </StatRow>
+          {full ? (
           <StatRow>
             <StatTile
               label="Expenses"
@@ -262,6 +271,26 @@ export default function Home() {
               onPress={() => router.push('/(app)/reports/profit')}
             />
           </StatRow>
+          ) : (
+          <StatRow>
+            <StatTile
+              label="E-invoices"
+              value={String(compliance.eInvoice.generated)}
+              tone="good"
+              icon="shield-check-outline"
+              caption={compliance.eInvoice.failed ? `${compliance.eInvoice.failed} rejected` : 'Reported to IRP'}
+              onPress={() => router.push('/(app)/(tabs)/gst')}
+            />
+            <StatTile
+              label="E-way bills"
+              value={String(compliance.eway.active)}
+              tone={compliance.expiringSoon ? 'warn' : 'default'}
+              icon="truck-fast-outline"
+              caption={compliance.expiringSoon ? `${compliance.expiringSoon} expire in 24 h` : 'Active'}
+              onPress={() => router.push('/(app)/(tabs)/gst')}
+            />
+          </StatRow>
+          )}
         </View>
 
         <SectionHeader title="Sales trend" action="Reports" onAction={() => router.push('/(app)/reports/sales-summary')} />
@@ -295,6 +324,8 @@ export default function Home() {
           />
         </Card>
 
+        {full ? (
+        <>
         <SectionHeader title="You owe" action="View all" onAction={() => router.push('/(app)/payables')} />
         <Card
           onPress={() => router.push('/(app)/payables')}
@@ -315,6 +346,8 @@ export default function Home() {
             </Text>
           </View>
         </Card>
+        </>
+        ) : null}
 
         {attention.length > 0 ? (
           <>
@@ -399,7 +432,7 @@ export default function Home() {
       <Fab icon="plus" onPress={() => setActionsOpen(true)} bottom={0} />
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title="Create">
-        {quickActions(t.c.primary).map((a) => (
+        {quickActions(t.c.primary).filter((a) => canOpen(a.route)).map((a) => (
           <Pressable
             key={a.key}
             onPress={() => {

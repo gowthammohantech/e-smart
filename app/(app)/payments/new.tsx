@@ -29,6 +29,7 @@ import {
   useBaseCurrency,
   useDocuments,
   useExchangeRates,
+  useHasModule,
   useParties,
   usePaymentAccounts,
   usePayments,
@@ -41,7 +42,9 @@ export default function NewPayment() {
   const insets = useSafeAreaInsets();
 
   const params = useLocalSearchParams<{ direction?: string; partyId?: string; documentId?: string }>();
-  const direction: PaymentDirection = params.direction === 'paid' ? 'paid' : 'received';
+  // Paying suppliers is part of payables, which the Sales plan leaves out.
+  const canPay = useHasModule('payables');
+  const direction: PaymentDirection = params.direction === 'paid' && canPay ? 'paid' : 'received';
 
   const baseCurrency = useBaseCurrency();
   const parties = useParties(direction === 'received' ? 'customer' : 'supplier');

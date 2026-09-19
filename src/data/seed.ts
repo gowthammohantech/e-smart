@@ -9,10 +9,12 @@ import {
   Item,
   NumberingSeries,
   Party,
+  Transporter,
   PaymentAccount,
   TaxCategory,
   User,
 } from '@/types';
+import { gstinChecksum } from '@/domain/gstin';
 import { fromMajor, zero } from '@/lib/money';
 import { addDaysISO, nowISO, today } from '@/lib/date';
 import { DEFAULT_PREFIXES, defaultSeries } from '@/domain/numbering';
@@ -61,12 +63,13 @@ export function seedCompanies(): Company[] {
       website: 'vertextraders.in',
       taxRegistration: {
         regime: 'GST',
-        identifier: '27AABCV1234F1Z5',
+        identifier: '27AABCV1234F1ZO',
         identifierLabel: 'GSTIN',
         registered: true,
         compositionScheme: false,
         placeOfSupplyStateCode: '27',
       },
+      plan: 'pro',
       fiscalYearStartMonth: 4,
       createdAt: daysAgo(420),
     },
@@ -83,12 +86,13 @@ export function seedCompanies(): Company[] {
       phone: '+91 80456 77120',
       taxRegistration: {
         regime: 'GST',
-        identifier: '29AACFA9876P1ZK',
+        identifier: '29AACFA9876P1ZH',
         identifierLabel: 'GSTIN',
         registered: true,
         compositionScheme: false,
         placeOfSupplyStateCode: '29',
       },
+      plan: 'basic',
       fiscalYearStartMonth: 4,
       createdAt: daysAgo(180),
     },
@@ -235,7 +239,8 @@ function cityFor(stateCode: string): string {
 function gstinFor(stateCode: string, i: number): string {
   const letter = (n: number) => String.fromCharCode(65 + (n % 26));
   const pan = `AABC${letter(2 + i)}${String(1000 + i * 7).slice(0, 4)}${letter(i)}`;
-  return `${stateCode}${pan}1Z${letter(i)}`;
+  const body = `${stateCode}${pan}1Z`;
+  return body + gstinChecksum(body);
 }
 
 export function seedParties(): Party[] {
@@ -314,7 +319,7 @@ export function seedParties(): Party[] {
     name: 'Lumen Brand Works',
     code: 'C-001',
     displayName: 'Tara Sen',
-    taxId: '29AADCL5544K1Z2',
+    taxId: '29AADCL5544K1Z4',
     email: 'finance@lumenbrand.works',
     phone: '+91 90190 22110',
     currency: 'INR',
@@ -331,7 +336,7 @@ export function seedParties(): Party[] {
     name: 'Inkline Print House',
     code: 'S-001',
     displayName: 'Girish Kamath',
-    taxId: '29AAECI7788M1ZP',
+    taxId: '29AAECI7788M1ZK',
     email: 'orders@inkline.in',
     phone: '+91 99001 55220',
     currency: 'INR',
@@ -512,6 +517,14 @@ export function defaultComplianceSettings(companyId: string, baseCurrency = 'INR
   };
 }
 
+export function seedTransporters(): Transporter[] {
+  return [
+    { id: 'trn_konkan', companyId: PRIMARY_COMPANY_ID, name: 'Konkan Roadlines', transporterId: '27AABCT5512M1Z6', phone: '+91 22 2771 4410', status: 'active' },
+    { id: 'trn_garuda', companyId: PRIMARY_COMPANY_ID, name: 'Garuda Freight Carriers', transporterId: '29AABCG4321K1ZM', status: 'active' },
+    { id: 'trn_sarathi', companyId: PRIMARY_COMPANY_ID, name: 'Sarathi Express Cargo', transporterId: '07AAECS7788P1ZA', status: 'active' },
+  ];
+}
+
 export function seedComplianceSettings(): ComplianceSettings[] {
   return [
     {
@@ -520,7 +533,7 @@ export function seedComplianceSettings(): ComplianceSettings[] {
       annualTurnover: fromMajor('84000000', 'INR'),
       irpUsername: 'vertex_irp01',
       irpClientIdMasked: 'ELX-****-9F21',
-      defaultTransporterId: '27AABCT5512M1ZQ',
+      defaultTransporterId: '27AABCT5512M1Z6',
       defaultTransporterName: 'Konkan Roadlines',
       defaultDistanceKm: 340,
     },

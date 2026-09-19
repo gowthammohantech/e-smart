@@ -16,7 +16,9 @@ import { useAppStore } from '@/store/appStore';
 import {
   useActiveCompany,
   useComplianceSummary,
+  useCanOpen,
   useCurrentUser,
+  useModuleSet,
   useUnreadCount,
 } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
@@ -40,11 +42,26 @@ export default function MoreTab() {
   const resetDemoData = useAppStore((s) => s.resetDemoData);
   const offline = useUiStore((s) => s.offlineMode);
   const complianceSummary = useComplianceSummary();
+  const canOpen = useCanOpen();
+  const moduleSet = useModuleSet();
 
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
-  const groups: { title: string; entries: Entry[] }[] = [
+  const allGroups: { title: string; entries: Entry[] }[] = [
+    // The Sales plan has no People or Reports tab, so they live here.
+    ...(moduleSet === 'sales'
+      ? [
+          {
+            title: 'Sales',
+            entries: [
+              { label: 'Customers', icon: 'account-group-outline', route: '/(app)/(tabs)/contacts' },
+              { label: 'Items & services', icon: 'package-variant', route: '/(app)/catalog/items' },
+              { label: 'Reports', icon: 'chart-box-outline', route: '/(app)/(tabs)/reports' },
+            ] as Entry[],
+          },
+        ]
+      : []),
     {
       title: 'Money',
       entries: [
@@ -88,7 +105,9 @@ export default function MoreTab() {
             ? String(complianceSummary.eInvoice.failed)
             : undefined,
         },
+        { label: 'GSTR-1', icon: 'file-send-outline', route: '/(app)/gst/gstr1' },
         { label: 'E-invoicing & e-way bill', icon: 'qrcode', route: '/(app)/settings/e-invoicing' },
+        { label: 'Transporters', icon: 'truck-outline', route: '/(app)/settings/transporters' },
         { label: 'Integrations', icon: 'puzzle-outline', route: '/(app)/settings/integrations' },
         { label: 'Backup & export', icon: 'database-export-outline', route: '/(app)/settings/backup' },
         { label: 'Audit trail', icon: 'history', route: '/(app)/settings/audit' },
@@ -105,6 +124,9 @@ export default function MoreTab() {
       ],
     },
   ];
+  const groups = allGroups
+    .map((g) => ({ ...g, entries: g.entries.filter((e) => canOpen(e.route)) }))
+    .filter((g) => g.entries.length > 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

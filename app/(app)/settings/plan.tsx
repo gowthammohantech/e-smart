@@ -10,45 +10,11 @@ import { Button } from '@/components/Button';
 import { Segmented } from '@/components/Field';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
-import { useDocuments } from '@/store/selectors';
+import { useActiveCompany, useDocuments } from '@/store/selectors';
+import { PLANS, moduleSetFor, planInfo } from '@/domain/plan';
+import type { PlanTier } from '@/types';
 
 type Cycle = 'monthly' | 'yearly';
-
-const PLANS = [
-  {
-    key: 'free',
-    name: 'Free',
-    monthly: 0,
-    yearly: 0,
-    blurb: 'Get going and see if it fits.',
-    features: ['1 business', '20 invoices a month', 'Basic reports', 'Single user'],
-  },
-  {
-    key: 'basic',
-    name: 'Smart Basic',
-    monthly: 399,
-    yearly: 3990,
-    blurb: 'For a shop or a solo trader.',
-    features: ['1 business, 2 users', 'Unlimited invoices', 'GST-ready documents', 'Receivables & reminders', 'Basic stock'],
-  },
-  {
-    key: 'pro',
-    name: 'Smart Pro',
-    monthly: 899,
-    yearly: 8990,
-    blurb: 'For a growing business with staff.',
-    features: ['3 businesses, 6 users', 'Branches & transfers', 'E-invoice & e-way bill', 'Multi-currency', 'OCR capture', 'All reports'],
-    popular: true,
-  },
-  {
-    key: 'business',
-    name: 'Smart Business',
-    monthly: 1799,
-    yearly: 17990,
-    blurb: 'Multiple locations and heavier volume.',
-    features: ['Unlimited businesses & users', 'Role-based access', 'Priority compliance support', 'Backup & audit export', 'Assistant'],
-  },
-];
 
 export default function PlanBilling() {
   const t = useTheme();
@@ -57,7 +23,20 @@ export default function PlanBilling() {
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const companies = useAppStore((s) => s.companies);
   const invoices = useDocuments('invoice');
-  const currentPlan = 'pro';
+  const company = useActiveCompany();
+  const setPlan = useAppStore((s) => s.setPlan);
+  const currentPlan = company.plan;
+  const current = planInfo(currentPlan);
+
+  const choose = (tier: PlanTier) => {
+    setPlan(company.id, tier);
+    const name = planInfo(tier).name;
+    if (moduleSetFor(currentPlan) === 'full' && moduleSetFor(tier) === 'sales') {
+      toast.show(`${name} — purchases, stock and expenses are hidden, not deleted`, 'info');
+    } else {
+      toast.show(`Switched to ${name}`, 'success');
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -68,12 +47,12 @@ export default function PlanBilling() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="star-circle-outline" size={22} color={t.c.primary} />
             <Text variant="title" weight="700" style={{ flex: 1 }}>
-              Smart Pro
+              {current.name}
             </Text>
             <Badge label="Active" tone="success" />
           </View>
           <Text variant="caption" tone="muted">
-            Renews on 1 April · ₹8,990 a year
+            {current.yearly === 0 ? 'Free forever' : `Renews on 1 April · ₹${current.yearly.toLocaleString('en-IN')} a year`}
           </Text>
           <View style={{ height: 1, backgroundColor: t.c.line }} />
           {[
@@ -152,7 +131,7 @@ export default function PlanBilling() {
                 title={isCurrent ? 'Current plan' : price === 0 ? 'Downgrade' : 'Choose this plan'}
                 variant={isCurrent ? 'ghost' : 'primary'}
                 disabled={isCurrent}
-                onPress={() => toast.show(`${p.name} selected — billing is not live in this prototype`, 'info')}
+                onPress={() => choose(p.key)}
                 fullWidth
               />
             </Card>
@@ -160,7 +139,7 @@ export default function PlanBilling() {
         })}
 
         <Text variant="caption" tone="muted" center style={{ lineHeight: 18 }}>
-          Elixir Books Smart is priced separately from Elixir Books ERP. Prices shown are illustrative.
+          Elixir Books Smart is priced separately from Elixir Books ERP. Prices shown are illustrative, and billing is not live in this prototype.
         </Text>
       </ScrollView>
     </View>

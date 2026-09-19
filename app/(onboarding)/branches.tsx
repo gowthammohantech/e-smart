@@ -8,7 +8,7 @@ import { TextField } from '@/components/Field';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
-import { ONBOARDING_STEPS, useOnboardingStore } from '@/store/onboardingStore';
+import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 
 export default function BranchesStep() {
   const t = useTheme();
@@ -33,11 +33,11 @@ export default function BranchesStep() {
     <WizardShell
       title="Locations"
       subtitle="Add a branch or warehouse if you operate from more than one place. You can skip this."
-      steps={ONBOARDING_STEPS}
-      currentStep={4}
+      steps={onboardingSteps(draft.plan)}
+      currentStep={stepIndex('branches', draft.plan)}
       primaryLabel="Finish setup"
-      onPrimary={() => router.push('/(onboarding)/done')}
-      onSkip={() => router.push('/(onboarding)/done')}
+      onPrimary={() => router.push(nextStepRoute('branches', draft.plan))}
+      onSkip={() => router.push(nextStepRoute('branches', draft.plan))}
     >
       <Card variant="flat" style={{ gap: t.spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
         <MaterialCommunityIcons name="office-building-outline" size={20} color={t.c.primary} />

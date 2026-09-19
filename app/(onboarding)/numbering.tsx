@@ -6,7 +6,7 @@ import { WizardShell } from '@/components/WizardShell';
 import { SwitchField, TextField } from '@/components/Field';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
-import { ONBOARDING_STEPS, useOnboardingStore } from '@/store/onboardingStore';
+import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 import { financialYearOf, today } from '@/lib/date';
 
 export default function NumberingStep() {
@@ -24,10 +24,10 @@ export default function NumberingStep() {
     <WizardShell
       title="Invoice numbering"
       subtitle="Finalised numbers are never reused, so pick a format you're happy with."
-      steps={ONBOARDING_STEPS}
-      currentStep={3}
-      onPrimary={() => router.push('/(onboarding)/branches')}
-      onSkip={() => router.push('/(onboarding)/branches')}
+      steps={onboardingSteps(draft.plan)}
+      currentStep={stepIndex('numbering', draft.plan)}
+      onPrimary={() => router.push(nextStepRoute('numbering', draft.plan))}
+      onSkip={() => router.push(nextStepRoute('numbering', draft.plan))}
     >
       <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>
         <Text variant="caption" tone="muted">

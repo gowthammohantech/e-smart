@@ -18,7 +18,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@/features/lixi/LixiOrb';
-import { answer, greet, LIXI_SUGGESTIONS, LixiAction, LixiContext, LixiReply } from '@/features/lixi/brain';
+import { answer, greet, lixiSuggestions, LixiAction, LixiContext, LixiReply } from '@/features/lixi/brain';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
 import {
   useBaseCurrency,
@@ -30,6 +30,7 @@ import {
   useParties,
   usePayables,
   usePayments,
+  usePlan,
   useReceivables,
   useStockLevels,
 } from '@/store/selectors';
@@ -60,6 +61,7 @@ export default function LixiChat() {
   const stock = useStockLevels();
   const compliance = useComplianceSummary();
   const user = useCurrentUser();
+  const plan = usePlan();
 
   const ctx: LixiContext = useMemo(
     () => ({
@@ -84,8 +86,9 @@ export default function LixiChat() {
       },
       monthTax: summarizeTax(documents, currency, { range: resolveRange('thisMonth') }).outwardTotal,
       userName: user?.name,
+      plan,
     }),
-    [currency, documents, payments, expenses, parties, receivables, payables, items, stock, compliance, user?.name],
+    [currency, documents, payments, expenses, parties, receivables, payables, items, stock, compliance, user?.name, plan],
   );
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -197,7 +200,7 @@ export default function LixiChat() {
               {intro.text}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
-              {LIXI_SUGGESTIONS.map((s) => (
+              {lixiSuggestions(plan).map((s) => (
                 <Chip key={s} label={s} onPress={() => send(s)} />
               ))}
             </View>

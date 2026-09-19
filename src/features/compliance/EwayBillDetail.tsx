@@ -33,6 +33,7 @@ import {
   canUpdatePartB,
   ewayBillStatusAt,
   hoursUntilExpiry,
+  normalizeVehicleNumber,
 } from '@/domain/ewayBill';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
 import { formatDate, formatDateTime, nowISO } from '@/lib/date';
@@ -508,7 +509,7 @@ function PartBSheet({
             label="Vehicle number"
             required
             value={vehicleNumber}
-            onChangeText={setVehicleNumber}
+            onChangeText={(v) => setVehicleNumber(normalizeVehicleNumber(v))}
             autoCapitalize="characters"
             autoCorrect={false}
             placeholder="MH12AB1234"

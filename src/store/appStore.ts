@@ -10,6 +10,8 @@ import {
   BusinessDocument,
   CancelReasonCode,
   Company,
+  PlanTier,
+  Transporter,
   ComplianceInfo,
   ComplianceIssue,
   ComplianceSettings,
@@ -73,6 +75,7 @@ import {
   submitInvoice,
 } from '@/domain/irpAdapter';
 import { INTEGRATIONS } from '@/data/masters';
+import { isValidGstin } from '@/domain/gstin';
 import {
   ACCOUNT_ID,
   CURRENT_USER_ID,
@@ -89,6 +92,7 @@ import {
   seedParties,
   seedPaymentAccounts,
   seedTaxCategories,
+  seedTransporters,
   seedUsers,
 } from '@/data/seed';
 import {
@@ -127,6 +131,7 @@ export type AppData = {
   integrations: Integration[];
   complianceSettings: ComplianceSettings[];
   ewayBills: EwayBill[];
+  transporters: Transporter[];
 };
 
 export type Session = {
@@ -191,6 +196,7 @@ export function buildSeedData(): AppData {
     integrations: INTEGRATIONS.map((i) => ({ ...i })),
     complianceSettings,
     ewayBills,
+    transporters: seedTransporters(),
   };
 }
 
@@ -207,6 +213,7 @@ type Actions = {
   setActiveCompany: (companyId: string) => void;
   setActiveBranch: (branchId: string) => void;
   saveCompany: (company: Company) => void;
+  setPlan: (companyId: string, plan: PlanTier) => void;
   createCompany: (partial: Omit<Company, 'id' | 'accountId' | 'createdAt'>) => string;
   saveBranch: (branch: Branch) => void;
   removeBranch: (id: string) => void;
@@ -262,6 +269,8 @@ type Actions = {
 
   /* compliance */
   saveComplianceSettings: (settings: ComplianceSettings) => void;
+  saveTransporter: (transporter: Transporter) => void;
+  removeTransporter: (id: string) => void;
   generateEInvoice: (documentId: string, opts?: { simulation?: IrpSimulation }) => ComplianceResult;
   cancelEInvoice: (documentId: string, reasonCode: CancelReasonCode, remark?: string) => ComplianceResult;
   generateEwayBill: (input: NewEwayBillInput) => ComplianceResult & { ewayBillId?: string };
@@ -341,6 +350,60 @@ export type ExtendEwayBillInput = {
 };
 
 const emptySession: Session = { userId: null, authenticated: false, onboardingComplete: false };
+
+/**
+ * Version 2 introduced e-way bills and compliance settings, which refer to
+ * documents by id. Ids are minted with `uid()`, which is not stable across
+ * seed runs, so a saved v1 dataset and a freshly built v2 one cannot be
+ * stitched together — every seeded bill would point at a document that no
+ * longer exists. Rebuilding the demo data is the only coherent answer, and
+ * the sign-in and the active company are carried over so nobody is bounced
+ * back to the welcome screen.
+ *
+ * Version 3 put a plan on every company. Anyone who already has data was
+ * using the whole app, so they land on Pro and nothing disappears. It also
+ * started checking the GSTIN check digit, which the demo GSTINs used to get
+ * wrong: a saved demo company or party whose GSTIN differs from the seed's
+ * only in that digit is given the seed's corrected one.
+ */
+export function migratePersisted(persisted: unknown, version: number): AppState {
+  if (version < 2) {
+    const prior = persisted as Partial<AppState> | undefined;
+    return {
+      ...buildSeedData(),
+      session: prior?.session ?? emptySession,
+      activeCompanyId: prior?.activeCompanyId ?? PRIMARY_COMPANY_ID,
+      activeBranchId: prior?.activeBranchId ?? 'brn_mum',
+    } as AppState;
+  }
+  const state = persisted as AppState;
+  if (version < 3) {
+    const seedGstin = new Map<string, string>();
+    seedCompanies().forEach((c) => c.taxRegistration?.identifier && seedGstin.set(c.id, c.taxRegistration.identifier));
+    seedParties().forEach((p) => p.taxId && seedGstin.set(p.id, p.taxId));
+    const repair = (id: string, gstin: string | undefined) => {
+      const fixed = seedGstin.get(id);
+      return gstin && fixed && !isValidGstin(gstin) && gstin.slice(0, 14) === fixed.slice(0, 14) ? fixed : gstin;
+    };
+    return {
+      ...state,
+      companies: (state.companies ?? []).map((c) => ({
+        ...c,
+        plan: c.plan ?? 'pro',
+        taxRegistration: c.taxRegistration && {
+          ...c.taxRegistration,
+          identifier: repair(c.id, c.taxRegistration.identifier),
+        },
+      })),
+      parties: (state.parties ?? []).map((p) => ({ ...p, taxId: repair(p.id, p.taxId) })),
+      transporters: state.transporters ?? seedTransporters(),
+      complianceSettings: (state.complianceSettings ?? []).map((c) =>
+        c.defaultTransporterId === '27AABCT5512M1ZQ' ? { ...c, defaultTransporterId: '27AABCT5512M1Z6' } : c,
+      ),
+    };
+  }
+  return state;
+}
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -658,6 +721,12 @@ export const useAppStore = create<AppState>()(
         saveCompany: (company) => {
           set({ companies: get().companies.map((c) => (c.id === company.id ? company : c)) });
           audit('updated', 'company', company.id, company.name);
+        },
+        setPlan: (companyId, plan) => {
+          const company = get().companies.find((c) => c.id === companyId);
+          if (!company || company.plan === plan) return;
+          set({ companies: get().companies.map((c) => (c.id === companyId ? { ...c, plan } : c)) });
+          audit('updated', 'company', companyId, `Plan changed to ${plan}`);
         },
         createCompany: (partial) => {
           const id = uid('cmp');
@@ -1166,6 +1235,20 @@ export const useAppStore = create<AppState>()(
           });
           audit('updated', 'complianceSettings', settings.companyId, 'E-invoicing & e-way bill');
         },
+        saveTransporter: (transporter) => {
+          const exists = get().transporters.some((x) => x.id === transporter.id);
+          set({
+            transporters: exists
+              ? get().transporters.map((x) => (x.id === transporter.id ? transporter : x))
+              : [...get().transporters, transporter],
+          });
+          audit(exists ? 'updated' : 'created', 'transporter', transporter.id, transporter.name);
+        },
+        removeTransporter: (id) => {
+          const gone = get().transporters.find((x) => x.id === id);
+          set({ transporters: get().transporters.filter((x) => x.id !== id) });
+          if (gone) audit('deleted', 'transporter', id, gone.name);
+        },
 
         generateEInvoice: (documentId, opts) => {
           const doc = get().documents.find((d) => d.id === documentId);
@@ -1628,32 +1711,14 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: 'ebs.data.v1',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => {
         const { hydrated, ...rest } = s;
         void hydrated;
         return rest as AppState;
       },
-      /**
-       * Version 2 introduced e-way bills and compliance settings, which refer
-       * to documents by id. Ids are minted with `uid()`, which is not stable
-       * across seed runs, so a saved v1 dataset and a freshly built v2 one
-       * cannot be stitched together — every seeded bill would point at a
-       * document that no longer exists. Rebuilding the demo data is the only
-       * coherent answer, and the sign-in and the active company are carried
-       * over so nobody is bounced back to the welcome screen.
-       */
-      migrate: (persisted, version) => {
-        if (version >= 2) return persisted as AppState;
-        const prior = persisted as Partial<AppState> | undefined;
-        return {
-          ...buildSeedData(),
-          session: prior?.session ?? emptySession,
-          activeCompanyId: prior?.activeCompanyId ?? PRIMARY_COMPANY_ID,
-          activeBranchId: prior?.activeBranchId ?? 'brn_mum',
-        } as AppState;
-      },
+      migrate: (persisted, version) => migratePersisted(persisted, version),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
       },
