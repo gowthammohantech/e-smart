@@ -109,7 +109,7 @@ export default function Appearance() {
           <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.xs }}>
             With every way off, Lixi is still under More → Ask Lixi.
           </Text>
-          {hintsLearned.swipeUp || hintsLearned.holdTab ? (
+          {hintsLearned.swipeTabs || hintsLearned.swipeUp || hintsLearned.holdTab ? (
             <Pressable
               onPress={() => {
                 resetLixiHints();

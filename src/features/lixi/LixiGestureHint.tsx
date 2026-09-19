@@ -10,7 +10,7 @@ import { HINT_EVERY_MS, HINT_FIRST_MS, HINT_SHOW_MS, HINT_TEXT, nextHint } from 
 
 /**
  * A tip that floats above the tab bar every few minutes, taking turns between
- * the two gestures that open Lixi. A tip retires once the person uses its
+ * the tab gestures: swiping between tabs, and the two that open Lixi. A tip retires once the person uses its
  * gesture or taps "Got it"; with nothing left to teach, no timer runs.
  *
  * It only counts time while the tabs are what's on screen: not under a pushed
@@ -79,7 +79,7 @@ export function LixiGestureHint({ bottom }: { bottom: number }) {
   const rendered = shown && !learned[shown] ? shown : null;
 
   useEffect(() => {
-    if (rendered !== 'swipeUp') return;
+    if (rendered !== 'swipeUp' && rendered !== 'swipeTabs') return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(bob, { toValue: 1, duration: 500, useNativeDriver: true }),
@@ -124,8 +124,14 @@ export function LixiGestureHint({ bottom }: { bottom: number }) {
           t.shadow.card,
         ]}
       >
-        <LixiOrb size={22} />
-        {rendered === 'swipeUp' ? (
+        {rendered === 'swipeTabs' ? (
+          <Animated.View style={{ transform: [{ translateX: bob.interpolate({ inputRange: [0, 1], outputRange: [-4, 4] }) }] }}>
+            <MaterialCommunityIcons name="gesture-swipe-horizontal" size={20} color={t.c.primary} />
+          </Animated.View>
+        ) : (
+          <LixiOrb size={22} />
+        )}
+        {rendered === 'swipeTabs' ? null : rendered === 'swipeUp' ? (
           <Animated.View style={{ transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [2, -3] }) }] }}>
             <MaterialCommunityIcons name="gesture-swipe-up" size={18} color={t.c.primary} />
           </Animated.View>

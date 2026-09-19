@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { BottomTabBar } from 'expo-router/build/react-navigation/bottom-tabs';
@@ -12,6 +12,7 @@ import { LixiGestureHint } from '@/features/lixi/LixiGestureHint';
 import { openLixi } from '@/features/lixi/open';
 import { TAB_QUESTIONS } from '@/features/lixi/brain';
 import { TabBar } from '@/components/TabBar';
+import { TabSwipe } from '@/components/TabSwipe';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -37,6 +38,9 @@ const VISIBLE = {
  * slot in the bar: hold a tab to ask about it, swipe up on the bar, or tap
  * the floating orb. Each is switchable in Settings → Appearance.
  *
+ * On either plan, swiping a screen left or right moves to the next or
+ * previous tab in the bar.
+ *
  * The Sales plan has four — Home, Sell, GST, More — split around Lixi's orb
  * in a floating bar, so the floating orb stays out of the way.
  */
@@ -53,6 +57,7 @@ export default function TabsLayout() {
   const lixiNudge = compliance.eInvoice.failed + compliance.expiringSoon;
   const moduleSet = useModuleSet();
   const visible: readonly string[] = VISIBLE[moduleSet];
+  const swipeTabs = useMemo(() => visible.flatMap((name) => TABS.filter((tab) => tab.name === name)), [visible]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -82,6 +87,11 @@ export default function TabsLayout() {
           tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
           tabBarHideOnKeyboard: true,
         }}
+        screenLayout={({ children, route, navigation }) => (
+          <TabSwipe tabs={swipeTabs} current={route.name} navigation={navigation}>
+            {children}
+          </TabSwipe>
+        )}
         screenListeners={({ route }) => ({
           tabLongPress: () => {
             if (!access.holdTab) return;
