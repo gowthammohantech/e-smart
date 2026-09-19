@@ -1,0 +1,9 @@
+{
+  "language": {
+    "title": "Language",
+    "sectionLabel": "Language",
+    "matchDevice": "Match device",
+    "matchDeviceHint": "Follows your phone, where Elixir Books Smart has the language.",
+    "note": "Tax terms like GST, GSTIN and HSN stay in English, because that is how they appear on your filings."
+  }
+}

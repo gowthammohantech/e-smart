@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { ThemeMode } from '@/theme/ThemeProvider';
+import { AppLanguage } from '@/i18n/config';
 
 export type RecentEntry = { id: string; kind: string; label: string; at: string };
 
@@ -18,6 +19,18 @@ export type LixiOrbSpot = { side: 'left' | 'right'; y: number };
 type UiState = {
   themeMode: ThemeMode;
   setThemeMode: (m: ThemeMode) => void;
+
+  /** The chosen language. `system` follows the device, falling back to English. */
+  language: AppLanguage;
+  setLanguage: (l: AppLanguage) => void;
+
+  /**
+   * Whether the persisted preferences have been read back. The theme and the
+   * language are both decided here, so the first paint has to wait for it or
+   * it flashes the defaults.
+   */
+  hydrated: boolean;
+  setHydrated: (v: boolean) => void;
 
   /** Simulated connectivity used by the offline/sync demo. */
   offlineMode: boolean;
@@ -54,6 +67,15 @@ export const useUiStore = create<UiState>()(
     (set, get) => ({
       themeMode: 'light',
       setThemeMode: (themeMode) => set({ themeMode }),
+
+      // `system` for a fresh install, but the v2 migration pins existing
+      // installs to English so nobody's app changes language on update.
+      // Anything the device asks for that we don't ship resolves to English.
+      language: 'system',
+      setLanguage: (language) => set({ language }),
+
+      hydrated: false,
+      setHydrated: (hydrated) => set({ hydrated }),
 
       offlineMode: false,
       setOfflineMode: (offlineMode) => set({ offlineMode }),
@@ -97,12 +119,25 @@ export const useUiStore = create<UiState>()(
     {
       name: 'ebs.ui.v1',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
-      // v0 defaulted to 'system'; move existing installs onto the new light default.
+      version: 2,
+      // `hydrated` is a runtime flag, not a preference. Persisting it would
+      // write back `true` and defeat the gate on the next cold start.
+      partialize: (s) => {
+        const { hydrated, ...rest } = s;
+        void hydrated;
+        return rest as UiState;
+      },
       migrate: (persisted, version) => {
         const state = persisted as Partial<UiState>;
+        // v0 defaulted to 'system'; move existing installs onto the new light default.
         if (version < 1 && state.themeMode === 'system') state.themeMode = 'light';
+        // v2 added language. Anyone already using the app was using it in
+        // English, so pin them there rather than switching under them.
+        if (version < 2 && state.language === undefined) state.language = 'en';
         return state as UiState;
+      },
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
       },
     },
   ),

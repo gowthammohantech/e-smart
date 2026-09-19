@@ -1,0 +1,63 @@
+{
+  "action": {
+    "save": "சேமி",
+    "cancel": "ரத்து",
+    "delete": "நீக்கு",
+    "done": "முடிந்தது",
+    "retry": "மீண்டும் முயல்",
+    "close": "மூடு",
+    "back": "பின்",
+    "next": "அடுத்து",
+    "edit": "திருத்து",
+    "share": "பகிர்",
+    "search": "தேடு",
+    "clear": "அழி",
+    "apply": "பயன்படுத்து",
+    "reset": "மீட்டமை",
+    "confirm": "உறுதிப்படுத்து"
+  },
+  "placeholder": {
+    "none": "—",
+    "unknown": "தெரியவில்லை"
+  },
+  "dateRange": {
+    "today": "இன்று",
+    "yesterday": "நேற்று",
+    "last7": "கடந்த 7 நாட்கள்",
+    "last30": "கடந்த 30 நாட்கள்",
+    "thisMonth": "இந்த மாதம்",
+    "lastMonth": "கடந்த மாதம்",
+    "last90": "கடந்த 90 நாட்கள்",
+    "thisFY": "இந்த நிதியாண்டு",
+    "lastFY": "கடந்த நிதியாண்டு",
+    "all": "எல்லா காலமும்",
+    "custom": "தனிப்பயன்"
+  },
+  "relative": {
+    "today": "இன்று",
+    "yesterday": "நேற்று",
+    "tomorrow": "நாளை",
+    "daysAgo_one": "{{count}} நாளுக்கு முன்",
+    "daysAgo_other": "{{count}} நாட்களுக்கு முன்",
+    "inDays_one": "{{count}} நாளில்",
+    "inDays_other": "{{count}} நாட்களில்"
+  },
+  "dateTime": {
+    "at": "{{date}} அன்று {{time}}"
+  },
+  "fy": {
+    "label": "நி.ஆ. {{from}}-{{to}}"
+  },
+  "compact": {
+    "thousand": "ஆ.",
+    "lakh": "ல.",
+    "crore": "கோ.",
+    "million": "M",
+    "billion": "B"
+  },
+  "list": {
+    "pair": "{{first}} மற்றும் {{second}}",
+    "end": "{{list}} மற்றும் {{last}}",
+    "separator": "{{list}}, {{item}}"
+  }
+}

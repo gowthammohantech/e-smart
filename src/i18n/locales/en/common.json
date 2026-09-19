@@ -1,0 +1,63 @@
+{
+  "action": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "done": "Done",
+    "retry": "Retry",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "edit": "Edit",
+    "share": "Share",
+    "search": "Search",
+    "clear": "Clear",
+    "apply": "Apply",
+    "reset": "Reset",
+    "confirm": "Confirm"
+  },
+  "placeholder": {
+    "none": "—",
+    "unknown": "Unknown"
+  },
+  "dateRange": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last7": "Last 7 days",
+    "last30": "Last 30 days",
+    "thisMonth": "This month",
+    "lastMonth": "Last month",
+    "last90": "Last 90 days",
+    "thisFY": "This financial year",
+    "lastFY": "Last financial year",
+    "all": "All time",
+    "custom": "Custom"
+  },
+  "relative": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "inDays_one": "in {{count}} day",
+    "inDays_other": "in {{count}} days"
+  },
+  "dateTime": {
+    "at": "{{date}} at {{time}}"
+  },
+  "fy": {
+    "label": "FY {{from}}-{{to}}"
+  },
+  "compact": {
+    "thousand": "K",
+    "lakh": "L",
+    "crore": "Cr",
+    "million": "M",
+    "billion": "B"
+  },
+  "list": {
+    "pair": "{{first}} and {{second}}",
+    "end": "{{list}} and {{last}}",
+    "separator": "{{list}}, {{item}}"
+  }
+}

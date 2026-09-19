@@ -6,14 +6,20 @@ import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { ToastProvider } from '@/components/Toast';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { useAppStore } from '@/store/appStore';
+import { useUiStore } from '@/store/uiStore';
 
 function RootNavigator() {
   const t = useTheme();
   const router = useRouter();
   const segments = useSegments();
 
-  const hydrated = useAppStore((s) => s.hydrated);
+  // Both stores gate the first paint: the data store decides which route the
+  // person belongs on, the UI store decides the theme and the language.
+  const dataHydrated = useAppStore((s) => s.hydrated);
+  const uiHydrated = useUiStore((s) => s.hydrated);
+  const hydrated = dataHydrated && uiHydrated;
   const authenticated = useAppStore((s) => s.session.authenticated);
   const onboardingComplete = useAppStore((s) => s.session.onboardingComplete);
 
@@ -66,6 +72,7 @@ export default function RootLayout() {
     // yet the callback never fires, so flip the flag once on mount.
     const timer = setTimeout(() => {
       if (!useAppStore.getState().hydrated) useAppStore.getState().setHydrated(true);
+      if (!useUiStore.getState().hydrated) useUiStore.getState().setHydrated(true);
     }, 400);
     return () => clearTimeout(timer);
   }, []);
@@ -73,11 +80,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <ToastProvider>
-            <RootNavigator />
-          </ToastProvider>
-        </ThemeProvider>
+        {/* Outermost, because the theme derives its script metrics from the
+            active language and the toast renders translated text. */}
+        <I18nProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <RootNavigator />
+            </ToastProvider>
+          </ThemeProvider>
+        </I18nProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

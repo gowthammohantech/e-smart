@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +9,7 @@ import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { StatRow, StatTile } from '@/components/StatTile';
 import { LixiAccess, useUiStore } from '@/store/uiStore';
+import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n/config';
 import { SwitchField } from '@/components/Field';
 import { LixiMark } from '@/features/lixi/LixiOrb';
 import { fromMajor } from '@/lib/money';
@@ -27,11 +29,86 @@ const MODES: { value: ThemeMode; label: string; description: string; icon: keyof
   { value: 'light', label: 'Light', description: 'Higher contrast in bright sunlight.', icon: 'white-balance-sunny' },
 ];
 
+/**
+ * Each language is listed in its own script, with its English name underneath —
+ * so somebody who cannot read the current UI language can still find theirs.
+ */
+const LANGUAGE_OPTIONS: {
+  value: AppLanguage;
+  label: string;
+  description: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+}[] = [
+  { value: 'system', label: '', description: '', icon: 'cellphone-cog' },
+  ...SUPPORTED_LANGUAGES.map((l) => ({
+    value: l.code as AppLanguage,
+    label: l.native,
+    description: l.label,
+    icon: 'translate' as keyof typeof MaterialCommunityIcons.glyphMap,
+  })),
+];
+
+type RadioRowProps = {
+  label: string;
+  description: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  active: boolean;
+  last: boolean;
+  onPress: () => void;
+};
+
+/** One option in a card-shaped radio list. Shared by the theme and language lists. */
+function RadioRow({ label, description, icon, active, last, onPress }: RadioRowProps) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: t.spacing.md,
+        padding: t.spacing.lg,
+        borderBottomWidth: last ? 0 : 0.5,
+        borderBottomColor: t.c.line,
+        backgroundColor: pressed ? t.c.card2 : 'transparent',
+      })}
+    >
+      <View
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 19,
+          backgroundColor: active ? t.c.chip : t.c.mutedSoft,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialCommunityIcons name={icon} size={19} color={active ? t.c.primary : t.c.muted} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="body" weight="600">
+          {label}
+        </Text>
+        <Text variant="caption" tone="muted">
+          {description}
+        </Text>
+      </View>
+      {active ? <MaterialCommunityIcons name="check-circle" size={20} color={t.c.primary} /> : null}
+    </Pressable>
+  );
+}
+
 export default function Appearance() {
   const t = useTheme();
+  const { t: tr } = useTranslation('settings');
   const baseCurrency = useBaseCurrency();
   const themeMode = useUiStore((s) => s.themeMode);
   const setThemeMode = useUiStore((s) => s.setThemeMode);
+  const language = useUiStore((s) => s.language);
+  const setLanguage = useUiStore((s) => s.setLanguage);
   const lixiAccess = useUiStore((s) => s.lixiAccess);
   const setLixiAccess = useUiStore((s) => s.setLixiAccess);
   const hintsLearned = useUiStore((s) => s.lixiHintsLearned);
@@ -44,50 +121,40 @@ export default function Appearance() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
         <Card padded={false}>
-          {MODES.map((m, i) => {
-            const active = themeMode === m.value;
-            return (
-              <Pressable
-                key={m.value}
-                onPress={() => setThemeMode(m.value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={m.label}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: t.spacing.md,
-                  padding: t.spacing.lg,
-                  borderBottomWidth: i < MODES.length - 1 ? 0.5 : 0,
-                  borderBottomColor: t.c.line,
-                  backgroundColor: pressed ? t.c.card2 : 'transparent',
-                })}
-              >
-                <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 19,
-                    backgroundColor: active ? t.c.chip : t.c.mutedSoft,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <MaterialCommunityIcons name={m.icon} size={19} color={active ? t.c.primary : t.c.muted} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text variant="body" weight="600">
-                    {m.label}
-                  </Text>
-                  <Text variant="caption" tone="muted">
-                    {m.description}
-                  </Text>
-                </View>
-                {active ? <MaterialCommunityIcons name="check-circle" size={20} color={t.c.primary} /> : null}
-              </Pressable>
-            );
-          })}
+          {MODES.map((m, i) => (
+            <RadioRow
+              key={m.value}
+              label={m.label}
+              description={m.description}
+              icon={m.icon}
+              active={themeMode === m.value}
+              last={i === MODES.length - 1}
+              onPress={() => setThemeMode(m.value)}
+            />
+          ))}
         </Card>
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+          {tr('language.sectionLabel')}
+        </Text>
+
+        <Card padded={false}>
+          {LANGUAGE_OPTIONS.map((o, i) => (
+            <RadioRow
+              key={o.value}
+              label={o.value === 'system' ? tr('language.matchDevice') : o.label}
+              description={o.value === 'system' ? tr('language.matchDeviceHint') : o.description}
+              icon={o.icon}
+              active={language === o.value}
+              last={i === LANGUAGE_OPTIONS.length - 1}
+              onPress={() => setLanguage(o.value)}
+            />
+          ))}
+        </Card>
+
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+          {tr('language.note')}
+        </Text>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
           <LixiMark size={20} />

@@ -119,7 +119,7 @@ export default function MoreTab() {
       entries: [
         { label: 'Devices & sessions', icon: 'cellphone-link', route: '/(app)/settings/devices' },
         { label: 'Plan & billing', icon: 'credit-card-outline', route: '/(app)/settings/plan' },
-        { label: 'Appearance', icon: 'theme-light-dark', route: '/(app)/settings/appearance' },
+        { label: 'Appearance & language', icon: 'theme-light-dark', route: '/(app)/settings/appearance' },
         { label: 'About', icon: 'information-outline', route: '/(app)/settings/about' },
       ],
     },

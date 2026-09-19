@@ -18,7 +18,11 @@
       "bundleIdentifier": "com.elixir.bookssmart",
       "infoPlist": {
         "NSCameraUsageDescription": "Scan receipts, supplier bills and barcodes.",
-        "NSPhotoLibraryUsageDescription": "Attach receipts and your business logo to records."
+        "NSPhotoLibraryUsageDescription": "Attach receipts and your business logo to records.",
+        "CFBundleLocalizations": [
+          "en",
+          "ta"
+        ]
       }
     },
     "android": {
@@ -29,16 +33,38 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
     },
-    "web": { "favicon": "./assets/favicon.png", "bundler": "metro" },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
     "plugins": [
       "expo-router",
-      ["expo-image-picker", { "photosPermission": "Attach receipts and your business logo." }],
-      ["expo-camera", { "cameraPermission": "Scan receipts, bills and barcodes." }],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attach receipts and your business logo."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan receipts, bills and barcodes."
+        }
+      ],
       "expo-splash-screen",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-localization"
     ],
-    "experiments": { "typedRoutes": false }
+    "experiments": {
+      "typedRoutes": false
+    },
+    "locales": {
+      "ta": "./src/i18n/native/ta.json"
+    }
   }
 }
