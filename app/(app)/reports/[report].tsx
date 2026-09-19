@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -21,7 +22,8 @@ import {
   summarizeStock,
   summarizeTax,
 } from '@/domain/reports';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { PAYMENT_METHODS } from '@/data/masters';
+import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { monthLabel } from '@/lib/date';
 import { toMajor } from '@/lib/money';
@@ -55,6 +57,7 @@ const TITLES: Record<string, { title: string; subtitle?: string }> = {
 
 export default function Report() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const { report } = useLocalSearchParams<{ report: string }>();
   const key = String(report);
   const meta = TITLES[key];
@@ -96,9 +99,16 @@ export default function Report() {
     [expenses, expenseCategories, baseCurrency, scope.filters],
   );
   const tax = useMemo(() => summarizeTax(documents, baseCurrency, scope.filters), [documents, baseCurrency, scope.filters]);
+  // The reports engine takes method names as data, so it stays free of the
+  // translator. Rebuilt when the language changes, or the chart keeps the old
+  // one's labels.
+  const methodLabels = useMemo(
+    () => Object.fromEntries(PAYMENT_METHODS.map((m) => [m, paymentMethodLabel(tr, m)])),
+    [tr],
+  );
   const paymentSummary = useMemo(
-    () => summarizePayments(payments, accountNames, PAYMENT_METHOD_LABELS, baseCurrency, scope.filters),
-    [payments, accountNames, baseCurrency, scope.filters],
+    () => summarizePayments(payments, accountNames, methodLabels, baseCurrency, scope.filters),
+    [payments, accountNames, methodLabels, baseCurrency, scope.filters],
   );
   const stock = useMemo(
     () => summarizeStock(items, movements, baseCurrency, scope.filters.branchId),
@@ -409,7 +419,7 @@ export default function Report() {
           p.date,
           p.direction,
           parties.find((x) => x.id === p.partyId)?.name ?? '',
-          PAYMENT_METHOD_LABELS[p.method],
+          paymentMethodLabel(tr, p.method),
           toMajor(p.amount),
         ]),
       );

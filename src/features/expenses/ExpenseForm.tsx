@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +14,8 @@ import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 import { Expense, PaymentMethod, RecurrenceFrequency } from '@/types';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { PAYMENT_METHODS } from '@/data/masters';
+import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney, formatPercent } from '@/lib/format';
 import { addDaysISO, today } from '@/lib/date';
 import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@/lib/money';
@@ -37,6 +39,7 @@ const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
 
 export function ExpenseForm({ expense }: { expense?: Expense }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -153,7 +156,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
 
         <DateField label="Date" value={date} onChange={setDate} required />
 
-        <PickerField label="Paid by" value={PAYMENT_METHOD_LABELS[method]} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
+        <PickerField label="Paid by" value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
         <PickerField label="Paid from" value={accounts.find((a) => a.id === accountId)?.name} onPress={() => setAccountOpen(true)} icon="bank-outline" />
         <PickerField
           label="Supplier"
@@ -250,7 +253,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         visible={methodOpen}
         onClose={() => setMethodOpen(false)}
         title="Payment method"
-        options={Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => ({ value, label }))}
+        options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
         value={method}
         onSelect={(v) => setMethod(v as PaymentMethod)}
         searchable={false}

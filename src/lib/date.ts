@@ -12,6 +12,9 @@ import {
   subDays,
   subMonths,
 } from 'date-fns';
+import type { Locale } from 'date-fns';
+import { ta } from 'date-fns/locale/ta';
+import i18n from '@/i18n';
 
 export type DateRange = { from: string; to: string };
 
@@ -28,18 +31,28 @@ export type DateRangePreset =
   | 'all'
   | 'custom';
 
-export const DATE_RANGE_PRESETS: { key: DateRangePreset; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'last7', label: 'Last 7 days' },
-  { key: 'last30', label: 'Last 30 days' },
-  { key: 'thisMonth', label: 'This month' },
-  { key: 'lastMonth', label: 'Last month' },
-  { key: 'last90', label: 'Last 90 days' },
-  { key: 'thisFY', label: 'This financial year' },
-  { key: 'lastFY', label: 'Last financial year' },
-  { key: 'all', label: 'All time' },
+/** The presets offered, in order. Names live in `common:dateRange.*`. */
+export const DATE_RANGE_PRESET_KEYS: DateRangePreset[] = [
+  'today',
+  'yesterday',
+  'last7',
+  'last30',
+  'thisMonth',
+  'lastMonth',
+  'last90',
+  'thisFY',
+  'lastFY',
+  'all',
 ];
+
+/**
+ * The date-fns locale for the active language. Only the month and day names
+ * come from here; the patterns stay `dd MMM yyyy`, which is the Indian
+ * convention and reads correctly in both languages.
+ */
+function activeLocale(): Locale | undefined {
+  return i18n.language === 'ta' ? ta : undefined;
+}
 
 export function toISODate(d: Date): string {
   return format(d, 'yyyy-MM-dd');
@@ -56,7 +69,7 @@ export function today(): string {
 export function formatDate(iso: string, pattern = 'dd MMM yyyy'): string {
   if (!iso) return '—';
   try {
-    return format(parseISO(iso), pattern);
+    return format(parseISO(iso), pattern, { locale: activeLocale() });
   } catch {
     return iso;
   }
@@ -65,7 +78,14 @@ export function formatDate(iso: string, pattern = 'dd MMM yyyy'): string {
 export function formatDateTime(iso: string): string {
   if (!iso) return '—';
   try {
-    return format(parseISO(iso), "dd MMM yyyy 'at' h:mm a");
+    const d = parseISO(iso);
+    const locale = activeLocale();
+    // The joining word leaves the date-fns pattern: Tamil puts its particle
+    // after the date, which a template can express and a pattern cannot.
+    return i18n.t('common:dateTime.at', {
+      date: format(d, 'dd MMM yyyy', { locale }),
+      time: format(d, 'h:mm a', { locale }),
+    });
   } catch {
     return iso;
   }
@@ -75,11 +95,11 @@ export function formatRelative(iso: string): string {
   if (!iso) return '—';
   const d = parseISO(iso);
   const days = differenceInCalendarDays(new Date(), d);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days === -1) return 'Tomorrow';
-  if (days > 1 && days < 7) return `${days} days ago`;
-  if (days < -1 && days > -7) return `in ${Math.abs(days)} days`;
+  if (days === 0) return i18n.t('common:relative.today');
+  if (days === 1) return i18n.t('common:relative.yesterday');
+  if (days === -1) return i18n.t('common:relative.tomorrow');
+  if (days > 1 && days < 7) return i18n.t('common:relative.daysAgo', { count: days });
+  if (days < -1 && days > -7) return i18n.t('common:relative.inDays', { count: Math.abs(days) });
   return formatDate(iso, 'dd MMM yyyy');
 }
 
@@ -156,7 +176,22 @@ export function monthKey(iso: string): string {
 
 export function monthLabel(key: string): string {
   try {
-    return format(parseISO(`${key}-01`), 'MMM');
+    return format(parseISO(`${key}-01`), 'MMM', { locale: activeLocale() });
+  } catch {
+    return key;
+  }
+}
+
+/**
+ * A one- or two-cluster month, for chart axes. Tamil's `MMM` runs to `ஜன.` /
+ * `பிப்.`, which is far wider than the three Latin characters the bar charts
+ * are spaced for; `MMMMM` gives the narrow form.
+ */
+export function monthLabelNarrow(key: string): string {
+  try {
+    return format(parseISO(`${key}-01`), i18n.language === 'ta' ? 'MMMMM' : 'MMM', {
+      locale: activeLocale(),
+    });
   } catch {
     return key;
   }

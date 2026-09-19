@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,13 +13,14 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '@/store/selectors';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney, formatPercent } from '@/lib/format';
 import { formatDate, formatDateTime } from '@/lib/date';
 import { subtract } from '@/lib/money';
 
 export default function ExpenseDetail() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
   const toast = useToast();
 
@@ -83,7 +85,7 @@ export default function ExpenseDetail() {
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           {[
             { label: 'Date', value: formatDate(expense.date) },
-            { label: 'Paid by', value: PAYMENT_METHOD_LABELS[expense.method] },
+            { label: 'Paid by', value: paymentMethodLabel(tr, expense.method) },
             { label: 'Paid from', value: account?.name ?? '—' },
             ...(supplier ? [{ label: 'Supplier', value: supplier.name }] : []),
             ...(expense.reference ? [{ label: 'Reference', value: expense.reference }] : []),

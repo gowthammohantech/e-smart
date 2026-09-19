@@ -59,5 +59,35 @@
     "pair": "{{first}} and {{second}}",
     "end": "{{list}} and {{last}}",
     "separator": "{{list}}, {{item}}"
+  },
+  "documentList": {
+    "search": "Search {{kind, lowercase}}",
+    "count_one": "{{count}} {{kind, lowercase}}",
+    "count_other": "{{count}} {{kind, lowercase}}",
+    "filterByStatus": "Filter by {{status}}",
+    "emptyNoneTitle": "No {{kind, lowercase}} yet",
+    "emptyNoneMessage": "Create your first {{kind, lowercase}} to see it here.",
+    "emptyNoMatchTitle": "Nothing matches",
+    "emptyNoMatchMessage": "Try clearing a filter or searching for something else.",
+    "clearFilters": "Clear filters",
+    "statusSection": "Status"
+  },
+  "documentEditor": {
+    "finalised": "{{kind}} finalised",
+    "savedDraft": "Saved as draft",
+    "dateLabel": "{{kind}} date",
+    "numberLabel": "{{kind}} number",
+    "finaliseTitle": "Finalise this {{kind, lowercase}}?",
+    "finaliseMessage": "A permanent number will be assigned and the {{kind, lowercase}} can no longer be edited freely."
+  },
+  "documentDetail": {
+    "changeStatus": "Change status",
+    "currently": "Currently {{status, lowercase}}",
+    "marked": "Marked {{status, lowercase}}",
+    "markAs": "Mark {{status}}",
+    "cancelKind": "Cancel {{kind, lowercase}}",
+    "createdDraft": "Created a draft {{kind, lowercase}}",
+    "shareTitle": "{{kind}} {{number}}",
+    "shareMessage": "{{kind}} {{number}} — {{amount}}"
   }
 }

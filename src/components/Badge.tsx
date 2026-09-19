@@ -4,7 +4,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
 import { DocStatus } from '@/types';
-import { STATUS_META, StatusTone } from '@/domain/documentStates';
+import { useTranslation } from 'react-i18next';
+import { STATUS_TONE, StatusTone } from '@/domain/documentStates';
+import { statusLabel } from '@/i18n/labels';
 
 type Props = {
   label: string;
@@ -55,6 +57,6 @@ export function Badge({ label, tone = 'neutral', icon, size = 'md', style }: Pro
 }
 
 export function StatusBadge({ status, size = 'md' }: { status: DocStatus; size?: 'sm' | 'md' }) {
-  const meta = STATUS_META[status] ?? { label: status, tone: 'neutral' as StatusTone };
-  return <Badge label={meta.label} tone={meta.tone} size={size} />;
+  const { t } = useTranslation('domain');
+  return <Badge label={statusLabel(t, status)} tone={STATUS_TONE[status] ?? 'neutral'} size={size} />;
 }

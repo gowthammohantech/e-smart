@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +19,8 @@ import { useToast } from '@/components/Toast';
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@/types';
 import { buildOutstanding } from '@/domain/receivables';
 import { resolveRate, settlementGainLoss } from '@/domain/fx';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { PAYMENT_METHODS } from '@/data/masters';
+import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney } from '@/lib/format';
 import { formatDate, today } from '@/lib/date';
 import { Money, fromMajor, money, subtract, toMajor, zero } from '@/lib/money';
@@ -37,6 +39,7 @@ import {
 
 export default function NewPayment() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -265,7 +268,7 @@ export default function NewPayment() {
 
         <PickerField
           label="Payment method"
-          value={PAYMENT_METHOD_LABELS[method]}
+          value={paymentMethodLabel(tr, method)}
           onPress={() => setMethodOpen(true)}
           icon="credit-card-outline"
         />
@@ -457,7 +460,7 @@ export default function NewPayment() {
         visible={methodOpen}
         onClose={() => setMethodOpen(false)}
         title="Payment method"
-        options={Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => ({ value, label }))}
+        options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
         value={method}
         onSelect={(v) => setMethod(v as PaymentMethod)}
         searchable={false}

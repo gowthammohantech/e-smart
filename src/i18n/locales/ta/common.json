@@ -59,5 +59,35 @@
     "pair": "{{first}} மற்றும் {{second}}",
     "end": "{{list}} மற்றும் {{last}}",
     "separator": "{{list}}, {{item}}"
+  },
+  "documentList": {
+    "search": "{{kind}} தேடு",
+    "count_one": "{{count}} {{kind}}",
+    "count_other": "{{count}} {{kind}}",
+    "filterByStatus": "{{status}} மூலம் வடிகட்டு",
+    "emptyNoneTitle": "இதுவரை {{kind}} இல்லை",
+    "emptyNoneMessage": "உங்கள் முதல் {{kind}} உருவாக்கினால் இங்கே தெரியும்.",
+    "emptyNoMatchTitle": "எதுவும் பொருந்தவில்லை",
+    "emptyNoMatchMessage": "ஒரு வடிகட்டியை நீக்கிப் பாருங்கள், அல்லது வேறு ஒன்றைத் தேடுங்கள்.",
+    "clearFilters": "வடிகட்டிகளை நீக்கு",
+    "statusSection": "நிலை"
+  },
+  "documentEditor": {
+    "finalised": "{{kind}} இறுதி செய்யப்பட்டது",
+    "savedDraft": "வரைவாகச் சேமிக்கப்பட்டது",
+    "dateLabel": "{{kind}} தேதி",
+    "numberLabel": "{{kind}} எண்",
+    "finaliseTitle": "இந்த {{kind}} இறுதி செய்யவா?",
+    "finaliseMessage": "நிரந்தர எண் ஒன்று வழங்கப்படும்; அதன் பிறகு இந்த {{kind}} சுதந்திரமாகத் திருத்த முடியாது."
+  },
+  "documentDetail": {
+    "changeStatus": "நிலையை மாற்று",
+    "currently": "தற்போது {{status}}",
+    "marked": "{{status}} எனக் குறிக்கப்பட்டது",
+    "markAs": "{{status}} எனக் குறி",
+    "cancelKind": "{{kind}} ரத்து செய்",
+    "createdDraft": "{{kind}} வரைவு உருவாக்கப்பட்டது",
+    "shareTitle": "{{kind}} {{number}}",
+    "shareMessage": "{{kind}} {{number}} — {{amount}}"
   }
 }

@@ -1,9 +1,11 @@
 import React from 'react';
 import { View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/theme/ThemeProvider';
 import { EmptyState } from '@/components/EmptyState';
-import { FULL_PLAN, MODULE_LABELS, Module, planInfo } from '@/domain/plan';
+import { FULL_PLAN, Module, planInfo } from '@/domain/plan';
+import { moduleLabel } from '@/i18n/labels';
 import { usePlan } from '@/store/selectors';
 
 /**
@@ -13,20 +15,21 @@ import { usePlan } from '@/store/selectors';
  */
 export default function Upgrade() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain', 'plan']);
   const router = useRouter();
   const { module } = useLocalSearchParams<{ module?: Module }>();
   const plan = planInfo(usePlan());
   const target = planInfo(FULL_PLAN);
-  const label = (module && MODULE_LABELS[module]) || 'This feature';
+  const label = module ? moduleLabel(tr, module) : tr('plan:upgrade.thisFeature');
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg, padding: t.spacing.lg }}>
       <Stack.Screen options={{ title: label }} />
       <EmptyState
         icon="lock-outline"
-        title={`${label} is on ${target.name}`}
-        message={`${plan.name} covers selling and GST. Upgrade to buy, stock and track expenses in the same books — anything you recorded before stays as it was.`}
-        actionLabel="See plans"
+        title={tr('plan:upgrade.lockedTitle', { module: label, plan: target.name })}
+        message={tr('plan:upgrade.lockedMessage', { currentPlan: plan.name })}
+        actionLabel={tr('plan:upgrade.seePlans')}
         onAction={() => router.replace('/(app)/settings/plan')}
       />
     </View>

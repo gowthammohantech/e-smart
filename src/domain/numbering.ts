@@ -3,19 +3,20 @@ import { financialYearOf } from '@/lib/date';
 
 export type SeriesKind = NumberingSeries['kind'];
 
-export const SERIES_LABELS: Record<SeriesKind, string> = {
-  quote: 'Quotation',
-  salesOrder: 'Sales order',
-  delivery: 'Delivery note',
-  invoice: 'Invoice',
-  salesReturn: 'Sales return',
-  purchaseOrder: 'Purchase order',
-  goodsReceipt: 'Goods receipt',
-  purchaseBill: 'Purchase bill',
-  purchaseReturn: 'Purchase return',
-  payment: 'Payment',
-  expense: 'Expense',
-};
+/** Every series a company can number, in the order the settings screen lists them. */
+export const SERIES_KINDS: SeriesKind[] = [
+  'quote',
+  'salesOrder',
+  'delivery',
+  'invoice',
+  'salesReturn',
+  'purchaseOrder',
+  'goodsReceipt',
+  'purchaseBill',
+  'purchaseReturn',
+  'payment',
+  'expense',
+];
 
 /**
  * Render the next document number for a series (FRD 17).

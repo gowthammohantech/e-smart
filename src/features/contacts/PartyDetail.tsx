@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,7 +22,7 @@ import { buildOutstanding } from '@/domain/receivables';
 import { formatMoney } from '@/lib/format';
 import { formatDate } from '@/lib/date';
 import { money, sum, zero } from '@/lib/money';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { paymentMethodLabel } from '@/i18n/labels';
 
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, usePartyHistory, usePayments } from '@/store/selectors';
@@ -31,6 +32,7 @@ type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
 export function PartyDetail({ party }: { party: Party }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
   const toast = useToast();
 
@@ -274,7 +276,7 @@ export function PartyDetail({ party }: { party: Party }) {
                       {p.number}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {formatDate(p.date)} · {PAYMENT_METHOD_LABELS[p.method]}
+                      {formatDate(p.date)} · {paymentMethodLabel(tr, p.method)}
                     </Text>
                   </View>
                   <Text variant="body" weight="700" tone={p.direction === 'received' ? 'good' : 'bad'}>

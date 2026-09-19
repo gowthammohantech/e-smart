@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useResolvedLanguage } from '@/i18n/I18nProvider';
 import { Pressable, ScrollView, Share, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Print from 'expo-print';
@@ -17,7 +19,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@/types';
-import { DOCUMENT_LABELS, STATUS_META, isFinalized, nextStatuses } from '@/domain/documentStates';
+import { STATUS_TONE, isFinalized, nextStatuses } from '@/domain/documentStates';
+import { documentKindLabel, statusLabel } from '@/i18n/labels';
 import { outstandingOf } from '@/domain/receivables';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { daysBetween, formatDate, today } from '@/lib/date';
@@ -43,6 +46,8 @@ import { isEwayBillRequired } from '@/domain/ewayBill';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common', 'domain']);
+  const language = useResolvedLanguage();
   const router = useRouter();
   const toast = useToast();
 
@@ -85,7 +90,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   );
   const canCancelIrn = canCancelEInvoice(doc.compliance, new Date().toISOString()).allowed;
 
-  const label = DOCUMENT_LABELS[doc.kind];
+  const kindName = documentKindLabel(tr, doc.kind, 1);
   const branch = branches.find((b) => b.id === doc.branchId);
   const isPayable = doc.kind === 'invoice' || doc.kind === 'purchaseBill';
 
@@ -102,6 +107,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     setBusy(true);
     try {
       const html = buildDocumentHtml({
+        t: tr,
+        language,
         document: doc,
         company,
         party,
@@ -110,9 +117,18 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       });
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label.singular} ${doc.number}` });
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: tr('common:documentDetail.shareTitle', { kind: kindName, number: doc.number }),
+        });
       } else {
-        await Share.share({ message: `${label.singular} ${doc.number} — ${formatMoney(doc.totals.grandTotal)}` });
+        await Share.share({
+          message: tr('common:documentDetail.shareMessage', {
+            kind: kindName,
+            number: doc.number,
+            amount: formatMoney(doc.totals.grandTotal),
+          }),
+        });
       }
       if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
     } catch {
@@ -127,7 +143,10 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     const id = convertDocument(doc.id, target);
     setActionsOpen(false);
     if (id) {
-      toast.show(`Created a draft ${DOCUMENT_LABELS[target].singular.toLowerCase()}`, 'success');
+      toast.show(
+        tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }),
+        'success',
+      );
       router.push(detailRouteFor(target, id) as never);
     }
   };
@@ -171,7 +190,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View style={{ gap: 4, flex: 1 }}>
               <Text variant="caption" tone="muted">
-                {label.singular}
+                {kindName}
               </Text>
               <Text variant="h3" weight="700">
                 {doc.number}
@@ -455,7 +474,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           } },
           ...(transitions.length ? [{ label: 'Change status', icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
           ...(doc.status !== 'cancelled' && isFinalized(doc.status)
-            ? [{ label: `Cancel ${label.singular.toLowerCase()}`, icon: 'close-octagon-outline' as const, onPress: () => { setActionsOpen(false); setConfirmCancel(true); } }]
+            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => { setActionsOpen(false); setConfirmCancel(true); } }]
             : []),
           ...(!isFinalized(doc.status)
             ? [{ label: 'Delete draft', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
@@ -484,7 +503,12 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       </Sheet>
 
       {/* Status sheet */}
-      <Sheet visible={statusOpen} onClose={() => setStatusOpen(false)} title="Change status" subtitle={`Currently ${STATUS_META[doc.status].label.toLowerCase()}`}>
+      <Sheet
+        visible={statusOpen}
+        onClose={() => setStatusOpen(false)}
+        title={tr('common:documentDetail.changeStatus')}
+        subtitle={tr('common:documentDetail.currently', { status: statusLabel(tr, doc.status) })}
+      >
         {transitions.length === 0 ? (
           <EmptyState icon="check-all" title="Nothing left to do" message="This document is in its final state." compact />
         ) : (
@@ -494,10 +518,10 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
               onPress={() => {
                 setDocumentStatus(doc.id, s);
                 setStatusOpen(false);
-                toast.show(`Marked ${STATUS_META[s].label.toLowerCase()}`, 'success');
+                toast.show(tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), 'success');
               }}
               accessibilityRole="button"
-              accessibilityLabel={`Mark ${STATUS_META[s].label}`}
+              accessibilityLabel={tr('common:documentDetail.markAs', { status: statusLabel(tr, s) })}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -507,7 +531,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                 backgroundColor: pressed ? t.c.card2 : 'transparent',
               })}
             >
-              <Badge label={STATUS_META[s].label} tone={STATUS_META[s].tone} />
+              <Badge label={statusLabel(tr, s)} tone={STATUS_TONE[s]} />
               <View style={{ flex: 1 }} />
               <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
             </Pressable>

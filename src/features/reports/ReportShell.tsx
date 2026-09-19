@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Share, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,7 +10,8 @@ import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
-import { DATE_RANGE_PRESETS, DateRangePreset, formatDate, resolveRange } from '@/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@/lib/date';
+import { dateRangeLabel } from '@/i18n/labels';
 import { useActiveCompany, useBranches, useParties } from '@/store/selectors';
 import { ReportFilters } from '@/domain/reports';
 
@@ -40,6 +42,7 @@ export function ReportShell({
   exportRows?: () => string;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
@@ -53,7 +56,9 @@ export function ReportShell({
 
   const branch = branches.find((b) => b.id === scope.filters.branchId);
   const party = parties.find((p) => p.id === scope.filters.partyId);
-  const rangeLabel = DATE_RANGE_PRESETS.find((p) => p.key === scope.preset)?.label ?? 'Custom';
+  const rangeLabel = DATE_RANGE_PRESET_KEYS.includes(scope.preset)
+    ? dateRangeLabel(tr, scope.preset)
+    : tr('common:dateRange.custom');
 
   const setPreset = (preset: DateRangePreset) =>
     onScopeChange({ preset, filters: { ...scope.filters, range: resolveRange(preset) } });
@@ -154,15 +159,15 @@ export function ReportShell({
       ) : null}
 
       <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="Date range">
-        {DATE_RANGE_PRESETS.map((p) => (
+        {DATE_RANGE_PRESET_KEYS.map((p) => (
           <Pressable
-            key={p.key}
+            key={p}
             onPress={() => {
-              setPreset(p.key);
+              setPreset(p);
               setFilterOpen(false);
             }}
             accessibilityRole="button"
-            accessibilityState={{ selected: scope.preset === p.key }}
+            accessibilityState={{ selected: scope.preset === p }}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -171,10 +176,10 @@ export function ReportShell({
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <Text variant="body" style={{ flex: 1 }} weight={scope.preset === p.key ? '600' : '400'}>
-              {p.label}
+            <Text variant="body" style={{ flex: 1 }} weight={scope.preset === p ? '600' : '400'}>
+              {dateRangeLabel(tr, p)}
             </Text>
-            {scope.preset === p.key ? <MaterialCommunityIcons name="check" size={19} color={t.c.primary} /> : null}
+            {scope.preset === p ? <MaterialCommunityIcons name="check" size={19} color={t.c.primary} /> : null}
           </Pressable>
         ))}
       </Sheet>

@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useResolvedLanguage } from '@/i18n/I18nProvider';
 import { Platform, Share, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -10,7 +12,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 import { buildDocumentHtml } from '@/features/documents/documentHtml';
-import { DOCUMENT_LABELS } from '@/domain/documentStates';
+import { documentKindLabel } from '@/i18n/labels';
 import { formatMoney } from '@/lib/format';
 import {
   useActiveCompany,
@@ -22,6 +24,8 @@ import {
 
 export default function DocumentPreview() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
+  const language = useResolvedLanguage();
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
@@ -37,6 +41,8 @@ export default function DocumentPreview() {
     () =>
       doc
         ? buildDocumentHtml({
+            t: tr,
+            language,
             document: doc,
             company,
             party,
@@ -44,7 +50,7 @@ export default function DocumentPreview() {
             ewayBill,
           })
         : '',
-    [doc, company, party, branches, ewayBill],
+    [doc, company, party, branches, ewayBill, tr, language],
   );
 
   if (!doc) {
@@ -56,7 +62,7 @@ export default function DocumentPreview() {
     );
   }
 
-  const label = DOCUMENT_LABELS[doc.kind].singular;
+  const label = documentKindLabel(tr, doc.kind, 1);
 
   const share = async () => {
     setBusy(true);

@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback} from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -10,14 +11,15 @@ import { SearchBar } from '@/components/SearchBar';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
 import { PaymentDirection } from '@/types';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { dateRangeLabel, paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney } from '@/lib/format';
-import { DATE_RANGE_PRESETS, DateRangePreset, formatDate, inRange, resolveRange } from '@/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@/lib/date';
 import { money, sum, zero } from '@/lib/money';
 import { useBaseCurrency, useParties, usePayments } from '@/store/selectors';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -62,12 +64,12 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}
         >
-          {[{ key: 'all' as DateRangePreset, label: 'All time' }, ...DATE_RANGE_PRESETS.filter((p) => p.key !== 'all')].map((p) => {
-            const active = range === p.key;
+          {(['all', ...DATE_RANGE_PRESET_KEYS.filter((k) => k !== 'all')] as DateRangePreset[]).map((p) => {
+            const active = range === p;
             return (
               <Pressable
-                key={p.key}
-                onPress={() => setRange(p.key)}
+                key={p}
+                onPress={() => setRange(p)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 style={{
@@ -80,7 +82,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                 }}
               >
                 <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                  {p.label}
+                  {dateRangeLabel(tr, p)}
                 </Text>
               </Pressable>
             );
@@ -131,7 +133,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                     {nameOf(p.partyId)}
                   </Text>
                   <Text variant="caption" tone="muted" numberOfLines={1}>
-                    {p.number} · {formatDate(p.date, 'dd MMM')} · {PAYMENT_METHOD_LABELS[p.method]}
+                    {p.number} · {formatDate(p.date, 'dd MMM')} · {paymentMethodLabel(tr, p.method)}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>

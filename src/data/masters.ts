@@ -94,15 +94,8 @@ export const INTEGRATIONS: Integration[] = [
   { id: 'int_drive', name: 'Google Drive backup', description: 'Nightly backup of documents.', icon: 'cloud-upload-outline', category: 'storage', connected: false },
 ];
 
-export const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: 'Cash',
-  bank: 'Bank transfer',
-  upi: 'UPI',
-  card: 'Card',
-  cheque: 'Cheque',
-  wallet: 'Wallet',
-  other: 'Other',
-};
+/** Payment method codes. The words live in `domain:paymentMethod.*`. */
+export const PAYMENT_METHODS = ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'] as const;
 
 export const PAYMENT_METHOD_ICONS: Record<string, string> = {
   cash: 'cash',

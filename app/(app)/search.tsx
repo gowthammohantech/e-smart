@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ import {
   useStockLevels,
   useCanOpen,
 } from '@/store/selectors';
-import { DOCUMENT_LABELS } from '@/domain/documentStates';
+import { documentKindLabel } from '@/i18n/labels';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
 import { formatMoney, formatQty } from '@/lib/format';
 import { formatDate } from '@/lib/date';
@@ -36,6 +37,7 @@ type Result = {
 /** Global search across every record the active company owns. */
 export default function GlobalSearch() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
 
   const [query, setQuery] = useState('');
@@ -88,7 +90,7 @@ export default function GlobalSearch() {
       if (`${d.number} ${partyName} ${d.reference ?? ''} ${d.supplierDocNumber ?? ''}`.toLowerCase().includes(q)) {
         out.push({
           id: d.id,
-          group: DOCUMENT_LABELS[d.kind].plural,
+          group: documentKindLabel(tr, d.kind, 2),
           title: d.number,
           subtitle: `${partyName} · ${formatDate(d.date, 'dd MMM')}`,
           trailing: formatMoney(d.totals.grandTotal),
@@ -128,7 +130,7 @@ export default function GlobalSearch() {
     });
 
     return out.filter((r) => canOpen(r.route)).slice(0, 60);
-  }, [query, parties, items, documents, payments, expenses, stock, canOpen]);
+  }, [query, parties, items, documents, payments, expenses, stock, canOpen, tr]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Result[]>();

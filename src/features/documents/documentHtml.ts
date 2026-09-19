@@ -1,5 +1,5 @@
 import { BusinessDocument, Company, EwayBill, Party } from '@/types';
-import { DOCUMENT_LABELS } from '@/domain/documentStates';
+import { documentKindLabel, type Translate } from '@/i18n/labels';
 import { flattenTaxComponents } from '@/domain/lineCalc';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { formatDate } from '@/lib/date';
@@ -7,6 +7,7 @@ import { money } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
 import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '@/lib/qr';
 import { E_INVOICE_CANCEL_REASONS } from '@/domain/eInvoice';
+import type { LanguageCode } from '@/i18n/config';
 
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -30,14 +31,23 @@ export function buildDocumentHtml({
   party,
   branchName,
   ewayBill,
+  t,
+  language,
 }: {
   document: BusinessDocument;
   company?: Company;
   party?: Party;
   branchName?: string;
   ewayBill?: EwayBill;
+  /** Translator for the descriptive labels. Statutory field names stay English. */
+  t: Translate;
+  language: LanguageCode;
 }): string {
-  const label = DOCUMENT_LABELS[doc.kind].singular.toUpperCase();
+  // A heading, so it takes the singular. Upper-casing is an English typographic
+  // convention and a no-op on Tamil, so it is applied only where it means
+  // something.
+  const kindName = documentKindLabel(t, doc.kind, 1);
+  const label = language === 'en' ? kindName.toUpperCase() : kindName;
   const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
   const pos = INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name;
 

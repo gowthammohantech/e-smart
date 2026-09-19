@@ -1,5 +1,6 @@
 import { Money, toMajor, factorOf } from './money';
 import { currencyMeta } from './currencies';
+import i18n from '@/i18n';
 
 function groupWestern(intPart: string): string {
   return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -50,14 +51,18 @@ export function formatCompactMoney(m: Money): string {
   const v = toMajor(m);
   const a = Math.abs(v);
   const sign = v < 0 ? '-' : '';
+  // Digits stay ASCII in every language — Tamil digits are archaic and never
+  // used in Indian commerce. Only the magnitude word is translated.
+  const unit = (key: 'thousand' | 'lakh' | 'crore' | 'million' | 'billion') =>
+    i18n.t(`common:compact.${key}`);
   if (meta.grouping === 'indian') {
-    if (a >= 1e7) return `${sign}${meta.symbol}${(a / 1e7).toFixed(2)} Cr`;
-    if (a >= 1e5) return `${sign}${meta.symbol}${(a / 1e5).toFixed(2)} L`;
-    if (a >= 1e3) return `${sign}${meta.symbol}${(a / 1e3).toFixed(1)}K`;
+    if (a >= 1e7) return `${sign}${meta.symbol}${(a / 1e7).toFixed(2)} ${unit('crore')}`;
+    if (a >= 1e5) return `${sign}${meta.symbol}${(a / 1e5).toFixed(2)} ${unit('lakh')}`;
+    if (a >= 1e3) return `${sign}${meta.symbol}${(a / 1e3).toFixed(1)}${unit('thousand')}`;
   } else {
-    if (a >= 1e9) return `${sign}${meta.symbol}${(a / 1e9).toFixed(2)}B`;
-    if (a >= 1e6) return `${sign}${meta.symbol}${(a / 1e6).toFixed(2)}M`;
-    if (a >= 1e3) return `${sign}${meta.symbol}${(a / 1e3).toFixed(1)}K`;
+    if (a >= 1e9) return `${sign}${meta.symbol}${(a / 1e9).toFixed(2)}${unit('billion')}`;
+    if (a >= 1e6) return `${sign}${meta.symbol}${(a / 1e6).toFixed(2)}${unit('million')}`;
+    if (a >= 1e3) return `${sign}${meta.symbol}${(a / 1e3).toFixed(1)}${unit('thousand')}`;
   }
   return formatMoney(m);
 }
@@ -90,8 +95,17 @@ export function initialsOf(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function pluralize(n: number, singular: string, plural?: string): string {
-  return `${n} ${n === 1 ? singular : plural ?? `${singular}s`}`;
+/**
+ * Joins a list the way the language does. `Intl.ListFormat` is not implemented
+ * in Hermes, so the joining words come from the catalogue: English takes
+ * "a and b", Tamil takes "a மற்றும் b".
+ */
+export function listJoin(items: string[]): string {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return i18n.t('common:list.pair', { first: items[0], second: items[1] });
+  const head = items.slice(0, -1).reduce((list, item) => i18n.t('common:list.separator', { list, item }));
+  return i18n.t('common:list.end', { list: head, last: items[items.length - 1] });
 }
 
 export function truncate(s: string, max: number): string {

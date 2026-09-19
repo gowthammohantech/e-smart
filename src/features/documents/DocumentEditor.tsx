@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +20,7 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Avatar } from '@/components/Avatar';
 
 import { DocumentKind, DocumentLine } from '@/types';
-import { DOCUMENT_LABELS } from '@/domain/documentStates';
+import { documentKindLabel } from '@/i18n/labels';
 import { resolveRate } from '@/domain/fx';
 import { CURRENCIES } from '@/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
@@ -68,6 +69,7 @@ export function DocumentEditor({
   onSaved?: (id: string) => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common', 'domain']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -117,7 +119,7 @@ export function DocumentEditor({
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
 
-  const label = DOCUMENT_LABELS[kind];
+  const kindName = documentKindLabel(tr, kind, 1);
   const party = parties.find((p) => p.id === draft.partyId);
   const branch = branches.find((b) => b.id === (draft.branchId ?? activeBranchId));
 
@@ -194,7 +196,12 @@ export function DocumentEditor({
       setDocumentStatus(id, target);
     }
 
-    toast.show(finalize ? `${label.singular} finalised` : 'Saved as draft', 'success');
+    toast.show(
+      finalize
+        ? tr('common:documentEditor.finalised', { kind: kindName })
+        : tr('common:documentEditor.savedDraft'),
+      'success',
+    );
     if (onSaved) onSaved(id);
     else router.replace(detailRouteFor(kind, id) as never);
   };
@@ -253,7 +260,12 @@ export function DocumentEditor({
         </Card>
       </Pressable>
 
-      <DateField label={`${label.singular} date`} value={draft.date} onChange={(date) => patch({ date })} required />
+      <DateField
+        label={tr('common:documentEditor.dateLabel', { kind: kindName })}
+        value={draft.date}
+        onChange={(date) => patch({ date })}
+        required
+      />
 
       {kind === 'invoice' || kind === 'purchaseBill' ? (
         <DateField
@@ -489,7 +501,7 @@ export function DocumentEditor({
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ gap: 3 }}>
             <Text variant="caption" tone="muted">
-              {label.singular} number
+              {tr('common:documentEditor.numberLabel', { kind: kindName })}
             </Text>
             <Text variant="title" weight="700">
               {documentId ? '—' : nextNumberFor(kind as never)}
@@ -714,8 +726,8 @@ export function DocumentEditor({
 
       <ConfirmDialog
         visible={confirmFinalize}
-        title={`Finalise this ${label.singular.toLowerCase()}?`}
-        message={`A permanent number will be assigned and the ${label.singular.toLowerCase()} can no longer be edited freely.`}
+        title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
+        message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
         confirmLabel="Finalise"
         icon="check-decagram-outline"
         onCancel={() => setConfirmFinalize(false)}

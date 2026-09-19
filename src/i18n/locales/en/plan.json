@@ -1,1 +1,71 @@
-{}
+{
+  "tier": {
+    "free": {
+      "blurb": "Get going and see if it fits.",
+      "feature": {
+        "businesses": "1 business",
+        "invoiceCap": "20 invoices a month",
+        "eInvoiceEwb": "E-invoice & e-way bill",
+        "users": "Single user"
+      }
+    },
+    "basic": {
+      "blurb": "For a shop or a solo trader who sells.",
+      "feature": {
+        "businesses": "1 business, 2 users",
+        "invoices": "Unlimited invoices",
+        "eInvoiceEwbGstr1": "E-invoice, e-way bill & GSTR-1",
+        "receivables": "Receivables & reminders"
+      }
+    },
+    "pro": {
+      "blurb": "Buy, stock and sell — for a growing business.",
+      "feature": {
+        "businesses": "3 businesses, 6 users",
+        "everythingInBasic": "Everything in Basic",
+        "purchases": "Purchases & payables",
+        "stock": "Stock, branches & transfers",
+        "expenses": "Expenses, OCR & multi-currency",
+        "allReports": "All reports"
+      }
+    },
+    "business": {
+      "blurb": "Multiple locations and heavier volume.",
+      "feature": {
+        "businesses": "Unlimited businesses & users",
+        "everythingInPro": "Everything in Pro",
+        "roles": "Role-based access",
+        "support": "Priority compliance support",
+        "backup": "Backup & audit export"
+      }
+    }
+  },
+  "upgrade": {
+    "lockedTitle": "{{module}} is on {{plan}}",
+    "lockedMessage": "{{currentPlan}} covers selling and GST. Upgrade to buy, stock and track expenses in the same books — anything you recorded before stays as it was.",
+    "seePlans": "See plans",
+    "thisFeature": "This feature"
+  },
+  "billing": {
+    "title": "Plan & billing",
+    "active": "Active",
+    "popular": "Popular",
+    "freeForever": "Free forever",
+    "renews": "Renews on 1 April · {{price}} a year",
+    "usageBusinesses": "Businesses",
+    "usageInvoices": "Invoices this year",
+    "usageUsers": "Users",
+    "ofTotal": "{{used}} of {{total}}",
+    "monthly": "Monthly",
+    "yearlySave": "Yearly · save 2 months",
+    "free": "Free",
+    "perMonth": "per month",
+    "perYear": "per year",
+    "currentPlan": "Current plan",
+    "downgrade": "Downgrade",
+    "choose": "Choose this plan",
+    "switched": "Switched to {{plan}}",
+    "downgraded": "{{plan}} — purchases, stock and expenses are hidden, not deleted",
+    "footnote": "Elixir Books Smart is priced separately from Elixir Books ERP. Prices shown are illustrative, and billing is not live in this prototype."
+  }
+}

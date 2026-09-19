@@ -3,8 +3,9 @@ import { Money, money, sum, zero } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
 import { DateRange, DateRangePreset, inRange, resolveRange } from '@/lib/date';
 import { AgingSummary, OutstandingDoc } from '@/domain/receivables';
-import { DOCUMENT_LABELS } from '@/domain/documentStates';
-import { FULL_PLAN, MODULE_LABELS, Module, canOpen, hasModule, planInfo } from '@/domain/plan';
+import { documentKindLabel, moduleLabel, statusLabel, type Translate } from '@/i18n/labels';
+import { FULL_PLAN, Module, canOpen, hasModule, planInfo } from '@/domain/plan';
+import i18n from '@/i18n';
 
 /**
  * Lixi, the in-app assistant. The prototype has no server, so Lixi reads the
@@ -40,6 +41,16 @@ export type LixiContext = {
   /** The company's plan; Lixi doesn't answer for modules it leaves out. Defaults to the full app. */
   plan?: PlanTier;
 };
+
+/**
+ * What Lixi needs from outside itself. Injected rather than imported so the
+ * module stays free of React and a test can pass a translator that echoes its
+ * key instead of asserting on prose.
+ */
+export type LixiDeps = { t: Translate };
+
+/** The live translator, read at call time so a language switch is picked up. */
+export const liveDeps = (): LixiDeps => ({ t: i18n.t });
 
 export type LixiStat = { label: string; value: string; tone?: 'good' | 'warn' | 'bad' };
 
@@ -107,7 +118,7 @@ export const TAB_QUESTIONS: Record<string, string> = {
   more: 'Anything wrong with GST?',
 };
 
-export function greet(ctx: LixiContext): LixiReply {
+export function greet(ctx: LixiContext, deps: LixiDeps = liveDeps()): LixiReply {
   const first = ctx.userName?.split(' ')[0];
   const gst = ctx.compliance.failed + ctx.compliance.ewbExpiringSoon;
   const overdue = ctx.receivables.outstanding.filter((o) => o.daysOverdue > 0).length;
@@ -146,9 +157,9 @@ const GATED_TOPICS: { module: Module; test: (q: string) => boolean }[] = [
   { module: 'expenses', test: (q) => has(q, 'spend', 'spent', 'expense', 'cost') },
 ];
 
-function upsell(module: Module, plan: PlanTier): LixiReply {
+function upsell(module: Module, plan: PlanTier, deps: LixiDeps): LixiReply {
   return {
-    text: `${MODULE_LABELS[module]} isn't part of ${planInfo(plan).name}, so I have nothing to read there. ${planInfo(FULL_PLAN).name} adds buying, stock and expenses to the same books.`,
+    text: `${moduleLabel(deps.t, module)} isn't part of ${planInfo(plan).name}, so I have nothing to read there. ${planInfo(FULL_PLAN).name} adds buying, stock and expenses to the same books.`,
     actions: [{ type: 'route', label: 'See plans', route: '/(app)/settings/plan', icon: 'star-circle-outline' }],
   };
 }
@@ -159,7 +170,7 @@ function upsell(module: Module, plan: PlanTier): LixiReply {
  * than a zero that reads like a fact, and no reply offers a screen the plan
  * can't open.
  */
-export function answer(input: string, ctx: LixiContext): LixiReply {
+export function answer(input: string, ctx: LixiContext, deps: LixiDeps = liveDeps()): LixiReply {
   const plan = ctx.plan ?? 'pro';
   const q = input.toLowerCase().trim();
   const creating = has(q, 'new ', 'create', 'make', 'draft a', 'raise', 'add ', 'record ');
@@ -168,22 +179,22 @@ export function answer(input: string, ctx: LixiContext): LixiReply {
   if (q && !byNumber) {
     const target = creating ? CREATE.find((c) => has(q, ...c.words)) : undefined;
     if (target && !canOpen(plan, target.route)) {
-      return upsell(target.route.includes('/expenses/') ? 'expenses' : 'purchases', plan);
+      return upsell(target.route.includes('/expenses/') ? 'expenses' : 'purchases', plan, deps);
     }
     if (!creating) {
       const topic = GATED_TOPICS.find((g) => !hasModule(plan, g.module) && g.test(q));
-      if (topic) return upsell(topic.module, plan);
+      if (topic) return upsell(topic.module, plan, deps);
     }
   }
 
-  const reply = answerFromBooks(input, ctx);
+  const reply = answerFromBooks(input, ctx, deps);
   return {
     ...reply,
     actions: reply.actions?.filter((a) => a.type !== 'route' || canOpen(plan, a.route)),
   };
 }
 
-function answerFromBooks(input: string, ctx: LixiContext): LixiReply {
+function answerFromBooks(input: string, ctx: LixiContext, deps: LixiDeps): LixiReply {
   const q = input.toLowerCase().trim();
   const { currency } = ctx;
   const invoices = ctx.documents.filter((d) => d.kind === 'invoice');
@@ -196,7 +207,9 @@ function answerFromBooks(input: string, ctx: LixiContext): LixiReply {
     const party = ctx.parties.find((p) => p.id === byNumber.partyId);
     const irn = byNumber.compliance?.eInvoiceStatus;
     return {
-      text: `${DOCUMENT_LABELS[byNumber.kind].singular} ${byNumber.number} for ${party?.name ?? 'an unknown party'}, dated ${byNumber.date}. It's ${byNumber.status}.`,
+      // `byNumber.status` used to be interpolated raw here, which printed the
+      // code ("partiallyPaid") rather than the label.
+      text: `${documentKindLabel(deps.t, byNumber.kind, 1)} ${byNumber.number} for ${party?.name ?? 'an unknown party'}, dated ${byNumber.date}. It's ${statusLabel(deps.t, byNumber.status).toLowerCase()}.`,
       stats: [
         { label: 'Total', value: fmt(byNumber.totals.grandTotal) },
         ...(irn && irn !== 'notApplicable'

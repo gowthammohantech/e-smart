@@ -103,7 +103,7 @@ function RadioRow({ label, description, icon, active, last, onPress }: RadioRowP
 
 export default function Appearance() {
   const t = useTheme();
-  const { t: tr } = useTranslation('settings');
+  const { t: tr } = useTranslation(['settings']);
   const baseCurrency = useBaseCurrency();
   const themeMode = useUiStore((s) => s.themeMode);
   const setThemeMode = useUiStore((s) => s.setThemeMode);

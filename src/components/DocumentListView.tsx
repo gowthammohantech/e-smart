@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback} from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Card } from './Card';
 import { Text } from './Text';
@@ -12,8 +13,9 @@ import { Sheet } from './Sheet';
 import { Button } from './Button';
 import { Badge } from './Badge';
 import { BusinessDocument, DocStatus, DocumentKind } from '@/types';
-import { DOCUMENT_LABELS, STATUS_META } from '@/domain/documentStates';
-import { DATE_RANGE_PRESETS, DateRangePreset, inRange, resolveRange } from '@/lib/date';
+import { STATUS_TONE } from '@/domain/documentStates';
+import { dateRangeLabel, documentKindLabel, statusLabel } from '@/i18n/labels';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, inRange, resolveRange } from '@/lib/date';
 import { formatMoney } from '@/lib/format';
 import { money, sum, zero } from '@/lib/money';
 import { useBaseCurrency, useParties } from '@/store/selectors';
@@ -52,6 +54,7 @@ export function DocumentListView({
   headerExtra?: React.ReactNode;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common', 'domain']);
   const router = useRouter();
   const baseCurrency = useBaseCurrency();
   const parties = useParties();
@@ -99,7 +102,6 @@ export function DocumentListView({
   const activeFilterCount =
     filters.statuses.length + (filters.partyId ? 1 : 0) + (filters.range !== 'all' ? 1 : 0);
 
-  const label = DOCUMENT_LABELS[kind];
 
   const toggleStatus = (s: DocStatus) =>
     setFilters((f) => ({
@@ -113,7 +115,7 @@ export function DocumentListView({
         <SearchBar
           value={filters.query}
           onChangeText={(query) => setFilters((f) => ({ ...f, query }))}
-          placeholder={`Search ${label.plural.toLowerCase()}`}
+          placeholder={tr('common:documentList.search', { kind: documentKindLabel(tr, kind, 2) })}
           right={
             <Pressable
               onPress={() => setFilterOpen(true)}
@@ -144,14 +146,14 @@ export function DocumentListView({
           >
             {availableStatuses.map((s) => {
               const active = filters.statuses.includes(s);
-              const meta = STATUS_META[s];
+              const label = statusLabel(tr, s);
               return (
                 <Pressable
                   key={s}
                   onPress={() => toggleStatus(s)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Filter by ${meta.label}`}
+                  accessibilityLabel={tr('common:documentList.filterByStatus', { status: label })}
                   style={{
                     paddingHorizontal: t.spacing.md,
                     paddingVertical: 6,
@@ -162,7 +164,7 @@ export function DocumentListView({
                   }}
                 >
                   <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                    {meta.label} · {documents.filter((d) => d.status === s).length}
+                    {label} · {documents.filter((d) => d.status === s).length}
                   </Text>
                 </Pressable>
               );
@@ -174,7 +176,10 @@ export function DocumentListView({
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text variant="caption" tone="muted">
-            {filtered.length} {filtered.length === 1 ? label.singular.toLowerCase() : label.plural.toLowerCase()}
+            {tr('common:documentList.count', {
+              count: filtered.length,
+              kind: documentKindLabel(tr, kind, filtered.length),
+            })}
           </Text>
           <Text variant="caption" weight="600">
             {formatMoney(total)}
@@ -190,13 +195,17 @@ export function DocumentListView({
           {filtered.length === 0 ? (
             <EmptyState
               illustration="no-documents" icon="file-search-outline"
-              title={documents.length === 0 ? `No ${label.plural.toLowerCase()} yet` : 'Nothing matches'}
+              title={
+                documents.length === 0
+                  ? tr('common:documentList.emptyNoneTitle', { kind: documentKindLabel(tr, kind, 2) })
+                  : tr('common:documentList.emptyNoMatchTitle')
+              }
               message={
                 documents.length === 0
-                  ? `Create your first ${label.singular.toLowerCase()} to see it here.`
-                  : 'Try clearing a filter or searching for something else.'
+                  ? tr('common:documentList.emptyNoneMessage', { kind: documentKindLabel(tr, kind, 1) })
+                  : tr('common:documentList.emptyNoMatchMessage')
               }
-              actionLabel={documents.length === 0 ? emptyAction : 'Clear filters'}
+              actionLabel={documents.length === 0 ? emptyAction : tr('common:documentList.clearFilters')}
               onAction={documents.length === 0 ? onEmptyAction : () => setFilters(DEFAULT_FILTERS)}
               compact
             />
@@ -236,12 +245,12 @@ export function DocumentListView({
               Date range
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-              {DATE_RANGE_PRESETS.map((p) => {
-                const active = filters.range === p.key;
+              {DATE_RANGE_PRESET_KEYS.map((p) => {
+                const active = filters.range === p;
                 return (
                   <Pressable
-                    key={p.key}
-                    onPress={() => setFilters((f) => ({ ...f, range: p.key }))}
+                    key={p}
+                    onPress={() => setFilters((f) => ({ ...f, range: p }))}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                     style={{
@@ -254,7 +263,7 @@ export function DocumentListView({
                     }}
                   >
                     <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
-                      {p.label}
+                      {dateRangeLabel(tr, p)}
                     </Text>
                   </Pressable>
                 );
@@ -271,7 +280,7 @@ export function DocumentListView({
                 const active = filters.statuses.includes(s);
                 return (
                   <Pressable key={s} onPress={() => toggleStatus(s)} accessibilityRole="button">
-                    <Badge label={STATUS_META[s].label} tone={active ? STATUS_META[s].tone : 'neutral'} />
+                    <Badge label={statusLabel(tr, s)} tone={active ? STATUS_TONE[s] : 'neutral'} />
                   </Pressable>
                 );
               })}

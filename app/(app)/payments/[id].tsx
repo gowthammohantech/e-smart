@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,12 +14,13 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '@/store/selectors';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney } from '@/lib/format';
 import { formatDate, formatDateTime } from '@/lib/date';
 
 export default function PaymentDetail() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
   const toast = useToast();
 
@@ -73,7 +75,7 @@ export default function PaymentDetail() {
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           {[
             { label: 'Date', value: formatDate(payment.date) },
-            { label: 'Method', value: PAYMENT_METHOD_LABELS[payment.method] },
+            { label: 'Method', value: paymentMethodLabel(tr, payment.method) },
             { label: isIn ? 'Deposited into' : 'Paid from', value: account?.name ?? '—' },
             ...(payment.reference ? [{ label: 'Reference', value: payment.reference }] : []),
             ...(payment.currency !== baseCurrency

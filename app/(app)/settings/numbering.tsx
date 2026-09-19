@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
@@ -12,7 +13,8 @@ import { PickerField, SwitchField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 import { NumberingSeries } from '@/types';
-import { SERIES_LABELS, formatNumber } from '@/domain/numbering';
+import { formatNumber } from '@/domain/numbering';
+import { seriesLabel } from '@/i18n/labels';
 import { useAppStore } from '@/store/appStore';
 import { useBranches, useNumberingSeries } from '@/store/selectors';
 import { today } from '@/lib/date';
@@ -25,6 +27,7 @@ const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
 
 export default function NumberingSettings() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const toast = useToast();
 
   const series = useNumberingSeries();
@@ -68,7 +71,7 @@ export default function NumberingSettings() {
   const save = () => {
     if (!draft) return;
     saveNumberingSeries(draft);
-    toast.show(`${SERIES_LABELS[draft.kind]} numbering updated`, 'success');
+    toast.show(`${seriesLabel(tr, draft.kind)} numbering updated`, 'success');
     setEditing(null);
   };
 
@@ -88,7 +91,7 @@ export default function NumberingSettings() {
           {series.map((s, i) => (
             <ListRow
               key={s.id}
-              title={SERIES_LABELS[s.kind]}
+              title={seriesLabel(tr, s.kind)}
               subtitle={formatNumber(s, { date: today(), branchCode })}
               meta={RESET_LABELS[s.resetPolicy]}
               icon="numeric"
@@ -104,7 +107,7 @@ export default function NumberingSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing ? SERIES_LABELS[editing.kind] : ''}
+        title={editing ? seriesLabel(tr, editing.kind) : ''}
         footer={<Button title="Save" onPress={save} fullWidth />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>

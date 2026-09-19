@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,12 +13,15 @@ import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useDocuments } from '@/store/selectors';
 import { PLANS, moduleSetFor, planInfo } from '@/domain/plan';
+import { planBlurb, planFeatures } from '@/features/plan/planCopy';
+import { formatNumber } from '@/lib/format';
 import type { PlanTier } from '@/types';
 
 type Cycle = 'monthly' | 'yearly';
 
 export default function PlanBilling() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['plan']);
   const toast = useToast();
 
   const [cycle, setCycle] = useState<Cycle>('yearly');
@@ -32,15 +36,15 @@ export default function PlanBilling() {
     setPlan(company.id, tier);
     const name = planInfo(tier).name;
     if (moduleSetFor(currentPlan) === 'full' && moduleSetFor(tier) === 'sales') {
-      toast.show(`${name} — purchases, stock and expenses are hidden, not deleted`, 'info');
+      toast.show(tr('plan:billing.downgraded', { plan: name }), 'info');
     } else {
-      toast.show(`Switched to ${name}`, 'success');
+      toast.show(tr('plan:billing.switched', { plan: name }), 'success');
     }
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: 'Plan & billing' }} />
+      <Stack.Screen options={{ title: tr('plan:billing.title') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: t.spacing.md }}>
@@ -49,16 +53,21 @@ export default function PlanBilling() {
             <Text variant="title" weight="700" style={{ flex: 1 }}>
               {current.name}
             </Text>
-            <Badge label="Active" tone="success" />
+            <Badge label={tr('plan:billing.active')} tone="success" />
           </View>
           <Text variant="caption" tone="muted">
-            {current.yearly === 0 ? 'Free forever' : `Renews on 1 April · ₹${current.yearly.toLocaleString('en-IN')} a year`}
+            {current.yearly === 0
+              ? tr('plan:billing.freeForever')
+              : tr('plan:billing.renews', { price: `₹${formatNumber(current.yearly, 0, 'indian')}` })}
           </Text>
           <View style={{ height: 1, backgroundColor: t.c.line }} />
           {[
-            { label: 'Businesses', value: `${companies.length} of 3` },
-            { label: 'Invoices this year', value: String(invoices.length) },
-            { label: 'Users', value: '4 of 6' },
+            {
+              label: tr('plan:billing.usageBusinesses'),
+              value: tr('plan:billing.ofTotal', { used: companies.length, total: 3 }),
+            },
+            { label: tr('plan:billing.usageInvoices'), value: String(invoices.length) },
+            { label: tr('plan:billing.usageUsers'), value: tr('plan:billing.ofTotal', { used: 4, total: 6 }) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="small" tone="muted">
@@ -73,8 +82,8 @@ export default function PlanBilling() {
 
         <Segmented
           options={[
-            { value: 'monthly', label: 'Monthly' },
-            { value: 'yearly', label: 'Yearly · save 2 months' },
+            { value: 'monthly', label: tr('plan:billing.monthly') },
+            { value: 'yearly', label: tr('plan:billing.yearlySave') },
           ]}
           value={cycle}
           onChange={(v) => setCycle(v as Cycle)}
@@ -98,26 +107,26 @@ export default function PlanBilling() {
                     <Text variant="title" weight="700">
                       {p.name}
                     </Text>
-                    {p.popular ? <Badge label="Popular" tone="info" size="sm" /> : null}
+                    {p.popular ? <Badge label={tr('plan:billing.popular')} tone="info" size="sm" /> : null}
                   </View>
                   <Text variant="caption" tone="muted">
-                    {p.blurb}
+                    {planBlurb(tr, p)}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text variant="h3" weight="700">
-                    {price === 0 ? 'Free' : `₹${price.toLocaleString('en-IN')}`}
+                    {price === 0 ? tr('plan:billing.free') : `₹${formatNumber(price, 0, 'indian')}`}
                   </Text>
                   {price > 0 ? (
                     <Text variant="micro" tone="muted">
-                      per {cycle === 'monthly' ? 'month' : 'year'}
+                      {cycle === 'monthly' ? tr('plan:billing.perMonth') : tr('plan:billing.perYear')}
                     </Text>
                   ) : null}
                 </View>
               </View>
 
               <View style={{ gap: 7 }}>
-                {p.features.map((f) => (
+                {planFeatures(tr, p).map((f) => (
                   <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
                     <MaterialCommunityIcons name="check" size={15} color={t.c.good} />
                     <Text variant="small" tone="muted" style={{ flex: 1 }}>
@@ -128,7 +137,13 @@ export default function PlanBilling() {
               </View>
 
               <Button
-                title={isCurrent ? 'Current plan' : price === 0 ? 'Downgrade' : 'Choose this plan'}
+                title={
+                  isCurrent
+                    ? tr('plan:billing.currentPlan')
+                    : price === 0
+                      ? tr('plan:billing.downgrade')
+                      : tr('plan:billing.choose')
+                }
                 variant={isCurrent ? 'ghost' : 'primary'}
                 disabled={isCurrent}
                 onPress={() => choose(p.key)}
@@ -139,7 +154,7 @@ export default function PlanBilling() {
         })}
 
         <Text variant="caption" tone="muted" center style={{ lineHeight: 18 }}>
-          Elixir Books Smart is priced separately from Elixir Books ERP. Prices shown are illustrative, and billing is not live in this prototype.
+          {tr('plan:billing.footnote')}
         </Text>
       </ScrollView>
     </View>

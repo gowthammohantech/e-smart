@@ -19,10 +19,15 @@ export type Module =
 
 export type PlanInfo = {
   key: PlanTier;
+  /** Product name. A brand, so it is never translated. */
   name: string;
   monthly: number;
   yearly: number;
-  blurb: string;
+  /**
+   * Stable feature slugs. The sentences live in `plan:tier.<key>.feature.<slug>`
+   * so this module stays free of copy, and a slug reused across tiers still
+   * reads differently per tier where the numbers differ.
+   */
   features: string[];
   popular?: boolean;
 };
@@ -33,24 +38,21 @@ export const PLANS: PlanInfo[] = [
     name: 'Free',
     monthly: 0,
     yearly: 0,
-    blurb: 'Get going and see if it fits.',
-    features: ['1 business', '20 invoices a month', 'E-invoice & e-way bill', 'Single user'],
+    features: ['businesses', 'invoiceCap', 'eInvoiceEwb', 'users'],
   },
   {
     key: 'basic',
     name: 'Smart Basic',
     monthly: 399,
     yearly: 3990,
-    blurb: 'For a shop or a solo trader who sells.',
-    features: ['1 business, 2 users', 'Unlimited invoices', 'E-invoice, e-way bill & GSTR-1', 'Receivables & reminders'],
+    features: ['businesses', 'invoices', 'eInvoiceEwbGstr1', 'receivables'],
   },
   {
     key: 'pro',
     name: 'Smart Pro',
     monthly: 899,
     yearly: 8990,
-    blurb: 'Buy, stock and sell — for a growing business.',
-    features: ['3 businesses, 6 users', 'Everything in Basic', 'Purchases & payables', 'Stock, branches & transfers', 'Expenses, OCR & multi-currency', 'All reports'],
+    features: ['businesses', 'everythingInBasic', 'purchases', 'stock', 'expenses', 'allReports'],
     popular: true,
   },
   {
@@ -58,8 +60,7 @@ export const PLANS: PlanInfo[] = [
     name: 'Smart Business',
     monthly: 1799,
     yearly: 17990,
-    blurb: 'Multiple locations and heavier volume.',
-    features: ['Unlimited businesses & users', 'Everything in Pro', 'Role-based access', 'Priority compliance support', 'Backup & audit export'],
+    features: ['businesses', 'everythingInPro', 'roles', 'support', 'backup'],
   },
 ];
 
@@ -79,15 +80,16 @@ export function hasModule(tier: PlanTier, module: Module): boolean {
   return moduleSetFor(tier) === 'full';
 }
 
-export const MODULE_LABELS: Record<Module, string> = {
-  purchases: 'Purchases',
-  inventory: 'Stock',
-  expenses: 'Expenses',
-  ocr: 'Bill capture',
-  fx: 'Multi-currency',
-  branches: 'Branches',
-  payables: 'Payables',
-};
+/** Every gateable module, for iterating. Names live in `domain:module.*`. */
+export const MODULES: Module[] = [
+  'purchases',
+  'inventory',
+  'expenses',
+  'ocr',
+  'fx',
+  'branches',
+  'payables',
+];
 
 /** Reports that read the buying side of the books, and the module each needs. */
 const FULL_PLAN_REPORTS: Record<string, Module> = {

@@ -1,1 +1,73 @@
-{}
+{
+  "status": {
+    "draft": "Draft",
+    "sent": "Sent",
+    "accepted": "Accepted",
+    "rejected": "Rejected",
+    "expired": "Expired",
+    "confirmed": "Confirmed",
+    "fulfilled": "Fulfilled",
+    "cancelled": "Cancelled",
+    "delivered": "Delivered",
+    "issued": "Issued",
+    "partiallyPaid": "Partly paid",
+    "paid": "Paid",
+    "overdue": "Overdue",
+    "requested": "Requested",
+    "approved": "Approved",
+    "processed": "Processed",
+    "received": "Received",
+    "billed": "Billed"
+  },
+  "documentKind": {
+    "quote_one": "Quotation",
+    "quote_other": "Quotations",
+    "salesOrder_one": "Sales order",
+    "salesOrder_other": "Sales orders",
+    "delivery_one": "Delivery note",
+    "delivery_other": "Delivery notes",
+    "invoice_one": "Invoice",
+    "invoice_other": "Invoices",
+    "salesReturn_one": "Sales return",
+    "salesReturn_other": "Sales returns",
+    "purchaseOrder_one": "Purchase order",
+    "purchaseOrder_other": "Purchase orders",
+    "goodsReceipt_one": "Goods receipt",
+    "goodsReceipt_other": "Goods receipts",
+    "purchaseBill_one": "Purchase bill",
+    "purchaseBill_other": "Purchase bills",
+    "purchaseReturn_one": "Purchase return",
+    "purchaseReturn_other": "Purchase returns"
+  },
+  "series": {
+    "quote": "Quotation",
+    "salesOrder": "Sales order",
+    "delivery": "Delivery note",
+    "invoice": "Invoice",
+    "salesReturn": "Sales return",
+    "purchaseOrder": "Purchase order",
+    "goodsReceipt": "Goods receipt",
+    "purchaseBill": "Purchase bill",
+    "purchaseReturn": "Purchase return",
+    "payment": "Payment",
+    "expense": "Expense"
+  },
+  "module": {
+    "purchases": "Purchases",
+    "inventory": "Stock",
+    "expenses": "Expenses",
+    "ocr": "Bill capture",
+    "fx": "Multi-currency",
+    "branches": "Branches",
+    "payables": "Payables"
+  },
+  "paymentMethod": {
+    "cash": "Cash",
+    "bank": "Bank transfer",
+    "upi": "UPI",
+    "card": "Card",
+    "cheque": "Cheque",
+    "wallet": "Wallet",
+    "other": "Other"
+  }
+}

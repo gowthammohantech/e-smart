@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,13 +13,14 @@ import { Fab } from '@/components/Fab';
 import { StatRow, StatTile } from '@/components/StatTile';
 import { DonutChart } from '@/components/charts/DonutChart';
 import { useBaseCurrency, useExpenseCategories, useExpenses } from '@/store/selectors';
-import { DATE_RANGE_PRESETS, DateRangePreset, formatDate, inRange, resolveRange } from '@/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@/lib/date';
 import { formatMoney } from '@/lib/format';
 import { money, sum, zero } from '@/lib/money';
-import { PAYMENT_METHOD_LABELS } from '@/data/masters';
+import { dateRangeLabel, paymentMethodLabel } from '@/i18n/labels';
 
 export default function ExpensesList() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['domain']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -69,12 +71,12 @@ export default function ExpensesList() {
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search expenses" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
-          {DATE_RANGE_PRESETS.map((p) => {
-            const active = range === p.key;
+          {DATE_RANGE_PRESET_KEYS.map((p) => {
+            const active = range === p;
             return (
               <Pressable
-                key={p.key}
-                onPress={() => setRange(p.key)}
+                key={p}
+                onPress={() => setRange(p)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 style={{
@@ -87,7 +89,7 @@ export default function ExpensesList() {
                 }}
               >
                 <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                  {p.label}
+                  {dateRangeLabel(tr, p)}
                 </Text>
               </Pressable>
             );
@@ -200,7 +202,7 @@ export default function ExpensesList() {
                       {cat?.name ?? 'Uncategorised'}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
-                      {formatDate(e.date, 'dd MMM')} · {PAYMENT_METHOD_LABELS[e.method]}
+                      {formatDate(e.date, 'dd MMM')} · {paymentMethodLabel(tr, e.method)}
                       {e.notes ? ` · ${e.notes}` : ''}
                     </Text>
                   </View>

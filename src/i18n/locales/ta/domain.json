@@ -1,1 +1,73 @@
-{}
+{
+  "status": {
+    "draft": "வரைவு",
+    "sent": "அனுப்பியது",
+    "accepted": "ஏற்றது",
+    "rejected": "நிராகரிப்பு",
+    "expired": "காலாவதி",
+    "confirmed": "உறுதி",
+    "fulfilled": "நிறைவு",
+    "cancelled": "ரத்து",
+    "delivered": "வழங்கியது",
+    "issued": "வெளியிட்டது",
+    "partiallyPaid": "பகுதி செலுத்தல்",
+    "paid": "செலுத்தியது",
+    "overdue": "தாமதம்",
+    "requested": "கோரிக்கை",
+    "approved": "அங்கீகாரம்",
+    "processed": "செயலாக்கம்",
+    "received": "பெற்றது",
+    "billed": "பில் செய்தது"
+  },
+  "documentKind": {
+    "quote_one": "விலை மதிப்பீடு",
+    "quote_other": "விலை மதிப்பீடுகள்",
+    "salesOrder_one": "விற்பனை ஆர்டர்",
+    "salesOrder_other": "விற்பனை ஆர்டர்கள்",
+    "delivery_one": "வழங்கல் குறிப்பு",
+    "delivery_other": "வழங்கல் குறிப்புகள்",
+    "invoice_one": "விலைப்பட்டியல்",
+    "invoice_other": "விலைப்பட்டியல்கள்",
+    "salesReturn_one": "விற்பனை திரும்பல்",
+    "salesReturn_other": "விற்பனை திரும்பல்கள்",
+    "purchaseOrder_one": "கொள்முதல் ஆர்டர்",
+    "purchaseOrder_other": "கொள்முதல் ஆர்டர்கள்",
+    "goodsReceipt_one": "பொருள் பெறுதல் சீட்டு",
+    "goodsReceipt_other": "பொருள் பெறுதல் சீட்டுகள்",
+    "purchaseBill_one": "கொள்முதல் பில்",
+    "purchaseBill_other": "கொள்முதல் பில்கள்",
+    "purchaseReturn_one": "கொள்முதல் திரும்பல்",
+    "purchaseReturn_other": "கொள்முதல் திரும்பல்கள்"
+  },
+  "series": {
+    "quote": "விலை மதிப்பீடு",
+    "salesOrder": "விற்பனை ஆர்டர்",
+    "delivery": "வழங்கல் குறிப்பு",
+    "invoice": "விலைப்பட்டியல்",
+    "salesReturn": "விற்பனை திரும்பல்",
+    "purchaseOrder": "கொள்முதல் ஆர்டர்",
+    "goodsReceipt": "பொருள் பெறுதல் சீட்டு",
+    "purchaseBill": "கொள்முதல் பில்",
+    "purchaseReturn": "கொள்முதல் திரும்பல்",
+    "payment": "கட்டணம்",
+    "expense": "செலவு"
+  },
+  "module": {
+    "purchases": "கொள்முதல்",
+    "inventory": "இருப்பு",
+    "expenses": "செலவுகள்",
+    "ocr": "பில் படம்பிடிப்பு",
+    "fx": "பல நாணயம்",
+    "branches": "கிளைகள்",
+    "payables": "செலுத்த வேண்டியவை"
+  },
+  "paymentMethod": {
+    "cash": "ரொக்கம்",
+    "bank": "வங்கிப் பரிமாற்றம்",
+    "upi": "UPI",
+    "card": "அட்டை",
+    "cheque": "காசோலை",
+    "wallet": "வாலட்",
+    "other": "மற்றவை"
+  }
+}
