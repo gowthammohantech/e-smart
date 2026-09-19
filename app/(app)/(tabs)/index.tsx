@@ -33,10 +33,13 @@ import { money, subtract, sum } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
 import { inRange, lastNMonths, monthLabel, resolveRange } from '@/lib/date';
 import { isLowStock } from '@/domain/stockLedger';
+import { useUiStore } from '@/store/uiStore';
+import { openLixi } from '@/features/lixi/open';
 
 export default function Home() {
   const t = useTheme();
   const router = useRouter();
+  const pullToLixi = useUiStore((s) => s.lixiAccess.pullDown);
 
   const user = useCurrentUser();
   const baseCurrency = useBaseCurrency();
@@ -206,7 +209,11 @@ export default function Home() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <AppHeader />
 
-      <Screen bottomInset={80}>
+      <Screen
+        bottomInset={80}
+        onRefresh={pullToLixi ? () => openLixi() : undefined}
+        refreshTitle="Let go to ask Lixi"
+      >
         <Text variant="h2" style={{ marginBottom: 2 }}>
           {greeting()}, {user?.name?.split(' ')[0] ?? 'there'}
         </Text>

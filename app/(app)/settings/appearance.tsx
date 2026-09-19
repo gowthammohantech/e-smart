@@ -7,9 +7,18 @@ import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { StatRow, StatTile } from '@/components/StatTile';
-import { useUiStore } from '@/store/uiStore';
+import { LixiAccess, useUiStore } from '@/store/uiStore';
+import { SwitchField } from '@/components/Field';
+import { LixiMark } from '@/features/lixi/LixiOrb';
 import { fromMajor } from '@/lib/money';
 import { useBaseCurrency } from '@/store/selectors';
+
+const LIXI_WAYS: { key: keyof LixiAccess; label: string; description: string }[] = [
+  { key: 'holdTab', label: 'Hold a tab', description: 'Press and hold any tab; Lixi opens already answering about it.' },
+  { key: 'swipeUp', label: 'Swipe up on the tab bar', description: 'Pull up from the bar and let go once the orb locks in.' },
+  { key: 'floatingOrb', label: 'Floating orb', description: 'A small orb on the screen edge. Drag it anywhere; tap to open.' },
+  { key: 'pullDown', label: 'Pull down on Home', description: 'Pull the Home screen down, like refreshing, to ask Lixi.' },
+];
 
 const MODES: { value: ThemeMode; label: string; description: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
   { value: 'system', label: 'Match device', description: 'Follows your phone’s light or dark setting.', icon: 'cellphone-cog' },
@@ -22,6 +31,8 @@ export default function Appearance() {
   const baseCurrency = useBaseCurrency();
   const themeMode = useUiStore((s) => s.themeMode);
   const setThemeMode = useUiStore((s) => s.setThemeMode);
+  const lixiAccess = useUiStore((s) => s.lixiAccess);
+  const setLixiAccess = useUiStore((s) => s.setLixiAccess);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -72,6 +83,28 @@ export default function Appearance() {
               </Pressable>
             );
           })}
+        </Card>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+          <LixiMark size={20} />
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+            Ways to open Lixi
+          </Text>
+        </View>
+
+        <Card style={{ gap: t.spacing.xs }}>
+          {LIXI_WAYS.map((w) => (
+            <SwitchField
+              key={w.key}
+              label={w.label}
+              description={w.description}
+              value={lixiAccess[w.key]}
+              onValueChange={(on) => setLixiAccess(w.key, on)}
+            />
+          ))}
+          <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.xs }}>
+            With every way off, Lixi is still under More → Ask Lixi.
+          </Text>
         </Card>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>

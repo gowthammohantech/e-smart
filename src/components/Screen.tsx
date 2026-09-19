@@ -14,6 +14,8 @@ type Props = {
   bottomInset?: number;
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** iOS caption under the pull spinner, for pulls that do more than refresh. */
+  refreshTitle?: string;
   background?: 'bg' | 'card';
 };
 
@@ -26,6 +28,7 @@ export function Screen({
   bottomInset = 0,
   onRefresh,
   refreshing,
+  refreshTitle,
   background = 'bg',
 }: Props) {
   const t = useTheme();
@@ -50,7 +53,13 @@ export function Screen({
       showsVerticalScrollIndicator={false}
       refreshControl={
         onRefresh ? (
-          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={t.c.muted} />
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.c.muted}
+            title={refreshTitle}
+            titleColor={t.c.muted}
+          />
         ) : undefined
       }
     >

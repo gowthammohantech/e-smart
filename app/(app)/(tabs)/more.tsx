@@ -59,7 +59,7 @@ export default function MoreTab() {
       title: 'Tools',
       entries: [
         { label: 'Scan a bill or receipt', icon: 'text-recognition', route: '/(app)/ocr/capture' },
-        { label: 'Ask the assistant', icon: 'robot-outline', route: '/(app)/assistant' },
+        { label: 'Ask Lixi', icon: 'creation', route: '/(app)/lixi' },
         { label: 'Global search', icon: 'magnify', route: '/(app)/search' },
         { label: 'Notifications', icon: 'bell-outline', route: '/(app)/notifications', badge: unread ? String(unread) : undefined },
       ],
