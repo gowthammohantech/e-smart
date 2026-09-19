@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,6 +14,7 @@ const DEMO_CODE = '123456';
 
 export default function Otp() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone?: string }>();
   const signInWithOtp = useAppStore((s) => s.signInWithOtp);
@@ -41,7 +43,7 @@ export default function Otp() {
 
   const verify = () => {
     if (code.length < LENGTH) {
-      setError('Enter all six digits');
+      setError(tr('auth:otp.enterAllDigits'));
       return;
     }
     if (code !== DEMO_CODE) {
@@ -53,7 +55,7 @@ export default function Otp() {
   };
 
   return (
-    <AuthShell title="Enter the code" subtitle={`We sent a 6-digit code to ${phone ?? 'your phone'}.`}>
+    <AuthShell title={tr('auth:otp.title')} subtitle={`We sent a 6-digit code to ${phone ?? 'your phone'}.`}>
       <View style={{ flexDirection: 'row', gap: t.spacing.sm, justifyContent: 'space-between' }}>
         {digits.map((d, i) => (
           <TextInput
@@ -64,7 +66,7 @@ export default function Otp() {
             value={d}
             onChangeText={(v) => setDigit(i, v)}
             onKeyPress={({ nativeEvent }) => {
-              if (nativeEvent.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
+              if (nativeEvent.key === tr('auth:otp.backspace') && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
             }}
             keyboardType="number-pad"
             maxLength={1}
@@ -95,7 +97,7 @@ export default function Otp() {
         </Text>
       )}
 
-      <Button title="Verify and continue" onPress={verify} fullWidth size="lg" />
+      <Button title={tr('auth:otp.submit')} onPress={verify} fullWidth size="lg" />
 
       <View style={{ alignItems: 'center' }}>
         {seconds > 0 ? (

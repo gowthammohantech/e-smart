@@ -1,1 +1,19 @@
-{}
+{
+  "validation": {
+    "required": "{{field}} is required",
+    "invalidEmail": "Enter a valid email address",
+    "invalidPhone": "Enter a valid phone number",
+    "gstinShape": "GSTIN should look like 27AABCV1234F1ZO",
+    "gstinCheckDigit": "This GSTIN fails its check digit — look for a typo",
+    "mustBeNumber": "{{field}} must be a number",
+    "mustBePositive": "{{field}} must be greater than zero",
+    "minLength": "{{field}} must be at least {{count}} characters"
+  },
+  "field": {
+    "email": "Email",
+    "password": "Password",
+    "phoneNumber": "Phone number",
+    "yourName": "Your name",
+    "businessName": "Business name"
+  }
+}

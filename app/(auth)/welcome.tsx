@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 
 export default function Welcome() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -37,21 +39,21 @@ export default function Welcome() {
             }}
           >
             <Text variant="micro" tone="primary">
-              ✦ AI-assisted by Lixi
+              {tr('auth:welcome.badge')}
             </Text>
           </View>
           <BrandLogo height={72} />
           <Text variant="body" tone="muted" center style={{ lineHeight: 22, maxWidth: 300 }}>
-            Invoices, payments and stock — with Lixi, your AI assistant, keeping an eye on the books.
+            {tr('auth:welcome.pitch')}
           </Text>
         </View>
       </View>
 
       <View style={{ gap: t.spacing.md }}>
-        <Button title="Get started" onPress={() => router.push('/(auth)/sign-up')} fullWidth size="lg" />
-        <Button title="I already have an account" variant="ghost" onPress={() => router.push('/(auth)/sign-in')} fullWidth />
+        <Button title={tr('auth:welcome.getStarted')} onPress={() => router.push('/(auth)/sign-up')} fullWidth size="lg" />
+        <Button title={tr('auth:welcome.haveAccount')} variant="ghost" onPress={() => router.push('/(auth)/sign-in')} fullWidth />
         <Text variant="micro" tone="muted" center>
-          Prototype build · demo data only
+          {tr('auth:welcome.buildNote')}
         </Text>
       </View>
     </View>

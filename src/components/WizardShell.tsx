@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +24,8 @@ export function WizardShell({
 }: {
   title: string;
   subtitle?: string;
-  steps?: readonly { key: string; label: string }[];
+  /** Onboarding step keys; named from `onboarding:step.*`. */
+  steps?: readonly string[];
   currentStep?: number;
   children: React.ReactNode;
   primaryLabel?: string;
@@ -34,6 +36,7 @@ export function WizardShell({
   onSkip?: () => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -80,7 +83,7 @@ export function WizardShell({
           ) : null}
         </View>
 
-        {steps && currentStep !== undefined ? <Stepper steps={steps} current={currentStep} /> : null}
+        {steps && currentStep !== undefined ? <Stepper steps={steps.map((k) => tr(`onboarding:step.${k}` as 'onboarding:step.tax'))} current={currentStep} /> : null}
 
         <View style={{ gap: 6 }}>
           <Text variant="h2">{title}</Text>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { AuthShell } from '@/components/AuthShell';
 import { TextField } from '@/components/Field';
@@ -7,13 +8,14 @@ import { EmptyState } from '@/components/EmptyState';
 import { Errors, hasErrors, required, validEmail } from '@/lib/validators';
 
 export default function ForgotPassword() {
+  const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState<Errors<'email'>>({});
   const [sent, setSent] = useState(false);
 
   const submit = () => {
-    const next = { email: required(email, 'Email') ?? validEmail(email) };
+    const next = { email: required(email, tr('errors:field.email')) ?? validEmail(email) };
     setErrors(next);
     if (hasErrors(next)) return;
     setSent(true);
@@ -21,12 +23,12 @@ export default function ForgotPassword() {
 
   if (sent) {
     return (
-      <AuthShell title="Check your inbox" subtitle={`We sent reset instructions to ${email}.`}>
+      <AuthShell title={tr('auth:forgot.sentTitle')} subtitle={tr('auth:forgot.sentSubtitle', { email })}>
         <EmptyState
           illustration="mail-sent" icon="email-check-outline"
-          title="Reset link sent"
-          message="Open the link on this device to choose a new password. It expires in 30 minutes."
-          actionLabel="Back to sign in"
+          title={tr('auth:forgot.sentBadge')}
+          message={tr('auth:forgot.sentMessage')}
+          actionLabel={tr('auth:forgot.backToSignIn')}
           onAction={() => router.replace('/(auth)/sign-in')}
         />
       </AuthShell>
@@ -34,9 +36,9 @@ export default function ForgotPassword() {
   }
 
   return (
-    <AuthShell title="Reset your password" subtitle="We'll email you a secure link to set a new one.">
+    <AuthShell title={tr('auth:forgot.title')} subtitle={tr('auth:forgot.subtitle')}>
       <TextField
-        label="Email"
+        label={tr('auth:forgot.email')}
         value={email}
         onChangeText={setEmail}
         placeholder="you@business.com"
@@ -46,7 +48,7 @@ export default function ForgotPassword() {
         error={errors.email}
         required
       />
-      <Button title="Send reset link" onPress={submit} fullWidth size="lg" />
+      <Button title={tr('auth:forgot.submit')} onPress={submit} fullWidth size="lg" />
     </AuthShell>
   );
 }

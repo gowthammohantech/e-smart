@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -11,6 +12,7 @@ import { Errors, hasErrors, minLength, required, validEmail, validPhone } from '
 
 export default function SignUp() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
   const signUp = useAppStore((s) => s.signUp);
 
@@ -24,11 +26,11 @@ export default function SignUp() {
 
   const submit = () => {
     const next: Errors<'name' | 'email' | 'phone' | 'password' | 'terms'> = {
-      name: required(name, 'Your name'),
-      email: required(email, 'Email') ?? validEmail(email),
+      name: required(name, tr('errors:field.yourName')),
+      email: required(email, tr('errors:field.email')) ?? validEmail(email),
       phone: validPhone(phone),
-      password: required(password, 'Password') ?? minLength(password, 8, 'Password'),
-      terms: accepted ? undefined : 'Please accept the terms to continue',
+      password: required(password, tr('errors:field.password')) ?? minLength(password, 8, tr('errors:field.password')),
+      terms: accepted ? undefined : tr('auth:signUp.acceptTerms'),
     };
     setErrors(next);
     if (hasErrors(next)) return;
@@ -41,10 +43,10 @@ export default function SignUp() {
   };
 
   return (
-    <AuthShell title="Create your account" subtitle="One account can hold as many businesses as you need.">
-      <TextField label="Your name" value={name} onChangeText={setName} placeholder="Full name" icon="account-outline" error={errors.name} required />
+    <AuthShell title={tr('auth:signUp.title')} subtitle={tr('auth:signUp.subtitle')}>
+      <TextField label={tr('auth:signUp.name')} value={name} onChangeText={setName} placeholder={tr('auth:signUp.namePlaceholder')} icon="account-outline" error={errors.name} required />
       <TextField
-        label="Email"
+        label={tr('auth:signUp.email')}
         value={email}
         onChangeText={setEmail}
         placeholder="you@business.com"
@@ -55,20 +57,20 @@ export default function SignUp() {
         required
       />
       <TextField
-        label="Mobile number"
+        label={tr('auth:signUp.mobile')}
         value={phone}
         onChangeText={setPhone}
         placeholder="+91 98765 43210"
         keyboardType="phone-pad"
         icon="cellphone"
         error={errors.phone}
-        hint="Used for OTP sign-in and payment alerts."
+        hint={tr('auth:signUp.mobileHint')}
       />
       <TextField
-        label="Password"
+        label={tr('auth:signUp.password')}
         value={password}
         onChangeText={setPassword}
-        placeholder="At least 8 characters"
+        placeholder={tr('auth:signUp.passwordHint')}
         secureTextEntry
         icon="lock-outline"
         error={errors.password}
@@ -77,7 +79,7 @@ export default function SignUp() {
 
       <View style={{ gap: 4 }}>
         <SwitchField
-          label="I accept the terms and privacy policy"
+          label={tr('auth:signUp.acceptLabel')}
           value={accepted}
           onValueChange={setAccepted}
         />
@@ -88,7 +90,7 @@ export default function SignUp() {
         ) : null}
       </View>
 
-      <Button title="Create account" onPress={submit} loading={busy} fullWidth size="lg" />
+      <Button title={tr('auth:signUp.submit')} onPress={submit} loading={busy} fullWidth size="lg" />
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.sm }}>
         <Text variant="small" tone="muted">

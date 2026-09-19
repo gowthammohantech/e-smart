@@ -74,7 +74,7 @@ import {
   submitEwayBill,
   submitInvoice,
 } from '@/domain/irpAdapter';
-import { INTEGRATIONS } from '@/data/masters';
+import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS } from '@/data/masters';
 import { isValidGstin } from '@/domain/gstin';
 import {
   ACCOUNT_ID,
@@ -365,6 +365,10 @@ const emptySession: Session = { userId: null, authenticated: false, onboardingCo
  * started checking the GSTIN check digit, which the demo GSTINs used to get
  * wrong: a saved demo company or party whose GSTIN differs from the seed's
  * only in that digit is given the seed's corrected one.
+ *
+ * Version 4 turned `Company.businessType` from an English display label into
+ * a stable slug, so it survives a language switch. The eight labels that
+ * shipped are mapped back; anything else is left as it is.
  */
 export function migratePersisted(persisted: unknown, version: number): AppState {
   if (version < 2) {
@@ -376,7 +380,7 @@ export function migratePersisted(persisted: unknown, version: number): AppState 
       activeBranchId: prior?.activeBranchId ?? 'brn_mum',
     } as AppState;
   }
-  const state = persisted as AppState;
+  let state = persisted as AppState;
   if (version < 3) {
     const seedGstin = new Map<string, string>();
     seedCompanies().forEach((c) => c.taxRegistration?.identifier && seedGstin.set(c.id, c.taxRegistration.identifier));
@@ -385,7 +389,7 @@ export function migratePersisted(persisted: unknown, version: number): AppState 
       const fixed = seedGstin.get(id);
       return gstin && fixed && !isValidGstin(gstin) && gstin.slice(0, 14) === fixed.slice(0, 14) ? fixed : gstin;
     };
-    return {
+    state = {
       ...state,
       companies: (state.companies ?? []).map((c) => ({
         ...c,
@@ -400,6 +404,19 @@ export function migratePersisted(persisted: unknown, version: number): AppState 
       complianceSettings: (state.complianceSettings ?? []).map((c) =>
         c.defaultTransporterId === '27AABCT5512M1ZQ' ? { ...c, defaultTransporterId: '27AABCT5512M1Z6' } : c,
       ),
+    };
+  }
+  if (version < 4) {
+    // Business type used to persist its English label, so it stopped matching
+    // the picker the moment the app spoke another language. It is a slug now;
+    // map the eight labels that shipped, and leave anything unrecognised
+    // alone rather than guessing.
+    state = {
+      ...state,
+      companies: (state.companies ?? []).map((c) => ({
+        ...c,
+        businessType: LEGACY_BUSINESS_TYPE_LABELS[c.businessType] ?? c.businessType,
+      })),
     };
   }
   return state;
@@ -1711,7 +1728,7 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: 'ebs.data.v1',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => {
         const { hydrated, ...rest } = s;

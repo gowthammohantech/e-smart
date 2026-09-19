@@ -1,1 +1,102 @@
-{}
+{
+  "step": {
+    "business": "Business",
+    "country": "Country",
+    "tax": "Tax",
+    "numbering": "Numbering",
+    "branches": "Branches"
+  },
+  "businessType": {
+    "retail": "Retail shop",
+    "wholesale": "Wholesale / Trading",
+    "services": "Services",
+    "freelancer": "Freelancer / Professional",
+    "distributor": "Distributor",
+    "manufacturer": "Manufacturer",
+    "restaurant": "Restaurant / Café",
+    "other": "Other"
+  },
+  "business": {
+    "title": "Tell us about your business",
+    "subtitle": "This appears on every invoice and quote you send.",
+    "addLogo": "Add business logo",
+    "logoSelected": "Logo selected",
+    "logoOptional": "Add your logo (optional)",
+    "name": "Business name",
+    "legalName": "Legal name",
+    "legalNamePlaceholder": "As registered (optional)",
+    "type": "Business type",
+    "plan": "Plan",
+    "planHintFull": "Sales, purchases, stock and expenses, with GST compliance.",
+    "planHintSales": "Sales with GST compliance. Upgrade any time for purchases and stock.",
+    "planTrailingFull": "Buy & sell",
+    "planTrailingSales": "Sell",
+    "address": "Address",
+    "addressPlaceholder": "Street address",
+    "city": "City",
+    "state": "State",
+    "pinCode": "PIN code",
+    "stateHint": "Used to decide CGST/SGST vs IGST on your invoices.",
+    "email": "Business email",
+    "phone": "Business phone",
+    "planSheetTitle": "Plan",
+    "stateSheetTitle": "State"
+  },
+  "country": {
+    "title": "Country and currency",
+    "subtitle": "Your country pack decides tax rules, invoice fields and date formats.",
+    "country": "Country",
+    "baseCurrency": "Base currency",
+    "currencyHint": "Every report is presented in this currency. Individual documents can still be raised in another currency.",
+    "fyStarts": "Financial year starts",
+    "whatYouGet": "What you get with {{country}}",
+    "gstPack": "{{taxIdLabel}} validation, CGST/SGST/IGST split by place of supply, HSN/SAC codes, e-invoice and e-way bill hooks, and {{country}} invoice formatting.",
+    "vatPack": "{{taxIdLabel}} capture, VAT-compliant invoice layout and local date/number formatting.",
+    "nonePack": "A tax-neutral setup you can configure manually under Settings."
+  },
+  "tax": {
+    "title": "Tax registration",
+    "subtitle": "You can change any of this later under Settings.",
+    "registeredHint": "Turn this off if you invoice without tax.",
+    "numberLabel": "Tax number",
+    "numberPlaceholder": "Registration number",
+    "stateHint": "The first two digits set your home state for CGST/SGST vs IGST.",
+    "composition": "Composition scheme",
+    "compositionHint": "Turn on if you file under the composition scheme — invoices will not show a tax breakdown."
+  },
+  "numbering": {
+    "title": "Invoice numbering",
+    "subtitle": "Finalised numbers are never reused, so pick a format you're happy with.",
+    "prefix": "Prefix",
+    "startFrom": "Start from",
+    "includeFy": "Include financial year"
+  },
+  "branches": {
+    "title": "Locations",
+    "subtitle": "Add a branch or warehouse if you operate from more than one place. You can skip this.",
+    "finish": "Finish setup",
+    "primary": "Primary location",
+    "name": "Branch name",
+    "code": "Code",
+    "city": "City",
+    "cityPlaceholder": "Pune",
+    "add": "Add branch"
+  },
+  "done": {
+    "readyTitle": "{{business}} is ready",
+    "fallbackBusiness": "Your business",
+    "defaultName": "My business",
+    "defaultTaxLabel": "Tax number",
+    "createInvoice": "Create my first invoice",
+    "goToDashboard": "Go to dashboard",
+    "next": {
+      "customersLabel": "Add your customers",
+      "customersBody": "Import or add them as you invoice.",
+      "itemsLabel": "Add products or services",
+      "itemsBody": "Set prices and tax once, reuse everywhere.",
+      "invoiceLabel": "Raise your first invoice",
+      "invoiceBody": "Share it on WhatsApp in seconds."
+    }
+  },
+  "stepProgress": "Step {{current}} of {{total}} · {{step}}"
+}

@@ -26,16 +26,38 @@ export const COUNTRIES: {
   { code: 'SA', name: 'Saudi Arabia', currency: 'SAR', regime: 'VAT', taxIdLabel: 'VAT No.', fiscalYearStartMonth: 1 },
 ];
 
+/**
+ * Business-type slugs. `Company.businessType` stores the slug, not the label,
+ * so a company keeps its type when the language changes. The words live in
+ * `onboarding:businessType.*`.
+ */
 export const BUSINESS_TYPES = [
-  'Retail shop',
-  'Wholesale / Trading',
-  'Services',
-  'Freelancer / Professional',
-  'Distributor',
-  'Manufacturer',
-  'Restaurant / Café',
-  'Other',
-];
+  'retail',
+  'wholesale',
+  'services',
+  'freelancer',
+  'distributor',
+  'manufacturer',
+  'restaurant',
+  'other',
+] as const;
+
+export type BusinessType = (typeof BUSINESS_TYPES)[number];
+
+/**
+ * Before the slugs, the English label was persisted directly. This maps the
+ * eight that shipped, so an existing company keeps its selection.
+ */
+export const LEGACY_BUSINESS_TYPE_LABELS: Record<string, BusinessType> = {
+  'Retail shop': 'retail',
+  'Wholesale / Trading': 'wholesale',
+  Services: 'services',
+  'Freelancer / Professional': 'freelancer',
+  Distributor: 'distributor',
+  Manufacturer: 'manufacturer',
+  'Restaurant / Café': 'restaurant',
+  Other: 'other',
+};
 
 export const UNITS: Unit[] = [
   { id: 'unit_pcs', code: 'PCS', name: 'Pieces', decimals: 0 },

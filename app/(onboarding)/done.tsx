@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,14 +14,15 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { COUNTRIES } from '@/data/masters';
 import { uid } from '@/lib/id';
 
-const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; body: string }[] = [
-  { icon: 'account-plus-outline', label: 'Add your customers', body: 'Import or add them as you invoice.' },
-  { icon: 'tag-outline', label: 'Add products or services', body: 'Set prices and tax once, reuse everywhere.' },
-  { icon: 'file-document-outline', label: 'Raise your first invoice', body: 'Share it on WhatsApp in seconds.' },
+const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey: string; bodyKey: string }[] = [
+  { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody' },
+  { icon: 'tag-outline', labelKey: 'itemsLabel', bodyKey: 'itemsBody' },
+  { icon: 'file-document-outline', labelKey: 'invoiceLabel', bodyKey: 'invoiceBody' },
 ];
 
 export default function Done() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { draft, reset } = useOnboardingStore();
@@ -37,7 +39,7 @@ export default function Done() {
     const country = COUNTRIES.find((c) => c.code === draft.country);
 
     const companyId = createCompany({
-      name: draft.name || 'My business',
+      name: draft.name || tr('onboarding:done.defaultName'),
       legalName: draft.legalName || undefined,
       logoUri: draft.logoUri,
       businessType: draft.businessType,
@@ -51,7 +53,7 @@ export default function Done() {
       taxRegistration: {
         regime: country?.regime ?? 'NONE',
         identifier: draft.taxIdentifier || undefined,
-        identifierLabel: country?.taxIdLabel ?? 'Tax number',
+        identifierLabel: country?.taxIdLabel ?? tr('onboarding:done.defaultTaxLabel'),
         registered: draft.taxRegistered,
         compositionScheme: draft.compositionScheme,
         placeOfSupplyStateCode: draft.address.stateCode,
@@ -103,7 +105,7 @@ export default function Done() {
           <Illustration name="setup-complete" size="hero" />
           <View style={{ gap: 6 }}>
             <Text variant="h2" center>
-              {draft.name || 'Your business'} is ready
+              {tr('onboarding:done.readyTitle', { business: draft.name || tr('onboarding:done.fallbackBusiness') })}
             </Text>
             <Text variant="small" tone="muted" center style={{ lineHeight: 20 }}>
               Tax slabs, numbering and your first location are all set up.
@@ -113,7 +115,7 @@ export default function Done() {
 
         <View style={{ gap: t.spacing.md }}>
           {NEXT_STEPS.map((s) => (
-            <Card key={s.label} variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+            <Card key={s.labelKey} variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
               <View
                 style={{
                   width: 36,
@@ -128,10 +130,10 @@ export default function Done() {
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
-                  {s.label}
+                  {tr(`onboarding:done.next.${s.labelKey}` as 'onboarding:done.next.customersLabel')}
                 </Text>
                 <Text variant="caption" tone="muted">
-                  {s.body}
+                  {tr(`onboarding:done.next.${s.bodyKey}` as 'onboarding:done.next.customersBody')}
                 </Text>
               </View>
             </Card>
@@ -140,8 +142,8 @@ export default function Done() {
       </View>
 
       <View style={{ gap: t.spacing.md }}>
-        <Button title="Create my first invoice" onPress={() => finish(true)} loading={busy} fullWidth size="lg" />
-        <Button title="Go to dashboard" variant="ghost" onPress={() => finish(false)} fullWidth />
+        <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth size="lg" />
+        <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} fullWidth />
       </View>
     </View>
   );

@@ -67,15 +67,10 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   reset: () => set({ draft: { ...initial } }),
 }));
 
-export const ONBOARDING_STEPS = [
-  { key: 'business', label: 'Business' },
-  { key: 'country', label: 'Country' },
-  { key: 'tax', label: 'Tax' },
-  { key: 'numbering', label: 'Numbering' },
-  { key: 'branches', label: 'Branches' },
-] as const;
+/** Step order. Names live in `onboarding:step.*`. */
+export const ONBOARDING_STEPS = ['business', 'country', 'tax', 'numbering', 'branches'] as const;
 
-export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]['key'];
+export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number];
 
 /**
  * A sales-only plan sells in India and has one location, so it skips the
@@ -83,19 +78,19 @@ export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]['key'];
  */
 export function onboardingSteps(plan: PlanTier) {
   return moduleSetFor(plan) === 'full'
-    ? ONBOARDING_STEPS
-    : ONBOARDING_STEPS.filter((s) => s.key !== 'country' && s.key !== 'branches');
+    ? (ONBOARDING_STEPS as readonly OnboardingStepKey[])
+    : ONBOARDING_STEPS.filter((s) => s !== 'country' && s !== 'branches');
 }
 
 export function stepIndex(key: OnboardingStepKey, plan: PlanTier = 'pro'): number {
-  return onboardingSteps(plan).findIndex((s) => s.key === key);
+  return onboardingSteps(plan).indexOf(key);
 }
 
 /** Where "Continue" goes from a step, given the plan chosen on the first one. */
 export function nextStepRoute(key: OnboardingStepKey, plan: PlanTier) {
   const steps = onboardingSteps(plan);
-  const next = steps[steps.findIndex((s) => s.key === key) + 1];
-  return (next ? `/(onboarding)/${next.key}` : '/(onboarding)/done') as `/(onboarding)/${OnboardingStepKey | 'done'}`;
+  const next = steps[steps.indexOf(key) + 1];
+  return (next ? `/(onboarding)/${next}` : '/(onboarding)/done') as `/(onboarding)/${OnboardingStepKey | 'done'}`;
 }
 
 export { today };

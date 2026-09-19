@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,6 +17,7 @@ import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/valid
 
 export default function BusinessStep() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
 
@@ -36,7 +38,7 @@ export default function BusinessStep() {
 
   const next = () => {
     const nextErrors: Errors<'name' | 'city' | 'state' | 'email' | 'phone'> = {
-      name: required(draft.name, 'Business name'),
+      name: required(draft.name, tr('errors:field.businessName')),
       city: required(draft.address.city, 'City'),
       state: required(draft.address.state, 'State'),
       email: validEmail(draft.email),
@@ -49,8 +51,8 @@ export default function BusinessStep() {
 
   return (
     <WizardShell
-      title="Tell us about your business"
-      subtitle="This appears on every invoice and quote you send."
+      title={tr('onboarding:business.title')}
+      subtitle={tr('onboarding:business.subtitle')}
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('business', draft.plan)}
       onPrimary={next}
@@ -59,7 +61,7 @@ export default function BusinessStep() {
         <Pressable
           onPress={pickLogo}
           accessibilityRole="button"
-          accessibilityLabel="Add business logo"
+          accessibilityLabel={tr('onboarding:business.addLogo')}
           style={{
             width: 84,
             height: 84,
@@ -82,12 +84,12 @@ export default function BusinessStep() {
           )}
         </Pressable>
         <Text variant="caption" tone="muted">
-          {draft.logoUri ? 'Logo selected' : 'Add your logo (optional)'}
+          {draft.logoUri ? tr('onboarding:business.logoSelected') : tr('onboarding:business.logoOptional')}
         </Text>
       </View>
 
       <TextField
-        label="Business name"
+        label={tr('onboarding:business.name')}
         value={draft.name}
         onChangeText={(v) => set({ name: v })}
         placeholder="e.g. Vertex Traders"
@@ -95,44 +97,44 @@ export default function BusinessStep() {
         required
       />
       <TextField
-        label="Legal name"
+        label={tr('onboarding:business.legalName')}
         value={draft.legalName}
         onChangeText={(v) => set({ legalName: v })}
-        placeholder="As registered (optional)"
+        placeholder={tr('onboarding:business.legalNamePlaceholder')}
       />
-      <PickerField label="Business type" value={draft.businessType} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
+      <PickerField label={tr('onboarding:business.type')} value={tr(`onboarding:businessType.${draft.businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
       <PickerField
-        label="Plan"
+        label={tr('onboarding:business.plan')}
         value={planInfo(draft.plan).name}
         onPress={() => setPlanOpen(true)}
         icon="star-circle-outline"
         hint={
           moduleSetFor(draft.plan) === 'full'
-            ? 'Sales, purchases, stock and expenses, with GST compliance.'
-            : 'Sales with GST compliance. Upgrade any time for purchases and stock.'
+            ? tr('onboarding:business.planHintFull')
+            : tr('onboarding:business.planHintSales')
         }
       />
 
       <TextField
-        label="Address"
+        label={tr('onboarding:business.address')}
         value={draft.address.line1}
         onChangeText={(v) => setAddress({ line1: v })}
-        placeholder="Street address"
+        placeholder={tr('onboarding:business.addressPlaceholder')}
         icon="map-marker-outline"
       />
 
       <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
         <TextField
-          label="City"
+          label={tr('onboarding:business.city')}
           value={draft.address.city}
           onChangeText={(v) => setAddress({ city: v })}
-          placeholder="City"
+          placeholder={tr('onboarding:business.city')}
           containerStyle={{ flex: 1 }}
           error={errors.city}
           required
         />
         <TextField
-          label="PIN code"
+          label={tr('onboarding:business.pinCode')}
           value={draft.address.postalCode}
           onChangeText={(v) => setAddress({ postalCode: v })}
           placeholder="400001"
@@ -142,17 +144,17 @@ export default function BusinessStep() {
       </View>
 
       <PickerField
-        label="State"
+        label={tr('onboarding:business.state')}
         value={draft.address.state || undefined}
         onPress={() => setStateOpen(true)}
         icon="map-outline"
         error={errors.state}
         required
-        hint="Used to decide CGST/SGST vs IGST on your invoices."
+        hint={tr('onboarding:business.stateHint')}
       />
 
       <TextField
-        label="Business email"
+        label={tr('onboarding:business.email')}
         value={draft.email}
         onChangeText={(v) => set({ email: v })}
         placeholder="accounts@business.com"
@@ -162,7 +164,7 @@ export default function BusinessStep() {
         error={errors.email}
       />
       <TextField
-        label="Business phone"
+        label={tr('onboarding:business.phone')}
         value={draft.phone}
         onChangeText={(v) => set({ phone: v })}
         placeholder="+91 98765 43210"
@@ -174,20 +176,20 @@ export default function BusinessStep() {
       <SelectSheet
         visible={typeOpen}
         onClose={() => setTypeOpen(false)}
-        title="Business type"
-        options={BUSINESS_TYPES.map((b) => ({ value: b, label: b }))}
+        title={tr('onboarding:business.type')}
+        options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))}
         value={draft.businessType}
         onSelect={(v) => set({ businessType: v })}
       />
       <SelectSheet
         visible={planOpen}
         onClose={() => setPlanOpen(false)}
-        title="Plan"
+        title={tr('onboarding:business.planSheetTitle')}
         subtitle="You can change this later in Settings"
         options={PLANS.map((p) => ({
           value: p.key,
           label: p.name,
-          trailing: moduleSetFor(p.key) === 'full' ? 'Buy & sell' : 'Sell',
+          trailing: moduleSetFor(p.key) === 'full' ? tr('onboarding:business.planTrailingFull') : tr('onboarding:business.planTrailingSales'),
         }))}
         value={draft.plan}
         onSelect={(v) => set({ plan: v as PlanTier })}
@@ -195,7 +197,7 @@ export default function BusinessStep() {
       <SelectSheet
         visible={stateOpen}
         onClose={() => setStateOpen(false)}
-        title="State"
+        title={tr('onboarding:business.stateSheetTitle')}
         subtitle="Where your business is registered"
         options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
         value={draft.address.stateCode}

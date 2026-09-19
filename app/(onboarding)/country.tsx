@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
 import { WizardShell } from '@/components/WizardShell';
@@ -9,11 +10,11 @@ import { Text } from '@/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 import { COUNTRIES } from '@/data/masters';
 import { CURRENCIES } from '@/lib/currencies';
-
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+import { monthNames } from '@/lib/date';
 
 export default function CountryStep() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
 
@@ -26,51 +27,51 @@ export default function CountryStep() {
 
   return (
     <WizardShell
-      title="Country and currency"
-      subtitle="Your country pack decides tax rules, invoice fields and date formats."
+      title={tr('onboarding:country.title')}
+      subtitle={tr('onboarding:country.subtitle')}
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('country', draft.plan)}
       onPrimary={() => router.push(nextStepRoute('country', draft.plan))}
     >
       <PickerField
-        label="Country"
+        label={tr('onboarding:country.country')}
         value={country?.name}
         onPress={() => setCountryOpen(true)}
         icon="earth"
         required
       />
       <PickerField
-        label="Base currency"
+        label={tr('onboarding:country.baseCurrency')}
         value={currency ? `${currency.name} (${currency.symbol})` : undefined}
         onPress={() => setCurrencyOpen(true)}
         icon="cash-multiple"
         required
-        hint="Every report is presented in this currency. Individual documents can still be raised in another currency."
+        hint={tr('onboarding:country.currencyHint')}
       />
       <PickerField
-        label="Financial year starts"
-        value={MONTHS[draft.fiscalYearStartMonth - 1]}
+        label={tr('onboarding:country.fyStarts')}
+        value={monthNames()[draft.fiscalYearStartMonth - 1]}
         onPress={() => setFyOpen(true)}
         icon="calendar-range"
       />
 
       <Card variant="flat" style={{ gap: t.spacing.sm }}>
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          What you get with {country?.name}
+          {tr('onboarding:country.whatYouGet', { country: country?.name })}
         </Text>
         <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
           {country?.regime === 'GST'
-            ? `${country.taxIdLabel} validation, CGST/SGST/IGST split by place of supply, HSN/SAC codes, e-invoice and e-way bill hooks, and ${country.name} invoice formatting.`
+            ? tr('onboarding:country.gstPack', { taxIdLabel: country.taxIdLabel, country: country.name })
             : country?.regime === 'VAT'
-              ? `${country.taxIdLabel} capture, VAT-compliant invoice layout and local date/number formatting.`
-              : 'A tax-neutral setup you can configure manually under Settings.'}
+              ? tr('onboarding:country.vatPack', { taxIdLabel: country.taxIdLabel })
+              : tr('onboarding:country.nonePack')}
         </Text>
       </Card>
 
       <SelectSheet
         visible={countryOpen}
         onClose={() => setCountryOpen(false)}
-        title="Country"
+        title={tr('onboarding:country.country')}
         options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, description: `${c.regime} · ${c.currency}` }))}
         value={draft.country}
         onSelect={(code) => {
@@ -88,7 +89,7 @@ export default function CountryStep() {
       <SelectSheet
         visible={currencyOpen}
         onClose={() => setCurrencyOpen(false)}
-        title="Base currency"
+        title={tr('onboarding:country.baseCurrency')}
         options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
         value={draft.baseCurrency}
         onSelect={(v) => set({ baseCurrency: v })}
@@ -96,8 +97,8 @@ export default function CountryStep() {
       <SelectSheet
         visible={fyOpen}
         onClose={() => setFyOpen(false)}
-        title="Financial year starts"
-        options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
+        title={tr('onboarding:country.fyStarts')}
+        options={monthNames().map((m, i) => ({ value: String(i + 1), label: m }))}
         value={String(draft.fiscalYearStartMonth)}
         onSelect={(v) => set({ fiscalYearStartMonth: Number(v) })}
         searchable={false}

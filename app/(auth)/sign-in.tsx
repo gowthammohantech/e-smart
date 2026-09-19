@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,6 +14,7 @@ type Mode = 'email' | 'phone';
 
 export default function SignIn() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
   const signIn = useAppStore((s) => s.signIn);
 
@@ -25,8 +27,8 @@ export default function SignIn() {
 
   const submitEmail = () => {
     const next: Errors<'email' | 'password'> = {
-      email: required(email, 'Email') ?? validEmail(email),
-      password: required(password, 'Password'),
+      email: required(email, tr('errors:field.email')) ?? validEmail(email),
+      password: required(password, tr('errors:field.password')),
     };
     setErrors(next);
     if (hasErrors(next)) return;
@@ -38,18 +40,18 @@ export default function SignIn() {
   };
 
   const submitPhone = () => {
-    const next = { phone: required(phone, 'Phone number') ?? validPhone(phone) };
+    const next = { phone: required(phone, tr('errors:field.phoneNumber')) ?? validPhone(phone) };
     setErrors(next);
     if (hasErrors(next)) return;
     router.push({ pathname: '/(auth)/otp', params: { phone } });
   };
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to pick up where you left off.">
+    <AuthShell title={tr('auth:signIn.title')} subtitle={tr('auth:signIn.subtitle')}>
       <Segmented
         options={[
-          { value: 'email', label: 'Email' },
-          { value: 'phone', label: 'Phone OTP' },
+          { value: 'email', label: tr('auth:signIn.tabEmail') },
+          { value: 'phone', label: tr('auth:signIn.tabPhone') },
         ]}
         value={mode}
         onChange={(v) => {
@@ -61,7 +63,7 @@ export default function SignIn() {
       {mode === 'email' ? (
         <View style={{ gap: t.spacing.lg }}>
           <TextField
-            label="Email"
+            label={tr('auth:signIn.email')}
             value={email}
             onChangeText={setEmail}
             placeholder="you@business.com"
@@ -71,30 +73,30 @@ export default function SignIn() {
             error={errors.email}
           />
           <TextField
-            label="Password"
+            label={tr('auth:signIn.password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="Your password"
+            placeholder={tr('auth:signIn.passwordPlaceholder')}
             secureTextEntry
             icon="lock-outline"
             error={errors.password}
           />
-          <Button title="Sign in" onPress={submitEmail} loading={busy} fullWidth size="lg" />
-          <Button title="Forgot password?" variant="ghost" onPress={() => router.push('/(auth)/forgot-password')} />
+          <Button title={tr('auth:signIn.submit')} onPress={submitEmail} loading={busy} fullWidth size="lg" />
+          <Button title={tr('auth:signIn.forgot')} variant="ghost" onPress={() => router.push('/(auth)/forgot-password')} />
         </View>
       ) : (
         <View style={{ gap: t.spacing.lg }}>
           <TextField
-            label="Mobile number"
+            label={tr('auth:signIn.mobile')}
             value={phone}
             onChangeText={setPhone}
             placeholder="+91 98765 43210"
             keyboardType="phone-pad"
             icon="cellphone"
             error={errors.phone}
-            hint="We'll text you a 6-digit code."
+            hint={tr('auth:signIn.otpHint')}
           />
-          <Button title="Send code" onPress={submitPhone} fullWidth size="lg" />
+          <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} fullWidth size="lg" />
         </View>
       )}
 
@@ -103,7 +105,7 @@ export default function SignIn() {
           or continue with
         </Text>
         <Button
-          title="Continue with Google"
+          title={tr('auth:signIn.google')}
           variant="ghost"
           icon="google"
           fullWidth

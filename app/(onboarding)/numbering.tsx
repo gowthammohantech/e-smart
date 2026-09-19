@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -11,6 +12,7 @@ import { financialYearOf, today } from '@/lib/date';
 
 export default function NumberingStep() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
 
@@ -22,8 +24,8 @@ export default function NumberingStep() {
 
   return (
     <WizardShell
-      title="Invoice numbering"
-      subtitle="Finalised numbers are never reused, so pick a format you're happy with."
+      title={tr('onboarding:numbering.title')}
+      subtitle={tr('onboarding:numbering.subtitle')}
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('numbering', draft.plan)}
       onPrimary={() => router.push(nextStepRoute('numbering', draft.plan))}
@@ -40,7 +42,7 @@ export default function NumberingStep() {
 
       <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
         <TextField
-          label="Prefix"
+          label={tr('onboarding:numbering.prefix')}
           value={draft.invoicePrefix}
           onChangeText={(v) => set({ invoicePrefix: v.toUpperCase().replace(/[^A-Z0-9-]/g, '') })}
           placeholder="INV"
@@ -48,7 +50,7 @@ export default function NumberingStep() {
           containerStyle={{ flex: 1 }}
         />
         <TextField
-          label="Start from"
+          label={tr('onboarding:numbering.startFrom')}
           value={draft.invoiceNextNumber}
           onChangeText={(v) => set({ invoiceNextNumber: v.replace(/[^0-9]/g, '') })}
           placeholder="1"
@@ -58,7 +60,7 @@ export default function NumberingStep() {
       </View>
 
       <SwitchField
-        label="Include financial year"
+        label={tr('onboarding:numbering.includeFy')}
         description={`Adds ${fy.label.replace('FY ', '')} to every number and restarts the sequence each year.`}
         value={draft.includeFiscalYear}
         onValueChange={(v) => set({ includeFiscalYear: v })}

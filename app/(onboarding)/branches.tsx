@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,6 +13,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@
 
 export default function BranchesStep() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
 
@@ -31,11 +33,11 @@ export default function BranchesStep() {
 
   return (
     <WizardShell
-      title="Locations"
-      subtitle="Add a branch or warehouse if you operate from more than one place. You can skip this."
+      title={tr('onboarding:branches.title')}
+      subtitle={tr('onboarding:branches.subtitle')}
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('branches', draft.plan)}
-      primaryLabel="Finish setup"
+      primaryLabel={tr('onboarding:branches.finish')}
       onPrimary={() => router.push(nextStepRoute('branches', draft.plan))}
       onSkip={() => router.push(nextStepRoute('branches', draft.plan))}
     >
@@ -46,7 +48,7 @@ export default function BranchesStep() {
             Head office
           </Text>
           <Text variant="caption" tone="muted">
-            {draft.address.city || 'Primary location'} · created automatically
+            {draft.address.city || tr('onboarding:branches.primary')} · created automatically
           </Text>
         </View>
       </Card>
@@ -75,19 +77,19 @@ export default function BranchesStep() {
       ))}
 
       <View style={{ gap: t.spacing.md }}>
-        <TextField label="Branch name" value={name} onChangeText={setName} placeholder="e.g. Pune warehouse" icon="warehouse" />
+        <TextField label={tr('onboarding:branches.name')} value={name} onChangeText={setName} placeholder="e.g. Pune warehouse" icon="warehouse" />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <TextField
-            label="Code"
+            label={tr('onboarding:branches.code')}
             value={code}
             onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))}
             placeholder="PUN"
             autoCapitalize="characters"
             containerStyle={{ flex: 1 }}
           />
-          <TextField label="City" value={city} onChangeText={setCity} placeholder="Pune" containerStyle={{ flex: 1 }} />
+          <TextField label={tr('onboarding:branches.city')} value={city} onChangeText={setCity} placeholder={tr('onboarding:branches.cityPlaceholder')} containerStyle={{ flex: 1 }} />
         </View>
-        <Button title="Add branch" variant="secondary" icon="plus" onPress={add} disabled={!name.trim()} />
+        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!name.trim()} />
       </View>
     </WizardShell>
   );

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,6 +14,7 @@ import { validGstin } from '@/lib/validators';
 
 export default function TaxStep() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['onboarding', 'errors', 'domain']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
   const [error, setError] = useState<string | undefined>();
@@ -34,8 +36,8 @@ export default function TaxStep() {
 
   return (
     <WizardShell
-      title="Tax registration"
-      subtitle="You can change any of this later under Settings."
+      title={tr('onboarding:tax.title')}
+      subtitle={tr('onboarding:tax.subtitle')}
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('tax', draft.plan)}
       onPrimary={next}
@@ -43,7 +45,7 @@ export default function TaxStep() {
     >
       <SwitchField
         label={`I'm registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`}
-        description="Turn this off if you invoice without tax."
+        description={tr('onboarding:tax.registeredHint')}
         value={draft.taxRegistered}
         onValueChange={(v) => set({ taxRegistered: v })}
       />
@@ -51,23 +53,23 @@ export default function TaxStep() {
       {draft.taxRegistered ? (
         <>
           <TextField
-            label={country?.taxIdLabel ?? 'Tax number'}
+            label={country?.taxIdLabel ?? tr('onboarding:tax.numberLabel')}
             value={draft.taxIdentifier}
             onChangeText={(v) => {
               set({ taxIdentifier: v.toUpperCase() });
               setError(undefined);
             }}
-            placeholder={draft.country === 'IN' ? '27AABCV1234F1ZO' : 'Registration number'}
+            placeholder={draft.country === 'IN' ? '27AABCV1234F1ZO' : tr('onboarding:tax.numberPlaceholder')}
             autoCapitalize="characters"
             icon="card-account-details-outline"
             error={error}
-            hint={draft.country === 'IN' ? 'The first two digits set your home state for CGST/SGST vs IGST.' : undefined}
+            hint={draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined}
           />
 
           {isGst && draft.country === 'IN' ? (
             <SwitchField
-              label="Composition scheme"
-              description="Turn on if you file under the composition scheme — invoices will not show a tax breakdown."
+              label={tr('onboarding:tax.composition')}
+              description={tr('onboarding:tax.compositionHint')}
               value={draft.compositionScheme}
               onValueChange={(v) => set({ compositionScheme: v })}
             />

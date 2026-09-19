@@ -119,5 +119,11 @@
     "addExpense": "Add expense",
     "addCustomer": "Add customer",
     "addItem": "Add item"
+  },
+  "editorStep": {
+    "party": "Who",
+    "items": "What",
+    "extras": "Tax & terms",
+    "review": "Review"
   }
 }

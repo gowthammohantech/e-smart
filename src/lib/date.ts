@@ -209,3 +209,9 @@ export function lastNMonths(n: number): string[] {
 export function nowISO(): string {
   return new Date().toISOString();
 }
+
+/** The twelve month names in the active language, January first. */
+export function monthNames(): string[] {
+  const locale = activeLocale();
+  return Array.from({ length: 12 }, (_, i) => format(new Date(2000, i, 1), 'LLLL', { locale }));
+}

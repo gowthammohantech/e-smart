@@ -48,12 +48,8 @@ import {
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
 
-const STEPS = [
-  { key: 'party', label: 'Who' },
-  { key: 'items', label: 'What' },
-  { key: 'extras', label: 'Tax & terms' },
-  { key: 'review', label: 'Review' },
-] as const;
+/** Editor step keys, in order. Names live in `common:editorStep.*`. */
+const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
 
@@ -557,7 +553,7 @@ export function DocumentEditor({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, paddingBottom: t.spacing.sm }}>
-        <Stepper steps={STEPS} current={step} />
+        <Stepper steps={STEPS.map((k) => tr(`common:editorStep.${k}` as 'common:editorStep.party'))} current={step} />
       </View>
 
       <ScrollView
