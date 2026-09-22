@@ -11,6 +11,7 @@ import { SectionHeader } from '@/components/Screen';
 import { PickerField, Segmented, TextField } from '@/components/Field';
 import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
+import { CityField } from '@/components/pickers/CityField';
 import { useToast } from '@/components/Toast';
 import {
   BusinessDocument,
@@ -30,6 +31,7 @@ import {
 } from '@/domain/ewayBill';
 import { mainHsnCodeOf } from '@/domain/eInvoice';
 import { INDIAN_STATES, stateName } from '@/data/masters';
+import { citiesForState } from '@/data/cities';
 import { formatDate, nowISO } from '@/lib/date';
 import { formatMoney } from '@/lib/format';
 
@@ -360,8 +362,14 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
         value={stateSheet === 'from' ? from.stateCode : to.stateCode}
         onSelect={(code) => {
-          if (stateSheet === 'from') setFrom({ ...from, stateCode: code });
-          else setTo({ ...to, stateCode: code });
+          // A place picked for the previous state no longer belongs.
+          const moved = (p: EwayPlace): EwayPlace => ({
+            ...p,
+            stateCode: code,
+            place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
+          });
+          if (stateSheet === 'from') setFrom(moved(from));
+          else setTo(moved(to));
           setStateSheet(null);
         }}
       />
@@ -406,10 +414,19 @@ function PlaceFields({
         onChangeText={(v) => onChange({ ...place, address1: v })}
         error={errors[`${prefix}.address1`]}
       />
-      <TextField
+      <PickerField
+        label={tr('compliance:ewb.state')}
+        value={place.stateCode ? stateName(place.stateCode) : undefined}
+        placeholder={tr('compliance:ewb.chooseState')}
+        onPress={onPickState}
+        icon="map-marker-outline"
+        error={errors[`${prefix}.stateCode`]}
+      />
+      <CityField
         label={tr('compliance:ewb.place')}
         value={place.place}
-        onChangeText={(v) => onChange({ ...place, place: v })}
+        onChange={(v) => onChange({ ...place, place: v })}
+        stateCode={place.stateCode}
         error={errors[`${prefix}.place`]}
       />
       <TextField
@@ -419,14 +436,6 @@ function PlaceFields({
         keyboardType="number-pad"
         maxLength={6}
         error={errors[`${prefix}.pincode`]}
-      />
-      <PickerField
-        label={tr('compliance:ewb.state')}
-        value={place.stateCode ? stateName(place.stateCode) : undefined}
-        placeholder={tr('compliance:ewb.chooseState')}
-        onPress={onPickState}
-        icon="map-marker-outline"
-        error={errors[`${prefix}.stateCode`]}
       />
     </>
   );

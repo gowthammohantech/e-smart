@@ -33,6 +33,8 @@ export function SelectSheet({
   searchPlaceholder = 'Search',
   emptyMessage = 'Nothing matches that search.',
   footer,
+  onCreate,
+  createLabel,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -45,12 +47,16 @@ export function SelectSheet({
   searchPlaceholder?: string;
   emptyMessage?: string;
   footer?: React.ReactNode;
+  /** Offer the typed search text as a value of its own, for lists that aren't exhaustive. */
+  onCreate?: (query: string) => void;
+  createLabel?: (query: string) => string;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const [query, setQuery] = useState('');
 
-  const showSearch = searchable && options.length > 6;
+  // A creatable list always needs the search box — it is where the new value is typed.
+  const showSearch = searchable && (options.length > 6 || !!onCreate);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -59,6 +65,36 @@ export function SelectSheet({
       (o) => o.label.toLowerCase().includes(q) || (o.description ?? '').toLowerCase().includes(q),
     );
   }, [options, query]);
+
+  const typed = query.trim();
+  const canCreate = !!onCreate && !!typed && !filtered.some((o) => o.label.toLowerCase() === typed.toLowerCase());
+  const createText = createLabel ? createLabel(typed) : tr('common:component.useTyped', { value: typed });
+
+  const createRow = canCreate ? (
+    <Pressable
+      onPress={() => {
+        onCreate?.(typed);
+        setQuery('');
+        onClose();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={createText}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: t.spacing.md,
+        paddingVertical: t.spacing.md,
+        paddingHorizontal: t.spacing.lg,
+        minHeight: 52,
+        backgroundColor: pressed ? t.c.card2 : 'transparent',
+      })}
+    >
+      <MaterialCommunityIcons name="plus" size={20} color={t.c.primary} />
+      <Text variant="body" weight="600" tone="primary" numberOfLines={1} style={{ flex: 1 }}>
+        {createText}
+      </Text>
+    </Pressable>
+  ) : null;
 
   return (
     <Sheet
@@ -81,7 +117,7 @@ export function SelectSheet({
     >
 
       {filtered.length === 0 ? (
-        <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage} compact />
+        (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage} compact />)
       ) : (
         filtered.map((o) => {
           const selected = o.value === value;
@@ -129,6 +165,7 @@ export function SelectSheet({
           );
         })
       )}
+      {filtered.length > 0 ? createRow : null}
     </Sheet>
   );
 }

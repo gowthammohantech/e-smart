@@ -9,7 +9,9 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { ListRow } from '@/components/ListRow';
 import { Sheet } from '@/components/Sheet';
-import { TextField, SwitchField } from '@/components/Field';
+import { PickerField, TextField, SwitchField } from '@/components/Field';
+import { SelectSheet } from '@/components/pickers/SelectSheet';
+import { CityField } from '@/components/pickers/CityField';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
@@ -17,6 +19,8 @@ import { Branch } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBranches, useDocuments } from '@/store/selectors';
 import { uid } from '@/lib/id';
+import { INDIAN_STATES, stateName } from '@/data/masters';
+import { citiesForState } from '@/data/cities';
 
 export default function BranchSettings() {
   const t = useTheme();
@@ -34,6 +38,8 @@ export default function BranchSettings() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [city, setCity] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [stateOpen, setStateOpen] = useState(false);
   const [phone, setPhone] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
 
@@ -42,6 +48,7 @@ export default function BranchSettings() {
     setName(branch?.name ?? '');
     setCode(branch?.code ?? '');
     setCity(branch?.address.city ?? company.address.city);
+    setStateCode(branch?.address.stateCode ?? company.address.stateCode ?? '');
     setPhone(branch?.phone ?? '');
     setIsPrimary(branch?.isPrimary ?? false);
   };
@@ -56,7 +63,13 @@ export default function BranchSettings() {
       code: (code || name.slice(0, 3)).toUpperCase(),
       phone: phone.trim() || undefined,
       isPrimary,
-      address: { ...editing.address, city: city.trim() || company.address.city },
+      address: {
+        ...editing.address,
+        // Head office's city is only a sensible default for a branch in the same state.
+        city: city.trim() || (stateCode === company.address.stateCode ? company.address.city : ''),
+        state: stateCode ? stateName(stateCode) : editing.address.state,
+        stateCode: stateCode || undefined,
+      },
     });
     toast.show(editing.id ? 'Branch updated' : 'Branch added', 'success');
     setEditing(null);
@@ -138,14 +151,32 @@ export default function BranchSettings() {
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('settings:branches.name')} value={name} onChangeText={setName} placeholder={tr('settings:branches.namePlaceholder')} icon="warehouse" required />
+          <PickerField
+            label={tr('settings:branches.state')}
+            value={stateCode ? stateName(stateCode) : undefined}
+            onPress={() => setStateOpen(true)}
+            icon="map-outline"
+          />
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <TextField label={tr('settings:branches.code')} value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" containerStyle={{ flex: 1 }} />
-            <TextField label={tr('settings:branches.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
+            <CityField label={tr('settings:branches.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
           </View>
           <TextField label={tr('settings:branches.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
           <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} />
         </View>
       </Sheet>
+
+      <SelectSheet
+        visible={stateOpen}
+        onClose={() => setStateOpen(false)}
+        title={tr('settings:branches.state')}
+        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        value={stateCode}
+        onSelect={(next) => {
+          setStateCode(next);
+          if (city && !citiesForState(next).includes(city)) setCity('');
+        }}
+      />
 
       <ConfirmDialog
         visible={!!confirmDelete}

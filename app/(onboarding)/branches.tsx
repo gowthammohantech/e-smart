@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { WizardShell } from '@/components/WizardShell';
 import { TextField } from '@/components/Field';
+import { CityField } from '@/components/pickers/CityField';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
@@ -85,7 +86,14 @@ export default function BranchesStep() {
             autoCapitalize="characters"
             containerStyle={{ flex: 1 }}
           />
-          <TextField label={tr('onboarding:branches.city')} value={city} onChangeText={setCity} placeholder={tr('onboarding:branches.cityPlaceholder')} containerStyle={{ flex: 1 }} />
+          <CityField
+            label={tr('onboarding:branches.city')}
+            value={city}
+            onChange={setCity}
+            stateCode={draft.address.stateCode}
+            placeholder={tr('onboarding:branches.cityPlaceholder')}
+            containerStyle={{ flex: 1 }}
+          />
         </View>
         <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!name.trim()} />
       </View>

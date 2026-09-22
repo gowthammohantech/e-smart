@@ -54,6 +54,7 @@
     "namePlaceholder": "e.g. Pune warehouse",
     "code": "Code",
     "city": "City",
+    "state": "State",
     "phone": "Phone",
     "primaryBranch": "Primary branch",
     "primaryHint": "Used as the default on new documents.",

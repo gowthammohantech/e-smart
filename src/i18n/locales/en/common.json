@@ -108,7 +108,12 @@
     "goBack": "Go back",
     "skip": "Skip",
     "noChartData": "No data for this period",
-    "quantity": "Quantity"
+    "quantity": "Quantity",
+    "useTyped": "Use “{{value}}”",
+    "city": "City",
+    "selectCity": "Select city",
+    "searchCity": "Search or type a city",
+    "allStates": "All states"
   },
   "totals": {
     "subtotal": "Subtotal",

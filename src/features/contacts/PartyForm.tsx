@@ -8,9 +8,11 @@ import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { AmountField, PickerField, SwitchField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
+import { CityField } from '@/components/pickers/CityField';
 import { useToast } from '@/components/Toast';
 import { GstRegistrationType, Party, PartyKind } from '@/types';
 import { INDIAN_STATES, stateName as stateNameOf } from '@/data/masters';
+import { citiesForState } from '@/data/cities';
 import { GST_REGISTRATION_LABELS } from '@/domain/eInvoice';
 import { CURRENCIES } from '@/lib/currencies';
 import { fromMajor, toMajor, zero } from '@/lib/money';
@@ -61,6 +63,14 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId'>>({});
+
+  // Both cities hang off the one state, so a city left over from the old state goes.
+  const changeState = (code: string) => {
+    setStateCode(code);
+    const cities = citiesForState(code);
+    if (city && !cities.includes(city)) setCity('');
+    if (shipCity && !cities.includes(shipCity)) setShipCity('');
+  };
 
   const label = kind === 'customer' ? 'Customer' : 'Supplier';
 
@@ -145,7 +155,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
             setTaxId(next);
             // The first two digits are the state; fill it in if it's still blank.
             if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
-              setStateCode(next.slice(0, 2));
+              changeState(next.slice(0, 2));
             }
           }}
           placeholder="27AABCV1234F1ZO"
@@ -168,10 +178,6 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.billingAddress')}</Text>
         <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} placeholder={tr('contacts:form.city')} containerStyle={{ flex: 1 }} />
-          <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
-        </View>
         <PickerField
           label={tr('contacts:form.state')}
           value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
@@ -179,12 +185,16 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           icon="map-outline"
           hint={tr('contacts:form.stateHint')}
         />
+        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
+          <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
+        </View>
 
         <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />
         {!sameShipping ? (
           <>
             <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />
-            <TextField label={tr('contacts:form.shippingCity')} value={shipCity} onChangeText={setShipCity} placeholder={tr('contacts:form.city')} />
+            <CityField label={tr('contacts:form.shippingCity')} value={shipCity} onChange={setShipCity} stateCode={stateCode} />
           </>
         ) : null}
 
@@ -224,7 +234,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         title={tr('contacts:form.state')}
         options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
         value={stateCode}
-        onSelect={setStateCode}
+        onSelect={changeState}
       />
       <SelectSheet
         visible={registrationOpen}

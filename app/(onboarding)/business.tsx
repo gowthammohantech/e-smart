@@ -8,9 +8,11 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { WizardShell } from '@/components/WizardShell';
 import { TextField, PickerField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
+import { CityField } from '@/components/pickers/CityField';
 import { Text } from '@/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 import { BUSINESS_TYPES, INDIAN_STATES } from '@/data/masters';
+import { citiesForState } from '@/data/cities';
 import { PLANS, moduleSetFor, planInfo } from '@/domain/plan';
 import type { PlanTier } from '@/types';
 import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/validators';
@@ -123,12 +125,22 @@ export default function BusinessStep() {
         icon="map-marker-outline"
       />
 
+      <PickerField
+        label={tr('onboarding:business.state')}
+        value={draft.address.state || undefined}
+        onPress={() => setStateOpen(true)}
+        icon="map-outline"
+        error={errors.state}
+        required
+        hint={tr('onboarding:business.stateHint')}
+      />
+
       <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-        <TextField
+        <CityField
           label={tr('onboarding:business.city')}
           value={draft.address.city}
-          onChangeText={(v) => setAddress({ city: v })}
-          placeholder={tr('onboarding:business.city')}
+          onChange={(v) => setAddress({ city: v })}
+          stateCode={draft.address.stateCode}
           containerStyle={{ flex: 1 }}
           error={errors.city}
           required
@@ -142,16 +154,6 @@ export default function BusinessStep() {
           containerStyle={{ flex: 1 }}
         />
       </View>
-
-      <PickerField
-        label={tr('onboarding:business.state')}
-        value={draft.address.state || undefined}
-        onPress={() => setStateOpen(true)}
-        icon="map-outline"
-        error={errors.state}
-        required
-        hint={tr('onboarding:business.stateHint')}
-      />
 
       <TextField
         label={tr('onboarding:business.email')}
@@ -203,7 +205,10 @@ export default function BusinessStep() {
         value={draft.address.stateCode}
         onSelect={(code) => {
           const s = INDIAN_STATES.find((x) => x.code === code);
-          setAddress({ stateCode: code, state: s?.name ?? '' });
+          const { city } = draft.address;
+          // A city picked for the previous state no longer belongs.
+          const keepCity = !city || citiesForState(code).includes(city);
+          setAddress({ stateCode: code, state: s?.name ?? '', ...(keepCity ? {} : { city: '' }) });
         }}
       />
     </WizardShell>

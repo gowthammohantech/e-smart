@@ -13,6 +13,7 @@ import { Sheet } from '@/components/Sheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Segmented, TextField } from '@/components/Field';
 import { useToast } from '@/components/Toast';
+import { CityField } from '@/components/pickers/CityField';
 import {
   CancelReasonCode,
   EwayBill,
@@ -521,7 +522,7 @@ function PartBSheet({
           />
         )}
 
-        <TextField label={tr('compliance:ewb.legStarts')} value={fromPlace} onChangeText={setFromPlace} />
+        <CityField label={tr('compliance:ewb.legStarts')} value={fromPlace} onChange={setFromPlace} stateCode={bill.from.stateCode} />
 
         <View style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.reason')}</Text>
@@ -622,7 +623,7 @@ function ExtendSheet({
           onChange={setTransitType}
         />
 
-        <TextField label={tr('compliance:ewb.whereNow')} value={place} onChangeText={setPlace} />
+        <CityField label={tr('compliance:ewb.whereNow')} value={place} onChange={setPlace} stateCode={bill.to.stateCode} />
         <TextField
           label={tr('compliance:ewb.pinCode')}
           value={pincode}

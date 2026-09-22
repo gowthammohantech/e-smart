@@ -8,10 +8,12 @@ import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { PickerField, SwitchField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
+import { CityField } from '@/components/pickers/CityField';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany } from '@/store/selectors';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@/data/masters';
+import { citiesForState } from '@/data/cities';
 import { CURRENCIES } from '@/lib/currencies';
 import { Errors, hasErrors, required, validEmail, validGstin } from '@/lib/validators';
 
@@ -108,11 +110,11 @@ export default function CompanySettings() {
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>
         <TextField label={tr('settings:company.address')} value={line1} onChangeText={setLine1} icon="map-marker-outline" />
+        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <TextField label={tr('settings:company.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
+          <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
           <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" containerStyle={{ flex: 1 }} />
         </View>
-        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
         <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} />
@@ -153,7 +155,17 @@ export default function CompanySettings() {
       </View>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: b }))} value={businessType} onSelect={setBusinessType} />
-      <SelectSheet visible={stateOpen} onClose={() => setStateOpen(false)} title={tr('settings:company.state')} options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))} value={stateCode} onSelect={setStateCode} />
+      <SelectSheet
+        visible={stateOpen}
+        onClose={() => setStateOpen(false)}
+        title={tr('settings:company.state')}
+        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        value={stateCode}
+        onSelect={(code) => {
+          setStateCode(code);
+          if (city && !citiesForState(code).includes(city)) setCity('');
+        }}
+      />
       <SelectSheet visible={fyOpen} onClose={() => setFyOpen(false)} title={tr('settings:company.fyStarts')} options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} value={String(fyMonth)} onSelect={(v) => setFyMonth(Number(v))} searchable={false} />
     </KeyboardAvoidingView>
   );
