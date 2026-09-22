@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -29,6 +30,7 @@ import { multiply } from '@/lib/money';
 
 export default function ItemDetail() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
@@ -79,7 +81,7 @@ export default function ItemDetail() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: item.name }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             <View
@@ -233,7 +235,7 @@ export default function ItemDetail() {
           right: 0,
           bottom: 0,
           padding: t.spacing.lg,
-          paddingBottom: t.spacing.xl,
+          paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,

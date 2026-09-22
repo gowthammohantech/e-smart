@@ -46,7 +46,12 @@
     "posHint": "Decides whether IGST or CGST + SGST applies",
     "partySearch": "Search your contacts or add a new one",
     "discountOnTotal": "Discount on total",
-    "total": "Total"
+    "total": "Total",
+    "roundOffAuto": "Auto",
+    "roundOffManual": "Manual",
+    "roundOffAmount": "Round-off amount",
+    "roundOffAmountHint": "Enter a negative value to round down, e.g. -0.40.",
+    "roundOffTooLarge": "Round-off must be less than {{amount}} either way."
   },
   "detail": {
     "finalise": "Finalise",
@@ -110,7 +115,17 @@
     "deleteMessage": "Any invoice it was applied to will go back to being outstanding. This cannot be undone.",
     "delete": "Delete",
     "deleted": "Payment deleted",
-    "appliedTo": "Applied to"
+    "appliedTo": "Applied to",
+    "depositInto": "Deposit into",
+    "payFrom": "Pay from",
+    "noAccountForMethod": "No account matches this payment method",
+    "addAccount": "Add a bank or wallet account",
+    "advanceAvailable": "Advance available: {{amount}}",
+    "advanceAvailableHint": "Adjust earlier advances against the open documents below.",
+    "adjustAdvance": "Adjust",
+    "advanceAdjusted": "{{amount}} adjusted from advances",
+    "advanceNothingToAdjust": "No advance could be adjusted",
+    "nothingLeftToApply": "The whole amount is already applied — increase the amount first"
   },
   "aging": {
     "overdue": "Overdue",

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -20,6 +21,7 @@ import { formatDate, formatDateTime } from '@/lib/date';
 
 export default function PaymentDetail() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
   const router = useRouter();
   const toast = useToast();
@@ -30,6 +32,7 @@ export default function PaymentDetail() {
   const accounts = usePaymentAccounts();
   const baseCurrency = useBaseCurrency();
   const removePayment = useAppStore((s) => s.removePayment);
+  const applyAdvances = useAppStore((s) => s.applyAdvances);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -49,7 +52,7 @@ export default function PaymentDetail() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: payment.number }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
           <View
             style={{
@@ -163,6 +166,20 @@ export default function PaymentDetail() {
             <Text variant="small" style={{ flex: 1 }}>
               {formatMoney(payment.unallocated)} is unallocated and available as an advance.
             </Text>
+            <Button
+              title={tr('sales:payment.adjustAdvance')}
+              size="sm"
+              variant="secondary"
+              onPress={() => {
+                const applied = applyAdvances(payment.partyId, payment.direction);
+                toast.show(
+                  applied.length
+                    ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
+                    : tr('sales:payment.advanceNothingToAdjust'),
+                  applied.length ? 'success' : 'info',
+                );
+              }}
+            />
           </Card>
         ) : null}
 
@@ -194,7 +211,7 @@ export default function PaymentDetail() {
           right: 0,
           bottom: 0,
           padding: t.spacing.lg,
-          paddingBottom: t.spacing.xl,
+          paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,

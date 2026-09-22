@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Platform,
   Pressable,
   StyleProp,
   Switch,
@@ -146,11 +147,14 @@ export function AmountField({
   containerStyle,
   autoFocus,
   size = 'md',
+  allowNegative,
 }: {
   label?: string;
   value: string;
   onChangeValue: (v: string) => void;
   currency: string;
+  /** Accept a leading "-" (signed adjustments). */
+  allowNegative?: boolean;
   error?: string;
   hint?: string;
   required?: boolean;
@@ -185,8 +189,9 @@ export function AmountField({
         </Text>
         <TextInput
           value={value}
-          onChangeText={(v) => onChangeValue(sanitizeAmountInput(v, currency))}
-          keyboardType="decimal-pad"
+          onChangeText={(v) => onChangeValue(sanitizeAmountInput(v, currency, { allowNegative }))}
+          // The iOS decimal pad has no minus key.
+          keyboardType={allowNegative && Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'decimal-pad'}
           placeholder={placeholder}
           placeholderTextColor={t.c.muted}
           autoFocus={autoFocus}
@@ -426,16 +431,34 @@ export function QuantityStepper({
     </Pressable>
   );
 
+  // Hold the raw text so an in-progress "1." survives re-render; resync when
+  // the value changes from outside (the +/- buttons).
+  const [text, setText] = useState(String(value));
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    if (Number(text) !== value) setText(String(value));
+  }
+
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
       {btn('minus', -step, 'Decrease quantity')}
       <TextInput
-        value={String(value)}
+        value={text}
         onChangeText={(v) => {
-          const n = Number(v.replace(/[^0-9.]/g, ''));
+          let clean = v.replace(/[^0-9.]/g, '');
+          const dot = clean.indexOf('.');
+          if (dot !== -1) {
+            clean = decimals > 0
+              ? clean.slice(0, dot + 1) + clean.slice(dot + 1).replace(/\./g, '').slice(0, decimals)
+              : clean.slice(0, dot);
+          }
+          setText(clean);
+          const n = Number(clean);
           onChange(Number.isFinite(n) ? n : min);
         }}
-        keyboardType="decimal-pad"
+        onBlur={() => setText(String(value))}
+        keyboardType={decimals > 0 ? 'decimal-pad' : 'number-pad'}
         accessibilityLabel={tr('common:component.quantity')}
         style={{
           minWidth: 52,

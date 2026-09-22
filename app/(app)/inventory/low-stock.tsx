@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -18,6 +19,7 @@ import { multiply } from '@/lib/money';
 
 export default function LowStock() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
@@ -47,7 +49,7 @@ export default function LowStock() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.lowStock') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <StatRow>
           <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={`${report.outCount} out of stock`} />
           <StatTile
@@ -129,7 +131,7 @@ export default function LowStock() {
             right: 0,
             bottom: 0,
             padding: t.spacing.lg,
-            paddingBottom: t.spacing.xl,
+            paddingBottom: insets.bottom + t.spacing.md,
             borderTopWidth: 1,
             borderTopColor: t.c.line,
             backgroundColor: t.c.paper,

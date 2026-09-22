@@ -46,7 +46,7 @@ export default function DocumentPreview() {
             document: doc,
             company,
             party,
-            branchName: branches.find((b) => b.id === doc.branchId)?.name,
+            branch: branches.find((b) => b.id === doc.branchId),
             ewayBill,
           })
         : '',

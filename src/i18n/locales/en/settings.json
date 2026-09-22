@@ -59,7 +59,18 @@
     "primaryBranch": "Primary branch",
     "primaryHint": "Used as the default on new documents.",
     "deleteMessage": "Documents already recorded against this branch keep their reference. This cannot be undone.",
-    "deleted": "Branch deleted"
+    "deleted": "Branch deleted",
+    "gstin": "GSTIN",
+    "gstinHint": "Leave blank if this branch uses the company GSTIN.",
+    "gstinStateMismatch": "This GSTIN is registered in {{state}}, not the state below",
+    "address": "Address",
+    "addressPlaceholder": "Building, street, area",
+    "pin": "PIN code",
+    "pinInvalid": "PIN code should be 6 digits",
+    "editTitle": "Edit branch",
+    "addTitle": "Add branch",
+    "updated": "Branch updated",
+    "added": "Branch added"
   },
   "taxes": {
     "none": "No tax rates",
@@ -160,7 +171,8 @@
     "includeBranch": "Include branch code",
     "branchHint": "Useful when several locations issue documents.",
     "resetPolicy": "Reset policy",
-    "nextWillBe": "Next number will be"
+    "nextWillBe": "Next number will be",
+    "tooLongForEInvoice": "Longer than {{count}} characters — the e-invoice portal will reject this number."
   },
   "users": {
     "invited": "Invited",

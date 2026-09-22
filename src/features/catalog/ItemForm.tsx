@@ -9,14 +9,14 @@ import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@/c
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 import { Item, ItemType } from '@/types';
-import { UNITS } from '@/data/masters';
+import { SERVICE_UNIT_CODES, UNITS, unitsFor } from '@/data/masters';
 import { fromMajor, toMajor, zero } from '@/lib/money';
 import { formatPercent } from '@/lib/format';
 import { uid } from '@/lib/id';
 import { nowISO } from '@/lib/date';
-import { Errors, hasErrors, required } from '@/lib/validators';
+import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@/lib/validators';
 import { useAppStore } from '@/store/appStore';
-import { useBaseCurrency, useHasModule, useItems, useTaxCategories } from '@/store/selectors';
+import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '@/store/selectors';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
@@ -28,6 +28,8 @@ export function ItemForm({ item }: { item?: Item }) {
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
   const existing = useItems();
+  // Read live, so a business that registers for GST gets the rule on its next edit.
+  const hsnRequired = hsnMandatory(useActiveCompany()?.taxRegistration);
   const saveItem = useAppStore((s) => s.saveItem);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   // Without the stock module a new item starts untracked; an existing item keeps its setting.
@@ -37,7 +39,7 @@ export function ItemForm({ item }: { item?: Item }) {
   const [name, setName] = useState(item?.name ?? '');
   const [sku, setSku] = useState(item?.sku ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [unit, setUnit] = useState(item?.unit ?? 'PCS');
+  const [unit, setUnit] = useState(item?.unit ?? (item?.type === 'service' ? 'NOS' : 'PCS'));
   const [salePrice, setSalePrice] = useState(item ? String(toMajor(item.salePrice)) : '');
   const [purchasePrice, setPurchasePrice] = useState(item ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
@@ -50,12 +52,15 @@ export function ItemForm({ item }: { item?: Item }) {
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'sku'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn'>>({});
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
 
   const save = () => {
-    const next: Errors<'name' | 'sku'> = { name: required(name, 'Item name') };
+    const next: Errors<'name' | 'sku' | 'hsn'> = {
+      name: required(name, 'Item name'),
+      hsn: validHsn(hsnCode, { required: hsnRequired }),
+    };
     const skuValue = sku.trim().toUpperCase() || `SKU-${String(existing.length + 1).padStart(4, '0')}`;
     if (existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
       next.sku = 'Another item already uses this SKU';
@@ -105,7 +110,10 @@ export function ItemForm({ item }: { item?: Item }) {
           value={type}
           onChange={(v) => {
             setType(v as ItemType);
-            if (v === 'service') setTrackInventory(false);
+            if (v === 'service') {
+              setTrackInventory(false);
+              if (!SERVICE_UNIT_CODES.includes(unit)) setUnit('NOS');
+            }
           }}
         />
 
@@ -136,11 +144,13 @@ export function ItemForm({ item }: { item?: Item }) {
         <TextField
           label={type === 'goods' ? 'HSN code' : 'SAC code'}
           value={hsnCode}
-          onChangeText={setHsnCode}
+          onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
           placeholder={type === 'goods' ? '84821011' : '998719'}
           keyboardType="number-pad"
           icon="numeric"
           hint={tr('inventory:form.hsnHint')}
+          error={errors.hsn}
+          required={hsnRequired}
         />
 
         {type === 'goods' ? (
@@ -199,7 +209,7 @@ export function ItemForm({ item }: { item?: Item }) {
         visible={unitOpen}
         onClose={() => setUnitOpen(false)}
         title={tr('inventory:form.unit')}
-        options={UNITS.map((u) => ({ value: u.code, label: u.name, trailing: u.code }))}
+        options={unitsFor(type).map((u) => ({ value: u.code, label: u.name, trailing: u.code }))}
         value={unit}
         onSelect={setUnit}
       />

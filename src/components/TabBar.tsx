@@ -161,7 +161,8 @@ export function TabBar({
         backgroundColor: t.c.bg,
         paddingHorizontal: t.spacing.lg,
         paddingTop: RISE,
-        paddingBottom: Math.max(insets.bottom - 10, t.spacing.md),
+        // iOS's home indicator tolerates a little overlap; Android's navigation bar does not.
+        paddingBottom: Math.max(Platform.OS === 'ios' ? insets.bottom - 10 : insets.bottom, t.spacing.md),
       }}
     >
       <View

@@ -1,4 +1,4 @@
-import { buildOutstanding, bucketFor, outstandingOf, summarizeAging } from '@/domain/receivables';
+import { allocateAdvances, availableAdvance, buildOutstanding, bucketFor, outstandingOf, summarizeAging } from '@/domain/receivables';
 import { ledgerFor, signedQuantity, stockOnHand } from '@/domain/stockLedger';
 import { resolveRate, settlementGainLoss } from '@/domain/fx';
 import { BusinessDocument, ExchangeRate, Payment, StockMovement } from '@/types';
@@ -202,5 +202,48 @@ describe('foreign exchange (FRD 6)', () => {
 
   it('recognises a loss when settlement is below the document rate', () => {
     expect(settlementGainLoss(fromMajor('1000', 'AED'), 23.85, 22.0, 'INR').minor).toBeLessThan(0);
+  });
+});
+
+describe('advance adjustment', () => {
+  const advance = (amount: string, date = addDaysISO(today(), -60)): Payment =>
+    payment('none', amount, {
+      id: `adv-${amount}`,
+      date,
+      allocations: [],
+      unallocated: fromMajor(amount, 'INR'),
+    });
+
+  it('applies an advance to the oldest open invoice first', () => {
+    const older = invoice({ id: 'a', number: 'INV/1', date: addDaysISO(today(), -50) });
+    const newer = invoice({ id: 'b', number: 'INV/2', date: addDaysISO(today(), -5) });
+    const [changed] = allocateAdvances([newer, older], [advance('1200')]);
+    expect(changed.allocations.map((a) => [a.documentId, a.amount.minor])).toEqual([
+      ['a', 100000],
+      ['b', 20000],
+    ]);
+    expect(changed.unallocated.minor).toBe(0);
+  });
+
+  it('keeps what the invoices cannot absorb as an advance', () => {
+    const [changed] = allocateAdvances([invoice()], [advance('1500')]);
+    expect(changed.allocations[0].amount.minor).toBe(100000);
+    expect(changed.unallocated.minor).toBe(50000);
+  });
+
+  it('respects allocations already made by other payments', () => {
+    const partly = payment('inv1', '400');
+    const [changed] = allocateAdvances([invoice()], [partly, advance('1000')]);
+    expect(changed.allocations[0].amount.minor).toBe(60000);
+    expect(changed.unallocated.minor).toBe(40000);
+  });
+
+  it('changes nothing when there is no advance or nothing open', () => {
+    expect(allocateAdvances([invoice()], [payment('inv1', '100')])).toEqual([]);
+    expect(allocateAdvances([], [advance('100')])).toEqual([]);
+  });
+
+  it('sums the advance a party holds', () => {
+    expect(availableAdvance([advance('100'), advance('250'), payment('inv1', '50')], 'INR').minor).toBe(35000);
   });
 });

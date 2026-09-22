@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Share, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -26,6 +27,7 @@ import { formatDateTime } from '@/lib/date';
 
 export default function BackupExport() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
@@ -97,7 +99,7 @@ export default function BackupExport() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.backupAndExport') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="database-export-outline" size={21} color={t.c.primary} />
@@ -156,7 +158,7 @@ export default function BackupExport() {
           right: 0,
           bottom: 0,
           padding: t.spacing.lg,
-          paddingBottom: t.spacing.xl,
+          paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,

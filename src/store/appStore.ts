@@ -34,6 +34,7 @@ import {
   Party,
   Payment,
   PaymentAccount,
+  PaymentDirection,
   StockMovement,
   SyncQueueEntry,
   TaxCategory,
@@ -74,8 +75,9 @@ import {
   submitEwayBill,
   submitInvoice,
 } from '@/domain/irpAdapter';
-import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS } from '@/data/masters';
+import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@/data/masters';
 import { isValidGstin } from '@/domain/gstin';
+import { allocateAdvances, statusForOutstanding } from '@/domain/receivables';
 import {
   ACCOUNT_ID,
   CURRENT_USER_ID,
@@ -249,6 +251,8 @@ type Actions = {
   /* payments */
   savePayment: (payment: Payment) => string;
   removePayment: (id: string) => void;
+  /** Adjust a party's advances against its open invoices/bills. Returns the amount applied, per currency. */
+  applyAdvances: (partyId: string, direction: PaymentDirection) => Money[];
 
   /* expenses */
   saveExpense: (expense: Expense) => string;
@@ -302,6 +306,7 @@ export type NewDocumentInput = {
   documentDiscountValue?: number;
   charges?: Money;
   applyRoundOff?: boolean;
+  roundOffManual?: Money;
   notes?: string;
   terms?: string;
   reference?: string;
@@ -369,6 +374,10 @@ const emptySession: Session = { userId: null, authenticated: false, onboardingCo
  * Version 4 turned `Company.businessType` from an English display label into
  * a stable slug, so it survives a language switch. The eight labels that
  * shipped are mapped back; anything else is left as it is.
+ *
+ * Version 5 gives every company a starter set of expense categories. Companies
+ * created in the app used to get none, which left the expense form with a
+ * required category it could not fill.
  */
 export function migratePersisted(persisted: unknown, version: number): AppState {
   if (version < 2) {
@@ -419,7 +428,24 @@ export function migratePersisted(persisted: unknown, version: number): AppState 
       })),
     };
   }
+  if (version < 5) {
+    const withCategories = new Set((state.expenseCategories ?? []).map((c) => c.companyId));
+    state = {
+      ...state,
+      expenseCategories: [
+        ...(state.expenseCategories ?? []),
+        ...(state.companies ?? [])
+          .filter((c) => !withCategories.has(c.id))
+          .flatMap((c) => starterExpenseCategories(c.id)),
+      ],
+    };
+  }
   return state;
+}
+
+/** Default expense categories for a new company, with ids unique to it. */
+function starterExpenseCategories(companyId: string): ExpenseCategory[] {
+  return defaultExpenseCategories(companyId).map((c) => ({ ...c, id: uid('exc') }));
 }
 
 export const useAppStore = create<AppState>()(
@@ -495,8 +521,35 @@ export const useAppStore = create<AppState>()(
           documentDiscountValue: doc.documentDiscountValue,
           charges: doc.charges,
           applyRoundOff: doc.applyRoundOff,
+          roundOffManual: doc.roundOffManual,
           taxCategories: s.taxCategories.filter((t) => t.companyId === doc.companyId),
           taxContext: taxContextFor(doc.companyId, doc.placeOfSupplyStateCode),
+        });
+      };
+
+      /**
+       * Re-derive paid / partly paid / unpaid for documents whose allocations
+       * changed. Any positive allocation short of the total is a valid
+       * partial settlement.
+       */
+      const refreshPaymentStatuses = (affected: Set<string>) => {
+        if (!affected.size) return;
+        const allocations = get().payments.flatMap((p) => p.allocations);
+        set({
+          documents: get().documents.map((d) => {
+            if (!affected.has(d.id)) return d;
+            const allocated = allocations
+              .filter((a) => a.documentId === d.id)
+              .reduce((acc, a) => acc + a.amount.minor, 0);
+            const outstanding = d.totals.grandTotal.minor - allocated;
+            const status: DocStatus =
+              outstanding <= 0
+                ? 'paid'
+                : allocated > 0
+                  ? 'partiallyPaid'
+                  : statusForOutstanding(d, d.totals.grandTotal);
+            return status === d.status ? d : { ...d, status, updatedAt: nowISO() };
+          }),
         });
       };
 
@@ -754,6 +807,7 @@ export const useAppStore = create<AppState>()(
             name: 'Head office',
             code: 'HO',
             address: partial.address,
+            gstin: partial.taxRegistration?.registered ? partial.taxRegistration.identifier : undefined,
             isPrimary: true,
           };
           const kinds: NumberingSeries['kind'][] = [
@@ -799,6 +853,7 @@ export const useAppStore = create<AppState>()(
             numberingSeries: [...get().numberingSeries, ...series],
             taxCategories: [...get().taxCategories, ...taxes],
             paymentAccounts: [...get().paymentAccounts, account],
+            expenseCategories: [...get().expenseCategories, ...starterExpenseCategories(id)],
             activeCompanyId: id,
             activeBranchId: branch.id,
           });
@@ -952,6 +1007,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: draft.documentDiscountValue ?? 0,
             charges: draft.charges ?? zero(draft.currency),
             applyRoundOff: draft.applyRoundOff ?? draft.currency === 'INR',
+            roundOffManual: draft.roundOffManual,
             placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress.stateCode,
             notes: draft.notes,
             terms: draft.terms,
@@ -1057,6 +1113,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
             applyRoundOff: src.applyRoundOff,
+            roundOffManual: src.roundOffManual,
             notes: src.notes,
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
@@ -1084,6 +1141,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
             applyRoundOff: src.applyRoundOff,
+            roundOffManual: src.roundOffManual,
             notes: src.notes,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             branchId: src.branchId,
@@ -1098,7 +1156,8 @@ export const useAppStore = create<AppState>()(
         /* payments                                                     */
         /* ------------------------------------------------------------ */
         savePayment: (payment) => {
-          const exists = get().payments.some((p) => p.id === payment.id);
+          const previous = get().payments.find((p) => p.id === payment.id);
+          const exists = !!previous;
           const withNumber =
             payment.number && payment.number !== ''
               ? payment
@@ -1110,24 +1169,11 @@ export const useAppStore = create<AppState>()(
               : [withNumber, ...get().payments],
           });
 
-          // Refresh the status of every invoice/bill this payment touches.
-          const affected = new Set(withNumber.allocations.map((a) => a.documentId));
-          if (affected.size) {
-            const payments = get().payments;
-            set({
-              documents: get().documents.map((d) => {
-                if (!affected.has(d.id)) return d;
-                const allocated = payments
-                  .flatMap((p) => p.allocations)
-                  .filter((a) => a.documentId === d.id)
-                  .reduce((acc, a) => acc + a.amount.minor, 0);
-                const outstanding = d.totals.grandTotal.minor - allocated;
-                const status: DocStatus =
-                  outstanding <= 0 ? 'paid' : allocated > 0 ? 'partiallyPaid' : d.status;
-                return { ...d, status, updatedAt: nowISO() };
-              }),
-            });
-          }
+          // Refresh the status of every invoice/bill this payment touches —
+          // including ones an edit removed it from.
+          refreshPaymentStatuses(
+            new Set([...withNumber.allocations, ...(previous?.allocations ?? [])].map((a) => a.documentId)),
+          );
 
           audit(exists ? 'updated payment' : 'recorded payment', 'payment', withNumber.id, withNumber.number);
           if (!exists && withNumber.direction === 'received') {
@@ -1139,22 +1185,34 @@ export const useAppStore = create<AppState>()(
         removePayment: (id) => {
           const p = get().payments.find((x) => x.id === id);
           if (!p) return;
-          const affected = new Set(p.allocations.map((a) => a.documentId));
-          const remaining = get().payments.filter((x) => x.id !== id);
-          set({
-            payments: remaining,
-            documents: get().documents.map((d) => {
-              if (!affected.has(d.id)) return d;
-              const allocated = remaining
-                .flatMap((x) => x.allocations)
-                .filter((a) => a.documentId === d.id)
-                .reduce((acc, a) => acc + a.amount.minor, 0);
-              const outstanding = d.totals.grandTotal.minor - allocated;
-              const status: DocStatus = outstanding <= 0 ? 'paid' : allocated > 0 ? 'partiallyPaid' : 'issued';
-              return { ...d, status, updatedAt: nowISO() };
-            }),
-          });
+          set({ payments: get().payments.filter((x) => x.id !== id) });
+          refreshPaymentStatuses(new Set(p.allocations.map((a) => a.documentId)));
           audit('deleted payment', 'payment', id, p.number);
+        },
+
+        applyAdvances: (partyId, direction) => {
+          const s = get();
+          const kind = direction === 'received' ? 'invoice' : 'purchaseBill';
+          const docs = s.documents.filter(
+            (d) => d.companyId === s.activeCompanyId && d.kind === kind && d.partyId === partyId,
+          );
+          const partyPayments = s.payments.filter(
+            (p) => p.companyId === s.activeCompanyId && p.partyId === partyId && p.direction === direction,
+          );
+          const changed = allocateAdvances(docs, partyPayments);
+          if (!changed.length) return [];
+
+          const byId = new Map(changed.map((p) => [p.id, p]));
+          const before = new Map(partyPayments.map((p) => [p.id, p.unallocated.minor]));
+          set({ payments: s.payments.map((p) => byId.get(p.id) ?? p) });
+          refreshPaymentStatuses(new Set(changed.flatMap((p) => p.allocations.map((a) => a.documentId))));
+
+          const applied = new Map<string, number>();
+          changed.forEach((p) => {
+            applied.set(p.currency, (applied.get(p.currency) ?? 0) + (before.get(p.id) ?? 0) - p.unallocated.minor);
+            audit('adjusted advance', 'payment', p.id, p.number);
+          });
+          return [...applied].map(([currency, minor]) => ({ minor, currency }));
         },
 
         /* ------------------------------------------------------------ */
@@ -1728,7 +1786,7 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: 'ebs.data.v1',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => {
         const { hydrated, ...rest } = s;

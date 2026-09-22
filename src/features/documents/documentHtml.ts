@@ -1,4 +1,4 @@
-import { BusinessDocument, Company, EwayBill, Party } from '@/types';
+import { Branch, BusinessDocument, Company, EwayBill, Party } from '@/types';
 import { documentKindLabel, type Translate } from '@/i18n/labels';
 import { flattenTaxComponents } from '@/domain/lineCalc';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
@@ -53,6 +53,7 @@ export function buildDocumentHtml({
   company,
   party,
   branchName,
+  branch,
   ewayBill,
   t,
   language,
@@ -61,6 +62,8 @@ export function buildDocumentHtml({
   company?: Company;
   party?: Party;
   branchName?: string;
+  /** The issuing branch: its own address and GSTIN win over the company's. */
+  branch?: Branch;
   ewayBill?: EwayBill;
   /** Translator for the descriptive labels. Statutory field names stay English. */
   t: Translate;
@@ -73,6 +76,8 @@ export function buildDocumentHtml({
   const label = language === 'en' ? kindName.toUpperCase() : kindName;
 
   const bi = bilingual(t, language);
+  const sellerTaxId = branch?.gstin ?? company?.taxRegistration?.identifier;
+  const branchLabel = branchName ?? branch?.name;
   const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
   const pos = INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name;
 
@@ -187,10 +192,10 @@ export function buildDocumentHtml({
   <div class="head">
     <div>
       <div class="brand">${esc(company?.name)}</div>
-      <div class="muted">${addressBlock(company?.address)}</div>
+      <div class="muted">${addressBlock(branch?.address.line1 ? branch.address : company?.address)}</div>
       ${company?.phone ? `<div class="muted">${esc(company.phone)}</div>` : ''}
       ${company?.email ? `<div class="muted">${esc(company.email)}</div>` : ''}
-      ${company?.taxRegistration?.identifier ? `<div style="margin-top:5px"><strong>${esc(company.taxRegistration.identifierLabel)}:</strong> ${esc(company.taxRegistration.identifier)}</div>` : ''}
+      ${sellerTaxId ? `<div style="margin-top:5px"><strong>${esc(company?.taxRegistration?.identifierLabel ?? 'GSTIN')}:</strong> ${esc(sellerTaxId)}</div>` : ''}
     </div>
     <div>
       <div class="doc-title">${label}</div>
@@ -199,7 +204,7 @@ export function buildDocumentHtml({
         <div class="muted">Date: ${formatDate(doc.date)}</div>
         ${doc.dueDate ? `<div class="muted">Due: ${formatDate(doc.dueDate)}</div>` : ''}
         ${doc.validUntil ? `<div class="muted">Valid until: ${formatDate(doc.validUntil)}</div>` : ''}
-        ${branchName ? `<div class="muted">${esc(branchName)}</div>` : ''}
+        ${branchLabel ? `<div class="muted">${esc(branchLabel)}</div>` : ''}
       </div>
     </div>
   </div>

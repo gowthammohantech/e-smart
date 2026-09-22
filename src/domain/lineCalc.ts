@@ -29,6 +29,8 @@ export type LineCalcInput = {
   documentDiscountValue: number;
   charges: Money;
   applyRoundOff: boolean;
+  /** Signed manual adjustment; overrides the automatic round-off. */
+  roundOffManual?: Money;
   taxCategories: TaxCategory[];
   taxContext: TaxContext;
 };
@@ -105,6 +107,7 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
     documentDiscountValue,
     charges,
     applyRoundOff,
+    roundOffManual,
     taxContext,
   } = input;
 
@@ -153,9 +156,12 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
   const chargesInCurrency = money(charges.minor, currency);
   const beforeRounding = add(subtract(afterTax, documentDiscount), chargesInCurrency);
 
-  const { rounded, adjustment } = applyRoundOff
-    ? roundToWholeUnit(beforeRounding)
-    : { rounded: beforeRounding, adjustment: zero(currency) };
+  const manual = roundOffManual ? money(roundOffManual.minor, currency) : undefined;
+  const { rounded, adjustment } = !applyRoundOff
+    ? { rounded: beforeRounding, adjustment: zero(currency) }
+    : manual
+      ? { rounded: add(beforeRounding, manual), adjustment: manual }
+      : roundToWholeUnit(beforeRounding);
 
   const grandTotalBase =
     currency === baseCurrency

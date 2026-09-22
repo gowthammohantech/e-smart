@@ -140,3 +140,46 @@ export function statusForOutstanding(
   if (doc.dueDate && daysBetween(doc.dueDate, asOf) > 0) return 'overdue';
   return partly ? 'partiallyPaid' : 'issued';
 }
+
+/**
+ * Adjust a party's advances (the unallocated part of earlier payments) against
+ * its open documents: oldest advance first, oldest document first. Only
+ * same-currency pairs are matched. Returns the payments that changed, with
+ * their allocations extended and `unallocated` reduced.
+ */
+export function allocateAdvances(docs: BusinessDocument[], payments: Payment[]): Payment[] {
+  const open = buildOutstanding(docs, payments).sort((a, b) => a.document.date.localeCompare(b.document.date));
+  const left = new Map(open.map((o) => [o.document.id, o.outstanding.minor]));
+  const changed: Payment[] = [];
+
+  [...payments]
+    .filter((p) => p.unallocated.minor > 0)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .forEach((p) => {
+      let remaining = p.unallocated.minor;
+      const allocations = p.allocations.map((a) => ({ ...a }));
+      open.forEach((o) => {
+        if (remaining <= 0 || o.document.currency !== p.currency) return;
+        const take = Math.min(remaining, left.get(o.document.id) ?? 0);
+        if (take <= 0) return;
+        const existing = allocations.find((a) => a.documentId === o.document.id);
+        if (existing) existing.amount = money(existing.amount.minor + take, p.currency);
+        else allocations.push({ documentId: o.document.id, documentNumber: o.document.number, amount: money(take, p.currency) });
+        left.set(o.document.id, (left.get(o.document.id) ?? 0) - take);
+        remaining -= take;
+      });
+      if (remaining !== p.unallocated.minor) {
+        changed.push({ ...p, allocations, unallocated: money(remaining, p.currency) });
+      }
+    });
+
+  return changed;
+}
+
+/** Total advance a party holds, in one currency. */
+export function availableAdvance(payments: Payment[], currency: string): Money {
+  return money(
+    payments.filter((p) => p.currency === currency).reduce((acc, p) => acc + p.unallocated.minor, 0),
+    currency,
+  );
+}

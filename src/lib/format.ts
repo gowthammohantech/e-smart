@@ -67,8 +67,28 @@ export function formatCompactMoney(m: Money): string {
   return formatMoney(m);
 }
 
-/** Convert user keyboard input into a clean numeric string for a currency. */
-export function sanitizeAmountInput(raw: string, currency: string): string {
+/**
+ * Convert user keyboard input into a clean numeric string for a currency.
+ * `allowNegative` keeps a single leading "-" — for signed adjustments such as
+ * a manual round-off.
+ */
+export function sanitizeAmountInput(
+  raw: string,
+  currency: string,
+  opts: { allowNegative?: boolean } = {},
+): string {
+  const negative = !!opts.allowNegative && raw.trim().startsWith('-');
+  const unsigned = sanitizeUnsigned(raw, currency);
+  return negative ? `-${unsigned}` : unsigned;
+}
+
+/** Money as the plain string an amount field holds, e.g. "1234.50". */
+export function toAmountInput(m: Money): string {
+  const precision = Math.log10(factorOf(m.currency));
+  return (m.minor / factorOf(m.currency)).toFixed(precision);
+}
+
+function sanitizeUnsigned(raw: string, currency: string): string {
   const precision = Math.log10(factorOf(currency));
   let s = raw.replace(/[^0-9.]/g, '');
   const firstDot = s.indexOf('.');

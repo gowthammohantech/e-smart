@@ -7,7 +7,9 @@
     "gstinCheckDigit": "This GSTIN fails its check digit — look for a typo",
     "mustBeNumber": "{{field}} must be a number",
     "mustBePositive": "{{field}} must be greater than zero",
-    "minLength": "{{field}} must be at least {{count}} characters"
+    "minLength": "{{field}} must be at least {{count}} characters",
+    "hsnRequired": "HSN/SAC code is required for a GST-registered business",
+    "hsnShape": "HSN/SAC code should be 4, 6 or 8 digits"
   },
   "field": {
     "email": "Email",

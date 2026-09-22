@@ -140,3 +140,32 @@ describe('document totals', () => {
     expect(totals.taxLines).toHaveLength(0);
   });
 });
+
+describe('round off and charges', () => {
+  // 100.34 + 18% = 118.40: the 0.40 fraction makes the rounding visible.
+  const odd = [line({ quantity: 1, unitPrice: fromMajor('100.34', 'INR') })];
+
+  it('rounds automatically to the nearest whole unit, adjusting down', () => {
+    const totals = doc(odd, { applyRoundOff: true });
+    expect(totals.roundOff.minor).toBe(-40);
+    expect(totals.grandTotal.minor).toBe(11800);
+  });
+
+  it('takes a negative manual round-off as typed', () => {
+    const totals = doc(odd, { applyRoundOff: true, roundOffManual: fromMajor('-0.90', 'INR') });
+    expect(totals.roundOff.minor).toBe(-90);
+    expect(totals.grandTotal.minor).toBe(11750);
+  });
+
+  it('ignores a manual round-off while rounding is off', () => {
+    const totals = doc(odd, { applyRoundOff: false, roundOffManual: fromMajor('-0.90', 'INR') });
+    expect(totals.roundOff.minor).toBe(0);
+    expect(totals.grandTotal.minor).toBe(11840);
+  });
+
+  it('subtracts negative other charges from the total', () => {
+    const totals = doc([line()], { charges: fromMajor('-50', 'INR') });
+    expect(totals.charges.minor).toBe(-5000);
+    expect(totals.grandTotal.minor).toBe(118000 - 5000);
+  });
+});

@@ -18,6 +18,7 @@ import { seriesLabel } from '@/i18n/labels';
 import { useAppStore } from '@/store/appStore';
 import { useBranches, useNumberingSeries } from '@/store/selectors';
 import { today, financialYearOf } from '@/lib/date';
+import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@/lib/validators';
 
 const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
   never: 'Never reset',
@@ -59,7 +60,7 @@ export default function NumberingSettings() {
   const draft: NumberingSeries | null = editing
     ? {
         ...editing,
-        prefix: prefix || editing.prefix,
+        prefix: prefix.replace(/\/+$/, '') || editing.prefix,
         nextNumber: Number(nextNumber) || 1,
         padding: Number(padding) || 4,
         includeFiscalYear: includeFy,
@@ -122,7 +123,12 @@ export default function NumberingSettings() {
             <TextField
               label={tr('settings:numbering.prefix')}
               value={prefix}
-              onChangeText={(v) => setPrefix(v.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+              onChangeText={(v) => setPrefix(sanitizePrefix(v))}
+              hint={
+                draft && formatNumber(draft, { date: today(), branchCode }).length > E_INVOICE_DOC_NUMBER_MAX
+                  ? tr('settings:numbering.tooLongForEInvoice', { count: E_INVOICE_DOC_NUMBER_MAX })
+                  : undefined
+              }
               autoCapitalize="characters"
               containerStyle={{ flex: 1 }}
             />

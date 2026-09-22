@@ -12,7 +12,8 @@ import { formatMoney, formatPercent } from '@/lib/format';
 import { fromMajor, toMajor } from '@/lib/money';
 import { calculateLine } from '@/domain/lineCalc';
 import { TaxContext } from '@/domain/taxEngine';
-import { UNITS } from '@/data/masters';
+import { unitDecimals, unitsFor } from '@/data/masters';
+import { useItems } from '@/store/selectors';
 
 type EditorProps = {
   visible: boolean;
@@ -59,6 +60,9 @@ function LineEditorForm({
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
+  // Services bill in counts or time only; one-off lines are treated as goods.
+  const itemType = useItems().find((i) => i.id === line?.itemId)?.type ?? 'goods';
+  const decimals = unitDecimals(unit);
 
   if (!line) return null;
 
@@ -125,7 +129,7 @@ function LineEditorForm({
         <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'flex-end' }}>
           <View style={{ flex: 1, gap: 6 }}>
             <Text variant="caption" tone="muted" weight="600">{tr('sales:line.quantity')}</Text>
-            <QuantityStepper value={quantity} onChange={setQuantity} min={0} decimals={2} />
+            <QuantityStepper key={unit} value={quantity} onChange={setQuantity} min={0} decimals={decimals} />
           </View>
           <PickerField label={tr('sales:line.unit')} value={unit} onPress={() => setUnitOpen(true)} containerStyle={{ width: 120 }} />
         </View>
@@ -206,9 +210,14 @@ function LineEditorForm({
         visible={unitOpen}
         onClose={() => setUnitOpen(false)}
         title={tr('sales:line.unit')}
-        options={UNITS.map((u) => ({ value: u.code, label: `${u.name} (${u.code})` }))}
+        options={unitsFor(itemType).map((u) => ({ value: u.code, label: `${u.name} (${u.code})` }))}
         value={unit}
-        onSelect={setUnit}
+        onSelect={(code) => {
+          setUnit(code);
+          // Drop decimals the new unit cannot carry (e.g. 1.5 -> 2 for NOS).
+          const d = unitDecimals(code);
+          setQuantity((q) => Number(q.toFixed(d)) || 1);
+        }}
       />
       <SelectSheet
         visible={taxOpen}

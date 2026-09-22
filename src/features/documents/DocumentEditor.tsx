@@ -25,7 +25,7 @@ import { resolveRate } from '@/domain/fx';
 import { CURRENCIES } from '@/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { addDaysISO } from '@/lib/date';
-import { fromMajor, money, toMajor } from '@/lib/money';
+import { factorOf, fromMajor, money, toMajor } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
 
 import { useAppStore } from '@/store/appStore';
@@ -144,6 +144,14 @@ export function DocumentEditor({
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
+  const [roundOffText, setRoundOffText] = useState(
+    draft.roundOffManual ? String(toMajor(draft.roundOffManual)) : '',
+  );
+  // A manual round-off is a small correction, not a discount: keep it under one whole unit.
+  const roundOffError =
+    draft.applyRoundOff && draft.roundOffManual && Math.abs(draft.roundOffManual.minor) >= factorOf(draft.currency)
+      ? tr('sales:editor.roundOffTooLarge', { amount: formatMoney(money(factorOf(draft.currency), draft.currency)) })
+      : undefined;
 
   const kindName = documentKindLabel(tr, kind, 1);
   const party = parties.find((p) => p.id === draft.partyId);
@@ -170,6 +178,10 @@ export function DocumentEditor({
 
   const save = (finalize: boolean) => {
     if (!draft.partyId) return;
+    if (roundOffError) {
+      toast.show(roundOffError, 'error');
+      return;
+    }
 
     const payload = {
       kind,
@@ -184,6 +196,7 @@ export function DocumentEditor({
       documentDiscountValue: draft.documentDiscountValue,
       charges: draft.charges,
       applyRoundOff: draft.applyRoundOff,
+      roundOffManual: draft.applyRoundOff ? draft.roundOffManual : undefined,
       notes: draft.notes || undefined,
       terms: draft.terms || undefined,
       reference: draft.reference || undefined,
@@ -475,6 +488,7 @@ export function DocumentEditor({
         }}
         currency={draft.currency}
         hint={tr('sales:editor.otherChargesHint')}
+        allowNegative
       />
 
       <SwitchField
@@ -483,6 +497,44 @@ export function DocumentEditor({
         value={draft.applyRoundOff}
         onValueChange={(applyRoundOff) => patch({ applyRoundOff })}
       />
+
+      {draft.applyRoundOff && (
+        <View style={{ gap: t.spacing.sm }}>
+          <Segmented
+            options={[
+              { value: 'auto', label: tr('sales:editor.roundOffAuto') },
+              { value: 'manual', label: tr('sales:editor.roundOffManual') },
+            ]}
+            value={draft.roundOffManual ? 'manual' : 'auto'}
+            onChange={(v) => {
+              if (v === 'auto') {
+                setRoundOffText('');
+                patch({ roundOffManual: undefined });
+              } else {
+                // Start from the automatic adjustment so switching changes nothing until edited.
+                const start = money(totals.roundOff.minor, draft.currency);
+                setRoundOffText(String(toMajor(start)));
+                patch({ roundOffManual: start });
+              }
+            }}
+            size="sm"
+          />
+          {draft.roundOffManual && (
+            <AmountField
+              label={tr('sales:editor.roundOffAmount')}
+              value={roundOffText}
+              onChangeValue={(v) => {
+                setRoundOffText(v);
+                patch({ roundOffManual: fromMajor(v || '0', draft.currency) });
+              }}
+              currency={draft.currency}
+              hint={tr('sales:editor.roundOffAmountHint')}
+              error={roundOffError}
+              allowNegative
+            />
+          )}
+        </View>
+      )}
 
       <TextField
         label={tr('sales:editor.notes')}

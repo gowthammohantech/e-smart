@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -32,6 +33,7 @@ type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
 export function PartyDetail({ party }: { party: Party }) {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['contacts', 'domain']);
   const router = useRouter();
   const toast = useToast();
@@ -132,7 +134,7 @@ export function PartyDetail({ party }: { party: Party }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <Card style={{ gap: t.spacing.lg }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             <Avatar name={party.name} size={54} />
@@ -327,7 +329,7 @@ export function PartyDetail({ party }: { party: Party }) {
           right: 0,
           bottom: 0,
           padding: t.spacing.lg,
-          paddingBottom: t.spacing.xl,
+          paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,

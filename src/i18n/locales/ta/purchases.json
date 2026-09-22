@@ -32,7 +32,11 @@
     "billableHint": "பின்னர் வசூலிக்கும்படி குறித்து வையுங்கள்.",
     "attachReceipt": "ரசீதை இணை",
     "scanInstead": "அதற்குப் பதிலாக OCR மூலம் ஸ்கேன் செய்",
-    "paymentMethod": "கட்டண முறை"
+    "paymentMethod": "கட்டண முறை",
+    "categoryRequired": "இந்தச் செலவுக்கு ஒரு வகையைத் தேர்ந்தெடுக்கவும்",
+    "addCategory": "வகையைச் சேர்",
+    "saveCategory": "வகையைச் சேமி",
+    "categoryName": "வகையின் பெயர்"
   },
   "expense": {
     "billable": "வசூலிக்கத்தக்கது",

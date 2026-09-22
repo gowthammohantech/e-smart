@@ -366,7 +366,8 @@ function recomputeTotal(doc: BusinessDocument): number {
   const t = doc.totals;
   return (
     t.taxableAmount.minor +
-    t.totalTax.minor +
+    t.totalTax.minor -
+    t.documentDiscount.minor +
     t.charges.minor +
     t.roundOff.minor
   );
@@ -594,8 +595,11 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       CgstVal: round2(toMajor({ minor: componentTotal(doc, 'CGST'), currency })),
       SgstVal: round2(toMajor({ minor: componentTotal(doc, 'SGST'), currency })),
       IgstVal: round2(toMajor({ minor: componentTotal(doc, 'IGST'), currency })),
-      Discount: round2(toMajor(doc.totals.documentDiscount)),
-      OthChrg: round2(toMajor(doc.totals.charges)),
+      // The portal only accepts OthChrg >= 0, so a negative charge travels as discount.
+      Discount: round2(
+        toMajor(doc.totals.documentDiscount) + Math.max(0, -toMajor(doc.totals.charges)),
+      ),
+      OthChrg: round2(Math.max(0, toMajor(doc.totals.charges))),
       RndOffAmt: round2(toMajor(doc.totals.roundOff)),
       TotInvVal: round2(toMajor(doc.totals.grandTotal)),
     },

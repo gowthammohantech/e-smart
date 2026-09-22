@@ -32,7 +32,11 @@
     "billableHint": "Flag it so you can re-charge it later.",
     "attachReceipt": "Attach receipt",
     "scanInstead": "Scan with OCR instead",
-    "paymentMethod": "Payment method"
+    "paymentMethod": "Payment method",
+    "categoryRequired": "Pick a category for this expense",
+    "addCategory": "Add category",
+    "saveCategory": "Save category",
+    "categoryName": "Category name"
   },
   "expense": {
     "billable": "Billable",

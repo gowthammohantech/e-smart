@@ -17,13 +17,14 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@/types';
-import { buildOutstanding } from '@/domain/receivables';
+import { availableAdvance, buildOutstanding } from '@/domain/receivables';
+import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
 import { resolveRate, settlementGainLoss } from '@/domain/fx';
 import { PAYMENT_METHODS } from '@/data/masters';
 import { paymentMethodLabel } from '@/i18n/labels';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, toAmountInput } from '@/lib/format';
 import { formatDate, today } from '@/lib/date';
-import { Money, fromMajor, money, subtract, toMajor, zero } from '@/lib/money';
+import { Money, fromMajor, money, subtract, zero } from '@/lib/money';
 import { uid } from '@/lib/id';
 
 import { useAppStore } from '@/store/appStore';
@@ -56,6 +57,7 @@ export default function NewPayment() {
   const openDocs = useDocuments(direction === 'received' ? 'invoice' : 'purchaseBill');
   const existingPayments = usePayments(direction);
   const savePayment = useAppStore((s) => s.savePayment);
+  const applyAdvances = useAppStore((s) => s.applyAdvances);
   const activeBranchId = useAppStore((s) => s.activeBranchId);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
@@ -63,7 +65,11 @@ export default function NewPayment() {
   const [date, setDate] = useState(today());
   const [amountText, setAmountText] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('upi');
-  const [accountId, setAccountId] = useState(accounts.find((a) => a.isDefault)?.id ?? accounts[0]?.id ?? '');
+  // The account follows the method: a bank payment never defaults to cash in hand.
+  const [accountId, setAccountId] = useState(defaultAccountFor('upi', accounts)?.id ?? '');
+  const methodAccounts = accountsForMethod(method, accounts);
+  /** While the user has not typed an amount, it tracks what is ticked below. */
+  const [amountFollows, setAmountFollows] = useState(true);
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [seeded, setSeeded] = useState(false);
@@ -98,9 +104,27 @@ export default function NewPayment() {
   const prefill = params.documentId ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
   if (prefill && !seeded) {
     setSeeded(true);
-    setAllocations({ [prefill.document.id]: String(toMajor(prefill.outstanding)) });
-    setAmountText(String(toMajor(prefill.outstanding)));
+    setAllocations({ [prefill.document.id]: toAmountInput(prefill.outstanding) });
+    setAmountText(toAmountInput(prefill.outstanding));
   }
+
+  // Advances already held against this party (unallocated parts of earlier payments).
+  const advance = useMemo(
+    () => availableAdvance(existingPayments.filter((p) => p.partyId === partyId), currency),
+    [existingPayments, partyId, currency],
+  );
+  const adjustAdvance = () => {
+    if (!partyId) return;
+    const applied = applyAdvances(partyId, direction);
+    setAllocations({});
+    if (amountFollows) setAmountText('');
+    toast.show(
+      applied.length
+        ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
+        : tr('sales:payment.advanceNothingToAdjust'),
+      applied.length ? 'success' : 'info',
+    );
+  };
 
   const amount = fromMajor(amountText || '0', currency);
   const allocatedTotal = useMemo(
@@ -114,37 +138,71 @@ export default function NewPayment() {
   const unallocated = subtract(amount, allocatedTotal);
   const overAllocated = unallocated.minor < 0;
 
-  const autoAllocate = () => {
-    let remaining = amount.minor;
+  /**
+   * Spread `total` over documents oldest first, never more than each one owes.
+   * A total smaller than the documents is a partial payment, which is fine.
+   */
+  const spread = (total: number, onlyIds?: string[]) => {
+    let remaining = total;
     const next: Record<string, string> = {};
     outstanding.forEach((o) => {
-      if (remaining <= 0) return;
-      const take = Math.min(remaining, o.outstanding.minor);
-      if (take > 0) {
-        next[o.document.id] = String(toMajor(money(take, currency)));
+      if (onlyIds && !onlyIds.includes(o.document.id)) return;
+      const take = Math.max(0, Math.min(remaining, o.outstanding.minor));
+      // A ticked document stays ticked (at 0.00) while the amount is being typed.
+      if (take > 0 || onlyIds) {
+        next[o.document.id] = toAmountInput(money(take, currency));
         remaining -= take;
       }
     });
-    setAllocations(next);
+    return next;
   };
+
+  const autoAllocate = () => setAllocations(spread(amount.minor));
 
   const payFull = () => {
     const total = outstanding.reduce((a, o) => a + o.outstanding.minor, 0);
-    setAmountText(String(toMajor(money(total, currency))));
-    const next: Record<string, string> = {};
-    outstanding.forEach((o) => {
-      if (o.outstanding.minor > 0) next[o.document.id] = String(toMajor(o.outstanding));
-    });
-    setAllocations(next);
+    setAmountFollows(true);
+    setAmountText(toAmountInput(money(total, currency)));
+    setAllocations(spread(total));
+  };
+
+  const sumOf = (a: Record<string, string>) =>
+    Object.values(a).reduce((acc, v) => acc + fromMajor(v || '0', currency).minor, 0);
+
+  const onAmountChange = (v: string) => {
+    setAmountText(v);
+    setAmountFollows(false);
+    // Keep the ticked documents, but re-fit them to the new amount so a
+    // smaller (partial) amount never leaves the form over-allocated.
+    const ticked = Object.keys(allocations);
+    setAllocations(spread(fromMajor(v || '0', currency).minor, ticked.length ? ticked : undefined));
   };
 
   const toggleAllocation = (docId: string, full: Money) => {
-    setAllocations((a) => {
-      const next = { ...a };
-      if (next[docId]) delete next[docId];
-      else next[docId] = String(toMajor(full));
-      return next;
-    });
+    const next = { ...allocations };
+    if (next[docId]) {
+      delete next[docId];
+    } else if (amountFollows) {
+      next[docId] = toAmountInput(full);
+    } else {
+      // Apply only what is left of the typed amount.
+      const take = Math.min(full.minor, amount.minor - sumOf(allocations));
+      if (take <= 0) {
+        toast.show(tr('sales:payment.nothingLeftToApply'), 'info');
+        return;
+      }
+      next[docId] = toAmountInput(money(take, currency));
+    }
+    setAllocations(next);
+    if (amountFollows) setAmountText(sumOf(next) ? toAmountInput(money(sumOf(next), currency)) : '');
+  };
+
+  const setRowAllocation = (docId: string, v: string, owed: Money) => {
+    // A document cannot take more than it owes; the excess stays an advance.
+    const capped = fromMajor(v || '0', currency).minor > owed.minor ? toAmountInput(owed) : v;
+    const next = { ...allocations, [docId]: capped };
+    setAllocations(next);
+    if (amountFollows) setAmountText(toAmountInput(money(sumOf(next), currency)));
   };
 
   const fxGainLoss = useMemo(() => {
@@ -258,7 +316,7 @@ export default function NewPayment() {
         <AmountField
           label={tr('sales:payment.amount')}
           value={amountText}
-          onChangeValue={setAmountText}
+          onChangeValue={onAmountChange}
           currency={currency}
           size="lg"
           required
@@ -274,12 +332,18 @@ export default function NewPayment() {
         />
 
         <PickerField
-          label={direction === 'received' ? 'Deposit into' : 'Pay from'}
-          value={accounts.find((a) => a.id === accountId)?.name}
+          label={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
+          value={methodAccounts.find((a) => a.id === accountId)?.name}
           onPress={() => setAccountOpen(true)}
           icon="bank-outline"
           required
+          error={methodAccounts.length === 0 ? tr('sales:payment.noAccountForMethod') : undefined}
         />
+        {methodAccounts.length === 0 ? (
+          <Pressable onPress={() => router.push('/(app)/settings/accounts')} accessibilityRole="link" hitSlop={6}>
+            <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.addAccount')}</Text>
+          </Pressable>
+        ) : null}
 
         <TextField
           label={tr('sales:payment.reference')}
@@ -298,6 +362,17 @@ export default function NewPayment() {
             icon="swap-horizontal"
             hint={tr('sales:payment.fxHint')}
           />
+        ) : null}
+
+        {partyId && advance.minor > 0 && outstanding.length > 0 ? (
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+            <MaterialCommunityIcons name="wallet-outline" size={22} color={t.c.primary} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
+              <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
+            </View>
+            <Button title={tr('sales:payment.adjustAdvance')} onPress={adjustAdvance} size="sm" variant="secondary" />
+          </Card>
         ) : null}
 
         {/* Allocation */}
@@ -369,7 +444,7 @@ export default function NewPayment() {
                     {selected ? (
                       <AmountField
                         value={allocations[o.document.id]}
-                        onChangeValue={(v) => setAllocations((a) => ({ ...a, [o.document.id]: v }))}
+                        onChangeValue={(v) => setRowAllocation(o.document.id, v, o.outstanding)}
                         currency={currency}
                         label={tr('sales:payment.applying')}
                       />
@@ -456,14 +531,17 @@ export default function NewPayment() {
         title={tr('sales:payment.method')}
         options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
         value={method}
-        onSelect={(v) => setMethod(v as PaymentMethod)}
+        onSelect={(v) => {
+          setMethod(v as PaymentMethod);
+          setAccountId((current) => accountIdAfterMethodChange(v as PaymentMethod, current, accounts));
+        }}
         searchable={false}
       />
       <SelectSheet
         visible={accountOpen}
         onClose={() => setAccountOpen(false)}
-        title={direction === 'received' ? 'Deposit into' : 'Pay from'}
-        options={accounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
+        title={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
+        options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
         value={accountId}
         onSelect={setAccountId}
         searchable={false}

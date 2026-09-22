@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -28,6 +29,7 @@ const META: Record<NotificationKind, { icon: keyof typeof MaterialCommunityIcons
 
 export default function Notifications() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common']);
   const router = useRouter();
 
@@ -82,7 +84,7 @@ export default function Notifications() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
         {rows.length === 0 ? (
           <Card padded={false}>
             <EmptyState
@@ -178,7 +180,7 @@ export default function Notifications() {
             right: 0,
             bottom: 0,
             padding: t.spacing.lg,
-            paddingBottom: t.spacing.xl,
+            paddingBottom: insets.bottom + t.spacing.md,
             borderTopWidth: 1,
             borderTopColor: t.c.line,
             backgroundColor: t.c.paper,

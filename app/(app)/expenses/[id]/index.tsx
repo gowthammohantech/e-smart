@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -20,6 +21,7 @@ import { subtract } from '@/lib/money';
 
 export default function ExpenseDetail() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases']);
   const router = useRouter();
   const toast = useToast();
@@ -51,7 +53,7 @@ export default function ExpenseDetail() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: expense.number || 'Expense' }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
           <View
             style={{
@@ -135,7 +137,7 @@ export default function ExpenseDetail() {
           right: 0,
           bottom: 0,
           padding: t.spacing.lg,
-          paddingBottom: t.spacing.xl,
+          paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,

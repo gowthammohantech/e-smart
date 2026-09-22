@@ -28,6 +28,7 @@ export type DraftState = {
   documentDiscountValue: number;
   charges: Money;
   applyRoundOff: boolean;
+  roundOffManual?: Money;
   placeOfSupplyStateCode?: string;
   notes: string;
   terms: string;
@@ -74,6 +75,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     documentDiscountValue: doc.documentDiscountValue,
     charges: doc.charges,
     applyRoundOff: doc.applyRoundOff,
+    roundOffManual: doc.roundOffManual,
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
@@ -159,6 +161,7 @@ export function useDocumentDraft(options: {
         exchangeRate: rate,
         charges: money(d.charges.minor, currency),
         applyRoundOff: currency === 'INR',
+        roundOffManual: undefined,
         lines: d.lines.map((l) => ({ ...l, unitPrice: money(l.unitPrice.minor, currency) })),
       }));
     },
@@ -176,6 +179,7 @@ export function useDocumentDraft(options: {
         documentDiscountValue: draft.documentDiscountValue,
         charges: draft.charges,
         applyRoundOff: draft.applyRoundOff,
+        roundOffManual: draft.roundOffManual,
         taxCategories,
         taxContext: { ...taxContext, placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? taxContext.placeOfSupplyStateCode },
       }),

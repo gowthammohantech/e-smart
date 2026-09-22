@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useResolvedLanguage } from '@/i18n/I18nProvider';
 import { Pressable, ScrollView, Share, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -46,6 +47,7 @@ import { isEwayBillRequired } from '@/domain/ewayBill';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const language = useResolvedLanguage();
   const router = useRouter();
@@ -112,7 +114,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         document: doc,
         company,
         party,
-        branchName: branch?.name,
+        branch,
         ewayBill,
       });
       const { uri } = await Print.printToFileAsync({ html });
@@ -182,7 +184,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }}
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -417,7 +419,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           right: 0,
           bottom: 0,
           padding: t.spacing.lg,
-          paddingBottom: t.spacing.xl,
+          paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,

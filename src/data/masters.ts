@@ -71,6 +71,18 @@ export const UNITS: Unit[] = [
   { id: 'unit_nos', code: 'NOS', name: 'Numbers', decimals: 0 },
 ];
 
+/** Units a service can be billed in — counts and time, never weight or volume. */
+export const SERVICE_UNIT_CODES = ['NOS', 'HR', 'DAY'];
+
+export function unitsFor(type: 'goods' | 'service'): Unit[] {
+  return type === 'service' ? UNITS.filter((u) => SERVICE_UNIT_CODES.includes(u.code)) : UNITS;
+}
+
+/** Decimal places a quantity in this unit may carry (NOS/PCS are whole numbers). */
+export function unitDecimals(code: string): number {
+  return UNITS.find((u) => u.code === code)?.decimals ?? 2;
+}
+
 export function gstCategories(companyId: string): TaxCategory[] {
   const base = [
     { id: 'tax_0', name: 'GST 0% (Exempt)', rate: 0 },

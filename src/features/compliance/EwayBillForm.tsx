@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -45,6 +46,7 @@ import { formatMoney } from '@/lib/format';
  */
 export function EwayBillForm({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
   const toast = useToast();
@@ -144,7 +146,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }}
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -309,7 +311,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           right: 0,
           bottom: 0,
           padding: t.spacing.lg,
-          paddingBottom: t.spacing.xl,
+          paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,

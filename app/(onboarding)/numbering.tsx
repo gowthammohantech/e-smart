@@ -9,6 +9,7 @@ import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
 import { financialYearOf, today } from '@/lib/date';
+import { sanitizePrefix } from '@/lib/validators';
 
 export default function NumberingStep() {
   const t = useTheme();
@@ -18,7 +19,7 @@ export default function NumberingStep() {
 
   const fy = financialYearOf(today(), draft.fiscalYearStartMonth);
   const seq = String(Number(draft.invoiceNextNumber) || 1).padStart(4, '0');
-  const preview = [draft.invoicePrefix || 'INV', draft.includeFiscalYear ? fy.label.replace('FY ', '') : null, seq]
+  const preview = [draft.invoicePrefix.replace(/\/+$/, '') || 'INV', draft.includeFiscalYear ? fy.label.replace('FY ', '') : null, seq]
     .filter(Boolean)
     .join('/');
 
@@ -42,7 +43,7 @@ export default function NumberingStep() {
         <TextField
           label={tr('onboarding:numbering.prefix')}
           value={draft.invoicePrefix}
-          onChangeText={(v) => set({ invoicePrefix: v.toUpperCase().replace(/[^A-Z0-9-]/g, '') })}
+          onChangeText={(v) => set({ invoicePrefix: sanitizePrefix(v) })}
           placeholder="INV"
           autoCapitalize="characters"
           containerStyle={{ flex: 1 }}

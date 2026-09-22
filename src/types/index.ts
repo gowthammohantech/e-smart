@@ -51,6 +51,8 @@ export type Branch = {
   name: string;
   code: string;
   address: Address;
+  /** Set when the branch holds its own GST registration (e.g. another state). */
+  gstin?: string;
   isPrimary: boolean;
   phone?: string;
 };
@@ -289,6 +291,11 @@ export type BusinessDocument = {
   documentDiscountValue: number;
   charges: Money;
   applyRoundOff: boolean;
+  /**
+   * A round-off typed by the user (may be negative). Absent means the
+   * adjustment is computed automatically to the nearest whole unit.
+   */
+  roundOffManual?: Money;
   placeOfSupplyStateCode?: string;
   notes?: string;
   terms?: string;

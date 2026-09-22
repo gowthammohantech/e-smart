@@ -12,9 +12,11 @@ import { Button } from '@/components/Button';
 import { AmountField, PickerField, SwitchField, TextField } from '@/components/Field';
 import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
+import { Sheet } from '@/components/Sheet';
 import { useToast } from '@/components/Toast';
 import { Expense, PaymentMethod, RecurrenceFrequency } from '@/types';
 import { PAYMENT_METHODS } from '@/data/masters';
+import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
 import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney, formatPercent } from '@/lib/format';
 import { addDaysISO, today } from '@/lib/date';
@@ -51,6 +53,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
   const suppliers = useParties('supplier');
 
   const saveExpense = useAppStore((s) => s.saveExpense);
+  const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
   const addAttachment = useAppStore((s) => s.addAttachment);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const activeBranchId = useAppStore((s) => s.activeBranchId);
@@ -59,7 +62,10 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
   const [amountText, setAmountText] = useState(expense ? String(toMajor(expense.amount)) : '');
   const [date, setDate] = useState(expense?.date ?? today());
   const [method, setMethod] = useState<PaymentMethod>(expense?.method ?? 'upi');
-  const [accountId, setAccountId] = useState(expense?.accountId ?? accounts.find((a) => a.isDefault)?.id ?? accounts[0]?.id ?? '');
+  const [accountId, setAccountId] = useState(
+    expense?.accountId ?? defaultAccountFor(expense?.method ?? 'upi', accounts)?.id ?? '',
+  );
+  const methodAccounts = accountsForMethod(method, accounts);
   const [supplierId, setSupplierId] = useState<string | null>(expense?.supplierId ?? null);
   const [taxCategoryId, setTaxCategoryId] = useState<string | null>(expense?.taxCategoryId ?? null);
   const [taxInclusive, setTaxInclusive] = useState(expense?.taxInclusive ?? true);
@@ -75,6 +81,20 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
   const [recurrenceOpen, setRecurrenceOpen] = useState(false);
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState<string | undefined>();
+
+  const addCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const id = uid('exc');
+    saveExpenseCategory({ id, companyId: activeCompanyId, name, icon: 'shape-outline', color: '#8E98AC' });
+    setCategoryId(id);
+    setCategoryError(undefined);
+    setNewCategoryName('');
+    setNewCategoryOpen(false);
+  };
 
   const amount = fromMajor(amountText || '0', baseCurrency);
   const taxRate = taxCategories.find((c) => c.id === taxCategoryId)?.rate ?? 0;
@@ -88,7 +108,11 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
   };
 
   const save = () => {
-    if (amount.minor <= 0 || !categoryId) return;
+    if (amount.minor <= 0) return;
+    if (!categoryId || !categories.some((c) => c.id === categoryId)) {
+      setCategoryError(tr('purchases:form.categoryRequired'));
+      return;
+    }
 
     const attachmentIds = expense?.attachmentIds ?? [];
     if (receiptUri) {
@@ -149,15 +173,17 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         <PickerField
           label={tr('purchases:form.category')}
           value={categories.find((c) => c.id === categoryId)?.name}
-          onPress={() => setCategoryOpen(true)}
+          onPress={() => (categories.length ? setCategoryOpen(true) : setNewCategoryOpen(true))}
+          placeholder={categories.length ? undefined : tr('purchases:form.addCategory')}
           icon="shape-outline"
           required
+          error={categoryError}
         />
 
         <DateField label={tr('purchases:form.date')} value={date} onChange={setDate} required />
 
         <PickerField label={tr('purchases:form.paidBy')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
-        <PickerField label={tr('purchases:form.paidFrom')} value={accounts.find((a) => a.id === accountId)?.name} onPress={() => setAccountOpen(true)} icon="bank-outline" />
+        <PickerField label={tr('purchases:form.paidFrom')} value={methodAccounts.find((a) => a.id === accountId)?.name} onPress={() => setAccountOpen(true)} icon="bank-outline" />
         <PickerField
           label={tr('purchases:form.supplier')}
           value={suppliers.find((s) => s.id === supplierId)?.name}
@@ -247,22 +273,55 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         title={tr('purchases:form.category')}
         options={categories.map((c) => ({ value: c.id, label: c.name, icon: c.icon as never }))}
         value={categoryId}
-        onSelect={setCategoryId}
+        onSelect={(id) => {
+          setCategoryId(id);
+          setCategoryError(undefined);
+        }}
+        footer={
+          <Button
+            title={tr('purchases:form.addCategory')}
+            icon="plus"
+            variant="ghost"
+            onPress={() => {
+              setCategoryOpen(false);
+              setNewCategoryOpen(true);
+            }}
+            fullWidth
+          />
+        }
       />
+      <Sheet
+        visible={newCategoryOpen}
+        onClose={() => setNewCategoryOpen(false)}
+        title={tr('purchases:form.addCategory')}
+        footer={<Button title={tr('purchases:form.saveCategory')} onPress={addCategory} disabled={!newCategoryName.trim()} fullWidth />}
+      >
+        <View style={{ padding: t.spacing.lg }}>
+          <TextField
+            label={tr('purchases:form.categoryName')}
+            value={newCategoryName}
+            onChangeText={setNewCategoryName}
+            autoFocus
+          />
+        </View>
+      </Sheet>
       <SelectSheet
         visible={methodOpen}
         onClose={() => setMethodOpen(false)}
         title={tr('purchases:form.paymentMethod')}
         options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
         value={method}
-        onSelect={(v) => setMethod(v as PaymentMethod)}
+        onSelect={(v) => {
+          setMethod(v as PaymentMethod);
+          setAccountId((current) => accountIdAfterMethodChange(v as PaymentMethod, current, accounts));
+        }}
         searchable={false}
       />
       <SelectSheet
         visible={accountOpen}
         onClose={() => setAccountOpen(false)}
         title={tr('purchases:form.paidFrom')}
-        options={accounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
+        options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
         value={accountId}
         onSelect={setAccountId}
         searchable={false}
