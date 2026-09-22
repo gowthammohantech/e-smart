@@ -58,10 +58,16 @@
       ],
       "expo-splash-screen",
       "expo-web-browser",
-      "expo-localization"
+      "expo-localization",
+      "./plugins/withSceneLifecycle"
     ],
     "experiments": {
-      "typedRoutes": false
+      "typedRoutes": false,
+      "inlineModules": {
+        "watchedDirectories": [
+          "native/ios"
+        ]
+      }
     },
     "locales": {
       "ta": "./src/i18n/native/ta.json"

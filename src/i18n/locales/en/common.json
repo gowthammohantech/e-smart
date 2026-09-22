@@ -78,7 +78,8 @@
     "dateLabel": "{{kind}} date",
     "numberLabel": "{{kind}} number",
     "finaliseTitle": "Finalise this {{kind, lowercase}}?",
-    "finaliseMessage": "A permanent number will be assigned and the {{kind, lowercase}} can no longer be edited freely."
+    "finaliseMessage": "A permanent number will be assigned and the {{kind, lowercase}} can no longer be edited freely.",
+    "prefillMissingParty": "That customer isn't available any more. Pick one to continue."
   },
   "documentDetail": {
     "changeStatus": "Change status",

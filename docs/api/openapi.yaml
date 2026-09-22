@@ -1,0 +1,4012 @@
+openapi: 3.1.0
+info:
+  title: Elixir Books Smart API
+  version: 1.0.0-draft
+  summary: Backend contract for taking the Elixir Books Smart app fully online.
+  description: |
+    Every action the app now performs against its local Zustand store
+    (`src/store/appStore.ts`) has a matching endpoint here. The entity shapes
+    mirror `src/types/index.ts`, so the client can swap the store's local
+    writes for these calls without changing its domain model.
+
+    ## Conventions
+    - **Auth**: `Authorization: Bearer <accessToken>` on everything except `/auth/*`,
+      `/plans` and `/reference/*`.
+    - **Tenancy**: the path scopes business data to a company:
+      `/companies/{companyId}/...`. The server checks that the caller's
+      `User.companyIds` (and `branchIds`, when set) include it.
+    - **Money** is always `{ minor: integer, currency: "INR" }`, in integer
+      minor units. There are no floats (see `src/lib/money.ts`).
+    - **Dates** are `YYYY-MM-DD`. **Timestamps** are ISO 8601 UTC.
+    - **Server-owned fields** are marked `readOnly`. The client may send them,
+      but the server ignores them: `id`, `companyId`, `number`, `totals`,
+      `createdAt`, `createdBy`, `updatedAt`, `version`, compliance results.
+    - **The server is the authority on calculation.** It recomputes document
+      totals, tax splits, stock levels, outstanding amounts and document
+      status with the same rules as `src/domain/*`. The client keeps its
+      engines for instant previews.
+    - **Numbering**: the server assigns document numbers when a document is
+      finalised and never reuses one. Drafts carry `"<KIND>-DRAFT"`.
+    - **Concurrency**: every mutable resource has a `version` and an `ETag`.
+      Send `If-Match` on `PUT`/`PATCH`/`DELETE`. A stale write gets `412`.
+    - **Idempotency**: send `Idempotency-Key` (a UUID) on every `POST`. Retries
+      from the offline queue are then safe. Keys are kept for 24 hours.
+    - **Pagination** is by cursor: `?limit=50&cursor=...` returns
+      `{ data, nextCursor }`.
+    - **Errors** use `application/problem+json` with a stable `code`. Validation
+      failures and compliance rejections also carry `issues[]`, which has the
+      same shape as `ComplianceIssue`.
+    - **Plan gating**: a request to a module the company's plan does not include
+      (see `src/domain/plan.ts`) returns `403` with code `PLAN_UPGRADE_REQUIRED`
+      and `requiredPlan`.
+    - **Roles**: owner > admin > accountant > sales > viewer. Each operation's
+      `x-roles` lists the minimum roles that may call it.
+servers:
+  - url: https://api.elixirbooks.example/v1
+    description: Production
+  - url: https://sandbox-api.elixirbooks.example/v1
+    description: Sandbox (IRP / EWB sandbox, test payments)
+security:
+  - bearerAuth: []
+tags:
+  - { name: Auth, description: 'Sign-up, sign-in, OTP, tokens' }
+  - { name: Me, description: 'Current user, profile, devices, push tokens' }
+  - { name: Companies, description: 'Companies, branches, onboarding' }
+  - { name: Users, description: 'Team members and invitations' }
+  - { name: Billing, description: 'Plans and subscriptions' }
+  - { name: Settings, description: 'Tax, expense categories, payment accounts, currencies, numbering, transporters' }
+  - { name: Parties, description: 'Customers and suppliers' }
+  - { name: Catalog, description: 'Items (goods and services)' }
+  - { name: Documents, description: 'Quotes, orders, deliveries, invoices, returns, POs, receipts, bills' }
+  - { name: Compliance, description: 'GST e-invoice (IRP) and e-way bills' }
+  - { name: Payments, description: 'Payments received and made' }
+  - { name: Expenses, description: 'Business expenses, recurring and billable' }
+  - { name: Inventory, description: 'Stock levels, movements, adjustments, transfers' }
+  - { name: Attachments, description: 'File uploads (receipts, logos, scans)' }
+  - { name: OCR, description: 'Bill and receipt extraction' }
+  - { name: Ledger, description: 'Receivables, payables, reminders' }
+  - { name: Reports, description: 'The nine PRD reports, with CSV and PDF export' }
+  - { name: GST, description: 'GSTR-1' }
+  - { name: Dashboard, description: 'Home-tab summary' }
+  - { name: Search, description: 'Global search' }
+  - { name: Notifications, description: 'In-app notification feed' }
+  - { name: Audit, description: 'Read-only audit trail' }
+  - { name: Integrations, description: 'Payments, messaging, accounting and storage connectors' }
+  - { name: Exports, description: 'Backup and data export' }
+  - { name: Sync, description: 'Offline queue push and pull' }
+  - { name: Reference, description: 'Countries, states, cities, currencies, HSN, GSTIN lookup' }
+
+paths:
+  # ------------------------------------------------------------------ Auth
+  /auth/sign-up:
+    post:
+      tags: [Auth]
+      operationId: signUp
+      security: []
+      summary: Create an account and its owner user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, maxLength: 120 }
+                email: { type: string, format: email }
+                phone: { type: string, description: E.164 }
+                password: { type: string, minLength: 8, writeOnly: true }
+                locale: { type: string, example: en }
+      responses:
+        '201': { $ref: '#/components/responses/AuthSession' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /auth/sign-in:
+    post:
+      tags: [Auth]
+      operationId: signIn
+      security: []
+      summary: Sign in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, writeOnly: true }
+                device: { $ref: '#/components/schemas/DeviceInfo' }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /auth/otp/request:
+    post:
+      tags: [Auth]
+      operationId: requestOtp
+      security: []
+      summary: Send a 6-digit sign-in code by SMS
+      description: The prototype accepts `123456`. The real server sends the code through the SMS provider.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string, description: E.164, example: '+919876543210' }
+                channel: { type: string, enum: [sms, whatsapp], default: sms }
+      responses:
+        '200':
+          description: Code sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId: { type: string }
+                  expiresInSeconds: { type: integer, example: 300 }
+                  resendAfterSeconds: { type: integer, example: 30 }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyOtp
+      security: []
+      summary: Exchange an OTP for a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, code]
+              properties:
+                requestId: { type: string }
+                code: { type: string, pattern: '^[0-9]{6}$' }
+                device: { $ref: '#/components/schemas/DeviceInfo' }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/password/forgot:
+    post:
+      tags: [Auth]
+      operationId: forgotPassword
+      security: []
+      summary: Email a password-reset link
+      description: Always returns 202, so the response does not reveal whether the email is registered.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: Accepted }
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 8, writeOnly: true }
+      responses:
+        '204': { description: Password changed; all other sessions revoked }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      security: []
+      summary: Rotate the refresh token and issue a new access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/sign-out:
+    post:
+      tags: [Auth]
+      operationId: signOut
+      summary: Revoke the current device session
+      responses:
+        '204': { description: Signed out }
+
+  # ------------------------------------------------------------------ Me
+  /me:
+    get:
+      tags: [Me]
+      operationId: getMe
+      summary: The signed-in user, their account, and the companies they can reach
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+    patch:
+      tags: [Me]
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                phone: { type: string }
+                avatarColor: { type: string }
+                locale: { type: string, enum: [en, ta] }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+  /me/onboarding/complete:
+    post:
+      tags: [Me]
+      operationId: completeOnboarding
+      responses:
+        '204': { description: Marked complete }
+  /me/devices:
+    get:
+      tags: [Me]
+      operationId: listDevices
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/DeviceSession' } }
+  /me/devices/{deviceId}:
+    delete:
+      tags: [Me]
+      operationId: revokeDevice
+      summary: Sign a device out. Its refresh token is revoked at once.
+      parameters:
+        - { name: deviceId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/push-tokens:
+    post:
+      tags: [Me]
+      operationId: registerPushToken
+      summary: Register an Expo / FCM / APNs push token for this device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, provider]
+              properties:
+                token: { type: string }
+                provider: { type: string, enum: [expo, fcm, apns] }
+      responses:
+        '204': { description: Registered }
+  /me/push-tokens/{token}:
+    delete:
+      tags: [Me]
+      operationId: unregisterPushToken
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Removed }
+
+  # ------------------------------------------------------------------ Companies
+  /companies:
+    get:
+      tags: [Companies]
+      operationId: listCompanies
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Company' } }
+    post:
+      tags: [Companies]
+      operationId: createCompany
+      summary: Create a company. Onboarding sends branches, tax and numbering in the same call.
+      x-roles: [owner]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/Company'
+                - type: object
+                  properties:
+                    branches: { type: array, items: { $ref: '#/components/schemas/Branch' } }
+                    numberingSeries: { type: array, items: { $ref: '#/components/schemas/NumberingSeries' } }
+                    seedDefaults:
+                      type: boolean
+                      default: true
+                      description: Create default tax categories, expense categories, a cash account and compliance settings for the country.
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Companies]
+      operationId: getCompany
+      responses:
+        '200':
+          description: OK
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+    put:
+      tags: [Companies]
+      operationId: saveCompany
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Company' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/logo:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    put:
+      tags: [Companies]
+      operationId: uploadCompanyLogo
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary, description: 'PNG or JPEG, up to 2 MB' }
+      responses:
+        '200':
+          description: Logo stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+    delete:
+      tags: [Companies]
+      operationId: removeCompanyLogo
+      x-roles: [owner, admin]
+      responses:
+        '204': { description: Removed }
+  /companies/{companyId}/branches:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Companies]
+      operationId: listBranches
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Branch' } }
+    post:
+      tags: [Companies]
+      operationId: createBranch
+      x-roles: [owner, admin]
+      x-plan-module: branches
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Branch' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branch' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /companies/{companyId}/branches/{branchId}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: branchId, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [Companies]
+      operationId: saveBranch
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Branch' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branch' }
+    delete:
+      tags: [Companies]
+      operationId: removeBranch
+      x-roles: [owner, admin]
+      description: '`409 BRANCH_IN_USE` when documents, stock or users reference the branch, or when it is the primary branch.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ------------------------------------------------------------------ Users
+  /users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: Everyone on the account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/User' } }
+    post:
+      tags: [Users]
+      operationId: inviteUser
+      summary: Invite a team member. Sends an email or SMS invite and creates the user with status `invited`.
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, role, companyIds]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+                role: { $ref: '#/components/schemas/UserRole' }
+                companyIds: { type: array, items: { type: string } }
+                branchIds: { type: array, items: { type: string } }
+      responses:
+        '201':
+          description: Invited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /users/{userId}:
+    parameters: [{ name: userId, in: path, required: true, schema: { type: string } }]
+    put:
+      tags: [Users]
+      operationId: saveUser
+      summary: Change role, company and branch access, or status
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/User' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '409': { description: Cannot demote or disable the last owner }
+    delete:
+      tags: [Users]
+      operationId: removeUser
+      x-roles: [owner, admin]
+      responses:
+        '204': { description: Removed; their sessions are revoked }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /users/{userId}/resend-invite:
+    parameters: [{ name: userId, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Users]
+      operationId: resendInvite
+      x-roles: [owner, admin]
+      responses:
+        '202': { description: Sent }
+  /invites/{token}/accept:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Users]
+      operationId: acceptInvite
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string, writeOnly: true }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSession' }
+
+  # ------------------------------------------------------------------ Billing
+  /plans:
+    get:
+      tags: [Billing]
+      operationId: listPlans
+      security: []
+      summary: The plan catalogue (prices and modules), mirroring `PLANS` in `src/domain/plan.ts`
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/PlanInfo' } }
+  /companies/{companyId}/subscription:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Billing]
+      operationId: getSubscription
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+  /companies/{companyId}/subscription/checkout:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Billing]
+      operationId: startCheckout
+      summary: Start an upgrade or downgrade. The plan changes only after the payment webhook confirms it.
+      x-roles: [owner]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan, cycle]
+              properties:
+                plan: { $ref: '#/components/schemas/PlanTier' }
+                cycle: { type: string, enum: [monthly, yearly] }
+      responses:
+        '200':
+          description: Checkout created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider: { type: string, enum: [razorpay] }
+                  subscriptionId: { type: string }
+                  checkoutUrl: { type: string, format: uri }
+                  keyId: { type: string, description: Public key for the in-app Razorpay checkout }
+  /companies/{companyId}/subscription/cancel:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Billing]
+      operationId: cancelSubscription
+      summary: Cancel at the end of the period. The company then falls back to Free, and no records are lost.
+      x-roles: [owner]
+      responses:
+        '200':
+          description: Scheduled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+
+  # ------------------------------------------------------------------ Settings (master data)
+  /companies/{companyId}/tax-categories:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listTaxCategories
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/TaxCategory' } }
+    post:
+      tags: [Settings]
+      operationId: createTaxCategory
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxCategory' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaxCategory' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/tax-categories/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveTaxCategory
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxCategory' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaxCategory' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Settings]
+      operationId: removeTaxCategory
+      x-roles: [owner, admin, accountant]
+      description: '`409 TAX_CATEGORY_IN_USE` when items or documents reference it.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/expense-categories:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listExpenseCategories
+      x-plan-module: expenses
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ExpenseCategory' } }
+    post:
+      tags: [Settings]
+      operationId: createExpenseCategory
+      x-roles: [owner, admin, accountant]
+      x-plan-module: expenses
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpenseCategory' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpenseCategory' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/expense-categories/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveExpenseCategory
+      x-roles: [owner, admin, accountant]
+      x-plan-module: expenses
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpenseCategory' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpenseCategory' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Settings]
+      operationId: removeExpenseCategory
+      x-roles: [owner, admin, accountant]
+      description: '`409 IN_USE` when expenses reference it.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/payment-accounts:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listPaymentAccounts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/PaymentAccount' } }
+    post:
+      tags: [Settings]
+      operationId: createPaymentAccount
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentAccount' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentAccount' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/payment-accounts/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: savePaymentAccount
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentAccount' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentAccount' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Settings]
+      operationId: removePaymentAccount
+      x-roles: [owner, admin, accountant]
+      description: '`409 IN_USE` when payments or expenses reference it.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/exchange-rates:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listExchangeRates
+      x-plan-module: fx
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ExchangeRate' } }
+    post:
+      tags: [Settings]
+      operationId: createExchangeRate
+      x-roles: [owner, admin, accountant]
+      x-plan-module: fx
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExchangeRate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExchangeRate' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/exchange-rates/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveExchangeRate
+      x-roles: [owner, admin, accountant]
+      x-plan-module: fx
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExchangeRate' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExchangeRate' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Settings]
+      operationId: removeExchangeRate
+      x-roles: [owner, admin, accountant]
+      description: 'Documents keep the rate they stored, so deleting a rate never changes history.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/transporters:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listTransporters
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Transporter' } }
+    post:
+      tags: [Settings]
+      operationId: createTransporter
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Transporter' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transporter' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/transporters/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveTransporter
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Transporter' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transporter' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Settings]
+      operationId: removeTransporter
+      x-roles: [owner, admin, accountant]
+      description: 'Existing e-way bills keep the transporter name they recorded.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/exchange-rates/refresh:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Settings]
+      operationId: refreshExchangeRates
+      summary: Pull today's rates from the FX provider for every currency the company uses
+      x-roles: [owner, admin, accountant]
+      x-plan-module: fx
+      responses:
+        '200':
+          description: Rates stored with source `provider`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ExchangeRate' } }
+  /companies/{companyId}/numbering-series:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listNumberingSeries
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/NumberingSeries' } }
+  /companies/{companyId}/numbering-series/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveNumberingSeries
+      description: '`nextNumber` may only move forward. A lower value returns `422 NUMBER_REUSE`, because numbers are never reused.'
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NumberingSeries' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NumberingSeries' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/numbering-series/{id}/preview:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Settings]
+      operationId: previewNextNumber
+      summary: The number the next finalised document would get. Nothing is consumed.
+      parameters:
+        - { name: date, in: query, schema: { type: string, format: date } }
+        - { name: branchId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  number: { type: string, example: INV/25-26/MUM/0042 }
+  /companies/{companyId}/compliance-settings:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Compliance]
+      operationId: getComplianceSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComplianceSettings' }
+    put:
+      tags: [Compliance]
+      operationId: saveComplianceSettings
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ComplianceSettings' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComplianceSettings' }
+  /companies/{companyId}/compliance-settings/credentials:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    put:
+      tags: [Compliance]
+      operationId: saveComplianceCredentials
+      summary: Store IRP / EWB API credentials
+      description: Write-only. The server encrypts them (KMS) and never returns them. Settings expose only `irpClientIdMasked`.
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [environment, username, password]
+              properties:
+                environment: { type: string, enum: [sandbox, production] }
+                gspProvider: { type: string, description: 'The GSP/ASP used to reach NIC, e.g. `cleartax`, `masters-india`, `nic-direct`' }
+                username: { type: string }
+                password: { type: string, writeOnly: true }
+                clientId: { type: string, writeOnly: true }
+                clientSecret: { type: string, writeOnly: true }
+      responses:
+        '204': { description: Stored }
+  /companies/{companyId}/compliance-settings/test-connection:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Compliance]
+      operationId: testComplianceConnection
+      summary: Authenticate against the IRP and the EWB portal with the stored credentials
+      x-roles: [owner, admin]
+      responses:
+        '200':
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  irp: { type: object, properties: { ok: { type: boolean }, message: { type: string } } }
+                  ewb: { type: object, properties: { ok: { type: boolean }, message: { type: string } } }
+
+  # ------------------------------------------------------------------ Parties
+  /companies/{companyId}/parties:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Parties]
+      operationId: listParties
+      parameters:
+        - { name: kind, in: query, schema: { $ref: '#/components/schemas/PartyKind' } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/PartyWithBalance' } }
+    post:
+      tags: [Parties]
+      operationId: createParty
+      description: 'Suppliers need the `purchases` module. The GSTIN check digit is validated (`src/domain/gstin.ts`).'
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Party' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Party' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/parties/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Parties]
+      operationId: getParty
+      responses:
+        '200':
+          description: OK
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PartyWithBalance' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Parties]
+      operationId: saveParty
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Party' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Party' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Parties]
+      operationId: removeParty
+      x-roles: [owner, admin]
+      description: '`409 PARTY_IN_USE` when documents or payments reference the party. Set `status: inactive` instead. (The prototype deletes without this check; the server must not.)'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/parties/{id}/statement:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Parties]
+      operationId: getPartyStatement
+      summary: Running ledger of documents and payments, with opening and closing balance
+      parameters:
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PartyStatement' }
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  # ------------------------------------------------------------------ Catalog
+  /companies/{companyId}/items:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Catalog]
+      operationId: listItems
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [goods, service] } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { name: barcode, in: query, description: 'Exact match, used by the scanner', schema: { type: string } }
+        - { name: lowStock, in: query, schema: { type: boolean } }
+        - { name: branchId, in: query, description: Branch for `stockOnHand`, schema: { type: string } }
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/ItemWithStock' } }
+    post:
+      tags: [Catalog]
+      operationId: createItem
+      description: When `trackInventory` is set and `openingStock > 0`, the server also writes an `opening` stock movement.
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Item' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+        '409': { description: SKU or barcode already used in this company }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/items/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Catalog]
+      operationId: getItem
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemWithStock' }
+    put:
+      tags: [Catalog]
+      operationId: saveItem
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Item' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+    delete:
+      tags: [Catalog]
+      operationId: removeItem
+      x-roles: [owner, admin]
+      description: '`409 ITEM_IN_USE` when documents or stock movements reference it. Set it inactive instead.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/items/{id}/image:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catalog]
+      operationId: uploadItemImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+
+  # ------------------------------------------------------------------ Documents
+  /companies/{companyId}/documents:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Documents]
+      operationId: listDocuments
+      description: 'Purchase-side kinds (`purchaseOrder`, `goodsReceipt`, `purchaseBill`, `purchaseReturn`) need the `purchases` module.'
+      parameters:
+        - name: kind
+          in: query
+          description: One or more kinds, comma-separated
+          style: form
+          explode: false
+          schema: { type: array, items: { $ref: '#/components/schemas/DocumentKind' } }
+        - name: status
+          in: query
+          style: form
+          explode: false
+          schema: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { name: outstanding, in: query, description: Only documents with an unpaid balance. Used by the payment allocation screen., schema: { type: boolean } }
+        - { name: overdue, in: query, schema: { type: boolean } }
+        - { name: eInvoiceStatus, in: query, schema: { $ref: '#/components/schemas/EInvoiceStatus' } }
+        - { name: sourceDocumentId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Q' }
+        - { name: sort, in: query, schema: { type: string, enum: [date, -date, number, -number, total, -total], default: -date } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+    post:
+      tags: [Documents]
+      operationId: createDocument
+      summary: Create a document. It is a draft unless `status` asks for a finalised one.
+      description: |
+        The server computes `totals` (FRD §10 order: qty × price → line discount →
+        taxable → tax → document discount → charges → round-off → grand total)
+        and snapshots each line's `taxRate`. A number is consumed only when the
+        document is created finalised. Stock movements are written for
+        deliveries, invoices, receipts, bills and returns when they are finalised.
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewDocumentInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/documents/calculate:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Documents]
+      operationId: calculateDocument
+      summary: Compute totals and tax lines without saving anything
+      description: The client's `lineCalc` gives an instant preview. This endpoint is the authoritative check.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewDocumentInput' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentTotals' }
+  /companies/{companyId}/documents/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Documents]
+      operationId: getDocument
+      responses:
+        '200':
+          description: OK
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Documents]
+      operationId: updateDocument
+      description: |
+        Merges the patch and recomputes totals. Lines, party, currency and dates
+        are editable only while the document is a draft. After finalisation only
+        `notes`, `terms`, `reference` and `attachmentIds` can change, and an
+        e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewDocumentInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Documents]
+      operationId: removeDocument
+      description: Only drafts can be deleted. A finalised document must be cancelled through `/status`, so its number is not lost. Stock movements the document wrote are reversed.
+      x-roles: [owner, admin]
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/documents/{id}/finalize:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: finalizeDocument
+      summary: Assign a number, move to the kind's issued state, write stock, and auto-report compliance
+      description: |
+        Target status by kind: quote → `sent`; salesOrder/purchaseOrder → `confirmed`;
+        delivery → `delivered`; goodsReceipt → `received`; returns → `approved`;
+        invoice/purchaseBill → `issued`. When compliance settings have
+        auto-generation on, the e-invoice and e-way bill are attempted too. Their
+        outcome is in `compliance`, and a failed attempt does not roll back the
+        finalisation.
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: Finalised
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  document: { $ref: '#/components/schemas/BusinessDocument' }
+                  compliance:
+                    type: object
+                    properties:
+                      eInvoice: { $ref: '#/components/schemas/ComplianceResult' }
+                      ewayBill: { $ref: '#/components/schemas/ComplianceResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/documents/{id}/status:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: setDocumentStatus
+      summary: Move a document to another status
+      description: |
+        Only transitions allowed by `src/domain/documentStates.ts` are accepted;
+        anything else returns `409 INVALID_TRANSITION`. `paid`, `partiallyPaid`
+        and `overdue` are derived by the server from payments and the due date,
+        so clients cannot set them.
+      x-roles: [owner, admin, accountant, sales]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/DocStatus' }
+                reason: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/documents/{id}/convert:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: convertDocument
+      summary: Create a draft of another kind from this one (quote → order → delivery → invoice, PO → receipt → bill, invoice → return)
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetKind]
+              properties:
+                targetKind: { $ref: '#/components/schemas/DocumentKind' }
+                lineIds: { type: array, items: { type: string }, description: Convert only these lines (partial fulfilment). All lines when omitted. }
+      responses:
+        '201':
+          description: Draft created, with `sourceDocumentId` set
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/documents/{id}/duplicate:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: duplicateDocument
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '201':
+          description: A new draft dated today
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+  /companies/{companyId}/documents/{id}/pdf:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Documents]
+      operationId: getDocumentPdf
+      summary: The printed document, with the IRN, signed QR, e-way bill number and UPI QR when present
+      parameters:
+        - { name: locale, in: query, schema: { type: string, enum: [en, ta] } }
+        - { name: copy, in: query, schema: { type: string, enum: [original, duplicate, triplicate], default: original } }
+      responses:
+        '200':
+          description: PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+  /companies/{companyId}/documents/{id}/share-link:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: createShareLink
+      summary: A public, expiring link where the customer can view, download and pay the document
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, format: uri }
+                  expiresAt: { type: string, format: date-time }
+  /companies/{companyId}/documents/{id}/send:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: sendDocument
+      summary: Email, WhatsApp or SMS the document to the party
+      description: Delivers the PDF or share link. A draft quote or an issued invoice moves to `sent`, and an `invoiceSent` notification is written.
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                channel: { type: string, enum: [email, whatsapp, sms] }
+                to: { type: array, items: { type: string }, description: Defaults to the party's email or phone }
+                cc: { type: array, items: { type: string } }
+                message: { type: string }
+                attachPdf: { type: boolean, default: true }
+                includePaymentLink: { type: boolean, default: false }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messageId: { type: string }
+                  status: { type: string, enum: [queued] }
+  /companies/{companyId}/documents/{id}/payment-link:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: createPaymentLink
+      summary: A Razorpay payment link for the outstanding amount. A payment recorded by the gateway webhook is allocated to this document.
+      x-roles: [owner, admin, accountant, sales]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: { $ref: '#/components/schemas/Money' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, format: uri }
+                  upiUri: { type: string, example: 'upi://pay?pa=vertex@okicici&am=11800.00&tn=INV-0042' }
+                  expiresAt: { type: string, format: date-time }
+
+  # ------------------------------------------------------------------ Compliance: e-invoice
+  /companies/{companyId}/documents/{id}/e-invoice:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Compliance]
+      operationId: getEInvoice
+      summary: IRN, ack number and date, signed QR, and the last issues
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComplianceInfo' }
+    post:
+      tags: [Compliance]
+      operationId: generateEInvoice
+      summary: Validate the document, build the NIC schema 1.1 payload, and register it with the IRP
+      description: |
+        With `dryRun=true`, it only validates and returns the payload. Blocking
+        issues return `422` with `issues[]`. A portal rejection returns `502`
+        with the NIC error code (2150, 2172, 2176, 2182, 2211, 3028, 3029) in
+        `issues[].code`. Duplicate IRN (2150) is resolved by fetching the
+        existing IRN from the portal.
+      x-roles: [owner, admin, accountant]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { name: dryRun, in: query, schema: { type: boolean, default: false } }
+      responses:
+        '200':
+          description: Generated (or, when `dryRun`, validated)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ComplianceResult'
+                  - properties:
+                      compliance: { $ref: '#/components/schemas/ComplianceInfo' }
+                      payload: { type: object, description: The NIC payload that was (or would be) sent }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+  /companies/{companyId}/documents/{id}/e-invoice/cancel:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Compliance]
+      operationId: cancelEInvoice
+      summary: Cancel the IRN. The portal allows this only within 24 hours of generation.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelRequest' }
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComplianceResult' }
+        '409': { description: 'Outside the 24-hour window, or an active e-way bill must be cancelled first' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+
+  # ------------------------------------------------------------------ Compliance: e-way bills
+  /companies/{companyId}/eway-bills:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Compliance]
+      operationId: listEwayBills
+      parameters:
+        - { name: status, in: query, description: '`expired` is derived from `validUpto`', schema: { $ref: '#/components/schemas/EwayBillStatus' } }
+        - { name: documentId, in: query, schema: { type: string } }
+        - { name: expiringWithinHours, in: query, schema: { type: integer } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/EwayBill' } }
+    post:
+      tags: [Compliance]
+      operationId: generateEwayBill
+      summary: Generate an e-way bill (Part-A and Part-B) for a finalised document
+      x-roles: [owner, admin, accountant]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { name: dryRun, in: query, schema: { type: boolean, default: false } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewEwayBillInput' }
+      responses:
+        '201':
+          description: Generated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ComplianceResult'
+                  - properties:
+                      ewayBill: { $ref: '#/components/schemas/EwayBill' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+  /companies/{companyId}/eway-bills/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Compliance]
+      operationId: getEwayBill
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EwayBill' }
+  /companies/{companyId}/eway-bills/{id}/pdf:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Compliance]
+      operationId: getEwayBillPdf
+      responses:
+        '200':
+          description: PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+  /companies/{companyId}/eway-bills/{id}/part-b:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Compliance]
+      operationId: updateEwayBillPartB
+      summary: Change the vehicle or transport leg. This appends to `partBUpdates`.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EwayBillPartBUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ComplianceResult'
+                  - properties:
+                      ewayBill: { $ref: '#/components/schemas/EwayBill' }
+        '409': { description: The bill is cancelled or expired }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+  /companies/{companyId}/eway-bills/{id}/extend:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Compliance]
+      operationId: extendEwayBill
+      summary: Extend validity. Allowed only from 8 hours before expiry to 8 hours after it.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExtendEwayBillInput' }
+      responses:
+        '200':
+          description: Extended
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ComplianceResult'
+                  - properties:
+                      ewayBill: { $ref: '#/components/schemas/EwayBill' }
+        '409': { description: Outside the extension window }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+  /companies/{companyId}/eway-bills/{id}/cancel:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Compliance]
+      operationId: cancelEwayBill
+      summary: Cancel. Allowed within 24 hours of generation.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelRequest' }
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComplianceResult' }
+        '409': { description: Outside the cancellation window }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+
+  # ------------------------------------------------------------------ Payments
+  /companies/{companyId}/payments:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: listPayments
+      description: '`direction=paid` needs the `payables` module.'
+      parameters:
+        - { name: direction, in: query, schema: { $ref: '#/components/schemas/PaymentDirection' } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { name: method, in: query, schema: { $ref: '#/components/schemas/PaymentMethod' } }
+        - { name: accountId, in: query, schema: { type: string } }
+        - { name: documentId, in: query, description: Payments allocated to this document, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Payment' } }
+    post:
+      tags: [Payments]
+      operationId: createPayment
+      description: |
+        The server assigns `number`, validates that allocations do not exceed each
+        document's outstanding amount, computes `unallocated` (held as an
+        advance) and `fxGainLoss`, and re-derives the status (`partiallyPaid` or
+        `paid`) of every allocated document.
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Payment' }
+      responses:
+        '201':
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payment' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/payments/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Payments]
+      operationId: getPayment
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payment' }
+    put:
+      tags: [Payments]
+      operationId: savePayment
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Payment' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payment' }
+    delete:
+      tags: [Payments]
+      operationId: removePayment
+      description: Re-derives the status of every document the payment was allocated to.
+      x-roles: [owner, admin]
+      responses:
+        '204': { description: Removed }
+  /companies/{companyId}/payments/{id}/receipt:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Payments]
+      operationId: getPaymentReceiptPdf
+      responses:
+        '200':
+          description: PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  # ------------------------------------------------------------------ Expenses
+  /companies/{companyId}/expenses:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Expenses]
+      operationId: listExpenses
+      x-plan-module: expenses
+      parameters:
+        - { name: categoryId, in: query, schema: { type: string } }
+        - { name: supplierId, in: query, schema: { type: string } }
+        - { name: billable, in: query, schema: { type: boolean } }
+        - { name: recurring, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Expense' } }
+    post:
+      tags: [Expenses]
+      operationId: createExpense
+      description: The server assigns `number`. A recurring expense is copied again on `nextRecurrenceDate` by a scheduled job.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: expenses
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Expense' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+  /companies/{companyId}/expenses/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Expenses]
+      operationId: getExpense
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+    put:
+      tags: [Expenses]
+      operationId: saveExpense
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Expense' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+    delete:
+      tags: [Expenses]
+      operationId: removeExpense
+      x-roles: [owner, admin]
+      responses:
+        '204': { description: Removed }
+
+  # ------------------------------------------------------------------ Inventory
+  /companies/{companyId}/stock/levels:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Inventory]
+      operationId: getStockLevels
+      summary: On-hand quantity per item (and branch), derived from the movement ledger
+      x-plan-module: inventory
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { name: itemId, in: query, schema: { type: string } }
+        - { name: lowStock, in: query, description: Only items at or below `reorderLevel`, schema: { type: boolean } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        itemId: { type: string }
+                        branchId: { type: [string, 'null'] }
+                        onHand: { type: number }
+                        reorderLevel: { type: number }
+                        low: { type: boolean }
+                        value: { $ref: '#/components/schemas/Money' }
+  /companies/{companyId}/stock/movements:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Inventory]
+      operationId: listStockMovements
+      summary: The movement ledger. It is immutable, so there is no PUT or DELETE.
+      x-plan-module: inventory
+      parameters:
+        - { name: itemId, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { $ref: '#/components/schemas/StockMovementType' } }
+        - { name: referenceId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/StockMovement' } }
+  /companies/{companyId}/stock/adjustments:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Inventory]
+      operationId: adjustStock
+      summary: Record one or more adjustments (signed quantities) or opening stock
+      x-roles: [owner, admin, accountant]
+      x-plan-module: inventory
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, date, lines]
+              properties:
+                branchId: { type: string }
+                date: { type: string, format: date }
+                type: { type: string, enum: [adjustment, opening], default: adjustment }
+                reason: { type: string, enum: [damaged, lost, found, recount, expired, other] }
+                notes: { type: string }
+                lines:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [itemId, quantity]
+                    properties:
+                      itemId: { type: string }
+                      quantity: { type: number, description: Signed; negative reduces stock }
+                      unitCost: { $ref: '#/components/schemas/Money' }
+      responses:
+        '201':
+          description: Movements written
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/StockMovement' } }
+        '422': { description: 'Would take stock negative, when the company forbids that' }
+  /companies/{companyId}/stock/transfers:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Inventory]
+      operationId: transferStock
+      summary: Move stock between branches. Writes a paired transferOut and transferIn.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: branches
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId, fromBranchId, toBranchId, quantity, date]
+              properties:
+                itemId: { type: string }
+                fromBranchId: { type: string }
+                toBranchId: { type: string }
+                quantity: { type: number, exclusiveMinimum: 0 }
+                date: { type: string, format: date }
+                notes: { type: string }
+      responses:
+        '201':
+          description: Transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/StockMovement' } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  # ------------------------------------------------------------------ Attachments
+  /companies/{companyId}/attachments:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Attachments]
+      operationId: listAttachments
+      parameters:
+        - { name: entityType, in: query, schema: { type: string } }
+        - { name: entityId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Attachment' } }
+    post:
+      tags: [Attachments]
+      operationId: createAttachmentUpload
+      summary: Reserve an attachment and get a pre-signed upload URL (S3 / GCS / R2)
+      description: The client PUTs the bytes to `uploadUrl`, then calls `/complete`. Limit is 10 MB. Allowed types are images and PDF.
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, mimeType, size]
+              properties:
+                name: { type: string }
+                mimeType: { type: string, enum: [image/jpeg, image/png, image/heic, application/pdf] }
+                size: { type: integer, maximum: 10485760 }
+                entityType: { type: string }
+                entityId: { type: string }
+      responses:
+        '201':
+          description: Reserved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachment: { $ref: '#/components/schemas/Attachment' }
+                  uploadUrl: { type: string, format: uri }
+                  uploadHeaders: { type: object, additionalProperties: { type: string } }
+                  expiresAt: { type: string, format: date-time }
+  /companies/{companyId}/attachments/{id}/complete:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Attachments]
+      operationId: completeAttachmentUpload
+      responses:
+        '200':
+          description: Upload verified and the attachment is live
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+  /companies/{companyId}/attachments/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Attachments]
+      operationId: getAttachment
+      summary: Metadata plus a short-lived signed download URL in `uri`
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+    delete:
+      tags: [Attachments]
+      operationId: removeAttachment
+      x-roles: [owner, admin, accountant]
+      responses:
+        '204': { description: Removed }
+
+  # ------------------------------------------------------------------ OCR
+  /companies/{companyId}/ocr/extractions:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [OCR]
+      operationId: createOcrExtraction
+      summary: Extract fields from an uploaded bill or receipt image
+      description: Replaces `mockExtract` in `src/features/ocr/ocrStore.ts`. Upload the image as an attachment first. Poll the extraction, or wait for the `ocr.completed` push.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: ocr
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attachmentId, kind]
+              properties:
+                attachmentId: { type: string }
+                kind: { type: string, enum: [expense, purchaseBill] }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OcrExtraction' }
+  /companies/{companyId}/ocr/extractions/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [OCR]
+      operationId: getOcrExtraction
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OcrExtraction' }
+
+  # ------------------------------------------------------------------ Ledger
+  /companies/{companyId}/receivables:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Ledger]
+      operationId: getReceivables
+      summary: Outstanding invoices with aging buckets (current, 1–30, 31–60, 61–90, 90+)
+      parameters:
+        - { name: asOf, in: query, schema: { type: string, format: date } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgingReport' }
+  /companies/{companyId}/payables:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Ledger]
+      operationId: getPayables
+      x-plan-module: payables
+      parameters:
+        - { name: asOf, in: query, schema: { type: string, format: date } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgingReport' }
+  /companies/{companyId}/receivables/reminders:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Ledger]
+      operationId: sendPaymentReminder
+      summary: Send a payment reminder over WhatsApp, SMS or email (replaces the `wa.me` deep link)
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyId, channel]
+              properties:
+                partyId: { type: string }
+                documentIds: { type: array, items: { type: string } }
+                channel: { type: string, enum: [whatsapp, sms, email] }
+                message: { type: string }
+                includePaymentLink: { type: boolean, default: true }
+      responses:
+        '202': { description: Queued }
+
+  # ------------------------------------------------------------------ Reports
+  /companies/{companyId}/reports/{reportKey}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - name: reportKey
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, profit]
+    get:
+      tags: [Reports]
+      operationId: getReport
+      summary: One of the nine PRD reports, in base currency
+      description: |
+        `purchase-summary`, `expense-summary`, `payables`, `stock` and `profit` need
+        a full plan. Send `Accept: text/csv` or `application/pdf` to export.
+        The response schema depends on `reportKey`: sales/purchase-summary →
+        TransactionSummary, expense-summary → ExpenseSummary, receivables/payables →
+        AgingReport, stock → StockReport, tax-summary → TaxSummary, payments →
+        PaymentSummary, profit → ProfitSnapshot.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { name: currency, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/TransactionSummary'
+                  - $ref: '#/components/schemas/ExpenseSummary'
+                  - $ref: '#/components/schemas/AgingReport'
+                  - $ref: '#/components/schemas/StockReport'
+                  - $ref: '#/components/schemas/TaxSummary'
+                  - $ref: '#/components/schemas/PaymentSummary'
+                  - $ref: '#/components/schemas/ProfitSnapshot'
+            text/csv:
+              schema: { type: string }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ------------------------------------------------------------------ GST
+  /companies/{companyId}/gst/gstr1:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [GST]
+      operationId: getGstr1
+      summary: GSTR-1 tables (B2B, B2CL, B2CS, EXP, CDNR, CDNUR) plus the HSN summary for a return period
+      parameters:
+        - { name: period, in: query, required: true, description: MMYYYY, schema: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$', example: '092026' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Gstr1Summary' }
+  /companies/{companyId}/gst/gstr1/export:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [GST]
+      operationId: exportGstr1
+      summary: The GSTR-1 JSON the GST portal's offline tool accepts, or a CSV or Excel workbook
+      parameters:
+        - { name: period, in: query, required: true, schema: { type: string } }
+        - { name: format, in: query, schema: { type: string, enum: [gstn-json, csv, xlsx], default: gstn-json } }
+      responses:
+        '200':
+          description: File
+          content:
+            application/json: { schema: { type: object } }
+            text/csv: { schema: { type: string } }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+
+  # ------------------------------------------------------------------ Dashboard / search
+  /companies/{companyId}/dashboard:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getDashboard
+      summary: Everything the home tab shows, in one call
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { name: range, in: query, schema: { type: string, enum: [today, week, month, quarter, year], default: month } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dashboard' }
+  /companies/{companyId}/search:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Search]
+      operationId: search
+      summary: Search across parties, items (name, SKU, barcode, HSN), documents and payments
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2 } }
+        - { name: limit, in: query, schema: { type: integer, default: 5, maximum: 20 }, description: Per group }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  parties: { type: array, items: { $ref: '#/components/schemas/Party' } }
+                  items: { type: array, items: { $ref: '#/components/schemas/Item' } }
+                  documents: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+                  payments: { type: array, items: { $ref: '#/components/schemas/Payment' } }
+
+  # ------------------------------------------------------------------ Notifications
+  /companies/{companyId}/notifications:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      parameters:
+        - { name: unread, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/AppNotification' } }
+                      unreadCount: { type: integer }
+    delete:
+      tags: [Notifications]
+      operationId: clearNotifications
+      responses:
+        '204': { description: Cleared for this user }
+  /companies/{companyId}/notifications/{id}/read:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      responses:
+        '204': { description: Marked }
+  /companies/{companyId}/notifications/read-all:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Notifications]
+      operationId: markAllNotificationsRead
+      responses:
+        '204': { description: Marked }
+
+  # ------------------------------------------------------------------ Audit
+  /companies/{companyId}/audit-events:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      summary: Append-only audit trail. The server writes it on every mutation, and clients cannot write to it.
+      x-roles: [owner, admin, accountant]
+      parameters:
+        - { name: entityType, in: query, schema: { type: string } }
+        - { name: entityId, in: query, schema: { type: string } }
+        - { name: actorId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+
+  # ------------------------------------------------------------------ Integrations
+  /companies/{companyId}/integrations:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Integrations]
+      operationId: listIntegrations
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Integration' } }
+  /companies/{companyId}/integrations/{integrationId}/connect:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: integrationId, in: path, required: true, schema: { type: string, enum: [int_razorpay, int_upi, int_einvoice, int_eway, int_whatsapp, int_sms, int_tally, int_drive] } }
+    post:
+      tags: [Integrations]
+      operationId: connectIntegration
+      summary: Connect an integration. OAuth providers (Google Drive, Razorpay) return an `authorizeUrl`.
+      x-roles: [owner, admin]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  type: object
+                  description: 'Provider-specific. Examples: UPI `{ vpa, payeeName }`, WhatsApp `{ phoneNumberId }`, SMS `{ senderId }`.'
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Connected, or an OAuth redirect is needed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  integration: { $ref: '#/components/schemas/Integration' }
+                  authorizeUrl: { type: string, format: uri }
+  /companies/{companyId}/integrations/{integrationId}/disconnect:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: integrationId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Integrations]
+      operationId: disconnectIntegration
+      x-roles: [owner, admin]
+      responses:
+        '200':
+          description: Disconnected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Integration' }
+
+  # ------------------------------------------------------------------ Exports / backup
+  /companies/{companyId}/exports:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Exports]
+      operationId: createExport
+      summary: Export the whole company (backup), or Tally vouchers, as a background job
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format]
+              properties:
+                format: { type: string, enum: [json-backup, csv-zip, tally-xml] }
+                from: { type: string, format: date }
+                to: { type: string, format: date }
+                includeAttachments: { type: boolean, default: false }
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportJob' }
+    get:
+      tags: [Exports]
+      operationId: listExports
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ExportJob' } }
+  /companies/{companyId}/exports/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Exports]
+      operationId: getExport
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportJob' }
+  /companies/{companyId}/backup-settings:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Exports]
+      operationId: getBackupSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupSettings' }
+    put:
+      tags: [Exports]
+      operationId: saveBackupSettings
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BackupSettings' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupSettings' }
+
+  # ------------------------------------------------------------------ Sync (offline-first)
+  /sync/push:
+    post:
+      tags: [Sync]
+      operationId: syncPush
+      summary: Replay the offline queue in order
+      description: |
+        Each mutation carries the endpoint it stands for, plus the `baseVersion` the
+        client edited. The server applies them in order and reports each result.
+        A stale `baseVersion` returns `conflict` with the server copy, so the
+        client can show it in Settings → Sync and retry or discard. Numbers and
+        totals are always assigned by the server here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mutations]
+              properties:
+                mutations:
+                  type: array
+                  maxItems: 200
+                  items: { $ref: '#/components/schemas/SyncMutation' }
+      responses:
+        '200':
+          description: Per-mutation results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        status: { type: string, enum: [applied, conflict, rejected] }
+                        entity: { type: object, description: 'Server copy after the mutation, or at conflict' }
+                        error: { $ref: '#/components/schemas/Problem' }
+  /sync/pull:
+    get:
+      tags: [Sync]
+      operationId: syncPull
+      summary: Changes since a cursor, for every company the user can reach
+      parameters:
+        - { name: since, in: query, description: Cursor from the previous pull; omit for a full snapshot, schema: { type: string } }
+        - { name: companyId, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 500, maximum: 2000 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        entityType: { type: string, example: document }
+                        entityId: { type: string }
+                        op: { type: string, enum: [upsert, delete] }
+                        version: { type: integer }
+                        data: { type: object }
+                  cursor: { type: string }
+                  hasMore: { type: boolean }
+
+  # ------------------------------------------------------------------ Reference data
+  /reference/countries:
+    get:
+      tags: [Reference]
+      operationId: listCountries
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string, example: IN }
+                        name: { type: string }
+                        currency: { type: string }
+                        taxRegime: { type: string, enum: [GST, VAT, NONE] }
+                        taxIdLabel: { type: string, example: GSTIN }
+  /reference/states:
+    get:
+      tags: [Reference]
+      operationId: listStates
+      security: []
+      parameters:
+        - { name: country, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK, with GST state codes for India
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string, example: '27' }
+                        name: { type: string, example: Maharashtra }
+  /reference/cities:
+    get:
+      tags: [Reference]
+      operationId: searchCities
+      security: []
+      summary: City search for `CityField` (the prototype bundles `src/data/cities.ts`)
+      parameters:
+        - { name: country, in: query, schema: { type: string, default: IN } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        state: { type: string }
+                        stateCode: { type: string }
+  /reference/pincodes/{pincode}:
+    get:
+      tags: [Reference]
+      operationId: lookupPincode
+      security: []
+      parameters:
+        - { name: pincode, in: path, required: true, schema: { type: string, pattern: '^[1-9][0-9]{5}$' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pincode: { type: string }
+                  city: { type: string }
+                  state: { type: string }
+                  stateCode: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /reference/distance:
+    get:
+      tags: [Reference]
+      operationId: getRoadDistance
+      summary: Approximate road distance between PIN codes, used for e-way bill validity
+      parameters:
+        - { name: fromPincode, in: query, required: true, schema: { type: string } }
+        - { name: toPincode, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  distanceKm: { type: integer }
+                  source: { type: string, enum: [ewb-portal, maps] }
+  /reference/currencies:
+    get:
+      tags: [Reference]
+      operationId: listCurrencies
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string }
+                        name: { type: string }
+                        symbol: { type: string }
+                        precision: { type: integer }
+  /reference/hsn:
+    get:
+      tags: [Reference]
+      operationId: searchHsn
+      summary: HSN/SAC code search with the suggested GST rate
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string }
+                        description: { type: string }
+                        kind: { type: string, enum: [HSN, SAC] }
+                        gstRate: { type: number }
+  /reference/gstin/{gstin}:
+    get:
+      tags: [Reference]
+      operationId: lookupGstin
+      summary: Verify a GSTIN on the GST portal and fetch its legal name, address and status, to autofill a party or company
+      parameters:
+        - { name: gstin, in: path, required: true, schema: { type: string, pattern: '^[0-9]{2}[A-Z0-9]{13}$' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gstin: { type: string }
+                  legalName: { type: string }
+                  tradeName: { type: string }
+                  status: { type: string, enum: [Active, Cancelled, Suspended, Inactive] }
+                  registrationType: { $ref: '#/components/schemas/GstRegistrationType' }
+                  address: { $ref: '#/components/schemas/Address' }
+                  registeredOn: { type: string, format: date }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: Check digit invalid }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+
+webhooks:
+  razorpayEvent:
+    post:
+      operationId: razorpayWebhook
+      summary: 'Inbound: Razorpay payment and subscription events (to POST /webhooks/razorpay)'
+      description: |
+        Verified with `X-Razorpay-Signature`. `payment_link.paid` records a
+        `received` Payment allocated to the linked document. `subscription.charged`
+        and `subscription.cancelled` update `Company.plan`.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Acknowledged }
+  whatsappStatus:
+    post:
+      operationId: whatsappWebhook
+      summary: 'Inbound: WhatsApp Business delivery and read receipts (to POST /webhooks/whatsapp)'
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Acknowledged }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token (15 min). Rotate it with `/auth/refresh`. The refresh token is bound to a DeviceSession.
+
+  parameters:
+    CompanyId: { name: companyId, in: path, required: true, schema: { type: string, example: cmp_vertex } }
+    Id: { name: id, in: path, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, format: uuid } }
+    IfMatch: { name: If-Match, in: header, required: false, description: ETag from the last read, schema: { type: string } }
+    Q: { name: q, in: query, description: Free-text search, schema: { type: string } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+    From: { name: from, in: query, schema: { type: string, format: date } }
+    To: { name: to, in: query, schema: { type: string, format: date } }
+    BranchIdQuery: { name: branchId, in: query, schema: { type: string } }
+
+  headers:
+    ETag: { schema: { type: string }, description: 'Weak ETag of `version`, e.g. W/"7"' }
+
+  responses:
+    AuthSession:
+      description: Session issued
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AuthSession' }
+    BadRequest:
+      description: Malformed request
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unauthorized:
+      description: Missing, expired or revoked token, or bad credentials
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Forbidden:
+      description: Role not allowed, company not reachable, or `PLAN_UPGRADE_REQUIRED`
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    NotFound:
+      description: Not found (also returned for another company's records)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Conflict:
+      description: 'Business-rule conflict: IN_USE, INVALID_TRANSITION, DOCUMENT_LOCKED, DUPLICATE'
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    PreconditionFailed:
+      description: '`If-Match` is stale; re-read and retry'
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unprocessable:
+      description: Validation failed; see `issues[]`
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    TooManyRequests:
+      description: Rate limited; see `Retry-After`
+      headers: { Retry-After: { schema: { type: integer } } }
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    UpstreamError:
+      description: The IRP, EWB or GST portal rejected the request or was unreachable. The portal's code is in `issues[].code`.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+
+  schemas:
+    # ---------------------------------------------------------------- primitives
+    Money:
+      type: object
+      required: [minor, currency]
+      properties:
+        minor: { type: integer, format: int64, description: 'Integer minor units (paise, cents, fils)' }
+        currency: { type: string, pattern: '^[A-Z]{3}$', example: INR }
+      example: { minor: 1180000, currency: INR }
+    Address:
+      type: object
+      required: [line1, city, state, postalCode, country]
+      properties:
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        stateCode: { type: string, description: 'GST state code, e.g. `27`' }
+        postalCode: { type: string }
+        country: { type: string, example: IN }
+    Page:
+      type: object
+      properties:
+        data: { type: array, items: {} }
+        nextCursor: { type: [string, 'null'] }
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string, example: PLAN_UPGRADE_REQUIRED }
+        detail: { type: string }
+        requiredPlan: { $ref: '#/components/schemas/PlanTier' }
+        issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
+        traceId: { type: string }
+    Versioned:
+      type: object
+      properties:
+        version: { type: integer, readOnly: true }
+        createdAt: { type: string, format: date-time, readOnly: true }
+        updatedAt: { type: string, format: date-time, readOnly: true }
+
+    # ---------------------------------------------------------------- auth & tenancy
+    DeviceInfo:
+      type: object
+      properties:
+        label: { type: string, example: Priya's iPhone }
+        platform: { type: string, example: ios 19.0 }
+        appVersion: { type: string }
+    AuthSession:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, example: 900 }
+        user: { $ref: '#/components/schemas/User' }
+        onboardingComplete: { type: boolean }
+    MeResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        accountId: { type: string }
+        onboardingComplete: { type: boolean }
+        companies: { type: array, items: { $ref: '#/components/schemas/Company' } }
+        defaultCompanyId: { type: string }
+    PlanTier: { type: string, enum: [free, basic, pro, business] }
+    UserRole: { type: string, enum: [owner, admin, accountant, sales, viewer] }
+    TaxRegistration:
+      type: object
+      required: [regime, identifierLabel, registered]
+      properties:
+        regime: { type: string, enum: [GST, VAT, NONE] }
+        identifier: { type: string, description: GSTIN / VAT number }
+        identifierLabel: { type: string, example: GSTIN }
+        registered: { type: boolean }
+        compositionScheme: { type: boolean }
+        placeOfSupplyStateCode: { type: string }
+    Company:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, businessType, country, baseCurrency, address, fiscalYearStartMonth]
+          properties:
+            id: { type: string, readOnly: true }
+            accountId: { type: string, readOnly: true }
+            name: { type: string }
+            legalName: { type: string }
+            logoUri: { type: string, format: uri, readOnly: true }
+            businessType: { type: string, description: 'Stable slug, e.g. `wholesale`' }
+            country: { type: string }
+            baseCurrency: { type: string }
+            address: { $ref: '#/components/schemas/Address' }
+            email: { type: string, format: email }
+            phone: { type: string }
+            website: { type: string }
+            taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
+            fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
+            plan: { allOf: [{ $ref: '#/components/schemas/PlanTier' }], readOnly: true, description: Changed only through billing }
+    Branch:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, code, address]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string }
+            code: { type: string, maxLength: 6, example: MUM }
+            address: { $ref: '#/components/schemas/Address' }
+            isPrimary: { type: boolean }
+            phone: { type: string }
+    User:
+      type: object
+      properties:
+        id: { type: string, readOnly: true }
+        accountId: { type: string, readOnly: true }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        role: { $ref: '#/components/schemas/UserRole' }
+        companyIds: { type: array, items: { type: string } }
+        branchIds: { type: array, items: { type: string }, description: Empty means all branches }
+        avatarColor: { type: string }
+        status: { type: string, enum: [active, invited, disabled] }
+        lastActiveAt: { type: string, format: date-time, readOnly: true }
+    DeviceSession:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        platform: { type: string }
+        lastActiveAt: { type: string, format: date-time }
+        current: { type: boolean }
+        location: { type: string }
+    PlanInfo:
+      type: object
+      properties:
+        key: { $ref: '#/components/schemas/PlanTier' }
+        name: { type: string }
+        monthly: { type: number, description: INR }
+        yearly: { type: number }
+        features: { type: array, items: { type: string } }
+        modules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables] } }
+        popular: { type: boolean }
+    Subscription:
+      type: object
+      properties:
+        companyId: { type: string }
+        plan: { $ref: '#/components/schemas/PlanTier' }
+        cycle: { type: string, enum: [monthly, yearly] }
+        status: { type: string, enum: [active, trialing, pastDue, cancelled, none] }
+        currentPeriodEnd: { type: string, format: date-time }
+        cancelAtPeriodEnd: { type: boolean }
+        provider: { type: string, enum: [razorpay, appStore, playStore] }
+
+    # ---------------------------------------------------------------- settings
+    TaxCategory:
+      type: object
+      required: [name, rate, type, effectiveFrom]
+      properties:
+        id: { type: string, readOnly: true }
+        companyId: { type: string, readOnly: true }
+        name: { type: string, example: GST 18% }
+        rate: { type: number, description: 'Combined percentage, split at calculation time' }
+        type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
+        hsnCode: { type: string }
+        effectiveFrom: { type: string, format: date }
+        description: { type: string }
+    ExpenseCategory:
+      type: object
+      required: [name]
+      properties:
+        id: { type: string, readOnly: true }
+        companyId: { type: string, readOnly: true }
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+    PaymentAccount:
+      type: object
+      required: [name, type, currency, openingBalance]
+      properties:
+        id: { type: string, readOnly: true }
+        companyId: { type: string, readOnly: true }
+        name: { type: string }
+        type: { type: string, enum: [cash, bank, wallet] }
+        currency: { type: string }
+        accountNumber: { type: string }
+        openingBalance: { $ref: '#/components/schemas/Money' }
+        currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+        isDefault: { type: boolean }
+    ExchangeRate:
+      type: object
+      required: [from, to, rate, effectiveFrom]
+      properties:
+        id: { type: string, readOnly: true }
+        companyId: { type: string, readOnly: true }
+        from: { type: string }
+        to: { type: string }
+        rate: { type: number }
+        effectiveFrom: { type: string, format: date }
+        source: { type: string, enum: [manual, provider] }
+    NumberingSeries:
+      type: object
+      required: [kind, prefix, nextNumber, padding]
+      properties:
+        id: { type: string, readOnly: true }
+        companyId: { type: string, readOnly: true }
+        kind:
+          type: string
+          enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, payment, expense]
+        prefix: { type: string, example: INV }
+        nextNumber: { type: integer, minimum: 1 }
+        padding: { type: integer, minimum: 1, maximum: 8 }
+        includeFiscalYear: { type: boolean }
+        includeBranchCode: { type: boolean }
+        resetPolicy: { type: string, enum: [never, yearly, monthly] }
+    Transporter:
+      type: object
+      required: [name, transporterId]
+      properties:
+        id: { type: string, readOnly: true }
+        companyId: { type: string, readOnly: true }
+        name: { type: string }
+        transporterId: { type: string, description: 15-character GSTIN or TRANSIN }
+        phone: { type: string }
+        status: { type: string, enum: [active, inactive] }
+    TransportMode: { type: string, enum: [road, rail, air, ship] }
+    VehicleType: { type: string, enum: [regular, overDimensional] }
+    ComplianceSettings:
+      type: object
+      properties:
+        companyId: { type: string, readOnly: true }
+        eInvoiceEnabled: { type: boolean }
+        annualTurnover: { $ref: '#/components/schemas/Money' }
+        eInvoiceTurnoverThreshold: { $ref: '#/components/schemas/Money' }
+        reportingWindowDays: { type: integer, example: 30 }
+        autoGenerateEInvoiceOnFinalise: { type: boolean }
+        irpUsername: { type: string }
+        irpClientIdMasked: { type: string, readOnly: true, example: 'ELX-****-9F21' }
+        irpEnvironment: { type: string, enum: [sandbox, production] }
+        ewayBillEnabled: { type: boolean }
+        ewayBillThreshold: { $ref: '#/components/schemas/Money' }
+        autoGenerateEwayBillOnFinalise: { type: boolean }
+        defaultTransporterId: { type: string }
+        defaultTransporterName: { type: string }
+        defaultDistanceKm: { type: integer }
+        defaultTransportMode: { $ref: '#/components/schemas/TransportMode' }
+        defaultVehicleType: { $ref: '#/components/schemas/VehicleType' }
+        updatedAt: { type: string, format: date-time, readOnly: true }
+    BackupSettings:
+      type: object
+      properties:
+        automatic: { type: boolean }
+        frequency: { type: string, enum: [daily, weekly] }
+        destination: { type: string, enum: [elixir-cloud, google-drive] }
+        lastBackupAt: { type: string, format: date-time, readOnly: true }
+
+    # ---------------------------------------------------------------- parties & items
+    PartyKind: { type: string, enum: [customer, supplier] }
+    GstRegistrationType: { type: string, enum: [regular, composition, unregistered, sez, overseas] }
+    Party:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [kind, name, currency, billingAddress, openingBalance, paymentTermsDays]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            kind: { $ref: '#/components/schemas/PartyKind' }
+            name: { type: string }
+            code: { type: string, description: Server assigns one when blank }
+            displayName: { type: string }
+            taxId: { type: string, description: GSTIN }
+            gstRegistrationType: { $ref: '#/components/schemas/GstRegistrationType' }
+            email: { type: string, format: email }
+            phone: { type: string }
+            currency: { type: string }
+            billingAddress: { $ref: '#/components/schemas/Address' }
+            shippingAddress: { $ref: '#/components/schemas/Address' }
+            creditLimit: { $ref: '#/components/schemas/Money' }
+            openingBalance: { $ref: '#/components/schemas/Money' }
+            paymentTermsDays: { type: integer, minimum: 0 }
+            notes: { type: string }
+            status: { type: string, enum: [active, inactive] }
+    PartyWithBalance:
+      allOf:
+        - $ref: '#/components/schemas/Party'
+        - type: object
+          properties:
+            outstanding: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            overdue: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            advance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true, description: Unallocated payments }
+    PartyStatement:
+      type: object
+      properties:
+        party: { $ref: '#/components/schemas/Party' }
+        openingBalance: { $ref: '#/components/schemas/Money' }
+        closingBalance: { $ref: '#/components/schemas/Money' }
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              entityType: { type: string, enum: [document, payment, opening] }
+              entityId: { type: string }
+              number: { type: string }
+              debit: { $ref: '#/components/schemas/Money' }
+              credit: { $ref: '#/components/schemas/Money' }
+              balance: { $ref: '#/components/schemas/Money' }
+    Item:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [sku, name, type, unit, salePrice, purchasePrice, taxCategoryId]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            sku: { type: string }
+            name: { type: string }
+            description: { type: string }
+            type: { type: string, enum: [goods, service] }
+            unit: { type: string, example: pcs }
+            salePrice: { $ref: '#/components/schemas/Money' }
+            purchasePrice: { $ref: '#/components/schemas/Money' }
+            taxCategoryId: { type: string }
+            hsnCode: { type: string }
+            barcode: { type: string }
+            trackInventory: { type: boolean }
+            openingStock: { type: number, description: Used only on create }
+            reorderLevel: { type: number }
+            imageUri: { type: string, format: uri, readOnly: true }
+            status: { type: string, enum: [active, inactive] }
+    ItemWithStock:
+      allOf:
+        - $ref: '#/components/schemas/Item'
+        - type: object
+          properties:
+            stockOnHand: { type: number, readOnly: true }
+            low: { type: boolean, readOnly: true }
+
+    # ---------------------------------------------------------------- documents
+    DocumentKind:
+      type: string
+      enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn]
+    DocStatus:
+      type: string
+      enum: [draft, sent, accepted, rejected, expired, confirmed, fulfilled, cancelled, delivered, issued, partiallyPaid, paid, overdue, requested, approved, processed, received, billed]
+    DocumentLine:
+      type: object
+      required: [name, quantity, unit, unitPrice, taxCategoryId]
+      properties:
+        id: { type: string }
+        itemId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        hsnCode: { type: string }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unit: { type: string }
+        unitPrice: { $ref: '#/components/schemas/Money' }
+        discountMode: { type: string, enum: [percent, amount], default: percent }
+        discountValue: { type: number, default: 0 }
+        taxCategoryId: { type: string }
+        taxRate: { type: number, readOnly: true, description: Snapshot of the rate applied }
+        taxInclusive: { type: boolean, default: false }
+    TaxComponent:
+      type: object
+      properties:
+        type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
+        label: { type: string }
+        rate: { type: number }
+        amount: { $ref: '#/components/schemas/Money' }
+    TaxLine:
+      type: object
+      properties:
+        categoryId: { type: string }
+        categoryName: { type: string }
+        rate: { type: number }
+        taxableAmount: { $ref: '#/components/schemas/Money' }
+        components: { type: array, items: { $ref: '#/components/schemas/TaxComponent' } }
+        totalTax: { $ref: '#/components/schemas/Money' }
+    DocumentTotals:
+      type: object
+      readOnly: true
+      properties:
+        subtotal: { $ref: '#/components/schemas/Money' }
+        lineDiscount: { $ref: '#/components/schemas/Money' }
+        documentDiscount: { $ref: '#/components/schemas/Money' }
+        taxableAmount: { $ref: '#/components/schemas/Money' }
+        taxLines: { type: array, items: { $ref: '#/components/schemas/TaxLine' } }
+        totalTax: { $ref: '#/components/schemas/Money' }
+        charges: { $ref: '#/components/schemas/Money' }
+        roundOff: { $ref: '#/components/schemas/Money' }
+        grandTotal: { $ref: '#/components/schemas/Money' }
+        grandTotalBase: { $ref: '#/components/schemas/Money' }
+    NewDocumentInput:
+      type: object
+      required: [kind, partyId, date, currency, lines]
+      properties:
+        kind: { $ref: '#/components/schemas/DocumentKind' }
+        partyId: { type: string }
+        branchId: { type: string, description: Defaults to the user's active branch }
+        date: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        validUntil: { type: string, format: date }
+        currency: { type: string }
+        exchangeRate: { type: number, description: Defaults to the effective rate on `date` }
+        lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/DocumentLine' } }
+        documentDiscountMode: { type: string, enum: [percent, amount] }
+        documentDiscountValue: { type: number }
+        charges: { $ref: '#/components/schemas/Money' }
+        applyRoundOff: { type: boolean }
+        notes: { type: string }
+        terms: { type: string }
+        reference: { type: string }
+        supplierDocNumber: { type: string }
+        placeOfSupplyStateCode: { type: string }
+        attachmentIds: { type: array, items: { type: string } }
+        sourceDocumentId: { type: string }
+        status: { type: string, enum: [draft, issued, sent, confirmed, delivered, received, approved], default: draft, description: A non-draft value creates and finalises in one step }
+    BusinessDocument:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - $ref: '#/components/schemas/NewDocumentInput'
+        - type: object
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            number: { type: string, readOnly: true, example: INV/25-26/MUM/0042 }
+            status: { $ref: '#/components/schemas/DocStatus' }
+            totals: { $ref: '#/components/schemas/DocumentTotals' }
+            compliance: { $ref: '#/components/schemas/ComplianceInfo' }
+            createdBy: { type: string, readOnly: true }
+    DocumentSummary:
+      type: object
+      description: Light row for lists
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/DocumentKind' }
+        number: { type: string }
+        status: { $ref: '#/components/schemas/DocStatus' }
+        partyId: { type: string }
+        partyName: { type: string }
+        branchId: { type: string }
+        date: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        grandTotal: { $ref: '#/components/schemas/Money' }
+        outstanding: { $ref: '#/components/schemas/Money' }
+        eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }
+        ewayBillStatus: { type: string, enum: [notApplicable, notRequired, pending, generated, cancelled, expired] }
+    DocumentDetail:
+      allOf:
+        - $ref: '#/components/schemas/BusinessDocument'
+        - type: object
+          readOnly: true
+          properties:
+            party: { $ref: '#/components/schemas/Party' }
+            allocated: { $ref: '#/components/schemas/Money' }
+            outstanding: { $ref: '#/components/schemas/Money' }
+            payments: { type: array, items: { $ref: '#/components/schemas/Payment' } }
+            linkedDocuments: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+            allowedTransitions: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
+            allowedConversions: { type: array, items: { $ref: '#/components/schemas/DocumentKind' } }
+
+    # ---------------------------------------------------------------- compliance
+    EInvoiceStatus: { type: string, enum: [notApplicable, pending, generated, cancelled, failed] }
+    CancelReasonCode: { type: string, enum: ['1', '2', '3', '4'], description: '1 duplicate, 2 data entry mistake, 3 order cancelled, 4 other' }
+    ComplianceIssue:
+      type: object
+      properties:
+        code: { type: string, description: NIC error code where one exists }
+        field: { type: string, example: 'lines[2].hsnCode' }
+        message: { type: string }
+        severity: { type: string, enum: [blocking, warning] }
+    ComplianceResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
+    CancelRequest:
+      type: object
+      required: [reasonCode]
+      properties:
+        reasonCode: { $ref: '#/components/schemas/CancelReasonCode' }
+        remark: { type: string, maxLength: 100 }
+    ComplianceInfo:
+      type: object
+      readOnly: true
+      properties:
+        eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }
+        eInvoiceDocType: { type: string, enum: [INV, CRN, DBN] }
+        eInvoiceSupplyType: { type: string, enum: [B2B, SEZWP, SEZWOP, EXPWP, EXPWOP, DEXP] }
+        irn: { type: string, pattern: '^[0-9a-f]{64}$' }
+        ackNo: { type: string, pattern: '^[0-9]{16}$' }
+        ackDate: { type: string, example: '2026-09-22 14:03:11' }
+        signedQrPayload: { type: string, description: JWS compact serialisation }
+        irnGeneratedAt: { type: string, format: date-time }
+        irnCancelledAt: { type: string, format: date-time }
+        irnCancelReasonCode: { $ref: '#/components/schemas/CancelReasonCode' }
+        irnCancelRemark: { type: string }
+        eInvoiceIssues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
+        ewayBillStatus: { type: string, enum: [notApplicable, notRequired, pending, generated, cancelled, expired] }
+        ewayBillId: { type: string }
+        ewayBillNumber: { type: string }
+        ewayBillValidUpto: { type: string, format: date-time }
+        lastMessage: { type: string }
+        lastAttemptAt: { type: string, format: date-time }
+    EwayBillStatus: { type: string, enum: [active, expired, cancelled] }
+    EwayPlace:
+      type: object
+      required: [legalName, gstin, address1, place, pincode, stateCode]
+      properties:
+        legalName: { type: string }
+        gstin: { type: string, description: GSTIN or `URP` }
+        address1: { type: string }
+        address2: { type: string }
+        place: { type: string }
+        pincode: { type: string }
+        stateCode: { type: string }
+    NewEwayBillInput:
+      type: object
+      required: [documentId, subSupplyType, transactionType, from, to, transportMode, vehicleType, distanceKm]
+      properties:
+        documentId: { type: string }
+        subSupplyType: { type: string, enum: [supply, export, jobWork, ownUse, jobWorkReturn, salesReturn, exhibition, lineSales, recipientNotKnown, others] }
+        subSupplyDescription: { type: string, description: Required when `others` }
+        transactionType: { type: integer, enum: [1, 2, 3, 4] }
+        from: { $ref: '#/components/schemas/EwayPlace' }
+        to: { $ref: '#/components/schemas/EwayPlace' }
+        transporterId: { type: string }
+        transporterName: { type: string }
+        transportMode: { $ref: '#/components/schemas/TransportMode' }
+        vehicleNumber: { type: string, example: MH04AB1234 }
+        vehicleType: { $ref: '#/components/schemas/VehicleType' }
+        transportDocNumber: { type: string }
+        transportDocDate: { type: string, format: date }
+        distanceKm: { type: integer, minimum: 0, maximum: 4000 }
+    EwayBillPartBUpdate:
+      type: object
+      required: [mode, vehicleType, fromPlace, fromStateCode, reasonCode]
+      properties:
+        id: { type: string, readOnly: true }
+        mode: { $ref: '#/components/schemas/TransportMode' }
+        vehicleNumber: { type: string }
+        vehicleType: { $ref: '#/components/schemas/VehicleType' }
+        transportDocNumber: { type: string }
+        transportDocDate: { type: string, format: date }
+        fromPlace: { type: string }
+        fromStateCode: { type: string }
+        reasonCode: { type: string, enum: ['1', '2', '3', '4'], description: '1 first time, 2 breakdown, 3 transhipment, 4 others' }
+        remark: { type: string }
+        updatedAt: { type: string, format: date-time, readOnly: true }
+        updatedBy: { type: string, readOnly: true }
+    ExtendEwayBillInput:
+      type: object
+      required: [remainingDistanceKm, reasonCode, transitType, currentPlace, currentPincode, currentStateCode]
+      properties:
+        remainingDistanceKm: { type: integer, minimum: 1 }
+        reasonCode: { type: string, enum: ['1', '2', '3', '4', '5'], description: '1 natural calamity, 2 law and order, 3 transhipment, 4 accident, 5 other' }
+        remark: { type: string }
+        transitType: { type: string, enum: [inTransit, inMovement] }
+        currentPlace: { type: string }
+        currentPincode: { type: string }
+        currentStateCode: { type: string }
+    EwayBillExtension:
+      allOf:
+        - $ref: '#/components/schemas/ExtendEwayBillInput'
+        - type: object
+          properties:
+            id: { type: string }
+            extendedAt: { type: string, format: date-time }
+            extendedBy: { type: string }
+            previousValidUpto: { type: string, format: date-time }
+            newValidUpto: { type: string, format: date-time }
+    EwayBill:
+      type: object
+      readOnly: true
+      properties:
+        id: { type: string }
+        companyId: { type: string }
+        branchId: { type: string }
+        ewayBillNumber: { type: string, pattern: '^[0-9]{12}$' }
+        documentId: { type: string }
+        documentKind: { $ref: '#/components/schemas/DocumentKind' }
+        documentNumber: { type: string }
+        documentDate: { type: string, format: date }
+        partyId: { type: string }
+        docType: { type: string, enum: [INV, BIL, BOE, CHL, CNT, OTH] }
+        supplyType: { type: string, enum: [outward, inward] }
+        subSupplyType: { type: string }
+        subSupplyDescription: { type: string }
+        transactionType: { type: integer, enum: [1, 2, 3, 4] }
+        from: { $ref: '#/components/schemas/EwayPlace' }
+        to: { $ref: '#/components/schemas/EwayPlace' }
+        consignmentValue: { $ref: '#/components/schemas/Money' }
+        taxableValue: { $ref: '#/components/schemas/Money' }
+        cgst: { $ref: '#/components/schemas/Money' }
+        sgst: { $ref: '#/components/schemas/Money' }
+        igst: { $ref: '#/components/schemas/Money' }
+        mainHsnCode: { type: string }
+        itemCount: { type: integer }
+        transporterId: { type: string }
+        transporterName: { type: string }
+        transportMode: { $ref: '#/components/schemas/TransportMode' }
+        vehicleNumber: { type: string }
+        vehicleType: { $ref: '#/components/schemas/VehicleType' }
+        transportDocNumber: { type: string }
+        transportDocDate: { type: string, format: date }
+        distanceKm: { type: integer }
+        generatedAt: { type: string, format: date-time }
+        generatedBy: { type: string }
+        validFrom: { type: string, format: date-time }
+        validUpto: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/EwayBillStatus' }
+        cancelledAt: { type: string, format: date-time }
+        cancelReasonCode: { $ref: '#/components/schemas/CancelReasonCode' }
+        cancelRemark: { type: string }
+        partBUpdates: { type: array, items: { $ref: '#/components/schemas/EwayBillPartBUpdate' } }
+        extensions: { type: array, items: { $ref: '#/components/schemas/EwayBillExtension' } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    # ---------------------------------------------------------------- money movement
+    PaymentDirection: { type: string, enum: [received, paid] }
+    PaymentMethod: { type: string, enum: [cash, bank, upi, card, cheque, wallet, other] }
+    PaymentAllocation:
+      type: object
+      required: [documentId, amount]
+      properties:
+        documentId: { type: string }
+        documentNumber: { type: string, readOnly: true }
+        amount: { $ref: '#/components/schemas/Money' }
+    Payment:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [direction, partyId, date, amount, currency, method, accountId]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            branchId: { type: string }
+            number: { type: string, readOnly: true }
+            direction: { $ref: '#/components/schemas/PaymentDirection' }
+            partyId: { type: string }
+            date: { type: string, format: date }
+            amount: { $ref: '#/components/schemas/Money' }
+            currency: { type: string }
+            exchangeRate: { type: number }
+            method: { $ref: '#/components/schemas/PaymentMethod' }
+            reference: { type: string }
+            accountId: { type: string }
+            allocations: { type: array, items: { $ref: '#/components/schemas/PaymentAllocation' } }
+            unallocated: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            fxGainLoss: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            source: { type: string, enum: [manual, gateway], readOnly: true }
+            notes: { type: string }
+            attachmentIds: { type: array, items: { type: string } }
+            createdBy: { type: string, readOnly: true }
+    Expense:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [categoryId, date, amount, currency, accountId, method]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            branchId: { type: string }
+            number: { type: string, readOnly: true }
+            categoryId: { type: string }
+            supplierId: { type: string }
+            date: { type: string, format: date }
+            amount: { $ref: '#/components/schemas/Money' }
+            currency: { type: string }
+            exchangeRate: { type: number }
+            taxCategoryId: { type: string }
+            taxAmount: { $ref: '#/components/schemas/Money' }
+            taxInclusive: { type: boolean }
+            accountId: { type: string }
+            method: { $ref: '#/components/schemas/PaymentMethod' }
+            reference: { type: string }
+            notes: { type: string }
+            billable: { type: boolean }
+            recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly] }
+            nextRecurrenceDate: { type: string, format: date, readOnly: true }
+            attachmentIds: { type: array, items: { type: string } }
+            createdBy: { type: string, readOnly: true }
+    StockMovementType: { type: string, enum: [opening, purchaseReceipt, salesIssue, salesReturn, purchaseReturn, transferIn, transferOut, adjustment] }
+    StockMovement:
+      type: object
+      readOnly: true
+      properties:
+        id: { type: string }
+        companyId: { type: string }
+        branchId: { type: string }
+        itemId: { type: string }
+        type: { $ref: '#/components/schemas/StockMovementType' }
+        quantity: { type: number }
+        unitCost: { $ref: '#/components/schemas/Money' }
+        date: { type: string, format: date }
+        referenceId: { type: string }
+        referenceNumber: { type: string }
+        notes: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    # ---------------------------------------------------------------- supporting
+    Attachment:
+      type: object
+      properties:
+        id: { type: string, readOnly: true }
+        companyId: { type: string, readOnly: true }
+        name: { type: string }
+        mimeType: { type: string }
+        size: { type: integer }
+        uri: { type: string, format: uri, readOnly: true, description: 'Signed, short-lived' }
+        status: { type: string, enum: [pending, ready], readOnly: true }
+        entityType: { type: string }
+        entityId: { type: string }
+        uploadedAt: { type: string, format: date-time, readOnly: true }
+    OcrExtraction:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [queued, processing, completed, failed] }
+        attachmentId: { type: string }
+        kind: { type: string, enum: [expense, purchaseBill] }
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string, enum: [vendor, gstin, date, amount, tax, reference, category] }
+              label: { type: string }
+              value: { type: string }
+              confidence: { type: number, minimum: 0, maximum: 1, description: Values below 0.75 are flagged for review }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              quantity: { type: number }
+              unitPrice: { type: number }
+              confidence: { type: number }
+              matchedItemId: { type: string }
+        matchedPartyId: { type: string }
+        error: { type: string }
+    AppNotification:
+      type: object
+      properties:
+        id: { type: string }
+        companyId: { type: string }
+        kind: { type: string, enum: [invoiceSent, paymentReceived, invoiceOverdue, lowStock, compliance, syncFailure, system] }
+        title: { type: string }
+        body: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        read: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: string }
+        companyId: { type: string }
+        actorId: { type: string }
+        actorName: { type: string }
+        action: { type: string, example: marked sent }
+        entityType: { type: string }
+        entityId: { type: string }
+        entityLabel: { type: string }
+        before: { type: string }
+        after: { type: string }
+        device: { type: string }
+        createdAt: { type: string, format: date-time }
+    Integration:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        icon: { type: string }
+        category: { type: string, enum: [payments, compliance, messaging, accounting, storage] }
+        connected: { type: boolean }
+        configRoute: { type: string }
+    ExportJob:
+      type: object
+      properties:
+        id: { type: string }
+        format: { type: string, enum: [json-backup, csv-zip, tally-xml] }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        downloadUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    SyncMutation:
+      type: object
+      required: [id, method, path, queuedAt]
+      properties:
+        id: { type: string, description: Client queue entry id; also the idempotency key }
+        method: { type: string, enum: [POST, PUT, PATCH, DELETE] }
+        path: { type: string, example: /companies/cmp_vertex/documents }
+        body: { type: object }
+        baseVersion: { type: integer }
+        clientEntityId: { type: string, description: Temporary id minted offline; the server maps it to the real one }
+        queuedAt: { type: string, format: date-time }
+
+    # ---------------------------------------------------------------- reports
+    MonthValue:
+      type: object
+      properties:
+        key: { type: string, example: 2026-09 }
+        value: { $ref: '#/components/schemas/Money' }
+    SummaryRow:
+      type: object
+      properties:
+        label: { type: string }
+        value: { $ref: '#/components/schemas/Money' }
+        count: { type: integer }
+    TransactionSummary:
+      type: object
+      properties:
+        total: { $ref: '#/components/schemas/Money' }
+        taxable: { $ref: '#/components/schemas/Money' }
+        tax: { $ref: '#/components/schemas/Money' }
+        discount: { $ref: '#/components/schemas/Money' }
+        count: { type: integer }
+        byMonth: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+        byParty: { type: array, items: { $ref: '#/components/schemas/SummaryRow' } }
+        byItem: { type: array, items: { $ref: '#/components/schemas/SummaryRow' } }
+        byBranch: { type: array, items: { $ref: '#/components/schemas/SummaryRow' } }
+        documents: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+    ExpenseSummary:
+      type: object
+      properties:
+        total: { $ref: '#/components/schemas/Money' }
+        tax: { $ref: '#/components/schemas/Money' }
+        count: { type: integer }
+        byCategory: { type: array, items: { $ref: '#/components/schemas/SummaryRow' } }
+        byMonth: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+        expenses: { type: array, items: { $ref: '#/components/schemas/Expense' } }
+    AgingReport:
+      type: object
+      properties:
+        asOf: { type: string, format: date }
+        total: { $ref: '#/components/schemas/Money' }
+        buckets:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string, enum: [current, d1_30, d31_60, d61_90, d90plus] }
+              amount: { $ref: '#/components/schemas/Money' }
+              count: { type: integer }
+        byParty:
+          type: array
+          items:
+            type: object
+            properties:
+              partyId: { type: string }
+              partyName: { type: string }
+              outstanding: { $ref: '#/components/schemas/Money' }
+              oldestDaysOverdue: { type: integer }
+        documents:
+          type: array
+          items:
+            type: object
+            properties:
+              document: { $ref: '#/components/schemas/DocumentSummary' }
+              allocated: { $ref: '#/components/schemas/Money' }
+              outstanding: { $ref: '#/components/schemas/Money' }
+              daysOverdue: { type: integer }
+              bucket: { type: string, enum: [current, d1_30, d31_60, d61_90, d90plus] }
+    StockReport:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              item: { $ref: '#/components/schemas/Item' }
+              onHand: { type: number }
+              value: { $ref: '#/components/schemas/Money' }
+              low: { type: boolean }
+        totalValue: { $ref: '#/components/schemas/Money' }
+        lowCount: { type: integer }
+        outCount: { type: integer }
+        trackedCount: { type: integer }
+    TaxSummaryRow:
+      type: object
+      properties:
+        rate: { type: number }
+        taxable: { $ref: '#/components/schemas/Money' }
+        cgst: { $ref: '#/components/schemas/Money' }
+        sgst: { $ref: '#/components/schemas/Money' }
+        igst: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+    TaxSummary:
+      type: object
+      properties:
+        outward: { type: array, items: { $ref: '#/components/schemas/TaxSummaryRow' } }
+        inward: { type: array, items: { $ref: '#/components/schemas/TaxSummaryRow' } }
+        outwardTotal: { $ref: '#/components/schemas/Money' }
+        inwardTotal: { $ref: '#/components/schemas/Money' }
+        netPayable: { $ref: '#/components/schemas/Money' }
+    PaymentSummary:
+      type: object
+      properties:
+        received: { $ref: '#/components/schemas/Money' }
+        paid: { $ref: '#/components/schemas/Money' }
+        net: { $ref: '#/components/schemas/Money' }
+        byMethod: { type: array, items: { $ref: '#/components/schemas/SummaryRow' } }
+        byAccount: { type: array, items: { $ref: '#/components/schemas/SummaryRow' } }
+        byMonth:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              received: { $ref: '#/components/schemas/Money' }
+              paid: { $ref: '#/components/schemas/Money' }
+        payments: { type: array, items: { $ref: '#/components/schemas/Payment' } }
+    ProfitSnapshot:
+      type: object
+      properties:
+        revenue: { $ref: '#/components/schemas/Money' }
+        costOfGoods: { $ref: '#/components/schemas/Money' }
+        grossProfit: { $ref: '#/components/schemas/Money' }
+        expenses: { $ref: '#/components/schemas/Money' }
+        netProfit: { $ref: '#/components/schemas/Money' }
+        margin: { type: number }
+        byMonth:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              revenue: { $ref: '#/components/schemas/Money' }
+              cost: { $ref: '#/components/schemas/Money' }
+              expenses: { $ref: '#/components/schemas/Money' }
+              profit: { $ref: '#/components/schemas/Money' }
+    Gstr1Row:
+      type: object
+      properties:
+        documentId: { type: string }
+        kind: { $ref: '#/components/schemas/DocumentKind' }
+        table: { type: string, enum: [b2b, b2cl, b2cs, exp, cdnr, cdnur] }
+        gstin: { type: string }
+        partyName: { type: string }
+        number: { type: string }
+        date: { type: string, format: date }
+        placeOfSupply: { type: string }
+        placeOfSupplyName: { type: string }
+        rate: { type: number }
+        taxableValue: { $ref: '#/components/schemas/Money' }
+        cgst: { $ref: '#/components/schemas/Money' }
+        sgst: { $ref: '#/components/schemas/Money' }
+        igst: { $ref: '#/components/schemas/Money' }
+        invoiceValue: { $ref: '#/components/schemas/Money' }
+    HsnRow:
+      type: object
+      properties:
+        hsnCode: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        taxableValue: { $ref: '#/components/schemas/Money' }
+        cgst: { $ref: '#/components/schemas/Money' }
+        sgst: { $ref: '#/components/schemas/Money' }
+        igst: { $ref: '#/components/schemas/Money' }
+        totalValue: { $ref: '#/components/schemas/Money' }
+    Gstr1Summary:
+      type: object
+      properties:
+        period: { type: string }
+        b2b: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
+        b2cl: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
+        b2cs: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
+        exp: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
+        cdnr: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
+        cdnur: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
+        hsn: { type: array, items: { $ref: '#/components/schemas/HsnRow' } }
+        totals:
+          type: object
+          properties:
+            taxableValue: { $ref: '#/components/schemas/Money' }
+            tax: { $ref: '#/components/schemas/Money' }
+            invoiceValue: { $ref: '#/components/schemas/Money' }
+            documents: { type: integer }
+    Dashboard:
+      type: object
+      properties:
+        sales: { $ref: '#/components/schemas/Money' }
+        purchases: { $ref: '#/components/schemas/Money' }
+        expenses: { $ref: '#/components/schemas/Money' }
+        receivable: { $ref: '#/components/schemas/Money' }
+        overdueReceivable: { $ref: '#/components/schemas/Money' }
+        payable: { $ref: '#/components/schemas/Money' }
+        cashBalance: { $ref: '#/components/schemas/Money' }
+        salesTrend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+        lowStockCount: { type: integer }
+        pendingCompliance: { type: integer, description: Invoices awaiting IRN plus e-way bills expiring soon }
+        recentDocuments: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+        unreadNotifications: { type: integer }

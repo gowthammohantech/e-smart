@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -19,7 +19,7 @@ import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Avatar } from '@/components/Avatar';
 
-import { DocumentKind, DocumentLine } from '@/types';
+import { DocumentKind, DocumentLine, Party } from '@/types';
 import { documentKindLabel } from '@/i18n/labels';
 import { resolveRate } from '@/domain/fx';
 import { CURRENCIES } from '@/lib/currencies';
@@ -57,11 +57,14 @@ export function DocumentEditor({
   kind,
   documentId,
   initialDraft,
+  prefill,
   onSaved,
 }: {
   kind: DocumentKind;
   documentId?: string;
   initialDraft?: DraftState;
+  /** Party, and optionally one item line, to start from (Siri / Shortcuts). */
+  prefill?: { partyId: string; itemId?: string; quantity?: number };
   onSaved?: (id: string) => void;
 }) {
   const t = useTheme();
@@ -96,15 +99,42 @@ export function DocumentEditor({
     [company],
   );
 
+  /** What choosing a party sets on the draft; shared by the picker and `prefill`. */
+  const partyFields = (p: Party, date: string, dueDate?: string): Partial<DraftState> => ({
+    partyId: p.id,
+    placeOfSupplyStateCode: p.billingAddress.stateCode,
+    currency: p.currency,
+    exchangeRate: p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, date),
+    dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(date, p.paymentTermsDays) : dueDate,
+  });
+
+  // A prefill seeds the draft and the opening step, as if the person had
+  // picked the party and item by hand. Read once, like `initialDraft`.
+  const [seed] = useState(() => {
+    if (!prefill) return null;
+    const p = parties.find((x) => x.id === prefill.partyId);
+    if (!p) return { missingParty: true, draft: undefined, step: 0 };
+    const base = emptyDraft(baseCurrency, kind);
+    const item = prefill.itemId ? items.find((i) => i.id === prefill.itemId) : undefined;
+    const lines = item
+      ? [{ ...lineFromItem(item, isPurchase, taxCategories), quantity: prefill.quantity ?? 1 }]
+      : [];
+    return {
+      missingParty: false,
+      draft: { ...base, ...partyFields(p, base.date, base.dueDate), lines },
+      step: STEPS.indexOf(item ? 'review' : 'items'),
+    };
+  });
+
   const { draft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
     taxContext,
-    initial: initialDraft,
+    initial: initialDraft ?? seed?.draft,
   });
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(seed?.step ?? 0);
   const [partyOpen, setPartyOpen] = useState(false);
   const [itemOpen, setItemOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -130,18 +160,13 @@ export function DocumentEditor({
   const pickParty = (id: string) => {
     const p = parties.find((x) => x.id === id);
     if (!p) return;
-    const rate = resolveRate(exchangeRates, p.currency, baseCurrency, draft.date);
-    patch({
-      partyId: id,
-      placeOfSupplyStateCode: p.billingAddress.stateCode,
-      currency: p.currency,
-      exchangeRate: p.currency === baseCurrency ? 1 : rate,
-      dueDate:
-        kind === 'invoice' || kind === 'purchaseBill'
-          ? addDaysISO(draft.date, p.paymentTermsDays)
-          : draft.dueDate,
-    });
+    patch(partyFields(p, draft.date, draft.dueDate));
   };
+
+  useEffect(() => {
+    if (seed?.missingParty) toast.show(tr('common:documentEditor.prefillMissingParty'), 'error');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const save = (finalize: boolean) => {
     if (!draft.partyId) return;

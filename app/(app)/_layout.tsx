@@ -3,6 +3,8 @@ import { Stack, usePathname, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
 import { hasModule, moduleForPath } from '@/domain/plan';
 import { usePlan } from '@/store/selectors';
+import { useIntentEntitySync } from '@/features/intents/useIntentEntitySync';
+import { useIntentHandoff } from '@/features/intents/useIntentHandoff';
 
 /**
  * Keeps a Sales-plan company out of full-plan screens however it got there.
@@ -24,6 +26,9 @@ function usePlanGuard() {
 export default function AppLayout() {
   const t = useTheme();
   usePlanGuard();
+  // Siri / Shortcuts: only mounted once signed in, onboarded and hydrated.
+  useIntentEntitySync();
+  useIntentHandoff();
   return (
     <Stack
       screenOptions={{
