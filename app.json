@@ -2,7 +2,7 @@
   "expo": {
     "name": "Elixir Books Smart",
     "slug": "elixir-books-smart",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "elixirsmart",
@@ -27,6 +27,7 @@
     },
     "android": {
       "package": "com.elixir.bookssmart",
+      "versionCode": 2,
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
