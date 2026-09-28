@@ -103,6 +103,8 @@ export function TextField({
           // goes on the box rather than as `lineHeight` on the TextInput,
           // which mis-centres the caret on Android.
           minHeight: t.script === 'tamil' ? 52 : 48,
+          // Read-only fields look it, rather than only refusing input.
+          opacity: rest.editable === false ? 0.6 : 1,
         }}
       >
         {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null}
