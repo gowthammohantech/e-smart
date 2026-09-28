@@ -1,4 +1,4 @@
-import { PaymentAccount, PaymentMethod } from '@/types';
+import { Expense, Payment, PaymentAccount, PaymentMethod } from '@/types';
 
 /**
  * Which kinds of account a payment method can settle through. Money paid by
@@ -41,4 +41,34 @@ export function accountIdAfterMethodChange(
   const fitting = accountsForMethod(method, accounts);
   if (fitting.some((a) => a.id === currentId)) return currentId;
   return defaultAccountFor(method, accounts)?.id ?? '';
+}
+
+/** Can this method settle through this account? (Bank transfers never touch cash in hand.) */
+export function accountFitsMethod(method: PaymentMethod, account: PaymentAccount | undefined): boolean {
+  return !!account && accountTypesFor(method).includes(account.type);
+}
+
+/**
+ * Running balance of every account, in base-currency minor units:
+ * opening + money received − money paid − expenses paid from it.
+ */
+export function accountBalances(
+  accounts: PaymentAccount[],
+  payments: Payment[],
+  expenses: Expense[],
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  accounts.forEach((a) => {
+    map[a.id] = a.openingBalance.minor;
+  });
+  payments.forEach((p) => {
+    if (map[p.accountId] === undefined) return;
+    const delta = Math.round(p.amount.minor * (p.exchangeRate || 1));
+    map[p.accountId] += p.direction === 'received' ? delta : -delta;
+  });
+  expenses.forEach((e) => {
+    if (map[e.accountId] === undefined) return;
+    map[e.accountId] -= Math.round(e.amount.minor * (e.exchangeRate || 1));
+  });
+  return map;
 }

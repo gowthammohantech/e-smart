@@ -134,7 +134,12 @@
     "adjustAdvance": "சரிசெய்",
     "advanceAdjusted": "முன்பணத்திலிருந்து {{amount}} சரிசெய்யப்பட்டது",
     "advanceNothingToAdjust": "எந்த முன்பணத்தையும் சரிசெய்ய முடியவில்லை",
-    "nothingLeftToApply": "முழுத் தொகையும் ஏற்கனவே பயன்படுத்தப்பட்டது — முதலில் தொகையை அதிகரிக்கவும்"
+    "nothingLeftToApply": "முழுத் தொகையும் ஏற்கனவே பயன்படுத்தப்பட்டது — முதலில் தொகையை அதிகரிக்கவும்",
+    "currency": "நாணயம்",
+    "insufficientCash": "கையிருப்புப் பணம் {{balance}} மட்டுமே உள்ளது",
+    "insufficientBalance": "இருப்புத் தொகையான {{balance}}-ஐ விட அதிகம்",
+    "accountBalance": "இருப்பு {{balance}}",
+    "useAdvanceHere": "இதற்கு முன்பணத்தைப் ({{amount}}) பயன்படுத்தவும்"
   },
   "aging": {
     "overdue": "தாமதம்",

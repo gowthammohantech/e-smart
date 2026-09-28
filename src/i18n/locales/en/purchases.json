@@ -36,7 +36,9 @@
     "categoryRequired": "Pick a category for this expense",
     "addCategory": "Add category",
     "saveCategory": "Save category",
-    "categoryName": "Category name"
+    "categoryName": "Category name",
+    "accountRequired": "Choose the account this was paid from",
+    "cashShort": "Cash in hand has only {{balance}}"
   },
   "expense": {
     "billable": "Billable",

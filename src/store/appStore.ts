@@ -78,6 +78,7 @@ import {
 import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@/data/masters';
 import { isValidGstin } from '@/domain/gstin';
 import { allocateAdvances, statusForOutstanding } from '@/domain/receivables';
+import { accountFitsMethod } from '@/domain/paymentAccounts';
 import {
   ACCOUNT_ID,
   CURRENT_USER_ID,
@@ -249,12 +250,15 @@ type Actions = {
   convertDocument: (id: string, target: DocumentKind) => string;
 
   /* payments */
+  /** Returns the id, or '' when the account does not fit the payment method. */
   savePayment: (payment: Payment) => string;
   removePayment: (id: string) => void;
   /** Adjust a party's advances against its open invoices/bills. Returns the amount applied, per currency. */
-  applyAdvances: (partyId: string, direction: PaymentDirection) => Money[];
+  /** Adjust held advances against open documents; `documentIds` limits which ones. */
+  applyAdvances: (partyId: string, direction: PaymentDirection, documentIds?: string[]) => Money[];
 
   /* expenses */
+  /** Returns the id, or '' when the account does not fit the payment method. */
   saveExpense: (expense: Expense) => string;
   removeExpense: (id: string) => void;
 
@@ -1169,6 +1173,8 @@ export const useAppStore = create<AppState>()(
         /* payments                                                     */
         /* ------------------------------------------------------------ */
         savePayment: (payment) => {
+          // A bank, cheque or card payment cannot go through cash in hand (and so on).
+          if (!accountFitsMethod(payment.method, get().paymentAccounts.find((a) => a.id === payment.accountId))) return '';
           const previous = get().payments.find((p) => p.id === payment.id);
           const exists = !!previous;
           const withNumber =
@@ -1203,11 +1209,15 @@ export const useAppStore = create<AppState>()(
           audit('deleted payment', 'payment', id, p.number);
         },
 
-        applyAdvances: (partyId, direction) => {
+        applyAdvances: (partyId, direction, documentIds) => {
           const s = get();
           const kind = direction === 'received' ? 'invoice' : 'purchaseBill';
           const docs = s.documents.filter(
-            (d) => d.companyId === s.activeCompanyId && d.kind === kind && d.partyId === partyId,
+            (d) =>
+              d.companyId === s.activeCompanyId &&
+              d.kind === kind &&
+              d.partyId === partyId &&
+              (!documentIds || documentIds.includes(d.id)),
           );
           const partyPayments = s.payments.filter(
             (p) => p.companyId === s.activeCompanyId && p.partyId === partyId && p.direction === direction,
@@ -1232,6 +1242,7 @@ export const useAppStore = create<AppState>()(
         /* expenses                                                     */
         /* ------------------------------------------------------------ */
         saveExpense: (expense) => {
+          if (!accountFitsMethod(expense.method, get().paymentAccounts.find((a) => a.id === expense.accountId))) return '';
           const exists = get().expenses.some((e) => e.id === expense.id);
           const withNumber =
             expense.number && expense.number !== ''

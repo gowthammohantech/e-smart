@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -16,7 +16,7 @@ import { Sheet } from '@/components/Sheet';
 import { useToast } from '@/components/Toast';
 import { Expense, PaymentMethod, RecurrenceFrequency } from '@/types';
 import { PAYMENT_METHODS } from '@/data/masters';
-import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
+import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
 import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney, formatPercent } from '@/lib/format';
 import { addDaysISO, today } from '@/lib/date';
@@ -26,8 +26,11 @@ import { useAppStore } from '@/store/appStore';
 import {
   useBaseCurrency,
   useExpenseCategories,
+  useExpenses,
   useParties,
   usePaymentAccounts,
+  usePayments,
+  usePrimaryBranchId,
   useTaxCategories,
 } from '@/store/selectors';
 
@@ -56,16 +59,25 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
   const addAttachment = useAppStore((s) => s.addAttachment);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const primaryBranchId = usePrimaryBranchId();
+  const payments = usePayments();
+  const expenses = useExpenses();
 
-  const [categoryId, setCategoryId] = useState(expense?.categoryId ?? categories[0]?.id ?? '');
+  // No silent default: the person recording the expense chooses its category.
+  const [categoryId, setCategoryId] = useState(expense?.categoryId ?? '');
   const [amountText, setAmountText] = useState(expense ? String(toMajor(expense.amount)) : '');
   const [date, setDate] = useState(expense?.date ?? today());
-  const [method, setMethod] = useState<PaymentMethod>(expense?.method ?? 'upi');
-  const [accountId, setAccountId] = useState(
-    expense?.accountId ?? defaultAccountFor(expense?.method ?? 'upi', accounts)?.id ?? '',
+  const [method, setMethod] = useState<PaymentMethod>(
+    () => expense?.method ?? (defaultAccountFor('upi', accounts) ? 'upi' : 'cash'),
+  );
+  const [pickedAccountId, setAccountId] = useState(
+    () => expense?.accountId ?? defaultAccountFor(method, accounts)?.id ?? '',
   );
   const methodAccounts = accountsForMethod(method, accounts);
+  const accountId = methodAccounts.some((a) => a.id === pickedAccountId)
+    ? pickedAccountId
+    : (defaultAccountFor(method, accounts)?.id ?? '');
+  const [accountError, setAccountError] = useState<string | undefined>();
   const [supplierId, setSupplierId] = useState<string | null>(expense?.supplierId ?? null);
   const [taxCategoryId, setTaxCategoryId] = useState<string | null>(expense?.taxCategoryId ?? null);
   const [taxInclusive, setTaxInclusive] = useState(expense?.taxInclusive ?? true);
@@ -102,6 +114,15 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
   const netAmount = taxInclusive ? subtract(amount, taxAmount) : amount;
   const totalPaid = taxInclusive ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
 
+  // Cash in hand cannot pay out more than it holds (an edit gives back its own amount first).
+  const account = accounts.find((a) => a.id === accountId);
+  const cashBalance = useMemo(() => {
+    if (!account || account.type !== 'cash') return undefined;
+    const others = expenses.filter((e) => e.id !== expense?.id);
+    return accountBalances(accounts, payments, others)[account.id];
+  }, [account, accounts, payments, expenses, expense?.id]);
+  const cashShort = cashBalance !== undefined && totalPaid.minor > cashBalance;
+
   const attachReceipt = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
     if (!result.canceled && result.assets[0]) setReceiptUri(result.assets[0].uri);
@@ -111,6 +132,14 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
     if (amount.minor <= 0) return;
     if (!categoryId || !categories.some((c) => c.id === categoryId)) {
       setCategoryError(tr('purchases:form.categoryRequired'));
+      return;
+    }
+    if (!accountId) {
+      setAccountError(tr('purchases:form.accountRequired'));
+      return;
+    }
+    if (cashShort) {
+      setAccountError(tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }));
       return;
     }
 
@@ -132,7 +161,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
     const record: Expense = {
       id: expense?.id ?? uid('exp'),
       companyId: expense?.companyId ?? activeCompanyId,
-      branchId: expense?.branchId ?? activeBranchId ?? 'brn_mum',
+      branchId: expense?.branchId ?? primaryBranchId ?? '',
       number: expense?.number ?? '',
       categoryId,
       supplierId: supplierId ?? undefined,
@@ -156,6 +185,10 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
     };
 
     const id = saveExpense(record);
+    if (!id) {
+      setAccountError(tr('purchases:form.accountRequired'));
+      return;
+    }
     toast.show(expense ? 'Expense updated' : 'Expense recorded', 'success');
     if (expense) router.back();
     else router.replace(`/(app)/expenses/${id}`);
@@ -183,7 +216,14 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         <DateField label={tr('purchases:form.date')} value={date} onChange={setDate} required />
 
         <PickerField label={tr('purchases:form.paidBy')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
-        <PickerField label={tr('purchases:form.paidFrom')} value={methodAccounts.find((a) => a.id === accountId)?.name} onPress={() => setAccountOpen(true)} icon="bank-outline" />
+        <PickerField
+          label={tr('purchases:form.paidFrom')}
+          value={methodAccounts.find((a) => a.id === accountId)?.name}
+          onPress={() => setAccountOpen(true)}
+          icon="bank-outline"
+          required
+          error={accountError ?? (cashShort ? tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }) : undefined)}
+        />
         <PickerField
           label={tr('purchases:form.supplier')}
           value={suppliers.find((s) => s.id === supplierId)?.name}
@@ -323,7 +363,10 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         title={tr('purchases:form.paidFrom')}
         options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
         value={accountId}
-        onSelect={setAccountId}
+        onSelect={(id) => {
+          setAccountId(id);
+          setAccountError(undefined);
+        }}
         searchable={false}
       />
       <SelectSheet

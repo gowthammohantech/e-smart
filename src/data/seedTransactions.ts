@@ -354,7 +354,8 @@ export function seedDocuments({ items, parties, taxCategories, series }: BuildAr
 export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]): Payment[] {
   const payments: Payment[] = [];
   const counters: Record<string, number> = {};
-  const methods: PaymentMethod[] = ['upi', 'bank', 'cash', 'cheque', 'card'];
+  // Cash in hand only takes cash; everything else settles through the bank.
+  const bankMethods: PaymentMethod[] = ['upi', 'bank', 'cheque', 'card'];
 
   const nextNumber = (companyId: string, date: string) => {
     counters[companyId] = (counters[companyId] ?? 0) + 1;
@@ -377,6 +378,7 @@ export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]
 
     const payDate = addDaysISO(doc.date, rng.int(1, 12));
     const clamped = payDate > today() ? today() : payDate;
+    const accountId = doc.companyId === PRIMARY_COMPANY_ID ? (i % 4 === 0 ? 'acc_cash' : 'acc_hdfc') : 'acc_a_bank';
     payments.push({
       id: uid('pay'),
       companyId: doc.companyId,
@@ -388,9 +390,9 @@ export function seedPayments(docs: BusinessDocument[], series: NumberingSeries[]
       amount,
       currency: doc.currency,
       exchangeRate: doc.exchangeRate,
-      method: methods[i % methods.length],
+      method: accountId === 'acc_cash' ? 'cash' : bankMethods[i % bankMethods.length],
       reference: i % 3 === 0 ? `UTR${rng.int(100000000, 999999999)}` : undefined,
-      accountId: doc.companyId === PRIMARY_COMPANY_ID ? (i % 4 === 0 ? 'acc_cash' : 'acc_hdfc') : 'acc_a_bank',
+      accountId,
       allocations: [{ documentId: doc.id, documentNumber: doc.number, amount }],
       unallocated: zero(doc.currency),
       notes: undefined,
@@ -460,7 +462,7 @@ const EXPENSE_PLAN: [string, number, number, string][] = [
 export function seedExpenses(series: NumberingSeries[]): Expense[] {
   let counter = 0;
   const s = series.find((x) => x.companyId === PRIMARY_COMPANY_ID && x.kind === 'expense')!;
-  const methods: PaymentMethod[] = ['bank', 'upi', 'cash', 'card'];
+  const bankMethods: PaymentMethod[] = ['bank', 'upi', 'card'];
 
   const out = EXPENSE_PLAN.map(([categoryId, amount, days, notes], i) => {
     counter += 1;
@@ -481,7 +483,7 @@ export function seedExpenses(series: NumberingSeries[]): Expense[] {
       taxAmount: taxable ? zero('INR') : money(Math.round((gross.minor * 18) / 118), 'INR'),
       taxInclusive: true,
       accountId: i % 5 === 0 ? 'acc_cash' : 'acc_hdfc',
-      method: methods[i % methods.length],
+      method: i % 5 === 0 ? ('cash' as const) : bankMethods[i % bankMethods.length],
       notes,
       billable: false,
       recurrence: categoryId === 'exp_rent' || categoryId === 'exp_salary' ? ('monthly' as const) : ('none' as const),

@@ -14,6 +14,7 @@ import { AmountField, Segmented, SwitchField, TextField } from '@/components/Fie
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { PaymentAccount } from '@/types';
+import { accountBalances } from '@/domain/paymentAccounts';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBaseCurrency, useExpenses, usePaymentAccounts, usePayments } from '@/store/selectors';
 import { formatMoney } from '@/lib/format';
@@ -43,22 +44,7 @@ export default function AccountSettings() {
   const [isDefault, setIsDefault] = useState(false);
 
   /** Running balance: opening + money in − money out − expenses paid from it. */
-  const balances = useMemo(() => {
-    const map: Record<string, number> = {};
-    accounts.forEach((a) => {
-      map[a.id] = a.openingBalance.minor;
-    });
-    payments.forEach((p) => {
-      const delta = Math.round(p.amount.minor * (p.exchangeRate || 1));
-      if (map[p.accountId] === undefined) return;
-      map[p.accountId] += p.direction === 'received' ? delta : -delta;
-    });
-    expenses.forEach((e) => {
-      if (map[e.accountId] === undefined) return;
-      map[e.accountId] -= Math.round(e.amount.minor * (e.exchangeRate || 1));
-    });
-    return map;
-  }, [accounts, payments, expenses]);
+  const balances = useMemo(() => accountBalances(accounts, payments, expenses), [accounts, payments, expenses]);
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 

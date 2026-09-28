@@ -1,9 +1,9 @@
 import { sanitizeAmountInput, toAmountInput } from '@/lib/format';
 import { hsnMandatory, sanitizePrefix, validHsn } from '@/lib/validators';
-import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
+import { accountBalances, accountFitsMethod, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
 import { formatNumber } from '@/domain/numbering';
 import { fromMajor, zero } from '@/lib/money';
-import { NumberingSeries, PaymentAccount } from '@/types';
+import { Expense, NumberingSeries, Payment, PaymentAccount } from '@/types';
 
 describe('amount input', () => {
   it('strips a minus sign unless negatives are allowed', () => {
@@ -68,5 +68,22 @@ describe('payment method and account', () => {
     expect(accountIdAfterMethodChange('bank', 'cash', accounts)).toBe('hdfc');
     expect(accountIdAfterMethodChange('upi', 'hdfc', accounts)).toBe('hdfc');
     expect(accountIdAfterMethodChange('bank', 'cash', [acc('cash', 'cash', true)])).toBe('');
+  });
+
+  it('rejects an account that does not fit the method', () => {
+    expect(accountFitsMethod('bank', accounts[0])).toBe(false);
+    expect(accountFitsMethod('bank', accounts[1])).toBe(true);
+    expect(accountFitsMethod('cash', undefined)).toBe(false);
+  });
+
+  it('keeps a running balance per account', () => {
+    const opening = [{ ...acc('cash', 'cash'), openingBalance: fromMajor('1000', 'INR') }, acc('hdfc', 'bank')];
+    const payments = [
+      { accountId: 'cash', direction: 'received', amount: fromMajor('500', 'INR'), exchangeRate: 1 },
+      { accountId: 'cash', direction: 'paid', amount: fromMajor('200', 'INR'), exchangeRate: 1 },
+      { accountId: 'hdfc', direction: 'received', amount: fromMajor('10', 'USD'), exchangeRate: 80 },
+    ] as Payment[];
+    const expenses = [{ accountId: 'cash', amount: fromMajor('300', 'INR'), exchangeRate: 1 }] as Expense[];
+    expect(accountBalances(opening, payments, expenses)).toEqual({ cash: 100000, hdfc: 80000 });
   });
 });

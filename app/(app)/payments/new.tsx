@@ -18,9 +18,10 @@ import { useToast } from '@/components/Toast';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@/types';
 import { availableAdvance, buildOutstanding } from '@/domain/receivables';
-import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
+import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
 import { resolveRate, settlementGainLoss } from '@/domain/fx';
 import { PAYMENT_METHODS } from '@/data/masters';
+import { CURRENCIES } from '@/lib/currencies';
 import { paymentMethodLabel } from '@/i18n/labels';
 import { formatMoney, toAmountInput } from '@/lib/format';
 import { formatDate, today } from '@/lib/date';
@@ -32,10 +33,12 @@ import {
   useBaseCurrency,
   useDocuments,
   useExchangeRates,
+  useExpenses,
   useHasModule,
   useParties,
   usePaymentAccounts,
   usePayments,
+  usePrimaryBranchId,
 } from '@/store/selectors';
 
 export default function NewPayment() {
@@ -56,18 +59,25 @@ export default function NewPayment() {
   const exchangeRates = useExchangeRates();
   const openDocs = useDocuments(direction === 'received' ? 'invoice' : 'purchaseBill');
   const existingPayments = usePayments(direction);
+  const allPayments = usePayments();
+  const expenses = useExpenses();
   const savePayment = useAppStore((s) => s.savePayment);
   const applyAdvances = useAppStore((s) => s.applyAdvances);
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const primaryBranchId = usePrimaryBranchId();
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
   const [partyId, setPartyId] = useState<string | null>(params.partyId ?? null);
   const [date, setDate] = useState(today());
   const [amountText, setAmountText] = useState('');
-  const [method, setMethod] = useState<PaymentMethod>('upi');
+  // Start on UPI when there is an account for it, else cash (a cash-only business).
+  const [method, setMethod] = useState<PaymentMethod>(() => (defaultAccountFor('upi', accounts) ? 'upi' : 'cash'));
   // The account follows the method: a bank payment never defaults to cash in hand.
-  const [accountId, setAccountId] = useState(defaultAccountFor('upi', accounts)?.id ?? '');
+  const [pickedAccountId, setAccountId] = useState(() => defaultAccountFor(method, accounts)?.id ?? '');
   const methodAccounts = accountsForMethod(method, accounts);
+  // Re-derived every render, so accounts that load (or change) later are picked up.
+  const accountId = methodAccounts.some((a) => a.id === pickedAccountId)
+    ? pickedAccountId
+    : (defaultAccountFor(method, accounts)?.id ?? '');
   /** While the user has not typed an amount, it tracks what is ticked below. */
   const [amountFollows, setAmountFollows] = useState(true);
   const [reference, setReference] = useState('');
@@ -77,22 +87,26 @@ export default function NewPayment() {
   /** Set only when the user overrides the resolved settlement rate. */
   const [rateOverride, setRateOverride] = useState<number | null>(null);
 
+  /** Set when the user picks a currency other than the party's. */
+  const [currencyChoice, setCurrencyChoice] = useState<string | null>(null);
   const [partyOpen, setPartyOpen] = useState(false);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
   const [methodOpen, setMethodOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
   const party = parties.find((p) => p.id === partyId);
 
-  // Outstanding documents for the selected party, oldest first.
+  // A payment settles in the party's currency unless the user picks another, at
+  // the rate effective on the payment date unless the user says otherwise.
+  const currency = currencyChoice ?? party?.currency ?? baseCurrency;
+
+  // Outstanding documents for the selected party in the payment currency, oldest first.
   const outstanding = useMemo(() => {
     if (!partyId) return [];
-    const docs = openDocs.filter((d) => d.partyId === partyId);
+    const docs = openDocs.filter((d) => d.partyId === partyId && d.currency === currency);
     return buildOutstanding(docs, existingPayments).sort((a, b) => a.document.date.localeCompare(b.document.date));
-  }, [openDocs, existingPayments, partyId]);
+  }, [openDocs, existingPayments, partyId, currency]);
 
-  // A payment settles in the party's currency, at the rate effective on the
-  // payment date unless the user says otherwise.
-  const currency = party?.currency ?? baseCurrency;
   const resolvedRate = useMemo(
     () => (currency === baseCurrency ? 1 : resolveRate(exchangeRates, currency, baseCurrency, date)),
     [currency, baseCurrency, exchangeRates, date],
@@ -113,11 +127,15 @@ export default function NewPayment() {
     () => availableAdvance(existingPayments.filter((p) => p.partyId === partyId), currency),
     [existingPayments, partyId, currency],
   );
-  const adjustAdvance = () => {
+  /** Adjust held advances against every open document, or just `docId`. */
+  const adjustAdvance = (docId?: string) => {
     if (!partyId) return;
-    const applied = applyAdvances(partyId, direction);
-    setAllocations({});
-    if (amountFollows) setAmountText('');
+    const applied = applyAdvances(partyId, direction, docId ? [docId] : undefined);
+    const next = { ...allocations };
+    if (docId) delete next[docId];
+    const kept = docId ? next : {};
+    setAllocations(kept);
+    if (amountFollows) setAmountText(sumOf(kept) ? toAmountInput(money(sumOf(kept), currency)) : '');
     toast.show(
       applied.length
         ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
@@ -223,7 +241,17 @@ export default function NewPayment() {
     return money(total, baseCurrency);
   }, [outstanding, allocations, currency, baseCurrency, exchangeRate]);
 
-  const canSave = !!partyId && amount.minor > 0 && !overAllocated && !!accountId;
+  // Money going out cannot exceed what the account holds; cash in hand can never go negative.
+  const account = accounts.find((a) => a.id === accountId);
+  const balance = useMemo(
+    () => (accountId ? accountBalances(accounts, allPayments, expenses)[accountId] : undefined),
+    [accounts, allPayments, expenses, accountId],
+  );
+  const amountInBase = Math.round(amount.minor * (exchangeRate || 1));
+  const shortfall = direction === 'paid' && balance !== undefined && amountInBase > balance;
+  const balanceBlocks = shortfall && account?.type === 'cash';
+
+  const canSave = !!partyId && amount.minor > 0 && !overAllocated && !!accountId && !balanceBlocks;
 
   const save = () => {
     if (!canSave || !partyId) return;
@@ -239,7 +267,7 @@ export default function NewPayment() {
     const payment: Payment = {
       id: uid('pay'),
       companyId: activeCompanyId,
-      branchId: activeBranchId ?? 'brn_mum',
+      branchId: primaryBranchId ?? '',
       number: '',
       direction,
       partyId,
@@ -260,6 +288,10 @@ export default function NewPayment() {
     };
 
     const id = savePayment(payment);
+    if (!id) {
+      toast.show(tr('sales:payment.noAccountForMethod'), 'error');
+      return;
+    }
     toast.show(direction === 'received' ? 'Payment recorded' : 'Payment made', 'success');
     router.replace(`/(app)/payments/${id}`);
   };
@@ -325,6 +357,13 @@ export default function NewPayment() {
         <DateField label={tr('sales:payment.date')} value={date} onChange={setDate} required />
 
         <PickerField
+          label={tr('sales:payment.currency')}
+          value={`${currency}${currency !== baseCurrency ? ` · 1 ${currency} = ${exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
+          onPress={() => setCurrencyOpen(true)}
+          icon="cash-multiple"
+        />
+
+        <PickerField
           label={tr('sales:payment.method')}
           value={paymentMethodLabel(tr, method)}
           onPress={() => setMethodOpen(true)}
@@ -337,7 +376,20 @@ export default function NewPayment() {
           onPress={() => setAccountOpen(true)}
           icon="bank-outline"
           required
-          error={methodAccounts.length === 0 ? tr('sales:payment.noAccountForMethod') : undefined}
+          error={
+            methodAccounts.length === 0
+              ? tr('sales:payment.noAccountForMethod')
+              : balanceBlocks
+                ? tr('sales:payment.insufficientCash', { balance: formatMoney(money(balance ?? 0, baseCurrency)) })
+                : undefined
+          }
+          hint={
+            direction === 'paid' && balance !== undefined
+              ? shortfall
+                ? tr('sales:payment.insufficientBalance', { balance: formatMoney(money(balance, baseCurrency)) })
+                : tr('sales:payment.accountBalance', { balance: formatMoney(money(balance, baseCurrency)) })
+              : undefined
+          }
         />
         {methodAccounts.length === 0 ? (
           <Pressable onPress={() => router.push('/(app)/settings/accounts')} accessibilityRole="link" hitSlop={6}>
@@ -371,7 +423,7 @@ export default function NewPayment() {
               <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
               <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
             </View>
-            <Button title={tr('sales:payment.adjustAdvance')} onPress={adjustAdvance} size="sm" variant="secondary" />
+            <Button title={tr('sales:payment.adjustAdvance')} onPress={() => adjustAdvance()} size="sm" variant="secondary" />
           </Card>
         ) : null}
 
@@ -440,6 +492,22 @@ export default function NewPayment() {
                         {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d late`} tone="danger" size="sm" /> : null}
                       </View>
                     </Pressable>
+
+                    {advance.minor > 0 ? (
+                      <Pressable
+                        onPress={() => adjustAdvance(o.document.id)}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}
+                      >
+                        <MaterialCommunityIcons name="wallet-outline" size={15} color={t.c.primary} />
+                        <Text variant="caption" tone="primary" weight="600">
+                          {tr('sales:payment.useAdvanceHere', {
+                            amount: formatMoney(money(Math.min(advance.minor, o.outstanding.minor), currency)),
+                          })}
+                        </Text>
+                      </Pressable>
+                    ) : null}
 
                     {selected ? (
                       <AmountField
@@ -523,6 +591,20 @@ export default function NewPayment() {
           setPartyId(id);
           setAllocations({});
           setRateOverride(null);
+          setCurrencyChoice(null);
+        }}
+      />
+      <SelectSheet
+        visible={currencyOpen}
+        onClose={() => setCurrencyOpen(false)}
+        title={tr('sales:payment.currency')}
+        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+        value={currency}
+        onSelect={(code) => {
+          setCurrencyChoice(code === (party?.currency ?? baseCurrency) ? null : code);
+          setAllocations({});
+          setRateOverride(null);
+          if (amountFollows) setAmountText('');
         }}
       />
       <SelectSheet
