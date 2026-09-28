@@ -9,7 +9,9 @@
     "mustBePositive": "{{field}} must be greater than zero",
     "minLength": "{{field}} must be at least {{count}} characters",
     "hsnRequired": "HSN/SAC code is required for a GST-registered business",
-    "hsnShape": "HSN/SAC code should be 4, 6 or 8 digits"
+    "hsnShape": "HSN/SAC code should be 4, 6 or 8 digits",
+    "gstinRequiredForType": "Enter the GSTIN for a registered party",
+    "gstinNotForType": "An unregistered or overseas party has no GSTIN"
   },
   "field": {
     "email": "Email",

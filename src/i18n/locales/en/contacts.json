@@ -31,7 +31,12 @@
     "active": "Active",
     "activeHint": "Inactive contacts stay in your records but are hidden from pickers.",
     "billingAddress": "Billing address",
-    "tradingTerms": "Trading terms"
+    "tradingTerms": "Trading terms",
+    "country": "Country",
+    "countryRequired": "Choose the country",
+    "overseasHint": "Place of supply is 'other country': invoices to them are exports.",
+    "region": "State / province / region",
+    "postalCode": "Postal code"
   },
   "detail": {
     "inactive": "Inactive",

@@ -49,6 +49,21 @@ export function hsnMandatory(reg: { regime: string; registered: boolean } | unde
   return !!reg && reg.regime === 'GST' && reg.registered;
 }
 
+/** Registration types that hold a GSTIN (an SEZ unit is registered too). */
+export function gstinRequiredFor(type: string | undefined): boolean {
+  return type === 'regular' || type === 'composition' || type === 'sez';
+}
+
+/**
+ * A party's GST type and GSTIN must agree: a registered type needs a valid
+ * GSTIN, and an unregistered or overseas party cannot carry one.
+ */
+export function partyGstinError(type: string | undefined, gstin: string | undefined): string | undefined {
+  const v = (gstin ?? '').trim();
+  if (gstinRequiredFor(type)) return v ? validGstin(v) : i18n.t('errors:validation.gstinRequiredForType');
+  return v ? i18n.t('errors:validation.gstinNotForType') : undefined;
+}
+
 export function positiveNumber(value: string | number | undefined, label: string): string | undefined {
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) return i18n.t('errors:validation.mustBeNumber', { field: label });

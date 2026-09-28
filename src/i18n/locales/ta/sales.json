@@ -56,7 +56,12 @@
     "creditLimitTitle": "கடன் வரம்பு மீறப்பட்டது",
     "creditLimitExceeded": "{{party}}-க்கான கடன் வரம்பு {{limit}}. இந்த விலைப்பட்டியலுடன் நிலுவை {{exposure}} ஆகும்.",
     "creditLimitProceed": "இருந்தாலும் தொடரவும்",
-    "returnFrom": "{{number}}-இலிருந்து வரிகள்"
+    "returnFrom": "{{number}}-இலிருந்து வரிகள்",
+    "otherCountry": "பிற நாடு (ஏற்றுமதி)",
+    "zeroRated": "பூஜ்ஜிய வரி",
+    "exportIgstHint": "ஏற்றுமதி அல்லது SEZ வழங்கல் — IGST பொருந்தும். பூஜ்ஜிய வரிக்கு வணிகச் சுயவிவரத்தில் LUT-ஐச் சேர்க்கவும்.",
+    "exportLutHint": "LUT-இன் கீழ் ஏற்றுமதி அல்லது SEZ வழங்கல் — IGST விதிக்கப்படாது.",
+    "importHint": "வெளிநாட்டு இறக்குமதி — வழங்குநரின் பில்லில் GST இல்லை (IGST சுங்கத்தில் செலுத்தப்படும்)."
   },
   "detail": {
     "finalise": "இறுதி செய்",

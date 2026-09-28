@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -22,6 +22,8 @@ import { Avatar } from '@/components/Avatar';
 import { DocumentKind, DocumentLine, Party } from '@/types';
 import { documentKindLabel } from '@/i18n/labels';
 import { resolveRate } from '@/domain/fx';
+import { buildTaxContext } from '@/domain/taxEngine';
+import { OTHER_COUNTRY_CODE } from '@/domain/stateCodes';
 import { CURRENCIES } from '@/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { addDaysISO } from '@/lib/date';
@@ -140,11 +142,23 @@ export function DocumentEditor({
     };
   });
 
+  // Party and place of supply decide export / SEZ / import treatment (IGST, or none under LUT).
+  const draftTaxContext = useCallback(
+    (d: DraftState) =>
+      buildTaxContext(company, {
+        placeOfSupply: d.placeOfSupplyStateCode,
+        party: parties.find((p) => p.id === d.partyId),
+        date: d.date,
+        purchase: isPurchase,
+      }),
+    [company, parties, isPurchase],
+  );
+
   const { draft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
-    taxContext,
+    taxContext: draftTaxContext,
     initial: initialDraft ?? seed?.draft,
   });
 
@@ -181,11 +195,20 @@ export function DocumentEditor({
     return src?.quantity;
   };
 
+  const docTaxContext = draftTaxContext(draft);
   const interState =
     taxContext.regime === 'GST' &&
-    !!taxContext.homeStateCode &&
-    !!draft.placeOfSupplyStateCode &&
-    taxContext.homeStateCode !== draft.placeOfSupplyStateCode;
+    (!!docTaxContext.crossBorder ||
+      (!!taxContext.homeStateCode &&
+        !!draft.placeOfSupplyStateCode &&
+        taxContext.homeStateCode !== draft.placeOfSupplyStateCode));
+  const taxBadge = docTaxContext.zeroRated
+    ? tr('sales:editor.zeroRated')
+    : interState
+      ? 'IGST'
+      : taxContext.regime === 'GST'
+        ? 'CGST + SGST'
+        : 'No tax';
 
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
@@ -414,10 +437,26 @@ export function DocumentEditor({
       {taxContext.regime === 'GST' ? (
         <PickerField
           label={tr('sales:editor.placeOfSupply')}
-          value={INDIAN_STATES.find((s) => s.code === draft.placeOfSupplyStateCode)?.name}
+          value={
+            draft.placeOfSupplyStateCode === OTHER_COUNTRY_CODE
+              ? tr('sales:editor.otherCountry')
+              : INDIAN_STATES.find((s) => s.code === draft.placeOfSupplyStateCode)?.name
+          }
           onPress={() => setPosOpen(true)}
           icon="map-marker-outline"
-          hint={interState ? 'Inter-state supply — IGST applies.' : 'Intra-state supply — CGST + SGST apply.'}
+          hint={
+            docTaxContext.crossBorder
+              ? tr(
+                  docTaxContext.zeroRated
+                    ? docTaxContext.crossBorder === 'import'
+                      ? 'sales:editor.importHint'
+                      : 'sales:editor.exportLutHint'
+                    : 'sales:editor.exportIgstHint',
+                )
+              : interState
+                ? 'Inter-state supply — IGST applies.'
+                : 'Intra-state supply — CGST + SGST apply.'
+          }
         />
       ) : null}
 
@@ -649,7 +688,7 @@ export function DocumentEditor({
               {documentId ? '—' : nextNumberFor(kind as never)}
             </Text>
           </View>
-          <Badge label={interState ? 'IGST' : taxContext.regime === 'GST' ? 'CGST + SGST' : 'No tax'} tone="info" />
+          <Badge label={taxBadge} tone="info" />
         </View>
 
         <View style={{ height: 1, backgroundColor: t.c.line }} />
@@ -855,7 +894,10 @@ export function DocumentEditor({
         onClose={() => setPosOpen(false)}
         title={tr('sales:editor.placeOfSupply')}
         subtitle={tr('sales:editor.posHint')}
-        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        options={[
+          ...INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code })),
+          { value: OTHER_COUNTRY_CODE, label: tr('sales:editor.otherCountry'), trailing: OTHER_COUNTRY_CODE },
+        ]}
         value={draft.placeOfSupplyStateCode}
         onSelect={(placeOfSupplyStateCode) => patch({ placeOfSupplyStateCode })}
       />
@@ -875,7 +917,7 @@ export function DocumentEditor({
         line={editingLine}
         currency={draft.currency}
         taxCategories={taxCategories}
-        taxContext={{ ...taxContext, placeOfSupplyStateCode: draft.placeOfSupplyStateCode }}
+        taxContext={docTaxContext}
         onClose={() => setEditingLine(null)}
         onSave={(p) => {
           if (!editingLine) return;

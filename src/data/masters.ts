@@ -6,6 +6,43 @@ export const INDIAN_STATES: { code: string; name: string }[] = GST_STATE_CODES.f
   .map(({ code, name }) => ({ code, name }))
   .sort((a, b) => a.name.localeCompare(b.name));
 
+/** Countries a party can be in: India plus the usual export / import partners. */
+export const WORLD_COUNTRIES: { code: string; name: string; currency: string }[] = [
+  { code: 'IN', name: 'India', currency: 'INR' },
+  { code: 'AE', name: 'United Arab Emirates', currency: 'AED' },
+  { code: 'AU', name: 'Australia', currency: 'AUD' },
+  { code: 'BD', name: 'Bangladesh', currency: 'BDT' },
+  { code: 'CA', name: 'Canada', currency: 'CAD' },
+  { code: 'CH', name: 'Switzerland', currency: 'CHF' },
+  { code: 'CN', name: 'China', currency: 'CNY' },
+  { code: 'DE', name: 'Germany', currency: 'EUR' },
+  { code: 'FR', name: 'France', currency: 'EUR' },
+  { code: 'GB', name: 'United Kingdom', currency: 'GBP' },
+  { code: 'HK', name: 'Hong Kong', currency: 'HKD' },
+  { code: 'ID', name: 'Indonesia', currency: 'IDR' },
+  { code: 'IT', name: 'Italy', currency: 'EUR' },
+  { code: 'JP', name: 'Japan', currency: 'JPY' },
+  { code: 'KE', name: 'Kenya', currency: 'KES' },
+  { code: 'KR', name: 'South Korea', currency: 'KRW' },
+  { code: 'LK', name: 'Sri Lanka', currency: 'LKR' },
+  { code: 'MY', name: 'Malaysia', currency: 'MYR' },
+  { code: 'NL', name: 'Netherlands', currency: 'EUR' },
+  { code: 'NP', name: 'Nepal', currency: 'NPR' },
+  { code: 'NZ', name: 'New Zealand', currency: 'NZD' },
+  { code: 'OM', name: 'Oman', currency: 'OMR' },
+  { code: 'QA', name: 'Qatar', currency: 'QAR' },
+  { code: 'SA', name: 'Saudi Arabia', currency: 'SAR' },
+  { code: 'SG', name: 'Singapore', currency: 'SGD' },
+  { code: 'TH', name: 'Thailand', currency: 'THB' },
+  { code: 'US', name: 'United States', currency: 'USD' },
+  { code: 'VN', name: 'Vietnam', currency: 'VND' },
+  { code: 'ZA', name: 'South Africa', currency: 'ZAR' },
+];
+
+export function countryName(code?: string): string {
+  return WORLD_COUNTRIES.find((c) => c.code === code)?.name ?? code ?? '';
+}
+
 export function stateName(code?: string): string {
   return INDIAN_STATES.find((s) => s.code === code)?.name ?? '—';
 }

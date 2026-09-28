@@ -146,7 +146,7 @@ export default function BranchSettings() {
               <ListRow
                 key={b.id}
                 title={b.name}
-                subtitle={[b.code, b.address.city, b.gstin].filter(Boolean).join(' · ')}
+                subtitle={[b.code, b.address.line1, b.address.city, b.gstin].filter(Boolean).join(' · ')}
                 meta={`${docCount(b.id)} documents`}
                 icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
                 divider={i < branches.length - 1}

@@ -21,7 +21,15 @@ export type OnboardingDraft = {
   invoicePrefix: string;
   invoiceNextNumber: string;
   includeFiscalYear: boolean;
-  branches: { name: string; code: string; city: string }[];
+  branches: {
+    name: string;
+    code: string;
+    city: string;
+    line1?: string;
+    stateCode?: string;
+    postalCode?: string;
+    gstin?: string;
+  }[];
 };
 
 const emptyAddress: Address = {

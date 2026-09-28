@@ -5,31 +5,56 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { WizardShell } from '@/components/WizardShell';
-import { TextField } from '@/components/Field';
+import { PickerField, TextField } from '@/components/Field';
 import { CityField } from '@/components/pickers/CityField';
+import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
+import { INDIAN_STATES, stateName } from '@/data/masters';
+import { citiesForState } from '@/data/cities';
+import { normalizeGstin } from '@/domain/gstin';
+import { validGstin } from '@/lib/validators';
 
 export default function BranchesStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding']);
+  const { t: tr } = useTranslation(['onboarding', 'settings']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
 
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [city, setCity] = useState('');
+  const [line1, setLine1] = useState('');
+  const [stateCode, setStateCode] = useState(draft.address.stateCode ?? '');
+  const [postalCode, setPostalCode] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [stateOpen, setStateOpen] = useState(false);
+  const gstinError = validGstin(gstin);
 
   const add = () => {
-    if (!name.trim()) return;
+    if (!name.trim() || gstinError) return;
     set({
-      branches: [...draft.branches, { name: name.trim(), code: (code || name.slice(0, 3)).toUpperCase(), city: city.trim() }],
+      branches: [
+        ...draft.branches,
+        {
+          name: name.trim(),
+          code: (code || name.slice(0, 3)).toUpperCase(),
+          city: city.trim(),
+          line1: line1.trim(),
+          stateCode: stateCode || undefined,
+          postalCode,
+          gstin: gstin ? normalizeGstin(gstin) : undefined,
+        },
+      ],
     });
     setName('');
     setCode('');
     setCity('');
+    setLine1('');
+    setPostalCode('');
+    setGstin('');
   };
 
   return (
@@ -60,8 +85,7 @@ export default function BranchesStep() {
               {b.name}
             </Text>
             <Text variant="caption" tone="muted">
-              {b.code}
-              {b.city ? ` · ${b.city}` : ''}
+              {[b.code, b.line1, b.city, b.gstin].filter(Boolean).join(' · ')}
             </Text>
           </View>
           <Pressable
@@ -90,13 +114,58 @@ export default function BranchesStep() {
             label={tr('onboarding:branches.city')}
             value={city}
             onChange={setCity}
-            stateCode={draft.address.stateCode}
+            stateCode={stateCode}
             placeholder={tr('onboarding:branches.cityPlaceholder')}
             containerStyle={{ flex: 1 }}
           />
         </View>
-        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!name.trim()} />
+        <TextField
+          label={tr('settings:branches.address')}
+          value={line1}
+          onChangeText={setLine1}
+          placeholder={tr('settings:branches.addressPlaceholder')}
+          icon="map-marker-outline"
+        />
+        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <PickerField
+            label={tr('settings:branches.state')}
+            value={stateCode ? stateName(stateCode) : undefined}
+            onPress={() => setStateOpen(true)}
+            containerStyle={{ flex: 1 }}
+          />
+          <TextField
+            label={tr('settings:branches.pin')}
+            value={postalCode}
+            onChangeText={(v) => setPostalCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
+            placeholder="411001"
+            keyboardType="number-pad"
+            containerStyle={{ flex: 1 }}
+          />
+        </View>
+        <TextField
+          label={tr('settings:branches.gstin')}
+          value={gstin}
+          onChangeText={(v) => setGstin(v.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15))}
+          placeholder="27AABCV1234F1ZO"
+          autoCapitalize="characters"
+          icon="card-account-details-outline"
+          error={gstin.length === 15 ? gstinError : undefined}
+          hint={tr('settings:branches.gstinHint')}
+        />
+        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!name.trim() || (!!gstin && !!gstinError)} />
       </View>
+
+      <SelectSheet
+        visible={stateOpen}
+        onClose={() => setStateOpen(false)}
+        title={tr('settings:branches.state')}
+        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        value={stateCode}
+        onSelect={(next) => {
+          setStateCode(next);
+          if (city && !citiesForState(next).includes(city)) setCity('');
+        }}
+      />
     </WizardShell>
   );
 }

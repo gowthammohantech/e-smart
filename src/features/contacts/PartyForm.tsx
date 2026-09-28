@@ -11,14 +11,15 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { CityField } from '@/components/pickers/CityField';
 import { useToast } from '@/components/Toast';
 import { GstRegistrationType, Party, PartyKind } from '@/types';
-import { INDIAN_STATES, stateName as stateNameOf } from '@/data/masters';
+import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@/data/masters';
+import { OTHER_COUNTRY_CODE } from '@/domain/stateCodes';
 import { citiesForState } from '@/data/cities';
 import { GST_REGISTRATION_LABELS } from '@/domain/eInvoice';
 import { CURRENCIES } from '@/lib/currencies';
 import { fromMajor, toMajor, zero } from '@/lib/money';
 import { uid } from '@/lib/id';
 import { nowISO } from '@/lib/date';
-import { Errors, hasErrors, required, validEmail, validGstin, validPhone } from '@/lib/validators';
+import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone } from '@/lib/validators';
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, useParties } from '@/store/selectors';
 
@@ -39,7 +40,17 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [name, setName] = useState(party?.name ?? '');
   const [contact, setContact] = useState(party?.displayName ?? '');
   const [taxId, setTaxId] = useState(party?.taxId ?? '');
-  const [registration, setRegistration] = useState<GstRegistrationType | undefined>(party?.gstRegistrationType);
+  // GST type comes first; it decides whether a GSTIN is asked for at all.
+  const [registration, setRegistration] = useState<GstRegistrationType>(
+    party?.gstRegistrationType ?? (party?.taxId ? 'regular' : 'unregistered'),
+  );
+  const overseas = registration === 'overseas';
+  const needsGstin = gstinRequiredFor(registration);
+  const [country, setCountry] = useState(
+    party?.billingAddress.country && party.billingAddress.country !== 'IN' ? party.billingAddress.country : '',
+  );
+  const [region, setRegion] = useState(overseas ? (party?.billingAddress.state ?? '') : '');
+  const [countryOpen, setCountryOpen] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [email, setEmail] = useState(party?.email ?? '');
   const [phone, setPhone] = useState(party?.phone ?? '');
@@ -62,7 +73,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [stateOpen, setStateOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country'>>({});
 
   // Both cities hang off the one state, so a city left over from the old state goes.
   const changeState = (code: string) => {
@@ -75,21 +86,25 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const label = kind === 'customer' ? 'Customer' : 'Supplier';
 
   const save = () => {
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId'> = {
+    const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country'> = {
       name: required(name, `${label} name`),
       email: validEmail(email),
       phone: validPhone(phone),
-      taxId: taxId
-        ? validGstin(taxId) ??
-          (stateCode && taxId.trim().toUpperCase().slice(0, 2) !== stateCode
-            ? `This GSTIN is registered in ${stateNameOf(taxId.trim().slice(0, 2))}, not the state below`
-            : undefined)
-        : undefined,
+      taxId:
+        partyGstinError(registration, gstin) ??
+        (gstin && stateCode && gstin.slice(0, 2) !== stateCode
+          ? `This GSTIN is registered in ${stateNameOf(gstin.slice(0, 2))}, not the state below`
+          : undefined),
+      country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
     };
     setErrors(next);
     if (hasErrors(next)) return;
 
-    const stateName = INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? '';
+    // An overseas party's place of supply is "other country" (96): exports and imports are inter-state.
+    const stateName = overseas ? region.trim() : (INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? '');
+    const partyStateCode = overseas ? OTHER_COUNTRY_CODE : stateCode || undefined;
+    const partyCountry = overseas ? country : 'IN';
     const nextCode =
       party?.code ??
       `${kind === 'customer' ? 'C' : 'S'}-${String(existing.length + 1).padStart(3, '0')}`;
@@ -101,8 +116,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       name: name.trim(),
       code: nextCode,
       displayName: contact.trim() || undefined,
-      taxId: taxId.trim().toUpperCase() || undefined,
-      gstRegistrationType: kind === 'customer' ? registration : party?.gstRegistrationType,
+      taxId: gstin || undefined,
+      gstRegistrationType: registration,
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       currency,
@@ -110,9 +125,9 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         line1: line1.trim(),
         city: city.trim(),
         state: stateName,
-        stateCode: stateCode || undefined,
+        stateCode: partyStateCode,
         postalCode: postalCode.trim(),
-        country: 'IN',
+        country: partyCountry,
       },
       shippingAddress: sameShipping
         ? undefined
@@ -120,9 +135,9 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
             line1: shipLine1.trim(),
             city: shipCity.trim(),
             state: stateName,
-            stateCode: stateCode || undefined,
+            stateCode: partyStateCode,
             postalCode: postalCode.trim(),
-            country: 'IN',
+            country: partyCountry,
           },
       creditLimit: creditLimit ? fromMajor(creditLimit, currency) : undefined,
       openingBalance: openingBalance ? fromMajor(openingBalance, currency) : zero(currency),
@@ -147,30 +162,32 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       >
         <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />
         <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />
-        <TextField
-          label="GSTIN"
-          value={taxId}
-          onChangeText={(v) => {
-            const next = v.toUpperCase();
-            setTaxId(next);
-            // The first two digits are the state; fill it in if it's still blank.
-            if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
-              changeState(next.slice(0, 2));
-            }
-          }}
-          placeholder="27AABCV1234F1ZO"
-          autoCapitalize="characters"
-          icon="card-account-details-outline"
-          error={errors.taxId}
-          hint={tr('contacts:form.gstinHint')}
+        <PickerField
+          label={tr('contacts:form.gstRegistration')}
+          value={GST_REGISTRATION_LABELS[registration]}
+          onPress={() => setRegistrationOpen(true)}
+          icon="shield-account-outline"
+          hint={tr('contacts:form.sezHint')}
+          required
         />
-        {kind === 'customer' ? (
-          <PickerField
-            label={tr('contacts:form.gstRegistration')}
-            value={GST_REGISTRATION_LABELS[registration ?? (taxId ? 'regular' : 'unregistered')]}
-            onPress={() => setRegistrationOpen(true)}
-            icon="shield-account-outline"
-            hint={tr('contacts:form.sezHint')}
+        {needsGstin ? (
+          <TextField
+            label="GSTIN"
+            value={taxId}
+            onChangeText={(v) => {
+              const next = v.toUpperCase();
+              setTaxId(next);
+              // The first two digits are the state; fill it in if it's still blank.
+              if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
+                changeState(next.slice(0, 2));
+              }
+            }}
+            placeholder="27AABCV1234F1ZO"
+            autoCapitalize="characters"
+            icon="card-account-details-outline"
+            error={errors.taxId}
+            hint={tr('contacts:form.gstinHint')}
+            required
           />
         ) : null}
         <TextField label={tr('contacts:form.phone')} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
@@ -178,23 +195,48 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.billingAddress')}</Text>
         <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />
-        <PickerField
-          label={tr('contacts:form.state')}
-          value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
-          onPress={() => setStateOpen(true)}
-          icon="map-outline"
-          hint={tr('contacts:form.stateHint')}
-        />
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
-          <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
-        </View>
+        {overseas ? (
+          <>
+            <PickerField
+              label={tr('contacts:form.country')}
+              value={country ? countryName(country) : undefined}
+              onPress={() => setCountryOpen(true)}
+              icon="earth"
+              error={errors.country}
+              hint={tr('contacts:form.overseasHint')}
+              required
+            />
+            <TextField label={tr('contacts:form.region')} value={region} onChangeText={setRegion} icon="map-outline" />
+            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
+              <TextField label={tr('contacts:form.postalCode')} value={postalCode} onChangeText={setPostalCode} autoCapitalize="characters" containerStyle={{ flex: 1 }} />
+            </View>
+          </>
+        ) : (
+          <>
+            <PickerField
+              label={tr('contacts:form.state')}
+              value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
+              onPress={() => setStateOpen(true)}
+              icon="map-outline"
+              hint={tr('contacts:form.stateHint')}
+            />
+            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
+              <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
+            </View>
+          </>
+        )}
 
         <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />
         {!sameShipping ? (
           <>
             <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />
-            <CityField label={tr('contacts:form.shippingCity')} value={shipCity} onChange={setShipCity} stateCode={stateCode} />
+            {overseas ? (
+              <TextField label={tr('contacts:form.shippingCity')} value={shipCity} onChangeText={setShipCity} />
+            ) : (
+              <CityField label={tr('contacts:form.shippingCity')} value={shipCity} onChange={setShipCity} stateCode={stateCode} />
+            )}
           </>
         ) : null}
 
@@ -241,8 +283,34 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         onClose={() => setRegistrationOpen(false)}
         title={tr('contacts:form.gstRegistration')}
         options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k] }))}
-        value={registration ?? (taxId ? 'regular' : 'unregistered')}
-        onSelect={(v) => setRegistration(v as GstRegistrationType)}
+        value={registration}
+        onSelect={(v) => {
+          const type = v as GstRegistrationType;
+          setRegistration(type);
+          setErrors((e) => ({ ...e, taxId: undefined }));
+          // An Indian state does not apply abroad, and an overseas party has no GSTIN.
+          if (type === 'overseas') {
+            setStateCode('');
+            setTaxId('');
+          } else if (!gstinRequiredFor(type)) {
+            setTaxId('');
+          }
+        }}
+        searchable={false}
+      />
+      <SelectSheet
+        visible={countryOpen}
+        onClose={() => setCountryOpen(false)}
+        title={tr('contacts:form.country')}
+        options={WORLD_COUNTRIES.filter((c) => c.code !== 'IN').map((c) => ({ value: c.code, label: c.name, trailing: c.currency }))}
+        value={country}
+        onSelect={(code) => {
+          setCountry(code);
+          setErrors((e) => ({ ...e, country: undefined }));
+          // Trade with that country usually runs in its currency, when the app carries it.
+          const cur = WORLD_COUNTRIES.find((c) => c.code === code)?.currency;
+          if (currency === baseCurrency && cur && CURRENCIES.some((c) => c.code === cur)) setCurrency(cur);
+        }}
       />
       <SelectSheet
         visible={currencyOpen}

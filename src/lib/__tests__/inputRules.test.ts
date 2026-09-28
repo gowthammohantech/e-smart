@@ -1,5 +1,5 @@
 import { sanitizeAmountInput, toAmountInput } from '@/lib/format';
-import { hsnMandatory, sanitizePrefix, validHsn } from '@/lib/validators';
+import { hsnMandatory, partyGstinError, sanitizePrefix, validHsn } from '@/lib/validators';
 import { accountBalances, accountFitsMethod, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
 import { formatNumber } from '@/domain/numbering';
 import { fromMajor, zero } from '@/lib/money';
@@ -85,5 +85,19 @@ describe('payment method and account', () => {
     ] as Payment[];
     const expenses = [{ accountId: 'cash', amount: fromMajor('300', 'INR'), exchangeRate: 1 }] as Expense[];
     expect(accountBalances(opening, payments, expenses)).toEqual({ cash: 100000, hdfc: 80000 });
+  });
+});
+
+describe('party GST type and GSTIN', () => {
+  it('needs a GSTIN for a registered type', () => {
+    expect(partyGstinError('regular', '')).toBeDefined();
+    expect(partyGstinError('sez', undefined)).toBeDefined();
+    expect(partyGstinError('regular', '27AABCV1234F1ZO')).toBeUndefined();
+  });
+
+  it('refuses a GSTIN on an unregistered or overseas party', () => {
+    expect(partyGstinError('unregistered', '27AABCV1234F1ZO')).toBeDefined();
+    expect(partyGstinError('overseas', '27AABCV1234F1ZO')).toBeDefined();
+    expect(partyGstinError('unregistered', '')).toBeUndefined();
   });
 });

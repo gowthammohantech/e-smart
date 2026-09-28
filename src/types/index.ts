@@ -43,6 +43,10 @@ export type TaxRegistration = {
   registered: boolean;
   compositionScheme?: boolean;
   placeOfSupplyStateCode?: string;
+  /** Letter of Undertaking: exports under it are zero-rated (no IGST charged). */
+  lutNumber?: string;
+  /** ISO date the LUT runs to (a financial year). */
+  lutValidTill?: string;
 };
 
 export type Branch = {

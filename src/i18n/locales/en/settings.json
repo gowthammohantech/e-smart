@@ -26,7 +26,11 @@
     "save": "Save changes",
     "saved": "Business profile updated",
     "registeredAddress": "Registered address",
-    "taxAndFy": "Tax and fiscal year"
+    "taxAndFy": "Tax and fiscal year",
+    "lockedNotice": "Entries have been posted, so the legal name, state, financial year and GST registration are locked. An unregistered business can still register for GST.",
+    "lutNumber": "LUT number (exports)",
+    "lutHint": "With a valid Letter of Undertaking, export invoices are zero-rated: no IGST is charged.",
+    "lutValidTill": "LUT valid till"
   },
   "accounts": {
     "default": "Default",

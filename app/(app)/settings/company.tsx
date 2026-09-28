@@ -11,7 +11,12 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { CityField } from '@/components/pickers/CityField';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
-import { useActiveCompany } from '@/store/selectors';
+import { useActiveCompany, useDocuments } from '@/store/selectors';
+import { profileLocks } from '@/domain/companyLock';
+import { isFinalized } from '@/domain/documentStates';
+import { DateField } from '@/components/pickers/DateField';
+import { Card } from '@/components/Card';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@/data/masters';
 import { citiesForState } from '@/data/cities';
 import { CURRENCIES } from '@/lib/currencies';
@@ -28,6 +33,9 @@ export default function CompanySettings() {
 
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
+  // After the first posted entry, the fields those entries depend on are frozen.
+  const posted = useDocuments().some((d) => isFinalized(d.status));
+  const locks = profileLocks(company, posted);
 
   const [name, setName] = useState(company?.name ?? '');
   const [legalName, setLegalName] = useState(company?.legalName ?? '');
@@ -43,6 +51,13 @@ export default function CompanySettings() {
   const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
   const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
+  const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
+  // An LUT is filed per financial year, so it runs to the next 31 March by default.
+  const [lutValidTill, setLutValidTill] = useState(() => {
+    if (company?.taxRegistration?.lutValidTill) return company.taxRegistration.lutValidTill;
+    const now = new Date();
+    return `${now.getMonth() >= 3 ? now.getFullYear() + 1 : now.getFullYear()}-03-31`;
+  });
 
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
@@ -85,6 +100,8 @@ export default function CompanySettings() {
         registered: taxRegistered,
         compositionScheme: composition,
         placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
+        lutNumber: taxRegistered && lutNumber.trim() ? lutNumber.trim().toUpperCase() : undefined,
+        lutValidTill: taxRegistered && lutNumber.trim() && lutValidTill ? lutValidTill : undefined,
       },
     });
     toast.show(tr('settings:company.saved'), 'success');
@@ -100,8 +117,16 @@ export default function CompanySettings() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {posted ? (
+          <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <MaterialCommunityIcons name="lock-outline" size={19} color={t.c.muted} />
+            <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
+              {tr('settings:company.lockedNotice')}
+            </Text>
+          </Card>
+        ) : null}
         <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
-        <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} />
+        <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
         <PickerField label={tr('settings:company.type')} value={businessType} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
 
         <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
@@ -110,18 +135,23 @@ export default function CompanySettings() {
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>
         <TextField label={tr('settings:company.address')} value={line1} onChangeText={setLine1} icon="map-marker-outline" />
-        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" />
+        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
           <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" containerStyle={{ flex: 1 }} />
         </View>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
-        <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} />
-        <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" />
-        <PickerField label={tr('settings:company.fyStarts')} value={MONTHS[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" />
+        <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
+        <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
+        <PickerField label={tr('settings:company.fyStarts')} value={MONTHS[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />
 
-        <SwitchField label={`Registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`} value={taxRegistered} onValueChange={setTaxRegistered} />
+        <SwitchField
+          label={`Registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`}
+          value={taxRegistered}
+          onValueChange={setTaxRegistered}
+          disabled={locks.registration}
+        />
         {taxRegistered ? (
           <>
             <TextField
@@ -131,13 +161,31 @@ export default function CompanySettings() {
               autoCapitalize="characters"
               icon="card-account-details-outline"
               error={errors.taxId}
+              editable={!locks.taxIdentity}
             />
             <SwitchField
               label={tr('settings:company.composition')}
               description={tr('settings:company.compositionHint')}
               value={composition}
               onValueChange={setComposition}
+              disabled={locks.taxIdentity}
             />
+            {country?.regime === 'GST' ? (
+              <>
+                <TextField
+                  label={tr('settings:company.lutNumber')}
+                  value={lutNumber}
+                  onChangeText={(v) => setLutNumber(v.toUpperCase())}
+                  autoCapitalize="characters"
+                  icon="earth-arrow-right"
+                  placeholder="AD270426012345X"
+                  hint={tr('settings:company.lutHint')}
+                />
+                {lutNumber.trim() ? (
+                  <DateField label={tr('settings:company.lutValidTill')} value={lutValidTill} onChange={setLutValidTill} />
+                ) : null}
+              </>
+            ) : null}
           </>
         ) : null}
       </ScrollView>

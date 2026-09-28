@@ -11,7 +11,7 @@ import { Card } from '@/components/Card';
 import { Illustration } from '@/components/Illustration';
 import { useAppStore } from '@/store/appStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { COUNTRIES } from '@/data/masters';
+import { COUNTRIES, stateName } from '@/data/masters';
 import { uid } from '@/lib/id';
 
 const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey: string; bodyKey: string }[] = [
@@ -66,7 +66,17 @@ export default function Done() {
         companyId,
         name: b.name,
         code: b.code,
-        address: { ...draft.address, city: b.city || draft.address.city },
+        // A branch has its own address (it goes on e-way bills); fall back to the
+        // head office only for what was left blank.
+        address: {
+          line1: b.line1 || '',
+          city: b.city || draft.address.city,
+          stateCode: b.stateCode || draft.address.stateCode,
+          state: b.stateCode ? stateName(b.stateCode) : draft.address.state,
+          postalCode: b.postalCode || '',
+          country: draft.address.country,
+        },
+        gstin: b.gstin || undefined,
         isPrimary: false,
       });
     });

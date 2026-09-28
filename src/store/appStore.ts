@@ -79,6 +79,8 @@ import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as default
 import { isValidGstin } from '@/domain/gstin';
 import { allocateAdvances, statusForOutstanding } from '@/domain/receivables';
 import { accountFitsMethod } from '@/domain/paymentAccounts';
+import { applyProfileLocks } from '@/domain/companyLock';
+import { buildTaxContext } from '@/domain/taxEngine';
 import {
   ACCOUNT_ID,
   CURRENT_USER_ID,
@@ -502,17 +504,6 @@ export const useAppStore = create<AppState>()(
 
       const companyOf = (companyId: string) => get().companies.find((c) => c.id === companyId);
 
-      const taxContextFor = (companyId: string, placeOfSupply?: string) => {
-        const company = companyOf(companyId);
-        const reg = company?.taxRegistration;
-        return {
-          regime: reg?.regime ?? ('NONE' as const),
-          homeStateCode: reg?.placeOfSupplyStateCode,
-          placeOfSupplyStateCode: placeOfSupply ?? reg?.placeOfSupplyStateCode,
-          registered: !!reg?.registered,
-        };
-      };
-
       const computeTotals = (doc: BusinessDocument) => {
         const s = get();
         const company = companyOf(doc.companyId);
@@ -527,7 +518,12 @@ export const useAppStore = create<AppState>()(
           applyRoundOff: doc.applyRoundOff,
           roundOffManual: doc.roundOffManual,
           taxCategories: s.taxCategories.filter((t) => t.companyId === doc.companyId),
-          taxContext: taxContextFor(doc.companyId, doc.placeOfSupplyStateCode),
+          taxContext: buildTaxContext(company, {
+            placeOfSupply: doc.placeOfSupplyStateCode,
+            party: s.parties.find((p) => p.id === doc.partyId),
+            date: doc.date,
+            purchase: ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'].includes(doc.kind),
+          }),
         });
       };
 
@@ -799,8 +795,20 @@ export const useAppStore = create<AppState>()(
           set({ activeCompanyId: companyId, activeBranchId: branch?.id ?? null });
         },
         setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
-        saveCompany: (company) => {
-          set({ companies: get().companies.map((c) => (c.id === company.id ? company : c)) });
+        saveCompany: (incoming) => {
+          const s = get();
+          const prev = s.companies.find((c) => c.id === incoming.id);
+          const posted = s.documents.some((d) => d.companyId === incoming.id && isFinalized(d.status));
+          const company = prev ? applyProfileLocks(prev, incoming, posted) : incoming;
+          set({
+            companies: s.companies.map((c) => (c.id === company.id ? company : c)),
+            // The head office is the registered address: keep its branch record in step.
+            branches: s.branches.map((b) =>
+              b.companyId === company.id && b.isPrimary
+                ? { ...b, address: { ...company.address }, gstin: company.taxRegistration?.registered ? company.taxRegistration.identifier : b.gstin }
+                : b,
+            ),
+          });
           audit('updated', 'company', company.id, company.name);
         },
         setPlan: (companyId, plan) => {

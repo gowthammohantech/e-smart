@@ -126,7 +126,8 @@ export function useDocumentDraft(options: {
   kind: DocumentKind;
   baseCurrency: string;
   taxCategories: TaxCategory[];
-  taxContext: TaxContext;
+  /** A fixed context, or one derived from the draft (party, place of supply, date). */
+  taxContext: TaxContext | ((draft: DraftState) => TaxContext);
   initial?: DraftState;
 }) {
   const { kind, baseCurrency, taxCategories, taxContext, initial } = options;
@@ -184,7 +185,10 @@ export function useDocumentDraft(options: {
         applyRoundOff: draft.applyRoundOff,
         roundOffManual: draft.roundOffManual,
         taxCategories,
-        taxContext: { ...taxContext, placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? taxContext.placeOfSupplyStateCode },
+        taxContext:
+          typeof taxContext === 'function'
+            ? taxContext(draft)
+            : { ...taxContext, placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? taxContext.placeOfSupplyStateCode },
       }),
     [draft, baseCurrency, taxCategories, taxContext],
   );

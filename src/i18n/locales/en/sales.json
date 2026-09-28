@@ -56,7 +56,12 @@
     "creditLimitTitle": "Credit limit exceeded",
     "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
     "creditLimitProceed": "Continue anyway",
-    "returnFrom": "Lines from {{number}}"
+    "returnFrom": "Lines from {{number}}",
+    "otherCountry": "Other country (export)",
+    "zeroRated": "Zero-rated",
+    "exportIgstHint": "Export or SEZ supply — IGST applies. Add an LUT in the business profile to zero-rate it.",
+    "exportLutHint": "Export or SEZ supply under LUT — zero-rated, no IGST charged.",
+    "importHint": "Import from abroad — no GST on the supplier's bill (IGST is paid at customs)."
   },
   "detail": {
     "finalise": "Finalise",

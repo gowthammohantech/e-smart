@@ -1,5 +1,6 @@
 import { Money, allocate, money, percent, zero } from '@/lib/money';
-import { TaxCategory, TaxComponent, TaxType } from '@/types';
+import { Company, Party, TaxCategory, TaxComponent, TaxType } from '@/types';
+import { OTHER_COUNTRY_CODE } from './stateCodes';
 
 export type TaxContext = {
   regime: 'GST' | 'VAT' | 'NONE';
@@ -8,7 +9,52 @@ export type TaxContext = {
   /** State code the goods/services are supplied to. */
   placeOfSupplyStateCode?: string;
   registered: boolean;
+  /**
+   * A cross-border or SEZ supply. It is always inter-state (IGST), even when
+   * the SEZ sits in the business's own state.
+   */
+  crossBorder?: 'export' | 'sez' | 'import';
+  /** No GST on the document: an export / SEZ supply under LUT, or an import bill. */
+  zeroRated?: boolean;
 };
+
+/** Is the company's Letter of Undertaking in force on `date`? */
+export function lutActive(company: Company | undefined, date: string): boolean {
+  const reg = company?.taxRegistration;
+  if (!reg?.registered || reg.regime !== 'GST' || !reg.lutNumber) return false;
+  return !reg.lutValidTill || date <= reg.lutValidTill;
+}
+
+/**
+ * The tax context for one document: the company's registration, the place of
+ * supply, and whether the party makes it an export, SEZ supply or import.
+ */
+export function buildTaxContext(
+  company: Company | undefined,
+  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean },
+): TaxContext {
+  const reg = company?.taxRegistration;
+  const pos = opts.placeOfSupply ?? reg?.placeOfSupplyStateCode;
+  const abroad = opts.party?.gstRegistrationType === 'overseas' || pos === OTHER_COUNTRY_CODE;
+  const crossBorder: TaxContext['crossBorder'] = abroad
+    ? opts.purchase
+      ? 'import'
+      : 'export'
+    : opts.party?.gstRegistrationType === 'sez'
+      ? 'sez'
+      : undefined;
+  return {
+    regime: reg?.regime ?? 'NONE',
+    homeStateCode: reg?.placeOfSupplyStateCode,
+    placeOfSupplyStateCode: pos,
+    registered: !!reg?.registered,
+    crossBorder,
+    // A foreign supplier's bill carries no Indian GST (IGST on imports is paid at customs).
+    zeroRated:
+      crossBorder === 'import' ||
+      (!!crossBorder && !opts.purchase && lutActive(company, opts.date)),
+  };
+}
 
 /**
  * Split a combined rate into its legal components (FRD 15 / FRD 16).
@@ -21,15 +67,16 @@ export function splitTax(
   rate: number,
   ctx: TaxContext,
 ): TaxComponent[] {
-  if (rate <= 0 || !ctx.registered) return [];
+  if (rate <= 0 || !ctx.registered || ctx.zeroRated) return [];
 
   const total = percent(taxableAmount, rate);
 
   if (ctx.regime === 'GST') {
     const interState =
-      !!ctx.homeStateCode &&
+      !!ctx.crossBorder ||
+      (!!ctx.homeStateCode &&
       !!ctx.placeOfSupplyStateCode &&
-      ctx.homeStateCode !== ctx.placeOfSupplyStateCode;
+      ctx.homeStateCode !== ctx.placeOfSupplyStateCode);
 
     if (interState) {
       return [{ type: 'IGST', label: `IGST ${rate}%`, rate, amount: total }];
