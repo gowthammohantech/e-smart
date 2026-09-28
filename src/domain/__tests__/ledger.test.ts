@@ -1,4 +1,4 @@
-import { allocateAdvances, availableAdvance, buildOutstanding, bucketFor, outstandingOf, summarizeAging } from '@/domain/receivables';
+import { allocateAdvances, availableAdvance, buildOutstanding, bucketFor, checkCreditLimit, outstandingOf, summarizeAging } from '@/domain/receivables';
 import { ledgerFor, signedQuantity, stockOnHand } from '@/domain/stockLedger';
 import { resolveRate, settlementGainLoss } from '@/domain/fx';
 import { BusinessDocument, ExchangeRate, Payment, StockMovement } from '@/types';
@@ -245,5 +245,54 @@ describe('advance adjustment', () => {
 
   it('sums the advance a party holds', () => {
     expect(availableAdvance([advance('100'), advance('250'), payment('inv1', '50')], 'INR').minor).toBe(35000);
+  });
+});
+
+describe('credit limit', () => {
+  const base = { partyId: 'p1', payments: [] as Payment[], rateToBase: (c: string) => (c === 'USD' ? 80 : 1) };
+
+  it('adds the new invoice to what the party already owes', () => {
+    const r = checkCreditLimit({
+      ...base,
+      limit: fromMajor('1500', 'INR'),
+      documents: [invoice()],
+      newTotal: fromMajor('600', 'INR'),
+    });
+    expect(r.exposure.minor).toBe(160000);
+    expect(r.exceeds).toBe(true);
+  });
+
+  it('counts only what is still outstanding, and only this party', () => {
+    const r = checkCreditLimit({
+      ...base,
+      limit: fromMajor('1500', 'INR'),
+      documents: [invoice(), invoice({ id: 'inv2', partyId: 'p2' })],
+      payments: [payment('inv1', '400')],
+      newTotal: fromMajor('600', 'INR'),
+    });
+    expect(r.exposure.minor).toBe(120000);
+    expect(r.exceeds).toBe(false);
+  });
+
+  it('does not count the draft being finalised twice', () => {
+    const r = checkCreditLimit({
+      ...base,
+      limit: fromMajor('1000', 'INR'),
+      documents: [invoice()],
+      newTotal: fromMajor('1000', 'INR'),
+      excludeDocumentId: 'inv1',
+    });
+    expect(r.exceeds).toBe(false);
+  });
+
+  it('converts a foreign-currency invoice into the limit currency', () => {
+    const r = checkCreditLimit({
+      ...base,
+      limit: fromMajor('1000', 'INR'),
+      documents: [],
+      newTotal: fromMajor('20', 'USD'),
+    });
+    expect(r.exposure.minor).toBe(160000);
+    expect(r.exceeds).toBe(true);
   });
 });

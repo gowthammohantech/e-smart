@@ -34,7 +34,8 @@
     "active": "Active",
     "activeHint": "Inactive items are hidden when creating documents.",
     "namePlaceholderFull": "What you're selling",
-    "trackStockHintFull": "Sales and purchases will move this item's stock automatically."
+    "trackStockHintFull": "Sales and purchases will move this item's stock automatically.",
+    "serviceUnitHint": "Services are always billed in Nos."
   },
   "detail": {
     "inactive": "Inactive",

@@ -384,7 +384,7 @@ const ITEM_SEED: [string, string, number, number, string, string, string, boolea
   ['Rice Bran Oil 5L', 'FMC-RBO', 880, 745, 'PCS', 'tax_5', '15152900', true],
   ['Packaged Drinking Water 1L (12 pk)', 'FMC-WTR', 168, 120, 'BOX', 'tax_18', '22011010', true],
   ['Annual Maintenance Contract', 'SRV-AMC', 24000, 0, 'NOS', 'tax_18', '998719', false],
-  ['On-site Installation (per hour)', 'SRV-INST', 850, 0, 'HR', 'tax_18', '995461', false],
+  ['On-site Installation', 'SRV-INST', 850, 0, 'NOS', 'tax_18', '995461', false],
   ['Equipment Calibration', 'SRV-CAL', 3500, 0, 'NOS', 'tax_18', '998346', false],
   ['Freight & Delivery', 'SRV-FRT', 1200, 0, 'NOS', 'tax_5', '996511', false],
 ];

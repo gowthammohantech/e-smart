@@ -71,8 +71,8 @@ export const UNITS: Unit[] = [
   { id: 'unit_nos', code: 'NOS', name: 'Numbers', decimals: 0 },
 ];
 
-/** Units a service can be billed in — counts and time, never weight or volume. */
-export const SERVICE_UNIT_CODES = ['NOS', 'HR', 'DAY'];
+/** A service is billed as a count of jobs: 'Nos' only. */
+export const SERVICE_UNIT_CODES = ['NOS'];
 
 export function unitsFor(type: 'goods' | 'service'): Unit[] {
   return type === 'service' ? UNITS.filter((u) => SERVICE_UNIT_CODES.includes(u.code)) : UNITS;

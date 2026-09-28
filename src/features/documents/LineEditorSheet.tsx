@@ -11,6 +11,7 @@ import { DocumentLine, TaxCategory } from '@/types';
 import { formatMoney, formatPercent } from '@/lib/format';
 import { fromMajor, toMajor } from '@/lib/money';
 import { calculateLine } from '@/domain/lineCalc';
+import { validHsn } from '@/lib/validators';
 import { TaxContext } from '@/domain/taxEngine';
 import { unitDecimals, unitsFor } from '@/data/masters';
 import { useItems } from '@/store/selectors';
@@ -24,6 +25,10 @@ type EditorProps = {
   onClose: () => void;
   onSave: (patch: Partial<DocumentLine>) => void;
   onRemove?: () => void;
+  /** HSN/SAC is mandatory (GST-registered business). */
+  hsnRequired?: boolean;
+  /** Upper bound on quantity, e.g. what the source invoice carried for a return. */
+  maxQuantity?: number;
 };
 
 /**
@@ -46,6 +51,8 @@ function LineEditorForm({
   onClose,
   onSave,
   onRemove,
+  hsnRequired = false,
+  maxQuantity,
 }: EditorProps) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales']);
@@ -58,10 +65,15 @@ function LineEditorForm({
   const [discountValue, setDiscountValue] = useState(String(line?.discountValue ?? 0));
   const [taxCategoryId, setTaxCategoryId] = useState(line?.taxCategoryId ?? '');
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
+  const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  // Services bill in counts or time only; one-off lines are treated as goods.
-  const itemType = useItems().find((i) => i.id === line?.itemId)?.type ?? 'goods';
+  const [errors, setErrors] = useState<{ name?: string; hsn?: string; quantity?: string }>({});
+  const item = useItems().find((i) => i.id === line?.itemId);
+  // Services bill in 'Nos' only; one-off lines are treated as goods.
+  const itemType = item?.type ?? 'goods';
+  // A catalogue line keeps the unit and HSN from the item master; only one-off lines choose their own.
+  const fromCatalogue = !!line?.itemId;
   const decimals = unitDecimals(unit);
 
   if (!line) return null;
@@ -85,10 +97,23 @@ function LineEditorForm({
   );
 
   const save = () => {
+    const next = {
+      name: name.trim() ? undefined : tr('sales:line.nameRequired'),
+      // A catalogue item's HSN is enforced on the item master; check it here too so an
+      // item created before GST registration cannot slip onto an invoice without one.
+      hsn: validHsn(hsnCode, { required: hsnRequired }),
+      quantity:
+        maxQuantity !== undefined && quantity > maxQuantity
+          ? tr('sales:line.quantityTooHigh', { max: maxQuantity })
+          : undefined,
+    };
+    setErrors(next);
+    if (next.name || next.hsn || next.quantity) return;
     onSave({
-      name: name.trim() || line.name,
+      name: name.trim(),
       quantity: quantity > 0 ? quantity : 1,
-      unit,
+      unit: fromCatalogue && item ? item.unit : unit,
+      hsnCode: hsnCode.trim() || undefined,
       unitPrice: fromMajor(price || '0', currency),
       discountMode,
       discountValue: Number(discountValue) || 0,
@@ -124,15 +149,50 @@ function LineEditorForm({
       }
     >
       <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-        <TextField label={tr('sales:line.description')} value={name} onChangeText={setName} placeholder={tr('sales:line.itemOrService')} />
+        <TextField
+          label={tr('sales:line.description')}
+          value={name}
+          onChangeText={setName}
+          placeholder={tr('sales:line.itemOrService')}
+          error={errors.name}
+          required
+        />
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'flex-end' }}>
           <View style={{ flex: 1, gap: 6 }}>
             <Text variant="caption" tone="muted" weight="600">{tr('sales:line.quantity')}</Text>
             <QuantityStepper key={unit} value={quantity} onChange={setQuantity} min={0} decimals={decimals} />
           </View>
-          <PickerField label={tr('sales:line.unit')} value={unit} onPress={() => setUnitOpen(true)} containerStyle={{ width: 120 }} />
+          <PickerField
+            label={tr('sales:line.unit')}
+            value={unit}
+            onPress={() => setUnitOpen(true)}
+            containerStyle={{ width: 120 }}
+            disabled={fromCatalogue}
+          />
         </View>
+        {errors.quantity ? (
+          <Text variant="caption" tone="bad">
+            {errors.quantity}
+          </Text>
+        ) : maxQuantity !== undefined ? (
+          <Text variant="caption" tone="muted">
+            {tr('sales:line.quantityMaxHint', { max: maxQuantity })}
+          </Text>
+        ) : null}
+
+        <TextField
+          label={itemType === 'service' ? 'SAC code' : 'HSN code'}
+          value={hsnCode}
+          onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
+          placeholder={itemType === 'service' ? '998719' : '84821011'}
+          keyboardType="number-pad"
+          icon="numeric"
+          editable={!fromCatalogue || !item?.hsnCode}
+          hint={fromCatalogue && item?.hsnCode ? tr('sales:line.hsnFromItem') : undefined}
+          error={errors.hsn}
+          required={hsnRequired}
+        />
 
         <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} />
 

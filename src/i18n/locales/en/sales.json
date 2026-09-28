@@ -51,7 +51,12 @@
     "roundOffManual": "Manual",
     "roundOffAmount": "Round-off amount",
     "roundOffAmountHint": "Enter a negative value to round down, e.g. -0.40.",
-    "roundOffTooLarge": "Round-off must be less than {{amount}} either way."
+    "roundOffTooLarge": "Round-off must be less than {{amount}} either way.",
+    "linesMissingHsn": "HSN/SAC is required on every line of a GST invoice. Missing on: {{names}}",
+    "creditLimitTitle": "Credit limit exceeded",
+    "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
+    "creditLimitProceed": "Continue anyway",
+    "returnFrom": "Lines from {{number}}"
   },
   "detail": {
     "finalise": "Finalise",
@@ -87,7 +92,11 @@
     "taxRate": "Tax rate",
     "quantity": "Quantity",
     "discount": "Discount",
-    "lineTotal": "Line total"
+    "lineTotal": "Line total",
+    "nameRequired": "Enter a name for this line",
+    "quantityTooHigh": "Cannot exceed {{max}}, the quantity on the original document",
+    "quantityMaxHint": "Up to {{max}} can be returned",
+    "hsnFromItem": "Taken from the item master"
   },
   "payment": {
     "selectContact": "Select contact",
@@ -176,5 +185,12 @@
     "validUntil": "Valid until",
     "ackNo": "Ack no.",
     "ackDate": "Ack date"
+  },
+  "returnPicker": {
+    "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",
+    "purchaseHint": "Pick the bill being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",
+    "search": "Search by number or party",
+    "empty": "Nothing to return against yet",
+    "created": "Return draft created"
   }
 }

@@ -9,7 +9,7 @@ import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@/c
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 import { Item, ItemType } from '@/types';
-import { SERVICE_UNIT_CODES, UNITS, unitsFor } from '@/data/masters';
+import { UNITS, unitsFor } from '@/data/masters';
 import { fromMajor, toMajor, zero } from '@/lib/money';
 import { formatPercent } from '@/lib/format';
 import { uid } from '@/lib/id';
@@ -75,7 +75,7 @@ export function ItemForm({ item }: { item?: Item }) {
       name: name.trim(),
       description: description.trim() || undefined,
       type,
-      unit,
+      unit: type === 'service' ? 'NOS' : unit,
       salePrice: salePrice ? fromMajor(salePrice, baseCurrency) : zero(baseCurrency),
       purchasePrice: purchasePrice ? fromMajor(purchasePrice, baseCurrency) : zero(baseCurrency),
       taxCategoryId,
@@ -112,7 +112,7 @@ export function ItemForm({ item }: { item?: Item }) {
             setType(v as ItemType);
             if (v === 'service') {
               setTrackInventory(false);
-              if (!SERVICE_UNIT_CODES.includes(unit)) setUnit('NOS');
+              setUnit('NOS');
             }
           }}
         />
@@ -134,7 +134,7 @@ export function ItemForm({ item }: { item?: Item }) {
           <AmountField label={tr('inventory:form.purchasePrice')} value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
         </View>
 
-        <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" />
+        <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" disabled={type === 'service'} hint={type === 'service' ? tr('inventory:form.serviceUnitHint') : undefined} />
         <PickerField
           label={tr('inventory:form.taxRate')}
           value={category ? `${category.name} (${formatPercent(category.rate)})` : 'Select'}

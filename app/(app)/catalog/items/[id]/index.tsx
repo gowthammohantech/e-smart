@@ -255,9 +255,9 @@ export default function ItemDetail() {
                 { label: 'Transfer between branches', icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
               ]
             : []),
-          { label: 'Sell this item', icon: 'file-document-edit-outline' as const, onPress: () => router.push('/(app)/sales/invoices/new') },
+          { label: 'Sell this item', icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?itemId=${item.id}`) },
           ...(hasPurchases
-            ? [{ label: 'Buy this item', icon: 'cart-outline' as const, onPress: () => router.push('/(app)/purchases/bills/new') }]
+            ? [{ label: 'Buy this item', icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?itemId=${item.id}`) }]
             : []),
           { label: 'Delete item', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
         ].map((a) => (

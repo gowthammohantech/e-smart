@@ -183,3 +183,37 @@ export function availableAdvance(payments: Payment[], currency: string): Money {
     currency,
   );
 }
+
+export type CreditCheck = {
+  /** Open invoices plus the new one, in the limit's currency. */
+  exposure: Money;
+  limit: Money;
+  exceeds: boolean;
+};
+
+/**
+ * Would a new invoice take the party past its credit limit? Everything is
+ * converted into the limit's currency through base, using `rateToBase`.
+ * `excludeDocumentId` keeps a draft being re-finalised from counting twice.
+ */
+export function checkCreditLimit(opts: {
+  limit: Money;
+  partyId: string;
+  documents: BusinessDocument[];
+  payments: Payment[];
+  newTotal: Money;
+  excludeDocumentId?: string;
+  rateToBase: (currency: string) => number;
+}): CreditCheck {
+  const { limit, partyId, documents, payments, newTotal, excludeDocumentId, rateToBase } = opts;
+  const limitRate = rateToBase(limit.currency) || 1;
+  const inLimit = (m: Money) =>
+    m.currency === limit.currency ? m.minor : Math.round((m.minor * (rateToBase(m.currency) || 1)) / limitRate);
+  const open = buildOutstanding(
+    documents.filter((d) => d.kind === 'invoice' && d.partyId === partyId && d.id !== excludeDocumentId),
+    payments,
+  );
+  const exposureMinor = open.reduce((acc, o) => acc + inLimit(o.outstanding), 0) + inLimit(newTotal);
+  const exposure = money(exposureMinor, limit.currency);
+  return { exposure, limit, exceeds: limit.minor > 0 && exposureMinor > limit.minor };
+}

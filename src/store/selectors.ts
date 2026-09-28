@@ -68,6 +68,13 @@ export function useBranches() {
   return useMemo(() => branches.filter((b) => b.companyId === companyId), [branches, companyId]);
 }
 
+/** The branch new entries default to: the company's primary, else the one picked in the header. */
+export function usePrimaryBranchId(): string | undefined {
+  const branches = useBranches();
+  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  return branches.find((b) => b.isPrimary)?.id ?? activeBranchId ?? branches[0]?.id;
+}
+
 export function useCompanies() {
   return useAppStore((s) => s.companies);
 }

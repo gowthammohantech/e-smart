@@ -34,6 +34,8 @@ export type DraftState = {
   terms: string;
   attachmentIds: string[];
   branchId?: string;
+  /** The invoice/bill a return (or conversion) was raised against. */
+  sourceDocumentId?: string;
 };
 
 export function emptyDraft(baseCurrency: string, kind: DocumentKind): DraftState {
@@ -81,6 +83,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],
     branchId: doc.branchId,
+    sourceDocumentId: doc.sourceDocumentId,
   };
 }
 

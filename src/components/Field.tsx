@@ -190,8 +190,9 @@ export function AmountField({
         <TextInput
           value={value}
           onChangeText={(v) => onChangeValue(sanitizeAmountInput(v, currency, { allowNegative }))}
-          // The iOS decimal pad has no minus key.
-          keyboardType={allowNegative && Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'decimal-pad'}
+          // Neither decimal pad has a minus key: iOS needs the punctuation
+          // keyboard, Android's numeric keyboard carries the sign.
+          keyboardType={allowNegative ? (Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric') : 'decimal-pad'}
           placeholder={placeholder}
           placeholderTextColor={t.c.muted}
           autoFocus={autoFocus}
@@ -230,11 +231,14 @@ export function PickerField({
   containerStyle,
   clearable,
   onClear,
+  disabled,
 }: {
   label?: string;
   value?: string;
   placeholder?: string;
   onPress: () => void;
+  /** Read-only: shows the value but does not open the picker. */
+  disabled?: boolean;
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
   error?: string;
   hint?: string;
@@ -249,7 +253,9 @@ export function PickerField({
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
       <Pressable
         onPress={onPress}
+        disabled={disabled}
         accessibilityRole="button"
+        accessibilityState={{ disabled: !!disabled }}
         accessibilityLabel={`${label ?? 'Select'}: ${value ?? placeholder}`}
         style={({ pressed }) => ({
           flexDirection: 'row',
@@ -261,14 +267,16 @@ export function PickerField({
           borderColor: error ? t.c.bad : t.c.line,
           paddingHorizontal: t.spacing.md,
           height: 48,
-          opacity: pressed ? 0.7 : 1,
+          opacity: disabled ? 0.6 : pressed ? 0.7 : 1,
         })}
       >
         {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} /> : null}
         <Text style={{ flex: 1 }} tone={value ? 'default' : 'muted'} numberOfLines={1}>
           {value ?? placeholder}
         </Text>
-        {clearable && value ? (
+        {disabled ? (
+          <MaterialCommunityIcons name="lock-outline" size={16} color={t.c.muted} />
+        ) : clearable && value ? (
           <Pressable onPress={onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.clear')}>
             <MaterialCommunityIcons name="close-circle" size={17} color={t.c.muted} />
           </Pressable>

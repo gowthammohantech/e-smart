@@ -553,6 +553,13 @@ export const useAppStore = create<AppState>()(
         });
       };
 
+      /** Where an entry lands when none was chosen: the active company's primary branch. */
+      const defaultBranchId = (): string => {
+        const s = get();
+        const own = s.branches.filter((b) => b.companyId === s.activeCompanyId);
+        return own.find((b) => b.isPrimary)?.id ?? s.activeBranchId ?? own[0]?.id ?? 'brn_mum';
+      };
+
       const consumeSeriesNumber = (kind: NumberingSeries['kind'], date: string): string => {
         const s = get();
         const companyId = s.activeCompanyId;
@@ -861,10 +868,16 @@ export const useAppStore = create<AppState>()(
         },
         saveBranch: (branch) => {
           const exists = get().branches.some((b) => b.id === branch.id);
+          // One primary branch per company: marking this one demotes the others.
+          const others = branch.isPrimary
+            ? get().branches.map((b) =>
+                b.companyId === branch.companyId && b.id !== branch.id && b.isPrimary ? { ...b, isPrimary: false } : b,
+              )
+            : get().branches;
           set({
             branches: exists
-              ? get().branches.map((b) => (b.id === branch.id ? branch : b))
-              : [...get().branches, branch],
+              ? others.map((b) => (b.id === branch.id ? branch : b))
+              : [...others, branch],
           });
           audit(exists ? 'updated' : 'created', 'branch', branch.id, branch.name);
         },
@@ -903,7 +916,7 @@ export const useAppStore = create<AppState>()(
             const m: StockMovement = {
               id: uid('stk'),
               companyId: item.companyId,
-              branchId: get().activeBranchId ?? 'brn_mum',
+              branchId: defaultBranchId(),
               itemId: item.id,
               type: 'opening',
               quantity: item.openingStock,
@@ -990,7 +1003,7 @@ export const useAppStore = create<AppState>()(
           const doc: BusinessDocument = {
             id: uid(draft.kind),
             companyId: s.activeCompanyId,
-            branchId: draft.branchId ?? s.activeBranchId ?? 'brn_mum',
+            branchId: draft.branchId ?? defaultBranchId(),
             kind: draft.kind,
             number,
             status,

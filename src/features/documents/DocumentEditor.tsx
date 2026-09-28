@@ -25,18 +25,24 @@ import { resolveRate } from '@/domain/fx';
 import { CURRENCIES } from '@/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@/lib/format';
 import { addDaysISO } from '@/lib/date';
+import { uid } from '@/lib/id';
 import { factorOf, fromMajor, money, toMajor } from '@/lib/money';
 import { INDIAN_STATES } from '@/data/masters';
+import { checkCreditLimit } from '@/domain/receivables';
+import { hsnMandatory, validHsn } from '@/lib/validators';
 
 import { useAppStore } from '@/store/appStore';
 import {
   useActiveCompany,
   useBaseCurrency,
   useBranches,
+  useDocuments,
   useExchangeRates,
   useHasModule,
   useItems,
   useParties,
+  usePayments,
+  usePrimaryBranchId,
   useTaxCategories,
 } from '@/store/selectors';
 import {
@@ -63,8 +69,8 @@ export function DocumentEditor({
   kind: DocumentKind;
   documentId?: string;
   initialDraft?: DraftState;
-  /** Party, and optionally one item line, to start from (Siri / Shortcuts). */
-  prefill?: { partyId: string; itemId?: string; quantity?: number };
+  /** Party and/or one item line to start from (Siri / Shortcuts, "Sell"/"Buy" on an item). */
+  prefill?: { partyId?: string; itemId?: string; quantity?: number };
   onSaved?: (id: string) => void;
 }) {
   const t = useTheme();
@@ -82,6 +88,13 @@ export function DocumentEditor({
   const isPurchase = PURCHASE_KINDS.includes(kind);
   const parties = useParties(isPurchase ? 'supplier' : 'customer');
   const items = useItems({ activeOnly: true });
+  const primaryBranchId = usePrimaryBranchId();
+  const documents = useDocuments();
+  const payments = usePayments();
+  const hsnRequired = hsnMandatory(company?.taxRegistration);
+  const isReturn = kind === 'salesReturn' || kind === 'purchaseReturn';
+  // Tax documents carry HSN/SAC per line; quotes and orders do not have to.
+  const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn);
 
   const createDocument = useAppStore((s) => s.createDocument);
   const updateDocument = useAppStore((s) => s.updateDocument);
@@ -111,14 +124,15 @@ export function DocumentEditor({
   // A prefill seeds the draft and the opening step, as if the person had
   // picked the party and item by hand. Read once, like `initialDraft`.
   const [seed] = useState(() => {
-    if (!prefill) return null;
-    const p = parties.find((x) => x.id === prefill.partyId);
-    if (!p) return { missingParty: true, draft: undefined, step: 0 };
-    const base = emptyDraft(baseCurrency, kind);
+    const base: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: primaryBranchId };
+    if (!prefill) return { missingParty: false, draft: base, step: 0 };
+    const p = prefill.partyId ? parties.find((x) => x.id === prefill.partyId) : undefined;
     const item = prefill.itemId ? items.find((i) => i.id === prefill.itemId) : undefined;
     const lines = item
       ? [{ ...lineFromItem(item, isPurchase, taxCategories), quantity: prefill.quantity ?? 1 }]
       : [];
+    // Without a party (e.g. "Sell" from an item) the line is ready and the party step stays open.
+    if (!p) return { missingParty: !!prefill.partyId, draft: { ...base, lines }, step: 0 };
     return {
       missingParty: false,
       draft: { ...base, ...partyFields(p, base.date, base.dueDate), lines },
@@ -142,6 +156,7 @@ export function DocumentEditor({
   const [branchOpen, setBranchOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
+  const [creditWarning, setCreditWarning] = useState<string | null>(null);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
@@ -155,7 +170,16 @@ export function DocumentEditor({
 
   const kindName = documentKindLabel(tr, kind, 1);
   const party = parties.find((p) => p.id === draft.partyId);
-  const branch = branches.find((b) => b.id === (draft.branchId ?? activeBranchId));
+  const branchId = draft.branchId ?? primaryBranchId ?? activeBranchId ?? undefined;
+  const branch = branches.find((b) => b.id === branchId);
+  // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
+  const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
+  const maxReturnQty = (line: DocumentLine | null) => {
+    if (!sourceDoc || !line) return undefined;
+    const src = sourceDoc.lines.find((l) => (line.itemId ? l.itemId === line.itemId : l.name === line.name));
+    return src?.quantity;
+  };
 
   const interState =
     taxContext.regime === 'GST' &&
@@ -176,10 +200,58 @@ export function DocumentEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Lines that cannot go on a finalised tax document yet. */
+  const lineProblem = (): string | undefined => {
+    const unnamed = draft.lines.find((l) => !l.name.trim());
+    if (unnamed) return tr('sales:line.nameRequired');
+    if (needsHsn) {
+      const missing = draft.lines.filter((l) => validHsn(l.hsnCode, { required: true }));
+      if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });
+    }
+    return undefined;
+  };
+
+  const creditLimitWarning = (): string | null => {
+    if (kind !== 'invoice' || !party?.creditLimit || party.creditLimit.minor <= 0) return null;
+    const check = checkCreditLimit({
+      limit: party.creditLimit,
+      partyId: party.id,
+      documents,
+      payments,
+      newTotal: totals.grandTotal,
+      excludeDocumentId: documentId,
+      rateToBase: (c) =>
+        c === baseCurrency ? 1 : c === draft.currency ? draft.exchangeRate : resolveRate(exchangeRates, c, baseCurrency, draft.date),
+    });
+    return check.exceeds
+      ? tr('sales:editor.creditLimitExceeded', {
+          party: party.name,
+          limit: formatMoney(check.limit),
+          exposure: formatMoney(check.exposure),
+        })
+      : null;
+  };
+
+  const requestFinalize = () => {
+    const problem = lineProblem();
+    if (problem) {
+      toast.show(problem, 'error');
+      return;
+    }
+    const warning = creditLimitWarning();
+    if (warning) setCreditWarning(warning);
+    else setConfirmFinalize(true);
+  };
+
   const save = (finalize: boolean) => {
     if (!draft.partyId) return;
     if (roundOffError) {
       toast.show(roundOffError, 'error');
+      return;
+    }
+    const problem = finalize ? lineProblem() : undefined;
+    if (problem) {
+      toast.show(problem, 'error');
       return;
     }
 
@@ -202,8 +274,9 @@ export function DocumentEditor({
       reference: draft.reference || undefined,
       supplierDocNumber: draft.supplierDocNumber || undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
-      branchId: draft.branchId ?? activeBranchId ?? undefined,
+      branchId,
       attachmentIds: draft.attachmentIds,
+      sourceDocumentId: draft.sourceDocumentId,
     };
 
     let id = documentId;
@@ -671,7 +744,7 @@ export function DocumentEditor({
           ) : (
             <>
               <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} style={{ flex: 1 }} />
-              <Button title={tr('sales:editor.finalise')} onPress={() => setConfirmFinalize(true)} style={{ flex: 1 }} />
+              <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} style={{ flex: 1 }} />
             </>
           )}
         </View>
@@ -710,42 +783,59 @@ export function DocumentEditor({
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
         title={tr('sales:editor.addItem')}
-        options={items.map((i) => ({
-          value: i.id,
-          label: i.name,
-          description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
-          trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
-        }))}
+        subtitle={sourceDoc ? tr('sales:editor.returnFrom', { number: sourceDoc.number }) : undefined}
+        options={
+          sourceDoc
+            ? sourceDoc.lines.map((l) => ({
+                value: l.id,
+                label: l.name,
+                description: `${formatQty(l.quantity)} ${l.unit} × ${formatMoney(l.unitPrice)}`,
+                trailing: formatPercent(l.taxRate),
+              }))
+            : items.map((i) => ({
+                value: i.id,
+                label: i.name,
+                description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
+                trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
+              }))
+        }
         onSelect={(id) => {
+          if (sourceDoc) {
+            const src = sourceDoc.lines.find((l) => l.id === id);
+            const already = src && draft.lines.find((l) => (src.itemId ? l.itemId === src.itemId : l.name === src.name));
+            if (src && !already) addLine({ ...src, id: uid('ln') });
+            return;
+          }
           const item = items.find((i) => i.id === id);
           if (item) addLine(lineFromItem(item, isPurchase, taxCategories));
         }}
         searchPlaceholder="Search by name or SKU"
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            <Button
-              title={tr('sales:editor.oneOffLine')}
-              variant="ghost"
-              icon="pencil-plus-outline"
-              style={{ flex: 1 }}
-              onPress={() => {
-                const line = blankLine(draft.currency, taxCategories);
-                addLine(line);
-                setItemOpen(false);
-                setEditingLine(line);
-              }}
-            />
-            <Button
-              title={tr('sales:editor.newItem')}
-              variant="secondary"
-              icon="plus"
-              style={{ flex: 1 }}
-              onPress={() => {
-                setItemOpen(false);
-                router.push('/(app)/catalog/items/new');
-              }}
-            />
-          </View>
+          sourceDoc ? undefined : (
+            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              <Button
+                title={tr('sales:editor.oneOffLine')}
+                variant="ghost"
+                icon="pencil-plus-outline"
+                style={{ flex: 1 }}
+                onPress={() => {
+                  // Added to the draft only when saved, so closing the sheet leaves no blank line behind.
+                  setItemOpen(false);
+                  setEditingLine(blankLine(draft.currency, taxCategories));
+                }}
+              />
+              <Button
+                title={tr('sales:editor.newItem')}
+                variant="secondary"
+                icon="plus"
+                style={{ flex: 1 }}
+                onPress={() => {
+                  setItemOpen(false);
+                  router.push('/(app)/catalog/items/new');
+                }}
+              />
+            </View>
+          )
         }
       />
 
@@ -775,8 +865,8 @@ export function DocumentEditor({
         onClose={() => setBranchOpen(false)}
         title={tr('sales:editor.branch')}
         options={branches.map((b) => ({ value: b.id, label: b.name, description: b.code }))}
-        value={draft.branchId ?? activeBranchId}
-        onSelect={(branchId) => patch({ branchId })}
+        value={branchId}
+        onSelect={(id) => patch({ branchId: id })}
         searchable={false}
       />
 
@@ -787,8 +877,27 @@ export function DocumentEditor({
         taxCategories={taxCategories}
         taxContext={{ ...taxContext, placeOfSupplyStateCode: draft.placeOfSupplyStateCode }}
         onClose={() => setEditingLine(null)}
-        onSave={(p) => editingLine && updateLine(editingLine.id, p)}
-        onRemove={() => editingLine && removeLine(editingLine.id)}
+        onSave={(p) => {
+          if (!editingLine) return;
+          if (editingIsNew) addLine({ ...editingLine, ...p });
+          else updateLine(editingLine.id, p);
+        }}
+        onRemove={editingIsNew ? undefined : () => editingLine && removeLine(editingLine.id)}
+        hsnRequired={needsHsn}
+        maxQuantity={maxReturnQty(editingLine)}
+      />
+
+      <ConfirmDialog
+        visible={!!creditWarning}
+        title={tr('sales:editor.creditLimitTitle')}
+        message={creditWarning ?? ''}
+        confirmLabel={tr('sales:editor.creditLimitProceed')}
+        icon="alert-outline"
+        onCancel={() => setCreditWarning(null)}
+        onConfirm={() => {
+          setCreditWarning(null);
+          setConfirmFinalize(true);
+        }}
       />
 
       <ConfirmDialog
