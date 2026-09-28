@@ -183,7 +183,7 @@ export default function OcrReview() {
             title={isExpense ? 'Create expense' : 'Create bill'}
             onPress={() => {
               toast.show(tr('inventory:ocr.carriedFields'), 'success');
-              router.replace(isExpense ? '/(app)/expenses/new' : '/(app)/purchases/bills/new');
+              router.replace(isExpense ? '/(app)/expenses/new?fromScan=1' : '/(app)/purchases/bills/new?fromScan=1');
             }}
             style={{ flex: 2 }}
           />

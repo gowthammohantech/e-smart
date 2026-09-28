@@ -12,10 +12,12 @@ import { Segmented } from '@/components/Field';
 import { Illustration } from '@/components/Illustration';
 import { useToast } from '@/components/Toast';
 import { mockExtract, useOcrStore } from '@/features/ocr/ocrStore';
+import { recognizeText } from '@/features/ocr/recognize';
+import { parseReceiptText } from '@/features/ocr/parseReceipt';
 
 const STEPS = [
   { icon: 'camera-outline' as const, label: 'Capture', body: 'Photograph the bill or pick one from your gallery.' },
-  { icon: 'image-filter-center-focus' as const, label: 'Preprocess', body: 'Crop, deskew and clean up the image.' },
+  { icon: 'cellphone-lock' as const, label: 'Read', body: 'Text is read on your phone — the image is never uploaded.' },
   { icon: 'text-recognition' as const, label: 'Extract', body: 'Read the vendor, date, totals, tax and line items.' },
   { icon: 'clipboard-check-outline' as const, label: 'Review', body: 'You confirm every field before anything is saved.' },
 ];
@@ -30,27 +32,50 @@ export default function OcrCapture() {
   const [kind, setKind] = useState<'expense' | 'purchaseBill'>('expense');
   const [busy, setBusy] = useState(false);
 
-  const run = async (uri?: string) => {
+  /** The built-in sample bill, for a demo or where on-device OCR is not available. */
+  const runSample = (uri?: string) => {
+    setResult(mockExtract(uri, kind));
+    router.push('/(app)/ocr/review');
+  };
+
+  const run = async (uri: string) => {
     setBusy(true);
-    // Simulate the round-trip to the extraction service.
-    setTimeout(() => {
-      setResult(mockExtract(uri, kind));
-      setBusy(false);
+    try {
+      // Read on the device with ML Kit; nothing is uploaded.
+      const text = await recognizeText(uri);
+      if (text === null) {
+        toast.show(tr('inventory:ocr.ocrUnavailable'), 'info');
+        runSample(uri);
+        return;
+      }
+      if (!text.trim()) {
+        toast.show(tr('inventory:ocr.noTextFound'), 'error');
+        return;
+      }
+      setResult(parseReceiptText(text, kind, uri));
       router.push('/(app)/ocr/review');
-    }, 1200);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const pick = async (fromCamera: boolean) => {
     try {
+      const permission = fromCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        toast.show(tr(fromCamera ? 'inventory:ocr.cameraDenied' : 'inventory:ocr.galleryDenied'), 'error');
+        return;
+      }
       const result = fromCamera
-        ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
-      if (result.canceled) return;
-      run(result.assets[0]?.uri);
+        ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+      if (result.canceled || !result.assets[0]?.uri) return;
+      await run(result.assets[0].uri);
     } catch {
-      // Camera is unavailable in the simulator and on web — still demo the flow.
+      // No camera in the simulator or on web.
       toast.show(tr('inventory:ocr.cameraUnavailable'), 'info');
-      run(undefined);
     }
   };
 
@@ -92,7 +117,7 @@ export default function OcrCapture() {
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <Button title={tr('inventory:ocr.fromGallery')} variant="ghost" icon="image-outline" onPress={() => pick(false)} style={{ flex: 1 }} disabled={busy} />
-          <Button title={tr('inventory:ocr.useSample')} variant="secondary" icon="file-find-outline" onPress={() => run(undefined)} style={{ flex: 1 }} loading={busy} />
+          <Button title={tr('inventory:ocr.useSample')} variant="secondary" icon="file-find-outline" onPress={() => runSample()} style={{ flex: 1 }} loading={busy} />
         </View>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('inventory:ocr.howItWorks')}</Text>

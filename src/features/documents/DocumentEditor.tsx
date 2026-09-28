@@ -72,7 +72,15 @@ export function DocumentEditor({
   documentId?: string;
   initialDraft?: DraftState;
   /** Party and/or one item line to start from (Siri / Shortcuts, "Sell"/"Buy" on an item). */
-  prefill?: { partyId?: string; itemId?: string; quantity?: number };
+  prefill?: {
+    partyId?: string;
+    itemId?: string;
+    quantity?: number;
+    /** From a scanned bill: its date, the supplier's number and the lines read off it. */
+    date?: string;
+    supplierDocNumber?: string;
+    lines?: { name: string; quantity: number; unitPrice: number }[];
+  };
   onSaved?: (id: string) => void;
 }) {
   const t = useTheme();
@@ -126,13 +134,24 @@ export function DocumentEditor({
   // A prefill seeds the draft and the opening step, as if the person had
   // picked the party and item by hand. Read once, like `initialDraft`.
   const [seed] = useState(() => {
-    const base: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: primaryBranchId };
-    if (!prefill) return { missingParty: false, draft: base, step: 0 };
+    const empty: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: primaryBranchId };
+    if (!prefill) return { missingParty: false, draft: empty, step: 0 };
+    const base: DraftState = {
+      ...empty,
+      date: prefill.date ?? empty.date,
+      supplierDocNumber: prefill.supplierDocNumber ?? empty.supplierDocNumber,
+    };
     const p = prefill.partyId ? parties.find((x) => x.id === prefill.partyId) : undefined;
     const item = prefill.itemId ? items.find((i) => i.id === prefill.itemId) : undefined;
+    const scanned = (prefill.lines ?? []).map((l) => ({
+      ...blankLine(p?.currency ?? baseCurrency, taxCategories),
+      name: l.name,
+      quantity: l.quantity,
+      unitPrice: fromMajor(String(l.unitPrice), p?.currency ?? baseCurrency),
+    }));
     const lines = item
       ? [{ ...lineFromItem(item, isPurchase, taxCategories), quantity: prefill.quantity ?? 1 }]
-      : [];
+      : scanned;
     // Without a party (e.g. "Sell" from an item) the line is ready and the party step stays open.
     if (!p) return { missingParty: !!prefill.partyId, draft: { ...base, lines }, step: 0 };
     return {

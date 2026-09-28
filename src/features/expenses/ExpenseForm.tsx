@@ -42,7 +42,18 @@ const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
   { value: 'yearly', label: 'Every year' },
 ];
 
-export function ExpenseForm({ expense }: { expense?: Expense }) {
+/** Values to start a new expense from, e.g. a scanned receipt. */
+export type ExpenseInitial = {
+  amount?: string;
+  date?: string;
+  reference?: string;
+  notes?: string;
+  supplierId?: string;
+  categoryId?: string;
+  receiptUri?: string;
+};
+
+export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'purchases']);
   const router = useRouter();
@@ -64,9 +75,9 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
   const expenses = useExpenses();
 
   // No silent default: the person recording the expense chooses its category.
-  const [categoryId, setCategoryId] = useState(expense?.categoryId ?? '');
-  const [amountText, setAmountText] = useState(expense ? String(toMajor(expense.amount)) : '');
-  const [date, setDate] = useState(expense?.date ?? today());
+  const [categoryId, setCategoryId] = useState(expense?.categoryId ?? initial?.categoryId ?? '');
+  const [amountText, setAmountText] = useState(expense ? String(toMajor(expense.amount)) : (initial?.amount ?? ''));
+  const [date, setDate] = useState(expense?.date ?? initial?.date ?? today());
   const [method, setMethod] = useState<PaymentMethod>(
     () => expense?.method ?? (defaultAccountFor('upi', accounts) ? 'upi' : 'cash'),
   );
@@ -78,14 +89,14 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
     ? pickedAccountId
     : (defaultAccountFor(method, accounts)?.id ?? '');
   const [accountError, setAccountError] = useState<string | undefined>();
-  const [supplierId, setSupplierId] = useState<string | null>(expense?.supplierId ?? null);
+  const [supplierId, setSupplierId] = useState<string | null>(expense?.supplierId ?? initial?.supplierId ?? null);
   const [taxCategoryId, setTaxCategoryId] = useState<string | null>(expense?.taxCategoryId ?? null);
   const [taxInclusive, setTaxInclusive] = useState(expense?.taxInclusive ?? true);
-  const [reference, setReference] = useState(expense?.reference ?? '');
-  const [notes, setNotes] = useState(expense?.notes ?? '');
+  const [reference, setReference] = useState(expense?.reference ?? initial?.reference ?? '');
+  const [notes, setNotes] = useState(expense?.notes ?? initial?.notes ?? '');
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(expense?.recurrence ?? 'none');
   const [billable, setBillable] = useState(expense?.billable ?? false);
-  const [receiptUri, setReceiptUri] = useState<string | undefined>();
+  const [receiptUri, setReceiptUri] = useState<string | undefined>(initial?.receiptUri);
 
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [methodOpen, setMethodOpen] = useState(false);
