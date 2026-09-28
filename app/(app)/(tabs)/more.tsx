@@ -23,6 +23,7 @@ import {
   useUnreadCount,
 } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
+import { countLabel } from '@/lib/format';
 
 type Entry = {
   label: string;
@@ -63,7 +64,16 @@ export default function MoreTab() {
             ] as Entry[],
           },
         ]
-      : []),
+      : [
+          // Five tabs fit a small phone; People and Reports move here on the full plan.
+          {
+            title: tr('nav:more.group.business'),
+            entries: [
+              { label: tr('nav:tab.contacts'), icon: 'account-group-outline', route: '/(app)/(tabs)/contacts' },
+              { label: tr('nav:tab.reports'), icon: 'chart-box-outline', route: '/(app)/(tabs)/reports' },
+            ] as Entry[],
+          },
+        ]),
     {
       title: tr('nav:more.group.money'),
       entries: [
@@ -80,7 +90,7 @@ export default function MoreTab() {
         { label: tr('nav:more.entry.scanBill'), icon: 'text-recognition', route: '/(app)/ocr/capture' },
         { label: tr('nav:more.entry.askLixi'), icon: 'creation', route: '/(app)/lixi' },
         { label: tr('nav:more.entry.globalSearch'), icon: 'magnify', route: '/(app)/search' },
-        { label: tr('nav:more.entry.notifications'), icon: 'bell-outline', route: '/(app)/notifications', badge: unread ? String(unread) : undefined },
+        { label: tr('nav:more.entry.notifications'), icon: 'bell-outline', route: '/(app)/notifications', badge: unread ? countLabel(unread) : undefined },
       ],
     },
     {
@@ -148,7 +158,7 @@ export default function MoreTab() {
             <Text variant="caption" tone="muted">
               {user?.email}
             </Text>
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 3 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 3 }}>
               <Badge label={user?.role ?? 'owner'} tone="info" size="sm" />
               <Badge label={company?.name ?? ''} tone="neutral" size="sm" />
             </View>
@@ -168,7 +178,7 @@ export default function MoreTab() {
                   chevron
                   divider={i < g.entries.length - 1}
                   onPress={() => router.push(e.route as never)}
-                  right={e.badge ? <Badge label={e.badge} tone="danger" size="sm" /> : undefined}
+                  right={e.badge ? <Badge label={e.badge} tone="danger" size="sm" count /> : undefined}
                 />
               ))}
             </Card>

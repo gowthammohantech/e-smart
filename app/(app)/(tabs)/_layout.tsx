@@ -15,6 +15,7 @@ import { openLixi } from '@/features/lixi/open';
 import { tabQuestion } from '@/features/lixi/brain';
 import { TabBar } from '@/components/TabBar';
 import { TabSwipe } from '@/components/TabSwipe';
+import { countLabel } from '@/lib/format';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -36,7 +37,8 @@ const TABS: { name: string; icon: IconName; activeIcon: IconName }[] = [
 
 /** Which tabs each plan shows, in bar order. The rest stay routable but unlisted. */
 const VISIBLE = {
-  full: ['index', 'sales', 'purchases', 'inventory', 'contacts', 'reports', 'more'],
+  // Five fit a 320dp phone with labels; People and Reports are one tap away in More.
+  full: ['index', 'sales', 'purchases', 'inventory', 'more'],
   sales: ['index', 'sales', 'gst', 'more'],
 } as const;
 
@@ -140,7 +142,7 @@ export default function TabsLayout() {
             options={{
               href: visible.includes(tab.name) ? undefined : null,
               title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
-              tabBarBadge: tab.name === 'more' && unread > 0 ? unread : undefined,
+              tabBarBadge: tab.name === 'more' && unread > 0 ? countLabel(unread) : undefined,
               tabBarBadgeStyle: { backgroundColor: t.c.bad, fontSize: 10 },
               tabBarIcon: ({ color, focused }) => (
                 <MaterialCommunityIcons name={focused ? tab.activeIcon : tab.icon} size={23} color={color} />

@@ -11,6 +11,7 @@ import { SelectSheet } from './pickers/SelectSheet';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBranches, useUnreadCount } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
+import { countLabel } from '@/lib/format';
 
 /**
  * Tab-level header: company/branch switcher on the left, sync state, global
@@ -118,9 +119,12 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           </Pressable>
         </Pressable>
 
-        {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" /> : null}
+        {/* On a narrow phone the status badge gives way (shrinks) before the buttons do. */}
+        {offline ? (
+          <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
+        ) : null}
         {!offline && pendingSync > 0 ? (
-          <Badge label={`${pendingSync} queued`} tone="info" icon="sync" size="sm" />
+          <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
         ) : null}
 
         {iconButton('magnify', tr('common:component.search'), () => router.push('/(app)/search'))}

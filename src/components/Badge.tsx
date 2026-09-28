@@ -13,10 +13,12 @@ type Props = {
   tone?: StatusTone;
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
   size?: 'sm' | 'md';
+  /** A count bubble: round for one digit, centred in its row, never squeezed. */
+  count?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
-export function Badge({ label, tone = 'neutral', icon, size = 'md', style }: Props) {
+export function Badge({ label, tone = 'neutral', icon, size = 'md', count, style }: Props) {
   const t = useTheme();
   const map: Record<StatusTone, { bg: string; fg: string }> = {
     neutral: { bg: t.c.mutedSoft, fg: t.c.muted },
@@ -37,17 +39,23 @@ export function Badge({ label, tone = 'neutral', icon, size = 'md', style }: Pro
           flexDirection: 'row',
           alignItems: 'center',
           gap: 4,
-          alignSelf: 'flex-start',
+          alignSelf: count ? 'center' : 'flex-start',
+          flexShrink: count ? 0 : 1,
+          ...(count ? { minWidth: size === 'sm' ? 20 : 24, justifyContent: 'center' as const } : null),
         },
         style,
       ]}
     >
       {icon ? <MaterialCommunityIcons name={icon} size={size === 'sm' ? 10 : 12} color={p.fg} /> : null}
       <Text
+        numberOfLines={1}
         style={{
           color: p.fg,
           fontSize: size === 'sm' ? t.fontSize.micro : t.fontSize.caption,
           fontWeight: '600',
+          flexShrink: 1,
+          textAlign: count ? 'center' : undefined,
+          fontVariant: count ? ['tabular-nums'] : undefined,
         }}
       >
         {label}

@@ -102,7 +102,8 @@
       "businessSetup": "Business setup",
       "dataCompliance": "Data & compliance",
       "account": "Account",
-      "prototype": "Prototype"
+      "prototype": "Prototype",
+      "business": "People & reports"
     },
     "entry": {
       "customers": "Customers",

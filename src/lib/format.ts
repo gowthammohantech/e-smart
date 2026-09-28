@@ -83,6 +83,11 @@ export function sanitizeAmountInput(
 }
 
 /** Money as the plain string an amount field holds, e.g. "1234.50". */
+/** A notification count as a bubble shows it: never wider than "99+". */
+export function countLabel(n: number): string {
+  return n > 99 ? '99+' : String(n);
+}
+
 export function toAmountInput(m: Money): string {
   const precision = Math.log10(factorOf(m.currency));
   return (m.minor / factorOf(m.currency)).toFixed(precision);

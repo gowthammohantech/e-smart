@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
 import { LIXI, LixiOrb } from '@/features/lixi/LixiOrb';
 import { Text } from './Text';
+import { countLabel } from '@/lib/format';
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -127,7 +128,9 @@ export function TabBar({
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{badge}</Text>
+              <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }} numberOfLines={1}>
+                {typeof badge === 'number' ? countLabel(badge) : badge}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -162,7 +165,8 @@ export function TabBar({
         paddingHorizontal: t.spacing.lg,
         paddingTop: RISE,
         // iOS's home indicator tolerates a little overlap; Android's navigation bar does not.
-        paddingBottom: Math.max(Platform.OS === 'ios' ? insets.bottom - 10 : insets.bottom, t.spacing.md),
+        // Never over the home indicator or the navigation bar.
+        paddingBottom: Math.max(insets.bottom, t.spacing.md),
       }}
     >
       <View
