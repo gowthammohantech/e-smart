@@ -1,0 +1,111 @@
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, View } from 'react-native';
+import { Stack } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Text } from '@esmart/ui/components/Text';
+import { Card } from '@esmart/ui/components/Card';
+import { Badge } from '@esmart/ui/components/Badge';
+import { Button } from '@esmart/ui/components/Button';
+import { ListRow } from '@esmart/ui/components/ListRow';
+import { SwitchField } from '@esmart/ui/components/Field';
+import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Illustration } from '@esmart/ui/components/Illustration';
+import { useToast } from '@esmart/ui/components/Toast';
+import { useAppStore } from '../../../store/appStore';
+import { useUiStore } from '../../../store/uiStore';
+import { formatRelative } from '@esmart/core/lib/date';
+
+export default function SyncStatus() {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['nav', 'settings']);
+  const toast = useToast();
+
+  const queue = useAppStore((s) => s.syncQueue);
+  const retrySync = useAppStore((s) => s.retrySync);
+  const clearSyncQueue = useAppStore((s) => s.clearSyncQueue);
+  const offline = useUiStore((s) => s.offlineMode);
+  const setOffline = useUiStore((s) => s.setOfflineMode);
+  const simulateLatency = useUiStore((s) => s.simulateLatency);
+  const setSimulateLatency = useUiStore((s) => s.setSimulateLatency);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <Stack.Screen options={{ title: tr('nav:title.syncStatus') }} />
+
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
+          <Illustration name={offline ? 'offline' : 'all-settled'} size="full" />
+          <Text variant="title" weight="700">
+            {offline ? 'Working offline' : queue.length ? `${queue.length} waiting to sync` : 'Everything is synced'}
+          </Text>
+          <Text variant="caption" tone="muted" center style={{ maxWidth: 280, lineHeight: 18 }}>
+            {offline
+              ? 'You can keep drafting. Anything you create is queued and sent as soon as you are back online.'
+              : 'Finalised financial records are validated on the server before they count, so your books stay authoritative.'}
+          </Text>
+        </Card>
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:sync.queue')}</Text>
+        <Card padded={false}>
+          {queue.length === 0 ? (
+            <EmptyState illustration="all-settled" icon="cloud-check-outline" title={tr('settings:sync.none')} message={tr('settings:sync.noneBody')} compact />
+          ) : (
+            queue.map((q, i) => (
+              <ListRow
+                key={q.id}
+                title={q.label}
+                subtitle={`${q.action} · ${q.entityType}`}
+                meta={`Queued ${formatRelative(q.queuedAt.slice(0, 10))} · ${q.attempts} attempt${q.attempts === 1 ? '' : 's'}`}
+                icon={q.status === 'failed' ? 'cloud-alert' : 'cloud-upload-outline'}
+                iconColor={q.status === 'failed' ? t.c.bad : t.c.primary}
+                divider={i < queue.length - 1}
+                right={<Badge label={q.status} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />}
+                onPress={() => {
+                  retrySync(q.id);
+                  toast.show(tr('settings:sync.synced'), 'success');
+                }}
+              />
+            ))
+          )}
+        </Card>
+
+        {queue.length > 0 ? (
+          <Button
+            title={tr('settings:sync.retryAll')}
+            variant="secondary"
+            icon="sync"
+            style={{ marginTop: t.spacing.md }}
+            onPress={() => {
+              clearSyncQueue();
+              toast.show(tr('settings:sync.allSynced'), 'success');
+            }}
+            fullWidth
+          />
+        ) : null}
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:sync.prototypeControls')}</Text>
+        <Card>
+          <SwitchField
+            label={tr('settings:sync.simulateOffline')}
+            description={tr('settings:sync.offlineHint')}
+            value={offline}
+            onValueChange={setOffline}
+          />
+          <SwitchField
+            label={tr('settings:sync.simulateLatency')}
+            description={tr('settings:sync.latencyHint')}
+            value={simulateLatency}
+            onValueChange={setSimulateLatency}
+          />
+        </Card>
+
+        <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
+          <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('settings:sync.conflictNote')}</Text>
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}

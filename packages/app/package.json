@@ -1,0 +1,50 @@
+{
+  "name": "@esmart/app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Screens, features and stores shared by the mobile and web apps.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@esmart/core": "*",
+    "@esmart/i18n": "*",
+    "@esmart/ui": "*"
+  },
+  "peerDependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/datetimepicker": "^9.1.0",
+    "@react-native-ml-kit/text-recognition": "^2.0.0",
+    "expo": "~57.0.23",
+    "expo-clipboard": "~57.0.2",
+    "expo-haptics": "~57.0.3",
+    "expo-image": "~57.0.5",
+    "expo-image-picker": "~57.0.18",
+    "expo-localization": "~57.0.2",
+    "expo-print": "~57.0.2",
+    "expo-router": "~57.0.21",
+    "expo-sharing": "~57.0.20",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-i18next": "^17.0.14",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "^15.15.4",
+    "react-native-webview": "^13.16.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@esmart/eslint-config": "*",
+    "@esmart/tsconfig": "*",
+    "@types/jest": "^30.0.0",
+    "@types/react": "~19.2.2",
+    "eslint": "^9.39.5",
+    "jest": "^30.5.1",
+    "jest-expo": "~57.0.5",
+    "typescript": "~6.0.3"
+  }
+}

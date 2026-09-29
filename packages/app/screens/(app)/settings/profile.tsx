@@ -1,0 +1,103 @@
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Text } from '@esmart/ui/components/Text';
+import { Card } from '@esmart/ui/components/Card';
+import { Badge } from '@esmart/ui/components/Badge';
+import { Button } from '@esmart/ui/components/Button';
+import { Avatar } from '@esmart/ui/components/Avatar';
+import { TextField } from '@esmart/ui/components/Field';
+import { ListRow } from '@esmart/ui/components/ListRow';
+import { useToast } from '@esmart/ui/components/Toast';
+import { useAppStore } from '../../../store/appStore';
+import { useCompanies, useCurrentUser } from '../../../store/selectors';
+import { Errors, hasErrors, required, validEmail, validPhone } from '@esmart/core/lib/validators';
+
+export default function Profile() {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['nav', 'settings']);
+  const router = useRouter();
+  const toast = useToast();
+  const insets = useSafeAreaInsets();
+
+  const user = useCurrentUser();
+  const companies = useCompanies();
+  const saveUser = useAppStore((s) => s.saveUser);
+  const setActiveCompany = useAppStore((s) => s.setActiveCompany);
+  const activeCompanyId = useAppStore((s) => s.activeCompanyId);
+
+  const [name, setName] = useState(user?.name ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone'>>({});
+
+  const save = () => {
+    const next: Errors<'name' | 'email' | 'phone'> = {
+      name: required(name, 'Name'),
+      email: required(email, 'Email') ?? validEmail(email),
+      phone: validPhone(phone),
+    };
+    setErrors(next);
+    if (hasErrors(next) || !user) return;
+    saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.trim() || undefined });
+    toast.show(tr('settings:profile.saved'), 'success');
+    router.back();
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ title: tr('nav:title.yourProfile') }} />
+
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xl }}>
+          <Avatar name={user?.name ?? 'You'} size={72} color={user?.avatarColor} />
+          <Text variant="title" weight="700">
+            {user?.name}
+          </Text>
+          <Badge label={user?.role ?? 'owner'} tone="info" />
+        </Card>
+
+        <TextField label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
+        <TextField label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />
+        <TextField label={tr('settings:profile.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="cellphone" error={errors.phone} />
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:profile.yourBusinesses')}</Text>
+        <Card padded={false}>
+          {companies.map((c, i) => (
+            <ListRow
+              key={c.id}
+              title={c.name}
+              subtitle={`${c.businessType} · ${c.baseCurrency}`}
+              icon="domain"
+              divider={i < companies.length - 1}
+              right={c.id === activeCompanyId ? <Badge label={tr('settings:profile.active')} tone="success" size="sm" /> : undefined}
+              onPress={() => {
+                setActiveCompany(c.id);
+                toast.show(`Switched to ${c.name}`, 'success');
+              }}
+            />
+          ))}
+        </Card>
+      </ScrollView>
+
+      <View
+        style={{
+          padding: t.spacing.lg,
+          paddingBottom: insets.bottom + t.spacing.md,
+          borderTopWidth: 1,
+          borderTopColor: t.c.line,
+          backgroundColor: t.c.paper,
+        }}
+      >
+        <Button title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
+      </View>
+    </KeyboardAvoidingView>
+  );
+}

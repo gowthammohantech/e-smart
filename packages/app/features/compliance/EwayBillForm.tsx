@@ -1,0 +1,455 @@
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Text } from '@esmart/ui/components/Text';
+import { Card } from '@esmart/ui/components/Card';
+import { Button } from '@esmart/ui/components/Button';
+import { SectionHeader } from '@esmart/ui/components/Screen';
+import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
+import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { CityField } from '@esmart/ui/components/pickers/CityField';
+import { useToast } from '@esmart/ui/components/Toast';
+import {
+  BusinessDocument,
+  EwayPlace,
+  EwaySubSupplyType,
+  TransportMode,
+  VehicleType,
+} from '@esmart/core/types';
+import { useAppStore } from '../../store/appStore';
+import { useActiveCompany, useComplianceSettings, useTransporters } from '../../store/selectors';
+import {
+  EWAY_SUB_SUPPLY_TYPES,
+  subSupplyTypeFor,
+  validUptoFor,
+  validityDays,
+  normalizeVehicleNumber,
+} from '@esmart/core/domain/ewayBill';
+import { mainHsnCodeOf } from '@esmart/core/domain/eInvoice';
+import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
+import { citiesForState } from '@esmart/core/data/cities';
+import { formatDate, nowISO } from '@esmart/core/lib/date';
+import { formatMoney } from '@esmart/core/lib/format';
+
+/**
+ * Raising an e-way bill (FRD 16).
+ *
+ * Part-A comes off the document and is shown read-only; Part-B is what the
+ * user actually has to supply. The validity preview recomputes on every
+ * keystroke, which is the clearest way to show the one-day-per-200-km rule
+ * doing its work.
+ */
+export function EwayBillForm({ document: doc }: { document: BusinessDocument }) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const { t: tr } = useTranslation(['compliance']);
+  const router = useRouter();
+  const toast = useToast();
+  const company = useActiveCompany();
+  const settings = useComplianceSettings();
+
+  const parties = useAppStore((s) => s.parties);
+  const branches = useAppStore((s) => s.branches);
+  const generateEwayBill = useAppStore((s) => s.generateEwayBill);
+
+  const buyer = parties.find((p) => p.id === doc.partyId);
+  const branch = branches.find((b) => b.id === doc.branchId);
+  const shipTo = buyer?.shippingAddress ?? buyer?.billingAddress;
+
+  const [subSupplyType, setSubSupplyType] = useState<EwaySubSupplyType>(subSupplyTypeFor(doc.kind));
+  const [subSupplyDescription, setSubSupplyDescription] = useState('');
+  const [subSupplyOpen, setSubSupplyOpen] = useState(false);
+
+  const [from, setFrom] = useState<EwayPlace>({
+    legalName: company.legalName ?? company.name,
+    gstin: company.taxRegistration?.identifier ?? 'URP',
+    address1: branch?.address.line1 ?? company.address.line1,
+    address2: branch?.address.line2 ?? company.address.line2,
+    place: branch?.address.city ?? company.address.city,
+    pincode: branch?.address.postalCode ?? company.address.postalCode,
+    stateCode: branch?.address.stateCode ?? company.address.stateCode ?? '',
+  });
+  const [to, setTo] = useState<EwayPlace>({
+    legalName: buyer?.name ?? '',
+    gstin: buyer?.taxId ?? 'URP',
+    address1: shipTo?.line1 ?? '',
+    address2: shipTo?.line2,
+    place: shipTo?.city ?? '',
+    pincode: shipTo?.postalCode ?? '',
+    stateCode: shipTo?.stateCode ?? '',
+  });
+  const [stateSheet, setStateSheet] = useState<'from' | 'to' | null>(null);
+
+  const [transporterId, setTransporterId] = useState(settings.defaultTransporterId ?? '');
+  const [transporterName, setTransporterName] = useState(settings.defaultTransporterName ?? '');
+  const transporters = useTransporters({ activeOnly: true });
+  const [transporterOpen, setTransporterOpen] = useState(false);
+  const [transportMode, setTransportMode] = useState<TransportMode>(settings.defaultTransportMode);
+  const [vehicleType, setVehicleType] = useState<VehicleType>(settings.defaultVehicleType);
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [transportDocNumber, setTransportDocNumber] = useState('');
+  const [transportDocDate, setTransportDocDate] = useState(doc.date);
+  const [distanceKm, setDistanceKm] = useState(String(settings.defaultDistanceKm));
+
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const distance = Number(distanceKm) || 0;
+  const preview = useMemo(() => {
+    const days = validityDays(distance, vehicleType);
+    return { days, validUpto: validUptoFor(nowISO(), distance, vehicleType) };
+  }, [distance, vehicleType]);
+
+  const byRoad = transportMode === 'road';
+
+  const submit = () => {
+    setBusy(true);
+    const outcome = generateEwayBill({
+      documentId: doc.id,
+      subSupplyType,
+      subSupplyDescription: subSupplyDescription.trim() || undefined,
+      transactionType: 1,
+      from,
+      to,
+      transporterId: transporterId.trim() || undefined,
+      transporterName: transporterName.trim() || undefined,
+      transportMode,
+      vehicleNumber: byRoad ? vehicleNumber.trim().toUpperCase() : undefined,
+      vehicleType,
+      transportDocNumber: byRoad ? undefined : transportDocNumber.trim() || undefined,
+      transportDocDate: byRoad ? undefined : transportDocDate,
+      distanceKm: distance,
+    });
+    setBusy(false);
+
+    if (outcome.ok && outcome.ewayBillId) {
+      toast.show(tr('compliance:ewb.generated'), 'success');
+      router.replace(`/(app)/compliance/eway/${outcome.ewayBillId}`);
+      return;
+    }
+
+    const next: Record<string, string> = {};
+    outcome.issues
+      .filter((i) => i.severity === 'blocking')
+      .forEach((i) => {
+        next[i.field] = i.message;
+      });
+    setErrors(next);
+    toast.show(outcome.issues[0]?.message ?? 'The bill could not be raised', 'error');
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ---------------- Part-A ---------------- */}
+        <Card style={{ gap: t.spacing.sm }}>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.consignment')}</Text>
+          <Row label={tr('compliance:ewb.document')} value={doc.number} />
+          <Row label={tr('compliance:ewb.dated')} value={formatDate(doc.date)} />
+          <Row label={tr('compliance:ewb.value')} value={formatMoney(doc.totals.grandTotal)} />
+          <Row label={tr('compliance:ewb.lines')} value={String(doc.lines.length)} />
+          <Row label={tr('compliance:ewb.mainHsn')} value={mainHsnCodeOf(doc) ?? '—'} />
+        </Card>
+
+        <View style={{ height: t.spacing.md }} />
+
+        <PickerField
+          label={tr('compliance:ewb.subSupplyType')}
+          value={EWAY_SUB_SUPPLY_TYPES[subSupplyType].label}
+          onPress={() => setSubSupplyOpen(true)}
+          icon="tag-outline"
+        />
+        {subSupplyType === 'others' ? (
+          <TextField
+            label={tr('compliance:ewb.describeSubSupply')}
+            required
+            value={subSupplyDescription}
+            onChangeText={setSubSupplyDescription}
+            error={errors.subSupplyDescription}
+            placeholder={tr('compliance:ewb.whatMoving')}
+          />
+        ) : null}
+
+        <SectionHeader title={tr('compliance:ewb.from')} />
+        <PlaceFields
+          place={from}
+          onChange={setFrom}
+          errors={errors}
+          prefix="from"
+          onPickState={() => setStateSheet('from')}
+        />
+
+        <SectionHeader title={tr('compliance:ewb.to')} />
+        <PlaceFields
+          place={to}
+          onChange={setTo}
+          errors={errors}
+          prefix="to"
+          onPickState={() => setStateSheet('to')}
+        />
+
+        {/* ---------------- Part-B ---------------- */}
+        <SectionHeader title={tr('compliance:ewb.transport')} />
+
+        {transporters.length ? (
+          <PickerField
+            label={tr('compliance:ewb.savedTransporter')}
+            value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
+            placeholder={tr('compliance:ewb.pickOrType')}
+            onPress={() => setTransporterOpen(true)}
+            icon="truck-outline"
+          />
+        ) : null}
+        <TextField
+          label={tr('compliance:ewb.transporterId')}
+          value={transporterId}
+          onChangeText={setTransporterId}
+          autoCapitalize="characters"
+          error={errors.transporterId}
+          placeholder="15-character GSTIN or TRANSIN"
+        />
+        <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
+
+        <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
+          <Segmented
+            options={[
+              { value: 'road', label: 'Road' },
+              { value: 'rail', label: 'Rail' },
+              { value: 'air', label: 'Air' },
+              { value: 'ship', label: 'Ship' },
+            ]}
+            value={transportMode}
+            onChange={setTransportMode}
+          />
+        </View>
+
+        <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
+          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.cargo')}</Text>
+          <Segmented
+            options={[
+              { value: 'regular', label: 'Regular' },
+              { value: 'overDimensional', label: 'Over-dimensional' },
+            ]}
+            value={vehicleType}
+            onChange={setVehicleType}
+          />
+        </View>
+
+        {byRoad ? (
+          <TextField
+            label={tr('compliance:ewb.vehicleNumber')}
+            required
+            value={vehicleNumber}
+            onChangeText={(v) => setVehicleNumber(normalizeVehicleNumber(v))}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            error={errors.vehicleNumber}
+            placeholder="MH12AB1234"
+          />
+        ) : (
+          <>
+            <TextField
+              label={tr('compliance:ewb.transportDocNumber')}
+              required
+              value={transportDocNumber}
+              onChangeText={setTransportDocNumber}
+              error={errors.transportDocNumber}
+              placeholder={tr('compliance:ewb.transportDocHint')}
+            />
+            <DateField
+              label={tr('compliance:ewb.transportDocDate')}
+              required
+              value={transportDocDate}
+              onChange={setTransportDocDate}
+              error={errors.transportDocDate}
+            />
+          </>
+        )}
+
+        <TextField
+          label={tr('compliance:ewb.approxDistance')}
+          required
+          value={distanceKm}
+          onChangeText={setDistanceKm}
+          keyboardType="number-pad"
+          suffix="km"
+          error={errors.distanceKm}
+        />
+
+        {/* The rule, made visible. */}
+        <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
+          <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text variant="small" weight="600">
+              {preview.days} {preview.days === 1 ? 'day' : 'days'} · valid to{' '}
+              {formatDate(preview.validUpto.slice(0, 10))}
+            </Text>
+            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+              {vehicleType === 'overDimensional'
+                ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
+                : 'One day per 200 km, or part thereof.'}{' '}
+              Validity always runs to midnight.
+            </Text>
+          </View>
+        </Card>
+      </ScrollView>
+
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: t.spacing.lg,
+          paddingBottom: insets.bottom + t.spacing.md,
+          borderTopWidth: 1,
+          borderTopColor: t.c.line,
+          backgroundColor: t.c.paper,
+        }}
+      >
+        <Button
+          title={tr('compliance:ewb.generate')}
+          icon="truck-fast-outline"
+          loading={busy}
+          onPress={submit}
+          fullWidth
+        />
+      </View>
+
+      <SelectSheet
+        visible={subSupplyOpen}
+        onClose={() => setSubSupplyOpen(false)}
+        title={tr('compliance:ewb.subSupplyType')}
+        options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
+          value: key,
+          label: EWAY_SUB_SUPPLY_TYPES[key].label,
+        }))}
+        value={subSupplyType}
+        onSelect={(v) => {
+          setSubSupplyType(v as EwaySubSupplyType);
+          setSubSupplyOpen(false);
+        }}
+        searchable={false}
+      />
+
+      <SelectSheet
+        visible={transporterOpen}
+        onClose={() => setTransporterOpen(false)}
+        title={tr('compliance:ewb.transporter')}
+        options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
+        value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
+        onSelect={(id) => {
+          const picked = transporters.find((x) => x.id === id);
+          if (picked) {
+            setTransporterId(picked.transporterId);
+            setTransporterName(picked.name);
+          }
+          setTransporterOpen(false);
+        }}
+      />
+      <SelectSheet
+        visible={stateSheet !== null}
+        onClose={() => setStateSheet(null)}
+        title={stateSheet === 'from' ? 'Despatch state' : 'Delivery state'}
+        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        value={stateSheet === 'from' ? from.stateCode : to.stateCode}
+        onSelect={(code) => {
+          // A place picked for the previous state no longer belongs.
+          const moved = (p: EwayPlace): EwayPlace => ({
+            ...p,
+            stateCode: code,
+            place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
+          });
+          if (stateSheet === 'from') setFrom(moved(from));
+          else setTo(moved(to));
+          setStateSheet(null);
+        }}
+      />
+    </View>
+  );
+}
+
+function PlaceFields({
+  place,
+  onChange,
+  errors,
+  prefix,
+  onPickState,
+}: {
+  place: EwayPlace;
+  onChange: (p: EwayPlace) => void;
+  errors: Record<string, string>;
+  prefix: 'from' | 'to';
+  onPickState: () => void;
+}) {
+  const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
+  return (
+    <>
+      <TextField
+        label={tr('compliance:ewb.legalName')}
+        value={place.legalName}
+        onChangeText={(v) => onChange({ ...place, legalName: v })}
+        error={errors[`${prefix}.legalName`]}
+      />
+      <TextField
+        label="GSTIN"
+        value={place.gstin}
+        onChangeText={(v) => onChange({ ...place, gstin: v.toUpperCase() })}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        error={errors[`${prefix}.gstin`]}
+        hint={tr('compliance:ewb.urpHint')}
+      />
+      <TextField
+        label={tr('compliance:ewb.address')}
+        value={place.address1}
+        onChangeText={(v) => onChange({ ...place, address1: v })}
+        error={errors[`${prefix}.address1`]}
+      />
+      <PickerField
+        label={tr('compliance:ewb.state')}
+        value={place.stateCode ? stateName(place.stateCode) : undefined}
+        placeholder={tr('compliance:ewb.chooseState')}
+        onPress={onPickState}
+        icon="map-marker-outline"
+        error={errors[`${prefix}.stateCode`]}
+      />
+      <CityField
+        label={tr('compliance:ewb.place')}
+        value={place.place}
+        onChange={(v) => onChange({ ...place, place: v })}
+        stateCode={place.stateCode}
+        error={errors[`${prefix}.place`]}
+      />
+      <TextField
+        label={tr('compliance:ewb.pinCode')}
+        value={place.pincode}
+        onChangeText={(v) => onChange({ ...place, pincode: v })}
+        keyboardType="number-pad"
+        maxLength={6}
+        error={errors[`${prefix}.pincode`]}
+      />
+    </>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Text variant="caption" tone="muted">
+        {label}
+      </Text>
+      <Text variant="small">{value}</Text>
+    </View>
+  );
+}

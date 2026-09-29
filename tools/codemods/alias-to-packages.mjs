@@ -23,6 +23,22 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
  * the package, that `@/<from>` now lives at, used for relative rewrites.
  */
 export const RULES = [
+  // Step 4: the UI kit and the app shell. These packages have no src/ folder
+  // and no `exports` map, so a subpath resolves with the usual extension
+  // probing (`.ts`, `.tsx`) in Metro, Jest and TypeScript alike.
+  { from: 'components/DocumentListView', to: '@esmart/app/components/DocumentListView', pkg: 'packages/app', src: 'components/DocumentListView' },
+  { from: 'components/QuickActions', to: '@esmart/app/components/QuickActions', pkg: 'packages/app', src: 'components/QuickActions' },
+  { from: 'components/TabSwipe', to: '@esmart/app/components/TabSwipe', pkg: 'packages/app', src: 'components/TabSwipe' },
+  { from: 'components/AppHeader', to: '@esmart/app/components/AppHeader', pkg: 'packages/app', src: 'components/AppHeader' },
+  { from: 'features/lixi/LixiOrb', to: '@esmart/ui/components/LixiOrb', pkg: 'packages/ui', src: 'components/LixiOrb' },
+  { from: 'i18n/I18nProvider', to: '@esmart/app/i18n/I18nProvider', pkg: 'packages/app', src: 'i18n/I18nProvider' },
+  { from: 'i18n/detect', to: '@esmart/app/i18n/detect', pkg: 'packages/app', src: 'i18n/detect' },
+  { from: 'components', to: '@esmart/ui/components', pkg: 'packages/ui', src: 'components' },
+  { from: 'theme', to: '@esmart/ui/theme', pkg: 'packages/ui', src: 'theme' },
+  { from: 'illustrations', to: '@esmart/ui/illustrations', pkg: 'packages/ui', src: 'illustrations' },
+  { from: 'features', to: '@esmart/app/features', pkg: 'packages/app', src: 'features' },
+  { from: 'store', to: '@esmart/app/store', pkg: 'packages/app', src: 'store' },
+  // Step 2: pure logic and catalogues.
   { from: 'i18n/labels', to: '@esmart/core/labels', pkg: 'packages/core', src: 'src/labels' },
   { from: 'i18n/config', to: '@esmart/i18n/config', pkg: 'packages/i18n', src: 'src/config' },
   { from: 'i18n/locales', to: '@esmart/i18n/locales', pkg: 'packages/i18n', src: 'src/locales' },

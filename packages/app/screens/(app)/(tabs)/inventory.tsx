@@ -1,0 +1,231 @@
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Pressable, ScrollView, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { AppHeader } from '../../../components/AppHeader';
+import { SectionHeader } from '@esmart/ui/components/Screen';
+import { Card } from '@esmart/ui/components/Card';
+import { Text } from '@esmart/ui/components/Text';
+import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
+import { SearchBar } from '@esmart/ui/components/SearchBar';
+import { Badge } from '@esmart/ui/components/Badge';
+import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Fab } from '@esmart/ui/components/Fab';
+import { Segmented } from '@esmart/ui/components/Field';
+import { Sheet } from '@esmart/ui/components/Sheet';
+import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '../../../store/selectors';
+import { summarizeStock } from '@esmart/core/domain/reports';
+import { formatMoney, formatQty } from '@esmart/core/lib/format';
+import { isLowStock } from '@esmart/core/domain/stockLedger';
+
+type Filter = 'all' | 'low' | 'out' | 'services';
+
+export default function InventoryTab() {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['inventory']);
+  const router = useRouter();
+
+  const baseCurrency = useBaseCurrency();
+  const items = useItems();
+  const movements = useStockMovements();
+  const stock = useStockLevels();
+
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [actionsOpen, setActionsOpen] = useState(false);
+
+  const report = useMemo(() => summarizeStock(items, movements, baseCurrency), [items, movements, baseCurrency]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((i) => {
+      const onHand = stock[i.id] ?? 0;
+      if (filter === 'low' && !(i.trackInventory && isLowStock(i, onHand) && onHand > 0)) return false;
+      if (filter === 'out' && !(i.trackInventory && onHand <= 0)) return false;
+      if (filter === 'services' && i.trackInventory) return false;
+      if (q && !`${i.name} ${i.sku} ${i.barcode ?? ''}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, stock, filter, query]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <AppHeader title={tr('inventory:hub.title')} subtitle={tr('inventory:hub.subtitle')} />
+
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <StatRow>
+          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={`${report.trackedCount} tracked items`} />
+          <StatTile
+            label={tr('inventory:hub.lowStock')}
+            value={String(report.lowCount)}
+            tone="warn"
+            icon="alert-outline"
+            caption={`${report.outCount} out of stock`}
+            onPress={() => router.push('/(app)/inventory/low-stock')}
+          />
+        </StatRow>
+
+        <View style={{ gap: t.spacing.md, marginTop: t.spacing.xl }}>
+          <SearchBar
+            value={query}
+            onChangeText={setQuery}
+            placeholder={tr('inventory:hub.searchPlaceholder')}
+            right={
+              <Pressable
+                onPress={() => router.push('/(app)/inventory/scan')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={tr('inventory:hub.scanBarcode')}
+              >
+                <MaterialCommunityIcons name="barcode-scan" size={19} color={t.c.primary} />
+              </Pressable>
+            }
+          />
+          <Segmented
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'low', label: tr('inventory:hub.low') },
+              { value: 'out', label: tr('inventory:hub.out') },
+              { value: 'services', label: 'Services' },
+            ]}
+            value={filter}
+            onChange={(v) => setFilter(v as Filter)}
+            size="sm"
+          />
+        </View>
+
+        <SectionHeader title={`${filtered.length} items`} action="Movements" onAction={() => router.push('/(app)/inventory/movements')} />
+
+        <Card padded={false}>
+          {filtered.length === 0 ? (
+            <EmptyState
+              illustration="no-items"
+              icon="package-variant"
+              title={tr('inventory:hub.nothingHere')}
+              message={items.length === 0 ? 'Add your first item to start tracking stock.' : 'No items match this filter.'}
+              actionLabel={items.length === 0 ? 'Add item' : undefined}
+              onAction={items.length === 0 ? () => router.push('/(app)/catalog/items/new') : undefined}
+              compact
+            />
+          ) : (
+            filtered.map((item, i) => {
+              const onHand = stock[item.id] ?? 0;
+              const low = item.trackInventory && isLowStock(item, onHand);
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => router.push(`/(app)/catalog/items/${item.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.name}, ${item.trackInventory ? `${onHand} in stock` : 'service'}`}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: t.spacing.md,
+                    padding: t.spacing.lg,
+                    borderBottomWidth: i < filtered.length - 1 ? 0.5 : 0,
+                    borderBottomColor: t.c.line,
+                    backgroundColor: pressed ? t.c.card2 : 'transparent',
+                  })}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: t.radius.sm,
+                      backgroundColor: item.trackInventory ? t.c.chip : t.c.mutedSoft,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={item.trackInventory ? 'package-variant-closed' : 'hammer-wrench'}
+                      size={19}
+                      color={item.trackInventory ? t.c.primary : t.c.muted}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text variant="body" weight="600" numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text variant="caption" tone="muted" numberOfLines={1}>
+                      {item.sku} · {formatMoney(item.salePrice)} / {item.unit}
+                    </Text>
+                  </View>
+
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    {item.trackInventory ? (
+                      <>
+                        <Text
+                          variant="body"
+                          weight="700"
+                          tone={onHand <= 0 ? 'bad' : low ? 'warn' : 'default'}
+                          style={{ fontVariant: ['tabular-nums'] }}
+                        >
+                          {formatQty(onHand)}
+                        </Text>
+                        {onHand <= 0 ? (
+                          <Badge label={tr('inventory:hub.out')} tone="danger" size="sm" />
+                        ) : low ? (
+                          <Badge label={tr('inventory:hub.low')} tone="warning" size="sm" />
+                        ) : (
+                          <Text variant="micro" tone="muted">
+                            {item.unit}
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <Badge label={tr('inventory:hub.service')} tone="neutral" size="sm" />
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })
+          )}
+        </Card>
+      </ScrollView>
+
+      <Fab icon="plus" onPress={() => setActionsOpen(true)} />
+
+      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('inventory:hub.actions')}>
+        {[
+          { label: 'Add item', icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
+          { label: 'Stock adjustment', icon: 'tune' as const, route: '/(app)/inventory/adjust' },
+          { label: 'Branch transfer', icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
+          { label: 'Set opening stock', icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
+          { label: tr('inventory:hub.scanBarcode'), icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
+          { label: 'Stock movements', icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
+        ].map((a) => (
+          <Pressable
+            key={a.label}
+            onPress={() => {
+              setActionsOpen(false);
+              router.push(a.route as never);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={a.label}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: t.spacing.md,
+              paddingVertical: t.spacing.md,
+              paddingHorizontal: t.spacing.lg,
+              backgroundColor: pressed ? t.c.card2 : 'transparent',
+            })}
+          >
+            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.primary} />
+            <Text variant="body" style={{ flex: 1 }}>
+              {a.label}
+            </Text>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+          </Pressable>
+        ))}
+      </Sheet>
+    </View>
+  );
+}

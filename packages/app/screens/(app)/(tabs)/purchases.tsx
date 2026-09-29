@@ -1,0 +1,171 @@
+import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { AppHeader } from '../../../components/AppHeader';
+import { SectionHeader } from '@esmart/ui/components/Screen';
+import { Card } from '@esmart/ui/components/Card';
+import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
+import { HubTiles } from '@esmart/ui/components/HubTiles';
+import { DocumentRow } from '@esmart/ui/components/DocumentRow';
+import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Fab } from '@esmart/ui/components/Fab';
+import { DonutChart } from '@esmart/ui/components/charts/DonutChart';
+import {
+  useBaseCurrency,
+  useDocuments,
+  useExpenseCategories,
+  useExpenses,
+  useParties,
+  usePayables,
+  usePayments,
+} from '../../../store/selectors';
+import { money, sum } from '@esmart/core/lib/money';
+import { inRange, resolveRange } from '@esmart/core/lib/date';
+
+export default function PurchasesTab() {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['purchases']);
+  const router = useRouter();
+
+  const baseCurrency = useBaseCurrency();
+  const bills = useDocuments('purchaseBill');
+  const orders = useDocuments('purchaseOrder');
+  const receipts = useDocuments('goodsReceipt');
+  const returns = useDocuments('purchaseReturn');
+  const expenses = useExpenses();
+  const categories = useExpenseCategories();
+  const payments = usePayments('paid');
+  const payables = usePayables();
+  const suppliers = useParties('supplier');
+
+  const month = resolveRange('thisMonth');
+
+  const monthPurchases = useMemo(
+    () =>
+      sum(
+        bills
+          .filter((d) => inRange(d.date, month) && !['draft', 'cancelled'].includes(d.status))
+          .map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
+        baseCurrency,
+      ),
+    [bills, month, baseCurrency],
+  );
+
+  const monthExpenses = useMemo(
+    () =>
+      sum(
+        expenses
+          .filter((e) => inRange(e.date, month))
+          .map((e) => money(Math.round(e.amount.minor * (e.exchangeRate || 1)), baseCurrency)),
+        baseCurrency,
+      ),
+    [expenses, month, baseCurrency],
+  );
+
+  const expenseSlices = useMemo(() => {
+    const map = new Map<string, number>();
+    expenses
+      .filter((e) => inRange(e.date, resolveRange('last90')))
+      .forEach((e) => {
+        map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + Math.round(e.amount.minor * (e.exchangeRate || 1)));
+      });
+    return Array.from(map.entries()).map(([id, minor]) => ({
+      label: categories.find((c) => c.id === id)?.name ?? 'Other',
+      value: money(minor, baseCurrency),
+    }));
+  }, [expenses, categories, baseCurrency]);
+
+  const recent = bills.filter((d) => d.status !== 'cancelled').slice(0, 6);
+  const nameOf = (id: string) => suppliers.find((s) => s.id === id)?.name ?? 'Unknown';
+
+  return (
+    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <AppHeader title={tr('purchases:hub.title')} subtitle={tr('purchases:hub.subtitle')} />
+
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <StatRow>
+          <StatTile
+            label={tr('purchases:hub.thisMonth')}
+            value={monthPurchases}
+            icon="cart-outline"
+            onPress={() => router.push('/(app)/purchases/bills')}
+          />
+          <StatTile
+            label={tr('purchases:hub.expenses')}
+            value={monthExpenses}
+            tone="warn"
+            icon="receipt-text-outline"
+            onPress={() => router.push('/(app)/expenses')}
+          />
+        </StatRow>
+
+        <View style={{ height: t.spacing.md }} />
+
+        <StatRow>
+          <StatTile
+            label={tr('purchases:hub.payable')}
+            value={payables.summary.total}
+            icon="file-clock-outline"
+            caption={`${payables.outstanding.length} open bills`}
+            onPress={() => router.push('/(app)/payables')}
+          />
+          <StatTile
+            label={tr('purchases:hub.overdue')}
+            value={payables.summary.overdue}
+            tone="bad"
+            icon="alert-circle-outline"
+            onPress={() => router.push('/(app)/payables')}
+          />
+        </StatRow>
+
+        <SectionHeader title={tr('purchases:hub.documents')} />
+        <HubTiles
+          tiles={[
+            { key: 'bills', label: 'Purchase bills', icon: 'file-document-outline', route: '/(app)/purchases/bills', count: bills.length },
+            { key: 'orders', label: 'Purchase orders', icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: orders.length },
+            { key: 'receipts', label: 'Goods receipts', icon: 'package-down', route: '/(app)/purchases/receipts', count: receipts.length },
+            { key: 'returns', label: 'Purchase returns', icon: 'package-up', route: '/(app)/purchases/returns', count: returns.length },
+            { key: 'expenses', label: tr('purchases:hub.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses', count: expenses.length },
+            { key: 'payments', label: 'Payments out', icon: 'cash-minus', route: '/(app)/payments/made', count: payments.length },
+          ]}
+        />
+
+        <SectionHeader title={tr('purchases:hub.whereMoneyGoes')} action="Report" onAction={() => router.push('/(app)/reports/expense-summary')} />
+        <Card>
+          <DonutChart slices={expenseSlices} centerLabel="Last 90 days" />
+        </Card>
+
+        <SectionHeader title={tr('purchases:hub.recentBills')} action="See all" onAction={() => router.push('/(app)/purchases/bills')} />
+        <Card padded={false}>
+          {recent.length === 0 ? (
+            <EmptyState
+              illustration="no-documents"
+              icon="file-document-outline"
+              title={tr('purchases:hub.noBills')}
+              actionLabel={tr('purchases:hub.recordBill')}
+              onAction={() => router.push('/(app)/purchases/bills/new')}
+              compact
+            />
+          ) : (
+            recent.map((d, i) => (
+              <DocumentRow
+                key={d.id}
+                document={d}
+                partyName={nameOf(d.partyId)}
+                divider={i < recent.length - 1}
+                onPress={() => router.push(`/(app)/purchases/bills/${d.id}`)}
+              />
+            ))
+          )}
+        </Card>
+      </ScrollView>
+
+      <Fab icon="plus" label={tr('purchases:hub.bill')} onPress={() => router.push('/(app)/purchases/bills/new')} />
+    </View>
+  );
+}
