@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { schema } from '@esmart/db';
-import { MUMBAI, ownerWithCompany, setupApi } from './helpers';
+import { MUMBAI, createCompany, ownerWithCompany, setupApi } from './helpers';
 
 const t = setupApi();
 
@@ -95,6 +95,17 @@ describe('sync push', () => {
 });
 
 describe('sync pull', () => {
+  it('keeps one entity changed in two companies as two changes', async () => {
+    const { token, c } = await ownerWithCompany(t);
+    const second = await createCompany(t, token, { name: 'Second Co' });
+    for (const base of [c, `/companies/${second.id}`]) {
+      expect((await t.post(`${base}/integrations/int_sms/connect`, { config: { senderId: 'ELIXIR' } }, { token })).status).toBe(200);
+    }
+    const pull = await t.get('/sync/pull', { token });
+    const sms = pull.body.changes.filter((ch: { entityId: string }) => ch.entityId === 'int_sms');
+    expect(sms.map((ch: { companyId: string }) => ch.companyId).sort()).toEqual([c.split('/')[2], second.id].sort());
+  });
+
   it('returns a snapshot, then changes since the cursor with each GET representation', async () => {
     const { token, c, company } = await ownerWithCompany(t);
     const a = await t.post(`${c}/parties`, customer('A'), { token });
@@ -107,7 +118,7 @@ describe('sync pull', () => {
     const byId = new Map(snap.body.changes.map((ch: { entityId: string }) => [ch.entityId, ch]));
     // B was deleted: a snapshot leaves it out. A appears once, at its latest version.
     expect(byId.has(b.body.id)).toBe(false);
-    expect(byId.get(a.body.id)).toEqual({ entityType: 'party', entityId: a.body.id, op: 'upsert', version: 2, data: (await t.get(`${c}/parties/${a.body.id}`, { token })).body });
+    expect(byId.get(a.body.id)).toEqual({ companyId: company.id, entityType: 'party', entityId: a.body.id, op: 'upsert', version: 2, data: (await t.get(`${c}/parties/${a.body.id}`, { token })).body });
     expect((byId.get(company.id) as { data: { name: string } }).data.name).toBe('Vertex Traders');
     // Branches have no single GET; their data comes from the list.
     const branchChange = snap.body.changes.find((ch: { entityType: string }) => ch.entityType === 'branch');

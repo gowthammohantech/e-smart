@@ -7323,6 +7323,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         changes?: {
+                            /** @description The company the change belongs to. The same entity id can change in more than one company (an integration, a user). */
+                            companyId?: string;
                             /** @example document */
                             entityType?: string;
                             entityId?: string;

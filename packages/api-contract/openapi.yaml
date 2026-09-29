@@ -2731,6 +2731,7 @@ paths:
                     items:
                       type: object
                       properties:
+                        companyId: { type: string, description: 'The company the change belongs to. The same entity id can change in more than one company (an integration, a user).' }
                         entityType: { type: string, example: document }
                         entityId: { type: string }
                         op: { type: string, enum: [upsert, delete] }

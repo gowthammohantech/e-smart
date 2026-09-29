@@ -95,7 +95,7 @@ async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>) {
  */
 export async function fetchEntities(server: FastifyInstance, authorization: string | undefined, wants: Want[]): Promise<Map<string, unknown>> {
   const out = new Map<string, unknown>();
-  const keyOf = (w: { entityType: string; entityId: string }) => `${w.entityType}:${w.entityId}`;
+  const keyOf = (w: { companyId: string; entityType: string; entityId: string }) => `${w.companyId}:${w.entityType}:${w.entityId}`;
   const lists = new Map<string, Promise<Map<string, unknown>>>();
 
   const loadList = (url: string) => {

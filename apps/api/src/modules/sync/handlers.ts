@@ -183,10 +183,10 @@ export const syncHandlers = defineHandlers({
       const [{ top }] = await ctx.db.select({ top: max(CL.seq) }).from(CL).where(inArray(CL.companyId, companies));
       const upTo = Number(top ?? 0);
       const latest = ctx.db
-        .selectDistinctOn([CL.entityType, CL.entityId], { seq: CL.seq, companyId: CL.companyId, entityType: CL.entityType, entityId: CL.entityId, op: CL.op, version: CL.version })
+        .selectDistinctOn([CL.companyId, CL.entityType, CL.entityId], { seq: CL.seq, companyId: CL.companyId, entityType: CL.entityType, entityId: CL.entityId, op: CL.op, version: CL.version })
         .from(CL)
         .where(and(inArray(CL.companyId, companies), lte(CL.seq, upTo)))
-        .orderBy(CL.entityType, CL.entityId, sql`${CL.seq} desc`)
+        .orderBy(CL.companyId, CL.entityType, CL.entityId, sql`${CL.seq} desc`)
         .as('latest');
       const found = await ctx.db
         .select()
@@ -209,7 +209,7 @@ export const syncHandlers = defineHandlers({
       cursor = page.length ? page[page.length - 1].seq : after;
       const last = new Map<string, Change>();
       for (const r of page) {
-        const key = `${r.entityType}:${r.entityId}`;
+        const key = `${r.companyId}:${r.entityType}:${r.entityId}`;
         last.delete(key);
         last.set(key, r);
       }
@@ -221,11 +221,12 @@ export const syncHandlers = defineHandlers({
     return {
       changes: rows.map((r) =>
         compact({
+          companyId: r.companyId,
           entityType: r.entityType,
           entityId: r.entityId,
           op: r.op === 'delete' ? ('delete' as const) : ('upsert' as const),
           version: r.version,
-          data: r.op === 'delete' ? undefined : (data.get(`${r.entityType}:${r.entityId}`) as Json | undefined),
+          data: r.op === 'delete' ? undefined : (data.get(`${r.companyId}:${r.entityType}:${r.entityId}`) as Json | undefined),
         }),
       ),
       cursor: String(cursor),
