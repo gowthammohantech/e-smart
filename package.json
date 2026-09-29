@@ -16,9 +16,9 @@
     "api": "npm run dev -w @esmart/api"
   },
   "devDependencies": {
-    "turbo": "^2.11.5",
+    "@esmart/eslint-config": "*",
     "eslint": "^9.39.5",
-    "@esmart/eslint-config": "*"
+    "turbo": "^2.11.5"
   },
   "packageManager": "npm@10.9.7",
   "engines": {

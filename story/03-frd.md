@@ -820,9 +820,9 @@ rejections carry `issues[]` in the same shape as `ComplianceIssue`.
 **FR-23.8** A module outside the plan returns `403 PLAN_UPGRADE_REQUIRED`.
 Operations are annotated `x-plan-module` and `x-roles`.
 
-**FR-23.9** The contract is `docs/api/openapi.yaml`: 111 paths, 152 operations,
+**FR-23.9** The contract is `packages/api-contract/openapi.yaml`: 111 paths, 152 operations,
 2 inbound webhooks. Entity schemas mirror `src/types/index.ts` field for field.
-The persistent schema is `docs/database/schema.sql`, 63 tables.
+The persistent schema is `packages/db/migrations/0000_baseline.sql`, 63 tables.
 
 ## 24. Test obligations
 

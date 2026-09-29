@@ -301,7 +301,7 @@ against. Exact arithmetic and state rules are in the FRD; this section defines
 - **State:** Zustand, persisted to AsyncStorage; reads through company-scoped selectors.
 - **Domain:** pure TypeScript in `src/domain`, no React, fully testable without rendering.
 - **Charts:** hand-drawn `react-native-svg`. No chart library.
-- **Server (to build):** contract already defined in `docs/api/openapi.yaml` — 111 paths, 152 operations, 2 webhooks; schema in `docs/database/schema.sql` (63 tables).
+- **Server (to build):** contract already defined in `packages/api-contract/openapi.yaml` — 111 paths, 152 operations, 2 webhooks; schema in `packages/db/migrations/0000_baseline.sql` (63 tables).
 - **iOS App Intents:** a Create Invoice intent, so Siri and Shortcuts can start an invoice for a known customer and item.
 
 ## 8. Release plan

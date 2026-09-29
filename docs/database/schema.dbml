@@ -3,7 +3,7 @@
 // Format: DBML. Paste into https://dbdiagram.io or run `npx @dbml/cli dbml2sql`.
 //
 // Sources: entity types in src/types/index.ts and the API contract in
-// docs/api/openapi.yaml. Target engine: PostgreSQL 15+.
+// packages/api-contract/openapi.yaml. Target engine: PostgreSQL 15+.
 //
 // Conventions
 // - IDs are prefixed strings minted by the server (cmp_…, doc_…), varchar(40).

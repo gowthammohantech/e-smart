@@ -1,3 +1,9 @@
+-- Baseline schema. This was docs/database/schema.sql, and it stays the
+-- source of truth for everything Drizzle cannot express: DEFERRABLE foreign
+-- keys (accounts and users reference each other) and column comments.
+-- src/schema.ts mirrors it, and later migrations are generated from diffs of
+-- that file against migrations/meta.
+
 CREATE TYPE "plan_tier" AS ENUM (
   'free',
   'basic',

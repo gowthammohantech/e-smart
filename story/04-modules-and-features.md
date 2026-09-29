@@ -446,7 +446,7 @@ prices and gating only, never a sentence.
 
 | Area | Today | What removes it |
 |---|---|---|
-| Server | Zustand + AsyncStorage | `docs/api/openapi.yaml`, `docs/database/schema.sql` |
+| Server | Zustand + AsyncStorage | `packages/api-contract/openapi.yaml`, `packages/db/migrations/0000_baseline.sql` |
 | Portals | In-process adapter with deterministic responses | GSP/ASP integration behind the same adapter interface |
 | OCR | Fixed extraction | Document AI / Textract / vision model |
 | Assistant | Rule-based over local store | A model with the same read-only, confirm-before-acting contract |

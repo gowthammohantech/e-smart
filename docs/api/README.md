@@ -5,15 +5,16 @@ Zustand store that is persisted to AsyncStorage (`src/store/appStore.ts`), and
 the portal calls (IRP, e-way bill, OCR) are simulated in-process. This folder
 defines the backend that replaces all of that, so the app can run fully online.
 
-- **[openapi.yaml](openapi.yaml)**: the contract, in OpenAPI 3.1. It has 111
+- **[openapi.yaml](../../packages/api-contract/openapi.yaml)**: the contract, in OpenAPI 3.1. It has 111
   paths, 152 operations and 2 inbound webhooks, and it passes `redocly lint`.
   Entity schemas mirror `src/types/index.ts` field for field.
 - This README lists the APIs, the third-party services behind them, and the
   order to build them in.
 
-View it with `npx @redocly/cli preview-docs docs/api/openapi.yaml`, or paste
-the file into <https://editor.swagger.io>. Generate a typed client with
-`npx openapi-typescript docs/api/openapi.yaml -o src/api/schema.d.ts`.
+View it with `npx @redocly/cli preview-docs packages/api-contract/openapi.yaml`, or paste
+the file into <https://editor.swagger.io>. Its TypeScript types are generated into
+`packages/api-contract/src/schema.d.ts` with `npm run generate -w @esmart/api-contract`,
+and `@esmart/api-client` wraps them in a typed fetch client.
 
 ## Contract rules, in brief
 

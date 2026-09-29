@@ -40,7 +40,7 @@ UX documents are the day-to-day references for anyone building a screen.
 | FRD §18 Receivables | `src/domain/receivables.ts` |
 | PRD packaging | `src/domain/plan.ts` |
 | Design system | `src/theme/tokens.ts`, `src/theme/chartColors.ts`, `src/components/**` |
-| Backend contract | `docs/api/openapi.yaml`, `docs/database/schema.sql` |
+| Backend contract | `packages/api-contract/openapi.yaml`, `packages/db/migrations/0000_baseline.sql` |
 
 ## Status
 

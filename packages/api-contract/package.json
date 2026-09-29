@@ -1,0 +1,27 @@
+{
+  "name": "@esmart/api-contract",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The OpenAPI contract between the apps and the API, and the TypeScript types generated from it.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./spec": "./src/spec.ts",
+    "./openapi.yaml": "./openapi.yaml"
+  },
+  "scripts": {
+    "generate": "npx -y openapi-typescript@7.13.0 openapi.yaml -o src/schema.d.ts --redocly redocly.yaml",
+    "typecheck": "tsc --noEmit",
+    "lint": "redocly lint openapi.yaml --format=stylish && eslint ."
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@esmart/eslint-config": "*",
+    "@esmart/tsconfig": "*",
+    "@redocly/cli": "^2.55.0",
+    "@types/node": "^22",
+    "eslint": "^9.39.5",
+    "typescript": "~6.0.3"
+  }
+}
