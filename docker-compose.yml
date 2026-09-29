@@ -1,0 +1,35 @@
+# Local services for the API. `docker compose up -d`, then
+# `npm run db:migrate -w @esmart/db` and `npm run dev -w @esmart/api`.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: esmart
+      POSTGRES_PASSWORD: esmart
+      POSTGRES_DB: esmart
+    ports: ['5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U esmart']
+      interval: 5s
+      retries: 10
+
+  # S3-compatible storage. Set STORAGE_PROVIDER=s3 S3_ENDPOINT=http://localhost:9000
+  # S3_FORCE_PATH_STYLE=true AWS_ACCESS_KEY_ID=esmart AWS_SECRET_ACCESS_KEY=esmart-secret.
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: esmart
+      MINIO_ROOT_PASSWORD: esmart-secret
+    ports: ['9000:9000', '9001:9001']
+    volumes: ['miniodata:/data']
+
+  # Catches outgoing email in development: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ['1025:1025', '8025:8025']
+
+volumes:
+  pgdata:
+  miniodata:

@@ -1459,7 +1459,7 @@ export const auditEvents = pgTable("audit_events", {
 ]);
 
 export const changeLog = pgTable("change_log", {
-	seq: bigserial({ mode: "bigint" }).primaryKey().notNull(),
+	seq: bigserial({ mode: "number" }).primaryKey().notNull(),
 	companyId: varchar("company_id", { length: 40 }).notNull(),
 	entityType: varchar("entity_type", { length: 30 }).notNull(),
 	entityId: varchar("entity_id", { length: 40 }).notNull(),
