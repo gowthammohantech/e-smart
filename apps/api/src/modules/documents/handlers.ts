@@ -12,6 +12,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { notify } from '../../lib/notify';
 import { money } from '../../lib/wire';
+import { afterFinalize } from '../compliance/handlers';
 import { partyToWire } from '../parties/wire';
 import { paymentsToWire } from '../payments/wire';
 import {
@@ -78,7 +79,7 @@ async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], sta
   const prepared = await prepareDocument(ctx.db, ctx.company, f, lines, { snapshotRates: extra.snapshotRates ?? true });
   if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot create documents in this branch');
   const draftStatus = requestedStatus(f.kind, 'draft') as DocStatus;
-  return ctx.db.transaction(async (tx) => {
+  const row = await ctx.db.transaction(async (tx) => {
     const [created] = await tx
       .insert(D)
       .values({ id: newId('doc'), companyId: ctx.company.id, number: draftNumber(f.kind), status: draftStatus, createdBy: ctx.user.id, ...prepared.columns, createdAt: ctx.now, updatedAt: ctx.now })
@@ -91,6 +92,7 @@ async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], sta
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'finalized', entityType: 'document', entityId: done.id, entityLabel: done.number, version: done.version });
     return done;
   });
+  return afterFinalize(ctx.db, ctx.deps, row, ctx.user);
 }
 
 /**
@@ -98,7 +100,7 @@ async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], sta
  * categories) and finalises it to `target`. Totals are always the server's.
  */
 async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus): Promise<DocRow> {
-  return ctx.db.transaction(async (tx) => {
+  const finalized = await ctx.db.transaction(async (tx) => {
     const row = await findDocument(ctx, tx, id, { lock: true });
     checkIfMatch(ctx.req, row.version);
     if (isFinalized(row.status) || row.status === 'cancelled') throw conflict('DOCUMENT_ALREADY_FINAL', `${row.number} is already ${row.status}`);
@@ -110,6 +112,8 @@ async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus): Promis
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'finalized', entityType: 'document', entityId: done.id, entityLabel: done.number, version: done.version, after: { status: done.status, number: done.number } });
     return done;
   });
+  // Outside the transaction: an IRN the company auto-generates never rolls back the number.
+  return afterFinalize(ctx.db, ctx.deps, finalized, ctx.user);
 }
 
 /**
