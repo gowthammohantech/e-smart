@@ -16,24 +16,7 @@ import { tabQuestion } from '../../../features/lixi/brain';
 import { TabBar } from '@esmart/ui/components/TabBar';
 import { TabSwipe } from '../../../components/TabSwipe';
 import { countLabel } from '@esmart/core/lib/format';
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
-
-/**
- * Tab names are resolved at render, not stored here, so the bar follows a
- * language switch. Labels are held to nine graphemes by the catalogue test:
- * seven can show at once at fontSize 10, and `adjustsFontSizeToFit` is iOS-only.
- */
-const TABS: { name: string; icon: IconName; activeIcon: IconName }[] = [
-  { name: 'index', icon: 'home-outline', activeIcon: 'home' },
-  { name: 'sales', icon: 'trending-up', activeIcon: 'trending-up' },
-  { name: 'purchases', icon: 'cart-outline', activeIcon: 'cart' },
-  { name: 'inventory', icon: 'package-variant-closed', activeIcon: 'package-variant' },
-  { name: 'gst', icon: 'shield-check-outline', activeIcon: 'shield-check' },
-  { name: 'contacts', icon: 'account-group-outline', activeIcon: 'account-group' },
-  { name: 'reports', icon: 'chart-box-outline', activeIcon: 'chart-box' },
-  { name: 'more', icon: 'dots-horizontal-circle-outline', activeIcon: 'dots-horizontal-circle' },
-];
+import { TABS } from '../../../navigation/tabs';
 
 /** Which tabs each plan shows, in bar order. The rest stay routable but unlisted. */
 const VISIBLE = {

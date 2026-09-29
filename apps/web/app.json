@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Elixir Books Smart",
+    "slug": "elixir-books-smart-web",
+    "version": "1.0.0",
+    "scheme": "elixirsmart",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["web"],
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "Elixir Books Smart",
+      "shortName": "Elixir Books",
+      "themeColor": "#0E121A"
+    },
+    "plugins": ["expo-router", "expo-localization"],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
