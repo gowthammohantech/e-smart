@@ -13,13 +13,13 @@ import { Sheet } from '@/components/Sheet';
 import { AmountField, Segmented, SwitchField, TextField } from '@/components/Field';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { PaymentAccount } from '@/types';
-import { accountBalances } from '@/domain/paymentAccounts';
+import { PaymentAccount } from '@esmart/core/types';
+import { accountBalances } from '@esmart/core/domain/paymentAccounts';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBaseCurrency, useExpenses, usePaymentAccounts, usePayments } from '@/store/selectors';
-import { formatMoney } from '@/lib/format';
-import { fromMajor, money, toMajor } from '@/lib/money';
-import { uid } from '@/lib/id';
+import { formatMoney } from '@esmart/core/lib/format';
+import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
+import { uid } from '@esmart/core/lib/id';
 
 export default function AccountSettings() {
   const t = useTheme();

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { PlanInfo } from '@/domain/plan';
-import type { Translate } from '@/i18n/labels';
+import type { PlanInfo } from '@esmart/core/domain/plan';
+import type { Translate } from '@esmart/core/labels';
 
 /**
  * The words for a plan tier. `src/domain/plan.ts` keeps the prices, the slugs

@@ -23,7 +23,7 @@ import {
   useUnreadCount,
 } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
-import { countLabel } from '@/lib/format';
+import { countLabel } from '@esmart/core/lib/format';
 
 type Entry = {
   label: string;

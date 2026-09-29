@@ -11,7 +11,7 @@ import { TextField } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
 import { Illustration } from '@/components/Illustration';
 import { useItems, useStockLevels } from '@/store/selectors';
-import { formatMoney, formatQty } from '@/lib/format';
+import { formatMoney, formatQty } from '@esmart/core/lib/format';
 
 /**
  * Barcode entry. A real build opens the camera through expo-camera; the

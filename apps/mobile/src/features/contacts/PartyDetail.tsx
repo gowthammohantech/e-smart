@@ -18,12 +18,12 @@ import { Sheet } from '@/components/Sheet';
 import { useToast } from '@/components/Toast';
 import { StatRow, StatTile } from '@/components/StatTile';
 
-import { Party } from '@/types';
-import { buildOutstanding } from '@/domain/receivables';
-import { formatMoney } from '@/lib/format';
-import { formatDate } from '@/lib/date';
-import { money, sum, zero } from '@/lib/money';
-import { paymentMethodLabel } from '@/i18n/labels';
+import { Party } from '@esmart/core/types';
+import { buildOutstanding } from '@esmart/core/domain/receivables';
+import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
+import { money, sum, zero } from '@esmart/core/lib/money';
+import { paymentMethodLabel } from '@esmart/core/labels';
 
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, usePartyHistory, usePayments } from '@/store/selectors';

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { keyLabel } from '@/i18n/labels';
+import { keyLabel } from '@esmart/core/labels';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,17 +10,17 @@ import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { QrCode } from '@/components/QrCode';
-import { MIN_READABLE_QR_SIZE } from '@/lib/qr';
-import { BusinessDocument } from '@/types';
+import { MIN_READABLE_QR_SIZE } from '@esmart/core/lib/qr';
+import { BusinessDocument } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import {
   useActiveCompany,
   useActiveEwayBill,
   useComplianceSettings,
 } from '@/store/selectors';
-import { canCancelEInvoice, isEInvoiceApplicable } from '@/domain/eInvoice';
-import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@/domain/ewayBill';
-import { formatDate, nowISO } from '@/lib/date';
+import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
+import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
+import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { EInvoiceSheet } from './EInvoiceSheet';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 

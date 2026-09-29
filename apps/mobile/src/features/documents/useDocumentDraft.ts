@@ -7,12 +7,12 @@ import {
   Item,
   Party,
   TaxCategory,
-} from '@/types';
-import { Money, fromMajor, money, zero } from '@/lib/money';
-import { addDaysISO, today } from '@/lib/date';
-import { uid } from '@/lib/id';
-import { calculateDocument } from '@/domain/lineCalc';
-import { TaxContext } from '@/domain/taxEngine';
+} from '@esmart/core/types';
+import { Money, fromMajor, money, zero } from '@esmart/core/lib/money';
+import { addDaysISO, today } from '@esmart/core/lib/date';
+import { uid } from '@esmart/core/lib/id';
+import { calculateDocument } from '@esmart/core/domain/lineCalc';
+import { TaxContext } from '@esmart/core/domain/taxEngine';
 
 export type DraftState = {
   partyId: string | null;

@@ -5,7 +5,7 @@ import { AuthShell } from '@/components/AuthShell';
 import { TextField } from '@/components/Field';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
-import { Errors, hasErrors, required, validEmail } from '@/lib/validators';
+import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
 
 export default function ForgotPassword() {
   const { t: tr } = useTranslation(['auth', 'errors']);

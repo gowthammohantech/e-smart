@@ -1,0 +1,29 @@
+{
+  "name": "@esmart/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure business logic shared by the apps and the API: money, tax, totals, numbering, ledgers, compliance, seed data.",
+  "exports": {
+    "./types": "./src/types/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@esmart/i18n": "*",
+    "date-fns": "^4.4.0"
+  },
+  "devDependencies": {
+    "@esmart/eslint-config": "*",
+    "@esmart/tsconfig": "*",
+    "@swc/core": "^1.16.12",
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30.0.0",
+    "eslint": "^9.39.5",
+    "jest": "^30.5.1",
+    "typescript": "~6.0.3"
+  }
+}

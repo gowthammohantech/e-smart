@@ -4,8 +4,8 @@ import { Pressable, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
-import { Money } from '@/lib/money';
-import { formatCompactMoney, formatMoney } from '@/lib/format';
+import { Money } from '@esmart/core/lib/money';
+import { formatCompactMoney, formatMoney } from '@esmart/core/lib/format';
 
 export type BarDatum = { label: string; value: Money; highlight?: boolean };
 

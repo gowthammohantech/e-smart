@@ -41,13 +41,13 @@ import {
   TransportMode,
   User,
   VehicleType,
-} from '@/types';
-import { Money, zero } from '@/lib/money';
-import { nowISO, today } from '@/lib/date';
-import { uid } from '@/lib/id';
-import { calculateDocument } from '@/domain/lineCalc';
-import { formatNumber } from '@/domain/numbering';
-import { initialStatus, isFinalized } from '@/domain/documentStates';
+} from '@esmart/core/types';
+import { Money, zero } from '@esmart/core/lib/money';
+import { nowISO, today } from '@esmart/core/lib/date';
+import { uid } from '@esmart/core/lib/id';
+import { calculateDocument } from '@esmart/core/domain/lineCalc';
+import { formatNumber } from '@esmart/core/domain/numbering';
+import { initialStatus, isFinalized } from '@esmart/core/domain/documentStates';
 import {
   EInvoiceContext,
   blockingIssues,
@@ -56,7 +56,7 @@ import {
   isEInvoiceApplicable,
   mainHsnCodeOf,
   validateEInvoice,
-} from '@/domain/eInvoice';
+} from '@esmart/core/domain/eInvoice';
 import {
   buildEwbPayload,
   canCancelEwayBill,
@@ -66,7 +66,7 @@ import {
   subSupplyTypeFor,
   validatePartA,
   validatePartB,
-} from '@/domain/ewayBill';
+} from '@esmart/core/domain/ewayBill';
 import {
   IrpSimulation,
   cancelEwayBillAtPortal,
@@ -74,13 +74,13 @@ import {
   extendEwayBillAtPortal,
   submitEwayBill,
   submitInvoice,
-} from '@/domain/irpAdapter';
-import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@/data/masters';
-import { isValidGstin } from '@/domain/gstin';
-import { allocateAdvances, statusForOutstanding } from '@/domain/receivables';
-import { accountFitsMethod } from '@/domain/paymentAccounts';
-import { applyProfileLocks } from '@/domain/companyLock';
-import { buildTaxContext } from '@/domain/taxEngine';
+} from '@esmart/core/domain/irpAdapter';
+import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
+import { isValidGstin } from '@esmart/core/domain/gstin';
+import { allocateAdvances, statusForOutstanding } from '@esmart/core/domain/receivables';
+import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
+import { applyProfileLocks } from '@esmart/core/domain/companyLock';
+import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import {
   ACCOUNT_ID,
   CURRENT_USER_ID,
@@ -99,7 +99,7 @@ import {
   seedTaxCategories,
   seedTransporters,
   seedUsers,
-} from '@/data/seed';
+} from '@esmart/core/data/seed';
 import {
   seedAttachments,
   seedAudit,
@@ -110,7 +110,7 @@ import {
   seedPayments,
   seedStockMovements,
   seedSyncQueue,
-} from '@/data/seedTransactions';
+} from '@esmart/core/data/seedTransactions';
 
 export type AppData = {
   accountId: string;

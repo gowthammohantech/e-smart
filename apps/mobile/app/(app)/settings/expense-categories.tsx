@@ -12,12 +12,12 @@ import { TextField } from '@/components/Field';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { Text } from '@/components/Text';
-import { ExpenseCategory } from '@/types';
+import { ExpenseCategory } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBaseCurrency, useExpenseCategories, useExpenses } from '@/store/selectors';
-import { formatMoney } from '@/lib/format';
-import { money } from '@/lib/money';
-import { uid } from '@/lib/id';
+import { formatMoney } from '@esmart/core/lib/format';
+import { money } from '@esmart/core/lib/money';
+import { uid } from '@esmart/core/lib/id';
 
 export default function ExpenseCategorySettings() {
   const t = useTheme();

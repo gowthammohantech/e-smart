@@ -15,7 +15,7 @@ import { openLixi } from '@/features/lixi/open';
 import { tabQuestion } from '@/features/lixi/brain';
 import { TabBar } from '@/components/TabBar';
 import { TabSwipe } from '@/components/TabSwipe';
-import { countLabel } from '@/lib/format';
+import { countLabel } from '@esmart/core/lib/format';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 

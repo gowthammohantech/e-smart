@@ -4,7 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
-import type { Translate } from '@/i18n/labels';
+import type { Translate } from '@esmart/core/labels';
 import { Text } from './Text';
 import { useCanOpen } from '@/store/selectors';
 

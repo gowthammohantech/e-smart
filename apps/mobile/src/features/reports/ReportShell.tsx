@@ -10,10 +10,10 @@ import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@/lib/date';
-import { dateRangeLabel } from '@/i18n/labels';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
+import { dateRangeLabel } from '@esmart/core/labels';
 import { useActiveCompany, useBranches, useParties } from '@/store/selectors';
-import { ReportFilters } from '@/domain/reports';
+import { ReportFilters } from '@esmart/core/domain/reports';
 
 export type ReportScope = {
   filters: ReportFilters;

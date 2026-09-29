@@ -8,8 +8,8 @@ import { SwitchField, TextField } from '@/components/Field';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
-import { financialYearOf, today } from '@/lib/date';
-import { sanitizePrefix } from '@/lib/validators';
+import { financialYearOf, today } from '@esmart/core/lib/date';
+import { sanitizePrefix } from '@esmart/core/lib/validators';
 
 export default function NumberingStep() {
   const t = useTheme();

@@ -21,8 +21,8 @@ import {
   usePayables,
   usePayments,
 } from '@/store/selectors';
-import { money, sum } from '@/lib/money';
-import { inRange, resolveRange } from '@/lib/date';
+import { money, sum } from '@esmart/core/lib/money';
+import { inRange, resolveRange } from '@esmart/core/lib/date';
 
 export default function PurchasesTab() {
   const t = useTheme();

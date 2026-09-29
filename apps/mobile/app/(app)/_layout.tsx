@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
-import { hasModule, moduleForPath } from '@/domain/plan';
+import { hasModule, moduleForPath } from '@esmart/core/domain/plan';
 import { usePlan } from '@/store/selectors';
 import { useIntentEntitySync } from '@/features/intents/useIntentEntitySync';
 import { useIntentHandoff } from '@/features/intents/useIntentHandoff';

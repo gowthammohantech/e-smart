@@ -13,8 +13,8 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useBranches, useItems, useStockLevels } from '@/store/selectors';
-import { formatQty } from '@/lib/format';
-import { today } from '@/lib/date';
+import { formatQty } from '@esmart/core/lib/format';
+import { today } from '@esmart/core/lib/date';
 
 export default function StockAdjust() {
   const t = useTheme();

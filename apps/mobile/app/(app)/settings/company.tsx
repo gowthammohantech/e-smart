@@ -12,15 +12,15 @@ import { CityField } from '@/components/pickers/CityField';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useDocuments } from '@/store/selectors';
-import { profileLocks } from '@/domain/companyLock';
-import { isFinalized } from '@/domain/documentStates';
+import { profileLocks } from '@esmart/core/domain/companyLock';
+import { isFinalized } from '@esmart/core/domain/documentStates';
 import { DateField } from '@/components/pickers/DateField';
 import { Card } from '@/components/Card';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@/data/masters';
-import { citiesForState } from '@/data/cities';
-import { CURRENCIES } from '@/lib/currencies';
-import { Errors, hasErrors, required, validEmail, validGstin } from '@/lib/validators';
+import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
+import { citiesForState } from '@esmart/core/data/cities';
+import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { Errors, hasErrors, required, validEmail, validGstin } from '@esmart/core/lib/validators';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 

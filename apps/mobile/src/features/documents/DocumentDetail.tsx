@@ -19,14 +19,14 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 
-import { BusinessDocument, DocStatus, DocumentKind } from '@/types';
-import { STATUS_TONE, isFinalized, nextStatuses } from '@/domain/documentStates';
-import { documentKindLabel, statusLabel } from '@/i18n/labels';
-import { outstandingOf } from '@/domain/receivables';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { daysBetween, formatDate, today } from '@/lib/date';
-import { money } from '@/lib/money';
-import { INDIAN_STATES } from '@/data/masters';
+import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
+import { STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { documentKindLabel, statusLabel } from '@esmart/core/labels';
+import { outstandingOf } from '@esmart/core/domain/receivables';
+import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
+import { money } from '@esmart/core/lib/money';
+import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from './documentHtml';
 
 import { useAppStore } from '@/store/appStore';
@@ -42,8 +42,8 @@ import {
 import { detailRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '@/features/compliance/ComplianceCard';
 import { EInvoiceSheet } from '@/features/compliance/EInvoiceSheet';
-import { canCancelEInvoice, isEInvoiceApplicable } from '@/domain/eInvoice';
-import { isEwayBillRequired } from '@/domain/ewayBill';
+import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
+import { isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();

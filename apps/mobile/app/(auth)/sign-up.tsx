@@ -8,7 +8,7 @@ import { TextField, SwitchField } from '@/components/Field';
 import { Button } from '@/components/Button';
 import { Text } from '@/components/Text';
 import { useAppStore } from '@/store/appStore';
-import { Errors, hasErrors, minLength, required, validEmail, validPhone } from '@/lib/validators';
+import { Errors, hasErrors, minLength, required, validEmail, validPhone } from '@esmart/core/lib/validators';
 
 export default function SignUp() {
   const t = useTheme();

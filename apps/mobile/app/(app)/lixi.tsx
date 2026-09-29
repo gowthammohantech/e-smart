@@ -35,9 +35,9 @@ import {
   useReceivables,
   useStockLevels,
 } from '@/store/selectors';
-import { summarizeTax } from '@/domain/reports';
-import { isLowStock } from '@/domain/stockLedger';
-import { resolveRange } from '@/lib/date';
+import { summarizeTax } from '@esmart/core/domain/reports';
+import { isLowStock } from '@esmart/core/domain/stockLedger';
+import { resolveRange } from '@esmart/core/lib/date';
 
 type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply };
 

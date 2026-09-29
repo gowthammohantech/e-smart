@@ -3,8 +3,8 @@ import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
 import { Card } from '@/components/Card';
-import { Money } from '@/lib/money';
-import { formatMoney } from '@/lib/format';
+import { Money } from '@esmart/core/lib/money';
+import { formatMoney } from '@esmart/core/lib/format';
 
 export function KeyFigures({ rows }: { rows: { label: string; value: string; tone?: 'good' | 'bad' | 'warn' }[] }) {
   const t = useTheme();

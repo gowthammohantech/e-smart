@@ -16,14 +16,14 @@ import { CityField } from '@/components/pickers/CityField';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { Branch } from '@/types';
+import { Branch } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBranches, useDocuments } from '@/store/selectors';
-import { uid } from '@/lib/id';
-import { Errors, hasErrors, validGstin } from '@/lib/validators';
-import { normalizeGstin } from '@/domain/gstin';
-import { INDIAN_STATES, stateName } from '@/data/masters';
-import { citiesForState } from '@/data/cities';
+import { uid } from '@esmart/core/lib/id';
+import { Errors, hasErrors, validGstin } from '@esmart/core/lib/validators';
+import { normalizeGstin } from '@esmart/core/domain/gstin';
+import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
+import { citiesForState } from '@esmart/core/data/cities';
 
 export default function BranchSettings() {
   const t = useTheme();

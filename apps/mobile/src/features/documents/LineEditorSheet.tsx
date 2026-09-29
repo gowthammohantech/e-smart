@@ -7,13 +7,13 @@ import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { AmountField, PickerField, Segmented, SwitchField, TextField , QuantityStepper } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
-import { DocumentLine, TaxCategory } from '@/types';
-import { formatMoney, formatPercent } from '@/lib/format';
-import { fromMajor, toMajor } from '@/lib/money';
-import { calculateLine } from '@/domain/lineCalc';
-import { validHsn } from '@/lib/validators';
-import { TaxContext } from '@/domain/taxEngine';
-import { unitDecimals, unitsFor } from '@/data/masters';
+import { DocumentLine, TaxCategory } from '@esmart/core/types';
+import { formatMoney, formatPercent } from '@esmart/core/lib/format';
+import { fromMajor, toMajor } from '@esmart/core/lib/money';
+import { calculateLine } from '@esmart/core/domain/lineCalc';
+import { validHsn } from '@esmart/core/lib/validators';
+import { TaxContext } from '@esmart/core/domain/taxEngine';
+import { unitDecimals, unitsFor } from '@esmart/core/data/masters';
 import { useItems } from '@/store/selectors';
 
 type EditorProps = {

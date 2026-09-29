@@ -10,16 +10,16 @@ import { AmountField, PickerField, SwitchField, TextField } from '@/components/F
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { CityField } from '@/components/pickers/CityField';
 import { useToast } from '@/components/Toast';
-import { GstRegistrationType, Party, PartyKind } from '@/types';
-import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@/data/masters';
-import { OTHER_COUNTRY_CODE } from '@/domain/stateCodes';
-import { citiesForState } from '@/data/cities';
-import { GST_REGISTRATION_LABELS } from '@/domain/eInvoice';
-import { CURRENCIES } from '@/lib/currencies';
-import { fromMajor, toMajor, zero } from '@/lib/money';
-import { uid } from '@/lib/id';
-import { nowISO } from '@/lib/date';
-import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone } from '@/lib/validators';
+import { GstRegistrationType, Party, PartyKind } from '@esmart/core/types';
+import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
+import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
+import { citiesForState } from '@esmart/core/data/cities';
+import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
+import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
+import { uid } from '@esmart/core/lib/id';
+import { nowISO } from '@esmart/core/lib/date';
+import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone } from '@esmart/core/lib/validators';
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, useParties } from '@/store/selectors';
 

@@ -3,8 +3,8 @@ import { Pressable, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text, TextTone } from './Text';
-import { Money } from '@/lib/money';
-import { formatCompactMoney } from '@/lib/format';
+import { Money } from '@esmart/core/lib/money';
+import { formatCompactMoney } from '@esmart/core/lib/format';
 import { Sparkline } from './charts/BarChart';
 
 export function StatTile({

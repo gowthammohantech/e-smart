@@ -12,12 +12,12 @@ import { EmptyState } from './EmptyState';
 import { Sheet } from './Sheet';
 import { Button } from './Button';
 import { Badge } from './Badge';
-import { BusinessDocument, DocStatus, DocumentKind } from '@/types';
-import { STATUS_TONE } from '@/domain/documentStates';
-import { dateRangeLabel, documentKindLabel, statusLabel } from '@/i18n/labels';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, inRange, resolveRange } from '@/lib/date';
-import { formatMoney } from '@/lib/format';
-import { money, sum, zero } from '@/lib/money';
+import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
+import { STATUS_TONE } from '@esmart/core/domain/documentStates';
+import { dateRangeLabel, documentKindLabel, statusLabel } from '@esmart/core/labels';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, inRange, resolveRange } from '@esmart/core/lib/date';
+import { formatMoney } from '@esmart/core/lib/format';
+import { money, sum, zero } from '@esmart/core/lib/money';
 import { useBaseCurrency, useParties } from '@/store/selectors';
 
 export type DocumentListFilters = {

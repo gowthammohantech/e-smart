@@ -14,8 +14,8 @@ import { TextField } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 import { useOcrStore } from '@/features/ocr/ocrStore';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { fromMajor, money } from '@/lib/money';
+import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { fromMajor, money } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '@/store/selectors';
 
 function confidenceTone(c: number): 'success' | 'warning' | 'danger' {

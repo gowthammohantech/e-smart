@@ -16,12 +16,12 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { Sparkline } from '@/components/charts/BarChart';
 import { useToast } from '@/components/Toast';
-import { ExchangeRate } from '@/types';
+import { ExchangeRate } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBaseCurrency, useExchangeRates } from '@/store/selectors';
-import { CURRENCIES, currencyMeta } from '@/lib/currencies';
-import { formatDate, today } from '@/lib/date';
-import { uid } from '@/lib/id';
+import { CURRENCIES, currencyMeta } from '@esmart/core/lib/currencies';
+import { formatDate, today } from '@esmart/core/lib/date';
+import { uid } from '@esmart/core/lib/id';
 
 export default function CurrencySettings() {
   const t = useTheme();

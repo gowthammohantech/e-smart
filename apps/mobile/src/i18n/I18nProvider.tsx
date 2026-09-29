@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { useUiStore } from '@/store/uiStore';
-import { LanguageCode } from './config';
+import { initReactI18next } from 'react-i18next';
+import i18n, { initI18n } from '@esmart/i18n';
+import type { LanguageCode } from '@esmart/i18n/config';
 import { deviceLanguage } from './detect';
-import i18n, { initI18n } from './index';
 
 // Built at module scope, before React mounts, so the very first paint is
 // already in the device's language rather than English-then-Tamil.
-initI18n(deviceLanguage());
+initI18n(deviceLanguage(), { plugins: [initReactI18next], debugMissingKeys: __DEV__ });
 
 /** Resolves the stored preference to a language the app actually ships. */
 export function useResolvedLanguage(): LanguageCode {

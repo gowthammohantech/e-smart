@@ -15,12 +15,12 @@ import { DateField } from '@/components/pickers/DateField';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { TaxCategory } from '@/types';
+import { TaxCategory } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useDocuments, useItems, useTaxCategories } from '@/store/selectors';
-import { formatPercent } from '@/lib/format';
-import { formatDate, today } from '@/lib/date';
-import { uid } from '@/lib/id';
+import { formatPercent } from '@esmart/core/lib/format';
+import { formatDate, today } from '@esmart/core/lib/date';
+import { uid } from '@esmart/core/lib/id';
 
 export default function TaxSettings() {
   const t = useTheme();

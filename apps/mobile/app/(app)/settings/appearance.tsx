@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { statusLabel } from '@/i18n/labels';
+import { statusLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,10 +10,10 @@ import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { StatRow, StatTile } from '@/components/StatTile';
 import { LixiAccess, useUiStore } from '@/store/uiStore';
-import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n/config';
+import { AppLanguage, SUPPORTED_LANGUAGES } from '@esmart/i18n/config';
 import { SwitchField } from '@/components/Field';
 import { LixiMark } from '@/features/lixi/LixiOrb';
-import { fromMajor } from '@/lib/money';
+import { fromMajor } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '@/store/selectors';
 import { useToast } from '@/components/Toast';
 

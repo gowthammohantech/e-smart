@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { keyLabel } from '@/i18n/labels';
+import { keyLabel } from '@esmart/core/labels';
 import { Animated, AppState, Keyboard, Pressable, View } from 'react-native';
 import { useIsFocused } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';

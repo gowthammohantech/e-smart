@@ -10,7 +10,7 @@ import { Badge } from '@/components/Badge';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
 import { useItems } from '@/store/selectors';
-import { formatMoney } from '@/lib/format';
+import { formatMoney } from '@esmart/core/lib/format';
 
 /**
  * The price list: what you sell and for how much. The full plan reaches items

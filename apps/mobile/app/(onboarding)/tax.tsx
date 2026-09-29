@@ -9,8 +9,8 @@ import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { Badge } from '@/components/Badge';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
-import { COUNTRIES } from '@/data/masters';
-import { validGstin } from '@/lib/validators';
+import { COUNTRIES } from '@esmart/core/data/masters';
+import { validGstin } from '@esmart/core/lib/validators';
 
 export default function TaxStep() {
   const t = useTheme();

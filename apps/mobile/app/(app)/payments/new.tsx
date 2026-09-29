@@ -16,17 +16,17 @@ import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
 
-import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@/types';
-import { availableAdvance, buildOutstanding } from '@/domain/receivables';
-import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
-import { resolveRate, settlementGainLoss } from '@/domain/fx';
-import { PAYMENT_METHODS } from '@/data/masters';
-import { CURRENCIES } from '@/lib/currencies';
-import { paymentMethodLabel } from '@/i18n/labels';
-import { formatMoney, toAmountInput } from '@/lib/format';
-import { formatDate, today } from '@/lib/date';
-import { Money, fromMajor, money, subtract, zero } from '@/lib/money';
-import { uid } from '@/lib/id';
+import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
+import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivables';
+import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { resolveRate, settlementGainLoss } from '@esmart/core/domain/fx';
+import { PAYMENT_METHODS } from '@esmart/core/data/masters';
+import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { paymentMethodLabel } from '@esmart/core/labels';
+import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
+import { formatDate, today } from '@esmart/core/lib/date';
+import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
+import { uid } from '@esmart/core/lib/id';
 
 import { useAppStore } from '@/store/appStore';
 import {

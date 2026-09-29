@@ -3,4 +3,4 @@
 // free regression net for the string extraction: if a transcription drifts,
 // an existing test fails.
 require('intl-pluralrules');
-require('./src/i18n').initI18n('en');
+require('@esmart/i18n').initI18n('en', { plugins: [require('react-i18next').initReactI18next] });

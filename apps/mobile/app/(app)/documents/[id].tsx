@@ -12,8 +12,8 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 import { buildDocumentHtml } from '@/features/documents/documentHtml';
-import { documentKindLabel } from '@/i18n/labels';
-import { formatMoney } from '@/lib/format';
+import { documentKindLabel } from '@esmart/core/labels';
+import { formatMoney } from '@esmart/core/lib/format';
 import {
   useActiveCompany,
   useActiveEwayBill,

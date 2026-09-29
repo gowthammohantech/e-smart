@@ -21,10 +21,10 @@ import {
   useReceivables,
   useStockMovements,
 } from '@/store/selectors';
-import { profitSnapshot, summarizeStock } from '@/domain/reports';
-import { lastNMonths, monthLabelNarrow, resolveRange } from '@/lib/date';
-import { money } from '@/lib/money';
-import { formatMoney, formatPercent } from '@/lib/format';
+import { profitSnapshot, summarizeStock } from '@esmart/core/domain/reports';
+import { lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/core/lib/date';
+import { money } from '@esmart/core/lib/money';
+import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 
 type ReportLink = {
   key: string;

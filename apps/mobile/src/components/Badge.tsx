@@ -3,10 +3,10 @@ import { StyleProp, View, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
-import { DocStatus } from '@/types';
+import { DocStatus } from '@esmart/core/types';
 import { useTranslation } from 'react-i18next';
-import { STATUS_TONE, StatusTone } from '@/domain/documentStates';
-import { statusLabel } from '@/i18n/labels';
+import { STATUS_TONE, StatusTone } from '@esmart/core/domain/documentStates';
+import { statusLabel } from '@esmart/core/labels';
 
 type Props = {
   label: string;

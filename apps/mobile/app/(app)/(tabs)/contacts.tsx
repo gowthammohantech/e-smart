@@ -14,9 +14,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
 import { Badge } from '@/components/Badge';
 import { useBaseCurrency, useDocuments, useHasModule, useParties, usePayments } from '@/store/selectors';
-import { buildOutstanding } from '@/domain/receivables';
-import { money } from '@/lib/money';
-import { formatMoney } from '@/lib/format';
+import { buildOutstanding } from '@esmart/core/domain/receivables';
+import { money } from '@esmart/core/lib/money';
+import { formatMoney } from '@esmart/core/lib/format';
 
 type Tab = 'customer' | 'supplier';
 

@@ -10,9 +10,9 @@ import { Badge } from '@/components/Badge';
 import { ListRow } from '@/components/ListRow';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { DeviceSession } from '@/types';
+import { DeviceSession } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
-import { formatRelative } from '@/lib/date';
+import { formatRelative } from '@esmart/core/lib/date';
 
 export default function Devices() {
   const t = useTheme();

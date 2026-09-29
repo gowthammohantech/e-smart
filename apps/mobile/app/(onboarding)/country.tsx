@@ -8,9 +8,9 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
-import { COUNTRIES } from '@/data/masters';
-import { CURRENCIES } from '@/lib/currencies';
-import { monthNames } from '@/lib/date';
+import { COUNTRIES } from '@esmart/core/data/masters';
+import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { monthNames } from '@esmart/core/lib/date';
 
 export default function CountryStep() {
   const t = useTheme();

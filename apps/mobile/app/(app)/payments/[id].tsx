@@ -15,9 +15,9 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '@/store/selectors';
-import { paymentMethodLabel } from '@/i18n/labels';
-import { formatMoney } from '@/lib/format';
-import { formatDate, formatDateTime } from '@/lib/date';
+import { paymentMethodLabel } from '@esmart/core/labels';
+import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate, formatDateTime } from '@esmart/core/lib/date';
 
 export default function PaymentDetail() {
   const t = useTheme();

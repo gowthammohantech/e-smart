@@ -4,8 +4,8 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/theme/ThemeProvider';
 import { EmptyState } from '@/components/EmptyState';
-import { FULL_PLAN, Module, planInfo } from '@/domain/plan';
-import { moduleLabel } from '@/i18n/labels';
+import { FULL_PLAN, Module, planInfo } from '@esmart/core/domain/plan';
+import { moduleLabel } from '@esmart/core/labels';
 import { usePlan } from '@/store/selectors';
 
 /**

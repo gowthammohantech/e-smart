@@ -1,5 +1,5 @@
-import { Party } from '@/types';
-import { normalizeGstin } from '@/domain/gstin';
+import { Party } from '@esmart/core/types';
+import { normalizeGstin } from '@esmart/core/domain/gstin';
 
 /** Find the contact a scanned bill is from: by GSTIN first, then by name. */
 export function matchParty(parties: Party[], by: { gstin?: string; name?: string }): string | undefined {

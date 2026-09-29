@@ -1,5 +1,5 @@
 import { getLocales } from 'expo-localization';
-import { FALLBACK_LANGUAGE, LanguageCode, isLanguageCode } from './config';
+import { FALLBACK_LANGUAGE, LanguageCode, isLanguageCode } from '@esmart/i18n/config';
 
 /**
  * The device's preferred language, narrowed to one the app ships.

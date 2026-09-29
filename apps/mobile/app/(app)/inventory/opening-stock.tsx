@@ -14,9 +14,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, useItems, useStockLevels } from '@/store/selectors';
-import { formatMoney, formatQty } from '@/lib/format';
-import { money } from '@/lib/money';
-import { today } from '@/lib/date';
+import { formatMoney, formatQty } from '@esmart/core/lib/format';
+import { money } from '@esmart/core/lib/money';
+import { today } from '@esmart/core/lib/date';
 
 export default function OpeningStock() {
   const t = useTheme();

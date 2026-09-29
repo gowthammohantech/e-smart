@@ -11,7 +11,7 @@ import { SearchBar } from '@/components/SearchBar';
 import { EmptyState } from '@/components/EmptyState';
 import { Avatar } from '@/components/Avatar';
 import { useAuditEvents } from '@/store/selectors';
-import { formatDateTime } from '@/lib/date';
+import { formatDateTime } from '@esmart/core/lib/date';
 
 const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
   created: 'plus-circle-outline',

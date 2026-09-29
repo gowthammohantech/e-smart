@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { ThemeMode } from '@/theme/ThemeProvider';
-import { AppLanguage } from '@/i18n/config';
+import { AppLanguage } from '@esmart/i18n/config';
 
 export type RecentEntry = { id: string; kind: string; label: string; at: string };
 

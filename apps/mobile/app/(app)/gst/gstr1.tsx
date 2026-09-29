@@ -14,10 +14,10 @@ import {
   Gstr1Row,
   Gstr1Table,
   gstr1Summary,
-} from '@/domain/gstr1';
+} from '@esmart/core/domain/gstr1';
 import { useActiveCompany, useBaseCurrency, useDocuments, useItems, useParties } from '@/store/selectors';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { toMajor } from '@/lib/money';
+import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { toMajor } from '@esmart/core/lib/money';
 
 type View_ = Gstr1Table | 'hsn';
 

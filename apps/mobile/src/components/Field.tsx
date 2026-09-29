@@ -13,8 +13,8 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
-import { currencySymbol } from '@/lib/currencies';
-import { sanitizeAmountInput } from '@/lib/format';
+import { currencySymbol } from '@esmart/core/lib/currencies';
+import { sanitizeAmountInput } from '@esmart/core/lib/format';
 
 /* ------------------------------------------------------------------ */
 /* Shared label / error wrapper                                        */

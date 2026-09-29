@@ -11,11 +11,11 @@ import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { CityField } from '@/components/pickers/CityField';
 import { Text } from '@/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
-import { BUSINESS_TYPES, INDIAN_STATES } from '@/data/masters';
-import { citiesForState } from '@/data/cities';
-import { PLANS, moduleSetFor, planInfo } from '@/domain/plan';
-import type { PlanTier } from '@/types';
-import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/validators';
+import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
+import { citiesForState } from '@esmart/core/data/cities';
+import { PLANS, moduleSetFor, planInfo } from '@esmart/core/domain/plan';
+import type { PlanTier } from '@esmart/core/types';
+import { Errors, hasErrors, required, validEmail, validPhone } from '@esmart/core/lib/validators';
 
 export default function BusinessStep() {
   const t = useTheme();

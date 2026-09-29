@@ -8,7 +8,7 @@ import { FieldShell } from '@/components/Field';
 import { Text } from '@/components/Text';
 import { Sheet } from '@/components/Sheet';
 import { Button } from '@/components/Button';
-import { formatDate, parseDate, toISODate } from '@/lib/date';
+import { formatDate, parseDate, toISODate } from '@esmart/core/lib/date';
 
 export function DateField({
   label,

@@ -14,14 +14,14 @@ import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Sheet } from '@/components/Sheet';
 import { useToast } from '@/components/Toast';
-import { Expense, PaymentMethod, RecurrenceFrequency } from '@/types';
-import { PAYMENT_METHODS } from '@/data/masters';
-import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@/domain/paymentAccounts';
-import { paymentMethodLabel } from '@/i18n/labels';
-import { formatMoney, formatPercent } from '@/lib/format';
-import { addDaysISO, today } from '@/lib/date';
-import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@/lib/money';
-import { uid } from '@/lib/id';
+import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
+import { PAYMENT_METHODS } from '@esmart/core/data/masters';
+import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { paymentMethodLabel } from '@esmart/core/labels';
+import { formatMoney, formatPercent } from '@esmart/core/lib/format';
+import { addDaysISO, today } from '@esmart/core/lib/date';
+import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
+import { uid } from '@esmart/core/lib/id';
 import { useAppStore } from '@/store/appStore';
 import {
   useBaseCurrency,

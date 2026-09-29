@@ -15,7 +15,7 @@ import { Illustration } from '@/components/Illustration';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useUiStore } from '@/store/uiStore';
-import { formatRelative } from '@/lib/date';
+import { formatRelative } from '@esmart/core/lib/date';
 
 export default function SyncStatus() {
   const t = useTheme();

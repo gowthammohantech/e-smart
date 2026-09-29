@@ -1,6 +1,6 @@
 import { findDate, findTotal, parseReceiptText } from '@/features/ocr/parseReceipt';
 import { isoOrUndefined, matchParty } from '@/features/ocr/matchParty';
-import { Party } from '@/types';
+import { Party } from '@esmart/core/types';
 
 const BILL = `TAX INVOICE
 Precision Components Pvt Ltd

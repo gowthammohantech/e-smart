@@ -2,8 +2,8 @@ import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
-import { Money } from '@/lib/money';
-import { formatCompactMoney, formatMoney } from '@/lib/format';
+import { Money } from '@esmart/core/lib/money';
+import { formatCompactMoney, formatMoney } from '@esmart/core/lib/format';
 import { sequentialRamp } from '@/theme/chartColors';
 
 export type AgingDatum = { key: string; label: string; amount: Money; count: number };

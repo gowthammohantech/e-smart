@@ -1,14 +1,14 @@
-import { Branch, BusinessDocument, Company, EwayBill, Party } from '@/types';
-import { documentKindLabel, type Translate } from '@/i18n/labels';
-import { flattenTaxComponents } from '@/domain/lineCalc';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { formatDate } from '@/lib/date';
-import { money } from '@/lib/money';
-import { INDIAN_STATES } from '@/data/masters';
-import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '@/lib/qr';
-import { E_INVOICE_CANCEL_REASONS } from '@/domain/eInvoice';
-import type { LanguageCode } from '@/i18n/config';
-import i18n from '@/i18n';
+import { Branch, BusinessDocument, Company, EwayBill, Party } from '@esmart/core/types';
+import { documentKindLabel, type Translate } from '@esmart/core/labels';
+import { flattenTaxComponents } from '@esmart/core/domain/lineCalc';
+import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
+import { money } from '@esmart/core/lib/money';
+import { INDIAN_STATES } from '@esmart/core/data/masters';
+import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '@esmart/core/lib/qr';
+import { E_INVOICE_CANCEL_REASONS } from '@esmart/core/domain/eInvoice';
+import type { LanguageCode } from '@esmart/i18n/config';
+import i18n from '@esmart/i18n';
 
 /**
  * A field label on the printed document. Under Tamil it reads in Tamil with

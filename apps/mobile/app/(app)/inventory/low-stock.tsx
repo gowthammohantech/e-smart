@@ -12,10 +12,10 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { StatRow, StatTile } from '@/components/StatTile';
 import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '@/store/selectors';
-import { summarizeStock } from '@/domain/reports';
-import { isLowStock } from '@/domain/stockLedger';
-import { formatMoney, formatQty } from '@/lib/format';
-import { multiply } from '@/lib/money';
+import { summarizeStock } from '@esmart/core/domain/reports';
+import { isLowStock } from '@esmart/core/domain/stockLedger';
+import { formatMoney, formatQty } from '@esmart/core/lib/format';
+import { multiply } from '@esmart/core/lib/money';
 
 export default function LowStock() {
   const t = useTheme();

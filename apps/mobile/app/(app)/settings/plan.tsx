@@ -12,10 +12,10 @@ import { Segmented } from '@/components/Field';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useDocuments } from '@/store/selectors';
-import { PLANS, moduleSetFor, planInfo } from '@/domain/plan';
+import { PLANS, moduleSetFor, planInfo } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '@/features/plan/planCopy';
-import { formatNumber } from '@/lib/format';
-import type { PlanTier } from '@/types';
+import { formatNumber } from '@esmart/core/lib/format';
+import type { PlanTier } from '@esmart/core/types';
 
 type Cycle = 'monthly' | 'yearly';
 

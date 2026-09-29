@@ -4,8 +4,8 @@ import { Pressable, View } from 'react-native';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/components/Text';
-import { Money, zero } from '@/lib/money';
-import { formatCompactMoney, formatMoney } from '@/lib/format';
+import { Money, zero } from '@esmart/core/lib/money';
+import { formatCompactMoney, formatMoney } from '@esmart/core/lib/format';
 import { seriesColor } from '@/theme/chartColors';
 
 export type DonutSlice = { label: string; value: Money };

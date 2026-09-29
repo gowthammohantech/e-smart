@@ -15,9 +15,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useBranches, useItems, useStockMovements } from '@/store/selectors';
-import { stockOnHand } from '@/domain/stockLedger';
-import { formatQty } from '@/lib/format';
-import { today } from '@/lib/date';
+import { stockOnHand } from '@esmart/core/domain/stockLedger';
+import { formatQty } from '@esmart/core/lib/format';
+import { today } from '@esmart/core/lib/date';
 
 export default function StockTransfer() {
   const t = useTheme();

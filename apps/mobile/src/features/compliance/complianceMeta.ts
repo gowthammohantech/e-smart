@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { DocumentEwayStatus, EInvoiceStatus, EwayBillStatus } from '@/types';
-import { StatusTone } from '@/domain/documentStates';
-import type { Translate } from '@/i18n/labels';
+import { DocumentEwayStatus, EInvoiceStatus, EwayBillStatus } from '@esmart/core/types';
+import { StatusTone } from '@esmart/core/domain/documentStates';
+import type { Translate } from '@esmart/core/labels';
 
 /**
  * How a compliance state is presented. The tone and the icon are fixed; the

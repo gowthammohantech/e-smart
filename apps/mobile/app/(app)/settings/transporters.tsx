@@ -16,9 +16,9 @@ import { Fab } from '@/components/Fab';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useTransporters } from '@/store/selectors';
-import { Transporter } from '@/types';
-import { formatGstin, isValidTransporterId } from '@/domain/gstin';
-import { uid } from '@/lib/id';
+import { Transporter } from '@esmart/core/types';
+import { formatGstin, isValidTransporterId } from '@esmart/core/domain/gstin';
+import { uid } from '@esmart/core/lib/id';
 
 /** The transporter master, used for Part-B of an e-way bill. */
 export default function TransportersSettings() {

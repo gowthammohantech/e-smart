@@ -1,4 +1,4 @@
-import type { LanguageCode } from '@/i18n/config';
+import type { LanguageCode } from '@esmart/i18n/config';
 
 /**
  * Matching stems for Lixi's intents, per language.

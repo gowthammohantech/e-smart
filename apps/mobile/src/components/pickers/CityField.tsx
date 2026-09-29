@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { StyleProp, ViewStyle } from 'react-native';
 import { PickerField } from '@/components/Field';
 import { SelectOption, SelectSheet } from '@/components/pickers/SelectSheet';
-import { allCities, citiesForState } from '@/data/cities';
-import { stateName } from '@/data/masters';
+import { allCities, citiesForState } from '@esmart/core/data/cities';
+import { stateName } from '@esmart/core/data/masters';
 
 /**
  * City picker scoped to the state chosen alongside it. The list is curated,

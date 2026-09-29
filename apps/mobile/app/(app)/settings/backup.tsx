@@ -23,7 +23,7 @@ import {
   usePayments,
   useStockMovements,
 } from '@/store/selectors';
-import { formatDateTime } from '@/lib/date';
+import { formatDateTime } from '@esmart/core/lib/date';
 
 export default function BackupExport() {
   const t = useTheme();

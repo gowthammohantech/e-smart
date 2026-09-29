@@ -15,16 +15,16 @@ import {
   PlanTier,
   StockMovement,
   Transporter,
-} from '@/types';
-import { Money, money, sum, zero } from '@/lib/money';
-import { buildOutstanding, summarizeAging } from '@/domain/receivables';
-import { stockMap } from '@/domain/stockLedger';
-import { PURCHASE_KINDS, SALES_KINDS } from '@/domain/documentStates';
-import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@/domain/ewayBill';
-import { isEInvoiceApplicable } from '@/domain/eInvoice';
-import { defaultComplianceSettings } from '@/data/seed';
-import { nowISO } from '@/lib/date';
-import { Module, ModuleSet, canOpen, hasModule, moduleSetFor } from '@/domain/plan';
+} from '@esmart/core/types';
+import { Money, money, sum, zero } from '@esmart/core/lib/money';
+import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
+import { stockMap } from '@esmart/core/domain/stockLedger';
+import { PURCHASE_KINDS, SALES_KINDS } from '@esmart/core/domain/documentStates';
+import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
+import { isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
+import { defaultComplianceSettings } from '@esmart/core/data/seed';
+import { nowISO } from '@esmart/core/lib/date';
+import { Module, ModuleSet, canOpen, hasModule, moduleSetFor } from '@esmart/core/domain/plan';
 
 /**
  * Every read below is scoped by the active company, which is how the

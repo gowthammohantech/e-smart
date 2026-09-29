@@ -16,9 +16,9 @@ import { Fab } from '@/components/Fab';
 import { Segmented } from '@/components/Field';
 import { Sheet } from '@/components/Sheet';
 import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '@/store/selectors';
-import { summarizeStock } from '@/domain/reports';
-import { formatMoney, formatQty } from '@/lib/format';
-import { isLowStock } from '@/domain/stockLedger';
+import { summarizeStock } from '@esmart/core/domain/reports';
+import { formatMoney, formatQty } from '@esmart/core/lib/format';
+import { isLowStock } from '@esmart/core/domain/stockLedger';
 
 type Filter = 'all' | 'low' | 'out' | 'services';
 

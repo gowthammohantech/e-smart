@@ -21,12 +21,12 @@ import {
   summarizePayments,
   summarizeStock,
   summarizeTax,
-} from '@/domain/reports';
-import { PAYMENT_METHODS } from '@/data/masters';
-import { paymentMethodLabel } from '@/i18n/labels';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { monthLabel, monthLabelNarrow } from '@/lib/date';
-import { toMajor } from '@/lib/money';
+} from '@esmart/core/domain/reports';
+import { PAYMENT_METHODS } from '@esmart/core/data/masters';
+import { paymentMethodLabel } from '@esmart/core/labels';
+import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
+import { toMajor } from '@esmart/core/lib/money';
 
 import {
   useBaseCurrency,

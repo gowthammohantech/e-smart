@@ -14,8 +14,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useAppStore } from '@/store/appStore';
 import { useNotifications } from '@/store/selectors';
-import { NotificationKind } from '@/types';
-import { formatRelative } from '@/lib/date';
+import { NotificationKind } from '@esmart/core/types';
+import { formatRelative } from '@esmart/core/lib/date';
 
 const META: Record<NotificationKind, { icon: keyof typeof MaterialCommunityIcons.glyphMap; tone: 'info' | 'success' | 'warning' | 'danger' | 'neutral' }> = {
   invoiceSent: { icon: 'send-outline', tone: 'info' },

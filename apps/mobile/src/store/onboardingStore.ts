@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { Address, PlanTier } from '@/types';
-import { moduleSetFor } from '@/domain/plan';
-import { today } from '@/lib/date';
+import { Address, PlanTier } from '@esmart/core/types';
+import { moduleSetFor } from '@esmart/core/domain/plan';
+import { today } from '@esmart/core/lib/date';
 
 export type OnboardingDraft = {
   name: string;

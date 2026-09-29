@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { keyLabel } from '@/i18n/labels';
+import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -22,7 +22,7 @@ import {
   EwayPartBReasonCode,
   TransportMode,
   VehicleType,
-} from '@/types';
+} from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useParties } from '@/store/selectors';
 import {
@@ -38,10 +38,10 @@ import {
   ewayBillStatusAt,
   hoursUntilExpiry,
   normalizeVehicleNumber,
-} from '@/domain/ewayBill';
+} from '@esmart/core/domain/ewayBill';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
-import { formatDate, formatDateTime, nowISO } from '@/lib/date';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatDateTime, nowISO } from '@esmart/core/lib/date';
+import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, expiryPhrase } from './complianceMeta';
 
 type Entry =

@@ -19,19 +19,19 @@ import { DateField } from '@/components/pickers/DateField';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { Avatar } from '@/components/Avatar';
 
-import { DocumentKind, DocumentLine, Party } from '@/types';
-import { documentKindLabel } from '@/i18n/labels';
-import { resolveRate } from '@/domain/fx';
-import { buildTaxContext } from '@/domain/taxEngine';
-import { OTHER_COUNTRY_CODE } from '@/domain/stateCodes';
-import { CURRENCIES } from '@/lib/currencies';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { addDaysISO } from '@/lib/date';
-import { uid } from '@/lib/id';
-import { factorOf, fromMajor, money, toMajor } from '@/lib/money';
-import { INDIAN_STATES } from '@/data/masters';
-import { checkCreditLimit } from '@/domain/receivables';
-import { hsnMandatory, validHsn } from '@/lib/validators';
+import { DocumentKind, DocumentLine, Party } from '@esmart/core/types';
+import { documentKindLabel } from '@esmart/core/labels';
+import { resolveRate } from '@esmart/core/domain/fx';
+import { buildTaxContext } from '@esmart/core/domain/taxEngine';
+import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
+import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { addDaysISO } from '@esmart/core/lib/date';
+import { uid } from '@esmart/core/lib/id';
+import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
+import { INDIAN_STATES } from '@esmart/core/data/masters';
+import { checkCreditLimit } from '@esmart/core/domain/receivables';
+import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '@/store/appStore';
 import {

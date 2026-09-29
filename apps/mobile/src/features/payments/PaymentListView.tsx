@@ -10,11 +10,11 @@ import { Avatar } from '@/components/Avatar';
 import { SearchBar } from '@/components/SearchBar';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
-import { PaymentDirection } from '@/types';
-import { dateRangeLabel, paymentMethodLabel } from '@/i18n/labels';
-import { formatMoney } from '@/lib/format';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@/lib/date';
-import { money, sum, zero } from '@/lib/money';
+import { PaymentDirection } from '@esmart/core/types';
+import { dateRangeLabel, paymentMethodLabel } from '@esmart/core/labels';
+import { formatMoney } from '@esmart/core/lib/format';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@esmart/core/lib/date';
+import { money, sum, zero } from '@esmart/core/lib/money';
 import { useBaseCurrency, useParties, usePayments } from '@/store/selectors';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {

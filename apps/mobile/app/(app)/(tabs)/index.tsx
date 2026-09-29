@@ -33,10 +33,10 @@ import {
   useReceivables,
   useStockLevels,
 } from '@/store/selectors';
-import { money, subtract, sum } from '@/lib/money';
-import { formatMoney } from '@/lib/format';
-import { inRange, lastNMonths, monthLabelNarrow, resolveRange } from '@/lib/date';
-import { isLowStock } from '@/domain/stockLedger';
+import { money, subtract, sum } from '@esmart/core/lib/money';
+import { formatMoney } from '@esmart/core/lib/format';
+import { inRange, lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/core/lib/date';
+import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { useUiStore } from '@/store/uiStore';
 import { openLixi } from '@/features/lixi/open';
 

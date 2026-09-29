@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { keyLabel } from '@/i18n/labels';
+import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { SearchBar } from '@/components/SearchBar';
 import { ListRow } from '@/components/ListRow';
 import { EmptyState } from '@/components/EmptyState';
 import { Segmented } from '@/components/Field';
-import { EInvoiceStatus, EwayBillStatus } from '@/types';
+import { EInvoiceStatus, EwayBillStatus } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import {
   useComplianceSettings,
@@ -23,10 +23,10 @@ import {
   useExpiringEwayBills,
   useParties,
 } from '@/store/selectors';
-import { ewayBillStatusAt, hoursUntilExpiry } from '@/domain/ewayBill';
+import { ewayBillStatusAt, hoursUntilExpiry } from '@esmart/core/domain/ewayBill';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
-import { formatDate, nowISO } from '@/lib/date';
-import { formatMoney } from '@/lib/format';
+import { formatDate, nowISO } from '@esmart/core/lib/date';
+import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 
 type Tab = 'eInvoice' | 'eway';

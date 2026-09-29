@@ -20,7 +20,7 @@ import {
   EwaySubSupplyType,
   TransportMode,
   VehicleType,
-} from '@/types';
+} from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useComplianceSettings, useTransporters } from '@/store/selectors';
 import {
@@ -29,12 +29,12 @@ import {
   validUptoFor,
   validityDays,
   normalizeVehicleNumber,
-} from '@/domain/ewayBill';
-import { mainHsnCodeOf } from '@/domain/eInvoice';
-import { INDIAN_STATES, stateName } from '@/data/masters';
-import { citiesForState } from '@/data/cities';
-import { formatDate, nowISO } from '@/lib/date';
-import { formatMoney } from '@/lib/format';
+} from '@esmart/core/domain/ewayBill';
+import { mainHsnCodeOf } from '@esmart/core/domain/eInvoice';
+import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
+import { citiesForState } from '@esmart/core/data/cities';
+import { formatDate, nowISO } from '@esmart/core/lib/date';
+import { formatMoney } from '@esmart/core/lib/format';
 
 /**
  * Raising an e-way bill (FRD 16).

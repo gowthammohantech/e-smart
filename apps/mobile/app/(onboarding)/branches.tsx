@@ -12,10 +12,10 @@ import { Card } from '@/components/Card';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '@/store/onboardingStore';
-import { INDIAN_STATES, stateName } from '@/data/masters';
-import { citiesForState } from '@/data/cities';
-import { normalizeGstin } from '@/domain/gstin';
-import { validGstin } from '@/lib/validators';
+import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
+import { citiesForState } from '@esmart/core/data/cities';
+import { normalizeGstin } from '@esmart/core/domain/gstin';
+import { validGstin } from '@esmart/core/lib/validators';
 
 export default function BranchesStep() {
   const t = useTheme();

@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
 import { LIXI, LixiOrb } from '@/features/lixi/LixiOrb';
 import { Text } from './Text';
-import { countLabel } from '@/lib/format';
+import { countLabel } from '@esmart/core/lib/format';
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 

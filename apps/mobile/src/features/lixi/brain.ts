@@ -1,13 +1,13 @@
-import { BusinessDocument, DocumentKind, Expense, Party, Payment, PlanTier } from '@/types';
-import { Money, money, sum, zero } from '@/lib/money';
-import { formatMoney, listJoin } from '@/lib/format';
-import { DateRange, DateRangePreset, inRange, resolveRange } from '@/lib/date';
-import { AgingSummary, OutstandingDoc } from '@/domain/receivables';
-import { documentKindLabel, keyLabel, moduleLabel, statusLabel, type Translate } from '@/i18n/labels';
+import { BusinessDocument, DocumentKind, Expense, Party, Payment, PlanTier } from '@esmart/core/types';
+import { Money, money, sum, zero } from '@esmart/core/lib/money';
+import { formatMoney, listJoin } from '@esmart/core/lib/format';
+import { DateRange, DateRangePreset, inRange, resolveRange } from '@esmart/core/lib/date';
+import { AgingSummary, OutstandingDoc } from '@esmart/core/domain/receivables';
+import { documentKindLabel, keyLabel, moduleLabel, statusLabel, type Translate } from '@esmart/core/labels';
 import { E_INVOICE_STATUS_META } from '@/features/compliance/complianceMeta';
-import { FULL_PLAN, Module, canOpen, hasModule, planInfo } from '@/domain/plan';
-import i18n from '@/i18n';
-import type { LanguageCode } from '@/i18n/config';
+import { FULL_PLAN, Module, canOpen, hasModule, planInfo } from '@esmart/core/domain/plan';
+import i18n from '@esmart/i18n';
+import type { LanguageCode } from '@esmart/i18n/config';
 import { type IntentId, stemsFor } from './keywords';
 
 /**

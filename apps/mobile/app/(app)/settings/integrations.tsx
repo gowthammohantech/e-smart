@@ -9,7 +9,7 @@ import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
-import { Integration } from '@/types';
+import { Integration } from '@esmart/core/types';
 
 const GROUPS: { key: Integration['category']; title: string; blurb: string }[] = [
   { key: 'payments', title: 'Payments', blurb: 'Let customers pay an invoice without leaving it.' },

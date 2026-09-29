@@ -11,8 +11,8 @@ import { Card } from '@/components/Card';
 import { Illustration } from '@/components/Illustration';
 import { useAppStore } from '@/store/appStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { COUNTRIES, stateName } from '@/data/masters';
-import { uid } from '@/lib/id';
+import { COUNTRIES, stateName } from '@esmart/core/data/masters';
+import { uid } from '@esmart/core/lib/id';
 
 const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey: string; bodyKey: string }[] = [
   { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody' },

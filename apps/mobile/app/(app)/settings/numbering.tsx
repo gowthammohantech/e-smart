@@ -12,13 +12,13 @@ import { Sheet } from '@/components/Sheet';
 import { PickerField, SwitchField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { useToast } from '@/components/Toast';
-import { NumberingSeries } from '@/types';
-import { formatNumber } from '@/domain/numbering';
-import { seriesLabel } from '@/i18n/labels';
+import { NumberingSeries } from '@esmart/core/types';
+import { formatNumber } from '@esmart/core/domain/numbering';
+import { seriesLabel } from '@esmart/core/labels';
 import { useAppStore } from '@/store/appStore';
 import { useBranches, useNumberingSeries } from '@/store/selectors';
-import { today, financialYearOf } from '@/lib/date';
-import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@/lib/validators';
+import { today, financialYearOf } from '@esmart/core/lib/date';
+import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 
 const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
   never: 'Never reset',

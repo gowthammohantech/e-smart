@@ -23,10 +23,10 @@ import {
   useStockMovements,
   useTaxCategories,
 } from '@/store/selectors';
-import { MOVEMENT_LABELS, isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@/domain/stockLedger';
-import { formatMoney, formatPercent, formatQty } from '@/lib/format';
-import { formatDate } from '@/lib/date';
-import { multiply } from '@/lib/money';
+import { MOVEMENT_LABELS, isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
+import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
+import { multiply } from '@esmart/core/lib/money';
 
 export default function ItemDetail() {
   const t = useTheme();

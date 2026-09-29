@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
-import { initialsOf } from '@/lib/format';
+import { initialsOf } from '@esmart/core/lib/format';
 
 const PALETTE = ['#007AFF', '#34C88A', '#F0B429', '#FF6B6B', '#C77DFF', '#00C2C7', '#FF9F45', '#7AA2F7'];
 

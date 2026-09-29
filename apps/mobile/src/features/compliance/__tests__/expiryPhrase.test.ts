@@ -1,4 +1,4 @@
-import i18n from '@/i18n';
+import i18n from '@esmart/i18n';
 import { expiryPhrase } from '../complianceMeta';
 
 /**

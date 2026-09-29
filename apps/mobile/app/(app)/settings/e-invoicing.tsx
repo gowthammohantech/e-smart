@@ -10,10 +10,10 @@ import { Button } from '@/components/Button';
 import { ListRow } from '@/components/ListRow';
 import { AmountField, Segmented, SwitchField, TextField } from '@/components/Field';
 import { useToast } from '@/components/Toast';
-import { ComplianceSettings, TransportMode, VehicleType } from '@/types';
+import { ComplianceSettings, TransportMode, VehicleType } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useBaseCurrency, useComplianceSettings, useComplianceSummary } from '@/store/selectors';
-import { fromMajor, toMajor } from '@/lib/money';
+import { fromMajor, toMajor } from '@esmart/core/lib/money';
 
 export default function EInvoicingSettings() {
   const t = useTheme();

@@ -8,7 +8,7 @@ import { TextField, Segmented } from '@/components/Field';
 import { Button } from '@/components/Button';
 import { Text } from '@/components/Text';
 import { useAppStore } from '@/store/appStore';
-import { Errors, required, validEmail, validPhone, hasErrors } from '@/lib/validators';
+import { Errors, required, validEmail, validPhone, hasErrors } from '@esmart/core/lib/validators';
 
 type Mode = 'email' | 'phone';
 

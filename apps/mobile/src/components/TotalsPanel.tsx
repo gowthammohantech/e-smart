@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
-import { DocumentTotals } from '@/types';
-import { formatMoney } from '@/lib/format';
-import { flattenTaxComponents } from '@/domain/lineCalc';
-import { isZero } from '@/lib/money';
+import { DocumentTotals } from '@esmart/core/types';
+import { formatMoney } from '@esmart/core/lib/format';
+import { flattenTaxComponents } from '@esmart/core/domain/lineCalc';
+import { isZero } from '@esmart/core/lib/money';
 
 function Row({
   label,

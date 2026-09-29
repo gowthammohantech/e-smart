@@ -7,12 +7,12 @@ import {
   seedNumberingSeries,
   seedParties,
   seedTaxCategories,
-} from '@/data/seed';
-import { seedCompliance, seedDocuments, seedExpenses, seedPayments } from '@/data/seedTransactions';
-import { buildOutstanding, summarizeAging } from '@/domain/receivables';
-import { zero } from '@/lib/money';
-import i18n from '@/i18n';
-import { LANGUAGE_CODES } from '@/i18n/config';
+} from '@esmart/core/data/seed';
+import { seedCompliance, seedDocuments, seedExpenses, seedPayments } from '@esmart/core/data/seedTransactions';
+import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
+import { zero } from '@esmart/core/lib/money';
+import i18n from '@esmart/i18n';
+import { LANGUAGE_CODES } from '@esmart/i18n/config';
 import { answer, greet, LIXI_TABS, LixiContext, lixiSuggestions, tabQuestion } from '../brain';
 
 /** Lixi answers from the books, so run it against the demo book, built the way the store builds it. */

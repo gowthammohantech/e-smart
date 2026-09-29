@@ -16,10 +16,10 @@ import { AgingBars } from '@/components/charts/AgingBars';
 import { Sheet } from '@/components/Sheet';
 import { useToast } from '@/components/Toast';
 
-import { AgingBucketKey } from '@/domain/receivables';
-import { formatMoney } from '@/lib/format';
-import { formatDate } from '@/lib/date';
-import { money, sum, zero } from '@/lib/money';
+import { AgingBucketKey } from '@esmart/core/domain/receivables';
+import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
+import { money, sum, zero } from '@esmart/core/lib/money';
 import { useBaseCurrency, useParties, usePayables, useReceivables } from '@/store/selectors';
 
 type Mode = 'all' | 'overdue' | 'dueSoon';

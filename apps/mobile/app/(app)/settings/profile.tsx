@@ -14,7 +14,7 @@ import { ListRow } from '@/components/ListRow';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useCompanies, useCurrentUser } from '@/store/selectors';
-import { Errors, hasErrors, required, validEmail, validPhone } from '@/lib/validators';
+import { Errors, hasErrors, required, validEmail, validPhone } from '@esmart/core/lib/validators';
 
 export default function Profile() {
   const t = useTheme();

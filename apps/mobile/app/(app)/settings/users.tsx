@@ -15,12 +15,12 @@ import { PickerField, TextField } from '@/components/Field';
 import { SelectSheet } from '@/components/pickers/SelectSheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { User, UserRole } from '@/types';
+import { User, UserRole } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useCurrentUser } from '@/store/selectors';
-import { Errors, hasErrors, required, validEmail } from '@/lib/validators';
-import { formatRelative } from '@/lib/date';
-import { uid } from '@/lib/id';
+import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
+import { formatRelative } from '@esmart/core/lib/date';
+import { uid } from '@esmart/core/lib/id';
 
 const ROLES: { value: UserRole; label: string; description: string }[] = [
   { value: 'owner', label: 'Owner', description: 'Full access, including billing and deleting the business.' },

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { G, Path, Rect } from 'react-native-svg';
-import { QrEcc, qrMatrix, qrSvgPath } from '@/lib/qr';
+import { QrEcc, qrMatrix, qrSvgPath } from '@esmart/core/lib/qr';
 
 type Props = {
   value: string;

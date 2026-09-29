@@ -4,9 +4,9 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
 import { StatusBadge } from './Badge';
 import { Avatar } from './Avatar';
-import { BusinessDocument } from '@/types';
-import { formatMoney } from '@/lib/format';
-import { formatDate } from '@/lib/date';
+import { BusinessDocument } from '@esmart/core/types';
+import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 
 export function DocumentRow({
   document,

@@ -14,10 +14,10 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { useAppStore } from '@/store/appStore';
 import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '@/store/selectors';
-import { paymentMethodLabel } from '@/i18n/labels';
-import { formatMoney, formatPercent } from '@/lib/format';
-import { formatDate, formatDateTime } from '@/lib/date';
-import { subtract } from '@/lib/money';
+import { paymentMethodLabel } from '@esmart/core/labels';
+import { formatMoney, formatPercent } from '@esmart/core/lib/format';
+import { formatDate, formatDateTime } from '@esmart/core/lib/date';
+import { subtract } from '@esmart/core/lib/money';
 
 export default function ExpenseDetail() {
   const t = useTheme();

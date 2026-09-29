@@ -11,7 +11,7 @@ import { SelectSheet } from './pickers/SelectSheet';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useBranches, useUnreadCount } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
-import { countLabel } from '@/lib/format';
+import { countLabel } from '@esmart/core/lib/format';
 
 /**
  * Tab-level header: company/branch switcher on the left, sync state, global

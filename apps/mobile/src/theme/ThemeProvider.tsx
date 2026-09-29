@@ -11,7 +11,7 @@ import {
 } from './tokens';
 import { useUiStore } from '@/store/uiStore';
 import { useResolvedLanguage } from '@/i18n/I18nProvider';
-import { Script, scriptOf } from '@/i18n/config';
+import { Script, scriptOf } from '@esmart/i18n/config';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 

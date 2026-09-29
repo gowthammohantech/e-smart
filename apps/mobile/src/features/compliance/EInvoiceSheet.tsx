@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { keyLabel } from '@/i18n/labels';
+import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,8 +13,8 @@ import { Sheet } from '@/components/Sheet';
 import { SwitchField, TextField } from '@/components/Field';
 import { useToast } from '@/components/Toast';
 import { QrCode } from '@/components/QrCode';
-import { MIN_READABLE_QR_SIZE } from '@/lib/qr';
-import { BusinessDocument, CancelReasonCode, ComplianceIssue } from '@/types';
+import { MIN_READABLE_QR_SIZE } from '@esmart/core/lib/qr';
+import { BusinessDocument, CancelReasonCode, ComplianceIssue } from '@esmart/core/types';
 import { useAppStore } from '@/store/appStore';
 import { useActiveCompany, useComplianceSettings } from '@/store/selectors';
 import {
@@ -27,9 +27,9 @@ import {
   isEInvoiceApplicable,
   requiresCancelRemark,
   validateEInvoice,
-} from '@/domain/eInvoice';
-import { nowISO } from '@/lib/date';
-import { formatMoney } from '@/lib/format';
+} from '@esmart/core/domain/eInvoice';
+import { nowISO } from '@esmart/core/lib/date';
+import { formatMoney } from '@esmart/core/lib/format';
 import { E_INVOICE_STATUS_META } from './complianceMeta';
 
 /**

@@ -10,10 +10,10 @@ import { Badge } from '@/components/Badge';
 import { SearchBar } from '@/components/SearchBar';
 import { EmptyState } from '@/components/EmptyState';
 import { useBranches, useItems, useStockMovements } from '@/store/selectors';
-import { MOVEMENT_LABELS, signedQuantity } from '@/domain/stockLedger';
-import { StockMovementType } from '@/types';
-import { formatQty } from '@/lib/format';
-import { formatDate } from '@/lib/date';
+import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger';
+import { StockMovementType } from '@esmart/core/types';
+import { formatQty } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
 

@@ -19,10 +19,10 @@ import {
   useStockLevels,
   useCanOpen,
 } from '@/store/selectors';
-import { documentKindLabel } from '@/i18n/labels';
+import { documentKindLabel } from '@esmart/core/labels';
 import { detailRouteFor } from '@/features/documents/DocumentEditor';
-import { formatMoney, formatQty } from '@/lib/format';
-import { formatDate } from '@/lib/date';
+import { formatMoney, formatQty } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 
 type Result = {
   id: string;
