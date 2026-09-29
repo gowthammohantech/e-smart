@@ -1,10 +1,9 @@
-const expoConfig = require('eslint-config-expo/flat');
+// Lints the repo-level scripts in tools/. Each workspace has its own config.
+const base = require('@esmart/eslint-config');
 
 module.exports = [
-  ...expoConfig,
-  {
-    ignores: ['dist/*', 'node_modules/*', '.expo/*'],
-  },
+  ...base,
+  { ignores: ['apps/**', 'packages/**'] },
   {
     // Build-time scripts that generate the placeholder illustrations. These run
     // in Node, not in the app bundle.

@@ -37,5 +37,8 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-/ios
-/android
+/apps/*/ios
+/apps/*/android
+
+# turborepo
+.turbo/

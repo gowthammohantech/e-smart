@@ -18,7 +18,7 @@ import { encodeGif, quantize } from './gif.mjs';
 
 const { chromium } = pw;
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = resolve(HERE, '../../assets/illustrations');
+const OUT = resolve(HERE, '../../apps/mobile/assets/illustrations');
 
 /** Names rendered as looping GIFs; everything else is a PNG. */
 const ANIMATED = new Set(['welcome', 'setup-complete', 'scanning', 'empty-dashboard']);

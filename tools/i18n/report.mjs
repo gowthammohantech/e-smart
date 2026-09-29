@@ -4,7 +4,7 @@
  * yet, per file. Run it to see what a stage has left to do:
  *
  *   node tools/i18n/report.mjs            # files with the most left
- *   node tools/i18n/report.mjs app/\(app\)/sales   # one subtree
+ *   node tools/i18n/report.mjs apps/mobile/app/\(app\)/sales   # one subtree
  *
  * It reports; it never rewrites. Key naming needs judgement, and the
  * interpolated sentences — the ones that actually matter — have to be shaped
@@ -13,7 +13,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOTS = process.argv.slice(2).length ? process.argv.slice(2) : ['app', 'src'];
+const ROOTS = process.argv.slice(2).length ? process.argv.slice(2) : ['apps', 'packages'];
 
 /** Props whose string value is shown to a person. */
 const PROP = /\b(title|subtitle|label|placeholder|hint|description|message|caption|actionLabel|emptyAction|confirmLabel|cancelLabel|accessibilityLabel|emptyTitle)=["']([^"']{2,})["']/g;
