@@ -13,7 +13,7 @@ Every file here is a **placeholder** drawn in the spirit of Storyset's
    roughly **480px** wide. Keep each GIF under ~300KB.
 5. Save it over the file of the same name in this folder.
 
-**That is the whole job — no code changes.** `src/illustrations/registry.ts`
+**That is the whole job — no code changes.** `packages/ui/illustrations/registry.ts`
 resolves each name to the filename, so replacing the file replaces the art.
 
 ## What belongs in each file
@@ -68,4 +68,4 @@ run it or it will overwrite the downloads.
 Storyset illustrations are free to use with attribution. The app credits them
 on **Settings → About**, and the README carries the same credit. If you move to
 a Freepik premium licence that waives attribution, remove the `ListRow` in
-`app/(app)/settings/about.tsx` that renders `ILLUSTRATION_CREDIT`.
+`packages/app/screens/(app)/settings/about.tsx` that renders `ILLUSTRATION_CREDIT`.
