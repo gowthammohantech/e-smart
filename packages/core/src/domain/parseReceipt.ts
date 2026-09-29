@@ -1,4 +1,23 @@
-import type { OcrField, OcrResult } from './ocrStore';
+/**
+ * Receipt and bill parsing: turns the raw text an OCR engine read into the
+ * fields the review screen confirms. Shared by the app (on-device ML Kit) and
+ * the API's OCR simulator.
+ */
+
+export type OcrField = {
+  key: string;
+  label: string;
+  value: string;
+  /** 0–1. Anything below 0.75 is surfaced for the user to check. */
+  confidence: number;
+};
+
+export type OcrResult = {
+  imageUri?: string;
+  kind: 'expense' | 'purchaseBill';
+  fields: OcrField[];
+  lines: { name: string; quantity: number; unitPrice: number; confidence: number }[];
+};
 
 const GSTIN_IN_TEXT = /\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];

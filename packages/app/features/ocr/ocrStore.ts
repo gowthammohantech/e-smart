@@ -1,19 +1,7 @@
 import { create } from 'zustand';
+import type { OcrResult } from '@esmart/core/domain/parseReceipt';
 
-export type OcrField = {
-  key: string;
-  label: string;
-  value: string;
-  /** 0–1. Anything below 0.75 is surfaced for the user to check. */
-  confidence: number;
-};
-
-export type OcrResult = {
-  imageUri?: string;
-  kind: 'expense' | 'purchaseBill';
-  fields: OcrField[];
-  lines: { name: string; quantity: number; unitPrice: number; confidence: number }[];
-};
+export type { OcrField, OcrResult } from '@esmart/core/domain/parseReceipt';
 
 type OcrState = {
   result: OcrResult | null;

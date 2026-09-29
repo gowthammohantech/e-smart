@@ -13,7 +13,7 @@ import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
 import { mockExtract, useOcrStore } from '../../../features/ocr/ocrStore';
 import { recognizeText } from '../../../features/ocr/recognize';
-import { parseReceiptText } from '../../../features/ocr/parseReceipt';
+import { parseReceiptText } from '@esmart/core/domain/parseReceipt';
 
 const STEPS = [
   { icon: 'camera-outline' as const, label: 'Capture', body: 'Photograph the bill or pick one from your gallery.' },
