@@ -1,12 +1,12 @@
-import { Branch, BusinessDocument, Company, EwayBill, Party } from '@esmart/core/types';
-import { documentKindLabel, type Translate } from '@esmart/core/labels';
-import { flattenTaxComponents } from '@esmart/core/domain/lineCalc';
-import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { formatDate } from '@esmart/core/lib/date';
-import { money } from '@esmart/core/lib/money';
-import { INDIAN_STATES } from '@esmart/core/data/masters';
-import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '@esmart/core/lib/qr';
-import { E_INVOICE_CANCEL_REASONS } from '@esmart/core/domain/eInvoice';
+import { Branch, BusinessDocument, Company, EwayBill, Party } from '../types';
+import { documentKindLabel, type Translate } from '../labels';
+import { flattenTaxComponents } from '../domain/lineCalc';
+import { formatMoney, formatPercent, formatQty } from '../lib/format';
+import { formatDate } from '../lib/date';
+import { money } from '../lib/money';
+import { INDIAN_STATES } from '../data/masters';
+import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '../lib/qr';
+import { E_INVOICE_CANCEL_REASONS } from '../domain/eInvoice';
 import type { LanguageCode } from '@esmart/i18n/config';
 import i18n from '@esmart/i18n';
 
@@ -46,7 +46,8 @@ function addressBlock(a?: { line1?: string; line2?: string; city?: string; state
 
 /**
  * Print-ready HTML for a business document. Rendered to PDF with expo-print
- * for sharing, and shown in the in-app preview.
+ * for sharing and shown in the in-app preview by the app, and rendered to PDF
+ * by the API (`getDocumentPdf`), so both print the same page.
  */
 export function buildDocumentHtml({
   document: doc,

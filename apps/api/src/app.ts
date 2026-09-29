@@ -14,6 +14,7 @@ import { handlers as defaultHandlers, webhookHandlers as defaultWebhooks } from 
 import { registerRoutes } from './openapi/routes';
 import { loadOperations } from './openapi/spec';
 import { MemoryStorage } from './providers';
+import { INTERNAL_HEADER, INTERNAL_TOKEN } from './lib/internal';
 
 export type BuildOptions = {
   logger?: boolean | object;
@@ -60,6 +61,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   await app.register(rateLimit, {
     max: deps.config.RATE_LIMIT_PER_MINUTE,
     timeWindow: '1 minute',
+    allowList: (req) => req.headers[INTERNAL_HEADER] === INTERNAL_TOKEN,
     // Per user once signed in, per IP before.
     keyGenerator: (req) => req.headers.authorization?.slice(-24) ?? req.ip,
     errorResponseBuilder: (_req, ctx) => ({

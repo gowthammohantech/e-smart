@@ -2615,11 +2615,10 @@ export interface components {
             attachmentIds?: string[];
             sourceDocumentId?: string;
             /**
-             * @description A non-draft value creates and finalises in one step
+             * @description A non-draft value creates and finalises in one step. On create only draft, issued, sent, confirmed, delivered, received and approved are accepted; paid, partiallyPaid and overdue are derived by the server (422 STATUS_DERIVED). The enum is the full DocStatus so that BusinessDocument, which extends this schema, can carry any status.
              * @default draft
-             * @enum {string}
              */
-            status: "draft" | "issued" | "sent" | "confirmed" | "delivered" | "received" | "approved";
+            status: components["schemas"]["DocStatus"];
         };
         BusinessDocument: components["schemas"]["Versioned"] & components["schemas"]["NewDocumentInput"] & {
             readonly id?: string;

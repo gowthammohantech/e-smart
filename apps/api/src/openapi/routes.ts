@@ -30,6 +30,19 @@ function makeCtx(deps: Deps, op: Operation, req: Parameters<Parameters<FastifyIn
 }
 
 /**
+ * `style: form, explode: false` arrays arrive as `?kind=a,b`. Split them in
+ * preValidation, before the contract's array schema checks the query.
+ */
+function splitCommaArrays(query: Record<string, unknown> | undefined, op: Operation) {
+  if (!query) return;
+  for (const name of op.commaArrays) {
+    const v = query[name];
+    if (typeof v === 'string') query[name] = v.split(',').filter(Boolean);
+    else if (Array.isArray(v) && v.length === 1 && typeof v[0] === 'string' && v[0].includes(',')) query[name] = v[0].split(',').filter(Boolean);
+  }
+}
+
+/**
  * One Fastify route per contract operation, under /v1. The request schema
  * comes from the spec, so a request the contract rejects never reaches a
  * handler. An operation with no handler answers 501, and the contract test
@@ -43,6 +56,7 @@ export function registerRoutes(app: FastifyInstance, deps: Deps, operations: Ope
       url: `/v1${op.path.replace(/\{([^}]+)\}/g, ':$1')}`,
       schema: isWebhook ? undefined : Object.fromEntries(Object.entries(op.schema).filter(([, v]) => v !== undefined)),
       exposeHeadRoute: false,
+      preValidation: async (req) => splitCommaArrays(req.query as Record<string, unknown>, op),
       config: { op, ...(isWebhook ? { rawBody: true } : {}) },
       handler: async (req, reply) => {
         if (isWebhook) {
@@ -57,7 +71,8 @@ export function registerRoutes(app: FastifyInstance, deps: Deps, operations: Ope
             body: (req.body ?? {}) as Record<string, unknown>,
             now: deps.now(),
           });
-          return reply.status(200).send({ ok: true });
+          // The contract declares a bare 200.
+          return reply.status(200).send();
         }
 
         const handler = handlers[op.id as OperationId] as ((ctx: Ctx<OperationId>) => Promise<unknown>) | undefined;

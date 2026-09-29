@@ -3,13 +3,14 @@ import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
 import { isValidGstin } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
-import { defineHandlers, type Ctx } from '../../context';
+import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, notFound, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
+import { partyStatement, statementHtml } from './statement';
 import { partyColumns, partyToWire, partyWithBalance } from './wire';
 
 const P = schema.parties;
@@ -185,6 +186,19 @@ export const partiesHandlers = defineHandlers({
       });
     });
     return undefined;
+  },
+
+  /** JSON by default; a PDF when the client asks for one in `Accept`. */
+  async getPartyStatement(ctx) {
+    const party = await findParty(ctx.db, ctx.company.id, ctx.params.id);
+    const range = { from: ctx.query.from, to: ctx.query.to };
+    const statement = await partyStatement(ctx.db, ctx.company, party, range);
+    const accept = String(ctx.req.headers.accept ?? '');
+    if (accept.includes('application/pdf') && !accept.includes('application/json')) {
+      const pdf = await ctx.deps.providers.pdf.render(statementHtml(ctx.company, statement, range));
+      return new RawBody(pdf, 'application/pdf', `statement-${party.code}.pdf`);
+    }
+    return statement;
   },
 });
 

@@ -22,6 +22,8 @@ export type Operation = {
   /** False for `security: []` operations (auth, plans, most reference data). */
   secured: boolean;
   successStatus: number;
+  /** Array query params sent comma-separated (`style: form, explode: false`). */
+  commaArrays: string[];
   requestContentType: string | null;
   schema: {
     params?: JsonSchema;
@@ -104,6 +106,9 @@ export function loadOperations() {
           planModule: op['x-plan-module'] ?? null,
           secured: isWebhook ? false : !(Array.isArray(op.security) && op.security.length === 0),
           successStatus,
+          commaArrays: params
+            .filter((p) => p.in === 'query' && p.explode === false && (p.schema as { type?: string } | undefined)?.type === 'array')
+            .map((p) => p.name as string),
           requestContentType,
           schema: {
             params: objectOf(params, 'path'),

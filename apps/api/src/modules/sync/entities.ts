@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { INTERNAL_HEADER, INTERNAL_TOKEN } from '../../lib/internal';
 
 /**
  * How /sync/pull fetches an entity's normal API representation: through the
@@ -55,6 +56,7 @@ export async function injectAs(
 ): Promise<InjectResult> {
   const headers: Record<string, string> = { ...(req.headers ?? {}) };
   if (authorization) headers.authorization = authorization;
+  headers[INTERNAL_HEADER] = INTERNAL_TOKEN;
   if (req.payload !== undefined) headers['content-type'] = 'application/json';
   const res = await server.inject({
     method: req.method,

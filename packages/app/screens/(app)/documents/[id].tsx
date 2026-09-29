@@ -11,7 +11,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
-import { buildDocumentHtml } from '../../../features/documents/documentHtml';
+import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 import { documentKindLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import {

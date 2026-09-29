@@ -3426,7 +3426,15 @@ components:
         placeOfSupplyStateCode: { type: string }
         attachmentIds: { type: array, items: { type: string } }
         sourceDocumentId: { type: string }
-        status: { type: string, enum: [draft, issued, sent, confirmed, delivered, received, approved], default: draft, description: A non-draft value creates and finalises in one step }
+        status:
+          allOf: [{ $ref: '#/components/schemas/DocStatus' }]
+          default: draft
+          description: >-
+            A non-draft value creates and finalises in one step. On create only
+            draft, issued, sent, confirmed, delivered, received and approved are
+            accepted; paid, partiallyPaid and overdue are derived by the server
+            (422 STATUS_DERIVED). The enum is the full DocStatus so that
+            BusinessDocument, which extends this schema, can carry any status.
     BusinessDocument:
       allOf:
         - $ref: '#/components/schemas/Versioned'

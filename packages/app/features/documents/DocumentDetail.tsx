@@ -27,7 +27,7 @@ import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
-import { buildDocumentHtml } from './documentHtml';
+import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
 import {
