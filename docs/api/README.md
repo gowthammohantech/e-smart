@@ -1,15 +1,15 @@
 # Elixir Books Smart: backend API contract
 
-The app is a UI prototype today. Every screen reads and writes a seeded
-Zustand store that is persisted to AsyncStorage (`src/store/appStore.ts`), and
-the portal calls (IRP, e-way bill, OCR) are simulated in-process. This folder
-defines the backend that replaces all of that, so the app can run fully online.
+The contract between the apps and the server. The server that implements
+it is `apps/api` (every operation, with the portals, OCR and GSTIN lookup
+behind simulators by default), and the apps talk to it in remote mode
+(`packages/app/remote`); see the root README. This page lists the APIs, the
+third-party services behind them, and the rules the server enforces.
 
 - **[openapi.yaml](../../packages/api-contract/openapi.yaml)**: the contract, in OpenAPI 3.1. It has 111
-  paths, 152 operations and 2 inbound webhooks, and it passes `redocly lint`.
-  Entity schemas mirror `src/types/index.ts` field for field.
-- This README lists the APIs, the third-party services behind them, and the
-  order to build them in.
+  paths, 152 operations and 2 inbound webhooks, and it passes `redocly lint`
+  (missing operation summaries are warnings). Entity schemas mirror
+  `packages/core/src/types/index.ts` field for field.
 
 View it with `npx @redocly/cli preview-docs packages/api-contract/openapi.yaml`, or paste
 the file into <https://editor.swagger.io>. Its TypeScript types are generated into
@@ -24,13 +24,13 @@ every endpoint:
 | Rule | What it means |
 |---|---|
 | Company-scoped paths | Business data lives under `/companies/{companyId}/…`. The server checks the caller's `companyIds` and `branchIds`. |
-| Money is `{ minor, currency }` | Amounts are integer minor units, as in `src/lib/money.ts`. There are no floats anywhere. |
-| Server is authoritative | The server recomputes totals, tax splits, stock, outstanding amounts and derived statuses (`paid`, `partiallyPaid`, `overdue`) by porting `src/domain/*`. The client keeps its engines for instant previews only. |
+| Money is `{ minor, currency }` | Amounts are integer minor units, as in `packages/core/src/lib/money.ts`. There are no floats anywhere. |
+| Server is authoritative | The server recomputes totals, tax splits, stock, outstanding amounts and derived statuses (`paid`, `partiallyPaid`, `overdue`) with `packages/core/src/domain/*`, the same code the apps run for instant previews. |
 | Server assigns numbers | Documents, payments and expenses get their number when finalised, and a number is never reused. |
 | `version` + `If-Match` | Optimistic concurrency on every write. A stale write gets `412`. |
 | `Idempotency-Key` on POST | Makes offline-queue retries safe. |
 | Problem+JSON errors | Each error has a stable `code`. Validation and portal rejections also carry `issues[]` in the same shape as `ComplianceIssue`. |
-| Plan gating | A module outside the plan returns `403 PLAN_UPGRADE_REQUIRED`, which mirrors `src/domain/plan.ts`. Operations carry `x-plan-module`. |
+| Plan gating | A module outside the plan returns `403 PLAN_UPGRADE_REQUIRED`, which follows `packages/core/src/domain/plan.ts`. Operations carry `x-plan-module`. |
 | Roles | Operations carry `x-roles` (owner, admin, accountant, sales, viewer). |
 
 ## Third-party services required
@@ -57,36 +57,13 @@ them sits behind the backend; the mobile app never calls them directly.
 | **Google Drive** | backup destination (`int_drive`) | Google Drive API (OAuth) |
 | **Secrets** | IRP/EWB credentials (`saveComplianceCredentials`) | AWS KMS, GCP KMS, Vault |
 
-## Build order
+## How the apps use it
 
-A suggested order. Each phase leaves the app usable online.
-
-1. **Foundation**: Auth, Me, Companies/branches (onboarding), Users, Settings
-   masters, Parties, Catalog, Attachments, Reference. The app can sign in for
-   real and manage master data.
-2. **Selling**: Documents (create, finalise, convert, status, PDF, send),
-   Payments, Ledger (receivables), Dashboard, Search, Notifications, Audit.
-   This covers everything on the Free and Basic plans except compliance.
-3. **Compliance**: compliance settings and credentials, e-invoice, e-way
-   bills, GSTIN lookup, GSTR-1. Start against the NIC sandbox; `servers[1]`
-   is the sandbox base URL.
-4. **Full plan**: purchase-side documents, Expenses, Inventory, OCR,
-   payables, FX, all Reports.
-5. **Money and ops**: Billing and Razorpay webhooks, payment links,
-   Integrations, Exports/backup, and Sync push/pull for offline mode.
-
-## Client changes this implies
-
-- Replace the store actions in `src/store/appStore.ts` with API calls. Each
-  action maps to one operation; the `operationId` usually matches the action
-  name (`saveParty`, `finalizeDocument`, `generateEwayBill`, …).
-- Remove the seed data (`src/data/seed*.ts`) and `resetDemoData` from
-  production builds.
-- Delete the simulations `src/domain/irpAdapter.ts` and `mockExtract`. The
-  validators in `eInvoice.ts` and `ewayBill.ts` stay for instant feedback.
-- Keep AsyncStorage only as a read cache and for the offline queue
-  (`syncQueue`), which drains through `/sync/push`.
-- Store tokens in `expo-secure-store`, not AsyncStorage.
+The apps stay local-first. Store actions still update the local store at once
+and queue the matching operation in `syncQueue`. It drains through
+`/sync/push`, and `/sync/pull` brings back what the server decided.
+Compliance calls (IRP, e-way bill) go straight to the API. The seeded demo
+mode is still the default build. Tokens live in `expo-secure-store`.
 
 ## Gaps the server must close
 

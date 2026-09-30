@@ -1,32 +1,86 @@
-# Elixir Books Smart — mobile UI prototype
+# Elixir Books Smart
 
-A React Native (Expo) prototype of **Elixir Books Smart**, the mobile-first
-business product described in the BRD, PRD and FRD. It is a **UI prototype**:
-there is no backend. Every screen runs against a seeded local dataset, but the
-calculations behind them — tax splits, document totals, receivables aging,
-stock balances, FX settlement — are real implementations of the rules in the
-FRD, not hard-coded numbers.
+Business accounting for Indian SMEs — invoicing, GST e-invoicing and e-way
+bills, payments, stock, expenses and reports — as a monorepo with a
+React Native app for phones, the same app for the web, and the API behind
+both.
 
-## Running it
+The apps run in two modes. **Demo mode** (the default) needs no server: every
+screen runs against a seeded local dataset. **Remote mode** makes them an
+offline-first client of the API. Either way the calculations — tax splits,
+document totals, receivables aging, stock balances, FX settlement — are real
+implementations of the rules in the FRD, shared by the apps and the server
+from one package.
+
+## Repository layout
+
+```
+apps/
+  mobile/          Expo app for iOS and Android (expo-router routes only)
+  web/             Expo app for the browser: desktop sidebar shell, same screens
+  api/             Fastify server, routed and validated from the OpenAPI contract
+packages/
+  core/            pure domain engines: money, tax, totals, numbering, ledgers,
+                   compliance, reports, types, seed data, invoice HTML
+  i18n/            message catalogues (English, Tamil) and the i18next instance
+  ui/              theme, component kit, charts, illustrations and brand assets
+  app/             screens, features, stores, and remote mode (remote/)
+  api-contract/    openapi.yaml and the TypeScript types generated from it
+  api-client/      typed fetch client: auth refresh, idempotency, problem errors
+  db/              Drizzle schema, migrations, reference data and the demo seed
+  tsconfig/, eslint-config/   shared presets
+docs/              API notes and the database diagram
+story/             BRD, PRD, FRD and the module breakdown
+tools/             illustration generator, i18n report, import codemod
+```
+
+Packages ship TypeScript source; Metro, Jest and tsx compile them where
+they're used, so there is no build step between packages. The API bundles
+them with tsup for production.
+
+## Getting started
+
+Needs Node 22 (`.nvmrc`) and, for the API, Postgres 16 (Docker works).
 
 ```bash
 npm install
-npx expo start
+
+# Demo mode: no server
+npm run mobile            # Expo dev server for the phone app
+npm run web               # the web app in a browser
+
+# The API
+docker compose up -d                      # Postgres, MinIO (S3), Mailpit
+npm run db:migrate -w @esmart/db          # schema + reference data
+npm run db:seed -w @esmart/db             # the demo businesses
+npm run api                               # http://localhost:4000/v1
+
+# The apps against the API (remote mode)
+EXPO_PUBLIC_DATA_SOURCE=remote EXPO_PUBLIC_API_URL=http://localhost:4000 npm run web
 ```
 
-Then open the project in **Expo Go** (iOS/Android) by scanning the QR code, or
-press `i` / `a` for a simulator. The app targets phones; tablet layouts are not
-part of this prototype.
-
-Demo credentials are pre-filled on the sign-in screen. Phone OTP accepts the
-code `123456`.
+Demo sign-in, in both modes: **gowtham@vertextraders.in / demo1234**. In demo
+mode the phone OTP is `123456`; the API sends real codes (set `DEMO_OTP=true`
+in `apps/api/.env` to accept `123456` in development).
 
 | Command | What it does |
 |---|---|
-| `npm start` | Expo dev server |
-| `npm run typecheck` | `tsc --noEmit`, strict |
-| `npm test` | Jest suite over the calculation engines |
-| `npx eslint .` | Lint |
+| `npm run typecheck` / `lint` / `test` | Turborepo runs it in every workspace (the API's tests need Postgres; see `TEST_DATABASE_URL`) |
+| `npm run build -w @esmart/api` | Bundles the server to `apps/api/dist` |
+| `npx expo export -p web` (in `apps/web`) | Static web build |
+| `npm run generate -w @esmart/api-contract` | Regenerates the TypeScript types after editing `openapi.yaml` |
+| `npm run db:generate -w @esmart/db` | Writes a migration from changes to `packages/db/src/schema.ts` |
+
+CI (`.github/workflows/ci.yml`) runs typecheck, lint and test against a
+Postgres service, builds the API and exports the web app.
+
+### Configuration
+
+- **Apps:** `EXPO_PUBLIC_DATA_SOURCE` (`local` or `remote`) and
+  `EXPO_PUBLIC_API_URL`, fixed at build time.
+- **API:** `apps/api/.env.example` lists every setting. All of them have a
+  development default, so an empty `.env` works against the docker-compose
+  Postgres. Production must set `JWT_SECRET` and `CREDENTIALS_KEY`.
 
 ## What's in the demo data
 
@@ -42,27 +96,73 @@ Two businesses under one account, so company isolation is visible:
 Switch between them from the header. **More → Reset demo data** restores the
 original dataset.
 
-## Architecture
+## The API
 
-```
-app/                      expo-router routes (screens only)
-src/
-  theme/                  design tokens + ThemeProvider, chart palettes
-  components/             primitives, form kit, charts
-  features/               screen-level composites (documents, contacts, …)
-  domain/                 pure calculation engines, no React
-  i18n/                   the message catalogues, and the code that resolves them
-  store/                  zustand stores + company-scoped selectors
-  data/                   seed dataset
-  illustrations/          illustration registry (name → asset)
-  lib/                    money, formatting, dates, validators
-assets/illustrations/     the artwork, plus how to replace it
-tools/illustrations/      script that draws the placeholder art
-```
+`packages/api-contract/openapi.yaml` is the source of truth: 152 operations
+and 2 webhooks, and the server implements every one (a test fails if any
+operation lacks a handler).
+
+- **Contract-driven routing.** Each operation becomes a route under `/v1` with
+  its request schema, so a request the contract rejects never reaches a
+  handler. Handlers are typed from the generated types and keyed by
+  `operationId` (`apps/api/src/modules/<tag>/handlers.ts`).
+- **Guards from the spec.** Bearer tokens with device-bound, rotating refresh
+  tokens; company access on every `/companies/{companyId}` path; `x-roles`;
+  and `x-plan-module` gating that returns `403 PLAN_UPGRADE_REQUIRED`.
+- **The server is authoritative.** Totals, tax splits, numbers (assigned on
+  finalise under a row lock, never reused), stock, outstanding amounts and
+  derived statuses are computed with `@esmart/core`, the same engines the apps
+  use for previews.
+- **Safe writes.** `Idempotency-Key` on every POST (a retry replays the
+  stored response), `If-Match` / `ETag` on updates (a stale write gets 412),
+  problem+json errors with stable codes and `issues[]`, an audit trail and a
+  change log for `/sync/pull`.
+- **Providers.** SMS, email, WhatsApp, push, object storage, PDF rendering,
+  the GST portals (IRP and e-way bill), GSTIN lookup, OCR, FX rates and
+  Razorpay all sit behind interfaces. Each has an in-process stand-in (an
+  outbox of sent messages, memory storage with signed URLs, a portal
+  simulator over `@esmart/core/domain/irpAdapter`…), so development and tests
+  need only Postgres; environment variables switch in the real adapters.
+- **Tests** (`apps/api/test`) run against a real Postgres, and every response
+  in every test is checked against the contract.
+
+The database is `packages/db`: the baseline migration is the original SQL
+schema (Drizzle can't express its deferrable foreign keys), `src/schema.ts`
+mirrors it, and later migrations are generated from diffs of that file.
+
+## Remote mode: offline first
+
+With `EXPO_PUBLIC_DATA_SOURCE=remote` the apps are an offline-first client of
+the API (`packages/app/remote/`). It is the outbox pattern, one code path
+whether or not there is a network:
+
+1. Every action still updates the local store at once, so the app is instant
+   and keeps working offline.
+2. A wrapper queues what the action means to the API (`POST` a new party,
+   `PUT` an edit against the version you had, `POST …/status`…) into the
+   store's `syncQueue`, in the contract's `SyncMutation` shape. Edits to
+   something the server hasn't seen yet fold into its pending create.
+3. The sync engine sends the queue through `POST /sync/push` straight away
+   when online, again when the connection returns or the app comes to the
+   foreground, and every minute; after a failed attempt it retries with
+   backoff. The queue entry's id is the idempotency key, so a resend never
+   applies twice.
+4. It then pulls `GET /sync/pull` for what the server decided — numbers,
+   totals, statuses, IRNs — and other devices' changes, and refreshes
+   notifications, the audit trail, stock movements, devices and users.
+5. Ids minted offline are swapped for the server's everywhere once the create
+   syncs. A change that lost a race (412) stays in **Settings → Sync** with the
+   server's copy shown, to send again or discard.
+
+E-invoicing and e-way bills go straight to the API instead of the queue,
+because the GST portals need a connection. Tokens are kept in the Keychain /
+Keystore (`expo-secure-store`), or localStorage on the web.
+
+## How the domain works
 
 ### The domain layer
 
-Everything financial lives in `src/domain` as pure functions, so it can be
+Everything financial lives in `packages/core/src/domain` as pure functions, so it can be
 tested without rendering anything:
 
 | Module | Responsibility |
@@ -95,9 +195,9 @@ network:
 - The **IRN** is the genuine SHA-256 of the supplier GSTIN, document type,
   document number and financial year. Anyone holding those four public fields
   can recompute it and check it against the invoice — which is the point of the
-  scheme, and why `src/lib/hash.ts` is a real digest rather than a stand-in.
+  scheme, and why `packages/core/src/lib/hash.ts` is a real digest rather than a stand-in.
 - The **signed QR** is a JWS carrying the ten claims the portal specifies, drawn
-  by a QR encoder in `src/lib/qr.ts` (byte mode, all four error-correction
+  by a QR encoder in `packages/core/src/lib/qr.ts` (byte mode, all four error-correction
   levels, versions 1 to 40, all eight masks scored against the four penalty
   rules). The payload runs to about 700 bytes, which lands around version 21.
   The code scans; it is verified by a decoder written independently against the
@@ -122,10 +222,10 @@ follows the device where it can, and anyone upgrading stays on English rather
 than having the language change under them. The switch is under
 **Settings → Appearance & language**.
 
-Copy lives in `src/i18n/locales/{en,ta}`, fifteen namespaces per language,
+Copy lives in `packages/i18n/src/locales/{en,ta}`, fifteen namespaces per language,
 resolved through i18next. Three rules keep it honest:
 
-- **The domain layer never sees a translator.** `src/domain` returns a code and
+- **The domain layer never sees a translator.** `packages/core/src/domain` returns a code and
   a tone — `STATUS_TONE`, a plan's feature slugs, a `ComplianceIssue`'s
   `messageKey` — and the words are resolved where they are displayed. The pure
   functions stay testable without a catalogue.
@@ -154,14 +254,14 @@ header reads in Tamil with the English term beneath it, because a GST invoice
 is read by officers and by counterparties in other states. Values — amounts,
 GSTIN, HSN, IRN, dates — render once, in Latin. An English PDF is unchanged.
 
-Adding a language is a folder under `src/i18n/locales` and one entry in
+Adding a language is a folder under `packages/i18n/src/locales` and one entry in
 `SUPPORTED_LANGUAGES`. Note that Tamil's plural rule matches English (`one` at
 n = 1 only); Hindi's does not — it counts zero as singular — so the
 `_one`/`_other` split is worth re-reading when it lands.
 
-### Data and state
+### Data and state in the apps
 
-`src/store/appStore.ts` holds every entity in a Zustand store persisted to
+`packages/app/store/appStore.ts` holds every entity in a Zustand store persisted to
 AsyncStorage, so anything created in the prototype survives a restart. Fields
 that a person picks from a fixed list store a stable slug rather than the
 English label they saw — `Company.businessType` learned this the hard way, and
@@ -169,11 +269,14 @@ a migration maps the labels that shipped. Seeded master data the user can then
 edit (tax categories, expense categories) is written in whatever language was
 active at onboarding and is their data from then on; it does not follow a later
 language switch. Reads go
-through `src/store/selectors.ts`, which scopes them by the active company —
+through `packages/app/store/selectors.ts`, which scopes them by the active company —
 that is how company isolation is enforced here.
 
 Writes also append an audit event and, where the PRD calls for it, raise a
 notification.
+
+In remote mode the same store is the local half of an offline-first client;
+see [Remote mode](#remote-mode-offline-first) above.
 
 ### Charts
 
@@ -188,8 +291,8 @@ identity.
 ### Illustrations
 
 Empty states, first-run screens and confirmation moments are illustrated rather
-than left to a lone icon. `src/illustrations/registry.ts` maps a semantic name
-(`not-found`, `all-settled`, `welcome`…) to a file in `assets/illustrations/`,
+than left to a lone icon. `packages/ui/illustrations/registry.ts` maps a semantic name
+(`not-found`, `all-settled`, `welcome`…) to a file in `packages/ui/assets/illustrations/`,
 and `EmptyState` takes an `illustration` prop, so a screen asks for meaning
 rather than a filename. Four hero moments — welcome, setup complete, scanning
 and the empty dashboard — are animated GIFs; the rest are PNG. Small in-sheet
@@ -198,7 +301,7 @@ at that size.
 
 The shipped files are placeholders drawn in the Storyset **Rafiki** style.
 Replacing one with the real download keeps its filename, so no code changes are
-needed — `assets/illustrations/README.md` lists what belongs in each file.
+needed — `packages/ui/assets/illustrations/README.md` lists what belongs in each file.
 
 ## What's covered
 
@@ -225,20 +328,22 @@ printed invoices and the assistant.
 Illustrations by [Storyset](https://storyset.com), used under their free
 licence, which requires attribution — the app credits them on
 **Settings → About**. The files currently in the repo are placeholders in the
-Rafiki style; see `assets/illustrations/README.md` for how to swap in the real
+Rafiki style; see `packages/ui/assets/illustrations/README.md` for how to swap in the real
 downloads.
 
 ## Known limits
 
-This is deliberately a prototype:
-
-- No server. Nothing syncs, and the offline/sync screens simulate the states
-  rather than implementing a real queue.
-- OCR returns a fixed plausible extraction so the review step can be
-  demonstrated; no image is actually read.
+- The GST portals, GSTIN lookup and OCR run on simulators; the e-invoice and
+  e-way bill provider has a GSP skeleton (`apps/api/src/providers/compliance.ts`
+  lists what a real one needs) and OCR and GSTIN lookup have none yet.
+  SMS (MSG91), email (SES), WhatsApp (Meta), push (Expo), storage (S3),
+  PDF (Chromium), FX (Open Exchange Rates) and Razorpay have real adapters.
+- Recurring expenses are materialised by an exported function
+  (`materializeRecurringExpenses`) that nothing schedules yet.
+- Share links are created, but the contract has no public page to open them.
+- A company-wide notification has one read state for everyone in it.
+- Attachments picked in the app stay on the device in remote mode; the
+  pre-signed upload API exists, but the app doesn't call it yet.
 - The assistant answers from the local store with rule-based logic, not a model.
-- Nothing is reported to a real Invoice Registration Portal. The rules are
-  real; only the network hop is simulated (see below).
-- Google sign-in signs straight into the demo account.
-- The illustrations are placeholders, not the real Storyset artwork — the
-  environment this was built in cannot reach storyset.com.
+- Google sign-in exists only in demo mode.
+- The illustrations are placeholders, not the real Storyset artwork.
