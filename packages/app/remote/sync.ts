@@ -47,6 +47,31 @@ export function syncNow(): Promise<void> {
   return running;
 }
 
+/**
+ * After a run that couldn't reach the server, try again by itself: 5s, 10s,
+ * 20s… up to a minute. Connectivity events help, but aren't relied on; some
+ * networks never report "reachable", and what matters is reaching our API.
+ */
+const RETRY_MIN_MS = 5_000;
+const RETRY_MAX_MS = 60_000;
+let retryIn = RETRY_MIN_MS;
+let retry: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRetry() {
+  if (retry) return;
+  retry = setTimeout(() => {
+    retry = null;
+    void syncNow();
+  }, retryIn);
+  retryIn = Math.min(retryIn * 2, RETRY_MAX_MS);
+}
+
+function clearRetry() {
+  if (retry) clearTimeout(retry);
+  retry = null;
+  retryIn = RETRY_MIN_MS;
+}
+
 let soon: ReturnType<typeof setTimeout> | null = null;
 /** Coalesces a burst of edits into one run shortly after the last. */
 export function syncSoon(delayMs = 400) {
@@ -66,8 +91,12 @@ async function runOnce() {
     await pullAll();
     await refreshLists();
     meta.patch({ online: true, lastSyncAt: new Date().toISOString(), lastError: undefined });
+    clearRetry();
   } catch (err) {
-    if (isNetworkError(err)) meta.patch({ online: false });
+    if (isNetworkError(err)) {
+      meta.patch({ online: false });
+      scheduleRetry();
+    }
     else meta.patch({ lastError: err instanceof Error ? err.message : String(err) });
   } finally {
     useRemoteMeta.getState().patch({ syncing: false });

@@ -22,6 +22,7 @@ import {
   VehicleType,
 } from '@esmart/core/types';
 import { useAppStore } from '../../store/appStore';
+import { compliance } from '../../remote';
 import { useActiveCompany, useComplianceSettings, useTransporters } from '../../store/selectors';
 import {
   EWAY_SUB_SUPPLY_TYPES,
@@ -55,7 +56,6 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
   const parties = useAppStore((s) => s.parties);
   const branches = useAppStore((s) => s.branches);
-  const generateEwayBill = useAppStore((s) => s.generateEwayBill);
 
   const buyer = parties.find((p) => p.id === doc.partyId);
   const branch = branches.find((b) => b.id === doc.branchId);
@@ -107,9 +107,9 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
   const byRoad = transportMode === 'road';
 
-  const submit = () => {
+  const submit = async () => {
     setBusy(true);
-    const outcome = generateEwayBill({
+    const outcome = await compliance.generateEwayBill({
       documentId: doc.id,
       subSupplyType,
       subSupplyDescription: subSupplyDescription.trim() || undefined,

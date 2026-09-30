@@ -16,6 +16,7 @@ import { QrCode } from '@esmart/ui/components/QrCode';
 import { MIN_READABLE_QR_SIZE } from '@esmart/core/lib/qr';
 import { BusinessDocument, CancelReasonCode, ComplianceIssue } from '@esmart/core/types';
 import { useAppStore } from '../../store/appStore';
+import { compliance } from '../../remote';
 import { useActiveCompany, useComplianceSettings } from '../../store/selectors';
 import {
   E_INVOICE_CANCEL_REASONS,
@@ -60,8 +61,6 @@ export function EInvoiceSheet({
   const parties = useAppStore((s) => s.parties);
   const items = useAppStore((s) => s.items);
   const documents = useAppStore((s) => s.documents);
-  const generateEInvoice = useAppStore((s) => s.generateEInvoice);
-  const cancelEInvoice = useAppStore((s) => s.cancelEInvoice);
 
   const [busy, setBusy] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
@@ -95,9 +94,9 @@ export function EInvoiceSheet({
   const cancellation = canCancelEInvoice(doc.compliance, nowISO());
   const meta = E_INVOICE_STATUS_META[doc.compliance?.eInvoiceStatus ?? 'pending'];
 
-  const generate = () => {
+  const generate = async () => {
     setBusy(true);
-    const outcome = generateEInvoice(doc.id, {
+    const outcome = await compliance.generateEInvoice(doc.id, {
       simulation: simulateFailure ? { fail: 'SIM001' } : undefined,
     });
     setBusy(false);
@@ -110,9 +109,9 @@ export function EInvoiceSheet({
     }
   };
 
-  const cancel = () => {
+  const cancel = async () => {
     setBusy(true);
-    const outcome = cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined);
+    const outcome = await compliance.cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined);
     setBusy(false);
     if (outcome.ok) {
       toast.show(tr('compliance:einv.cancelled'), 'success');

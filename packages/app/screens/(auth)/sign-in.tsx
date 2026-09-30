@@ -8,6 +8,8 @@ import { TextField, Segmented } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { useAppStore } from '../../store/appStore';
+import { isRemote, remoteSession } from '../../remote';
+import { describeError } from '../../remote/errors';
 import { Errors, required, validEmail, validPhone, hasErrors } from '@esmart/core/lib/validators';
 
 type Mode = 'email' | 'phone';
@@ -33,6 +35,14 @@ export default function SignIn() {
     setErrors(next);
     if (hasErrors(next)) return;
     setBusy(true);
+    if (isRemote()) {
+      // The root layout routes on once the session and its data are in.
+      remoteSession.signIn(email, password).catch((err: unknown) => {
+        setBusy(false);
+        setErrors({ password: describeError(err, tr) });
+      });
+      return;
+    }
     setTimeout(() => {
       signIn(email);
       router.replace('/(app)/(tabs)');
@@ -100,6 +110,8 @@ export default function SignIn() {
         </View>
       )}
 
+      {/* The API has no Google sign-in yet; the demo signs straight in. */}
+      {isRemote() ? null : (
       <View style={{ alignItems: 'center', gap: t.spacing.md, marginTop: t.spacing.md }}>
         <Text variant="caption" tone="muted">
           or continue with
@@ -115,6 +127,7 @@ export default function SignIn() {
           }}
         />
       </View>
+      )}
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.lg }}>
         <Text variant="small" tone="muted">{tr('auth:signIn.newHere')}</Text>

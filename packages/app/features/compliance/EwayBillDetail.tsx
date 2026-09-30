@@ -24,6 +24,7 @@ import {
   VehicleType,
 } from '@esmart/core/types';
 import { useAppStore } from '../../store/appStore';
+import { compliance } from '../../remote';
 import { useParties } from '../../store/selectors';
 import {
   EWAY_CANCEL_REASONS,
@@ -57,9 +58,6 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
 
   const documents = useAppStore((s) => s.documents);
   const parties = useParties();
-  const updatePartB = useAppStore((s) => s.updateEwayBillPartB);
-  const extend = useAppStore((s) => s.extendEwayBill);
-  const cancel = useAppStore((s) => s.cancelEwayBill);
 
   const [partBOpen, setPartBOpen] = useState(false);
   const [extendOpen, setExtendOpen] = useState(false);
@@ -314,9 +312,9 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
         onClose={() => setPartBOpen(false)}
         bill={bill}
         busy={busy}
-        onSubmit={(update) => {
+        onSubmit={async (update) => {
           setBusy(true);
-          const outcome = updatePartB(bill.id, update);
+          const outcome = await compliance.updateEwayBillPartB(bill.id, update);
           setBusy(false);
           if (outcome.ok) {
             toast.show(tr('compliance:ewb.partBUpdated'), 'success');
@@ -332,9 +330,9 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
         onClose={() => setExtendOpen(false)}
         bill={bill}
         busy={busy}
-        onSubmit={(args) => {
+        onSubmit={async (args) => {
           setBusy(true);
-          const outcome = extend(bill.id, args);
+          const outcome = await compliance.extendEwayBill(bill.id, args);
           setBusy(false);
           if (outcome.ok) {
             toast.show(tr('compliance:ewb.validityExtended'), 'success');
@@ -362,11 +360,11 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
         confirmLabel={tr('compliance:ewb.cancelConfirm')}
         destructive
         onCancel={() => setPendingCancel(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           const args = pendingCancel;
           setPendingCancel(null);
           if (!args) return;
-          const outcome = cancel(bill.id, args.code, args.remark);
+          const outcome = await compliance.cancelEwayBill(bill.id, args.code, args.remark);
           if (outcome.ok) toast.show(tr('compliance:ewb.cancelled'), 'success');
           else toast.show(outcome.issues[0]?.message ?? 'The bill could not be cancelled', 'error');
         }}

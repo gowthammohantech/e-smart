@@ -7,6 +7,9 @@ import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { useAppStore } from '../../store/appStore';
+import { isRemote, remoteSession } from '../../remote';
+import { describeError } from '../../remote/errors';
+import { toE164 } from '../../remote/phone';
 
 const LENGTH = 6;
 /** Fixed code so the prototype can be demonstrated without a real gateway. */
@@ -23,6 +26,21 @@ export default function Otp() {
   const [error, setError] = useState<string | undefined>();
   const [seconds, setSeconds] = useState(30);
   const inputs = useRef<(TextInput | null)[]>([]);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Remote mode sends a real code, on arrival and on every resend.
+  const request = React.useCallback(() => {
+    if (!isRemote()) return;
+    remoteSession
+      .requestOtp(toE164(String(phone ?? '')))
+      .then((r) => {
+        setRequestId(r.requestId);
+        setSeconds(r.resendAfterSeconds);
+      })
+      .catch((err: unknown) => setError(describeError(err, tr)));
+  }, [phone, tr]);
+  useEffect(request, [request]);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -44,6 +62,15 @@ export default function Otp() {
   const verify = () => {
     if (code.length < LENGTH) {
       setError(tr('auth:otp.enterAllDigits'));
+      return;
+    }
+    if (isRemote()) {
+      if (!requestId) return;
+      setBusy(true);
+      remoteSession.verifyOtp(requestId, code).catch((err: unknown) => {
+        setBusy(false);
+        setError(describeError(err, tr));
+      });
       return;
     }
     if (code !== DEMO_CODE) {
@@ -91,13 +118,13 @@ export default function Otp() {
         <Text variant="caption" tone="bad">
           {error}
         </Text>
-      ) : (
+      ) : isRemote() ? null : (
         <Text variant="caption" tone="muted">
           Prototype code: {DEMO_CODE}
         </Text>
       )}
 
-      <Button title={tr('auth:otp.submit')} onPress={verify} fullWidth size="lg" />
+      <Button title={tr('auth:otp.submit')} onPress={verify} loading={busy} fullWidth size="lg" />
 
       <View style={{ alignItems: 'center' }}>
         {seconds > 0 ? (
@@ -105,7 +132,13 @@ export default function Otp() {
             Resend code in {seconds}s
           </Text>
         ) : (
-          <Pressable onPress={() => setSeconds(30)} accessibilityRole="button">
+          <Pressable
+            onPress={() => {
+              setSeconds(30);
+              request();
+            }}
+            accessibilityRole="button"
+          >
             <Text variant="small" tone="primary" weight="600">{tr('auth:otp.resend')}</Text>
           </Pressable>
         )}

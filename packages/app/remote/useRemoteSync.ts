@@ -21,7 +21,9 @@ export function useRemoteSync() {
     void syncNow();
 
     const unsubscribeNet = NetInfo.addEventListener((state) => {
-      const online = state.isConnected !== false && state.isInternetReachable !== false;
+      // Only "connected" counts: reachability probes a third-party URL that
+      // some networks block, and our own requests are the real test.
+      const online = state.isConnected !== false;
       const was = useRemoteMeta.getState().online;
       useRemoteMeta.getState().patch({ online });
       if (online && !was) void syncNow();

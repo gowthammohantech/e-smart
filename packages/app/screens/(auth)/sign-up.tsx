@@ -8,6 +8,9 @@ import { TextField, SwitchField } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { useAppStore } from '../../store/appStore';
+import { isRemote, remoteSession } from '../../remote';
+import { describeError } from '../../remote/errors';
+import { toE164 } from '../../remote/phone';
 import { Errors, hasErrors, minLength, required, validEmail, validPhone } from '@esmart/core/lib/validators';
 
 export default function SignUp() {
@@ -36,6 +39,14 @@ export default function SignUp() {
     if (hasErrors(next)) return;
 
     setBusy(true);
+    if (isRemote()) {
+      // A new account has no company yet, so the root layout routes to onboarding.
+      remoteSession.signUp({ name: name.trim(), email, phone: phone.trim() ? toE164(phone) : undefined, password }).catch((err: unknown) => {
+        setBusy(false);
+        setErrors({ email: describeError(err, tr) });
+      });
+      return;
+    }
     setTimeout(() => {
       signUp(name.trim(), email.trim());
       router.replace('/(onboarding)/business');

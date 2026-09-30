@@ -6,6 +6,8 @@ import { TextField } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
+import { isRemote, remoteSession } from '../../remote';
+import { describeError } from '../../remote/errors';
 
 export default function ForgotPassword() {
   const { t: tr } = useTranslation(['auth', 'errors']);
@@ -18,7 +20,12 @@ export default function ForgotPassword() {
     const next = { email: required(email, tr('errors:field.email')) ?? validEmail(email) };
     setErrors(next);
     if (hasErrors(next)) return;
-    setSent(true);
+    if (!isRemote()) return setSent(true);
+    // The server answers the same whether or not the email is registered.
+    remoteSession
+      .forgotPassword(email)
+      .then(() => setSent(true))
+      .catch((err: unknown) => setErrors({ email: describeError(err, tr) }));
   };
 
   if (sent) {

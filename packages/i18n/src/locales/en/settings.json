@@ -149,7 +149,20 @@
     "allSynced": "All changes synced",
     "queue": "Queue",
     "prototypeControls": "Prototype controls",
-    "conflictNote": "Conflicts are surfaced for you to resolve rather than being overwritten silently."
+    "conflictNote": "Conflicts are surfaced for you to resolve rather than being overwritten silently.",
+    "syncNow": "Sync now",
+    "reload": "Reload everything from the server",
+    "lastSynced": "Last synced {{when}}",
+    "neverSynced": "Not synced yet",
+    "offlineNow": "Offline. Changes are saved on this device and sent when you're back online.",
+    "retry": "Send my change again",
+    "discard": "Discard my change",
+    "close": "Close",
+    "conflictTitle": "Changed on another device",
+    "conflictBody": "Someone saved this after you started editing. You now see their version. Send yours again to replace it, or discard it.",
+    "rejectedTitle": "The server refused this change",
+    "retrying": "Sending again",
+    "discarded": "Change discarded"
   },
   "transporters": {
     "none": "No transporters yet",

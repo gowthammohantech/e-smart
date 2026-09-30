@@ -17,6 +17,8 @@ const Env = z.object({
   DATABASE_URL: z.string().default('postgres://esmart:esmart@localhost:5432/esmart'),
   /** Where the API is reachable from outside; used in share links and upload URLs. */
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
+  /** The web app, for links people open: password resets and invitations. */
+  APP_URL: z.string().default('http://localhost:8081'),
   /** Comma-separated origins allowed by CORS. `*` in development. */
   CORS_ORIGINS: z.string().default('*'),
 

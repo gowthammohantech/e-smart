@@ -139,7 +139,7 @@ export const authHandlers = defineHandlers({
         tokenHash: sha256(token),
         expiresAt: new Date(ctx.now.getTime() + RESET_TTL_MS),
       });
-      const link = `${ctx.deps.config.PUBLIC_BASE_URL}/reset-password?token=${token}`;
+      const link = `${ctx.deps.config.APP_URL}/reset-password?token=${token}`;
       await ctx.deps.providers.email.send({
         to: user.email,
         subject: 'Reset your Elixir Books password',

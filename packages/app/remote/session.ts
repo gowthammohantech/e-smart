@@ -98,3 +98,14 @@ export async function resync() {
   useAppStore.setState({ ...emptyData(), syncQueue, session, activeCompanyId, activeBranchId });
   await loadSnapshot();
 }
+
+/** Sets a new password from an emailed reset link. Every session is signed out. */
+export async function resetPassword(token: string, password: string) {
+  await api.POST('/auth/password/reset', { body: { token, password } });
+}
+
+/** Accepts a team invitation and signs straight in. */
+export async function acceptInvite(token: string, password: string) {
+  const { data } = await api.POST('/invites/{token}/accept', { params: { path: { token } }, body: { password } });
+  await begin(data as AuthSession);
+}

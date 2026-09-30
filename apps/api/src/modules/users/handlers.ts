@@ -102,8 +102,8 @@ async function issueInvite(tx: DbOrTx, user: UserRow, invitedBy: string, now: Da
   return token;
 }
 
-async function sendInviteEmail(deps: { config: { PUBLIC_BASE_URL: string }; providers: { email: { send: (m: { to: string; subject: string; text: string }) => Promise<unknown> } } }, user: UserRow, inviter: string, token: string) {
-  const link = `${deps.config.PUBLIC_BASE_URL}/accept-invite?token=${token}`;
+async function sendInviteEmail(deps: { config: { APP_URL: string }; providers: { email: { send: (m: { to: string; subject: string; text: string }) => Promise<unknown> } } }, user: UserRow, inviter: string, token: string) {
+  const link = `${deps.config.APP_URL}/accept-invite?token=${token}`;
   await deps.providers.email.send({
     to: user.email,
     subject: `${inviter} invited you to Elixir Books`,
