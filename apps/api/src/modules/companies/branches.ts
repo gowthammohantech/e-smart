@@ -1,3 +1,4 @@
+import { isValidGstin } from '@esmart/core/domain/gstin';
 import { and, asc, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
@@ -23,7 +24,14 @@ function branchColumns(body: Schema<'Branch'>) {
   const code = body.code.trim().toUpperCase();
   if (!name) throw invalid('name', 'Name is required');
   if (!/^[A-Z0-9]{1,6}$/.test(code)) throw invalid('code', 'Use 1 to 6 letters or digits');
-  return { name, code, ...addressTo('address', body.address), phone: body.phone ?? null };
+  const gstin = body.gstin?.trim().toUpperCase() || null;
+  if (gstin && body.address.country === 'IN') {
+    if (!isValidGstin(gstin)) throw invalid('gstin', 'This GSTIN is not valid (check digit mismatch)');
+    if (body.address.stateCode && gstin.slice(0, 2) !== body.address.stateCode) {
+      throw invalid('address.stateCode', "The branch's state doesn't match its GSTIN's state code");
+    }
+  }
+  return { name, code, ...addressTo('address', body.address), phone: body.phone ?? null, gstin };
 }
 
 async function assertCodeFree(db: DbOrTx, companyId: string, code: string, exceptId?: string) {

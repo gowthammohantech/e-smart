@@ -2270,6 +2270,13 @@ export interface components {
             registered: boolean;
             compositionScheme?: boolean;
             placeOfSupplyStateCode?: string;
+            /** @description Letter of Undertaking. While valid, exports and SEZ supplies are zero-rated instead of charged IGST. */
+            lutNumber?: string;
+            /**
+             * Format: date
+             * @description Last day the LUT covers; absent means open-ended
+             */
+            lutValidTill?: string;
         };
         Company: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -2301,6 +2308,8 @@ export interface components {
             address: components["schemas"]["Address"];
             isPrimary?: boolean;
             phone?: string;
+            /** @description The branch's own GSTIN when it is registered separately; printed as the seller */
+            gstin?: string;
         };
         User: {
             readonly id?: string;
@@ -2607,6 +2616,8 @@ export interface components {
             documentDiscountValue?: number;
             charges?: components["schemas"]["Money"];
             applyRoundOff?: boolean;
+            /** @description A round-off the user typed; overrides the automatic one when applyRoundOff is true */
+            roundOffManual?: components["schemas"]["Money"];
             notes?: string;
             terms?: string;
             reference?: string;

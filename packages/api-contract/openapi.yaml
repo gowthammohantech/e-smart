@@ -3085,6 +3085,8 @@ components:
         registered: { type: boolean }
         compositionScheme: { type: boolean }
         placeOfSupplyStateCode: { type: string }
+        lutNumber: { type: string, description: 'Letter of Undertaking. While valid, exports and SEZ supplies are zero-rated instead of charged IGST.' }
+        lutValidTill: { type: string, format: date, description: Last day the LUT covers; absent means open-ended }
     Company:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -3119,6 +3121,7 @@ components:
             address: { $ref: '#/components/schemas/Address' }
             isPrimary: { type: boolean }
             phone: { type: string }
+            gstin: { type: string, description: 'The branch''s own GSTIN when it is registered separately; printed as the seller' }
     User:
       type: object
       properties:
@@ -3420,6 +3423,7 @@ components:
         documentDiscountValue: { type: number }
         charges: { $ref: '#/components/schemas/Money' }
         applyRoundOff: { type: boolean }
+        roundOffManual: { allOf: [{ $ref: '#/components/schemas/Money' }], description: A round-off the user typed; overrides the automatic one when applyRoundOff is true }
         notes: { type: string }
         terms: { type: string }
         reference: { type: string }

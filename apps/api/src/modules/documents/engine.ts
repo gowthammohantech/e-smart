@@ -54,6 +54,8 @@ export function companyCore(row: CompanyRow): Company {
       registered: row.taxRegistered,
       compositionScheme: row.compositionScheme,
       placeOfSupplyStateCode: row.placeOfSupplyStateCode ?? undefined,
+      lutNumber: row.lutNumber ?? undefined,
+      lutValidTill: row.lutValidTill ?? undefined,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     plan: row.plan,
@@ -130,6 +132,8 @@ export type DocFields = {
   chargesMinor: number;
   chargesCurrency?: string;
   applyRoundOff: boolean | null;
+  /** A round-off the user typed, in minor units of the document currency. */
+  roundOffManualMinor: number | null;
   placeOfSupplyStateCode: string | null;
   notes: string | null;
   terms: string | null;
@@ -193,6 +197,7 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     chargesMinor: body.charges?.minor ?? base?.chargesMinor ?? 0,
     chargesCurrency: body.charges?.currency,
     applyRoundOff: body.applyRoundOff ?? base?.applyRoundOff ?? null,
+    roundOffManualMinor: body.roundOffManual !== undefined ? body.roundOffManual.minor : (base?.roundOffManualMinor ?? null),
     placeOfSupplyStateCode: keep(body.placeOfSupplyStateCode, base?.placeOfSupplyStateCode),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
@@ -216,6 +221,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     documentDiscountValue: Number(row.documentDiscountValue),
     chargesMinor: row.chargesMinor,
     applyRoundOff: row.applyRoundOff,
+    roundOffManualMinor: row.roundOffManualMinor,
     placeOfSupplyStateCode: row.placeOfSupplyStateCode,
     notes: row.notes,
     terms: row.terms,
@@ -348,6 +354,7 @@ export async function prepareDocument(
     documentDiscountValue: f.documentDiscountValue,
     charges: { minor: f.chargesMinor, currency: f.currency },
     applyRoundOff,
+    roundOffManual: f.roundOffManualMinor !== null ? { minor: f.roundOffManualMinor, currency: f.currency } : undefined,
     taxCategories: categories,
     taxContext,
   });
@@ -373,6 +380,7 @@ export async function prepareDocument(
       documentDiscountValue: String(f.documentDiscountValue),
       chargesMinor: f.chargesMinor,
       applyRoundOff,
+      roundOffManualMinor: f.roundOffManualMinor,
       placeOfSupplyStateCode: placeOfSupply,
       notes: f.notes,
       terms: f.terms,

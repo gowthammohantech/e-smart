@@ -89,6 +89,8 @@ export const branches = pgTable("branches", {
 	addressCountry: char("address_country", { length: 2 }).notNull(),
 	isPrimary: boolean("is_primary").default(false).notNull(),
 	phone: varchar({ length: 20 }),
+	// The branch's own GSTIN, when it is registered separately; printed as the seller.
+	gstin: varchar({ length: 15 }),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -527,6 +529,8 @@ export const documents = pgTable("documents", {
 	documentDiscountValue: numeric("document_discount_value", { precision: 18, scale:  4 }).default('0').notNull(),
 	chargesMinor: bigint("charges_minor", { mode: "number" }).default(0).notNull(),
 	applyRoundOff: boolean("apply_round_off").default(true).notNull(),
+	// A round-off the user typed, overriding the automatic one.
+	roundOffManualMinor: bigint("round_off_manual_minor", { mode: "number" }),
 	placeOfSupplyStateCode: varchar("place_of_supply_state_code", { length: 2 }),
 	notes: text(),
 	terms: text(),
@@ -1554,6 +1558,9 @@ export const companies = pgTable("companies", {
 	taxRegistered: boolean("tax_registered").default(false).notNull(),
 	compositionScheme: boolean("composition_scheme").default(false).notNull(),
 	placeOfSupplyStateCode: varchar("place_of_supply_state_code", { length: 2 }),
+	// Letter of Undertaking: exports and SEZ supplies are zero-rated while it is valid.
+	lutNumber: varchar("lut_number", { length: 40 }),
+	lutValidTill: date("lut_valid_till", { mode: 'string' }),
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
 	plan: planTier().default('free').notNull(),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),

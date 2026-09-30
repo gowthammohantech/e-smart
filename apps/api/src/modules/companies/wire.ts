@@ -28,6 +28,8 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
       registered: row.taxRegistered,
       compositionScheme: row.compositionScheme,
       placeOfSupplyStateCode: row.placeOfSupplyStateCode,
+      lutNumber: row.lutNumber,
+      lutValidTill: row.lutValidTill,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     plan: row.plan,
@@ -54,6 +56,8 @@ export function companyColumns(body: Schema<'Company'>) {
     taxRegistered: tax?.registered ?? false,
     compositionScheme: tax?.compositionScheme ?? false,
     placeOfSupplyStateCode: tax?.placeOfSupplyStateCode ?? body.address.stateCode ?? null,
+    lutNumber: tax?.lutNumber?.trim().toUpperCase() || null,
+    lutValidTill: tax?.lutNumber?.trim() ? (tax.lutValidTill ?? null) : null,
     fiscalYearStartMonth: body.fiscalYearStartMonth,
   };
 }
@@ -67,6 +71,7 @@ export function branchToWire(row: BranchRow): Schema<'Branch'> {
     address: addressFrom(row, 'address')!,
     isPrimary: row.isPrimary,
     phone: row.phone,
+    gstin: row.gstin,
     ...versioned(row),
   });
 }

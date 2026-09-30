@@ -39,7 +39,7 @@ export async function renderDocumentPdf(
   const eway = row.currentEwayBillId ? await db.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, row.currentEwayBillId)) : [];
   const language: LanguageCode = opts.locale ?? 'en';
   const coreBranch: Branch | undefined = branch
-    ? { id: branch.id, companyId: branch.companyId, name: branch.name, code: branch.code, address: addressFrom(branch, 'address')!, isPrimary: branch.isPrimary, phone: branch.phone ?? undefined }
+    ? { id: branch.id, companyId: branch.companyId, name: branch.name, code: branch.code, address: addressFrom(branch, 'address')!, isPrimary: branch.isPrimary, phone: branch.phone ?? undefined, gstin: branch.gstin ?? undefined }
     : undefined;
   const ewayBill = eway[0]
     ? ({ ewayBillNumber: eway[0].ewayBillNumber.trim(), validUpto: eway[0].validUpto.toISOString() } as EwayBill)
