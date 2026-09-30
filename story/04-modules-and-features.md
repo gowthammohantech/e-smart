@@ -387,12 +387,15 @@ orb carries a nudge badge counting failed e-invoices plus expiring e-way bills.
 tax charged, low stock, compliance state, a party's balance, what needs
 attention.
 
-**What it will not do:** write anything. Any action that opens a writing form is
-preceded by a confirmation prompt in the chat. It does not answer for modules
-outside the tier, and never invents a figure.
+**What it will not do:** write anything without the user's confirmation. On the
+model it can prepare a draft document, a payment, a party, an expense, a
+document send or a payment reminder, shown as a confirm card; only confirming
+saves it. Any action that opens a writing form is preceded by a confirmation
+prompt in the chat. It does not answer for modules outside the tier, and never
+invents a figure.
 
-**Prototype boundary:** rule-based intent matching over the local store, not a
-model.
+**Demo mode:** rule-based intent matching over the local store. In remote mode
+it runs on Claude through the API (`lixiChat`), with the same tools over MCP.
 
 ---
 
@@ -449,7 +452,7 @@ prices and gating only, never a sentence.
 | Server | Zustand + AsyncStorage | `packages/api-contract/openapi.yaml`, `packages/db/migrations/0000_baseline.sql` |
 | Portals | In-process adapter with deterministic responses | GSP/ASP integration behind the same adapter interface |
 | OCR | Fixed extraction | Document AI / Textract / vision model |
-| Assistant | Rule-based over local store | A model with the same read-only, confirm-before-acting contract |
+| Assistant | Rule-based over local store | Claude through `lixiChat` and MCP; writes only through a confirmed, signed pending action (built) |
 | Sync | Simulated states | Real queue with idempotency keys and id mapping |
 | Google sign-in | Straight into the demo account | Real OAuth |
 | Illustrations | Placeholders in the Storyset Rafiki style | The real downloads, same filenames |

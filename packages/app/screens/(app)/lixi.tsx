@@ -20,7 +20,9 @@ import { Text } from '@esmart/ui/components/Text';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@esmart/ui/components/LixiOrb';
 import { answer, greet, lixiSuggestions, LixiAction, LixiContext, LixiReply } from '../../features/lixi/brain';
+import { askRemote, confirmRemote, remoteLixiAvailable, type PendingLixiAction } from '../../features/lixi/remote';
 import { detailRouteFor } from '../../features/documents/DocumentEditor';
+import { describeError } from '../../remote/errors';
 import {
   useBaseCurrency,
   useComplianceSummary,
@@ -46,8 +48,9 @@ const THINK_MS = 650;
 
 export default function LixiChat() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['lixi']);
+  const { t: tr, i18n } = useTranslation(['lixi']);
   const router = useRouter();
+  const remote = remoteLixiAvailable();
   // Set when Lixi was opened by holding a tab: the question to answer first.
   const { ask } = useLocalSearchParams<{ ask?: string }>();
   const insets = useSafeAreaInsets();
@@ -97,6 +100,8 @@ export default function LixiChat() {
   const [draft, setDraft] = useState('');
   const [thinking, setThinking] = useState(false);
   const [pending, setPending] = useState<Extract<LixiAction, { type: 'route' }> | null>(null);
+  // A write the server's Lixi prepared; nothing happens until it is confirmed.
+  const [action, setAction] = useState<PendingLixiAction | null>(null);
   const scroll = useRef<ScrollView>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -111,12 +116,37 @@ export default function LixiChat() {
     setDraft('');
     setMessages((m) => [...m, { id: `${Date.now()}-me`, from: 'me', reply: { text } }]);
     setThinking(true);
-    timer.current = setTimeout(() => {
-      const reply = answer(text, ctx);
-      setMessages((m) => [...m, { id: `${Date.now()}-lixi`, from: 'lixi', reply }]);
-      setThinking(false);
-      AccessibilityInfo.announceForAccessibility(reply.text);
-    }, THINK_MS);
+    if (remote) {
+      const turns = [...messages, { from: 'me' as const, reply: { text } }].map((m) => ({
+        role: m.from === 'me' ? ('user' as const) : ('assistant' as const),
+        text: m.reply.text,
+      }));
+      askRemote(turns, i18n.language)
+        // Offline or the model is down: the local brain answers instead.
+        .then((res) => {
+          say(res?.reply ?? answer(text, ctx));
+          if (res?.pendingAction) setAction(res.pendingAction);
+        })
+        .catch((err) => say({ text: describeError(err, tr) }));
+      return;
+    }
+    timer.current = setTimeout(() => say(answer(text, ctx)), THINK_MS);
+  };
+
+  const say = (reply: LixiReply) => {
+    setMessages((m) => [...m, { id: `${Date.now()}-lixi`, from: 'lixi', reply }]);
+    setThinking(false);
+    AccessibilityInfo.announceForAccessibility(reply.text);
+  };
+
+  const confirmAction = (a: PendingLixiAction) => {
+    setAction(null);
+    setThinking(true);
+    confirmRemote(a)
+      .then((res) =>
+        say(res.ok ? res.reply : { text: res.expired ? tr('lixi:ui.actionExpired') : tr('lixi:ui.actionFailed', { reason: res.reason }) }),
+      )
+      .catch((err) => say({ text: describeError(err, tr) }));
   };
 
   const act = (a: LixiAction) => {
@@ -170,7 +200,7 @@ export default function LixiChat() {
             Lixi
           </Text>
           <Text variant="caption" style={{ color: thinking ? LIXI.blue : t.c.muted }}>
-            {thinking ? 'Reading your books…' : 'Answers from your books, on this device'}
+            {thinking ? tr('lixi:ui.reading') : tr(remote ? 'lixi:ui.subtitleRemote' : 'lixi:ui.subtitleLocal')}
           </Text>
         </View>
         {messages.length ? (
@@ -280,6 +310,15 @@ export default function LixiChat() {
           setPending(null);
           if (route) router.push(route as never);
         }}
+      />
+      <ConfirmDialog
+        visible={!!action}
+        title={action?.summary ?? ''}
+        message={tr('lixi:ui.confirmNote')}
+        confirmLabel={tr('lixi:ui.confirm')}
+        icon="check-circle-outline"
+        onCancel={() => setAction(null)}
+        onConfirm={() => action && confirmAction(action)}
       />
     </KeyboardAvoidingView>
   );

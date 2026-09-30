@@ -69,6 +69,7 @@ tags:
   - { name: GST, description: 'GSTR-1' }
   - { name: Dashboard, description: 'Home-tab summary' }
   - { name: Search, description: 'Global search' }
+  - { name: Assistant, description: 'Lixi: answers from the books, and prepares writes for the user to confirm' }
   - { name: Notifications, description: 'In-app notification feed' }
   - { name: Audit, description: 'Read-only audit trail' }
   - { name: Integrations, description: 'Payments, messaging, accounting and storage connectors' }
@@ -2460,6 +2461,69 @@ paths:
                   documents: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
                   payments: { type: array, items: { $ref: '#/components/schemas/Payment' } }
 
+  # ------------------------------------------------------------------ Assistant
+  /companies/{companyId}/lixi/messages:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Assistant]
+      operationId: lixiChat
+      summary: Ask Lixi
+      description: |
+        Lixi answers from the company's books through the same routes the app
+        uses, as the caller, so role and plan gating apply. It never writes: a
+        request to draft, record or send comes back as `pendingAction`, which
+        runs only through `lixiConfirmAction`. The same tools are served over
+        MCP at `/companies/{companyId}/mcp` (outside this contract).
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LixiChatRequest' }
+      responses:
+        '200':
+          description: Lixi's answer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LixiChatResponse' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+  /companies/{companyId}/lixi/actions:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Assistant]
+      operationId: lixiConfirmAction
+      summary: Confirm an action Lixi prepared
+      description: |
+        Runs a `pendingAction` as the caller. The token is bound to the user,
+        session and company and expires after five minutes (`410
+        LIXI_ACTION_EXPIRED`). Role and plan are checked again now; the inner
+        route's error comes back unchanged. Confirming twice runs once.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 1, maxLength: 20000 }
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LixiConfirmResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '410':
+          description: The action expired
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
   # ------------------------------------------------------------------ Notifications
   /companies/{companyId}/notifications:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
@@ -4023,3 +4087,72 @@ components:
         pendingCompliance: { type: integer, description: Invoices awaiting IRN plus e-way bills expiring soon }
         recentDocuments: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
         unreadNotifications: { type: integer }
+
+    # ---------------------------------------------------------------- assistant
+    LixiChatRequest:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 40
+          description: The conversation so far, oldest first, ending with the user's question.
+          items:
+            type: object
+            required: [role, text]
+            properties:
+              role: { type: string, enum: [user, assistant] }
+              text: { type: string, minLength: 1, maxLength: 4000 }
+        locale: { type: string, description: 'Reply language, e.g. `en` or `ta`. Defaults to the user''s locale.' }
+    LixiStat:
+      type: object
+      required: [label, value]
+      properties:
+        label: { type: string }
+        value: { type: string }
+    LixiAction:
+      type: object
+      required: [type, label]
+      properties:
+        type: { type: string, enum: [route, document, ask] }
+        label: { type: string }
+        route: { type: string, description: 'App route, for `route`. Only routes the plan can open.' }
+        kind: { $ref: '#/components/schemas/DocumentKind' }
+        id: { type: string, description: 'Document id, for `document`' }
+        question: { type: string, description: 'For `ask`' }
+    LixiReply:
+      type: object
+      required: [text, stats, actions]
+      properties:
+        text: { type: string }
+        stats: { type: array, items: { $ref: '#/components/schemas/LixiStat' } }
+        actions: { type: array, items: { $ref: '#/components/schemas/LixiAction' } }
+    LixiPendingAction:
+      type: object
+      required: [token, tool, summary, preview, expiresAt]
+      properties:
+        token: { type: string, description: Opaque; pass to lixiConfirmAction }
+        tool: { type: string }
+        summary: { type: string }
+        preview: { type: object, additionalProperties: true }
+        expiresAt: { type: string, format: date-time }
+    LixiChatResponse:
+      type: object
+      required: [reply]
+      properties:
+        reply: { $ref: '#/components/schemas/LixiReply' }
+        pendingAction: { $ref: '#/components/schemas/LixiPendingAction' }
+    LixiConfirmResponse:
+      type: object
+      required: [reply, result]
+      properties:
+        reply: { $ref: '#/components/schemas/LixiReply' }
+        result:
+          type: object
+          required: [entity]
+          properties:
+            entity: { type: string, enum: [document, payment, party, expense, message, reminder] }
+            id: { type: string }
+            kind: { type: string }
+            number: { type: string }

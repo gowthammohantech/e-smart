@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from '../config';
+import { createAssistantProvider, type AssistantProvider } from './assistant';
 import { createComplianceProvider, type ComplianceProvider } from './compliance';
 import { createFxProvider, type FxProvider } from './fx';
 import { createGstinProvider, type GstinProvider } from './gstin';
@@ -23,6 +24,7 @@ export type Providers = {
   ocr: OcrProvider;
   fx: FxProvider;
   payments: PaymentsProvider;
+  assistant: AssistantProvider;
 };
 
 /**
@@ -42,6 +44,7 @@ export function createProviders(config: Config, log: FastifyBaseLogger | { info:
     ocr: createOcrProvider(config),
     fx: createFxProvider(config),
     payments: createPaymentsProvider(config),
+    assistant: createAssistantProvider(config),
   };
 }
 

@@ -185,7 +185,14 @@
     "thinking": "Lixi is thinking",
     "prompt": "What can I dig up?",
     "gotIt": "Got it",
-    "gotItA11y": "Got it, don't show this tip again"
+    "gotItA11y": "Got it, don't show this tip again",
+    "reading": "Reading your books…",
+    "subtitleLocal": "Answers from your books, on this device",
+    "subtitleRemote": "Answers from your books",
+    "confirm": "Confirm",
+    "confirmNote": "Nothing is saved until you confirm.",
+    "actionFailed": "That didn't go through: {{reason}}",
+    "actionExpired": "That expired. Ask me again and I'll prepare it afresh."
   },
   "hint": {
     "swipeTabs": "Swipe left or right to switch tabs",

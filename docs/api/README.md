@@ -48,6 +48,7 @@ them sits behind the backend; the mobile app never calls them directly.
 | **Email** | invites, password reset, sending documents | Amazon SES, SendGrid, Postmark |
 | **Payments** | `createPaymentLink`, `razorpayWebhook` | Razorpay (payment links, UPI) |
 | **Subscriptions** | `startCheckout`, plan changes | Razorpay Subscriptions, or App Store / Play Billing if sold in-app |
+| **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`) |
 | **OCR** | `createOcrExtraction` (replaces `mockExtract`) | Google Document AI, AWS Textract, Azure Document Intelligence, or an LLM vision model |
 | **Object storage** | attachments, logos, item images, PDFs, exports | S3, GCS, Cloudflare R2 (pre-signed URLs) |
 | **PDF rendering** | `getDocumentPdf`, receipts, statements, reports | Headless Chromium (Puppeteer or Gotenberg) running the same template as `documentHtml.ts` |
@@ -311,6 +312,35 @@ The prototype allows some things a real backend must refuse:
 | Method | Path | Operation |
 |---|---|---|
 | GET | `…/search` | search |
+
+### Assistant
+
+| Method | Path | Operation |
+|---|---|---|
+| POST | `…/lixi/messages` | lixiChat |
+| POST | `…/lixi/actions` | lixiConfirmAction |
+| POST | `/companies/{companyId}/mcp` | MCP (Streamable HTTP; not in the contract) |
+
+Lixi's tools live in `apps/api/src/lixi/tools.ts`. Each one calls a contract
+route in-process, as the caller, so it can never do more than the user could.
+Reads answer directly. Writes return a pending action (`lixi/confirm.ts`): a
+signed token, bound to user, session and company, valid for five minutes, and
+used as the inner request's Idempotency-Key.
+
+**Using the MCP endpoint.** Point any MCP client that speaks Streamable HTTP at
+`https://<api>/v1/companies/<companyId>/mcp` with the user's access token as
+`Authorization: Bearer …`. For example, with Claude Code:
+
+```sh
+claude mcp add --transport http elixir-books \
+  https://api.example/v1/companies/<companyId>/mcp \
+  --header "Authorization: Bearer <accessToken>"
+```
+
+Access tokens last 15 minutes, so this suits trying things out; a
+long-lived integration needs OAuth on this endpoint (not built yet). Write tools
+return `{token, summary, preview}`; `confirm_action` runs one and is marked
+destructive, so clients ask the person first.
 
 ### Notifications
 

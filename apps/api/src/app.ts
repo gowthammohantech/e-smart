@@ -15,6 +15,7 @@ import { registerRoutes } from './openapi/routes';
 import { loadOperations } from './openapi/spec';
 import { MemoryStorage } from './providers';
 import { INTERNAL_HEADER, INTERNAL_TOKEN } from './lib/internal';
+import { registerMcp } from './lixi/mcp';
 
 export type BuildOptions = {
   logger?: boolean | object;
@@ -83,6 +84,9 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
     await deps.pool.query('select 1');
     return { ok: true };
   });
+
+  // Lixi's tools over MCP; outside the contract, like /health.
+  registerMcp(app, deps);
 
   const { operations } = await loadOperations();
   registerRoutes(app, deps, operations, opts.handlers ?? defaultHandlers, opts.webhooks ?? defaultWebhooks);

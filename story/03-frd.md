@@ -741,8 +741,19 @@ route.
 If the data is not there, Lixi says so. It never estimates and never invents a
 figure.
 
-**FR-21.2** Lixi **never writes**. Any action that would open a form which writes
-carries a `confirm` prompt that the chat asks before navigating.
+**FR-21.2** Lixi **never writes on its own**. Any action that would open a form
+which writes carries a `confirm` prompt that the chat asks before navigating.
+On the server, a write tool only returns a pending action: a signed token,
+bound to the user, session and company and valid for five minutes, that runs
+the exact request only through `lixiConfirmAction`. Role and plan are checked
+again at that moment, and a repeated confirmation runs once.
+
+**FR-21.6** In remote mode Lixi runs on a model (`lixiChat`). Every tool calls
+the contract route it names, as the signed-in user, so company access, roles and
+plan gating are the app's own. The same tools are served over MCP (Streamable
+HTTP, stateless) at `/v1/companies/{companyId}/mcp` for MCP clients, with
+`confirm_action` marked destructive. When the server is unreachable or the model
+is down, the chat answers from the local brain.
 
 **FR-21.3** Lixi respects the plan: it does not answer for modules the tier
 excludes, and its suggestions never link to a route the tier cannot open.

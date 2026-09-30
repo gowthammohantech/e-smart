@@ -1780,6 +1780,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/lixi/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Lixi
+         * @description Lixi answers from the company's books through the same routes the app
+         *     uses, as the caller, so role and plan gating apply. It never writes: a
+         *     request to draft, record or send comes back as `pendingAction`, which
+         *     runs only through `lixiConfirmAction`. The same tools are served over
+         *     MCP at `/companies/{companyId}/mcp` (outside this contract).
+         */
+        post: operations["lixiChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/lixi/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an action Lixi prepared
+         * @description Runs a `pendingAction` as the caller. The token is bound to the user,
+         *     session and company and expires after five minutes (`410
+         *     LIXI_ACTION_EXPIRED`). Role and plan are checked again now; the inner
+         *     route's error comes back unchanged. Confirming twice runs once.
+         */
+        post: operations["lixiConfirmAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/notifications": {
         parameters: {
             query?: never;
@@ -3213,6 +3264,62 @@ export interface components {
             pendingCompliance?: number;
             recentDocuments?: components["schemas"]["DocumentSummary"][];
             unreadNotifications?: number;
+        };
+        LixiChatRequest: {
+            /** @description The conversation so far, oldest first, ending with the user's question. */
+            messages: {
+                /** @enum {string} */
+                role: "user" | "assistant";
+                text: string;
+            }[];
+            /** @description Reply language, e.g. `en` or `ta`. Defaults to the user's locale. */
+            locale?: string;
+        };
+        LixiStat: {
+            label: string;
+            value: string;
+        };
+        LixiAction: {
+            /** @enum {string} */
+            type: "route" | "document" | "ask";
+            label: string;
+            /** @description App route, for `route`. Only routes the plan can open. */
+            route?: string;
+            kind?: components["schemas"]["DocumentKind"];
+            /** @description Document id, for `document` */
+            id?: string;
+            /** @description For `ask` */
+            question?: string;
+        };
+        LixiReply: {
+            text: string;
+            stats: components["schemas"]["LixiStat"][];
+            actions: components["schemas"]["LixiAction"][];
+        };
+        LixiPendingAction: {
+            /** @description Opaque; pass to lixiConfirmAction */
+            token: string;
+            tool: string;
+            summary: string;
+            preview: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        LixiChatResponse: {
+            reply: components["schemas"]["LixiReply"];
+            pendingAction?: components["schemas"]["LixiPendingAction"];
+        };
+        LixiConfirmResponse: {
+            reply: components["schemas"]["LixiReply"];
+            result: {
+                /** @enum {string} */
+                entity: "document" | "payment" | "party" | "expense" | "message" | "reminder";
+                id?: string;
+                kind?: string;
+                number?: string;
+            };
         };
     };
     responses: {
@@ -6938,6 +7045,78 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    lixiChat: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LixiChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Lixi's answer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LixiChatResponse"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            502: components["responses"]["UpstreamError"];
+        };
+    };
+    lixiConfirmAction: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LixiConfirmResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            /** @description The action expired */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
         };
     };
     listNotifications: {

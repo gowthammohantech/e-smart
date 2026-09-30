@@ -261,7 +261,7 @@ against. Exact arithmetic and state rules are in the FRD; this section defines
 
 **Acceptance**
 - Lixi answers only from company-scoped data. If the data is not there it says so; it never invents a figure.
-- Lixi never writes. Any action that opens a form which would write carries an explicit confirm prompt first.
+- Lixi never writes on its own. It can prepare a write (a draft document, a payment, a party, an expense, a message or reminder), but nothing is saved until I confirm it; the server enforces this, not the model. Opening a form that would write also carries a confirm prompt first.
 - Lixi respects the plan: it does not answer for modules the tier excludes.
 - Three access gestures — hold a tab, swipe up on the bar, tap the floating orb — each independently switchable in Settings → Appearance.
 

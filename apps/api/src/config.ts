@@ -62,6 +62,15 @@ const Env = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().default('dev-razorpay-secret'),
+
+  /** The model behind Lixi. The simulator needs no key and no network. */
+  ASSISTANT_PROVIDER: z.enum(['simulator', 'anthropic']).default('simulator'),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  LIXI_MODEL: z.string().default('claude-opus-5-5'),
+  LIXI_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('low'),
+  LIXI_MAX_TOOL_ROUNDS: z.coerce.number().int().min(1).max(20).default(8),
+  /** Lixi questions per user per minute; each one can cost several model calls. */
+  LIXI_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(20),
 });
 
 export type Config = z.infer<typeof Env>;
@@ -72,6 +81,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     if (config.JWT_SECRET.startsWith('dev-only')) throw new Error('JWT_SECRET must be set in production.');
     if (config.DEMO_OTP) throw new Error('DEMO_OTP must be off in production.');
     if (env.CREDENTIALS_KEY === undefined) throw new Error('CREDENTIALS_KEY must be set in production.');
+    if (config.ASSISTANT_PROVIDER === 'anthropic' && !config.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY must be set for ASSISTANT_PROVIDER=anthropic.');
   }
   return config;
 }

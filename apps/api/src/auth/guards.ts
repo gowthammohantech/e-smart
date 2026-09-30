@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { schema } from '@esmart/db';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
-import type { AuthUser, Deps } from '../context';
+import type { AuthUser, CompanyRow, Deps } from '../context';
 import { ApiError, forbidden, planUpgradeRequired, unauthorized } from '../http/errors';
 import type { AccessClaims } from './sessions';
 
@@ -31,7 +31,7 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
   };
 }
 
-async function authenticate(app: FastifyInstance, deps: Deps, req: FastifyRequest, required: boolean) {
+export async function authenticate(app: FastifyInstance, deps: Deps, req: FastifyRequest, required: boolean) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     if (required) throw unauthorized('UNAUTHORIZED', 'Missing bearer token');
@@ -54,6 +54,15 @@ async function authenticate(app: FastifyInstance, deps: Deps, req: FastifyReques
   req.authUser = user;
 }
 
+/** The company in a path, if the caller may open it. */
+export async function companyFor(deps: Deps, user: AuthUser, companyId: string): Promise<CompanyRow> {
+  const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!company || company.accountId !== user.accountId || !user.companyIds.includes(companyId)) {
+    throw forbidden('COMPANY_ACCESS_DENIED', 'You do not have access to this company');
+  }
+  return company;
+}
+
 /**
  * The guard chain, in order, for every contract route:
  * authenticate → company access → role → plan module.
@@ -71,13 +80,7 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
     if (!user) return;
 
     const companyId = (req.params as { companyId?: string }).companyId;
-    if (companyId) {
-      const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
-      if (!company || company.accountId !== user.accountId || !user.companyIds.includes(companyId)) {
-        throw forbidden('COMPANY_ACCESS_DENIED', 'You do not have access to this company');
-      }
-      req.company = company;
-    }
+    if (companyId) req.company = await companyFor(deps, user, companyId);
 
     if (op.roles && !op.roles.includes(user.role)) {
       throw new ApiError(403, 'ROLE_FORBIDDEN', `This needs one of: ${op.roles.join(', ')}`);

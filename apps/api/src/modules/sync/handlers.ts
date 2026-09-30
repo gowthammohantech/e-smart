@@ -5,7 +5,8 @@ import { defineHandlers } from '../../context';
 import { badRequest, forbidden } from '../../http/errors';
 import { sha256 } from '../../lib/crypto';
 import { compact } from '../../lib/wire';
-import { fetchEntities, injectAs } from './entities';
+import { injectAs } from '../../lib/internal';
+import { fetchEntities } from './entities';
 
 const CL = schema.changeLog;
 const SM = schema.syncMutations;

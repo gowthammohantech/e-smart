@@ -344,6 +344,9 @@ downloads.
 - A company-wide notification has one read state for everyone in it.
 - Attachments picked in the app stay on the device in remote mode; the
   pre-signed upload API exists, but the app doesn't call it yet.
-- The assistant answers from the local store with rule-based logic, not a model.
+- In remote mode, Lixi runs on Claude (`ASSISTANT_PROVIDER=anthropic`), with its
+  tools also served over MCP at `/v1/companies/{id}/mcp`. In demo mode, and
+  whenever the server can't be reached, it falls back to the rule-based brain
+  over the local store.
 - Google sign-in exists only in demo mode.
 - The illustrations are placeholders, not the real Storyset artwork.
