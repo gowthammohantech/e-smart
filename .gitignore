@@ -13,6 +13,7 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
@@ -39,6 +40,11 @@ yarn-error.*
 # generated native folders
 /apps/*/ios
 /apps/*/android
+/ios
+/android
+
+# signing keys and store credentials (see apps/mobile/plugins/withAndroidSigning.js)
+/apps/*/credentials/
 
 # turborepo
 .turbo/

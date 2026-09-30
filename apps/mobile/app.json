@@ -60,7 +60,8 @@
       "expo-splash-screen",
       "expo-web-browser",
       "expo-localization",
-      "./plugins/withSceneLifecycle"
+      "./plugins/withSceneLifecycle",
+      "./plugins/withAndroidSigning"
     ],
     "experiments": {
       "typedRoutes": false,
