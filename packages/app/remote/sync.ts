@@ -1,7 +1,7 @@
 import { ApiError } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
-import { applyEntity, purgeLocalDefaults, remapIds, removeEntity, replaceForCompany, unwrap } from './apply';
+import { applyChanges, applyEntity, purgeLocalDefaults, remapIds, replaceForCompany, unwrap } from './apply';
 import { useRemoteMeta } from './meta';
 import * as outbox from './outbox';
 
@@ -157,11 +157,7 @@ async function pullAll() {
   let cursor = meta.cursor;
   for (;;) {
     const { data } = await api.GET('/sync/pull', { params: { query: { ...(cursor ? { since: cursor } : {}), limit: 500 } } });
-    for (const ch of data?.changes ?? []) {
-      if (!ch.entityType || !ch.entityId) continue;
-      if (ch.op === 'delete') removeEntity(ch.entityType, ch.entityId);
-      else if (ch.data) applyEntity(ch.entityType, ch.data);
-    }
+    applyChanges(data?.changes ?? []);
     cursor = data?.cursor ?? cursor;
     useRemoteMeta.getState().patch({ cursor });
     if (!data?.hasMore) return;

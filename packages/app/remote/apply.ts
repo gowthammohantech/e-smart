@@ -72,12 +72,39 @@ export function applyEntity(entityType: string, data: unknown) {
   if (typeof row.version === 'number' && typeof row.id === 'string') useRemoteMeta.getState().setVersion(row.id, row.version);
 }
 
-export function removeEntity(entityType: string, id: string) {
-  const map = COLLECTIONS[entityType];
-  if (!map) return;
-  const list = useAppStore.getState()[map.collection] as Row[];
-  useAppStore.setState({ [map.collection]: list.filter((r) => r[map.key] !== id) } as never);
-  useRemoteMeta.getState().forget(id);
+export type Change = { op?: string; entityType?: string; entityId?: string; data?: unknown };
+
+/**
+ * A page of /sync/pull changes, applied with one write to each store. Every
+ * setState makes the persist middleware serialise the whole store, so a
+ * first sync applied change by change takes minutes on a phone.
+ */
+export function applyChanges(changes: Change[]) {
+  if (!changes.length) return;
+  const s = useAppStore.getState();
+  const lists: Record<string, Row[]> = {};
+  const versions = { ...useRemoteMeta.getState().versions };
+  for (const ch of changes) {
+    const map = ch.entityType ? COLLECTIONS[ch.entityType] : undefined;
+    if (!map || !ch.entityId) continue;
+    const list = (lists[map.collection] ??= [...(s[map.collection] as Row[])]);
+    if (ch.op === 'delete') {
+      const at = list.findIndex((r) => r[map.key] === ch.entityId);
+      if (at >= 0) list.splice(at, 1);
+      delete versions[ch.entityId];
+      continue;
+    }
+    if (!ch.data || typeof ch.data !== 'object') continue;
+    const row = ch.data as Row;
+    const key = row[map.key];
+    if (typeof key !== 'string') continue;
+    const at = list.findIndex((r) => r[map.key] === key);
+    if (at >= 0) list[at] = { ...list[at], ...row };
+    else list.push(row);
+    if (typeof row.version === 'number' && typeof row.id === 'string') versions[row.id] = row.version;
+  }
+  if (Object.keys(lists).length) useAppStore.setState(lists as never);
+  useRemoteMeta.setState({ versions });
 }
 
 /** Replaces one collection's rows for a company with the server's list. */
