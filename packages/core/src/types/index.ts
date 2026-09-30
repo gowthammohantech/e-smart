@@ -777,6 +777,19 @@ export type SyncQueueEntry = {
   attempts: number;
   lastError?: string;
   queuedAt: string;
+  /*
+   * The API mutation the entry stands for (remote mode). The prototype's
+   * seeded entries have none. The shape is the contract's SyncMutation.
+   */
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path?: string;
+  body?: unknown;
+  /** The server version the change was made against; a stale one is a conflict. */
+  baseVersion?: number;
+  /** An id minted offline, which the server maps to its own on create. */
+  clientEntityId?: string;
+  /** The server's copy when the change conflicted, for the Sync screen. */
+  conflict?: unknown;
 };
 
 export type Integration = {

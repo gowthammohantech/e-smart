@@ -10,9 +10,14 @@ import { ToastProvider } from '@esmart/ui/components/Toast';
 import { I18nProvider } from '../i18n/I18nProvider';
 import { useAppStore } from '../store/appStore';
 import { useUiStore } from '../store/uiStore';
+import { installRemote, useRemoteSync } from '../remote';
+
+// Remote mode wraps the store's actions once, before anything renders.
+installRemote();
 
 function RootNavigator() {
   const t = useTheme();
+  useRemoteSync();
   const router = useRouter();
   const segments = useSegments();
 

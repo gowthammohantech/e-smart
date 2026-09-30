@@ -45,6 +45,7 @@ import {
 import { Money, zero } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
+import { isRemote } from '../remote/config';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { formatNumber } from '@esmart/core/domain/numbering';
 import { initialStatus, isFinalized } from '@esmart/core/domain/documentStates';
@@ -145,6 +146,36 @@ export type Session = {
   onboardingComplete: boolean;
   signedInAt?: string;
 };
+
+/** Remote mode starts empty: everything arrives from the API on sign-in. */
+export function emptyData(): AppData {
+  return {
+    accountId: '',
+    users: [],
+    devices: [],
+    companies: [],
+    branches: [],
+    parties: [],
+    items: [],
+    taxCategories: [],
+    expenseCategories: [],
+    paymentAccounts: [],
+    exchangeRates: [],
+    numberingSeries: [],
+    documents: [],
+    payments: [],
+    expenses: [],
+    stockMovements: [],
+    attachments: [],
+    notifications: [],
+    auditEvents: [],
+    syncQueue: [],
+    integrations: [],
+    complianceSettings: [],
+    ewayBills: [],
+    transporters: [],
+  };
+}
 
 export function buildSeedData(): AppData {
   const companies = seedCompanies();
@@ -733,13 +764,13 @@ export const useAppStore = create<AppState>()(
         });
       };
 
-      const seed = buildSeedData();
+      const seed = isRemote() ? emptyData() : buildSeedData();
 
       return {
         ...seed,
         session: emptySession,
-        activeCompanyId: PRIMARY_COMPANY_ID,
-        activeBranchId: 'brn_mum',
+        activeCompanyId: isRemote() ? '' : PRIMARY_COMPANY_ID,
+        activeBranchId: isRemote() ? '' : 'brn_mum',
         hydrated: false,
         setHydrated: (hydrated) => set({ hydrated }),
 
@@ -1817,7 +1848,8 @@ export const useAppStore = create<AppState>()(
       };
     },
     {
-      name: 'ebs.data.v1',
+      // Remote data never shares storage with the demo dataset.
+      name: isRemote() ? 'ebs.remote.v1' : 'ebs.data.v1',
       version: 5,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => {
