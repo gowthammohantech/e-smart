@@ -49,5 +49,20 @@ export default defineRailway(() => {
     },
   });
 
-  return project('e-smart', { resources: [api, web] });
+  /**
+   * The platform admin console: a static Vite build, served with an SPA
+   * fallback. VITE_API_URL is read at build time, so changing it needs a
+   * rebuild, not just a restart.
+   */
+  const admin = service('admin', {
+    build: 'npm run build -w @esmart/admin',
+    start: 'npm run start -w @esmart/admin',
+    healthcheck: '/',
+    env: {
+      NODE_ENV: 'production',
+      VITE_API_URL: 'https://api-production-4abd.up.railway.app',
+    },
+  });
+
+  return project('e-smart', { resources: [api, web, admin] });
 });

@@ -40,6 +40,11 @@ Enum plan_module {
   branches
   payables
 }
+Enum platform_role {
+  superadmin
+  support
+}
+
 Enum user_role {
   owner
   admin
@@ -408,6 +413,9 @@ Table accounts {
   id varchar(40) [pk, note: 'CustomerAccount; owns companies and users']
   name varchar(200) [not null]
   owner_user_id varchar(40) [note: 'set once the first user exists']
+  suspended_at timestamptz [note: 'set by a platform operator; every user is locked out while set']
+  suspended_reason varchar(500)
+  suspended_by varchar(40) [ref: > users.id]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 }
@@ -481,6 +489,7 @@ Table users {
   phone varchar(20) [unique, note: 'E.164']
   password_hash varchar(255) [note: 'argon2id; null for OTP-only users']
   role user_role [not null, default: 'viewer']
+  platform_role platform_role [note: 'platform operator access to /admin; null for tenant users']
   avatar_color varchar(9) [not null]
   status user_status [not null, default: 'invited']
   locale varchar(10) [default: 'en']
@@ -1422,6 +1431,28 @@ Table audit_events {
     (company_id, entity_type, entity_id)
   }
   Note: 'Append-only; no updates or deletes'
+}
+
+Table platform_audit_events {
+  id varchar(40) [pk]
+  actor_id varchar(40) [not null, ref: > users.id]
+  actor_email varchar(254) [not null, note: 'snapshot']
+  action varchar(60) [not null, note: 'e.g. account.suspend, company.plan.override']
+  target_type varchar(30) [not null, note: 'account | company | user']
+  target_id varchar(40) [not null]
+  target_label varchar(200) [not null]
+  reason varchar(500) [not null]
+  before jsonb
+  after jsonb
+  ip_address inet
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    created_at
+    (target_type, target_id)
+    actor_id
+  }
+  Note: 'What platform operators did, across tenants. Append-only.'
 }
 
 Table integrations {
