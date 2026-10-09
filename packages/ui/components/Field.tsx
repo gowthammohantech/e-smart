@@ -7,15 +7,31 @@ import {
   Switch,
   TextInput,
   TextInputProps,
+  TextStyle,
   View,
   ViewStyle,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeProvider';
+import { type Theme, useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
+import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { currencySymbol } from '@esmart/core/lib/currencies';
 import { sanitizeAmountInput } from '@esmart/core/lib/format';
+
+const WEB = Platform.OS === 'web';
+
+/**
+ * Web only: a focused field shows its own border, so the browser's outline on
+ * the input inside it goes. Spread into a style object; empty on native.
+ */
+// RN's types only list the outline styles native draws; react-native-web also takes 'none'.
+export const WEB_INPUT_RESET = (WEB ? { outlineStyle: 'none', outlineWidth: 0 } : {}) as TextStyle;
+
+/** Web only: a soft halo outside a focused field's border. Empty on native. */
+export function webFocusHalo(t: Theme, focused: boolean): ViewStyle {
+  return WEB && focused ? { boxShadow: `0 0 0 3px ${t.c.primary}2E` } : {};
+}
 
 /* ------------------------------------------------------------------ */
 /* Shared label / error wrapper                                        */
@@ -42,7 +58,11 @@ export function FieldShell({
       {label ? (
         <Text variant="caption" tone="muted" weight="600">
           {label}
-          {required ? <Text style={{ color: t.c.bad }}> *</Text> : null}
+          {required ? (
+            // On the web the asterisk must match the label's size, or a required
+            // label runs taller and its field sits lower than the one beside it.
+            <Text variant={WEB ? 'caption' : undefined} style={{ color: t.c.bad }}> *</Text>
+          ) : null}
         </Text>
       ) : null}
       {children}
@@ -108,6 +128,7 @@ export function TextField({
           minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 42 : 48,
           // Read-only fields look it, rather than only refusing input.
           opacity: rest.editable === false ? 0.6 : 1,
+          ...webFocusHalo(t, focused && !error),
         }}
       >
         {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null}
@@ -120,6 +141,7 @@ export function TextField({
               paddingVertical: multiline ? t.spacing.md : t.spacing.sm,
               minHeight: multiline ? (t.script === 'tamil' ? 100 : 92) : undefined,
               textAlignVertical: multiline ? 'top' : 'center',
+              ...WEB_INPUT_RESET,
             },
             style,
           ]}
@@ -130,7 +152,14 @@ export function TextField({
           accessibilityLabel={label}
           {...rest}
         />
-        {suffix}
+        {/* Text can't sit straight inside a View, so a plain unit such as "km" gets its own Text. */}
+        {typeof suffix === 'string' || typeof suffix === 'number' ? (
+          <Text variant="caption" tone="muted">
+            {suffix}
+          </Text>
+        ) : (
+          suffix
+        )}
       </View>
     </FieldShell>
   );
@@ -170,6 +199,7 @@ export function AmountField({
 }) {
   const t = useTheme();
   const [focused, setFocused] = useState(false);
+  const desktop = useIsDesktop();
 
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
@@ -178,12 +208,14 @@ export function AmountField({
           flexDirection: 'row',
           alignItems: 'center',
           gap: t.spacing.sm,
-          backgroundColor: t.c.card2,
+          // A desktop uses the web's white, outlined input, the same height as the fields beside it.
+          backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
           borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
-          height: size === 'lg' ? 64 : 48,
+          height: size === 'lg' ? 64 : desktop ? 42 : 48,
+          ...webFocusHalo(t, focused && !error),
         }}
       >
         <Text
@@ -210,6 +242,7 @@ export function AmountField({
             fontSize: size === 'lg' ? t.fontSize.h2 : t.fontSize.body,
             fontWeight: size === 'lg' ? '700' : '500',
             fontVariant: ['tabular-nums'],
+            ...WEB_INPUT_RESET,
           }}
         />
         <Text variant="caption" tone="muted">
@@ -266,7 +299,7 @@ export function PickerField({
         accessibilityRole="button"
         accessibilityState={{ disabled: !!disabled }}
         accessibilityLabel={`${label ?? 'Select'}: ${value ?? placeholder}`}
-        style={({ pressed }) => ({
+        style={(state) => ({
           flexDirection: 'row',
           alignItems: 'center',
           gap: t.spacing.sm,
@@ -276,7 +309,9 @@ export function PickerField({
           borderColor: error ? t.c.bad : t.c.line,
           paddingHorizontal: t.spacing.md,
           height: desktop ? 42 : 48,
-          opacity: disabled ? 0.6 : pressed ? 0.7 : 1,
+          opacity: disabled ? 0.6 : state.pressed ? 0.7 : 1,
+          // The app's keyboard focus ring, in place of the browser's black outline.
+          ...(WEB ? focusRing(t, (state as WebPressState).focused) : {}),
         })}
       >
         {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} /> : null}

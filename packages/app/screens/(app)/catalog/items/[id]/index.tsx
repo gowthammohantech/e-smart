@@ -319,7 +319,12 @@ export default function ItemDetail() {
         ].map((a) => (
           <Pressable
             key={a.label}
-            onPress={a.onPress}
+            // Every action closes the sheet first; it is a modal, so one left open
+            // would sit over the screen the action navigates to.
+            onPress={() => {
+              setActionsOpen(false);
+              a.onPress();
+            }}
             accessibilityRole="button"
             accessibilityLabel={a.label}
             style={({ pressed }) => ({

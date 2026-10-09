@@ -14,7 +14,9 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { mockExtract, useOcrStore } from '../../../features/ocr/ocrStore';
 import { recognizeText } from '../../../features/ocr/recognize';
 import { parseReceiptText } from '@esmart/core/domain/parseReceipt';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
 
 const STEPS = [
   { icon: 'camera-outline' as const, label: 'Capture', body: 'Photograph the bill or pick one from your gallery.' },
@@ -28,6 +30,9 @@ export default function OcrCapture() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const toast = useToast();
+  // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
+  const breakpoint = useBreakpoint();
+  const desktop = breakpoint !== 'phone';
 
   const setResult = useOcrStore((s) => s.setResult);
   const [kind, setKind] = useState<'expense' | 'purchaseBill'>('expense');
@@ -79,6 +84,112 @@ export default function OcrCapture() {
       toast.show(tr('inventory:ocr.cameraUnavailable'), 'info');
     }
   };
+
+  if (desktop) {
+    const scan = (
+      <Card style={{ gap: t.spacing.lg }}>
+        <View style={{ width: 360 }}>
+          <Segmented
+            options={[
+              { value: 'expense', label: 'Expense receipt' },
+              { value: 'purchaseBill', label: 'Supplier bill' },
+            ]}
+            value={kind}
+            onChange={(v) => setKind(v as 'expense' | 'purchaseBill')}
+            size="sm"
+          />
+        </View>
+
+        <Pressable
+          onPress={() => pick(true)}
+          accessibilityRole="button"
+          accessibilityLabel={tr('inventory:ocr.takePhoto')}
+          disabled={busy}
+          style={(state) => {
+            const { hovered, focused } = state as WebPressState;
+            return [
+              {
+                alignItems: 'center',
+                gap: t.spacing.sm,
+                paddingVertical: t.spacing.xxl,
+                paddingHorizontal: t.spacing.lg,
+                borderRadius: t.radius.lg,
+                borderWidth: 1.5,
+                borderStyle: 'dashed',
+                borderColor: hovered ? t.c.primary : t.c.line,
+                backgroundColor: hovered ? t.c.chip : t.c.card2,
+              },
+              focusRing(t, focused),
+            ];
+          }}
+        >
+          <Illustration name="scanning" size="full" />
+          <Text variant="title" weight="600">
+            {busy ? 'Reading the bill…' : 'Take a photo'}
+          </Text>
+          <Text variant="small" tone="muted" center style={{ maxWidth: 360, lineHeight: 20 }}>
+            {busy ? 'Extracting vendor, date, totals and line items.' : 'Lay the bill flat with good light for the best result.'}
+          </Text>
+        </Pressable>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: t.spacing.md }}>
+          <Button title={tr('inventory:ocr.fromGallery')} variant="ghost" icon="image-outline" onPress={() => pick(false)} disabled={busy} />
+          <Button title={tr('inventory:ocr.useSample')} variant="secondary" icon="file-find-outline" onPress={() => runSample()} loading={busy} />
+        </View>
+
+        {/* Reading a bill needs the phone app; say so before the person tries it here. */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm, padding: t.spacing.md, borderRadius: t.radius.md, backgroundColor: t.c.chip }}>
+          <MaterialCommunityIcons name="information-outline" size={18} color={t.c.primary} />
+          <Text variant="small" tone="muted" style={{ flex: 1, lineHeight: 20 }}>
+            {tr('inventory:ocr.ocrUnavailable')}
+          </Text>
+        </View>
+      </Card>
+    );
+
+    const steps = (
+      <FormSection title={tr('inventory:ocr.howItWorks')}>
+        <View style={{ gap: t.spacing.lg }}>
+          {STEPS.map((s, i) => (
+            <View key={s.label} style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name={s.icon} size={17} color={t.c.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="body" weight="600">
+                  {i + 1}. {s.label}
+                </Text>
+                <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+                  {s.body}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', gap: t.spacing.sm, paddingTop: t.spacing.md, borderTopWidth: 1, borderTopColor: t.c.line }}>
+          <MaterialCommunityIcons name="shield-check-outline" size={18} color={t.c.good} />
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.howItWorksBody')}</Text>
+        </View>
+      </FormSection>
+    );
+
+    return (
+      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+        <Stack.Screen options={{ title: tr('nav:title.scanABill') }} />
+        <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+          {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
+          {breakpoint === 'tablet' ? (
+            <View style={{ gap: t.spacing.lg }}>
+              {scan}
+              {steps}
+            </View>
+          ) : (
+            <SplitPane main={scan} side={steps} sideWidth={360} />
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

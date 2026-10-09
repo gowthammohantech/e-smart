@@ -38,7 +38,9 @@
     "saveCategory": "வகையைச் சேமி",
     "categoryName": "வகையின் பெயர்",
     "accountRequired": "இது செலுத்தப்பட்ட கணக்கைத் தேர்ந்தெடுக்கவும்",
-    "cashShort": "கையிருப்புப் பணம் {{balance}} மட்டுமே உள்ளது"
+    "cashShort": "கையிருப்புப் பணம் {{balance}} மட்டுமே உள்ளது",
+    "summary": "சுருக்கம்",
+    "receipt": "ரசீது"
   },
   "expense": {
     "billable": "வசூலிக்கத்தக்கது",
@@ -53,6 +55,11 @@
     "inputTax": "உள்ளீட்டு வரி",
     "claimable": "கோரத்தக்கது",
     "noExpenses": "செலவுகள் இல்லை",
-    "allCategories": "அனைத்து வகைகளும்"
+    "allCategories": "அனைத்து வகைகளும்",
+    "details": "செலவு விவரங்கள்",
+    "amount": "தொகை",
+    "total": "மொத்தம்",
+    "supplier": "வழங்குநர்",
+    "attachments": "இணைப்புகள்"
   }
 }

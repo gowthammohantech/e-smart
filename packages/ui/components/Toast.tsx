@@ -1,8 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Animated } from 'react-native';
+import { Animated, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 
 type ToastTone = 'info' | 'success' | 'error';
@@ -31,6 +32,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 function ToastView({ message, onDone }: { message: ToastMessage; onDone: () => void }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  // Always false in the native apps, so the desktop toast only ever reaches a browser.
+  const desktop = useIsDesktop();
   const [anim] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
@@ -44,6 +47,49 @@ function ToastView({ message, onDone }: { message: ToastMessage; onDone: () => v
   const icon =
     message.tone === 'success' ? 'check-circle' : message.tone === 'error' ? 'alert-circle' : 'information';
   const color = message.tone === 'success' ? t.c.good : message.tone === 'error' ? t.c.bad : t.c.primary;
+
+  if (desktop) {
+    const soft = message.tone === 'success' ? t.c.goodSoft : message.tone === 'error' ? t.c.badSoft : t.c.chip;
+    // A desktop toast is a compact card in the bottom-right corner, sliding in from the right,
+    // with the tone shown by a stripe and a tinted icon rather than spanning the window.
+    return (
+      <Animated.View
+        pointerEvents="none"
+        accessibilityLiveRegion="polite"
+        style={[
+          {
+            position: 'absolute',
+            right: t.spacing.xxl,
+            bottom: t.spacing.xxl,
+            width: 400,
+            maxWidth: '100%',
+            backgroundColor: t.c.paper,
+            borderRadius: t.radius.lg,
+            borderWidth: 1,
+            borderColor: t.c.line,
+            borderLeftWidth: 4,
+            borderLeftColor: color,
+            paddingVertical: t.spacing.md,
+            paddingLeft: t.spacing.md,
+            paddingRight: t.spacing.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: t.spacing.md,
+            opacity: anim,
+            transform: [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }],
+          },
+          t.shadow.sheet,
+        ]}
+      >
+        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: soft, alignItems: 'center', justifyContent: 'center' }}>
+          <MaterialCommunityIcons name={icon} size={18} color={color} />
+        </View>
+        <Text variant="body" weight="500" style={{ flex: 1 }}>
+          {message.text}
+        </Text>
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View

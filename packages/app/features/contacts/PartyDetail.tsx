@@ -421,14 +421,19 @@ export function PartyDetail({ party }: { party: Party }) {
             ? [
                 { label: 'New invoice', icon: 'file-document-edit-outline' as const, onPress: () => router.push('/(app)/sales/invoices/new') },
                 { label: 'New quotation', icon: 'file-percent-outline' as const, onPress: () => router.push('/(app)/sales/quotes/new') },
-                { label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => { setActionsOpen(false); toast.show(tr('contacts:detail.reminderQueued'), 'success'); } },
+                { label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => toast.show(tr('contacts:detail.reminderQueued'), 'success') },
               ]
             : [{ label: 'New purchase bill', icon: 'cart-outline' as const, onPress: () => router.push('/(app)/purchases/bills/new') }]),
-          { label: 'Delete contact', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
+          { label: 'Delete contact', icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
         ].map((a) => (
           <Pressable
             key={a.label}
-            onPress={a.onPress}
+            // Every action closes the sheet first; it is a modal, so one left open
+            // would sit over the screen the action navigates to.
+            onPress={() => {
+              setActionsOpen(false);
+              a.onPress();
+            }}
             accessibilityRole="button"
             accessibilityLabel={a.label}
             style={({ pressed }) => ({

@@ -118,6 +118,7 @@
   },
   "payment": {
     "selectContact": "Select contact",
+    "details": "Payment details",
     "amount": "Amount",
     "date": "Payment date",
     "method": "Payment method",
@@ -133,6 +134,7 @@
     "notes": "Notes",
     "notesPlaceholder": "Internal note",
     "applyTo": "Apply to",
+    "summary": "Summary",
     "autoAllocateShort": "Auto-allocate",
     "payAll": "Pay all",
     "heldAsAdvance": "Held as an advance",
@@ -171,6 +173,8 @@
     "openedEmail": "Reminder opened in email",
     "aging": "Aging",
     "clear": "Clear",
+    "dueSoon": "Due soon",
+    "dueSoonCaption": "Due in the next 7 days",
     "reminderNote": "The message is prepared for you — you send it yourself, so nothing leaves the app without your say-so."
   },
   "list": {
