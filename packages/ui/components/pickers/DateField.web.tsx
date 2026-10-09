@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsDesktop } from '../../theme/breakpoints';
-import { FieldShell } from '../Field';
+import { FieldShell, webFocusHalo } from '../Field';
 import { toISODate } from '@esmart/core/lib/date';
 
 /**
@@ -32,6 +32,7 @@ export function DateField({
 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
+  const [focused, setFocused] = useState(false);
 
   return (
     <FieldShell label={label} required={required} hint={hint} error={error}>
@@ -44,9 +45,10 @@ export function DateField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : t.c.line,
+          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
           height: desktop ? 42 : 48,
+          ...webFocusHalo(t, focused && !error),
         }}
       >
         <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
@@ -60,9 +62,13 @@ export function DateField({
           onChange={(e) => {
             if (e.target.value) onChange(e.target.value);
           }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           style={{
             flex: 1,
             border: 'none',
+            // The box around it shows focus; the browser's own outline would double it.
+            outline: 'none',
             background: 'transparent',
             color: t.c.text,
             fontSize: t.fontSize.body,

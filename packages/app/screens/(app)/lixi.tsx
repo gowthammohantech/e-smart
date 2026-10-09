@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
+import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@esmart/ui/components/LixiOrb';
 import { answer, greet, lixiSuggestions, LixiAction, LixiContext, LixiReply } from '../../features/lixi/brain';
@@ -99,6 +100,8 @@ export default function LixiChat() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
+  /** Only a browser shows the composer focused; the phone keeps its look. */
+  const [composerFocused, setComposerFocused] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [pending, setPending] = useState<Extract<LixiAction, { type: 'route' }> | null>(null);
   // A write the server's Lixi prepared; nothing happens until it is confirmed.
@@ -266,6 +269,8 @@ export default function LixiChat() {
           submitBehavior="submit"
           multiline
           accessibilityLabel={tr('lixi:ui.messageLixi')}
+          onFocus={() => setComposerFocused(true)}
+          onBlur={() => setComposerFocused(false)}
           style={{
             flex: 1,
             minHeight: 44,
@@ -279,6 +284,8 @@ export default function LixiChat() {
             borderColor: t.c.line,
             color: t.c.text,
             fontSize: t.fontSize.body,
+            ...webFocusHalo(t, composerFocused),
+            ...WEB_INPUT_RESET,
           }}
         />
         <Pressable

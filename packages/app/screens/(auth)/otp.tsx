@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
+import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { useAppStore } from '../../store/appStore';
 import { isRemote, remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
@@ -26,6 +27,8 @@ export default function Otp() {
   const [error, setError] = useState<string | undefined>();
   const [seconds, setSeconds] = useState(30);
   const inputs = useRef<(TextInput | null)[]>([]);
+  // Which box has focus; only a browser shows it, the phone keeps its look.
+  const [focusedBox, setFocusedBox] = useState<number | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -111,6 +114,8 @@ export default function Otp() {
               if (nativeEvent.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
             }}
             onSubmitEditing={verify}
+            onFocus={() => setFocusedBox(i)}
+            onBlur={() => setFocusedBox((f) => (f === i ? null : f))}
             keyboardType="number-pad"
             textContentType="oneTimeCode"
             accessibilityLabel={tr('auth:otp.digit', { n: i + 1 })}
@@ -121,7 +126,9 @@ export default function Otp() {
               height: 58,
               borderRadius: t.radius.md,
               borderWidth: 1,
-              borderColor: error ? t.c.bad : d ? t.c.primary : t.c.line,
+              borderColor: error ? t.c.bad : d || (Platform.OS === 'web' && focusedBox === i) ? t.c.primary : t.c.line,
+              ...webFocusHalo(t, focusedBox === i && !error),
+              ...WEB_INPUT_RESET,
               backgroundColor: t.c.card2,
               color: t.c.text,
               fontSize: t.fontSize.h3,
