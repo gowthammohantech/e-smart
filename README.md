@@ -19,6 +19,7 @@ apps/
   mobile/          Expo app for iOS and Android (expo-router routes only)
   web/             Expo app for the browser: desktop sidebar shell, same screens
   api/             Fastify server, routed and validated from the OpenAPI contract
+  admin/           React + Vite console for platform operators (tenants, plans, audit)
 packages/
   core/            pure domain engines: money, tax, totals, numbering, ledgers,
                    compliance, reports, types, seed data, invoice HTML
@@ -55,6 +56,10 @@ npm run db:migrate -w @esmart/db          # schema + reference data
 npm run db:seed -w @esmart/db             # the demo businesses
 npm run api                               # http://localhost:4000/v1
 
+# The platform admin console (needs the API)
+npm run db:platform-admin -w @esmart/db -- --email you@example.com --role superadmin
+npm run admin                             # http://localhost:5174
+
 # The apps against the API (remote mode)
 EXPO_PUBLIC_DATA_SOURCE=remote EXPO_PUBLIC_API_URL=http://localhost:4000 npm run web
 ```
@@ -68,16 +73,19 @@ in `apps/api/.env` to accept `123456` in development).
 | `npm run typecheck` / `lint` / `test` | Turborepo runs it in every workspace (the API's tests need Postgres; see `TEST_DATABASE_URL`) |
 | `npm run build -w @esmart/api` | Bundles the server to `apps/api/dist` |
 | `npx expo export -p web` (in `apps/web`) | Static web build |
+| `npm run build -w @esmart/admin` | Static build of the admin console to `apps/admin/dist` |
 | `npm run generate -w @esmart/api-contract` | Regenerates the TypeScript types after editing `openapi.yaml` |
 | `npm run db:generate -w @esmart/db` | Writes a migration from changes to `packages/db/src/schema.ts` |
 
 CI (`.github/workflows/ci.yml`) runs typecheck, lint and test against a
-Postgres service, builds the API and exports the web app.
+Postgres service, builds the API and the admin console, and exports the web app.
 
 ### Configuration
 
 - **Apps:** `EXPO_PUBLIC_DATA_SOURCE` (`local` or `remote`) and
   `EXPO_PUBLIC_API_URL`, fixed at build time.
+- **Admin console:** `VITE_API_URL` (the API origin, without `/v1`), fixed
+  at build time; see `apps/admin/.env.example`.
 - **API:** `apps/api/.env.example` lists every setting. All of them have a
   development default, so an empty `.env` works against the docker-compose
   Postgres. Production must set `JWT_SECRET` and `CREDENTIALS_KEY`.
@@ -98,7 +106,7 @@ original dataset.
 
 ## The API
 
-`packages/api-contract/openapi.yaml` is the source of truth: 152 operations
+`packages/api-contract/openapi.yaml` is the source of truth: 165 operations
 and 2 webhooks, and the server implements every one (a test fails if any
 operation lacks a handler).
 
@@ -109,6 +117,8 @@ operation lacks a handler).
 - **Guards from the spec.** Bearer tokens with device-bound, rotating refresh
   tokens; company access on every `/companies/{companyId}` path; `x-roles`;
   and `x-plan-module` gating that returns `403 PLAN_UPGRADE_REQUIRED`.
+  Cross-tenant `/admin/*` routes use `x-platform-roles` instead (see
+  [docs/api](docs/api/README.md#platform-operators)).
 - **The server is authoritative.** Totals, tax splits, numbers (assigned on
   finalise under a row lock, never reused), stock, outstanding amounts and
   derived statuses are computed with `@esmart/core`, the same engines the apps

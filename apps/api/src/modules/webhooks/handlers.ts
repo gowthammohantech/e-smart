@@ -28,7 +28,7 @@ async function actorFor(db: DbOrTx, userId: string | null | undefined, source: s
   if (!userId) return null;
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
   if (!u) return null;
-  return { id: u.id, accountId: u.accountId, name: source, email: u.email, role: u.role, status: u.status, locale: u.locale, companyIds: [], branchIds: [], sessionId: '' };
+  return { id: u.id, accountId: u.accountId, name: source, email: u.email, role: u.role, platformRole: null, status: u.status, locale: u.locale, companyIds: [], branchIds: [], sessionId: '' };
 }
 
 async function ownerOf(db: DbOrTx, companyId: string, source: string): Promise<AuthUser | null> {

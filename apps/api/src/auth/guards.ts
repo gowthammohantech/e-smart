@@ -8,11 +8,15 @@ import type { AccessClaims } from './sessions';
 
 async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | null> {
   const [row] = await deps.db
-    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt })
+    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, suspendedAt: schema.accounts.suspendedAt })
     .from(schema.users)
     .innerJoin(schema.deviceSessions, eq(schema.deviceSessions.userId, schema.users.id))
+    .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
     .where(and(eq(schema.users.id, claims.sub), eq(schema.deviceSessions.id, claims.sid)));
   if (!row || row.revokedAt) return null;
+  // Suspension revokes every session, so this only catches a token minted in
+  // the same instant; it keeps the rule airtight without relying on that.
+  if (row.suspendedAt) throw forbidden('ACCOUNT_SUSPENDED', 'This account has been suspended. Contact support.');
   const [companies, branches] = await Promise.all([
     deps.db.select({ id: schema.userCompanies.companyId }).from(schema.userCompanies).where(eq(schema.userCompanies.userId, row.u.id)),
     deps.db.select({ id: schema.userBranches.branchId }).from(schema.userBranches).where(eq(schema.userBranches.userId, row.u.id)),
@@ -23,6 +27,7 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
     name: row.u.name,
     email: row.u.email,
     role: row.u.role,
+    platformRole: row.u.platformRole,
     status: row.u.status,
     locale: row.u.locale,
     companyIds: companies.map((c) => c.id),
@@ -66,6 +71,8 @@ export async function companyFor(deps: Deps, user: AuthUser, companyId: string):
 /**
  * The guard chain, in order, for every contract route:
  * authenticate → company access → role → plan module.
+ * Platform routes (`x-platform-roles`) check the platform role instead and
+ * never take a company or a tenant role.
  */
 export function registerGuards(app: FastifyInstance, deps: Deps) {
   app.decorateRequest('authUser', null);
@@ -78,6 +85,13 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
     await authenticate(app, deps, req, op.secured);
     const user = req.authUser;
     if (!user) return;
+
+    if (op.platformRoles) {
+      if (!user.platformRole || !op.platformRoles.includes(user.platformRole)) {
+        throw forbidden('PLATFORM_FORBIDDEN', `This needs platform role: ${op.platformRoles.join(', ')}`);
+      }
+      return;
+    }
 
     const companyId = (req.params as { companyId?: string }).companyId;
     if (companyId) req.company = await companyFor(deps, user, companyId);

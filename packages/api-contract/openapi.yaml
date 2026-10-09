@@ -41,6 +41,9 @@ info:
       and `requiredPlan`.
     - **Roles**: owner > admin > accountant > sales > viewer. Each operation's
       `x-roles` lists the minimum roles that may call it.
+    - **Platform operators**: `/admin/*` operations carry `x-platform-roles`
+      instead and are open only to users with a platform role
+      (`superadmin`, `support`). Tenant roles never grant them.
 servers:
   - url: https://api.elixirbooks.example/v1
     description: Production
@@ -76,6 +79,7 @@ tags:
   - { name: Exports, description: 'Backup and data export' }
   - { name: Sync, description: 'Offline queue push and pull' }
   - { name: Reference, description: 'Countries, states, cities, currencies, HSN, GSTIN lookup' }
+  - { name: Platform, description: 'Cross-tenant operations for platform operators (`x-platform-roles`)' }
 
 paths:
   # ------------------------------------------------------------------ Auth
@@ -2995,6 +2999,252 @@ paths:
         '422': { description: Check digit invalid }
         '502': { $ref: '#/components/responses/UpstreamError' }
 
+  # ------------------------------------------------------------------ Platform (operators)
+  # Cross-tenant routes for platform operators (`users.platform_role`).
+  # `x-platform-roles` replaces `x-roles` here: tenant roles never apply, and a
+  # caller without a platform role gets 403 PLATFORM_FORBIDDEN.
+  /admin/metrics/overview:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOverview
+      summary: Platform totals, plan mix, and daily signups and document volume for a date range (default the last 30 days)
+      x-platform-roles: [superadmin, support]
+      parameters:
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformOverview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/accounts:
+    get:
+      tags: [Platform]
+      operationId: listPlatformAccounts
+      summary: Every tenant account, newest first. `q` matches the account, company or owner name and the owner's email.
+      x-platform-roles: [superadmin, support]
+      parameters:
+        - { $ref: '#/components/parameters/Q' }
+        - { name: status, in: query, schema: { type: string, enum: [active, suspended] } }
+        - { name: plan, in: query, description: Accounts with at least one company on this plan, schema: { $ref: '#/components/schemas/PlanTier' } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/PlatformAccount' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/accounts/{accountId}:
+    parameters: [{ name: accountId, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Platform]
+      operationId: getPlatformAccount
+      summary: One account with its companies and users
+      x-platform-roles: [superadmin, support]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformAccountDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/accounts/{accountId}/suspend:
+    parameters:
+      - { name: accountId, in: path, required: true, schema: { type: string } }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+    post:
+      tags: [Platform]
+      operationId: suspendAccount
+      summary: Lock every user of the account out and sign them out everywhere. Sign-in and refresh fail with ACCOUNT_SUSPENDED until it is reactivated.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformReason' }
+      responses:
+        '200':
+          description: Suspended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformAccount' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/accounts/{accountId}/reactivate:
+    parameters:
+      - { name: accountId, in: path, required: true, schema: { type: string } }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+    post:
+      tags: [Platform]
+      operationId: reactivateAccount
+      summary: Lift a suspension. Users sign in again; their old sessions stay revoked.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformReason' }
+      responses:
+        '200':
+          description: Reactivated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformAccount' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/companies/{companyId}:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Platform]
+      operationId: getPlatformCompany
+      summary: One company with its subscription, plan history and document counts
+      x-platform-roles: [superadmin, support]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformCompanyDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/companies/{companyId}/plan:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    put:
+      tags: [Platform]
+      operationId: overrideCompanyPlan
+      summary: Set a company's plan by hand (comps, trials, support fixes). Recorded as an `adminOverride` subscription event. A provider-managed subscription may be changed back by its next billing webhook; the response warns when that applies.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformPlanOverride' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company, subscription]
+                properties:
+                  company: { $ref: '#/components/schemas/PlatformCompany' }
+                  subscription: { $ref: '#/components/schemas/Subscription' }
+                  warning: { type: [string, 'null'] }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/users:
+    get:
+      tags: [Platform]
+      operationId: listPlatformUsers
+      summary: Users across every account, newest first. `q` matches name, email or phone.
+      x-platform-roles: [superadmin, support]
+      parameters:
+        - { $ref: '#/components/parameters/Q' }
+        - { name: status, in: query, schema: { type: string, enum: [active, invited, disabled] } }
+        - { name: accountId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/PlatformUser' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/users/{userId}/disable:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+    post:
+      tags: [Platform]
+      operationId: disablePlatformUser
+      summary: Disable a user and sign them out everywhere. Platform operators can't be disabled here.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformReason' }
+      responses:
+        '200':
+          description: Disabled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/users/{userId}/enable:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+    post:
+      tags: [Platform]
+      operationId: enablePlatformUser
+      summary: Re-enable a disabled user
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformReason' }
+      responses:
+        '200':
+          description: Enabled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/audit-events:
+    get:
+      tags: [Platform]
+      operationId: listPlatformAuditEvents
+      summary: Every action platform operators have taken, newest first
+      x-platform-roles: [superadmin, support]
+      parameters:
+        - { name: actorId, in: query, schema: { type: string } }
+        - { name: targetType, in: query, schema: { type: string, enum: [account, company, user] } }
+        - { name: targetId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/PlatformAuditEvent' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
 webhooks:
   razorpayEvent:
     post:
@@ -3146,6 +3396,9 @@ components:
         onboardingComplete: { type: boolean }
         companies: { type: array, items: { $ref: '#/components/schemas/Company' } }
         defaultCompanyId: { type: string }
+        platformRole:
+          description: Set only for platform operators, who can use `/admin/*`
+          oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }]
     PlanTier: { type: string, enum: [free, basic, pro, business] }
     UserRole: { type: string, enum: [owner, admin, accountant, sales, viewer] }
     TaxRegistration:
@@ -3868,6 +4121,164 @@ components:
         before: { type: string }
         after: { type: string }
         device: { type: string }
+        createdAt: { type: string, format: date-time }
+    # ---------------------------------------------------------------- platform (operators)
+    PlatformRole: { type: string, enum: [superadmin, support] }
+    PlatformReason:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500, description: Why; kept in the platform audit log }
+    PlatformAccount:
+      type: object
+      required: [id, name, status, companyCount, userCount, plans, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        ownerUserId: { type: [string, 'null'] }
+        ownerName: { type: [string, 'null'] }
+        ownerEmail: { type: [string, 'null'] }
+        status: { type: string, enum: [active, suspended] }
+        suspendedAt: { type: [string, 'null'], format: date-time }
+        suspendedReason: { type: [string, 'null'] }
+        companyCount: { type: integer }
+        userCount: { type: integer }
+        plans: { type: array, description: Distinct plans across the account's companies, items: { $ref: '#/components/schemas/PlanTier' } }
+        lastActiveAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    PlatformCompany:
+      type: object
+      required: [id, accountId, name, country, plan, subscriptionStatus, createdAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        name: { type: string }
+        legalName: { type: [string, 'null'] }
+        country: { type: string }
+        city: { type: string }
+        taxIdentifier: { type: [string, 'null'] }
+        plan: { $ref: '#/components/schemas/PlanTier' }
+        subscriptionStatus: { type: string, enum: [active, trialing, pastDue, cancelled, none] }
+        onboardingCompletedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    PlatformUser:
+      type: object
+      required: [id, accountId, name, email, role, status, accountSuspended, createdAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        accountName: { type: string }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: [string, 'null'] }
+        role: { $ref: '#/components/schemas/UserRole' }
+        platformRole: { oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }] }
+        status: { type: string, enum: [active, invited, disabled] }
+        accountSuspended: { type: boolean }
+        lastActiveAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    PlatformAccountDetail:
+      type: object
+      required: [account, companies, users]
+      properties:
+        account: { $ref: '#/components/schemas/PlatformAccount' }
+        companies: { type: array, items: { $ref: '#/components/schemas/PlatformCompany' } }
+        users: { type: array, items: { $ref: '#/components/schemas/PlatformUser' } }
+    PlatformCompanyDetail:
+      type: object
+      required: [company, accountName, subscription, planHistory, documentCounts, userCount]
+      properties:
+        company: { $ref: '#/components/schemas/PlatformCompany' }
+        accountName: { type: string }
+        accountSuspended: { type: boolean }
+        subscription: { oneOf: [{ $ref: '#/components/schemas/Subscription' }, { type: 'null' }] }
+        planHistory:
+          type: array
+          items:
+            type: object
+            required: [id, event, createdAt]
+            properties:
+              id: { type: string }
+              fromPlan: { oneOf: [{ $ref: '#/components/schemas/PlanTier' }, { type: 'null' }] }
+              toPlan: { oneOf: [{ $ref: '#/components/schemas/PlanTier' }, { type: 'null' }] }
+              event: { type: string }
+              createdAt: { type: string, format: date-time }
+        documentCounts:
+          type: array
+          items:
+            type: object
+            required: [kind, count]
+            properties:
+              kind: { type: string }
+              count: { type: integer }
+        userCount: { type: integer }
+    PlatformPlanOverride:
+      type: object
+      required: [plan, reason]
+      properties:
+        plan: { $ref: '#/components/schemas/PlanTier' }
+        status: { type: string, enum: [active, trialing], description: Defaults to active }
+        cycle: { type: string, enum: [monthly, yearly], description: 'Defaults to the current cycle, else monthly' }
+        currentPeriodEnd: { type: [string, 'null'], format: date-time, description: 'Shown as the end of the current period. Nothing downgrades automatically when it passes; omit or null for open-ended' }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    PlatformOverview:
+      type: object
+      required: [from, to, totals, plans, signups, documents]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        totals:
+          type: object
+          required: [accounts, suspendedAccounts, companies, users, activeUsers30d]
+          properties:
+            accounts: { type: integer }
+            suspendedAccounts: { type: integer }
+            companies: { type: integer }
+            users: { type: integer }
+            activeUsers30d: { type: integer, description: Users seen in the 30 days up to now }
+        plans:
+          type: array
+          description: Companies per plan, every tier listed
+          items:
+            type: object
+            required: [plan, companies]
+            properties:
+              plan: { $ref: '#/components/schemas/PlanTier' }
+              companies: { type: integer }
+        signups:
+          type: array
+          description: One row per day in the range, zero-filled
+          items:
+            type: object
+            required: [date, accounts, companies]
+            properties:
+              date: { type: string, format: date }
+              accounts: { type: integer }
+              companies: { type: integer }
+        documents:
+          type: array
+          description: Documents created per day in the range, zero-filled
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer }
+    PlatformAuditEvent:
+      type: object
+      required: [id, actorId, actorEmail, action, targetType, targetId, targetLabel, reason, createdAt]
+      properties:
+        id: { type: string }
+        actorId: { type: string }
+        actorEmail: { type: string }
+        action: { type: string, example: account.suspend }
+        targetType: { type: string, enum: [account, company, user] }
+        targetId: { type: string }
+        targetLabel: { type: string }
+        reason: { type: string }
+        before: { type: string, description: JSON snapshot }
+        after: { type: string, description: JSON snapshot }
+        ipAddress: { type: string }
         createdAt: { type: string, format: date-time }
     Integration:
       type: object

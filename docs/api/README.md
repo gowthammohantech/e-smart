@@ -6,8 +6,8 @@ behind simulators by default), and the apps talk to it in remote mode
 (`packages/app/remote`); see the root README. This page lists the APIs, the
 third-party services behind them, and the rules the server enforces.
 
-- **[openapi.yaml](../../packages/api-contract/openapi.yaml)**: the contract, in OpenAPI 3.1. It has 111
-  paths, 152 operations and 2 inbound webhooks, and it passes `redocly lint`
+- **[openapi.yaml](../../packages/api-contract/openapi.yaml)**: the contract, in OpenAPI 3.1. It has 124
+  paths, 165 operations and 2 inbound webhooks, and it passes `redocly lint`
   (missing operation summaries are warnings). Entity schemas mirror
   `packages/core/src/types/index.ts` field for field.
 
@@ -32,6 +32,7 @@ every endpoint:
 | Problem+JSON errors | Each error has a stable `code`. Validation and portal rejections also carry `issues[]` in the same shape as `ComplianceIssue`. |
 | Plan gating | A module outside the plan returns `403 PLAN_UPGRADE_REQUIRED`, which follows `packages/core/src/domain/plan.ts`. Operations carry `x-plan-module`. |
 | Roles | Operations carry `x-roles` (owner, admin, accountant, sales, viewer). |
+| Platform operators | `/admin/*` operations carry `x-platform-roles` (superadmin, support) instead. Tenant roles never grant them; anyone else gets `403 PLATFORM_FORBIDDEN`. |
 
 ## Third-party services required
 
@@ -394,6 +395,41 @@ destructive, so clients ask the person first.
 | GET | `/reference/currencies` | listCurrencies |
 | GET | `/reference/hsn` | searchHsn |
 | GET | `/reference/gstin/{gstin}` | lookupGstin |
+
+### Platform (operators)
+
+Cross-tenant routes for the admin console (`apps/admin`). Every one needs a
+platform role on the caller (`users.platform_role`); `support` can read,
+only `superadmin` can act. Each action takes a `reason` and writes a
+`platform_audit_events` row in the same transaction.
+
+| Method | Path | Operation | Roles |
+|---|---|---|---|
+| GET | `/admin/metrics/overview` | getPlatformOverview | support, superadmin |
+| GET | `/admin/accounts` | listPlatformAccounts | support, superadmin |
+| GET | `/admin/accounts/{accountId}` | getPlatformAccount | support, superadmin |
+| POST | `/admin/accounts/{accountId}/suspend` | suspendAccount | superadmin |
+| POST | `/admin/accounts/{accountId}/reactivate` | reactivateAccount | superadmin |
+| GET | `/admin/companies/{companyId}` | getPlatformCompany | support, superadmin |
+| PUT | `/admin/companies/{companyId}/plan` | overrideCompanyPlan | superadmin |
+| GET | `/admin/users` | listPlatformUsers | support, superadmin |
+| POST | `/admin/users/{userId}/disable` | disablePlatformUser | superadmin |
+| POST | `/admin/users/{userId}/enable` | enablePlatformUser | superadmin |
+| GET | `/admin/audit-events` | listPlatformAuditEvents | support, superadmin |
+
+- **Suspending an account** revokes every session of its users at once.
+  Sign-in, OTP, invite acceptance and token refresh then fail with
+  `401 ACCOUNT_SUSPENDED` until it is reactivated. An account that has a
+  platform operator can't be suspended (`409 PLATFORM_ACCOUNT`).
+- **A plan override** sets `companies.plan`, upserts the subscription, logs an
+  `adminOverride` subscription event and records the change in the company's
+  own audit trail as "(platform support)". A provider-billed subscription can
+  be changed back by its next webhook; the response carries a `warning` when
+  that applies.
+- **Granting access** is deliberately not an API: run
+  `npm run db:platform-admin -w @esmart/db -- --email you@example.com --role superadmin`
+  (`support`, or `none` to revoke) against the database. The user must
+  already exist.
 
 ### Inbound webhooks
 

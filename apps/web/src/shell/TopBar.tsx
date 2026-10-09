@@ -16,7 +16,8 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useUiStore } from '@esmart/app/store/uiStore';
 import { isRemote, useRemoteMeta } from '@esmart/app/remote';
 import { useActiveCompany, useBranches, useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
-import { openLixi } from '@esmart/app/features/lixi/open';
+import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
+import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
 import { NOTIFICATION_META, notificationRoute } from '@esmart/app/features/notifications/notificationMeta';
 import { CommandPalette } from './CommandPalette';
@@ -75,6 +76,41 @@ const IconButton = React.forwardRef<
     </Pressable>
   );
 });
+
+/** Opens and closes the Lixi side panel; lit while it is open. */
+function LixiButton({ label }: { label: string }) {
+  const t = useTheme();
+  const { open } = useLixiPanel();
+  return (
+    <Pressable
+      onPress={toggleLixiPanel}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ expanded: open }}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressState;
+        return [
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            height: 38,
+            paddingLeft: 8,
+            paddingRight: 14,
+            borderRadius: t.radius.md,
+            backgroundColor: open || pressed || hovered ? t.c.chip : 'transparent',
+          },
+          focusRing(t, focused),
+        ];
+      }}
+    >
+      <LixiMark size={26} />
+      <Text weight="600" style={{ color: LIXI.blue }}>
+        Lixi
+      </Text>
+    </Pressable>
+  );
+}
 
 /**
  * The desktop app's top bar: which business and branch you're in, search
@@ -218,7 +254,7 @@ export function TopBar() {
       {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ alignSelf: 'center' }} /> : null}
       {!offline && pendingSync > 0 ? <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ alignSelf: 'center' }} /> : null}
 
-      <IconButton icon="creation-outline" label={tr('nav:more.entry.askLixi')} onPress={() => openLixi()} />
+      <LixiButton label={tr('nav:more.entry.askLixi')} />
       <IconButton ref={bellAnchor} icon="bell-outline" label={tr('nav:shell.notifications')} onPress={openBellMenu} badge={unread} />
 
       <Pressable

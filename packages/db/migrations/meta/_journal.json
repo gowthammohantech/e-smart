@@ -22,6 +22,13 @@
       "when": 1791518903209,
       "tag": "0002_allow_negative_stock",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791533056481,
+      "tag": "0003_platform_admin",
+      "breakpoints": true
     }
   ]
 }

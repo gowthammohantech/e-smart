@@ -382,6 +382,8 @@ export function SwitchField({
         disabled={disabled}
         trackColor={{ true: t.c.primary, false: t.c.line }}
         thumbColor="#FFFFFF"
+        // On the web the "on" thumb defaults to green; keep it white like the rest.
+        {...(Platform.OS === 'web' ? ({ activeThumbColor: '#FFFFFF' } as object) : null)}
         accessibilityLabel={label}
       />
     </View>

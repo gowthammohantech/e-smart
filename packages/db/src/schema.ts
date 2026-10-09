@@ -58,6 +58,7 @@ export const paymentDirection = pgEnum("payment_direction", ['received', 'paid']
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
 export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables'])
 export const planTier = pgEnum("plan_tier", ['free', 'basic', 'pro', 'business'])
+export const platformRole = pgEnum("platform_role", ['superadmin', 'support'])
 export const pushProvider = pgEnum("push_provider", ['expo', 'fcm', 'apns'])
 export const rateSource = pgEnum("rate_source", ['manual', 'provider'])
 export const recurrenceFrequency = pgEnum("recurrence_frequency", ['none', 'weekly', 'monthly', 'quarterly', 'yearly'])
@@ -116,6 +117,8 @@ export const users = pgTable("users", {
 	phone: varchar({ length: 20 }),
 	passwordHash: varchar("password_hash", { length: 255 }),
 	role: userRole().default('viewer').notNull(),
+	/** Platform operator access to /admin; null for every tenant user. */
+	platformRole: platformRole("platform_role"),
 	avatarColor: varchar("avatar_color", { length: 9 }).notNull(),
 	status: userStatus().default('invited').notNull(),
 	locale: varchar({ length: 10 }).default('en'),
@@ -1523,6 +1526,10 @@ export const accounts = pgTable("accounts", {
 	id: varchar({ length: 40 }).primaryKey().notNull(),
 	name: varchar({ length: 200 }).notNull(),
 	ownerUserId: varchar("owner_user_id", { length: 40 }),
+	/** Set by a platform operator; every user of the account is locked out while set. */
+	suspendedAt: timestamp("suspended_at", { withTimezone: true, mode: 'date' }),
+	suspendedReason: varchar("suspended_reason", { length: 500 }),
+	suspendedBy: varchar("suspended_by", { length: 40 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -1530,6 +1537,36 @@ export const accounts = pgTable("accounts", {
 			columns: [table.ownerUserId],
 			foreignColumns: [users.id],
 			name: "accounts_owner_user_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.suspendedBy],
+			foreignColumns: [users.id],
+			name: "accounts_suspended_by_fkey"
+		}),
+]);
+
+/** Actions platform operators take across tenants. Not tied to a company. */
+export const platformAuditEvents = pgTable("platform_audit_events", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	actorId: varchar("actor_id", { length: 40 }).notNull(),
+	actorEmail: varchar("actor_email", { length: 254 }).notNull(),
+	action: varchar({ length: 60 }).notNull(),
+	targetType: varchar("target_type", { length: 30 }).notNull(),
+	targetId: varchar("target_id", { length: 40 }).notNull(),
+	targetLabel: varchar("target_label", { length: 200 }).notNull(),
+	reason: varchar({ length: 500 }).notNull(),
+	before: jsonb(),
+	after: jsonb(),
+	ipAddress: inet("ip_address"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	index("platform_audit_events_created_at_idx").using("btree", table.createdAt.desc().nullsFirst()),
+	index("platform_audit_events_target_type_target_id_idx").using("btree", table.targetType.asc().nullsLast(), table.targetId.asc().nullsLast()),
+	index("platform_audit_events_actor_id_idx").using("btree", table.actorId.asc().nullsLast()),
+	foreignKey({
+			columns: [table.actorId],
+			foreignColumns: [users.id],
+			name: "platform_audit_events_actor_id_fkey"
 		}),
 ]);
 

@@ -29,6 +29,7 @@ export const meHandlers = defineHandlers({
       onboardingComplete: await onboardingComplete(ctx.db, row.id),
       companies: await Promise.all(companies.map((c) => companyToWire(ctx.deps, c))),
       ...(defaultCompanyId ? { defaultCompanyId } : {}),
+      platformRole: row.platformRole,
     };
   },
 

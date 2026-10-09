@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -48,13 +48,21 @@ type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply };
 /** Long enough to read as thought, short enough not to feel slow. */
 const THINK_MS = 650;
 
-export default function LixiChat() {
+type LixiChatProps = {
+  /** Set when the chat sits in the web desktop's side panel instead of being a screen. */
+  onClose?: () => void;
+  /** The question to answer first, when it isn't coming from the route. */
+  initialAsk?: string;
+};
+
+export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   const t = useTheme();
   const { t: tr, i18n } = useTranslation(['lixi']);
   const router = useRouter();
   const remote = remoteLixiAvailable();
   // Set when Lixi was opened by holding a tab: the question to answer first.
-  const { ask } = useLocalSearchParams<{ ask?: string }>();
+  const { ask: routeAsk } = useLocalSearchParams<{ ask?: string }>();
+  const ask = initialAsk ?? routeAsk;
   const insets = useSafeAreaInsets();
 
   const currency = useBaseCurrency();
@@ -103,6 +111,7 @@ export default function LixiChat() {
   /** Only a browser shows the composer focused; the phone keeps its look. */
   const [composerFocused, setComposerFocused] = useState(false);
   const [thinking, setThinking] = useState(false);
+  const [soundOn, setSoundOn] = useState(false);
   const [pending, setPending] = useState<Extract<LixiAction, { type: 'route' }> | null>(null);
   // A write the server's Lixi prepared; nothing happens until it is confirmed.
   const [action, setAction] = useState<PendingLixiAction | null>(null);
@@ -176,6 +185,62 @@ export default function LixiChat() {
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {onClose ? (
+        // The desktop panel's header: Lixi and what it is, a sound toggle, close.
+        <View
+          style={{
+            paddingHorizontal: t.spacing.lg,
+            paddingVertical: t.spacing.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: t.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: t.c.line,
+          }}
+        >
+          <LixiOrb size={38} thinking={thinking} />
+          <View style={{ flex: 1 }}>
+            <Text variant="title" weight="700">
+              Lixi
+            </Text>
+            <Text variant="caption" style={{ color: thinking ? LIXI.blue : t.c.muted }}>
+              {thinking ? tr('lixi:ui.reading') : 'AI assistant · preview'}
+            </Text>
+          </View>
+          {messages.length ? (
+            <Pressable
+              onPress={() => setMessages([])}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={tr('lixi:ui.newChat')}
+              style={{ padding: 6 }}
+            >
+              <MaterialCommunityIcons name="broom" size={20} color={t.c.muted} />
+            </Pressable>
+          ) : null}
+          {/* Only the switch for now; it doesn't change anything yet. */}
+          <Pressable
+            onPress={() => setSoundOn((on) => !on)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={soundOn ? 'Mute Lixi' : 'Unmute Lixi'}
+            accessibilityState={{ selected: soundOn }}
+            style={{ padding: 6 }}
+          >
+            <Feather name={soundOn ? 'volume-2' : 'volume-x'} size={20} color={t.c.muted} />
+          </Pressable>
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={tr('lixi:ui.closeLixi')}
+            style={{ padding: 6 }}
+          >
+            <Feather name="x" size={22} color={t.c.muted} />
+          </Pressable>
+        </View>
+      ) : (
+        <>
       {/* Header */}
       <View
         style={{
@@ -218,6 +283,9 @@ export default function LixiChat() {
           </Pressable>
         ) : null}
       </View>
+
+        </>
+      )}
 
       <ScrollView
         ref={scroll}

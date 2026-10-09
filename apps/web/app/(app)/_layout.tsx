@@ -1,10 +1,12 @@
-import { View } from 'react-native';
+import { Animated, View } from 'react-native';
 import { Stack, usePathname } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { PageActionsProvider, PageHeader } from '@esmart/ui/components/PageHeader';
 import { usePlanGuard } from '@esmart/app/navigation/usePlanGuard';
 import { Sidebar } from '../../src/Sidebar';
+import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth } from '../../src/sidebarState';
 import { TopBar } from '../../src/shell/TopBar';
+import { LixiPanel } from '../../src/shell/LixiPanel';
 import { SettingsNav } from '../../src/shell/SettingsNav';
 import { CONTENT_MAX_WIDTH, useIsDesktop } from '../../src/layout';
 
@@ -21,6 +23,8 @@ export default function WebAppLayout() {
   // Settings pages get their own list of pages beside them (and a narrower,
   // form-width column); everything else uses the full content width.
   const inSettings = pathname.startsWith('/settings');
+  // Plan & billing lays its tiers side by side, so it takes the full column.
+  const wideSettings = pathname.startsWith('/settings/plan') || pathname.startsWith('/settings/sync');
   usePlanGuard();
 
   const stack = (
@@ -63,13 +67,28 @@ export default function WebAppLayout() {
         <View style={{ flex: 1 }}>
           <TopBar />
           <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: t.spacing.lg }}>
-            <View style={{ flex: 1, width: '100%', maxWidth: CONTENT_MAX_WIDTH, flexDirection: 'row', gap: t.spacing.lg }}>
+            {/* A folded sidebar hands its width to the page: the column's cap
+                grows by exactly what the sidebar gave up. */}
+            <Animated.View
+              style={{
+                flex: 1,
+                width: '100%',
+                maxWidth: sidebarWidth.interpolate({
+                  inputRange: [SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH],
+                  outputRange: [CONTENT_MAX_WIDTH + SIDEBAR_WIDTH - SIDEBAR_COMPACT_WIDTH, CONTENT_MAX_WIDTH],
+                  extrapolate: 'clamp',
+                }),
+                flexDirection: 'row',
+                gap: t.spacing.lg,
+              }}
+            >
               {/* Kept in place (null when hidden) so the Stack never remounts. */}
               {inSettings ? <SettingsNav /> : null}
-              <View style={{ flex: 1, maxWidth: inSettings ? 880 : undefined }}>{stack}</View>
-            </View>
+              <View style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined }}>{stack}</View>
+            </Animated.View>
           </View>
         </View>
+        <LixiPanel />
       </View>
     </PageActionsProvider>
   );

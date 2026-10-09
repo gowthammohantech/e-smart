@@ -4,6 +4,7 @@ import type { OperationId } from '@esmart/api-contract';
 import type { Module } from '@esmart/core/domain/plan';
 
 export type Role = 'owner' | 'admin' | 'accountant' | 'sales' | 'viewer';
+export type PlatformRole = 'superadmin' | 'support';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 type JsonSchema = Record<string, unknown>;
 
@@ -18,6 +19,8 @@ export type Operation = {
   tag: string;
   /** Roles allowed to call it; null means every signed-in role. */
   roles: Role[] | null;
+  /** Set on `/admin/*`: the platform roles allowed. Tenant roles never apply. */
+  platformRoles: PlatformRole[] | null;
   planModule: Module | null;
   /** False for `security: []` operations (auth, plans, most reference data). */
   secured: boolean;
@@ -103,6 +106,7 @@ export function loadOperations() {
           url: path.replace(/\{([^}]+)\}/g, ':$1'),
           tag: op.tags?.[0] ?? (isWebhook ? 'Webhooks' : 'Other'),
           roles: op['x-roles'] ?? null,
+          platformRoles: op['x-platform-roles'] ?? null,
           planModule: op['x-plan-module'] ?? null,
           secured: isWebhook ? false : !(Array.isArray(op.security) && op.security.length === 0),
           successStatus,
