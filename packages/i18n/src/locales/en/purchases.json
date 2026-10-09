@@ -38,7 +38,9 @@
     "saveCategory": "Save category",
     "categoryName": "Category name",
     "accountRequired": "Choose the account this was paid from",
-    "cashShort": "Cash in hand has only {{balance}}"
+    "cashShort": "Cash in hand has only {{balance}}",
+    "summary": "Summary",
+    "receipt": "Receipt"
   },
   "expense": {
     "billable": "Billable",

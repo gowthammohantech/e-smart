@@ -38,7 +38,9 @@
     "saveCategory": "வகையைச் சேமி",
     "categoryName": "வகையின் பெயர்",
     "accountRequired": "இது செலுத்தப்பட்ட கணக்கைத் தேர்ந்தெடுக்கவும்",
-    "cashShort": "கையிருப்புப் பணம் {{balance}} மட்டுமே உள்ளது"
+    "cashShort": "கையிருப்புப் பணம் {{balance}} மட்டுமே உள்ளது",
+    "summary": "சுருக்கம்",
+    "receipt": "ரசீது"
   },
   "expense": {
     "billable": "வசூலிக்கத்தக்கது",

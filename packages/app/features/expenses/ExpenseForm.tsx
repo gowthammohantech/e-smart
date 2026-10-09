@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FormContainer } from '@esmart/ui/components/Layout';
+import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
@@ -34,7 +34,7 @@ import {
   usePrimaryBranchId,
   useTaxCategories,
 } from '../../store/selectors';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 
 const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
   { value: 'none', label: 'Does not repeat' },
@@ -57,9 +57,12 @@ export type ExpenseInitial = {
 
 export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'purchases']);
+  const { t: tr } = useTranslation(['domain', 'purchases', 'common']);
   const router = useRouter();
   const toast = useToast();
+  // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
+  const breakpoint = useBreakpoint();
+  const desktop = breakpoint !== 'phone';
 
   const baseCurrency = useBaseCurrency();
   const categories = useExpenseCategories();
@@ -206,111 +209,270 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     else router.replace(`/(app)/expenses/${id}`);
   };
 
-  return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer>
-        <ScrollView
-          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
-        >
-          <AmountField label={tr('purchases:form.amount')} value={amountText} onChangeValue={setAmountText} currency={baseCurrency} size="lg" autoFocus={!expense} required />
+  // Every field is built once and placed twice: stacked in one column on a
+  // phone, grouped into cards across two columns on a desktop browser.
+  const amountField = (
+    <AmountField
+      label={tr('purchases:form.amount')}
+      value={amountText}
+      onChangeValue={setAmountText}
+      currency={baseCurrency}
+      // Large on a phone, where it is the screen's focus; field-sized on a desktop so it lines up in its row.
+      size={desktop ? 'md' : 'lg'}
+      autoFocus={!expense}
+      required
+    />
+  );
+  const categoryField = (
+    <PickerField
+      label={tr('purchases:form.category')}
+      value={categories.find((c) => c.id === categoryId)?.name}
+      onPress={() => (categories.length ? setCategoryOpen(true) : setNewCategoryOpen(true))}
+      placeholder={categories.length ? undefined : tr('purchases:form.addCategory')}
+      icon="shape-outline"
+      required
+      error={categoryError}
+    />
+  );
+  const dateField = <DateField label={tr('purchases:form.date')} value={date} onChange={setDate} required />;
+  const methodField = (
+    <PickerField label={tr('purchases:form.paidBy')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
+  );
+  const accountField = (
+    <PickerField
+      label={tr('purchases:form.paidFrom')}
+      value={methodAccounts.find((a) => a.id === accountId)?.name}
+      onPress={() => setAccountOpen(true)}
+      icon="bank-outline"
+      required
+      error={accountError ?? (cashShort ? tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }) : undefined)}
+    />
+  );
+  const supplierField = (
+    <PickerField
+      label={tr('purchases:form.supplier')}
+      value={suppliers.find((s) => s.id === supplierId)?.name}
+      placeholder={tr('purchases:form.optional')}
+      onPress={() => setSupplierOpen(true)}
+      icon="truck-outline"
+      clearable
+      onClear={() => setSupplierId(null)}
+    />
+  );
+  const taxField = (
+    <PickerField
+      label={tr('purchases:form.tax')}
+      value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : 'No tax'}
+      onPress={() => setTaxOpen(true)}
+      icon="percent-outline"
+      clearable
+      onClear={() => setTaxCategoryId(null)}
+    />
+  );
+  const inclusiveField = <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />;
+  const referenceField = (
+    <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />
+  );
+  const notesField = (
+    <TextField label={tr('purchases:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('purchases:form.notesPlaceholder')} multiline />
+  );
+  const repeatsField = (
+    <PickerField label={tr('purchases:form.repeats')} value={RECURRENCES.find((r) => r.value === recurrence)?.label} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
+  );
+  const billableField = (
+    <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
+  );
+  const receiptCard = (
+    <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
+      <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        <MaterialCommunityIcons name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
+        <View style={{ flex: 1 }}>
+          <Text variant="body" weight="600">
+            {receiptUri ? 'Receipt attached' : 'Attach a receipt'}
+          </Text>
+          <Text variant="caption" tone="muted">
+            {receiptUri ? 'Tap to replace' : 'Photo or scan of the bill'}
+          </Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+      </Card>
+    </Pressable>
+  );
+  const scanButton = (
+    <Button
+      title={tr('purchases:form.scanInstead')}
+      variant="ghost"
+      icon="text-recognition"
+      onPress={() => router.push('/(app)/ocr/capture')}
+      fullWidth
+    />
+  );
+  const submitTitle = expense ? 'Save changes' : 'Record expense';
 
-          <PickerField
-            label={tr('purchases:form.category')}
-            value={categories.find((c) => c.id === categoryId)?.name}
-            onPress={() => (categories.length ? setCategoryOpen(true) : setNewCategoryOpen(true))}
-            placeholder={categories.length ? undefined : tr('purchases:form.addCategory')}
-            icon="shape-outline"
-            required
-            error={categoryError}
-          />
+  const phoneForm = (
+    <ScrollView
+      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {amountField}
 
-          <DateField label={tr('purchases:form.date')} value={date} onChange={setDate} required />
+      {categoryField}
 
-          <PickerField label={tr('purchases:form.paidBy')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
-          <PickerField
-            label={tr('purchases:form.paidFrom')}
-            value={methodAccounts.find((a) => a.id === accountId)?.name}
-            onPress={() => setAccountOpen(true)}
-            icon="bank-outline"
-            required
-            error={accountError ?? (cashShort ? tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }) : undefined)}
-          />
-          <PickerField
-            label={tr('purchases:form.supplier')}
-            value={suppliers.find((s) => s.id === supplierId)?.name}
-            placeholder={tr('purchases:form.optional')}
-            onPress={() => setSupplierOpen(true)}
-            icon="truck-outline"
-            clearable
-            onClear={() => setSupplierId(null)}
-          />
+      {dateField}
 
-          <PickerField
-            label={tr('purchases:form.tax')}
-            value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : 'No tax'}
-            onPress={() => setTaxOpen(true)}
-            icon="percent-outline"
-            clearable
-            onClear={() => setTaxCategoryId(null)}
-          />
+      {methodField}
+      {accountField}
+      {supplierField}
 
-          {taxRate > 0 ? (
-            <>
-              <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />
-              <Card variant="flat" style={{ gap: t.spacing.sm }}>
-                {[
-                  { label: 'Net amount', value: formatMoney(netAmount) },
-                  { label: `Input tax (${formatPercent(taxRate)})`, value: formatMoney(taxAmount) },
-                  { label: 'Total paid', value: formatMoney(totalPaid) },
-                ].map((r) => (
-                  <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" tone="muted">
-                      {r.label}
-                    </Text>
-                    <Text variant="caption" weight="600">
-                      {r.value}
-                    </Text>
-                  </View>
-                ))}
-              </Card>
-            </>
-          ) : null}
+      {taxField}
 
-          <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />
-          <TextField label={tr('purchases:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('purchases:form.notesPlaceholder')} multiline />
-
-          <PickerField label={tr('purchases:form.repeats')} value={RECURRENCES.find((r) => r.value === recurrence)?.label} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
-          <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
-
-          <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
-            <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-              <MaterialCommunityIcons name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
-              <View style={{ flex: 1 }}>
-                <Text variant="body" weight="600">
-                  {receiptUri ? 'Receipt attached' : 'Attach a receipt'}
-                </Text>
+      {taxRate > 0 ? (
+        <>
+          {inclusiveField}
+          <Card variant="flat" style={{ gap: t.spacing.sm }}>
+            {[
+              { label: 'Net amount', value: formatMoney(netAmount) },
+              { label: `Input tax (${formatPercent(taxRate)})`, value: formatMoney(taxAmount) },
+              { label: 'Total paid', value: formatMoney(totalPaid) },
+            ].map((r) => (
+              <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="muted">
-                  {receiptUri ? 'Tap to replace' : 'Photo or scan of the bill'}
+                  {r.label}
+                </Text>
+                <Text variant="caption" weight="600">
+                  {r.value}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
-            </Card>
-          </Pressable>
+            ))}
+          </Card>
+        </>
+      ) : null}
 
-          <Button
-            title={tr('purchases:form.scanInstead')}
-            variant="ghost"
-            icon="text-recognition"
-            onPress={() => router.push('/(app)/ocr/capture')}
-            fullWidth
-          />
-        </ScrollView>
+      {referenceField}
+      {notesField}
 
-        <FormActions>
-          <Button title={expense ? 'Save changes' : 'Record expense'} onPress={save} disabled={amount.minor <= 0} fullWidth size="lg" />
-        </FormActions>
+      {repeatsField}
+      {billableField}
+
+      {receiptCard}
+
+      {scanButton}
+    </ScrollView>
+  );
+
+  const summaryRow = (label: string, value: string, strong = false) => (
+    <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
+      <Text variant={strong ? 'body' : 'small'} tone={strong ? undefined : 'muted'} weight={strong ? '700' : undefined}>
+        {label}
+      </Text>
+      <Text variant={strong ? 'body' : 'small'} weight={strong ? '700' : '600'} style={{ fontVariant: ['tabular-nums'] }}>
+        {value}
+      </Text>
+    </View>
+  );
+
+  const details = (
+    <FormSection title={tr('purchases:expense.details')}>
+      <FieldRow>
+        {amountField}
+        {dateField}
+      </FieldRow>
+      <FieldRow>
+        {categoryField}
+        {supplierField}
+      </FieldRow>
+      <FieldRow>
+        {methodField}
+        {accountField}
+      </FieldRow>
+      <FieldRow>
+        {referenceField}
+        {repeatsField}
+      </FieldRow>
+      {notesField}
+    </FormSection>
+  );
+  const tax = (
+    <FormSection title={tr('purchases:form.tax')}>
+      <FieldRow>
+        {taxField}
+        {/* The switch sits level with the picker's box rather than its label. */}
+        {taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : <View />}
+      </FieldRow>
+    </FormSection>
+  );
+  const summary = (
+    <FormSection title={tr('purchases:form.summary')}>
+      <View style={{ gap: t.spacing.md }}>
+        {taxRate > 0 ? summaryRow('Net amount', formatMoney(netAmount)) : null}
+        {taxRate > 0 ? summaryRow(`Input tax (${formatPercent(taxRate)})`, formatMoney(taxAmount)) : null}
+        {taxRate > 0 ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
+        {summaryRow('Total paid', formatMoney(totalPaid), true)}
+      </View>
+    </FormSection>
+  );
+  const receipt = (
+    <FormSection title={tr('purchases:form.receipt')}>
+      <View style={{ gap: t.spacing.sm }}>
+        {receiptCard}
+        {scanButton}
+      </View>
+    </FormSection>
+  );
+  const billableCard = <Card>{billableField}</Card>;
+
+  const desktopForm = (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
+      {breakpoint === 'tablet' ? (
+        <View style={{ gap: t.spacing.lg }}>
+          {details}
+          {tax}
+          {summary}
+          {billableCard}
+          {receipt}
+        </View>
+      ) : (
+        <SplitPane
+          sideWidth={360}
+          main={
+            <View style={{ gap: t.spacing.lg }}>
+              {details}
+              {tax}
+            </View>
+          }
+          side={
+            <>
+              {summary}
+              {billableCard}
+              {receipt}
+            </>
+          }
+        />
+      )}
+    </ScrollView>
+  );
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
+        {desktop ? desktopForm : phoneForm}
+
+        {desktop ? (
+          <FormActions>
+            <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => router.back()} />
+            <Button title={submitTitle} onPress={save} disabled={amount.minor <= 0} />
+          </FormActions>
+        ) : (
+          <FormActions>
+            <Button title={submitTitle} onPress={save} disabled={amount.minor <= 0} fullWidth size="lg" />
+          </FormActions>
+        )}
 
         <SelectSheet
           visible={categoryOpen}
