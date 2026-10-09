@@ -1562,6 +1562,8 @@ export const companies = pgTable("companies", {
 	lutNumber: varchar("lut_number", { length: 40 }),
 	lutValidTill: date("lut_valid_till", { mode: 'string' }),
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
+	// Off by default: a sale cannot take a tracked item below zero at its branch.
+	allowNegativeStock: boolean("allow_negative_stock").default(false).notNull(),
 	plan: planTier().default('free').notNull(),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),
 	version: integer().default(1).notNull(),

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -12,6 +12,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { useAuditEvents } from '../../../store/selectors';
 import { formatDateTime } from '@esmart/core/lib/date';
+import { auditChanges } from '@esmart/core/domain/auditDiff';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
@@ -22,11 +23,21 @@ const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
   invited: 'account-plus-outline',
 };
 
+/** `billingAddress.postalCode` → `Billing address › postal code`. */
+function fieldLabel(path: string): string {
+  const words = path
+    .split('.')
+    .map((p) => p.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase())
+    .join(' › ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export default function AuditTrail() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const events = useAuditEvents();
   const [query, setQuery] = useState('');
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -53,32 +64,56 @@ export default function AuditTrail() {
           {filtered.length === 0 ? (
             <EmptyState icon="history" title={tr('settings:audit.none')} message={tr('settings:audit.noneBody')} compact />
           ) : (
-            filtered.slice(0, 150).map((e, i) => (
-              <View
-                key={e.id}
-                style={{
-                  flexDirection: 'row',
-                  gap: t.spacing.md,
-                  padding: t.spacing.lg,
-                  borderBottomWidth: i < Math.min(filtered.length, 150) - 1 ? 0.5 : 0,
-                  borderBottomColor: t.c.line,
-                }}
-              >
-                <Avatar name={e.actorName} size={34} />
-                <View style={{ flex: 1, gap: 3 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <MaterialCommunityIcons name={iconFor(e.action)} size={14} color={t.c.muted} />
-                    <Text variant="small" weight="600" style={{ flex: 1 }} numberOfLines={1}>
-                      {e.actorName} {e.action} {e.entityLabel}
-                    </Text>
+            filtered.slice(0, 150).map((e, i) => {
+              const changes = auditChanges(e.before, e.after);
+              const open = openId === e.id && changes.length > 0;
+              return (
+                <Pressable
+                  key={e.id}
+                  disabled={!changes.length}
+                  onPress={() => setOpenId(open ? null : e.id)}
+                  accessibilityRole={changes.length ? 'button' : undefined}
+                  accessibilityState={changes.length ? { expanded: open } : undefined}
+                  style={{
+                    gap: t.spacing.sm,
+                    padding: t.spacing.lg,
+                    borderBottomWidth: i < Math.min(filtered.length, 150) - 1 ? 0.5 : 0,
+                    borderBottomColor: t.c.line,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                    <Avatar name={e.actorName} size={34} />
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialCommunityIcons name={iconFor(e.action)} size={14} color={t.c.muted} />
+                        <Text variant="small" weight="600" style={{ flex: 1 }} numberOfLines={1}>
+                          {e.actorName} {e.action} {e.entityLabel}
+                        </Text>
+                      </View>
+                      <Text variant="caption" tone="muted">
+                        {e.entityType} · {formatDateTime(e.createdAt)}
+                        {changes.length ? ` · ${tr('settings:audit.fieldsChanged', { count: changes.length })}` : ''}
+                      </Text>
+                    </View>
+                    {e.device ? <Badge label={e.device} tone="neutral" size="sm" /> : null}
+                    {changes.length ? <MaterialCommunityIcons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={t.c.muted} /> : null}
                   </View>
-                  <Text variant="caption" tone="muted">
-                    {e.entityType} · {formatDateTime(e.createdAt)}
-                  </Text>
-                </View>
-                {e.device ? <Badge label={e.device} tone="neutral" size="sm" /> : null}
-              </View>
-            ))
+                  {open ? (
+                    <View style={{ marginLeft: 34 + t.spacing.md, gap: t.spacing.sm }}>
+                      {changes.map((c) => (
+                        <View key={c.field} style={{ gap: 2 }}>
+                          <Text variant="caption" weight="600">{c.field === 'value' ? tr('settings:audit.value') : fieldLabel(c.field)}</Text>
+                          <Text variant="caption" tone="bad" style={{ textDecorationLine: c.from ? 'line-through' : 'none' }}>
+                            {c.from ?? tr('settings:audit.empty')}
+                          </Text>
+                          <Text variant="caption" tone="good">{c.to ?? tr('settings:audit.empty')}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })
           )}
         </Card>
 

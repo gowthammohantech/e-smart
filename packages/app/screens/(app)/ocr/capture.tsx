@@ -33,7 +33,7 @@ export default function OcrCapture() {
   const [kind, setKind] = useState<'expense' | 'purchaseBill'>('expense');
   const [busy, setBusy] = useState(false);
 
-  /** The built-in sample bill, for a demo or where on-device OCR is not available. */
+  /** The built-in sample bill, only when the person asks for it. */
   const runSample = (uri?: string) => {
     setResult(mockExtract(uri, kind));
     router.push('/(app)/ocr/review');
@@ -45,8 +45,8 @@ export default function OcrCapture() {
       // Read on the device with ML Kit; nothing is uploaded.
       const text = await recognizeText(uri);
       if (text === null) {
-        toast.show(tr('inventory:ocr.ocrUnavailable'), 'info');
-        runSample(uri);
+        // Say so, rather than passing the sample bill off as this photo.
+        toast.show(tr('inventory:ocr.ocrUnavailable'), 'error');
         return;
       }
       if (!text.trim()) {

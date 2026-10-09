@@ -55,6 +55,8 @@
     "roundOffAmountHint": "Enter a negative value to round down, e.g. -0.40.",
     "roundOffTooLarge": "Round-off must be less than {{amount}} either way.",
     "linesMissingHsn": "HSN/SAC is required on every line of a GST invoice. Missing on: {{names}}",
+    "insufficientStock": "Not enough stock at this branch: {{names}}. Add stock or turn on “Allow negative stock” in company settings.",
+    "stockShort": "{{name}} ({{onHand}} {{unit}} in stock, {{needed}} needed)",
     "creditLimitTitle": "Credit limit exceeded",
     "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
     "creditLimitProceed": "Continue anyway",

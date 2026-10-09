@@ -1,16 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Segmented } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { ReportShell, toCsv, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import {
   GSTR1_TABLE_LABELS,
+  NIL_SUPPLY_LABELS,
   Gstr1Row,
   Gstr1Table,
   gstr1Summary,
@@ -19,7 +20,7 @@ import { useActiveCompany, useBaseCurrency, useDocuments, useItems, useParties }
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { toMajor } from '@esmart/core/lib/money';
 
-type View_ = Gstr1Table | 'hsn';
+type View_ = Gstr1Table | 'hsn' | 'nil' | 'docs';
 
 const VIEWS: { value: View_; label: string }[] = [
   { value: 'b2b', label: 'B2B' },
@@ -28,8 +29,12 @@ const VIEWS: { value: View_; label: string }[] = [
   { value: 'exp', label: 'EXP' },
   { value: 'cdnr', label: 'CDNR' },
   { value: 'cdnur', label: 'CDNUR' },
+  { value: 'nil', label: 'NIL' },
   { value: 'hsn', label: 'HSN' },
+  { value: 'docs', label: 'DOCS' },
 ];
+
+const NATURE_LABEL = { invoice: 'Invoices', creditNote: 'Credit notes' } as const;
 
 /**
  * GSTR-1, the outward-supplies return. Every sale lands in exactly one table,
@@ -63,6 +68,10 @@ export default function Gstr1Report() {
 
   const rowsFor = (table: Gstr1Table): Gstr1Row[] => summary[table];
 
+  // Credit notes filed under B2CS reduce it, so they show as negatives.
+  const signed = (r: Gstr1Row, m: { minor: number }) =>
+    formatMoney({ minor: (r.kind === 'salesReturn' && view === 'b2cs' ? -1 : 1) * m.minor, currency: baseCurrency });
+
   const tableRows =
     view === 'hsn'
       ? summary.hsn.map((h) => [
@@ -71,22 +80,42 @@ export default function Gstr1Report() {
           formatMoney(h.taxableValue),
           formatMoney(h.totalValue),
         ])
-      : rowsFor(view).map((r) => [
-          r.number,
-          r.gstin ? r.gstin.slice(0, 2) + '…' + r.gstin.slice(-4) : r.placeOfSupply,
-          formatPercent(r.rate),
-          formatMoney(r.taxableValue),
-          formatMoney({ minor: r.cgst.minor + r.sgst.minor + r.igst.minor, currency: baseCurrency }),
-        ]);
+      : view === 'nil'
+        ? summary.nil.map((n) => [NIL_SUPPLY_LABELS[n.supplyType], formatMoney(n.nilRated), formatMoney(n.exempt), formatMoney(n.nonGst)])
+        : view === 'docs'
+          ? summary.docs.map((d) => [NATURE_LABEL[d.nature], `${d.from} – ${d.to}`, String(d.total), String(d.cancelled), String(d.total - d.cancelled)])
+          : rowsFor(view).map((r) => [
+              r.number,
+              r.gstin ? r.gstin.slice(0, 2) + '…' + r.gstin.slice(-4) : r.placeOfSupply,
+              formatPercent(r.rate),
+              signed(r, r.taxableValue),
+              signed(r, { minor: r.cgst.minor + r.sgst.minor + r.igst.minor }),
+            ]);
 
   const headers =
     view === 'hsn'
       ? ['HSN', 'Qty', 'Taxable', 'Total']
-      : ['Document', view === 'b2b' || view === 'cdnr' ? 'GSTIN' : 'PoS', 'Rate', 'Taxable', 'Tax'];
+      : view === 'nil'
+        ? ['Supply', 'Nil rated', 'Exempt', 'Non-GST']
+        : view === 'docs'
+          ? ['Nature', 'Series', 'Total', 'Cancelled', 'Net']
+          : ['Document', view === 'b2b' || view === 'cdnr' ? 'GSTIN' : 'PoS', 'Rate', 'Taxable', 'Tax'];
 
   const exportRows = () => {
+    if (view === 'nil') {
+      return reportTable(
+        ['Supply type', 'Nil rated', 'Exempted', 'Non-GST'],
+        summary.nil.map((n) => [NIL_SUPPLY_LABELS[n.supplyType], toMajor(n.nilRated), toMajor(n.exempt), toMajor(n.nonGst)]),
+      );
+    }
+    if (view === 'docs') {
+      return reportTable(
+        ['Nature of document', 'From', 'To', 'Total number', 'Cancelled', 'Net issued'],
+        summary.docs.map((d) => [NATURE_LABEL[d.nature], d.from, d.to, d.total, d.cancelled, d.total - d.cancelled]),
+      );
+    }
     if (view === 'hsn') {
-      return toCsv(
+      return reportTable(
         ['HSN', 'Description', 'UQC', 'Quantity', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total'],
         summary.hsn.map((h) => [
           h.hsnCode,
@@ -101,7 +130,7 @@ export default function Gstr1Report() {
         ]),
       );
     }
-    return toCsv(
+    return reportTable(
       ['GSTIN', 'Customer', 'Document', 'Date', 'Place of supply', 'Rate', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Invoice value'],
       rowsFor(view).map((r) => [
         r.gstin ?? 'URP',
@@ -119,7 +148,8 @@ export default function Gstr1Report() {
     );
   };
 
-  const count = view === 'hsn' ? summary.hsn.length : rowsFor(view).length;
+  const count =
+    view === 'hsn' ? summary.hsn.length : view === 'nil' ? summary.nil.length : view === 'docs' ? summary.docs.length : rowsFor(view).length;
 
   return (
     <>
@@ -141,14 +171,23 @@ export default function Gstr1Report() {
 
         <View style={{ height: t.spacing.lg }} />
 
-        <Segmented size="sm" value={view} onChange={(v) => setView(v as View_)} options={VIEWS} />
+        {/* Nine tables do not fit a phone's width side by side; let them scroll. */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, minWidth: VIEWS.length * 64 }}>
+          <View style={{ flex: 1 }}>
+            <Segmented size="sm" value={view} onChange={(v) => setView(v as View_)} options={VIEWS} />
+          </View>
+        </ScrollView>
 
         <View style={{ height: t.spacing.md }} />
 
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           {view === 'hsn'
             ? 'Quantities and values rolled up by HSN, as table 12 of the return wants them.'
-            : GSTR1_TABLE_LABELS[view]}
+            : view === 'nil'
+              ? 'Table 8 — nil-rated, exempted and non-GST supplies.'
+              : view === 'docs'
+                ? 'Table 13 — documents issued in the period, by numbering series.'
+                : GSTR1_TABLE_LABELS[view]}
         </Text>
 
         <View style={{ height: t.spacing.md }} />

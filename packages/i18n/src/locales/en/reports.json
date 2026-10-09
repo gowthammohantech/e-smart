@@ -46,6 +46,9 @@
   },
   "shell": {
     "exportCsv": "Export as CSV",
+    "export": "Export",
+    "exportPdf": "PDF",
+    "exportExcel": "Excel (.xlsx)",
     "dateRange": "Date range",
     "branch": "Branch",
     "contact": "Contact",

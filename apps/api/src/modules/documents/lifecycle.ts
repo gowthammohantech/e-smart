@@ -1,14 +1,16 @@
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
-import { signedQuantity } from '@esmart/core/domain/stockLedger';
+import { MOVEMENT_SIGN, signedQuantity } from '@esmart/core/domain/stockLedger';
 import type { BusinessDocument, DocStatus, DocumentKind, StockMovementType } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow } from '../../context';
-import { preconditionFailed } from '../../http/errors';
+import { preconditionFailed, unprocessable } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
+import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
+import { stockOnHand } from '../catalog/stock';
 import type { DocRow } from './engine';
 
 const D = schema.documents;
@@ -130,6 +132,11 @@ async function movedUpstream(tx: DbOrTx, row: DocRow): Promise<boolean> {
  * Writes the stock movements for a document that has just been finalised:
  * one per line whose item tracks inventory. Quantities are signed (the
  * ledger's convention), with the sign from `@esmart/core` MOVEMENT_SIGN.
+ *
+ * Unless the company allows negative stock, a document that takes stock out
+ * (a sale, a delivery, a purchase return) may not take a tracked item below
+ * zero at its branch: that is 422 INSUFFICIENT_STOCK and the whole
+ * finalisation rolls back.
  */
 export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, actorId: string): Promise<number> {
   const type = movementTypeFor(row.kind);
@@ -140,7 +147,13 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
   const lines = await tx.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, row.id));
   const itemIds = [...new Set(lines.map((l) => l.itemId).filter((x): x is string => !!x))];
   if (!itemIds.length) return 0;
-  const items = await tx.select().from(schema.items).where(and(eq(schema.items.companyId, row.companyId), inArray(schema.items.id, itemIds)));
+  // Locked so two sales finalised at once cannot both spend the same stock.
+  const items = await tx
+    .select()
+    .from(schema.items)
+    .where(and(eq(schema.items.companyId, row.companyId), inArray(schema.items.id, itemIds)))
+    .orderBy(schema.items.id)
+    .for('update');
   const tracked = new Map(items.filter((i) => i.trackInventory && i.type === 'goods').map((i) => [i.id, i]));
   const baseCurrency = company.baseCurrency.trim();
   const rate = Number(row.exchangeRate) || 1;
@@ -169,6 +182,26 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
         createdBy: actorId,
       };
     });
+  if (values.length && MOVEMENT_SIGN[type] < 0 && !company.allowNegativeStock) {
+    const need = new Map<string, number>();
+    for (const v of values) need.set(v.itemId, (need.get(v.itemId) ?? 0) + Math.abs(Number(v.quantity)));
+    const onHand = await stockOnHand(tx, row.companyId, [...need.keys()], row.branchId);
+    const short = [...need].filter(([id, qty]) => (onHand.get(id) ?? 0) < qty);
+    if (short.length) {
+      throw unprocessable(
+        short.map(([id, qty]) => {
+          const item = tracked.get(id)!;
+          const line = lines.find((l) => l.itemId === id)!;
+          return {
+            field: `lines[${line.position - 1}].quantity`,
+            message: `${item.name}: ${onHand.get(id) ?? 0} ${item.unit} in stock at this branch, ${qty} needed`,
+            severity: 'blocking' as const,
+          };
+        }),
+        'INSUFFICIENT_STOCK',
+      );
+    }
+  }
   if (values.length) await tx.insert(M).values(values);
   return values.length;
 }
@@ -206,6 +239,27 @@ export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow,
 // ------------------------------------------------------------ transitions
 
 /**
+ * An invoice may not take its customer past their credit limit unless the
+ * caller says so (`overrideCreditLimit`, which the app sends once the user
+ * has seen the warning): 422 CREDIT_LIMIT_EXCEEDED. Exposure is what the
+ * customer already owes on open invoices plus this one; `row` is still a
+ * draft here, so it is not counted twice.
+ */
+async function checkCreditLimit(tx: DbOrTx, row: DocRow, now: Date): Promise<void> {
+  if (row.kind !== 'invoice') return;
+  const [party] = await tx.select().from(schema.parties).where(eq(schema.parties.id, row.partyId));
+  if (!party?.creditLimitMinor || party.creditLimitMinor <= 0) return;
+  const balances = await partyBalances(tx, row.companyId, [{ id: party.id, kind: 'customer' }], today(now));
+  const exposure = (balances.get(party.id)?.outstanding ?? 0) + row.grandTotalMinor;
+  if (exposure <= party.creditLimitMinor) return;
+  const amount = (minor: number) => `${party.currency.trim()} ${(minor / 100).toFixed(2)}`;
+  throw unprocessable(
+    [{ field: 'partyId', message: `${party.name} would owe ${amount(exposure)}, over their credit limit of ${amount(party.creditLimitMinor)}`, severity: 'blocking' }],
+    'CREDIT_LIMIT_EXCEEDED',
+  );
+}
+
+/**
  * Takes a draft to a finalised status inside `tx`: draws its number from the
  * series, writes stock, and settles invoices and bills to their derived
  * status. The caller has already recomputed and saved the totals.
@@ -217,7 +271,9 @@ export async function finalizeInTx(
   row: DocRow,
   target: DocStatus,
   now: Date,
+  opts: { overrideCreditLimit?: boolean } = {},
 ): Promise<DocRow> {
+  if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
   const number = await assignNumber(tx, { companyId: row.companyId, kind: row.kind, branchId: row.branchId, date: row.date });
   const status = effectiveStatus({ ...row, status: target }, today(now));
   const [updated] = await tx

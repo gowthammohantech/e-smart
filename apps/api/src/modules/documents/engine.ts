@@ -58,6 +58,7 @@ export function companyCore(row: CompanyRow): Company {
       lutValidTill: row.lutValidTill ?? undefined,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
+    allowNegativeStock: row.allowNegativeStock,
     plan: row.plan,
     createdAt: iso(row.createdAt)!,
   };
@@ -460,4 +461,28 @@ export async function deleteLines(tx: DbOrTx, documentId: string) {
 /** The status a new document starts in: its kind's initial status, or the finalised one asked for. */
 export function requestedStatus(kind: DocumentKind, status: string | undefined): string {
   return !status || status === 'draft' ? initialStatus(kind) : status;
+}
+
+/**
+ * What the audit trail keeps of a document: the fields a person edits, in
+ * readable form, so the trail can show what changed. Each line is one string
+ * ("Steel rod × 2 NOS @ 1000.00, 18%"), so an edit shows as a line removed
+ * and another added.
+ */
+export async function auditSnapshot(db: DbOrTx, row: DocRow, lines: LineRow[]) {
+  const [party] = await db.select({ name: schema.parties.name }).from(schema.parties).where(eq(schema.parties.id, row.partyId));
+  const currency = row.currency.trim();
+  return {
+    status: row.status,
+    party: party?.name ?? row.partyId,
+    date: row.date,
+    dueDate: row.dueDate ?? undefined,
+    reference: row.reference ?? undefined,
+    notes: row.notes ?? undefined,
+    terms: row.terms ?? undefined,
+    total: { minor: row.grandTotalMinor, currency },
+    lines: [...lines]
+      .sort((a, b) => a.position - b.position)
+      .map((l) => `${l.name} × ${Number(l.quantity)} ${l.unit} @ ${(l.unitPriceMinor / 100).toFixed(2)}, ${Number(l.taxRate)}%`),
+  };
 }

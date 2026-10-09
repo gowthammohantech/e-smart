@@ -20,7 +20,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
-import { Errors, hasErrors, required, validEmail, validGstin } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -51,6 +51,7 @@ export default function CompanySettings() {
   const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
   const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
+  const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
   const [lutValidTill, setLutValidTill] = useState(() => {
@@ -62,16 +63,17 @@ export default function CompanySettings() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'taxId'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'taxId' | 'postalCode'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = () => {
-    const next: Errors<'name' | 'email' | 'taxId'> = {
+    const next: Errors<'name' | 'email' | 'taxId' | 'postalCode'> = {
       name: required(name, 'Business name'),
       email: validEmail(email),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
+      postalCode: validPostalCode(postalCode, company?.country),
     };
     setErrors(next);
     if (hasErrors(next) || !company) return;
@@ -85,6 +87,7 @@ export default function CompanySettings() {
       phone: phone.trim() || undefined,
       website: website.trim() || undefined,
       fiscalYearStartMonth: fyMonth,
+      allowNegativeStock,
       address: {
         ...company.address,
         line1: line1.trim(),
@@ -138,7 +141,7 @@ export default function CompanySettings() {
         <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
-          <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" containerStyle={{ flex: 1 }} />
+          <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={errors.postalCode} containerStyle={{ flex: 1 }} />
         </View>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
@@ -188,6 +191,14 @@ export default function CompanySettings() {
             ) : null}
           </>
         ) : null}
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.inventory')}</Text>
+        <SwitchField
+          label={tr('settings:company.allowNegativeStock')}
+          description={tr('settings:company.allowNegativeStockHint')}
+          value={allowNegativeStock}
+          onValueChange={setAllowNegativeStock}
+        />
       </ScrollView>
 
       <FormActions>

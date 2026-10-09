@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { isFinalized } from '@esmart/core/domain/documentStates';
 import { settlementGainLoss } from '@esmart/core/domain/fx';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
@@ -18,6 +18,27 @@ import type { PaymentRow } from './wire';
 const PAY = schema.payments;
 const A = schema.paymentAllocations;
 const D = schema.documents;
+
+/**
+ * An account's balance in base-currency minor units, as core's
+ * `accountBalances` computes it: opening + received − paid − expenses.
+ * `exceptPaymentId` leaves out a payment being rewritten.
+ */
+async function accountBalanceMinor(tx: DbOrTx, account: typeof schema.paymentAccounts.$inferSelect, exceptPaymentId?: string): Promise<number> {
+  const base = sql<string>`coalesce(sum(round(${PAY.amountMinor} * ${PAY.exchangeRate})), 0)`;
+  const pays = await tx
+    .select({ direction: PAY.direction, total: base })
+    .from(PAY)
+    .where(and(eq(PAY.accountId, account.id), exceptPaymentId ? ne(PAY.id, exceptPaymentId) : undefined))
+    .groupBy(PAY.direction);
+  const E = schema.expenses;
+  const [spent] = await tx
+    .select({ total: sql<string>`coalesce(sum(round(${E.amountMinor} * ${E.exchangeRate})), 0)` })
+    .from(E)
+    .where(eq(E.accountId, account.id));
+  const net = pays.reduce((s, p) => s + (p.direction === 'received' ? 1 : -1) * Number(p.total), 0);
+  return account.openingBalanceMinor + net - Number(spent?.total ?? 0);
+}
 
 export type PaymentInput = {
   direction: 'received' | 'paid';
@@ -71,7 +92,12 @@ export async function writePayment(
 
   const [party] = await tx.select().from(schema.parties).where(and(eq(schema.parties.companyId, company.id), eq(schema.parties.id, input.partyId)));
   if (!party) blocking('partyId', 'No such party in this company');
-  const [account] = await tx.select().from(schema.paymentAccounts).where(and(eq(schema.paymentAccounts.companyId, company.id), eq(schema.paymentAccounts.id, input.accountId)));
+  // Locked so two payments out of one cash box cannot both spend its last rupee.
+  const [account] = await tx
+    .select()
+    .from(schema.paymentAccounts)
+    .where(and(eq(schema.paymentAccounts.companyId, company.id), eq(schema.paymentAccounts.id, input.accountId)))
+    .for('update');
   if (!account) blocking('accountId', 'No such payment account in this company');
   else if (!accountFitsMethod(input.method, { ...account, currency: account.currency.trim(), openingBalance: { minor: account.openingBalanceMinor, currency: account.currency.trim() }, accountNumber: account.accountNumber ?? undefined })) {
     blocking('accountId', `A ${input.method} payment cannot go through a ${account.type} account`);
@@ -129,7 +155,19 @@ export async function writePayment(
   });
   const allocated = input.allocations.reduce((s, a) => s + a.amountMinor, 0);
   if (allocated > input.amountMinor) blocking('allocations', `Allocations (${allocated}) exceed the payment (${input.amountMinor})`);
-  if (issues.length) throw unprocessable(issues, overOutstanding ? 'ALLOCATION_EXCEEDS_OUTSTANDING' : 'VALIDATION_FAILED');
+
+  // Cash cannot go below zero. A bank account may be overdrawn, as the app
+  // only warns there.
+  let shortOfCash = false;
+  if (input.direction === 'paid' && account?.type === 'cash' && exchangeRate && !issues.length) {
+    const balance = await accountBalanceMinor(tx, account, existing?.id);
+    const amountBase = Math.round(input.amountMinor * exchangeRate);
+    if (amountBase > balance) {
+      shortOfCash = true;
+      blocking('amount.minor', `${account.name} holds ${baseCurrency} ${(Math.max(balance, 0) / 100).toFixed(2)}; this payment needs ${baseCurrency} ${(amountBase / 100).toFixed(2)}`);
+    }
+  }
+  if (issues.length) throw unprocessable(issues, overOutstanding ? 'ALLOCATION_EXCEEDS_OUTSTANDING' : shortOfCash ? 'INSUFFICIENT_BALANCE' : 'VALIDATION_FAILED');
 
   // FX gain or loss (base currency) when a foreign-currency document settles at another rate.
   let fxGainLossMinor: number | null = null;

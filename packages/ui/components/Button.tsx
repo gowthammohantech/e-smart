@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme/ThemeProvider';
 import { focusRing, type WebPressState } from '../theme/interaction';
+import { useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success';
@@ -38,8 +39,13 @@ export function Button({
 }: Props) {
   const t = useTheme();
 
-  const heights: Record<ButtonSize, number> = { sm: 36, md: 46, lg: 54 };
-  const fonts: Record<ButtonSize, number> = { sm: t.fontSize.small, md: t.fontSize.body, lg: t.fontSize.title };
+  const desktop = useIsDesktop();
+  // Phone sizes suit a thumb; a desktop pointer needs less, so buttons there
+  // take web proportions.
+  const heights: Record<ButtonSize, number> = desktop ? { sm: 32, md: 40, lg: 44 } : { sm: 36, md: 46, lg: 54 };
+  const fonts: Record<ButtonSize, number> = desktop
+    ? { sm: t.fontSize.caption + 1, md: t.fontSize.small + 1, lg: t.fontSize.body }
+    : { sm: t.fontSize.small, md: t.fontSize.body, lg: t.fontSize.title };
 
   const palette: Record<ButtonVariant, { bg: string; fg: string; border: string }> = {
     primary: { bg: t.c.primary, fg: t.c.onPrimary, border: t.c.primary },

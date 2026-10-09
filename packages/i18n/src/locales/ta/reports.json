@@ -46,6 +46,9 @@
   },
   "shell": {
     "exportCsv": "CSV ஆக ஏற்றுமதி செய்",
+    "export": "ஏற்றுமதி",
+    "exportPdf": "PDF",
+    "exportExcel": "Excel (.xlsx)",
     "dateRange": "தேதி வரம்பு",
     "branch": "கிளை",
     "contact": "தொடர்பு",

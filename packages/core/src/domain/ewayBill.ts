@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { isValidGstin } from './gstin';
 import { INDIAN_STATES } from '../data/masters';
+import { PINCODE_RE } from '../lib/validators';
 
 /**
  * E-way bills (FRD 16).
@@ -101,7 +102,7 @@ export const EWAY_MAX_DISTANCE_KM = 4000;
 export const VEHICLE_NUMBER_RE =
   /^(?:[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2}|DF[0-9]{10}|TR[0-9]{2}[A-Z]{1,3}[0-9]{4})$/;
 
-export const PINCODE_RE = /^[1-9][0-9]{5}$/;
+export { PINCODE_RE };
 export const EWAY_NUMBER_RE = /^[0-9]{12}$/;
 
 const HOUR = 3600 * 1000;

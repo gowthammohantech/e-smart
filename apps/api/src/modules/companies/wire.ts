@@ -32,6 +32,7 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
       lutValidTill: row.lutValidTill,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
+    allowNegativeStock: row.allowNegativeStock,
     plan: row.plan,
     ...versioned(row),
   });
@@ -59,6 +60,8 @@ export function companyColumns(body: Schema<'Company'>) {
     lutNumber: tax?.lutNumber?.trim().toUpperCase() || null,
     lutValidTill: tax?.lutNumber?.trim() ? (tax.lutValidTill ?? null) : null,
     fiscalYearStartMonth: body.fiscalYearStartMonth,
+    // Left alone when a client that predates the setting saves the company.
+    ...(body.allowNegativeStock !== undefined && { allowNegativeStock: body.allowNegativeStock }),
   };
 }
 

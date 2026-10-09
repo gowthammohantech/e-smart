@@ -15,7 +15,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '.
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
-import { validGstin } from '@esmart/core/lib/validators';
+import { validGstin, validPostalCode } from '@esmart/core/lib/validators';
 
 export default function BranchesStep() {
   const t = useTheme();
@@ -32,9 +32,10 @@ export default function BranchesStep() {
   const [gstin, setGstin] = useState('');
   const [stateOpen, setStateOpen] = useState(false);
   const gstinError = validGstin(gstin);
+  const pinError = validPostalCode(postalCode, draft.address.country);
 
   const add = () => {
-    if (!name.trim() || gstinError) return;
+    if (!name.trim() || gstinError || pinError) return;
     set({
       branches: [
         ...draft.branches,
@@ -139,6 +140,7 @@ export default function BranchesStep() {
             onChangeText={(v) => setPostalCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
             placeholder="411001"
             keyboardType="number-pad"
+            error={pinError}
             containerStyle={{ flex: 1 }}
           />
         </View>
@@ -152,7 +154,7 @@ export default function BranchesStep() {
           error={gstin.length === 15 ? gstinError : undefined}
           hint={tr('settings:branches.gstinHint')}
         />
-        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!name.trim() || (!!gstin && !!gstinError)} />
+        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!name.trim() || (!!gstin && !!gstinError) || !!pinError} />
       </View>
 
       <SelectSheet

@@ -17,7 +17,7 @@ import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { PLANS, moduleSetFor, planInfo } from '@esmart/core/domain/plan';
 import type { PlanTier } from '@esmart/core/types';
-import { Errors, hasErrors, required, validEmail, validPhone } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail, validPhone, validPostalCode } from '@esmart/core/lib/validators';
 
 export default function BusinessStep() {
   const t = useTheme();
@@ -29,7 +29,7 @@ export default function BusinessStep() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'city' | 'state' | 'email' | 'phone'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode'>>({});
 
   const pickLogo = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -42,12 +42,13 @@ export default function BusinessStep() {
   };
 
   const next = () => {
-    const nextErrors: Errors<'name' | 'city' | 'state' | 'email' | 'phone'> = {
+    const nextErrors: Errors<'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode'> = {
       name: required(draft.name, tr('errors:field.businessName')),
       city: required(draft.address.city, 'City'),
       state: required(draft.address.state, 'State'),
       email: validEmail(draft.email),
       phone: validPhone(draft.phone),
+      postalCode: validPostalCode(draft.address.postalCode, draft.address.country),
     };
     setErrors(nextErrors);
     if (hasErrors(nextErrors)) return;
@@ -166,6 +167,8 @@ export default function BusinessStep() {
           onChangeText={(v) => setAddress({ postalCode: v })}
           placeholder="400001"
           keyboardType="number-pad"
+          maxLength={draft.address.country === 'IN' ? 6 : undefined}
+          error={errors.postalCode}
           containerStyle={{ flex: 1 }}
         />
       </View>

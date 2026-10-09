@@ -32,6 +32,8 @@ export type Company = {
   website?: string;
   taxRegistration?: TaxRegistration;
   fiscalYearStartMonth: number;
+  /** Let sales take tracked items below zero. Off unless the business turns it on. */
+  allowNegativeStock?: boolean;
   plan: PlanTier;
   createdAt: string;
 };

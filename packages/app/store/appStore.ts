@@ -49,6 +49,7 @@ import { isRemote } from '../remote/config';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { formatNumber } from '@esmart/core/domain/numbering';
 import { initialStatus, isFinalized } from '@esmart/core/domain/documentStates';
+import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import {
   EInvoiceContext,
   blockingIssues,
@@ -276,7 +277,8 @@ type Actions = {
   createDocument: (draft: NewDocumentInput) => string;
   updateDocument: (id: string, patch: Partial<BusinessDocument>) => void;
   recalculateDocument: (id: string) => void;
-  setDocumentStatus: (id: string, status: DocStatus) => void;
+  /** `overrideCreditLimit` rides along to the server once the user has accepted the credit-limit warning. */
+  setDocumentStatus: (id: string, status: DocStatus, opts?: { overrideCreditLimit?: boolean }) => void;
   finalizeDocument: (id: string) => void;
   removeDocument: (id: string) => void;
   duplicateDocument: (id: string) => string;
@@ -940,11 +942,12 @@ export const useAppStore = create<AppState>()(
         /* masters                                                      */
         /* ------------------------------------------------------------ */
         saveParty: (party) => {
-          const exists = get().parties.some((p) => p.id === party.id);
+          const previous = get().parties.find((p) => p.id === party.id);
+          const exists = !!previous;
           set({
             parties: exists ? get().parties.map((p) => (p.id === party.id ? party : p)) : [...get().parties, party],
           });
-          audit(exists ? 'updated' : 'created', party.kind, party.id, party.name);
+          audit(exists ? 'updated' : 'created', party.kind, party.id, party.name, previous ? { before: JSON.stringify(previous), after: JSON.stringify(party) } : undefined);
           return party.id;
         },
         removeParty: (id) => {
@@ -953,7 +956,8 @@ export const useAppStore = create<AppState>()(
           if (p) audit('deleted', p.kind, id, p.name);
         },
         saveItem: (item) => {
-          const exists = get().items.some((i) => i.id === item.id);
+          const previous = get().items.find((i) => i.id === item.id);
+          const exists = !!previous;
           set({ items: exists ? get().items.map((i) => (i.id === item.id ? item : i)) : [...get().items, item] });
           if (!exists && item.trackInventory && item.openingStock > 0) {
             const m: StockMovement = {
@@ -971,7 +975,7 @@ export const useAppStore = create<AppState>()(
             };
             set({ stockMovements: [...get().stockMovements, m] });
           }
-          audit(exists ? 'updated' : 'created', 'item', item.id, item.name);
+          audit(exists ? 'updated' : 'created', 'item', item.id, item.name, previous ? { before: JSON.stringify(previous), after: JSON.stringify(item) } : undefined);
           return item.id;
         },
         removeItem: (id) => {
@@ -1099,7 +1103,11 @@ export const useAppStore = create<AppState>()(
           const merged = { ...existing, ...patch, updatedAt: nowISO() };
           merged.totals = computeTotals(merged);
           set({ documents: get().documents.map((d) => (d.id === id ? merged : d)) });
-          audit('updated', existing.kind, id, merged.number);
+          const partyName = (pid: string) => get().parties.find((p) => p.id === pid)?.name;
+          audit('updated', existing.kind, id, merged.number, {
+            before: documentAuditSnapshot(existing, partyName(existing.partyId)),
+            after: documentAuditSnapshot(merged, partyName(merged.partyId)),
+          });
         },
 
         recalculateDocument: (id) => {

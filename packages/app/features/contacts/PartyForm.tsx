@@ -20,7 +20,7 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO } from '@esmart/core/lib/date';
-import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone } from '@esmart/core/lib/validators';
+import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -74,7 +74,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [stateOpen, setStateOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'>>({});
 
   // Both cities hang off the one state, so a city left over from the old state goes.
   const changeState = (code: string) => {
@@ -88,7 +88,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
   const save = () => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'> = {
       name: required(name, `${label} name`),
       email: validEmail(email),
       phone: validPhone(phone),
@@ -98,6 +98,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           ? `This GSTIN is registered in ${stateNameOf(gstin.slice(0, 2))}, not the state below`
           : undefined),
       country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
+      postalCode: validPostalCode(postalCode, overseas ? country : 'IN'),
     };
     setErrors(next);
     if (hasErrors(next)) return;
@@ -211,7 +212,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
               <TextField label={tr('contacts:form.region')} value={region} onChangeText={setRegion} icon="map-outline" />
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
                 <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
-                <TextField label={tr('contacts:form.postalCode')} value={postalCode} onChangeText={setPostalCode} autoCapitalize="characters" containerStyle={{ flex: 1 }} />
+                <TextField label={tr('contacts:form.postalCode')} value={postalCode} onChangeText={setPostalCode} autoCapitalize="characters" error={errors.postalCode} containerStyle={{ flex: 1 }} />
               </View>
             </>
           ) : (
@@ -225,7 +226,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
               />
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
                 <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
-                <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
+                <TextField label="PIN" value={postalCode} onChangeText={(v) => setPostalCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="400001" keyboardType="number-pad" maxLength={6} error={errors.postalCode} containerStyle={{ flex: 1 }} />
               </View>
             </>
           )}

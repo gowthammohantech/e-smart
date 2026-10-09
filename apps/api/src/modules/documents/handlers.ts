@@ -17,6 +17,7 @@ import { partyToWire } from '../parties/wire';
 import { paymentsToWire } from '../payments/wire';
 import {
   assertKindAllowed,
+  auditSnapshot,
   deleteLines,
   draftNumber,
   fieldsFromRow,
@@ -75,7 +76,7 @@ function checkRequestedStatus(kind: DocumentKind, status: string): DocStatus {
  * Inserts a new document from prepared fields, finalising it in the same
  * transaction when asked. Shared by create, convert and duplicate.
  */
-async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], status: DocStatus, extra: { attachmentIds?: string[]; snapshotRates?: boolean; action?: string } = {}) {
+async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], status: DocStatus, extra: { attachmentIds?: string[]; snapshotRates?: boolean; action?: string; overrideCreditLimit?: boolean } = {}) {
   const prepared = await prepareDocument(ctx.db, ctx.company, f, lines, { snapshotRates: extra.snapshotRates ?? true });
   if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot create documents in this branch');
   const draftStatus = requestedStatus(f.kind, 'draft') as DocStatus;
@@ -88,7 +89,7 @@ async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], sta
     await linkAttachments(tx, ctx.company.id, created.id, extra.attachmentIds);
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: extra.action ?? 'created', entityType: 'document', entityId: created.id, entityLabel: created.number, version: created.version });
     if (status === draftStatus) return created;
-    const done = await finalizeInTx(tx, ctx.company, ctx.user, created, status, ctx.now);
+    const done = await finalizeInTx(tx, ctx.company, ctx.user, created, status, ctx.now, { overrideCreditLimit: extra.overrideCreditLimit });
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'finalized', entityType: 'document', entityId: done.id, entityLabel: done.number, version: done.version });
     return done;
   });
@@ -99,7 +100,7 @@ async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], sta
  * Recomputes a draft from what is stored (tax rates re-read from the
  * categories) and finalises it to `target`. Totals are always the server's.
  */
-async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus): Promise<DocRow> {
+async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus, opts: { overrideCreditLimit?: boolean } = {}): Promise<DocRow> {
   const finalized = await ctx.db.transaction(async (tx) => {
     const row = await findDocument(ctx, tx, id, { lock: true });
     checkIfMatch(ctx.req, row.version);
@@ -108,7 +109,7 @@ async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus): Promis
     const prepared = await prepareDocument(tx, ctx.company, fieldsFromRow(row), linesFromRows(lines), { snapshotRates: true });
     const [recomputed] = await tx.update(D).set({ ...prepared.columns, updatedAt: ctx.now }).where(eq(D.id, row.id)).returning();
     await writeLines(tx, row.id, prepared);
-    const done = await finalizeInTx(tx, ctx.company, ctx.user, recomputed, target, ctx.now);
+    const done = await finalizeInTx(tx, ctx.company, ctx.user, recomputed, target, ctx.now, opts);
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'finalized', entityType: 'document', entityId: done.id, entityLabel: done.number, version: done.version, after: { status: done.status, number: done.number } });
     return done;
   });
@@ -246,7 +247,7 @@ export const documentsHandlers = defineHandlers({
     const body = ctx.body;
     assertKindAllowed(ctx.company, body.kind);
     const status = checkRequestedStatus(body.kind, body.status);
-    const row = await insertDocument(ctx, fieldsFromWire(body), linesFromWire(body.lines), status, { attachmentIds: body.attachmentIds });
+    const row = await insertDocument(ctx, fieldsFromWire(body), linesFromWire(body.lines), status, { attachmentIds: body.attachmentIds, overrideCreditLimit: body.overrideCreditLimit });
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },
@@ -334,7 +335,17 @@ export const documentsHandlers = defineHandlers({
         await writeLines(tx, current.id, prepared);
       }
       await linkAttachments(tx, ctx.company.id, current.id, body.attachmentIds);
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'updated', entityType: 'document', entityId: updated.id, entityLabel: updated.number, version: updated.version });
+      const newLines = await tx.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, current.id));
+      await recordChange(tx, ctx.user, {
+        companyId: ctx.company.id,
+        action: 'updated',
+        entityType: 'document',
+        entityId: updated.id,
+        entityLabel: updated.number,
+        version: updated.version,
+        before: await auditSnapshot(tx, current, storedLines),
+        after: await auditSnapshot(tx, updated, newLines),
+      });
       return updated;
     });
     setEtag(ctx.reply, row.version);
@@ -354,17 +365,18 @@ export const documentsHandlers = defineHandlers({
       await tx.delete(schema.shareLinks).where(eq(schema.shareLinks.documentId, current.id));
       await tx.delete(schema.reminderDocuments).where(eq(schema.reminderDocuments.documentId, current.id));
       await tx.update(schema.messageDeliveries).set({ documentId: null }).where(eq(schema.messageDeliveries.documentId, current.id));
+      const before = await auditSnapshot(tx, current, await tx.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, current.id)));
       await deleteLines(tx, current.id);
       const deleted = await tx.delete(D).where(and(eq(D.id, current.id), eq(D.version, current.version))).returning({ id: D.id });
       if (!deleted.length) throw preconditionFailed();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'document', entityId: current.id, entityLabel: current.number, version: current.version + 1, deleted: true });
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'document', entityId: current.id, entityLabel: current.number, version: current.version + 1, deleted: true, before });
     });
     return undefined;
   },
 
   async finalizeDocument(ctx) {
     const current = await findDocument(ctx, ctx.db, ctx.params.id);
-    const row = await finalizeDraft(ctx, current.id, FINAL_STATUS[current.kind]);
+    const row = await finalizeDraft(ctx, current.id, FINAL_STATUS[current.kind], { overrideCreditLimit: ctx.body?.overrideCreditLimit });
     setEtag(ctx.reply, row.version);
     return { document: await toWire(ctx, row) };
   },
@@ -378,7 +390,7 @@ export const documentsHandlers = defineHandlers({
     const from = effectiveStatus(current, today(ctx.now));
     if (!canTransition(current.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${current.kind} cannot go from ${from} to ${target}`);
 
-    const row = !isFinalized(current.status) && isFinalized(target) && target !== 'cancelled' ? await finalizeDraft(ctx, current.id, target) : await changeStatus(ctx, current.id, target, ctx.body.reason);
+    const row = !isFinalized(current.status) && isFinalized(target) && target !== 'cancelled' ? await finalizeDraft(ctx, current.id, target, { overrideCreditLimit: ctx.body.overrideCreditLimit }) : await changeStatus(ctx, current.id, target, ctx.body.reason);
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },

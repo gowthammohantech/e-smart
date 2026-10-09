@@ -1,5 +1,5 @@
 import { sanitizeAmountInput, toAmountInput } from '../format';
-import { hsnMandatory, partyGstinError, sanitizePrefix, validHsn } from '../validators';
+import { hsnMandatory, partyGstinError, sanitizePrefix, validHsn, validPostalCode } from '../validators';
 import { accountBalances, accountFitsMethod, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '../../domain/paymentAccounts';
 import { formatNumber } from '../../domain/numbering';
 import { fromMajor, zero } from '../money';
@@ -99,5 +99,22 @@ describe('party GST type and GSTIN', () => {
     expect(partyGstinError('unregistered', '27AABCV1234F1ZO')).toBeDefined();
     expect(partyGstinError('overseas', '27AABCV1234F1ZO')).toBeDefined();
     expect(partyGstinError('unregistered', '')).toBeUndefined();
+  });
+});
+
+describe('postal code', () => {
+  it('wants a six-digit Indian PIN that does not start with 0', () => {
+    expect(validPostalCode('400001')).toBeUndefined();
+    expect(validPostalCode(' 600028 ')).toBeUndefined();
+    expect(validPostalCode('40001')).toBe('Enter a six-digit PIN code, e.g. 400001');
+    expect(validPostalCode('040001')).toBeDefined();
+    expect(validPostalCode('4000A1')).toBeDefined();
+  });
+
+  it('leaves an empty code and other countries alone', () => {
+    expect(validPostalCode('')).toBeUndefined();
+    expect(validPostalCode(undefined)).toBeUndefined();
+    expect(validPostalCode('02110', 'US')).toBeUndefined();
+    expect(validPostalCode('SW1A 1AA', 'GB')).toBeUndefined();
   });
 });

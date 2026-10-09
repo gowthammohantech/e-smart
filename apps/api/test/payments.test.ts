@@ -160,6 +160,22 @@ describe('payments', () => {
     await expectMoneyInvariants(t, m.companyId);
   });
 
+  it('will not pay out more cash than the cash account holds', async () => {
+    const m = await moneySetup(t);
+    const toSupplier = (minor: number) => payment(m, { direction: 'paid', partyId: m.supplier!.id, amount: { minor, currency: 'INR' } });
+    const empty = await t.post(`${m.c}/payments`, toSupplier(50000), { token: m.token });
+    expect(empty.status).toBe(422);
+    expect(empty.body).toMatchObject({ code: 'INSUFFICIENT_BALANCE', issues: [{ field: 'amount.minor', message: 'Cash holds INR 0.00; this payment needs INR 500.00' }] });
+
+    await t.post(`${m.c}/payments`, payment(m), { token: m.token }); // ₹1,000 received in cash
+    const within = await t.post(`${m.c}/payments`, toSupplier(60000), { token: m.token });
+    expect(within.status).toBe(201);
+    expect((await t.post(`${m.c}/payments`, toSupplier(50000), { token: m.token })).status).toBe(422);
+    // Rewriting a payment does not count its own old amount against it.
+    const edited = await t.put(`${m.c}/payments/${within.body.id}`, toSupplier(100000), { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect(edited.status).toBe(200);
+  });
+
   it('prints a receipt, filters the list, and gates payments made on the plan', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);

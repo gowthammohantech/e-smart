@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 import { currencySymbol } from '@esmart/core/lib/currencies';
 import { sanitizeAmountInput } from '@esmart/core/lib/format';
@@ -86,6 +87,7 @@ export function TextField({
 }: TextFieldProps) {
   const t = useTheme();
   const [focused, setFocused] = useState(false);
+  const desktop = useIsDesktop();
 
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
@@ -94,7 +96,8 @@ export function TextField({
           flexDirection: 'row',
           alignItems: multiline ? 'flex-start' : 'center',
           gap: t.spacing.sm,
-          backgroundColor: t.c.card2,
+          // A desktop uses the web's white, outlined input.
+          backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
           borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
@@ -102,7 +105,7 @@ export function TextField({
           // Tamil's below-line vowel signs need a few more pixels. The extra
           // goes on the box rather than as `lineHeight` on the TextInput,
           // which mis-centres the caret on Android.
-          minHeight: t.script === 'tamil' ? 52 : 48,
+          minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 42 : 48,
           // Read-only fields look it, rather than only refusing input.
           opacity: rest.editable === false ? 0.6 : 1,
         }}
@@ -251,6 +254,7 @@ export function PickerField({
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
+  const desktop = useIsDesktop();
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
       {/* The clear button sits beside the field's button, not inside it: on
@@ -266,12 +270,12 @@ export function PickerField({
           flexDirection: 'row',
           alignItems: 'center',
           gap: t.spacing.sm,
-          backgroundColor: t.c.card2,
+          backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
           borderColor: error ? t.c.bad : t.c.line,
           paddingHorizontal: t.spacing.md,
-          height: 48,
+          height: desktop ? 42 : 48,
           opacity: disabled ? 0.6 : pressed ? 0.7 : 1,
         })}
       >
@@ -367,6 +371,9 @@ export function Segmented<T extends string>({
   size?: 'sm' | 'md';
 }) {
   const t = useTheme();
+  // A desktop shows the quieter web tab switch: the chosen option raised in
+  // white on a grey track, rather than filled with the brand colour.
+  const desktop = useIsDesktop();
   return (
     <View
       style={[
@@ -391,17 +398,18 @@ export function Segmented<T extends string>({
             accessibilityLabel={o.label}
             style={{
               flex: 1,
-              height: size === 'sm' ? 30 : 38,
+              height: size === 'sm' ? 30 : desktop ? 34 : 38,
               borderRadius: t.radius.sm,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: active ? t.c.primary : 'transparent',
+              backgroundColor: active ? (desktop ? t.c.paper : t.c.primary) : 'transparent',
+              ...(desktop && active ? t.shadow.card : null),
             }}
           >
             <Text
               variant={size === 'sm' ? 'caption' : 'small'}
               weight="600"
-              style={{ color: active ? t.c.onPrimary : t.c.muted }}
+              style={{ color: active ? (desktop ? t.c.text : t.c.onPrimary) : t.c.muted }}
               numberOfLines={1}
             >
               {o.label}

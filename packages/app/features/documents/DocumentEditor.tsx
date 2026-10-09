@@ -32,6 +32,7 @@ import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
+import { stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -46,6 +47,7 @@ import {
   useParties,
   usePayments,
   usePrimaryBranchId,
+  useStockMovements,
   useTaxCategories,
 } from '../../store/selectors';
 import {
@@ -101,6 +103,8 @@ export function DocumentEditor({
   const isPurchase = PURCHASE_KINDS.includes(kind);
   const parties = useParties(isPurchase ? 'supplier' : 'customer');
   const items = useItems({ activeOnly: true });
+  const allItems = useItems();
+  const movements = useStockMovements();
   const primaryBranchId = usePrimaryBranchId();
   const documents = useDocuments();
   const payments = usePayments();
@@ -193,6 +197,8 @@ export function DocumentEditor({
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [creditWarning, setCreditWarning] = useState<string | null>(null);
+  // Set once the user accepts the credit-limit warning, so the server lets the invoice through.
+  const [creditOverride, setCreditOverride] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
@@ -253,6 +259,17 @@ export function DocumentEditor({
       const missing = draft.lines.filter((l) => validHsn(l.hsnCode, { required: true }));
       if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });
     }
+    const short = stockShortfalls({
+      doc: { kind, branchId: branchId ?? '', lines: draft.lines, sourceDocumentId: draft.sourceDocumentId },
+      items: allItems,
+      movements,
+      allowNegativeStock: company?.allowNegativeStock,
+    });
+    if (short.length) {
+      return tr('sales:editor.insufficientStock', {
+        names: short.map((s) => tr('sales:editor.stockShort', { name: s.name, onHand: s.onHand, needed: s.needed, unit: s.unit })).join(', '),
+      });
+    }
     return undefined;
   };
 
@@ -276,6 +293,8 @@ export function DocumentEditor({
         })
       : null;
   };
+
+  const creditNotice = creditLimitWarning();
 
   const requestFinalize = () => {
     const problem = lineProblem();
@@ -345,7 +364,7 @@ export function DocumentEditor({
                 : kind === 'salesReturn' || kind === 'purchaseReturn'
                   ? 'approved'
                   : 'issued';
-      setDocumentStatus(id, target);
+      setDocumentStatus(id, target, creditOverride ? { overrideCreditLimit: true } : undefined);
     }
 
     toast.show(
@@ -749,6 +768,16 @@ export function DocumentEditor({
         />
       </Card>
 
+      {/* Shown on the draft too, not only when finalising. */}
+      {creditNotice ? (
+        <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <MaterialCommunityIcons name="alert-outline" size={19} color={t.c.warn} />
+          <Text variant="caption" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
+            {creditNotice}
+          </Text>
+        </Card>
+      ) : null}
+
       <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
         <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
         <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
@@ -1016,6 +1045,7 @@ export function DocumentEditor({
           onCancel={() => setCreditWarning(null)}
           onConfirm={() => {
             setCreditWarning(null);
+            setCreditOverride(true);
             setConfirmFinalize(true);
           }}
         />

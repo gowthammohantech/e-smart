@@ -168,6 +168,56 @@ describe('GSTR-1', () => {
     expect(s.hsn[0].igst.minor).toBe(1_620_00);
   });
 
+  it('reports a sale with no party on record as a walk-in B2CS sale', () => {
+    const walkIn = { ...doc('consumer_mh'), id: 'cash-1', partyId: 'gone' };
+    const s = summarize([walkIn]);
+    expect(s.b2cs.map((r) => r.documentId)).toEqual(['cash-1']);
+    expect(s.b2cs[0].partyName).toBe('Walk-in customer');
+    expect(s.totals.documents).toBe(1);
+  });
+
+  it('nets a small credit note to a consumer against B2CS, not CDNUR', () => {
+    const credit = doc('consumer_mh', { kind: 'salesReturn', number: 'CRN-1', lines: [line({ quantity: 1 })] });
+    const s = summarize([doc('consumer_mh'), credit]);
+    expect(s.cdnur).toHaveLength(0);
+    expect(s.b2cs.map((r) => r.kind)).toEqual(['invoice', 'salesReturn']);
+  });
+
+  it('keeps a credit note against a large inter-state sale in CDNUR', () => {
+    const credit = doc('consumer_ka', { kind: 'salesReturn', number: 'CRN-1', lines: [line({ quantity: 100 })] });
+    expect(summarize([credit]).cdnur).toHaveLength(1);
+  });
+
+  it('moves nil-rated supplies to table 8 by supply type', () => {
+    const s = summarize([
+      doc('registered', { number: 'A', lines: [line({ id: 'a', taxRate: 0 }), line({ id: 'b' })] }),
+      doc('consumer_mh', { number: 'B', lines: [line({ taxRate: 0 })] }),
+    ]);
+    expect(s.b2b.map((r) => r.rate)).toEqual([18]);
+    expect(s.b2cs).toHaveLength(0);
+    expect(s.nil).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ supplyType: 'INTRB2B', nilRated: fromMajor('10000', 'INR') }),
+        expect.objectContaining({ supplyType: 'INTRAB2C', nilRated: fromMajor('10000', 'INR') }),
+      ]),
+    );
+    expect(s.totals.taxableValue).toEqual(fromMajor('30000', 'INR'));
+  });
+
+  it('summarises documents issued per series, counting cancelled ones', () => {
+    const s = summarize([
+      doc('registered', { number: 'INV-0003' }),
+      doc('registered', { number: 'INV-0001' }),
+      doc('registered', { number: 'INV-0002', status: 'cancelled' }),
+      doc('registered', { number: 'INV-0009', status: 'draft' }),
+      doc('registered', { kind: 'salesReturn', number: 'CRN-1' }),
+    ]);
+    expect(s.docs).toEqual([
+      { nature: 'creditNote', series: 'CRN-', from: 'CRN-1', to: 'CRN-1', total: 1, cancelled: 0 },
+      { nature: 'invoice', series: 'INV-', from: 'INV-0001', to: 'INV-0003', total: 3, cancelled: 1 },
+    ]);
+  });
+
   it('converts a foreign-currency invoice at its stored rate', () => {
     const usd = doc('overseas', {
       currency: 'USD',

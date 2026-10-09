@@ -32,6 +32,20 @@ export function validGstin(value: string | undefined): string | undefined {
   return isValidGstin(value) ? undefined : i18n.t('errors:validation.gstinCheckDigit');
 }
 
+/** Indian PIN code: six digits, never starting with 0. */
+export const PINCODE_RE = /^[1-9][0-9]{5}$/;
+
+/**
+ * A postal code on any address. Indian PINs must be six digits; other
+ * countries' codes are free-form. Empty passes — a caller that needs one
+ * checks `required` too.
+ */
+export function validPostalCode(value: string | undefined, country = 'IN'): string | undefined {
+  const v = (value ?? '').trim();
+  if (!v || country !== 'IN') return undefined;
+  return PINCODE_RE.test(v) ? undefined : i18n.t('errors:validation.pincodeShape');
+}
+
 export const HSN_RE = /^\d{4}(\d{2})?(\d{2})?$/;
 
 /**

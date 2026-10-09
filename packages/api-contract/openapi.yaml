@@ -1444,6 +1444,14 @@ paths:
         finalisation.
       x-roles: [owner, admin, accountant, sales]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
       responses:
         '200':
           description: Finalised
@@ -1483,6 +1491,7 @@ paths:
               properties:
                 status: { $ref: '#/components/schemas/DocStatus' }
                 reason: { type: string }
+                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
       responses:
         '200':
           description: Updated
@@ -3171,6 +3180,7 @@ components:
             website: { type: string }
             taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
             fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
+            allowNegativeStock: { type: boolean, default: false, description: 'When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.' }
             plan: { allOf: [{ $ref: '#/components/schemas/PlanTier' }], readOnly: true, description: Changed only through billing }
     Branch:
       allOf:
@@ -3495,6 +3505,7 @@ components:
         placeOfSupplyStateCode: { type: string }
         attachmentIds: { type: array, items: { type: string } }
         sourceDocumentId: { type: string }
+        overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
         status:
           allOf: [{ $ref: '#/components/schemas/DocStatus' }]
           default: draft
@@ -4042,6 +4053,7 @@ components:
         sgst: { $ref: '#/components/schemas/Money' }
         igst: { $ref: '#/components/schemas/Money' }
         invoiceValue: { $ref: '#/components/schemas/Money' }
+        exported: { type: boolean, description: 'Set on an export, or a credit note against one' }
     HsnRow:
       type: object
       properties:
@@ -4054,6 +4066,24 @@ components:
         sgst: { $ref: '#/components/schemas/Money' }
         igst: { $ref: '#/components/schemas/Money' }
         totalValue: { $ref: '#/components/schemas/Money' }
+    NilRow:
+      type: object
+      description: GSTR-1 table 8, one row per supply type
+      properties:
+        supplyType: { type: string, enum: [INTRB2B, INTRAB2B, INTRB2C, INTRAB2C] }
+        nilRated: { $ref: '#/components/schemas/Money' }
+        exempt: { $ref: '#/components/schemas/Money' }
+        nonGst: { $ref: '#/components/schemas/Money' }
+    DocIssueRow:
+      type: object
+      description: GSTR-1 table 13, one row per numbering series
+      properties:
+        nature: { type: string, enum: [invoice, creditNote] }
+        series: { type: string }
+        from: { type: string }
+        to: { type: string }
+        total: { type: integer }
+        cancelled: { type: integer }
     Gstr1Summary:
       type: object
       properties:
@@ -4065,6 +4095,8 @@ components:
         cdnr: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
         cdnur: { type: array, items: { $ref: '#/components/schemas/Gstr1Row' } }
         hsn: { type: array, items: { $ref: '#/components/schemas/HsnRow' } }
+        nil: { type: array, items: { $ref: '#/components/schemas/NilRow' } }
+        docs: { type: array, items: { $ref: '#/components/schemas/DocIssueRow' } }
         totals:
           type: object
           properties:

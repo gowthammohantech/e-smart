@@ -21,7 +21,7 @@ import { Branch } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBranches, useDocuments } from '../../../store/selectors';
 import { uid } from '@esmart/core/lib/id';
-import { Errors, hasErrors, validGstin } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -98,7 +98,7 @@ export default function BranchSettings() {
             ? tr('settings:branches.gstinStateMismatch', { state: stateName(cleanGstin.slice(0, 2)) })
             : undefined)
         : undefined,
-      postalCode: postalCode && !/^\d{6}$/.test(postalCode) ? tr('settings:branches.pinInvalid') : undefined,
+      postalCode: validPostalCode(postalCode, company.address.country),
     };
     setErrors(next);
     if (hasErrors(next)) return;

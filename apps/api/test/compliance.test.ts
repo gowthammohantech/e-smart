@@ -33,6 +33,7 @@ const b2b = (m: Money, over: Record<string, unknown> = {}) => issueInvoice(t, m,
 
 /** An invoice for goods worth more than the ₹50,000 e-way bill threshold. */
 async function goodsInvoice(m: Money) {
+  await m.allowNegativeStock();
   const rod = await m.item();
   return b2b(m, { lines: [line(m.gst(18), { itemId: rod, hsnCode: '7214', unitPrice: { minor: 50_000_00, currency: 'INR' } })] });
 }

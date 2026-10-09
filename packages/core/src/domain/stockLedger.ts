@@ -1,4 +1,4 @@
-import { Item, StockMovement, StockMovementType } from '../types';
+import { BusinessDocument, DocumentKind, Item, StockMovement, StockMovementType } from '../types';
 import { Money, money, multiply, sum, zero } from '../lib/money';
 
 /** Direction each movement type applies to on-hand quantity (FRD 13). */
@@ -33,6 +33,40 @@ export function stockOnHand(itemId: string, movements: StockMovement[], branchId
   return movements
     .filter((m) => m.itemId === itemId && (!branchId || m.branchId === branchId))
     .reduce((acc, m) => acc + signedQuantity(m), 0);
+}
+
+/** Kinds whose finalising takes stock out of the branch. */
+export const OUTBOUND_KINDS: DocumentKind[] = ['invoice', 'delivery', 'purchaseReturn'];
+
+export type StockShortfall = { itemId: string; name: string; unit: string; onHand: number; needed: number };
+
+/**
+ * Tracked goods a document would take below zero at its branch if it were
+ * finalised now. Empty when the company allows negative stock, when the kind
+ * does not take stock out, or when the stock already left with the document
+ * it came from (an invoice made from a delivery).
+ */
+export function stockShortfalls(args: {
+  doc: Pick<BusinessDocument, 'kind' | 'branchId' | 'lines' | 'sourceDocumentId'>;
+  items: Item[];
+  movements: StockMovement[];
+  allowNegativeStock?: boolean;
+}): StockShortfall[] {
+  const { doc, items, movements } = args;
+  if (args.allowNegativeStock || !OUTBOUND_KINDS.includes(doc.kind)) return [];
+  if (doc.sourceDocumentId && movements.some((m) => m.referenceId === doc.sourceDocumentId)) return [];
+  const needed = new Map<string, number>();
+  doc.lines.forEach((l) => {
+    if (l.itemId) needed.set(l.itemId, (needed.get(l.itemId) ?? 0) + Math.abs(l.quantity));
+  });
+  const out: StockShortfall[] = [];
+  needed.forEach((qty, itemId) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item || !item.trackInventory || item.type !== 'goods') return;
+    const onHand = stockOnHand(itemId, movements, doc.branchId);
+    if (onHand < qty) out.push({ itemId, name: item.name, unit: item.unit, onHand, needed: qty });
+  });
+  return out;
 }
 
 export function stockMap(movements: StockMovement[], branchId?: string): Record<string, number> {

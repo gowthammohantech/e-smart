@@ -187,10 +187,11 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     if (DERIVED.includes(status)) return;
     const doc = byId(call.after.documents, call.args[0]);
     if (!doc) return;
+    const override = (call.args[2] as { overrideCreditLimit?: boolean } | undefined)?.overrideCreditLimit ? { overrideCreditLimit: true } : {};
     // Not on the server yet: create it in its final state in one go.
     const create = outbox.pendingCreate(doc.id);
-    if (create && status !== 'cancelled') return outbox.update(create.id, { body: documentBody(doc) });
-    outbox.action({ method: 'POST', path: `${c(doc.companyId)}/documents/${doc.id}/status`, body: { status }, entityType: 'document', entityId: doc.id, label: doc.number });
+    if (create && status !== 'cancelled') return outbox.update(create.id, { body: { ...documentBody(doc), ...override } });
+    outbox.action({ method: 'POST', path: `${c(doc.companyId)}/documents/${doc.id}/status`, body: { status, ...override }, entityType: 'document', entityId: doc.id, label: doc.number });
   },
   finalizeDocument: documentAction(() => '/finalize'),
   duplicateDocument: documentAction(() => '/duplicate', undefined, (call) => call.result as string),

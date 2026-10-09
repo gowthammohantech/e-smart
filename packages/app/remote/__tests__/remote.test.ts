@@ -106,6 +106,13 @@ describe('queueing', () => {
     expect(queue()[0]).toMatchObject({ method: 'POST', path: `/companies/${PRIMARY_COMPANY_ID}/documents/${doc.id}/duplicate`, clientEntityId: copyId });
   });
 
+  it('passes an accepted credit-limit override to the server, and only then', () => {
+    const doc = actions().documents.find((d) => d.kind === 'invoice' && d.status === 'draft')!;
+    actions().setDocumentStatus(doc.id, 'issued', { overrideCreditLimit: true });
+    actions().setDocumentStatus(doc.id, 'cancelled');
+    expect(queue().map((e) => e.body)).toEqual([{ status: 'issued', overrideCreditLimit: true }, { status: 'cancelled' }]);
+  });
+
   it('sends a new company with the numbering chosen during onboarding', () => {
     const companyId = actions().createCompany({ ...actions().companies[0], name: 'New Co' } as never);
     const series = actions().numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice')!;

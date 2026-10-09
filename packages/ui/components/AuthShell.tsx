@@ -11,7 +11,7 @@ import { SHOW_SCROLLBAR, useBreakpoint } from '../theme/breakpoints';
 import type { WebPressState } from '../theme/interaction';
 
 /** The sign-in form column on a desktop browser. */
-export const AUTH_FORM_WIDTH = 400;
+export const AUTH_FORM_WIDTH = 380;
 
 export function AuthShell({
   title,
@@ -40,7 +40,7 @@ export function AuthShell({
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: t.spacing.xxxl }}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ width: '100%', maxWidth: AUTH_FORM_WIDTH, gap: t.spacing.xl }}>
+        <View style={{ width: '100%', maxWidth: AUTH_FORM_WIDTH, gap: t.spacing.xxl }}>
           {!hideBack && router.canGoBack() ? (
             <Pressable
               onPress={() => router.back()}
@@ -67,9 +67,9 @@ export function AuthShell({
                 <BrandLogo height={36} />
               </View>
             ) : null}
-            <Text variant="h1">{title}</Text>
+            <Text variant="h2">{title}</Text>
             {subtitle ? (
-              <Text variant="body" tone="muted" style={{ lineHeight: 22 }}>
+              <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
                 {subtitle}
               </Text>
             ) : null}

@@ -11,7 +11,8 @@ import { DonutChart } from '@esmart/ui/components/charts/DonutChart';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 
-import { ReportShell, toCsv, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import type { ReportTable } from '../../../features/reports/reportTable';
 import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 
 import {
@@ -132,7 +133,7 @@ export default function Report() {
     rows.map((r) => ({ label: monthLabelNarrow(r.key), value: r.value }));
 
   let body: React.ReactNode = null;
-  let exportRows: (() => string) | undefined;
+  let exportRows: (() => ReportTable) | undefined;
 
   if (key === 'sales-summary' || key === 'purchase-summary') {
     const data = key === 'sales-summary' ? sales : purchases;
@@ -185,7 +186,7 @@ export default function Report() {
       </>
     );
     exportRows = () =>
-      toCsv(
+      reportTable(
         ['Number', 'Date', 'Contact', 'Taxable', 'Tax', 'Total'],
         data.documents.map((d) => [
           d.number,
@@ -222,7 +223,7 @@ export default function Report() {
       </>
     );
     exportRows = () =>
-      toCsv(
+      reportTable(
         ['Number', 'Date', 'Category', 'Amount', 'Tax'],
         expenseSummary.expenses.map((e) => [
           e.number,
@@ -262,7 +263,7 @@ export default function Report() {
       </>
     );
     exportRows = () =>
-      toCsv(
+      reportTable(
         ['Document', 'Contact', 'Date', 'Due', 'Total', 'Paid', 'Outstanding', 'Days overdue'],
         data.outstanding.map((o) => [
           o.document.number,
@@ -303,7 +304,7 @@ export default function Report() {
       </>
     );
     exportRows = () =>
-      toCsv(
+      reportTable(
         ['SKU', 'Item', 'Unit', 'On hand', 'Reorder level', 'Value'],
         stock.rows.map((r) => [r.item.sku, r.item.name, r.item.unit, r.onHand, r.item.reorderLevel, toMajor(r.value)]),
       );
@@ -368,7 +369,7 @@ export default function Report() {
       </>
     );
     exportRows = () =>
-      toCsv(
+      reportTable(
         ['Direction', 'Rate', 'Taxable', 'CGST', 'SGST', 'IGST', 'Total'],
         [
           ...tax.outward.map((r) => ['Outward', r.rate, toMajor(r.taxable), toMajor(r.cgst), toMajor(r.sgst), toMajor(r.igst), toMajor(r.total)]),
@@ -408,7 +409,7 @@ export default function Report() {
       </>
     );
     exportRows = () =>
-      toCsv(
+      reportTable(
         ['Number', 'Date', 'Direction', 'Contact', 'Method', 'Amount'],
         paymentSummary.payments.map((p) => [
           p.number,
@@ -461,7 +462,7 @@ export default function Report() {
       </>
     );
     exportRows = () =>
-      toCsv(
+      reportTable(
         ['Month', 'Revenue', 'Cost of goods', 'Expenses', 'Profit'],
         profit.byMonth.map((m) => [m.key, toMajor(m.revenue), toMajor(m.cost), toMajor(m.expenses), toMajor(m.profit)]),
       );

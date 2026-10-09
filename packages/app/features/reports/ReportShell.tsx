@@ -15,6 +15,8 @@ import { dateRangeLabel } from '@esmart/core/labels';
 import { useActiveCompany, useBranches, useParties } from '../../store/selectors';
 import { ReportFilters } from '@esmart/core/domain/reports';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { deliverFile, deliverPdf } from './exportFiles';
+import { ReportTable, XLSX_MIME, exportName, tableHtml, toCsv, xlsxBytes } from './reportTable';
 
 export type ReportScope = {
   filters: ReportFilters;
@@ -40,7 +42,7 @@ export function ReportShell({
   onScopeChange: (s: ReportScope) => void;
   showPartyFilter?: boolean;
   children: React.ReactNode;
-  exportRows?: () => string;
+  exportRows?: () => ReportTable;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'reports']);
@@ -54,6 +56,7 @@ export function ReportShell({
   const [filterOpen, setFilterOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [partyOpen, setPartyOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const branch = branches.find((b) => b.id === scope.filters.branchId);
   const party = parties.find((p) => p.id === scope.filters.partyId);
@@ -64,14 +67,28 @@ export function ReportShell({
   const setPreset = (preset: DateRangePreset) =>
     onScopeChange({ preset, filters: { ...scope.filters, range: resolveRange(preset) } });
 
-  const doExport = async () => {
+  const basisLine = () =>
+    `${company?.name ?? ''} · ${formatDate(scope.filters.range.from)} to ${formatDate(scope.filters.range.to)} · ${branch?.name ?? 'all branches'} · ${company?.baseCurrency ?? ''}`;
+
+  const doExport = async (format: 'pdf' | 'xlsx' | 'csv') => {
     if (!exportRows) return;
+    setExportOpen(false);
+    const table = exportRows();
+    const name = exportName(title, scope.filters.range.from, scope.filters.range.to);
     try {
-      await Share.share({ message: exportRows(), title: `${title} export` });
+      if (format === 'pdf') await deliverPdf(`${name}.pdf`, tableHtml(title, basisLine(), table));
+      else if (format === 'xlsx') await deliverFile(`${name}.xlsx`, xlsxBytes(title, table), XLSX_MIME);
+      else await Share.share({ message: toCsv(table), title: `${title} export` });
     } catch {
       toast.show(tr('reports:shell.exportCancelled'), 'error');
     }
   };
+
+  const EXPORTS: { format: 'pdf' | 'xlsx' | 'csv'; icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string }[] = [
+    { format: 'pdf', icon: 'file-pdf-box', label: tr('reports:shell.exportPdf') },
+    { format: 'xlsx', icon: 'file-excel-box', label: tr('reports:shell.exportExcel') },
+    { format: 'csv', icon: 'file-delimited-outline', label: tr('reports:shell.exportCsv') },
+  ];
 
   const chip = (label: string, active: boolean, onPress: () => void, onClear?: () => void) => (
     <Pressable
@@ -153,9 +170,32 @@ export function ReportShell({
             backgroundColor: t.c.paper,
           }}
         >
-          <Button title={tr('reports:shell.exportCsv')} icon="file-export-outline" variant="secondary" onPress={doExport} fullWidth />
+          <Button title={tr('reports:shell.export')} icon="file-export-outline" variant="secondary" onPress={() => setExportOpen(true)} fullWidth />
         </View>
       ) : null}
+
+      <Sheet visible={exportOpen} onClose={() => setExportOpen(false)} title={tr('reports:shell.export')}>
+        {EXPORTS.map((e) => (
+          <Pressable
+            key={e.format}
+            onPress={() => doExport(e.format)}
+            accessibilityRole="button"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: t.spacing.md,
+              paddingVertical: t.spacing.md,
+              paddingHorizontal: t.spacing.lg,
+              backgroundColor: pressed ? t.c.card2 : 'transparent',
+            })}
+          >
+            <MaterialCommunityIcons name={e.icon} size={20} color={t.c.text} />
+            <Text variant="body" style={{ flex: 1 }}>
+              {e.label}
+            </Text>
+          </Pressable>
+        ))}
+      </Sheet>
 
       <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={tr('reports:shell.dateRange')}>
         {DATE_RANGE_PRESET_KEYS.map((p) => (
@@ -219,10 +259,7 @@ export function useReportScope(initial: DateRangePreset = 'thisFY') {
   return { scope, setScope };
 }
 
-export function toCsv(headers: string[], rows: (string | number)[][]): string {
-  const escape = (v: string | number) => {
-    const s = String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return [headers.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\n');
+/** A report's export: what the PDF, Excel and CSV files are built from. */
+export function reportTable(headers: string[], rows: (string | number)[][]): ReportTable {
+  return { headers, rows };
 }

@@ -15,6 +15,13 @@
       "when": 1790738230430,
       "tag": "0001_contract_gaps",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791518903209,
+      "tag": "0002_allow_negative_stock",
+      "breakpoints": true
     }
   ]
 }

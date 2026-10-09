@@ -23,6 +23,7 @@ import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
+import { stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
@@ -66,6 +67,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const ewayBill = useActiveEwayBill(doc.id);
   const complianceSettings = useComplianceSettings();
   const storeItems = useAppStore((s) => s.items);
+  const stockMovements = useAppStore((s) => s.stockMovements);
 
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
   const removeDocument = useAppStore((s) => s.removeDocument);
@@ -682,6 +684,19 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
             <Pressable
               key={s}
               onPress={() => {
+                // Finalising from here must pass the same stock check as the editor.
+                const short = !isFinalized(doc.status) && isFinalized(s)
+                  ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
+                  : [];
+                if (short.length) {
+                  toast.show(
+                    tr('sales:editor.insufficientStock', {
+                      names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
+                    }),
+                    'error',
+                  );
+                  return;
+                }
                 setDocumentStatus(doc.id, s);
                 setStatusOpen(false);
                 toast.show(tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), 'success');

@@ -50,7 +50,10 @@ export async function moneySetup(t: TestContext, plan: 'free' | 'basic' | 'pro' 
     return id;
   };
 
-  return { ...o, companyId, gst, mumbai, bengaluru, supplier, branch, cash, item };
+  /** For tests about something other than stock levels: sales may then take an item below zero. */
+  const allowNegativeStock = () => db.update(schema.companies).set({ allowNegativeStock: true }).where(eq(schema.companies.id, companyId));
+
+  return { ...o, companyId, gst, mumbai, bengaluru, supplier, branch, cash, item, allowNegativeStock };
 }
 
 export type Money = Awaited<ReturnType<typeof moneySetup>>;

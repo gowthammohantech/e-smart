@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
-import { and, eq, gte, inArray, lte, notInArray } from 'drizzle-orm';
-import { gstr1Summary, GSTR1_TABLES, GSTR1_TABLE_LABELS, type Gstr1Summary } from '@esmart/core/domain/gstr1';
+import { and, eq, gte, inArray, lte, ne } from 'drizzle-orm';
+import { gstr1Summary, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Summary } from '@esmart/core/domain/gstr1';
 import type { Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
@@ -26,15 +26,16 @@ export function periodRange(period: string): { from: string; to: string } {
 
 /**
  * GSTR-1 for a month, computed by `@esmart/core` gstr1Summary from the
- * company's issued invoices and credit notes (drafts and cancelled
- * documents never count), in the base currency.
+ * company's issued invoices and credit notes, in the base currency. Drafts
+ * never count; cancelled documents are fetched only for the table 13
+ * document summary.
  */
 export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date): Promise<Gstr1Summary> {
   const range = periodRange(period);
   const rows = await db
     .select()
     .from(D)
-    .where(and(eq(D.companyId, company.id), inArray(D.kind, ['invoice', 'salesReturn']), notInArray(D.status, ['draft', 'cancelled']), gte(D.date, range.from), lte(D.date, range.to)))
+    .where(and(eq(D.companyId, company.id), inArray(D.kind, ['invoice', 'salesReturn']), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to)))
     .orderBy(D.date, D.number);
   const baseCurrency = company.baseCurrency.trim();
   const documents = (await documentsToWire(db, rows, now, baseCurrency)).map(toCoreDocument);
@@ -105,6 +106,12 @@ async function workbook(summary: Gstr1Summary, company: CompanyRow, period: stri
   const hsn = wb.addWorksheet('HSN');
   hsn.addRow(['HSN', 'Description', 'UQC', 'Quantity', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total value']).font = { bold: true };
   for (const h of summary.hsn) hsn.addRow([h.hsnCode, h.description, h.unit, h.quantity, major(h.taxableValue), major(h.cgst), major(h.sgst), major(h.igst), major(h.totalValue)]);
+  const nil = wb.addWorksheet('NIL');
+  nil.addRow(['Supply type', 'Nil rated', 'Exempted', 'Non-GST']).font = { bold: true };
+  for (const n of summary.nil) nil.addRow([NIL_SUPPLY_LABELS[n.supplyType], major(n.nilRated), major(n.exempt), major(n.nonGst)]);
+  const docs = wb.addWorksheet('DOCS');
+  docs.addRow(['Nature of document', 'From', 'To', 'Total number', 'Cancelled', 'Net issued']).font = { bold: true };
+  for (const d of summary.docs) docs.addRow([d.nature === 'invoice' ? 'Invoices for outward supply' : 'Credit Note', d.from, d.to, d.total, d.cancelled, d.total - d.cancelled]);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 

@@ -31,8 +31,9 @@ function byKey<T>(items: T[], key: (t: T) => string): Map<string, T[]> {
 
 /**
  * GSTR-1 in the JSON the GST portal's offline tool imports (`b2b`, `b2cl`,
- * `b2cs`, `exp`, `cdnr`, `cdnur`, `hsn`), from core's summary. B2CS is
- * consolidated by place of supply and rate, as the return requires.
+ * `b2cs`, `exp`, `cdnr`, `cdnur`, `nil`, `hsn`, `doc_issue`), from core's
+ * summary. B2CS is consolidated by place of supply and rate, as the return
+ * requires, net of the credit notes filed against it.
  */
 export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   const homeState = gstin.slice(0, 2);
@@ -45,7 +46,7 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
     inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d) })),
   }));
   const b2cs = [...byKey(summary.b2cs, (r) => `${r.placeOfSupply}|${r.rate}`).values()].map((rows) => {
-    const total = (pick: (r: Gstr1Row) => number) => r2(rows.reduce((a, r) => a + pick(r), 0));
+    const total = (pick: (r: Gstr1Row) => number) => r2(rows.reduce((a, r) => a + (r.kind === 'salesReturn' ? -1 : 1) * pick(r), 0));
     return {
       sply_ty: rows[0].placeOfSupply === homeState ? 'INTRA' : 'INTER',
       pos: rows[0].placeOfSupply,
@@ -63,7 +64,31 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
     inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: 0 })) })),
   }));
   const cdnr = [...byKey(byDocument(summary.cdnr), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, nt: docs.map(note) }));
-  const cdnur = byDocument(summary.cdnur).map((d) => ({ typ: 'B2CL', ...note(d) }));
+  const cdnur = byDocument(summary.cdnur).map((d) => {
+    const exported = !!d[0].exported;
+    const typ = exported ? (d.some((r) => r.igst.minor > 0) ? 'EXPWP' : 'EXPWOP') : 'B2CL';
+    // The offline tool rejects `pos` on export notes.
+    const { pos, ...rest } = note(d);
+    return exported ? { typ, ...rest } : { typ, ...rest, pos };
+  });
+  const nil = {
+    inv: summary.nil.map((n) => ({ sply_ty: n.supplyType, nil_amt: r2(n.nilRated.minor), expt_amt: r2(n.exempt.minor), ngsup_amt: r2(n.nonGst.minor) })),
+  };
+  const docNatures = [
+    { nature: 'invoice' as const, doc_num: 1, doc_typ: 'Invoices for outward supply' },
+    { nature: 'creditNote' as const, doc_num: 5, doc_typ: 'Credit Note' },
+  ];
+  const doc_issue = {
+    doc_det: docNatures
+      .map(({ nature, doc_num, doc_typ }) => ({
+        doc_num,
+        doc_typ,
+        docs: summary.docs
+          .filter((d) => d.nature === nature)
+          .map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.total, cancel: d.cancelled, net_issue: d.total - d.cancelled })),
+      }))
+      .filter((n) => n.docs.length),
+  };
   const hsn = {
     data: summary.hsn.map((h, i) => ({
       num: i + 1,
@@ -78,5 +103,5 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
       csamt: 0,
     })),
   };
-  return { gstin, fp: period, version: 'GST3.1.6', hash: 'hash', b2b, b2cl, b2cs, exp, cdnr, cdnur, hsn };
+  return { gstin, fp: period, version: 'GST3.1.6', hash: 'hash', b2b, b2cl, b2cs, exp, cdnr, cdnur, nil, hsn, doc_issue };
 }

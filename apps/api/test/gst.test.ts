@@ -53,6 +53,11 @@ describe('gst: GSTR-1', () => {
     });
     expect(s.totals.taxableValue.minor).toBe(400000);
     expect(s.hsn).toEqual([expect.objectContaining({ hsnCode: '7214', quantity: 4, taxableValue: { minor: 400000, currency: 'INR' } })]);
+    // Table 13 counts the cancelled invoice too, never the draft.
+    expect(s.docs).toEqual([
+      expect.objectContaining({ nature: 'creditNote', total: 1, cancelled: 0 }),
+      expect.objectContaining({ nature: 'invoice', total: 3, cancelled: 1 }),
+    ]);
 
     const bad = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '2026-09' }, unchecked: true });
     expect(bad.status).toBe(422);
@@ -73,6 +78,7 @@ describe('gst: GSTR-1', () => {
       b2cs: [{ sply_ty: 'INTRA', pos: '27', rt: 18, txval: 3000, camt: 270, samt: 270 }],
       cdnr: [{ ctin: '29AABCG4321K1ZM', nt: [{ ntty: 'C', val: 1180 }] }],
       hsn: { data: [{ hsn_sc: '7214', uqc: 'NOS', qty: 4, txval: 4000 }] },
+      doc_issue: { doc_det: [{ doc_num: 1, docs: [{ totnum: 3, cancel: 1, net_issue: 2 }] }, { doc_num: 5, docs: [{ totnum: 1, cancel: 0, net_issue: 1 }] }] },
     });
 
     const csv = await t.get(`${m.c}/gst/gstr1/export`, { token: m.token, query: { period: '092026', format: 'csv' } });
@@ -87,7 +93,7 @@ describe('gst: GSTR-1', () => {
     expect(xlsx.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(xlsx.body as unknown as ExcelJS.Buffer);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(['Summary', 'B2B', 'B2CL', 'B2CS', 'EXP', 'CDNR', 'CDNUR', 'HSN']);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Summary', 'B2B', 'B2CL', 'B2CS', 'EXP', 'CDNR', 'CDNUR', 'HSN', 'NIL', 'DOCS']);
     expect(wb.getWorksheet('B2B')!.getRow(3).getCell(11).value).toBe(2360);
 
     const bad = await t.get(`${m.c}/gst/gstr1/export`, { token: m.token, query: { period: 'sept' } });

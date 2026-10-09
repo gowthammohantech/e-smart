@@ -2,6 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useIsDesktop } from '../../theme/breakpoints';
 import { FieldShell } from '../Field';
 import { toISODate } from '@esmart/core/lib/date';
 
@@ -30,6 +31,7 @@ export function DateField({
   maximumDate?: Date;
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
 
   return (
     <FieldShell label={label} required={required} hint={hint} error={error}>
@@ -38,12 +40,13 @@ export function DateField({
           flexDirection: 'row',
           alignItems: 'center',
           gap: t.spacing.sm,
-          backgroundColor: t.c.card2,
+          // Matches TextField: outlined white on a desktop, filled on a phone.
+          backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
           borderColor: error ? t.c.bad : t.c.line,
           paddingHorizontal: t.spacing.md,
-          height: 48,
+          height: desktop ? 42 : 48,
         }}
       >
         <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />

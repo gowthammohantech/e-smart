@@ -16,11 +16,13 @@ export default function WebAuthLayout() {
   return (
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.c.paper }}>
       {breakpoint === 'tablet' ? null : (
-        <View style={{ flex: 11 }}>
+        // A fixed share, capped, so a very wide window widens the form side
+        // rather than stretching the panel's copy apart.
+        <View style={{ width: '40%', maxWidth: 680 }}>
           <AuthBrandPanel />
         </View>
       )}
-      <View style={{ flex: 13 }}>
+      <View style={{ flex: 1 }}>
         <AuthLayout />
       </View>
     </View>

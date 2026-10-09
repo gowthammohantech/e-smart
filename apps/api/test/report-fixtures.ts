@@ -18,6 +18,8 @@ export const INR = (minor: number) => ({ minor, currency: 'INR' });
  */
 export async function books(t: TestContext, m: Money) {
   t.setNow('2026-09-29T10:00:00Z');
+  // Invoice B sells a rod before the bill that brings any in.
+  await m.allowNegativeStock();
   const rod = await m.item();
   const a = await issueInvoice(t, m, { date: '2026-09-10', lines: [line(m.gst(18), { itemId: rod })] });
   const b = await issueInvoice(t, m, { partyId: m.bengaluru.id, date: '2026-08-15', lines: [line(m.gst(18), { itemId: rod, quantity: 1 })] });

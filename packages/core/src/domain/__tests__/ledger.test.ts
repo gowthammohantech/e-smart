@@ -1,7 +1,7 @@
 import { allocateAdvances, availableAdvance, buildOutstanding, bucketFor, checkCreditLimit, outstandingOf, summarizeAging } from '../receivables';
-import { ledgerFor, signedQuantity, stockOnHand } from '../stockLedger';
+import { ledgerFor, signedQuantity, stockOnHand, stockShortfalls } from '../stockLedger';
 import { resolveRate, settlementGainLoss } from '../fx';
-import { BusinessDocument, ExchangeRate, Payment, StockMovement } from '../../types';
+import { BusinessDocument, DocumentLine, ExchangeRate, Item, Payment, StockMovement } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
 import { addDaysISO, today } from '../../lib/date';
 
@@ -171,6 +171,29 @@ describe('stock ledger (FRD 13)', () => {
     expect(rows[1].balance).toBe(150);
     expect(rows[2].balance).toBe(120);
     expect(rows[rows.length - 1].balance).toBe(92);
+  });
+
+  describe('shortfalls before finalising', () => {
+    const rod = { id: 'i1', name: 'Rod', unit: 'PCS', type: 'goods', trackInventory: true } as Item;
+    const fitting = { id: 'i2', name: 'Fitting', unit: 'NOS', type: 'service', trackInventory: false } as Item;
+    const ln = (itemId: string | undefined, quantity: number) => ({ itemId, quantity }) as DocumentLine;
+    const check = (kind: BusinessDocument['kind'], lines: DocumentLine[], over: { allowNegativeStock?: boolean; sourceDocumentId?: string } = {}) =>
+      stockShortfalls({ doc: { kind, branchId: 'b1', lines, sourceDocumentId: over.sourceDocumentId }, items: [rod, fitting], movements, allowNegativeStock: over.allowNegativeStock });
+
+    it('flags a sale above what the branch holds, adding up lines for the same item', () => {
+      expect(check('invoice', [ln('i1', 50)])).toEqual([]);
+      expect(check('invoice', [ln('i1', 50), ln('i1', 50), ln('i2', 500), ln(undefined, 9)])).toEqual([
+        { itemId: 'i1', name: 'Rod', unit: 'PCS', onHand: 92, needed: 100 },
+      ]);
+      expect(check('purchaseReturn', [ln('i1', 93)])).toHaveLength(1);
+    });
+
+    it('lets it through when stock comes in, is allowed negative, or already left with the source', () => {
+      expect(check('purchaseBill', [ln('i1', 500)])).toEqual([]);
+      expect(check('invoice', [ln('i1', 500)], { allowNegativeStock: true })).toEqual([]);
+      const delivered = [...movements, { ...base, id: 'm9', type: 'salesIssue' as const, quantity: 500, referenceId: 'dn1' }];
+      expect(stockShortfalls({ doc: { kind: 'invoice', branchId: 'b1', lines: [ln('i1', 500)], sourceDocumentId: 'dn1' }, items: [rod], movements: delivered })).toEqual([]);
+    });
   });
 });
 

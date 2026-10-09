@@ -30,6 +30,9 @@
     "lockedNotice": "Entries have been posted, so the legal name, state, financial year and GST registration are locked. An unregistered business can still register for GST.",
     "lutNumber": "LUT number (exports)",
     "lutHint": "With a valid Letter of Undertaking, export invoices are zero-rated: no IGST is charged.",
+    "inventory": "Inventory",
+    "allowNegativeStock": "Allow negative stock",
+    "allowNegativeStockHint": "Let invoices and deliveries sell more than the branch has in stock. When off, they cannot be finalised until the stock is added.",
     "lutValidTill": "LUT valid till"
   },
   "accounts": {
@@ -70,7 +73,6 @@
     "address": "Address",
     "addressPlaceholder": "Building, street, area",
     "pin": "PIN code",
-    "pinInvalid": "PIN code should be 6 digits",
     "editTitle": "Edit branch",
     "addTitle": "Add branch",
     "updated": "Branch updated",
@@ -223,7 +225,11 @@
     "search": "Search the trail",
     "none": "Nothing recorded",
     "noneBody": "Actions you take are logged here.",
-    "note": "Audit records cannot be edited or deleted from the app. Export them with your company backup for your records."
+    "note": "Audit records cannot be edited or deleted from the app. Export them with your company backup for your records.",
+    "fieldsChanged_one": "{{count}} field changed",
+    "fieldsChanged_other": "{{count}} fields changed",
+    "value": "Value",
+    "empty": "(empty)"
   },
   "categories": {
     "add": "Add category",

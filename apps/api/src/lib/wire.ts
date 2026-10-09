@@ -4,6 +4,8 @@
  * addresses are flattened into prefixed columns in the database.
  */
 import type { Schema } from '@esmart/api-contract';
+import { PINCODE_RE } from '@esmart/core/lib/validators';
+import { invalid } from '../http/errors';
 
 export type Money = Schema<'Money'>;
 export type Address = Schema<'Address'>;
@@ -63,10 +65,18 @@ export function addressFrom<P extends string>(row: Record<string, unknown>, pref
   });
 }
 
-/** Writes an Address to prefixed columns; all null when the address is absent. */
+/**
+ * Writes an Address to prefixed columns; all null when the address is absent.
+ * Every stored address passes through here, so an Indian PIN is checked here
+ * too: six digits, not starting with 0. Empty is allowed.
+ */
 export function addressTo<P extends string>(prefix: P, a: Address): AddressColumns<P, string>;
 export function addressTo<P extends string>(prefix: P, a: Address | undefined | null): AddressColumns<P, string | null>;
 export function addressTo<P extends string>(prefix: P, a: Address | undefined | null): AddressColumns<P, string | null> {
+  const pin = a?.postalCode?.trim();
+  if (pin && a?.country?.trim() === 'IN' && !PINCODE_RE.test(pin)) {
+    throw invalid(prefix === 'address' ? 'address.postalCode' : `${prefix}Address.postalCode`, 'Enter a six-digit PIN code, e.g. 400001');
+  }
   return {
     [`${prefix}Line1`]: a?.line1 ?? null,
     [`${prefix}Line2`]: a?.line2 ?? null,

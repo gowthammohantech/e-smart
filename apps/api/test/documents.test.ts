@@ -228,6 +228,7 @@ describe('documents: numbering and lifecycle', () => {
 describe('documents: stock and plans', () => {
   it('moves stock on finalising a delivery, not again on its invoice, and reverses on cancel', async () => {
     const m = await moneySetup(t);
+    await m.allowNegativeStock();
     const rod = await m.item();
     const service = await m.item({ trackInventory: false, name: 'Fitting' });
     const delivery = await t.post(
@@ -252,6 +253,55 @@ describe('documents: stock and plans', () => {
     expect(await onHand(t, rod)).toBe(-5);
     await t.post(`${m.c}/documents/${direct.id}/status`, { status: 'cancelled' }, { token: m.token });
     expect(await onHand(t, rod)).toBe(-3);
+  });
+
+  it('records what an edit changed in the audit trail', async () => {
+    const m = await moneySetup(t);
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    await t.patch(`${m.c}/documents/${draft.body.id}`, invoiceBody(m, { notes: 'Deliver by Friday', lines: [line(m.gst(18), { quantity: 3 })] }), { token: m.token });
+    const trail = await t.get(`${m.c}/audit-events`, { token: m.token, query: { entityId: draft.body.id } });
+    const edit = trail.body.data.find((e: { action: string }) => e.action === 'updated');
+    expect(JSON.parse(edit.before)).toMatchObject({ party: 'Sunrise Retail', lines: ['Steel rod × 2 NOS @ 1000.00, 18%'], total: { minor: 236000, currency: 'INR' } });
+    expect(JSON.parse(edit.after)).toMatchObject({ notes: 'Deliver by Friday', lines: ['Steel rod × 3 NOS @ 1000.00, 18%'], total: { minor: 354000, currency: 'INR' } });
+  });
+
+  it('refuses an invoice that takes the customer past their credit limit, unless overridden', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.parties).set({ creditLimitMinor: 300000 }).where(eq(schema.parties.id, m.mumbai.id));
+    await issueInvoice(t, m); // 2,360 owed, within 3,000
+
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    const over = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, {}, { token: m.token });
+    expect(over.status).toBe(422);
+    expect(over.body).toMatchObject({ code: 'CREDIT_LIMIT_EXCEEDED', issues: [{ field: 'partyId', message: 'Sunrise Retail would owe INR 4720.00, over their credit limit of INR 3000.00' }] });
+
+    const viaCreate = await t.post(`${m.c}/documents`, invoiceBody(m, { status: 'issued' }), { token: m.token });
+    expect(viaCreate.status).toBe(422);
+
+    const overridden = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, { overrideCreditLimit: true }, { token: m.token });
+    expect(overridden.status).toBe(200);
+    expect(overridden.body.document.status).toBe('issued');
+  });
+
+  it('refuses a sale that would take stock below zero, unless the company allows it', async () => {
+    const m = await moneySetup(t);
+    const rod = await m.item();
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m, { lines: [line(m.gst(18)), line(m.gst(18), { itemId: rod, quantity: 3 })] }), { token: m.token });
+    const short = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, {}, { token: m.token });
+    expect(short.status).toBe(422);
+    expect(short.body).toMatchObject({ code: 'INSUFFICIENT_STOCK', issues: [{ field: 'lines[1].quantity', message: 'Steel rod: 0 NOS in stock at this branch, 3 needed' }] });
+    expect(await onHand(t, rod)).toBe(0);
+    const [still] = await t.deps.db.select().from(schema.documents).where(eq(schema.documents.id, draft.body.id));
+    expect(still.status).toBe('draft');
+
+    await t.post(`${m.c}/stock/adjustments`, { branchId: m.branch.id, date: '2026-09-01', type: 'opening', lines: [{ itemId: rod, quantity: 3 }] }, { token: m.token });
+    const covered = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, {}, { token: m.token });
+    expect(covered.status).toBe(200);
+    expect(await onHand(t, rod)).toBe(0);
+
+    await m.allowNegativeStock();
+    await issueInvoice(t, m, { lines: [line(m.gst(18), { itemId: rod, quantity: 2 })] });
+    expect(await onHand(t, rod)).toBe(-2);
   });
 
   it('needs the purchases module for purchase-side kinds, and receives stock on a bill', async () => {

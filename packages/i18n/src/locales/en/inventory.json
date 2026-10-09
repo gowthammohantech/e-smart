@@ -130,7 +130,7 @@
     "cameraUnavailable": "Camera unavailable here. Choose a photo or use the sample.",
     "howItWorks": "How it works",
     "howItWorksBody": "Nothing is saved until you confirm it. Low-confidence fields are flagged so you can correct them first.",
-    "ocrUnavailable": "Text reading needs the installed app build — showing the sample bill instead.",
+    "ocrUnavailable": "Bill scanning works in the installed Elixir Books app on Android or iPhone. It is not available in the browser or in Expo Go.",
     "noTextFound": "No text found. Retake the photo flat and in good light.",
     "cameraDenied": "Allow camera access in Settings to scan a bill.",
     "galleryDenied": "Allow photo access in Settings to pick a bill."

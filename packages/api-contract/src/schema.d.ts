@@ -2347,6 +2347,11 @@ export interface components {
             website?: string;
             taxRegistration?: components["schemas"]["TaxRegistration"];
             fiscalYearStartMonth: number;
+            /**
+             * @description When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.
+             * @default false
+             */
+            allowNegativeStock: boolean;
             /** @description Changed only through billing */
             readonly plan?: components["schemas"]["PlanTier"];
         };
@@ -2676,6 +2681,8 @@ export interface components {
             placeOfSupplyStateCode?: string;
             attachmentIds?: string[];
             sourceDocumentId?: string;
+            /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+            overrideCreditLimit?: boolean;
             /**
              * @description A non-draft value creates and finalises in one step. On create only draft, issued, sent, confirmed, delivered, received and approved are accepted; paid, partiallyPaid and overdue are derived by the server (422 STATUS_DERIVED). The enum is the full DocStatus so that BusinessDocument, which extends this schema, can carry any status.
              * @default draft
@@ -3222,6 +3229,8 @@ export interface components {
             sgst?: components["schemas"]["Money"];
             igst?: components["schemas"]["Money"];
             invoiceValue?: components["schemas"]["Money"];
+            /** @description Set on an export, or a credit note against one */
+            exported?: boolean;
         };
         HsnRow: {
             hsnCode?: string;
@@ -3234,6 +3243,24 @@ export interface components {
             igst?: components["schemas"]["Money"];
             totalValue?: components["schemas"]["Money"];
         };
+        /** @description GSTR-1 table 8, one row per supply type */
+        NilRow: {
+            /** @enum {string} */
+            supplyType?: "INTRB2B" | "INTRAB2B" | "INTRB2C" | "INTRAB2C";
+            nilRated?: components["schemas"]["Money"];
+            exempt?: components["schemas"]["Money"];
+            nonGst?: components["schemas"]["Money"];
+        };
+        /** @description GSTR-1 table 13, one row per numbering series */
+        DocIssueRow: {
+            /** @enum {string} */
+            nature?: "invoice" | "creditNote";
+            series?: string;
+            from?: string;
+            to?: string;
+            total?: number;
+            cancelled?: number;
+        };
         Gstr1Summary: {
             period?: string;
             b2b?: components["schemas"]["Gstr1Row"][];
@@ -3243,6 +3270,8 @@ export interface components {
             cdnr?: components["schemas"]["Gstr1Row"][];
             cdnur?: components["schemas"]["Gstr1Row"][];
             hsn?: components["schemas"]["HsnRow"][];
+            nil?: components["schemas"]["NilRow"][];
+            docs?: components["schemas"]["DocIssueRow"][];
             totals?: {
                 taxableValue?: components["schemas"]["Money"];
                 tax?: components["schemas"]["Money"];
@@ -5605,7 +5634,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+                    overrideCreditLimit?: boolean;
+                };
+            };
+        };
         responses: {
             /** @description Finalised */
             200: {
@@ -5640,6 +5676,8 @@ export interface operations {
                 "application/json": {
                     status: components["schemas"]["DocStatus"];
                     reason?: string;
+                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+                    overrideCreditLimit?: boolean;
                 };
             };
         };
