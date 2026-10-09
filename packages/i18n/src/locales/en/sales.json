@@ -173,6 +173,8 @@
     "openedEmail": "Reminder opened in email",
     "aging": "Aging",
     "clear": "Clear",
+    "dueSoon": "Due soon",
+    "dueSoonCaption": "Due in the next 7 days",
     "reminderNote": "The message is prepared for you — you send it yourself, so nothing leaves the app without your say-so."
   },
   "list": {
