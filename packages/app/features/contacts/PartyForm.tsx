@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FormContainer } from '@esmart/ui/components/Layout';
+import { FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
+import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
@@ -23,15 +24,18 @@ import { nowISO } from '@esmart/core/lib/date';
 import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 
 export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts']);
+  const { t: tr } = useTranslation(['contacts', 'common']);
   const router = useRouter();
   const toast = useToast();
+  // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
+  const breakpoint = useBreakpoint();
+  const desktop = breakpoint !== 'phone';
 
   const baseCurrency = useBaseCurrency();
   const existing = useParties(kind);
@@ -155,114 +159,269 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${record.id}` : `/(app)/contacts/suppliers/${record.id}`);
   };
 
+  // Every field is built once and placed twice: stacked in one column on a
+  // phone, grouped into cards across two columns on a desktop browser.
+  const nameField = <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />;
+  const contactField = <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />;
+  const registrationField = (
+    <PickerField
+      label={tr('contacts:form.gstRegistration')}
+      value={GST_REGISTRATION_LABELS[registration]}
+      onPress={() => setRegistrationOpen(true)}
+      icon="shield-account-outline"
+      hint={tr('contacts:form.sezHint')}
+      required
+    />
+  );
+  const gstinField = needsGstin ? (
+    <TextField
+      label="GSTIN"
+      value={taxId}
+      onChangeText={(v) => {
+        const next = v.toUpperCase();
+        setTaxId(next);
+        // The first two digits are the state; fill it in if it's still blank.
+        if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
+          changeState(next.slice(0, 2));
+        }
+      }}
+      placeholder="27AABCV1234F1ZO"
+      autoCapitalize="characters"
+      icon="card-account-details-outline"
+      error={errors.taxId}
+      hint={tr('contacts:form.gstinHint')}
+      required
+    />
+  ) : null;
+  const phoneField = <TextField label={tr('contacts:form.phone')} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />;
+  const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
+
+  const addressField = <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />;
+  const countryField = (
+    <PickerField
+      label={tr('contacts:form.country')}
+      value={country ? countryName(country) : undefined}
+      onPress={() => setCountryOpen(true)}
+      icon="earth"
+      error={errors.country}
+      hint={tr('contacts:form.overseasHint')}
+      required
+    />
+  );
+  const regionField = <TextField label={tr('contacts:form.region')} value={region} onChangeText={setRegion} icon="map-outline" />;
+  const stateField = (
+    <PickerField
+      label={tr('contacts:form.state')}
+      value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
+      onPress={() => setStateOpen(true)}
+      icon="map-outline"
+      hint={tr('contacts:form.stateHint')}
+    />
+  );
+  // City and postal code share a row on a phone too, where each takes half of it.
+  const overseasCityField = (style?: ViewStyle) => <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} containerStyle={style} />;
+  const overseasPostalField = (style?: ViewStyle) => (
+    <TextField label={tr('contacts:form.postalCode')} value={postalCode} onChangeText={setPostalCode} autoCapitalize="characters" error={errors.postalCode} containerStyle={style} />
+  );
+  const cityField = (style?: ViewStyle) => <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={style} />;
+  const pinField = (style?: ViewStyle) => (
+    <TextField label="PIN" value={postalCode} onChangeText={(v) => setPostalCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="400001" keyboardType="number-pad" maxLength={6} error={errors.postalCode} containerStyle={style} />
+  );
+  const sameShippingField = <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />;
+  const shipAddressField = <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />;
+  const shipCityField = overseas ? (
+    <TextField label={tr('contacts:form.shippingCity')} value={shipCity} onChangeText={setShipCity} />
+  ) : (
+    <CityField label={tr('contacts:form.shippingCity')} value={shipCity} onChange={setShipCity} stateCode={stateCode} />
+  );
+
+  const currencyField = <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />;
+  const termsField = <PickerField label={tr('contacts:form.paymentTerms')} value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
+  const creditLimitField =
+    kind === 'customer' ? (
+      <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
+    ) : null;
+  const openingBalanceField = (
+    <AmountField
+      label={tr('contacts:form.openingBalance')}
+      value={openingBalance}
+      onChangeValue={setOpeningBalance}
+      currency={currency}
+      hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
+    />
+  );
+  const notesField = <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />;
+  const activeField = <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />;
+
+  const submitTitle = party ? 'Save changes' : `Add ${label.toLowerCase()}`;
+
+  const phoneHeading = (title: string) => (
+    <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{title}</Text>
+  );
+
+  const phoneForm = (
+    <ScrollView
+      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {nameField}
+      {contactField}
+      {registrationField}
+      {gstinField}
+      {phoneField}
+      {emailField}
+
+      {phoneHeading(tr('contacts:form.billingAddress'))}
+      {addressField}
+      {overseas ? (
+        <>
+          {countryField}
+          {regionField}
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            {overseasCityField({ flex: 1 })}
+            {overseasPostalField({ flex: 1 })}
+          </View>
+        </>
+      ) : (
+        <>
+          {stateField}
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            {cityField({ flex: 1 })}
+            {pinField({ flex: 1 })}
+          </View>
+        </>
+      )}
+
+      {sameShippingField}
+      {!sameShipping ? (
+        <>
+          {shipAddressField}
+          {shipCityField}
+        </>
+      ) : null}
+
+      {phoneHeading(tr('contacts:form.tradingTerms'))}
+      {currencyField}
+      {termsField}
+      {creditLimitField}
+      {openingBalanceField}
+
+      {notesField}
+      {activeField}
+    </ScrollView>
+  );
+
+  const details = (
+    <FormSection title={tr('contacts:form.businessDetails')}>
+      <FieldRow>
+        {nameField}
+        {contactField}
+      </FieldRow>
+      <FieldRow>
+        {registrationField}
+        {/* Holds the column when there's no GSTIN, so the picker keeps its width. */}
+        {gstinField ?? <View />}
+      </FieldRow>
+      <FieldRow>
+        {phoneField}
+        {emailField}
+      </FieldRow>
+    </FormSection>
+  );
+  const address = (
+    <FormSection title={tr('contacts:form.billingAddress')}>
+      {addressField}
+      {overseas ? (
+        <>
+          <FieldRow>
+            {countryField}
+            {regionField}
+          </FieldRow>
+          <FieldRow>
+            {overseasCityField()}
+            {overseasPostalField()}
+          </FieldRow>
+        </>
+      ) : (
+        <FieldRow>
+          {stateField}
+          {cityField()}
+          {pinField()}
+        </FieldRow>
+      )}
+      {sameShippingField}
+      {!sameShipping ? (
+        <FieldRow>
+          {shipAddressField}
+          {shipCityField}
+        </FieldRow>
+      ) : null}
+    </FormSection>
+  );
+  const trading = (
+    <FormSection title={tr('contacts:form.tradingTerms')}>
+      {currencyField}
+      {termsField}
+      {creditLimitField}
+      {openingBalanceField}
+    </FormSection>
+  );
+  const status = (
+    <FormSection title={tr('contacts:form.notesAndStatus')}>
+      {notesField}
+      {activeField}
+    </FormSection>
+  );
+
+  const desktopForm = (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
+      {breakpoint === 'tablet' ? (
+        <View style={{ gap: t.spacing.lg }}>
+          {details}
+          {address}
+          {trading}
+          {status}
+        </View>
+      ) : (
+        <SplitPane
+          sideWidth={360}
+          main={
+            <View style={{ gap: t.spacing.lg }}>
+              {details}
+              {address}
+            </View>
+          }
+          side={
+            <>
+              {trading}
+              {status}
+            </>
+          }
+        />
+      )}
+    </ScrollView>
+  );
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer>
-        <ScrollView
-          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
-        >
-          <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />
-          <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />
-          <PickerField
-            label={tr('contacts:form.gstRegistration')}
-            value={GST_REGISTRATION_LABELS[registration]}
-            onPress={() => setRegistrationOpen(true)}
-            icon="shield-account-outline"
-            hint={tr('contacts:form.sezHint')}
-            required
-          />
-          {needsGstin ? (
-            <TextField
-              label="GSTIN"
-              value={taxId}
-              onChangeText={(v) => {
-                const next = v.toUpperCase();
-                setTaxId(next);
-                // The first two digits are the state; fill it in if it's still blank.
-                if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
-                  changeState(next.slice(0, 2));
-                }
-              }}
-              placeholder="27AABCV1234F1ZO"
-              autoCapitalize="characters"
-              icon="card-account-details-outline"
-              error={errors.taxId}
-              hint={tr('contacts:form.gstinHint')}
-              required
-            />
-          ) : null}
-          <TextField label={tr('contacts:form.phone')} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
-          <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
-
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.billingAddress')}</Text>
-          <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />
-          {overseas ? (
-            <>
-              <PickerField
-                label={tr('contacts:form.country')}
-                value={country ? countryName(country) : undefined}
-                onPress={() => setCountryOpen(true)}
-                icon="earth"
-                error={errors.country}
-                hint={tr('contacts:form.overseasHint')}
-                required
-              />
-              <TextField label={tr('contacts:form.region')} value={region} onChangeText={setRegion} icon="map-outline" />
-              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
-                <TextField label={tr('contacts:form.postalCode')} value={postalCode} onChangeText={setPostalCode} autoCapitalize="characters" error={errors.postalCode} containerStyle={{ flex: 1 }} />
-              </View>
-            </>
-          ) : (
-            <>
-              <PickerField
-                label={tr('contacts:form.state')}
-                value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
-                onPress={() => setStateOpen(true)}
-                icon="map-outline"
-                hint={tr('contacts:form.stateHint')}
-              />
-              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
-                <TextField label="PIN" value={postalCode} onChangeText={(v) => setPostalCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="400001" keyboardType="number-pad" maxLength={6} error={errors.postalCode} containerStyle={{ flex: 1 }} />
-              </View>
-            </>
-          )}
-
-          <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />
-          {!sameShipping ? (
-            <>
-              <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />
-              {overseas ? (
-                <TextField label={tr('contacts:form.shippingCity')} value={shipCity} onChangeText={setShipCity} />
-              ) : (
-                <CityField label={tr('contacts:form.shippingCity')} value={shipCity} onChange={setShipCity} stateCode={stateCode} />
-              )}
-            </>
-          ) : null}
-
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.tradingTerms')}</Text>
-          <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />
-          <PickerField label={tr('contacts:form.paymentTerms')} value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />
-          {kind === 'customer' ? (
-            <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
-          ) : null}
-          <AmountField
-            label={tr('contacts:form.openingBalance')}
-            value={openingBalance}
-            onChangeValue={setOpeningBalance}
-            currency={currency}
-            hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
-          />
-
-          <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />
-          <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />
-        </ScrollView>
+      <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
+        {desktop ? desktopForm : phoneForm}
 
         <FormActions>
-          <Button title={party ? 'Save changes' : `Add ${label.toLowerCase()}`} onPress={save} fullWidth size="lg" />
+          {desktop ? (
+            <>
+              <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => router.back()} />
+              <Button title={submitTitle} onPress={save} />
+            </>
+          ) : (
+            <Button title={submitTitle} onPress={save} fullWidth size="lg" />
+          )}
         </FormActions>
 
         <SelectSheet
@@ -326,5 +485,18 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         />
       </FormContainer>
     </KeyboardAvoidingView>
+  );
+}
+
+/** A titled card grouping related fields on the desktop layout. */
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const t = useTheme();
+  return (
+    <Card style={{ gap: t.spacing.lg }}>
+      <Text variant="caption" tone="muted" weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        {title}
+      </Text>
+      {children}
+    </Card>
   );
 }
