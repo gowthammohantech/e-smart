@@ -152,7 +152,14 @@ export function TextField({
           accessibilityLabel={label}
           {...rest}
         />
-        {suffix}
+        {/* Text can't sit straight inside a View, so a plain unit such as "km" gets its own Text. */}
+        {typeof suffix === 'string' || typeof suffix === 'number' ? (
+          <Text variant="caption" tone="muted">
+            {suffix}
+          </Text>
+        ) : (
+          suffix
+        )}
       </View>
     </FieldShell>
   );

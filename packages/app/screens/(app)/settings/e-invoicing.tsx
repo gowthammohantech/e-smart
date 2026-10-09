@@ -14,7 +14,7 @@ import { ComplianceSettings, TransportMode, VehicleType } from '@esmart/core/typ
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency, useComplianceSettings, useComplianceSummary } from '../../../store/selectors';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
@@ -22,6 +22,8 @@ export default function EInvoicingSettings() {
   const { t: tr } = useTranslation(['compliance', 'nav']);
   const router = useRouter();
   const toast = useToast();
+  // Always false in the native apps, so the desktop header action only ever reaches a browser.
+  const desktop = useIsDesktop();
 
   const stored = useComplianceSettings();
   const currency = useBaseCurrency();
@@ -47,10 +49,20 @@ export default function EInvoicingSettings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: tr('nav:title.eInvoicingAndEWayBill') }} />
+      <Stack.Screen
+        options={
+          desktop
+            ? // A desktop puts Save with the page title, top right, instead of a bar at the bottom.
+              {
+                title: tr('nav:title.eInvoicingAndEWayBill'),
+                headerRight: () => <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} />,
+              }
+            : { title: tr('nav:title.eInvoicingAndEWayBill') }
+        }
+      />
 
       <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
+        contentContainerStyle={desktop ? { padding: t.spacing.lg, paddingBottom: t.spacing.xxxl } : { padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         keyboardShouldPersistTaps="handled"
       >
@@ -237,21 +249,23 @@ export default function EInvoicingSettings() {
         </Card>
       </ScrollView>
 
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
-      </View>
+      {desktop ? null : (
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: t.spacing.lg,
+            paddingBottom: insets.bottom + t.spacing.md,
+            borderTopWidth: 1,
+            borderTopColor: t.c.line,
+            backgroundColor: t.c.paper,
+          }}
+        >
+          <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
+        </View>
+      )}
     </View>
   );
 }
