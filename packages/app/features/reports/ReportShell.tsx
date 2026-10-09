@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Share, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -14,7 +15,7 @@ import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } fro
 import { dateRangeLabel } from '@esmart/core/labels';
 import { useActiveCompany, useBranches, useParties } from '../../store/selectors';
 import { ReportFilters } from '@esmart/core/domain/reports';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { deliverFile, deliverPdf } from './exportFiles';
 import { ReportTable, XLSX_MIME, exportName, tableHtml, toCsv, xlsxBytes } from './reportTable';
 
@@ -48,6 +49,8 @@ export function ReportShell({
   const { t: tr } = useTranslation(['common', 'reports']);
   const toast = useToast();
   const insets = useSafeAreaInsets();
+  // Always false in the native apps, so the desktop header action only ever reaches a browser.
+  const desktop = useIsDesktop();
 
   const company = useActiveCompany();
   const branches = useBranches();
@@ -122,7 +125,24 @@ export function ReportShell({
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
+      {desktop && exportRows ? (
+        // A desktop puts Export with the page title, top right, instead of a bar at the bottom.
+        <Stack.Screen
+          options={{
+            headerRight: () => (
+              <Button title={tr('reports:shell.export')} icon="file-export-outline" variant="secondary" onPress={() => setExportOpen(true)} />
+            ),
+          }}
+        />
+      ) : null}
+      <View
+        style={
+          Platform.OS === 'web'
+            ? // In a browser the report scrolls up under the filters; keep a gap below the chips.
+              { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, paddingBottom: t.spacing.md, gap: t.spacing.md }
+            : { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }
+        }
+      >
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
           {chip(rangeLabel, true, () => setFilterOpen(true))}
           {branches.length > 1
@@ -138,7 +158,11 @@ export function ReportShell({
         </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView
+        // Only a phone has the export bar to scroll clear of.
+        contentContainerStyle={desktop ? { padding: t.spacing.lg, paddingBottom: t.spacing.xxxl } : { padding: t.spacing.lg, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+      >
         <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: 4 }}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
@@ -156,7 +180,7 @@ export function ReportShell({
         {children}
       </ScrollView>
 
-      {exportRows ? (
+      {exportRows && !desktop ? (
         <View
           style={{
             position: 'absolute',
