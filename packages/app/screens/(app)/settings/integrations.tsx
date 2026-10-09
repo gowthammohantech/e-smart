@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -112,6 +112,8 @@ export default function Integrations() {
                       }}
                       trackColor={{ true: t.c.primary, false: t.c.line }}
                       thumbColor="#FFFFFF"
+                      // On the web the "on" thumb defaults to green; keep it white like the rest.
+                      {...(Platform.OS === 'web' ? ({ activeThumbColor: '#FFFFFF' } as object) : null)}
                       accessibilityLabel={`${i.connected ? 'Disconnect' : 'Connect'} ${i.name}`}
                     />
                   </View>
