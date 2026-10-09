@@ -24,7 +24,7 @@ export default function WebAppLayout() {
   // form-width column); everything else uses the full content width.
   const inSettings = pathname.startsWith('/settings');
   // Plan & billing lays its tiers side by side, so it takes the full column.
-  const wideSettings = pathname.startsWith('/settings/plan');
+  const wideSettings = pathname.startsWith('/settings/plan') || pathname.startsWith('/settings/sync');
   usePlanGuard();
 
   const stack = (
