@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -12,13 +12,11 @@ import { canOpen } from '@esmart/core/domain/plan';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
 import { usePlan } from '@esmart/app/store/selectors';
+import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth as width, useSidebarCollapsed } from './sidebarState';
+
+export { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH };
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
-
-export const SIDEBAR_WIDTH = 248;
-
-/** Between the desktop and full-sidebar breakpoints only the icons show. */
-export const SIDEBAR_COMPACT_WIDTH = 68;
 
 function NavItem({
   icon,
@@ -182,20 +180,72 @@ export function Sidebar() {
   const { t: tr } = useTranslation(['nav']);
   const pathname = usePathname();
   const plan = usePlan();
-  const compact = useBreakpoint() === 'tablet';
+  const breakpoint = useBreakpoint();
+  const [collapsed, toggleCollapsed] = useSidebarCollapsed();
+  // A narrow window is always icons-only; a wider one can be folded by hand.
+  const narrow = breakpoint === 'tablet';
+  const folded = narrow || collapsed;
+
+  // The width eases between the two sizes. Going narrower, the labels stay
+  // until the sidebar has finished closing; going wider, they appear as it
+  // opens, so nothing jumps.
+  const [settled, setSettled] = useState(folded);
+  useEffect(() => {
+    const anim = Animated.timing(width, {
+      toValue: folded ? SIDEBAR_COMPACT_WIDTH : SIDEBAR_WIDTH,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished) setSettled(folded);
+    });
+    return () => anim.stop();
+  }, [folded]);
+  const compact = folded && settled;
 
   const current = tabForPath(pathname);
   const inSettings = pathname.startsWith('/settings');
 
   return (
-    <View
+    <Animated.View
       style={{
-        width: compact ? SIDEBAR_COMPACT_WIDTH : SIDEBAR_WIDTH,
+        width,
         backgroundColor: t.c.paper,
         borderRightWidth: 1,
         borderRightColor: t.c.line,
+        // Above the page, so the fold button can straddle the edge.
+        zIndex: 10,
       }}
     >
+      {narrow ? null : (
+        <Pressable
+          onPress={toggleCollapsed}
+          accessibilityRole="button"
+          accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          style={(state) => {
+            const { hovered, focused } = state as WebPressState;
+            return {
+              position: 'absolute',
+              top: 72,
+              right: -16,
+              width: 32,
+              height: 32,
+              borderRadius: t.radius.md,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: hovered ? t.c.card2 : t.c.card,
+              borderWidth: 1,
+              borderColor: t.c.line,
+              zIndex: 20,
+              ...focusRing(t, focused),
+            };
+          }}
+        >
+          <MaterialCommunityIcons name={collapsed ? 'chevron-right' : 'chevron-left'} size={20} color={t.c.text} />
+        </Pressable>
+      )}
+      <View style={{ flex: 1, overflow: 'hidden' }}>
       <View
         style={{
           height: 60,
@@ -246,6 +296,7 @@ export function Sidebar() {
           compact={compact}
         />
       </View>
-    </View>
+      </View>
+    </Animated.View>
   );
 }
