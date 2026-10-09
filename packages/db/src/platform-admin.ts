@@ -32,6 +32,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error('Usage: npm run db:platform-admin -w @esmart/db -- --email you@example.com [--role superadmin|support|none]');
     process.exit(1);
   }
-  await setPlatformRole(process.env.DATABASE_URL ?? 'postgres://esmart:esmart@localhost:5432/esmart', values.email, values.role as PlatformRoleArg);
+  try {
+    await setPlatformRole(process.env.DATABASE_URL ?? 'postgres://esmart:esmart@localhost:5432/esmart', values.email, values.role as PlatformRoleArg);
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+  }
   console.log(values.role === 'none' ? `Removed platform access from ${values.email}.` : `${values.email} is now a platform ${values.role}.`);
 }

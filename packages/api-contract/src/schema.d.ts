@@ -3361,15 +3361,15 @@ export interface components {
         PlatformPlanOverride: {
             plan: components["schemas"]["PlanTier"];
             /**
-             * @default active
+             * @description Defaults to active
              * @enum {string}
              */
-            status: "active" | "trialing";
+            status?: "active" | "trialing";
             /**
-             * @default monthly
+             * @description Defaults to the current cycle, else monthly
              * @enum {string}
              */
-            cycle: "monthly" | "yearly";
+            cycle?: "monthly" | "yearly";
             /**
              * Format: date-time
              * @description Shown as the end of the current period. Nothing downgrades automatically when it passes; omit or null for open-ended

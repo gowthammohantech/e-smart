@@ -4217,8 +4217,8 @@ components:
       required: [plan, reason]
       properties:
         plan: { $ref: '#/components/schemas/PlanTier' }
-        status: { type: string, enum: [active, trialing], default: active }
-        cycle: { type: string, enum: [monthly, yearly], default: monthly }
+        status: { type: string, enum: [active, trialing], description: Defaults to active }
+        cycle: { type: string, enum: [monthly, yearly], description: 'Defaults to the current cycle, else monthly' }
         currentPeriodEnd: { type: [string, 'null'], format: date-time, description: 'Shown as the end of the current period. Nothing downgrades automatically when it passes; omit or null for open-ended' }
         reason: { type: string, minLength: 3, maxLength: 500 }
     PlatformOverview:
