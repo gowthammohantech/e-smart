@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
+import { FormActions } from '@esmart/ui/components/ActionBar';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
@@ -21,15 +21,15 @@ import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/mast
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { Errors, hasErrors, required, validEmail, validGstin } from '@esmart/core/lib/validators';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export default function CompanySettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'onboarding']);
   const router = useRouter();
   const toast = useToast();
-  const insets = useSafeAreaInsets();
 
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
@@ -115,7 +115,7 @@ export default function CompanySettings() {
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         {posted ? (
           <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
@@ -127,7 +127,7 @@ export default function CompanySettings() {
         ) : null}
         <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
         <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
-        <PickerField label={tr('settings:company.type')} value={businessType} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
+        <PickerField label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
 
         <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
         <TextField label={tr('settings:company.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
@@ -190,19 +190,11 @@ export default function CompanySettings() {
         ) : null}
       </ScrollView>
 
-      <View
-        style={{
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
+      <FormActions>
         <Button title={tr('settings:company.save')} onPress={save} fullWidth size="lg" />
-      </View>
+      </FormActions>
 
-      <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: b }))} value={businessType} onSelect={setBusinessType} />
+      <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />
       <SelectSheet
         visible={stateOpen}
         onClose={() => setStateOpen(false)}

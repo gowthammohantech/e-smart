@@ -19,6 +19,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useBranches, useNumberingSeries } from '../../../store/selectors';
 import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
   never: 'Never reset',
@@ -80,7 +81,7 @@ export default function NumberingSettings() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.documentNumbering') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             Each document type has its own series. A number is assigned only when a document is finalised, and a finalised

@@ -9,6 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { ILLUSTRATION_CREDIT } from '@esmart/ui/illustrations/registry';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function About() {
   const t = useTheme();
@@ -18,7 +19,7 @@ export default function About() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.about') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ alignItems: 'center', gap: t.spacing.md, paddingVertical: t.spacing.xxl }}>
           <BrandLogo height={64} />
           <Text variant="h3" weight="700">{tr('settings:about.appName')}</Text>

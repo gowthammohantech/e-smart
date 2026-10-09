@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
+import { PageHeader } from '@esmart/ui/components/PageHeader';
+import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
 import { isRemote, useRemoteMeta } from '../remote';
@@ -20,9 +23,11 @@ import { countLabel } from '@esmart/core/lib/format';
  */
 export function AppHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common']);
+  const { t: tr } = useTranslation(['common', 'nav', 'onboarding']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // The desktop sidebar already has search and notifications.
+  const desktop = useIsDesktop();
 
   const company = useActiveCompany();
   const branches = useBranches();
@@ -40,6 +45,18 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const [branchOpen, setBranchOpen] = useState(false);
 
   const branch = branches.find((b) => b.id === activeBranchId);
+  const pathname = usePathname();
+
+  // The desktop top bar already has the company switcher, sync state,
+  // search and notifications; a tab page only needs its title.
+  if (desktop) {
+    return (
+      <PageHeader
+        title={title ?? tr(`nav:tab.${tabForPath(pathname)}` as 'nav:tab.index')}
+        subtitle={subtitle}
+      />
+    );
+  }
 
   const iconButton = (
     icon: keyof typeof MaterialCommunityIcons.glyphMap,
@@ -89,7 +106,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   return (
     <View
       style={{
-        paddingTop: insets.top + t.spacing.sm,
+        paddingTop: desktop ? t.spacing.xl : insets.top + t.spacing.sm,
         paddingHorizontal: t.spacing.lg,
         paddingBottom: t.spacing.md,
         backgroundColor: t.c.bg,
@@ -97,30 +114,39 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-        <Pressable
-          onPress={() => setSwitcherOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`Switch business. Current: ${company?.name}`}
-          style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.7 : 1 })}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {/* Siblings, not nested: on web each Pressable is a <button>, and a
+            button inside a button is invalid HTML and steals the inner press. */}
+        <View style={{ flex: 1, alignItems: 'flex-start' }}>
+          <Pressable
+            onPress={() => setSwitcherOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Switch business. Current: ${company?.name}`}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              maxWidth: '100%',
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
             <Text variant="title" weight="700" numberOfLines={1} style={{ flexShrink: 1 }}>
               {title ?? company?.name ?? tr('common:component.business')}
             </Text>
             {!title ? <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} /> : null}
-          </View>
+          </Pressable>
           <Pressable
             onPress={() => setBranchOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={tr('common:component.switchBranch', {
               branch: branch?.name ?? tr('common:component.allBranches'),
             })}
+            style={({ pressed }) => ({ maxWidth: '100%', opacity: pressed ? 0.7 : 1 })}
           >
             <Text variant="caption" tone="muted" numberOfLines={1}>
               {subtitle ?? `${branch?.name ?? tr('common:component.allBranches')} · ${company?.baseCurrency ?? ''}`}
             </Text>
           </Pressable>
-        </Pressable>
+        </View>
 
         {/* On a narrow phone the status badge gives way (shrinks) before the buttons do. */}
         {offline ? (
@@ -130,8 +156,12 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
         ) : null}
 
-        {iconButton('magnify', tr('common:component.search'), () => router.push('/(app)/search'))}
-        {iconButton('bell-outline', tr('common:component.notifications'), () => router.push('/(app)/notifications'), unread)}
+        {desktop ? null : (
+          <>
+            {iconButton('magnify', tr('common:component.search'), () => router.push('/(app)/search'))}
+            {iconButton('bell-outline', tr('common:component.notifications'), () => router.push('/(app)/notifications'), unread)}
+          </>
+        )}
       </View>
 
       <SelectSheet
@@ -142,7 +172,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         options={companies.map((c) => ({
           value: c.id,
           label: c.name,
-          description: `${c.businessType} · ${c.baseCurrency}`,
+          description: `${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`,
           icon: 'domain',
         }))}
         value={company?.id}

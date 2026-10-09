@@ -17,6 +17,7 @@ import { useBaseCurrency, useItems, useStockLevels } from '../../../store/select
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function OpeningStock() {
   const t = useTheme();
@@ -82,7 +83,7 @@ export default function OpeningStock() {
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:opening.search')} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
           {filtered.length === 0 ? (
             <EmptyState illustration="no-items" icon="package-variant" title={tr('inventory:opening.noTracked')} compact />

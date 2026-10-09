@@ -13,6 +13,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { DeviceSession } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { formatRelative } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function Devices() {
   const t = useTheme();
@@ -27,7 +28,7 @@ export default function Devices() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.devicesAndSessions') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('settings:devices.revokeNote')}</Text>
         </Card>

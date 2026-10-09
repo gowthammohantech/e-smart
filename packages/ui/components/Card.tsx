@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+import { focusRing, type WebPressState } from '../theme/interaction';
 
 type Props = {
   children: React.ReactNode;
@@ -28,7 +29,16 @@ export function Card({ children, style, onPress, padded = true, variant = 'raise
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={onPress}
-        style={({ pressed }) => [base, variant === 'raised' ? t.shadow.card : null, pressed && { opacity: 0.75 }, style]}
+        style={(state) => {
+          const { pressed, hovered, focused } = state as WebPressState;
+          return [
+            base,
+            variant === 'raised' ? t.shadow.card : null,
+            { opacity: pressed ? 0.75 : hovered ? 0.9 : 1 },
+            focusRing(t, focused),
+            style,
+          ];
+        }}
       >
         {children}
       </Pressable>

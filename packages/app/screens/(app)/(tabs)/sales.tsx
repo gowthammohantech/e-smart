@@ -7,6 +7,7 @@ import { AppHeader } from '../../../components/AppHeader';
 import { SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
+import { StatGrid } from '@esmart/ui/components/Layout';
 import { HubTiles } from '@esmart/ui/components/HubTiles';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -23,6 +24,7 @@ import {
 import { money, sum } from '@esmart/core/lib/money';
 import { inRange, resolveRange } from '@esmart/core/lib/date';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function SalesTab() {
   const t = useTheme();
@@ -89,44 +91,43 @@ export default function SalesTab() {
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        <StatRow>
-          <StatTile
-            label={tr('sales:hub.invoicedThisMonth')}
-            value={monthTotal}
-            icon="file-document-outline"
-            onPress={() => router.push('/(app)/sales/invoices')}
-          />
-          <StatTile
-            label={tr('sales:hub.collected')}
-            value={monthCollected}
-            tone="good"
-            icon="cash-check"
-            onPress={() => router.push('/(app)/payments/received')}
-          />
-        </StatRow>
-
-        <View style={{ height: t.spacing.md }} />
-
-        <StatRow>
-          <StatTile
-            label={tr('sales:hub.outstanding')}
-            value={receivables.summary.total}
-            tone="warn"
-            icon="clock-alert-outline"
-            caption={`${receivables.outstanding.length} open invoices`}
-            onPress={() => router.push('/(app)/receivables')}
-          />
-          <StatTile
-            label={tr('sales:hub.overdue')}
-            value={receivables.summary.overdue}
-            tone="bad"
-            icon="alert-circle-outline"
-            caption={`${receivables.outstanding.filter((o) => o.daysOverdue > 0).length} invoices`}
-            onPress={() => router.push('/(app)/receivables')}
-          />
-        </StatRow>
+        <StatGrid>
+          <StatRow>
+            <StatTile
+              label={tr('sales:hub.invoicedThisMonth')}
+              value={monthTotal}
+              icon="file-document-outline"
+              onPress={() => router.push('/(app)/sales/invoices')}
+            />
+            <StatTile
+              label={tr('sales:hub.collected')}
+              value={monthCollected}
+              tone="good"
+              icon="cash-check"
+              onPress={() => router.push('/(app)/payments/received')}
+            />
+          </StatRow>
+          <StatRow>
+            <StatTile
+              label={tr('sales:hub.outstanding')}
+              value={receivables.summary.total}
+              tone="warn"
+              icon="clock-alert-outline"
+              caption={`${receivables.outstanding.length} open invoices`}
+              onPress={() => router.push('/(app)/receivables')}
+            />
+            <StatTile
+              label={tr('sales:hub.overdue')}
+              value={receivables.summary.overdue}
+              tone="bad"
+              icon="alert-circle-outline"
+              caption={`${receivables.outstanding.filter((o) => o.daysOverdue > 0).length} invoices`}
+              onPress={() => router.push('/(app)/receivables')}
+            />
+          </StatRow>
+        </StatGrid>
 
         <SectionHeader title={tr('sales:hub.documents')} />
         <HubTiles

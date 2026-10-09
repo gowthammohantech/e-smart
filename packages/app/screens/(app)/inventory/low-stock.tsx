@@ -5,10 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '../../../store/selectors';
@@ -16,6 +16,7 @@ import { summarizeStock } from '@esmart/core/domain/reports';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { multiply } from '@esmart/core/lib/money';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function LowStock() {
   const t = useTheme();
@@ -49,7 +50,7 @@ export default function LowStock() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.lowStock') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
           <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={`${report.outCount} out of stock`} />
           <StatTile
@@ -124,21 +125,7 @@ export default function LowStock() {
       </ScrollView>
 
       {rows.length > 0 ? (
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: t.spacing.lg,
-            paddingBottom: insets.bottom + t.spacing.md,
-            borderTopWidth: 1,
-            borderTopColor: t.c.line,
-            backgroundColor: t.c.paper,
-          }}
-        >
-          <Button title={tr('inventory:lowStock.raisePo')} icon="cart-plus" onPress={() => router.push('/(app)/purchases/orders/new')} fullWidth size="lg" />
-        </View>
+        <PrimaryActionBar title={tr('inventory:lowStock.raisePo')} icon="cart-plus" onPress={() => router.push('/(app)/purchases/orders/new')} />
       ) : null}
     </View>
   );

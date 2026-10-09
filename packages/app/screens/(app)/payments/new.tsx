@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { FormContainer } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -40,6 +41,7 @@ import {
   usePayments,
   usePrimaryBranchId,
 } from '../../../store/selectors';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function NewPayment() {
   const t = useTheme();
@@ -301,333 +303,335 @@ export default function NewPayment() {
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Stack.Screen options={{ title: direction === 'received' ? 'Receive payment' : 'Make payment' }} />
+      <FormContainer wide>
+        <Stack.Screen options={{ title: direction === 'received' ? 'Receive payment' : 'Make payment' }} />
 
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            {party ? (
-              <>
-                <Avatar name={party.name} size={42} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text variant="body" weight="600">
-                    {party.name}
-                  </Text>
-                  <Text variant="caption" tone="muted">
-                    {outstanding.length} open {outstanding.length === 1 ? 'document' : 'documents'}
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <>
-                <View
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 21,
-                    backgroundColor: t.c.chip,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
-                </View>
-                <Text variant="body" weight="600" style={{ flex: 1 }}>
-                  Select {direction === 'received' ? 'customer' : 'supplier'}
-                </Text>
-              </>
-            )}
-            <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
-          </Card>
-        </Pressable>
-
-        <AmountField
-          label={tr('sales:payment.amount')}
-          value={amountText}
-          onChangeValue={onAmountChange}
-          currency={currency}
-          size="lg"
-          required
-        />
-
-        <DateField label={tr('sales:payment.date')} value={date} onChange={setDate} required />
-
-        <PickerField
-          label={tr('sales:payment.currency')}
-          value={`${currency}${currency !== baseCurrency ? ` · 1 ${currency} = ${exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
-          onPress={() => setCurrencyOpen(true)}
-          icon="cash-multiple"
-        />
-
-        <PickerField
-          label={tr('sales:payment.method')}
-          value={paymentMethodLabel(tr, method)}
-          onPress={() => setMethodOpen(true)}
-          icon="credit-card-outline"
-        />
-
-        <PickerField
-          label={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
-          value={methodAccounts.find((a) => a.id === accountId)?.name}
-          onPress={() => setAccountOpen(true)}
-          icon="bank-outline"
-          required
-          error={
-            methodAccounts.length === 0
-              ? tr('sales:payment.noAccountForMethod')
-              : balanceBlocks
-                ? tr('sales:payment.insufficientCash', { balance: formatMoney(money(balance ?? 0, baseCurrency)) })
-                : undefined
-          }
-          hint={
-            direction === 'paid' && balance !== undefined
-              ? shortfall
-                ? tr('sales:payment.insufficientBalance', { balance: formatMoney(money(balance, baseCurrency)) })
-                : tr('sales:payment.accountBalance', { balance: formatMoney(money(balance, baseCurrency)) })
-              : undefined
-          }
-        />
-        {methodAccounts.length === 0 ? (
-          <Pressable onPress={() => router.push('/(app)/settings/accounts')} accessibilityRole="link" hitSlop={6}>
-            <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.addAccount')}</Text>
-          </Pressable>
-        ) : null}
-
-        <TextField
-          label={tr('sales:payment.reference')}
-          value={reference}
-          onChangeText={setReference}
-          placeholder={tr('sales:payment.referencePlaceholder')}
-          icon="pound"
-        />
-
-        {currency !== baseCurrency ? (
-          <TextField
-            label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
-            value={String(exchangeRate)}
-            onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
-            keyboardType="decimal-pad"
-            icon="swap-horizontal"
-            hint={tr('sales:payment.fxHint')}
-          />
-        ) : null}
-
-        {partyId && advance.minor > 0 && outstanding.length > 0 ? (
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <MaterialCommunityIcons name="wallet-outline" size={22} color={t.c.primary} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
-              <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
-            </View>
-            <Button title={tr('sales:payment.adjustAdvance')} onPress={() => adjustAdvance()} size="sm" variant="secondary" />
-          </Card>
-        ) : null}
-
-        {/* Allocation */}
-        <View style={{ gap: t.spacing.sm }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
-            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <Pressable onPress={autoAllocate} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.autoAllocate')}>
-                <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.autoAllocateShort')}</Text>
-              </Pressable>
-              <Pressable onPress={payFull} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.payEverything')}>
-                <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.payAll')}</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <Card padded={false}>
-            {!partyId ? (
-              <EmptyState icon="account-search-outline" title={tr('sales:payment.pickContact')} compact />
-            ) : outstanding.length === 0 ? (
-              <EmptyState
-                illustration="all-settled"
-              icon="check-all"
-                title={tr('sales:payment.nothingOutstanding')}
-                message={tr('sales:payment.advanceHint')}
-                compact
-              />
-            ) : (
-              outstanding.map((o, i) => {
-                const selected = !!allocations[o.document.id];
-                return (
+        <ScrollView
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
+          <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+              {party ? (
+                <>
+                  <Avatar name={party.name} size={42} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text variant="body" weight="600">
+                      {party.name}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {outstanding.length} open {outstanding.length === 1 ? 'document' : 'documents'}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <>
                   <View
-                    key={o.document.id}
                     style={{
-                      padding: t.spacing.lg,
-                      borderBottomWidth: i < outstanding.length - 1 ? 0.5 : 0,
-                      borderBottomColor: t.c.line,
-                      gap: t.spacing.sm,
+                      width: 42,
+                      height: 42,
+                      borderRadius: 21,
+                      backgroundColor: t.c.chip,
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
-                    <Pressable
-                      onPress={() => toggleAllocation(o.document.id, o.outstanding)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: selected }}
-                      accessibilityLabel={`Allocate to ${o.document.number}`}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
-                    >
-                      <MaterialCommunityIcons
-                        name={selected ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                        size={21}
-                        color={selected ? t.c.primary : t.c.muted}
-                      />
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text variant="body" weight="600">
-                          {o.document.number}
-                        </Text>
-                        <Text variant="caption" tone="muted">
-                          {formatDate(o.document.date, 'dd MMM')} · due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                        <Text variant="small" weight="700">
-                          {formatMoney(o.outstanding)}
-                        </Text>
-                        {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d late`} tone="danger" size="sm" /> : null}
-                      </View>
-                    </Pressable>
-
-                    {advance.minor > 0 ? (
-                      <Pressable
-                        onPress={() => adjustAdvance(o.document.id)}
-                        hitSlop={6}
-                        accessibilityRole="button"
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}
-                      >
-                        <MaterialCommunityIcons name="wallet-outline" size={15} color={t.c.primary} />
-                        <Text variant="caption" tone="primary" weight="600">
-                          {tr('sales:payment.useAdvanceHere', {
-                            amount: formatMoney(money(Math.min(advance.minor, o.outstanding.minor), currency)),
-                          })}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-
-                    {selected ? (
-                      <AmountField
-                        value={allocations[o.document.id]}
-                        onChangeValue={(v) => setRowAllocation(o.document.id, v, o.outstanding)}
-                        currency={currency}
-                        label={tr('sales:payment.applying')}
-                      />
-                    ) : null}
+                    <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
                   </View>
-                );
-              })
-            )}
+                  <Text variant="body" weight="600" style={{ flex: 1 }}>
+                    Select {direction === 'received' ? 'customer' : 'supplier'}
+                  </Text>
+                </>
+              )}
+              <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+            </Card>
+          </Pressable>
+
+          <AmountField
+            label={tr('sales:payment.amount')}
+            value={amountText}
+            onChangeValue={onAmountChange}
+            currency={currency}
+            size="lg"
+            required
+          />
+
+          <DateField label={tr('sales:payment.date')} value={date} onChange={setDate} required />
+
+          <PickerField
+            label={tr('sales:payment.currency')}
+            value={`${currency}${currency !== baseCurrency ? ` · 1 ${currency} = ${exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
+            onPress={() => setCurrencyOpen(true)}
+            icon="cash-multiple"
+          />
+
+          <PickerField
+            label={tr('sales:payment.method')}
+            value={paymentMethodLabel(tr, method)}
+            onPress={() => setMethodOpen(true)}
+            icon="credit-card-outline"
+          />
+
+          <PickerField
+            label={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
+            value={methodAccounts.find((a) => a.id === accountId)?.name}
+            onPress={() => setAccountOpen(true)}
+            icon="bank-outline"
+            required
+            error={
+              methodAccounts.length === 0
+                ? tr('sales:payment.noAccountForMethod')
+                : balanceBlocks
+                  ? tr('sales:payment.insufficientCash', { balance: formatMoney(money(balance ?? 0, baseCurrency)) })
+                  : undefined
+            }
+            hint={
+              direction === 'paid' && balance !== undefined
+                ? shortfall
+                  ? tr('sales:payment.insufficientBalance', { balance: formatMoney(money(balance, baseCurrency)) })
+                  : tr('sales:payment.accountBalance', { balance: formatMoney(money(balance, baseCurrency)) })
+                : undefined
+            }
+          />
+          {methodAccounts.length === 0 ? (
+            <Pressable onPress={() => router.push('/(app)/settings/accounts')} accessibilityRole="link" hitSlop={6}>
+              <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.addAccount')}</Text>
+            </Pressable>
+          ) : null}
+
+          <TextField
+            label={tr('sales:payment.reference')}
+            value={reference}
+            onChangeText={setReference}
+            placeholder={tr('sales:payment.referencePlaceholder')}
+            icon="pound"
+          />
+
+          {currency !== baseCurrency ? (
+            <TextField
+              label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
+              value={String(exchangeRate)}
+              onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
+              keyboardType="decimal-pad"
+              icon="swap-horizontal"
+              hint={tr('sales:payment.fxHint')}
+            />
+          ) : null}
+
+          {partyId && advance.minor > 0 && outstanding.length > 0 ? (
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+              <MaterialCommunityIcons name="wallet-outline" size={22} color={t.c.primary} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
+                <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
+              </View>
+              <Button title={tr('sales:payment.adjustAdvance')} onPress={() => adjustAdvance()} size="sm" variant="secondary" />
+            </Card>
+          ) : null}
+
+          {/* Allocation */}
+          <View style={{ gap: t.spacing.sm }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
+              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                <Pressable onPress={autoAllocate} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.autoAllocate')}>
+                  <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.autoAllocateShort')}</Text>
+                </Pressable>
+                <Pressable onPress={payFull} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.payEverything')}>
+                  <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.payAll')}</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <Card padded={false}>
+              {!partyId ? (
+                <EmptyState icon="account-search-outline" title={tr('sales:payment.pickContact')} compact />
+              ) : outstanding.length === 0 ? (
+                <EmptyState
+                  illustration="all-settled"
+                icon="check-all"
+                  title={tr('sales:payment.nothingOutstanding')}
+                  message={tr('sales:payment.advanceHint')}
+                  compact
+                />
+              ) : (
+                outstanding.map((o, i) => {
+                  const selected = !!allocations[o.document.id];
+                  return (
+                    <View
+                      key={o.document.id}
+                      style={{
+                        padding: t.spacing.lg,
+                        borderBottomWidth: i < outstanding.length - 1 ? 0.5 : 0,
+                        borderBottomColor: t.c.line,
+                        gap: t.spacing.sm,
+                      }}
+                    >
+                      <Pressable
+                        onPress={() => toggleAllocation(o.document.id, o.outstanding)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: selected }}
+                        accessibilityLabel={`Allocate to ${o.document.number}`}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
+                      >
+                        <MaterialCommunityIcons
+                          name={selected ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                          size={21}
+                          color={selected ? t.c.primary : t.c.muted}
+                        />
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text variant="body" weight="600">
+                            {o.document.number}
+                          </Text>
+                          <Text variant="caption" tone="muted">
+                            {formatDate(o.document.date, 'dd MMM')} · due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                          <Text variant="small" weight="700">
+                            {formatMoney(o.outstanding)}
+                          </Text>
+                          {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d late`} tone="danger" size="sm" /> : null}
+                        </View>
+                      </Pressable>
+
+                      {advance.minor > 0 ? (
+                        <Pressable
+                          onPress={() => adjustAdvance(o.document.id)}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}
+                        >
+                          <MaterialCommunityIcons name="wallet-outline" size={15} color={t.c.primary} />
+                          <Text variant="caption" tone="primary" weight="600">
+                            {tr('sales:payment.useAdvanceHere', {
+                              amount: formatMoney(money(Math.min(advance.minor, o.outstanding.minor), currency)),
+                            })}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+
+                      {selected ? (
+                        <AmountField
+                          value={allocations[o.document.id]}
+                          onChangeValue={(v) => setRowAllocation(o.document.id, v, o.outstanding)}
+                          currency={currency}
+                          label={tr('sales:payment.applying')}
+                        />
+                      ) : null}
+                    </View>
+                  );
+                })
+              )}
+            </Card>
+          </View>
+
+          {/* Allocation summary */}
+          <Card style={{ gap: t.spacing.sm }}>
+            {[
+              { label: 'Payment amount', value: formatMoney(amount) },
+              { label: 'Allocated', value: formatMoney(allocatedTotal) },
+            ].map((r) => (
+              <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text variant="small" tone="muted">
+                  {r.label}
+                </Text>
+                <Text variant="small" weight="600">
+                  {r.value}
+                </Text>
+              </View>
+            ))}
+            <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
+                {overAllocated ? 'Over-allocated by' : 'Unallocated (advance)'}
+              </Text>
+              <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
+                {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
+              </Text>
+            </View>
+            {fxGainLoss && fxGainLoss.minor !== 0 ? (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                <Text variant="caption" tone="muted">
+                  FX {fxGainLoss.minor >= 0 ? 'gain' : 'loss'}
+                </Text>
+                <Text variant="caption" weight="600" tone={fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
+                  {formatMoney(fxGainLoss, { signed: true })}
+                </Text>
+              </View>
+            ) : null}
           </Card>
+
+          <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />
+        </ScrollView>
+
+        <View
+          style={{
+            padding: t.spacing.lg,
+            paddingBottom: insets.bottom + t.spacing.md,
+            borderTopWidth: 1,
+            borderTopColor: t.c.line,
+            backgroundColor: t.c.paper,
+          }}
+        >
+          <Button
+            title={direction === 'received' ? 'Record payment' : 'Record payment made'}
+            onPress={save}
+            disabled={!canSave}
+            fullWidth
+            size="lg"
+          />
         </View>
 
-        {/* Allocation summary */}
-        <Card style={{ gap: t.spacing.sm }}>
-          {[
-            { label: 'Payment amount', value: formatMoney(amount) },
-            { label: 'Allocated', value: formatMoney(allocatedTotal) },
-          ].map((r) => (
-            <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text variant="small" tone="muted">
-                {r.label}
-              </Text>
-              <Text variant="small" weight="600">
-                {r.value}
-              </Text>
-            </View>
-          ))}
-          <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
-              {overAllocated ? 'Over-allocated by' : 'Unallocated (advance)'}
-            </Text>
-            <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
-              {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
-            </Text>
-          </View>
-          {fxGainLoss && fxGainLoss.minor !== 0 ? (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text variant="caption" tone="muted">
-                FX {fxGainLoss.minor >= 0 ? 'gain' : 'loss'}
-              </Text>
-              <Text variant="caption" weight="600" tone={fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
-                {formatMoney(fxGainLoss, { signed: true })}
-              </Text>
-            </View>
-          ) : null}
-        </Card>
-
-        <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />
-      </ScrollView>
-
-      <View
-        style={{
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button
-          title={direction === 'received' ? 'Record payment' : 'Record payment made'}
-          onPress={save}
-          disabled={!canSave}
-          fullWidth
-          size="lg"
+        <SelectSheet
+          visible={partyOpen}
+          onClose={() => setPartyOpen(false)}
+          title={direction === 'received' ? 'Select customer' : 'Select supplier'}
+          options={parties.map((p) => ({ value: p.id, label: p.name, description: p.phone ?? p.email ?? p.code }))}
+          value={partyId}
+          onSelect={(id) => {
+            setPartyId(id);
+            setAllocations({});
+            setRateOverride(null);
+            setCurrencyChoice(null);
+          }}
         />
-      </View>
-
-      <SelectSheet
-        visible={partyOpen}
-        onClose={() => setPartyOpen(false)}
-        title={direction === 'received' ? 'Select customer' : 'Select supplier'}
-        options={parties.map((p) => ({ value: p.id, label: p.name, description: p.phone ?? p.email ?? p.code }))}
-        value={partyId}
-        onSelect={(id) => {
-          setPartyId(id);
-          setAllocations({});
-          setRateOverride(null);
-          setCurrencyChoice(null);
-        }}
-      />
-      <SelectSheet
-        visible={currencyOpen}
-        onClose={() => setCurrencyOpen(false)}
-        title={tr('sales:payment.currency')}
-        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
-        value={currency}
-        onSelect={(code) => {
-          setCurrencyChoice(code === (party?.currency ?? baseCurrency) ? null : code);
-          setAllocations({});
-          setRateOverride(null);
-          if (amountFollows) setAmountText('');
-        }}
-      />
-      <SelectSheet
-        visible={methodOpen}
-        onClose={() => setMethodOpen(false)}
-        title={tr('sales:payment.method')}
-        options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
-        value={method}
-        onSelect={(v) => {
-          setMethod(v as PaymentMethod);
-          setAccountId((current) => accountIdAfterMethodChange(v as PaymentMethod, current, accounts));
-        }}
-        searchable={false}
-      />
-      <SelectSheet
-        visible={accountOpen}
-        onClose={() => setAccountOpen(false)}
-        title={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
-        options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
-        value={accountId}
-        onSelect={setAccountId}
-        searchable={false}
-      />
+        <SelectSheet
+          visible={currencyOpen}
+          onClose={() => setCurrencyOpen(false)}
+          title={tr('sales:payment.currency')}
+          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+          value={currency}
+          onSelect={(code) => {
+            setCurrencyChoice(code === (party?.currency ?? baseCurrency) ? null : code);
+            setAllocations({});
+            setRateOverride(null);
+            if (amountFollows) setAmountText('');
+          }}
+        />
+        <SelectSheet
+          visible={methodOpen}
+          onClose={() => setMethodOpen(false)}
+          title={tr('sales:payment.method')}
+          options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
+          value={method}
+          onSelect={(v) => {
+            setMethod(v as PaymentMethod);
+            setAccountId((current) => accountIdAfterMethodChange(v as PaymentMethod, current, accounts));
+          }}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={accountOpen}
+          onClose={() => setAccountOpen(false)}
+          title={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
+          options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
+          value={accountId}
+          onSelect={setAccountId}
+          searchable={false}
+        />
+      </FormContainer>
     </KeyboardAvoidingView>
   );
 }

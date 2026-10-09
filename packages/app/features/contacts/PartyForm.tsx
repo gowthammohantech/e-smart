@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { FormContainer } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
+import { FormActions } from '@esmart/ui/components/ActionBar';
 import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
@@ -22,6 +23,7 @@ import { nowISO } from '@esmart/core/lib/date';
 import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 
@@ -30,7 +32,6 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const { t: tr } = useTranslation(['contacts']);
   const router = useRouter();
   const toast = useToast();
-  const insets = useSafeAreaInsets();
 
   const baseCurrency = useBaseCurrency();
   const existing = useParties(kind);
@@ -155,180 +156,174 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />
-        <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />
-        <PickerField
-          label={tr('contacts:form.gstRegistration')}
-          value={GST_REGISTRATION_LABELS[registration]}
-          onPress={() => setRegistrationOpen(true)}
-          icon="shield-account-outline"
-          hint={tr('contacts:form.sezHint')}
-          required
-        />
-        {needsGstin ? (
-          <TextField
-            label="GSTIN"
-            value={taxId}
-            onChangeText={(v) => {
-              const next = v.toUpperCase();
-              setTaxId(next);
-              // The first two digits are the state; fill it in if it's still blank.
-              if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
-                changeState(next.slice(0, 2));
-              }
-            }}
-            placeholder="27AABCV1234F1ZO"
-            autoCapitalize="characters"
-            icon="card-account-details-outline"
-            error={errors.taxId}
-            hint={tr('contacts:form.gstinHint')}
+      <FormContainer>
+        <ScrollView
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
+          <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />
+          <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />
+          <PickerField
+            label={tr('contacts:form.gstRegistration')}
+            value={GST_REGISTRATION_LABELS[registration]}
+            onPress={() => setRegistrationOpen(true)}
+            icon="shield-account-outline"
+            hint={tr('contacts:form.sezHint')}
             required
           />
-        ) : null}
-        <TextField label={tr('contacts:form.phone')} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
-        <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
-
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.billingAddress')}</Text>
-        <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />
-        {overseas ? (
-          <>
-            <PickerField
-              label={tr('contacts:form.country')}
-              value={country ? countryName(country) : undefined}
-              onPress={() => setCountryOpen(true)}
-              icon="earth"
-              error={errors.country}
-              hint={tr('contacts:form.overseasHint')}
+          {needsGstin ? (
+            <TextField
+              label="GSTIN"
+              value={taxId}
+              onChangeText={(v) => {
+                const next = v.toUpperCase();
+                setTaxId(next);
+                // The first two digits are the state; fill it in if it's still blank.
+                if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
+                  changeState(next.slice(0, 2));
+                }
+              }}
+              placeholder="27AABCV1234F1ZO"
+              autoCapitalize="characters"
+              icon="card-account-details-outline"
+              error={errors.taxId}
+              hint={tr('contacts:form.gstinHint')}
               required
             />
-            <TextField label={tr('contacts:form.region')} value={region} onChangeText={setRegion} icon="map-outline" />
-            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
-              <TextField label={tr('contacts:form.postalCode')} value={postalCode} onChangeText={setPostalCode} autoCapitalize="characters" containerStyle={{ flex: 1 }} />
-            </View>
-          </>
-        ) : (
-          <>
-            <PickerField
-              label={tr('contacts:form.state')}
-              value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
-              onPress={() => setStateOpen(true)}
-              icon="map-outline"
-              hint={tr('contacts:form.stateHint')}
-            />
-            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
-              <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
-            </View>
-          </>
-        )}
+          ) : null}
+          <TextField label={tr('contacts:form.phone')} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />
+          <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
 
-        <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />
-        {!sameShipping ? (
-          <>
-            <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />
-            {overseas ? (
-              <TextField label={tr('contacts:form.shippingCity')} value={shipCity} onChangeText={setShipCity} />
-            ) : (
-              <CityField label={tr('contacts:form.shippingCity')} value={shipCity} onChange={setShipCity} stateCode={stateCode} />
-            )}
-          </>
-        ) : null}
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.billingAddress')}</Text>
+          <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />
+          {overseas ? (
+            <>
+              <PickerField
+                label={tr('contacts:form.country')}
+                value={country ? countryName(country) : undefined}
+                onPress={() => setCountryOpen(true)}
+                icon="earth"
+                error={errors.country}
+                hint={tr('contacts:form.overseasHint')}
+                required
+              />
+              <TextField label={tr('contacts:form.region')} value={region} onChangeText={setRegion} icon="map-outline" />
+              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                <TextField label={tr('contacts:form.city')} value={city} onChangeText={setCity} containerStyle={{ flex: 1 }} />
+                <TextField label={tr('contacts:form.postalCode')} value={postalCode} onChangeText={setPostalCode} autoCapitalize="characters" containerStyle={{ flex: 1 }} />
+              </View>
+            </>
+          ) : (
+            <>
+              <PickerField
+                label={tr('contacts:form.state')}
+                value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
+                onPress={() => setStateOpen(true)}
+                icon="map-outline"
+                hint={tr('contacts:form.stateHint')}
+              />
+              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
+                <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} placeholder="400001" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
+              </View>
+            </>
+          )}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.tradingTerms')}</Text>
-        <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />
-        <PickerField label={tr('contacts:form.paymentTerms')} value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />
-        {kind === 'customer' ? (
-          <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
-        ) : null}
-        <AmountField
-          label={tr('contacts:form.openingBalance')}
-          value={openingBalance}
-          onChangeValue={setOpeningBalance}
-          currency={currency}
-          hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
+          <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />
+          {!sameShipping ? (
+            <>
+              <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />
+              {overseas ? (
+                <TextField label={tr('contacts:form.shippingCity')} value={shipCity} onChangeText={setShipCity} />
+              ) : (
+                <CityField label={tr('contacts:form.shippingCity')} value={shipCity} onChange={setShipCity} stateCode={stateCode} />
+              )}
+            </>
+          ) : null}
+
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('contacts:form.tradingTerms')}</Text>
+          <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />
+          <PickerField label={tr('contacts:form.paymentTerms')} value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />
+          {kind === 'customer' ? (
+            <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
+          ) : null}
+          <AmountField
+            label={tr('contacts:form.openingBalance')}
+            value={openingBalance}
+            onChangeValue={setOpeningBalance}
+            currency={currency}
+            hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
+          />
+
+          <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />
+          <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />
+        </ScrollView>
+
+        <FormActions>
+          <Button title={party ? 'Save changes' : `Add ${label.toLowerCase()}`} onPress={save} fullWidth size="lg" />
+        </FormActions>
+
+        <SelectSheet
+          visible={stateOpen}
+          onClose={() => setStateOpen(false)}
+          title={tr('contacts:form.state')}
+          options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+          value={stateCode}
+          onSelect={changeState}
         />
-
-        <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />
-        <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />
-      </ScrollView>
-
-      <View
-        style={{
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button title={party ? 'Save changes' : `Add ${label.toLowerCase()}`} onPress={save} fullWidth size="lg" />
-      </View>
-
-      <SelectSheet
-        visible={stateOpen}
-        onClose={() => setStateOpen(false)}
-        title={tr('contacts:form.state')}
-        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
-        value={stateCode}
-        onSelect={changeState}
-      />
-      <SelectSheet
-        visible={registrationOpen}
-        onClose={() => setRegistrationOpen(false)}
-        title={tr('contacts:form.gstRegistration')}
-        options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k] }))}
-        value={registration}
-        onSelect={(v) => {
-          const type = v as GstRegistrationType;
-          setRegistration(type);
-          setErrors((e) => ({ ...e, taxId: undefined }));
-          // An Indian state does not apply abroad, and an overseas party has no GSTIN.
-          if (type === 'overseas') {
-            setStateCode('');
-            setTaxId('');
-          } else if (!gstinRequiredFor(type)) {
-            setTaxId('');
-          }
-        }}
-        searchable={false}
-      />
-      <SelectSheet
-        visible={countryOpen}
-        onClose={() => setCountryOpen(false)}
-        title={tr('contacts:form.country')}
-        options={WORLD_COUNTRIES.filter((c) => c.code !== 'IN').map((c) => ({ value: c.code, label: c.name, trailing: c.currency }))}
-        value={country}
-        onSelect={(code) => {
-          setCountry(code);
-          setErrors((e) => ({ ...e, country: undefined }));
-          // Trade with that country usually runs in its currency, when the app carries it.
-          const cur = WORLD_COUNTRIES.find((c) => c.code === code)?.currency;
-          if (currency === baseCurrency && cur && CURRENCIES.some((c) => c.code === cur)) setCurrency(cur);
-        }}
-      />
-      <SelectSheet
-        visible={currencyOpen}
-        onClose={() => setCurrencyOpen(false)}
-        title={tr('contacts:form.currency')}
-        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
-        value={currency}
-        onSelect={setCurrency}
-      />
-      <SelectSheet
-        visible={termsOpen}
-        onClose={() => setTermsOpen(false)}
-        title={tr('contacts:form.paymentTerms')}
-        options={TERMS.map((d) => ({ value: String(d), label: d === 0 ? 'Due on receipt' : `${d} days` }))}
-        value={String(terms)}
-        onSelect={(v) => setTerms(Number(v))}
-        searchable={false}
-      />
+        <SelectSheet
+          visible={registrationOpen}
+          onClose={() => setRegistrationOpen(false)}
+          title={tr('contacts:form.gstRegistration')}
+          options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k] }))}
+          value={registration}
+          onSelect={(v) => {
+            const type = v as GstRegistrationType;
+            setRegistration(type);
+            setErrors((e) => ({ ...e, taxId: undefined }));
+            // An Indian state does not apply abroad, and an overseas party has no GSTIN.
+            if (type === 'overseas') {
+              setStateCode('');
+              setTaxId('');
+            } else if (!gstinRequiredFor(type)) {
+              setTaxId('');
+            }
+          }}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={countryOpen}
+          onClose={() => setCountryOpen(false)}
+          title={tr('contacts:form.country')}
+          options={WORLD_COUNTRIES.filter((c) => c.code !== 'IN').map((c) => ({ value: c.code, label: c.name, trailing: c.currency }))}
+          value={country}
+          onSelect={(code) => {
+            setCountry(code);
+            setErrors((e) => ({ ...e, country: undefined }));
+            // Trade with that country usually runs in its currency, when the app carries it.
+            const cur = WORLD_COUNTRIES.find((c) => c.code === code)?.currency;
+            if (currency === baseCurrency && cur && CURRENCIES.some((c) => c.code === cur)) setCurrency(cur);
+          }}
+        />
+        <SelectSheet
+          visible={currencyOpen}
+          onClose={() => setCurrencyOpen(false)}
+          title={tr('contacts:form.currency')}
+          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+          value={currency}
+          onSelect={setCurrency}
+        />
+        <SelectSheet
+          visible={termsOpen}
+          onClose={() => setTermsOpen(false)}
+          title={tr('contacts:form.paymentTerms')}
+          options={TERMS.map((d) => ({ value: String(d), label: d === 0 ? 'Due on receipt' : `${d} days` }))}
+          value={String(terms)}
+          onSelect={(v) => setTerms(Number(v))}
+          searchable={false}
+        />
+      </FormContainer>
     </KeyboardAvoidingView>
   );
 }

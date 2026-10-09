@@ -10,6 +10,7 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { Integration } from '@esmart/core/types';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const GROUPS: { key: Integration['category']; title: string; blurb: string }[] = [
   { key: 'payments', title: 'Payments', blurb: 'Let customers pay an invoice without leaving it.' },
@@ -32,7 +33,7 @@ export default function Integrations() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.integrations') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             Each provider sits behind an adapter, so swapping one out never changes how your documents work. In this

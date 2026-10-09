@@ -15,6 +15,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useBranches, useItems, useStockLevels } from '../../../store/selectors';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function StockAdjust() {
   const t = useTheme();
@@ -77,7 +78,7 @@ export default function StockAdjust() {
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <PickerField
           label={tr('inventory:adjust.item')}

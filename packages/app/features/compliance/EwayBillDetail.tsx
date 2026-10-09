@@ -44,6 +44,7 @@ import { detailRouteFor } from '../documents/DocumentEditor';
 import { formatDate, formatDateTime, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, expiryPhrase } from './complianceMeta';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Entry =
   | { at: string; kind: 'partB'; label: string; detail: string; icon: 'truck-outline' }
@@ -115,7 +116,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <Card style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>

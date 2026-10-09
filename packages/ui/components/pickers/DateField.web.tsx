@@ -60,7 +60,6 @@ export function DateField({
           style={{
             flex: 1,
             border: 'none',
-            outline: 'none',
             background: 'transparent',
             color: t.c.text,
             fontSize: t.fontSize.body,

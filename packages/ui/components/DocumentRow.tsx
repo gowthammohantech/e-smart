@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { StatusBadge } from './Badge';
 import { Avatar } from './Avatar';
@@ -28,7 +29,9 @@ export function DocumentRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${document.number}, ${partyName}, ${formatMoney(document.totals.grandTotal)}`}
-      style={({ pressed }) => ({
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressState;
+        return {
         flexDirection: 'row',
         alignItems: 'center',
         gap: t.spacing.md,
@@ -36,8 +39,10 @@ export function DocumentRow({
         paddingHorizontal: t.spacing.lg,
         borderBottomWidth: divider ? 0.5 : 0,
         borderBottomColor: t.c.line,
-        backgroundColor: pressed ? t.c.card2 : 'transparent',
-      })}
+        backgroundColor: pressed || hovered ? t.c.card2 : 'transparent',
+        ...focusRing(t, focused),
+        };
+      }}
     >
       <Avatar name={partyName} size={38} />
 

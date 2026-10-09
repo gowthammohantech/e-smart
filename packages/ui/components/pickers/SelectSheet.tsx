@@ -7,6 +7,7 @@ import { Sheet } from '../Sheet';
 import { SearchBar } from '../SearchBar';
 import { Text } from '../Text';
 import { EmptyState } from '../EmptyState';
+import { Button } from '../Button';
 
 export type SelectOption = {
   value: string;
@@ -35,6 +36,9 @@ export function SelectSheet({
   footer,
   onCreate,
   createLabel,
+  multiple = false,
+  onConfirm,
+  confirmLabel,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -42,7 +46,7 @@ export function SelectSheet({
   subtitle?: string;
   options: SelectOption[];
   value?: string | null;
-  onSelect: (value: string) => void;
+  onSelect?: (value: string) => void;
   searchable?: boolean;
   searchPlaceholder?: string;
   emptyMessage?: string;
@@ -50,10 +54,22 @@ export function SelectSheet({
   /** Offer the typed search text as a value of its own, for lists that aren't exhaustive. */
   onCreate?: (query: string) => void;
   createLabel?: (query: string) => string;
+  /** Tick several rows, then confirm them together; `onSelect` is not called in this mode. */
+  multiple?: boolean;
+  onConfirm?: (values: string[]) => void;
+  confirmLabel?: (count: number) => string;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const [query, setQuery] = useState('');
+  // Kept in tap order so whatever is confirmed arrives in the order it was picked.
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const close = () => {
+    setQuery('');
+    setPicked([]);
+    onClose();
+  };
 
   // A creatable list always needs the search box — it is where the new value is typed.
   const showSearch = searchable && (options.length > 6 || !!onCreate);
@@ -74,8 +90,7 @@ export function SelectSheet({
     <Pressable
       onPress={() => {
         onCreate?.(typed);
-        setQuery('');
-        onClose();
+        close();
       }}
       accessibilityRole="button"
       accessibilityLabel={createText}
@@ -99,13 +114,28 @@ export function SelectSheet({
   return (
     <Sheet
       visible={visible}
-      onClose={() => {
-        setQuery('');
-        onClose();
-      }}
+      onClose={close}
       title={title}
       subtitle={subtitle}
-      footer={footer}
+      footer={
+        multiple ? (
+          <View style={{ gap: t.spacing.md }}>
+            <Button
+              title={confirmLabel ? confirmLabel(picked.length) : tr('common:action.done')}
+              icon="check"
+              disabled={picked.length === 0}
+              fullWidth
+              onPress={() => {
+                onConfirm?.(picked);
+                close();
+              }}
+            />
+            {footer}
+          </View>
+        ) : (
+          footer
+        )
+      }
       fillHeight={showSearch}
       header={
         showSearch ? (
@@ -120,18 +150,22 @@ export function SelectSheet({
         (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage} compact />)
       ) : (
         filtered.map((o) => {
-          const selected = o.value === value;
+          const checked = multiple && picked.includes(o.value);
+          const selected = multiple ? checked : o.value === value;
           return (
             <Pressable
               key={o.value}
               disabled={o.disabled}
               onPress={() => {
-                onSelect(o.value);
-                setQuery('');
-                onClose();
+                if (multiple) {
+                  setPicked((p) => (p.includes(o.value) ? p.filter((v) => v !== o.value) : [...p, o.value]));
+                  return;
+                }
+                onSelect?.(o.value);
+                close();
               }}
-              accessibilityRole="button"
-              accessibilityState={{ selected, disabled: !!o.disabled }}
+              accessibilityRole={multiple ? 'checkbox' : 'button'}
+              accessibilityState={multiple ? { checked, disabled: !!o.disabled } : { selected, disabled: !!o.disabled }}
               accessibilityLabel={o.label}
               style={({ pressed }) => ({
                 flexDirection: 'row',
@@ -144,6 +178,13 @@ export function SelectSheet({
                 opacity: o.disabled ? 0.4 : 1,
               })}
             >
+              {multiple ? (
+                <MaterialCommunityIcons
+                  name={checked ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                  size={22}
+                  color={checked ? t.c.primary : t.c.muted}
+                />
+              ) : null}
               {o.icon ? <MaterialCommunityIcons name={o.icon} size={20} color={t.c.muted} /> : null}
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight={selected ? '600' : '400'} numberOfLines={1}>
@@ -160,7 +201,7 @@ export function SelectSheet({
                   {o.trailing}
                 </Text>
               ) : null}
-              {selected ? <MaterialCommunityIcons name="check" size={19} color={t.c.primary} /> : null}
+              {selected && !multiple ? <MaterialCommunityIcons name="check" size={19} color={t.c.primary} /> : null}
             </Pressable>
           );
         })

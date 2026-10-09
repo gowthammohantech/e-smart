@@ -16,6 +16,7 @@ import { LixiMark } from '@esmart/ui/components/LixiOrb';
 import { fromMajor } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useToast } from '@esmart/ui/components/Toast';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const LIXI_WAYS: { key: keyof LixiAccess; label: string; description: string }[] = [
   { key: 'holdTab', label: 'Hold a tab', description: 'Press and hold any tab; Lixi opens already answering about it.' },
@@ -120,7 +121,7 @@ export default function Appearance() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.appearance') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
           {MODES.map((m, i) => (
             <RadioRow

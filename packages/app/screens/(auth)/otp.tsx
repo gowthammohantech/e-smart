@@ -49,8 +49,22 @@ export default function Otp() {
   }, [seconds]);
 
   const setDigit = (index: number, value: string) => {
-    const clean = value.replace(/[^0-9]/g, '').slice(-1);
+    const typed = value.replace(/[^0-9]/g, '');
     const next = [...digits];
+    // Typing over a filled box gives its old digit plus the new one; more
+    // than that is a pasted code, spread across the boxes from here on.
+    const isPaste = typed.length > 1 && !(typed.length === 2 && typed[0] === digits[index]);
+    if (isPaste) {
+      const pasted = typed.slice(0, LENGTH - index).split('');
+      pasted.forEach((d, k) => {
+        next[index + k] = d;
+      });
+      setDigits(next);
+      setError(undefined);
+      inputs.current[Math.min(index + pasted.length, LENGTH - 1)]?.focus();
+      return;
+    }
+    const clean = typed.slice(-1);
     next[index] = clean;
     setDigits(next);
     setError(undefined);
@@ -74,7 +88,7 @@ export default function Otp() {
       return;
     }
     if (code !== DEMO_CODE) {
-      setError(`Incorrect code. Use ${DEMO_CODE} in this prototype.`);
+      setError(tr('auth:otp.incorrectDemo', { code: DEMO_CODE }));
       return;
     }
     signInWithOtp(String(phone ?? ''));
@@ -82,7 +96,7 @@ export default function Otp() {
   };
 
   return (
-    <AuthShell title={tr('auth:otp.title')} subtitle={`We sent a 6-digit code to ${phone ?? 'your phone'}.`}>
+    <AuthShell title={tr('auth:otp.title')} subtitle={phone ? tr('auth:otp.sentTo', { phone }) : tr('auth:otp.sentToFallback')}>
       <View style={{ flexDirection: 'row', gap: t.spacing.sm, justifyContent: 'space-between' }}>
         {digits.map((d, i) => (
           <TextInput
@@ -93,13 +107,17 @@ export default function Otp() {
             value={d}
             onChangeText={(v) => setDigit(i, v)}
             onKeyPress={({ nativeEvent }) => {
-              if (nativeEvent.key === tr('auth:otp.backspace') && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
+              // The key name is fixed; it is not the translated label.
+              if (nativeEvent.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
             }}
+            onSubmitEditing={verify}
             keyboardType="number-pad"
-            maxLength={1}
-            accessibilityLabel={`Digit ${i + 1}`}
+            textContentType="oneTimeCode"
+            accessibilityLabel={tr('auth:otp.digit', { n: i + 1 })}
             style={{
               flex: 1,
+              // A browser input has an intrinsic width; let the row share it out.
+              minWidth: 0,
               height: 58,
               borderRadius: t.radius.md,
               borderWidth: 1,
@@ -120,7 +138,7 @@ export default function Otp() {
         </Text>
       ) : isRemote() ? null : (
         <Text variant="caption" tone="muted">
-          Prototype code: {DEMO_CODE}
+          {tr('auth:otp.demoCode', { code: DEMO_CODE })}
         </Text>
       )}
 
@@ -129,7 +147,7 @@ export default function Otp() {
       <View style={{ alignItems: 'center' }}>
         {seconds > 0 ? (
           <Text variant="small" tone="muted">
-            Resend code in {seconds}s
+            {tr('auth:otp.resendIn', { seconds })}
           </Text>
         ) : (
           <Pressable

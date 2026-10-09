@@ -28,6 +28,7 @@ import { detailRouteFor } from '../documents/DocumentEditor';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Tab = 'eInvoice' | 'eway';
 
@@ -106,7 +107,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   return (
     <ScrollView
       contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: bottomInset }}
-      showsVerticalScrollIndicator={false}
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       keyboardShouldPersistTaps="handled"
     >
       {header}

@@ -60,15 +60,14 @@ export default function NumberingStep() {
 
       <SwitchField
         label={tr('onboarding:numbering.includeFy')}
-        description={`Adds ${fy.label.replace('FY ', '')} to every number and restarts the sequence each year.`}
+        description={tr('onboarding:numbering.includeFyHint', { fy: fy.label.replace('FY ', '') })}
         value={draft.includeFiscalYear}
         onValueChange={(v) => set({ includeFiscalYear: v })}
       />
 
       <Card variant="flat">
         <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
-          Quotes, purchase bills, payments and expenses each get their own series with matching settings. You can tune
-          them individually in Settings → Numbering.
+          {tr('onboarding:numbering.seriesNote')}
         </Text>
       </Card>
     </WizardShell>

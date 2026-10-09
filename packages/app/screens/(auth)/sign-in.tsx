@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { TextField, Segmented } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
@@ -19,6 +20,7 @@ export default function SignIn() {
   const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
   const signIn = useAppStore((s) => s.signIn);
+  const desktop = useIsDesktop();
 
   const [mode, setMode] = useState<Mode>('email');
   const [email, setEmail] = useState('gowtham@vertextraders.in');
@@ -90,9 +92,24 @@ export default function SignIn() {
             secureTextEntry
             icon="lock-outline"
             error={errors.password}
+            onSubmitEditing={submitEmail}
           />
+          {desktop ? (
+            <Text
+              variant="small"
+              tone="primary"
+              weight="600"
+              accessibilityRole="link"
+              style={{ alignSelf: 'flex-end', marginTop: -t.spacing.sm }}
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
+              {tr('auth:signIn.forgot')}
+            </Text>
+          ) : null}
           <Button title={tr('auth:signIn.submit')} onPress={submitEmail} loading={busy} fullWidth size="lg" />
-          <Button title={tr('auth:signIn.forgot')} variant="ghost" onPress={() => router.push('/(auth)/forgot-password')} />
+          {desktop ? null : (
+            <Button title={tr('auth:signIn.forgot')} variant="ghost" onPress={() => router.push('/(auth)/forgot-password')} />
+          )}
         </View>
       ) : (
         <View style={{ gap: t.spacing.lg }}>
@@ -105,6 +122,7 @@ export default function SignIn() {
             icon="cellphone"
             error={errors.phone}
             hint={tr('auth:signIn.otpHint')}
+            onSubmitEditing={submitPhone}
           />
           <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} fullWidth size="lg" />
         </View>
@@ -113,9 +131,13 @@ export default function SignIn() {
       {/* The API has no Google sign-in yet; the demo signs straight in. */}
       {isRemote() ? null : (
       <View style={{ alignItems: 'center', gap: t.spacing.md, marginTop: t.spacing.md }}>
-        <Text variant="caption" tone="muted">
-          or continue with
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, alignSelf: 'stretch' }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: t.c.line }} />
+          <Text variant="caption" tone="muted">
+            or continue with
+          </Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: t.c.line }} />
+        </View>
         <Button
           title={tr('auth:signIn.google')}
           variant="ghost"

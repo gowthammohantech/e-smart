@@ -1,6 +1,8 @@
 import React from 'react';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Cell, DataTable as UiDataTable } from '@esmart/ui/components/DataTable';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Money } from '@esmart/core/lib/money';
@@ -89,7 +91,30 @@ export function DataTable({
   widths?: number[];
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const flexOf = (i: number) => widths?.[i] ?? 1;
+
+  // A desktop gets the same table as the app's lists, rows highlighted on hover.
+  if (desktop) {
+    return (
+      <UiDataTable
+        scroll={false}
+        columns={headers.map((h, i) => ({
+          key: String(i),
+          header: h,
+          flex: flexOf(i),
+          align: i === 0 ? ('left' as const) : ('right' as const),
+          render: (row: { cells: (string | number)[] }) => (
+            <Cell weight={i === 0 ? '600' : undefined} mono={i > 0}>
+              {row.cells[i]}
+            </Cell>
+          ),
+        }))}
+        rows={rows.map((cells, index) => ({ cells, index }))}
+        rowKey={(row) => String(row.index)}
+      />
+    );
+  }
 
   return (
     <Card padded={false}>

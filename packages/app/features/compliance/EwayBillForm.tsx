@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { FormContainer } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
@@ -36,6 +37,7 @@ import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 /**
  * Raising an e-way bill (FRD 16).
@@ -145,236 +147,238 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ---------------- Part-A ---------------- */}
-        <Card style={{ gap: t.spacing.sm }}>
-          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.consignment')}</Text>
-          <Row label={tr('compliance:ewb.document')} value={doc.number} />
-          <Row label={tr('compliance:ewb.dated')} value={formatDate(doc.date)} />
-          <Row label={tr('compliance:ewb.value')} value={formatMoney(doc.totals.grandTotal)} />
-          <Row label={tr('compliance:ewb.lines')} value={String(doc.lines.length)} />
-          <Row label={tr('compliance:ewb.mainHsn')} value={mainHsnCodeOf(doc) ?? '—'} />
-        </Card>
+      <FormContainer wide>
+        <ScrollView
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ---------------- Part-A ---------------- */}
+          <Card style={{ gap: t.spacing.sm }}>
+            <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.consignment')}</Text>
+            <Row label={tr('compliance:ewb.document')} value={doc.number} />
+            <Row label={tr('compliance:ewb.dated')} value={formatDate(doc.date)} />
+            <Row label={tr('compliance:ewb.value')} value={formatMoney(doc.totals.grandTotal)} />
+            <Row label={tr('compliance:ewb.lines')} value={String(doc.lines.length)} />
+            <Row label={tr('compliance:ewb.mainHsn')} value={mainHsnCodeOf(doc) ?? '—'} />
+          </Card>
 
-        <View style={{ height: t.spacing.md }} />
+          <View style={{ height: t.spacing.md }} />
 
-        <PickerField
-          label={tr('compliance:ewb.subSupplyType')}
-          value={EWAY_SUB_SUPPLY_TYPES[subSupplyType].label}
-          onPress={() => setSubSupplyOpen(true)}
-          icon="tag-outline"
-        />
-        {subSupplyType === 'others' ? (
-          <TextField
-            label={tr('compliance:ewb.describeSubSupply')}
-            required
-            value={subSupplyDescription}
-            onChangeText={setSubSupplyDescription}
-            error={errors.subSupplyDescription}
-            placeholder={tr('compliance:ewb.whatMoving')}
-          />
-        ) : null}
-
-        <SectionHeader title={tr('compliance:ewb.from')} />
-        <PlaceFields
-          place={from}
-          onChange={setFrom}
-          errors={errors}
-          prefix="from"
-          onPickState={() => setStateSheet('from')}
-        />
-
-        <SectionHeader title={tr('compliance:ewb.to')} />
-        <PlaceFields
-          place={to}
-          onChange={setTo}
-          errors={errors}
-          prefix="to"
-          onPickState={() => setStateSheet('to')}
-        />
-
-        {/* ---------------- Part-B ---------------- */}
-        <SectionHeader title={tr('compliance:ewb.transport')} />
-
-        {transporters.length ? (
           <PickerField
-            label={tr('compliance:ewb.savedTransporter')}
-            value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-            placeholder={tr('compliance:ewb.pickOrType')}
-            onPress={() => setTransporterOpen(true)}
-            icon="truck-outline"
+            label={tr('compliance:ewb.subSupplyType')}
+            value={EWAY_SUB_SUPPLY_TYPES[subSupplyType].label}
+            onPress={() => setSubSupplyOpen(true)}
+            icon="tag-outline"
           />
-        ) : null}
-        <TextField
-          label={tr('compliance:ewb.transporterId')}
-          value={transporterId}
-          onChangeText={setTransporterId}
-          autoCapitalize="characters"
-          error={errors.transporterId}
-          placeholder="15-character GSTIN or TRANSIN"
-        />
-        <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
-
-        <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
-          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
-          <Segmented
-            options={[
-              { value: 'road', label: 'Road' },
-              { value: 'rail', label: 'Rail' },
-              { value: 'air', label: 'Air' },
-              { value: 'ship', label: 'Ship' },
-            ]}
-            value={transportMode}
-            onChange={setTransportMode}
-          />
-        </View>
-
-        <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
-          <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.cargo')}</Text>
-          <Segmented
-            options={[
-              { value: 'regular', label: 'Regular' },
-              { value: 'overDimensional', label: 'Over-dimensional' },
-            ]}
-            value={vehicleType}
-            onChange={setVehicleType}
-          />
-        </View>
-
-        {byRoad ? (
-          <TextField
-            label={tr('compliance:ewb.vehicleNumber')}
-            required
-            value={vehicleNumber}
-            onChangeText={(v) => setVehicleNumber(normalizeVehicleNumber(v))}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            error={errors.vehicleNumber}
-            placeholder="MH12AB1234"
-          />
-        ) : (
-          <>
+          {subSupplyType === 'others' ? (
             <TextField
-              label={tr('compliance:ewb.transportDocNumber')}
+              label={tr('compliance:ewb.describeSubSupply')}
               required
-              value={transportDocNumber}
-              onChangeText={setTransportDocNumber}
-              error={errors.transportDocNumber}
-              placeholder={tr('compliance:ewb.transportDocHint')}
+              value={subSupplyDescription}
+              onChangeText={setSubSupplyDescription}
+              error={errors.subSupplyDescription}
+              placeholder={tr('compliance:ewb.whatMoving')}
             />
-            <DateField
-              label={tr('compliance:ewb.transportDocDate')}
-              required
-              value={transportDocDate}
-              onChange={setTransportDocDate}
-              error={errors.transportDocDate}
+          ) : null}
+
+          <SectionHeader title={tr('compliance:ewb.from')} />
+          <PlaceFields
+            place={from}
+            onChange={setFrom}
+            errors={errors}
+            prefix="from"
+            onPickState={() => setStateSheet('from')}
+          />
+
+          <SectionHeader title={tr('compliance:ewb.to')} />
+          <PlaceFields
+            place={to}
+            onChange={setTo}
+            errors={errors}
+            prefix="to"
+            onPickState={() => setStateSheet('to')}
+          />
+
+          {/* ---------------- Part-B ---------------- */}
+          <SectionHeader title={tr('compliance:ewb.transport')} />
+
+          {transporters.length ? (
+            <PickerField
+              label={tr('compliance:ewb.savedTransporter')}
+              value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
+              placeholder={tr('compliance:ewb.pickOrType')}
+              onPress={() => setTransporterOpen(true)}
+              icon="truck-outline"
             />
-          </>
-        )}
+          ) : null}
+          <TextField
+            label={tr('compliance:ewb.transporterId')}
+            value={transporterId}
+            onChangeText={setTransporterId}
+            autoCapitalize="characters"
+            error={errors.transporterId}
+            placeholder="15-character GSTIN or TRANSIN"
+          />
+          <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
 
-        <TextField
-          label={tr('compliance:ewb.approxDistance')}
-          required
-          value={distanceKm}
-          onChangeText={setDistanceKm}
-          keyboardType="number-pad"
-          suffix="km"
-          error={errors.distanceKm}
-        />
-
-        {/* The rule, made visible. */}
-        <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
-          <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text variant="small" weight="600">
-              {preview.days} {preview.days === 1 ? 'day' : 'days'} · valid to{' '}
-              {formatDate(preview.validUpto.slice(0, 10))}
-            </Text>
-            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-              {vehicleType === 'overDimensional'
-                ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
-                : 'One day per 200 km, or part thereof.'}{' '}
-              Validity always runs to midnight.
-            </Text>
+          <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
+            <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
+            <Segmented
+              options={[
+                { value: 'road', label: 'Road' },
+                { value: 'rail', label: 'Rail' },
+                { value: 'air', label: 'Air' },
+                { value: 'ship', label: 'Ship' },
+              ]}
+              value={transportMode}
+              onChange={setTransportMode}
+            />
           </View>
-        </Card>
-      </ScrollView>
 
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button
-          title={tr('compliance:ewb.generate')}
-          icon="truck-fast-outline"
-          loading={busy}
-          onPress={submit}
-          fullWidth
+          <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
+            <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.cargo')}</Text>
+            <Segmented
+              options={[
+                { value: 'regular', label: 'Regular' },
+                { value: 'overDimensional', label: 'Over-dimensional' },
+              ]}
+              value={vehicleType}
+              onChange={setVehicleType}
+            />
+          </View>
+
+          {byRoad ? (
+            <TextField
+              label={tr('compliance:ewb.vehicleNumber')}
+              required
+              value={vehicleNumber}
+              onChangeText={(v) => setVehicleNumber(normalizeVehicleNumber(v))}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              error={errors.vehicleNumber}
+              placeholder="MH12AB1234"
+            />
+          ) : (
+            <>
+              <TextField
+                label={tr('compliance:ewb.transportDocNumber')}
+                required
+                value={transportDocNumber}
+                onChangeText={setTransportDocNumber}
+                error={errors.transportDocNumber}
+                placeholder={tr('compliance:ewb.transportDocHint')}
+              />
+              <DateField
+                label={tr('compliance:ewb.transportDocDate')}
+                required
+                value={transportDocDate}
+                onChange={setTransportDocDate}
+                error={errors.transportDocDate}
+              />
+            </>
+          )}
+
+          <TextField
+            label={tr('compliance:ewb.approxDistance')}
+            required
+            value={distanceKm}
+            onChangeText={setDistanceKm}
+            keyboardType="number-pad"
+            suffix="km"
+            error={errors.distanceKm}
+          />
+
+          {/* The rule, made visible. */}
+          <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
+            <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="small" weight="600">
+                {preview.days} {preview.days === 1 ? 'day' : 'days'} · valid to{' '}
+                {formatDate(preview.validUpto.slice(0, 10))}
+              </Text>
+              <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+                {vehicleType === 'overDimensional'
+                  ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
+                  : 'One day per 200 km, or part thereof.'}{' '}
+                Validity always runs to midnight.
+              </Text>
+            </View>
+          </Card>
+        </ScrollView>
+
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: t.spacing.lg,
+            paddingBottom: insets.bottom + t.spacing.md,
+            borderTopWidth: 1,
+            borderTopColor: t.c.line,
+            backgroundColor: t.c.paper,
+          }}
+        >
+          <Button
+            title={tr('compliance:ewb.generate')}
+            icon="truck-fast-outline"
+            loading={busy}
+            onPress={submit}
+            fullWidth
+          />
+        </View>
+
+        <SelectSheet
+          visible={subSupplyOpen}
+          onClose={() => setSubSupplyOpen(false)}
+          title={tr('compliance:ewb.subSupplyType')}
+          options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
+            value: key,
+            label: EWAY_SUB_SUPPLY_TYPES[key].label,
+          }))}
+          value={subSupplyType}
+          onSelect={(v) => {
+            setSubSupplyType(v as EwaySubSupplyType);
+            setSubSupplyOpen(false);
+          }}
+          searchable={false}
         />
-      </View>
 
-      <SelectSheet
-        visible={subSupplyOpen}
-        onClose={() => setSubSupplyOpen(false)}
-        title={tr('compliance:ewb.subSupplyType')}
-        options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
-          value: key,
-          label: EWAY_SUB_SUPPLY_TYPES[key].label,
-        }))}
-        value={subSupplyType}
-        onSelect={(v) => {
-          setSubSupplyType(v as EwaySubSupplyType);
-          setSubSupplyOpen(false);
-        }}
-        searchable={false}
-      />
-
-      <SelectSheet
-        visible={transporterOpen}
-        onClose={() => setTransporterOpen(false)}
-        title={tr('compliance:ewb.transporter')}
-        options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
-        value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
-        onSelect={(id) => {
-          const picked = transporters.find((x) => x.id === id);
-          if (picked) {
-            setTransporterId(picked.transporterId);
-            setTransporterName(picked.name);
-          }
-          setTransporterOpen(false);
-        }}
-      />
-      <SelectSheet
-        visible={stateSheet !== null}
-        onClose={() => setStateSheet(null)}
-        title={stateSheet === 'from' ? 'Despatch state' : 'Delivery state'}
-        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
-        value={stateSheet === 'from' ? from.stateCode : to.stateCode}
-        onSelect={(code) => {
-          // A place picked for the previous state no longer belongs.
-          const moved = (p: EwayPlace): EwayPlace => ({
-            ...p,
-            stateCode: code,
-            place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
-          });
-          if (stateSheet === 'from') setFrom(moved(from));
-          else setTo(moved(to));
-          setStateSheet(null);
-        }}
-      />
+        <SelectSheet
+          visible={transporterOpen}
+          onClose={() => setTransporterOpen(false)}
+          title={tr('compliance:ewb.transporter')}
+          options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
+          value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
+          onSelect={(id) => {
+            const picked = transporters.find((x) => x.id === id);
+            if (picked) {
+              setTransporterId(picked.transporterId);
+              setTransporterName(picked.name);
+            }
+            setTransporterOpen(false);
+          }}
+        />
+        <SelectSheet
+          visible={stateSheet !== null}
+          onClose={() => setStateSheet(null)}
+          title={stateSheet === 'from' ? 'Despatch state' : 'Delivery state'}
+          options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+          value={stateSheet === 'from' ? from.stateCode : to.stateCode}
+          onSelect={(code) => {
+            // A place picked for the previous state no longer belongs.
+            const moved = (p: EwayPlace): EwayPlace => ({
+              ...p,
+              stateCode: code,
+              place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
+            });
+            if (stateSheet === 'from') setFrom(moved(from));
+            else setTo(moved(to));
+            setStateSheet(null);
+          }}
+        />
+      </FormContainer>
     </View>
   );
 }

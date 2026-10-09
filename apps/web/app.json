@@ -12,6 +12,7 @@
       "favicon": "./assets/favicon.png",
       "name": "Elixir Books Smart",
       "shortName": "Elixir Books",
+      "description": "Invoicing, purchases, inventory, GST and accounts for small businesses.",
       "themeColor": "#0E121A"
     },
     "plugins": ["expo-router", "expo-localization"],

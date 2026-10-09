@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleProp, View, ViewStyle , Platform } f
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme/ThemeProvider';
+import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success';
@@ -65,7 +66,9 @@ export function Button({
       accessibilityLabel={title}
       onPress={handlePress}
       disabled={isDisabled}
-      style={({ pressed }) => [
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressState;
+        return [
         {
           height: heights[size],
           borderRadius: t.radius.md,
@@ -76,11 +79,13 @@ export function Button({
           alignItems: 'center',
           justifyContent: 'center',
           paddingHorizontal: size === 'sm' ? t.spacing.md : t.spacing.xl,
-          opacity: isDisabled ? 0.45 : pressed ? 0.8 : 1,
+          opacity: isDisabled ? 0.45 : pressed ? 0.8 : hovered ? 0.9 : 1,
           alignSelf: fullWidth ? 'stretch' : 'auto',
         },
+        focusRing(t, focused),
         style,
-      ]}
+      ];
+      }}
     >
       {loading ? (
         <ActivityIndicator color={p.fg} size="small" />

@@ -10,6 +10,8 @@ import { TextField, PickerField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { Text } from '@esmart/ui/components/Text';
+import { FieldRow } from '@esmart/ui/components/Layout';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -22,6 +24,7 @@ export default function BusinessStep() {
   const { t: tr } = useTranslation(['errors', 'onboarding']);
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
+  const desktop = useIsDesktop();
 
   const [typeOpen, setTypeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
@@ -59,7 +62,7 @@ export default function BusinessStep() {
       currentStep={stepIndex('business', draft.plan)}
       onPrimary={next}
     >
-      <View style={{ alignItems: 'center', gap: t.spacing.sm }}>
+      <View style={desktop ? { flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg } : { alignItems: 'center', gap: t.spacing.sm }}>
         <Pressable
           onPress={pickLogo}
           accessibilityRole="button"
@@ -85,11 +88,19 @@ export default function BusinessStep() {
             <MaterialCommunityIcons name="image-plus" size={26} color={t.c.muted} />
           )}
         </Pressable>
-        <Text variant="caption" tone="muted">
-          {draft.logoUri ? tr('onboarding:business.logoSelected') : tr('onboarding:business.logoOptional')}
-        </Text>
+        <View style={{ gap: 2, alignItems: desktop ? 'flex-start' : 'center' }}>
+          {desktop ? (
+            <Text variant="body" weight="600">
+              {tr('onboarding:business.addLogo')}
+            </Text>
+          ) : null}
+          <Text variant="caption" tone="muted">
+            {draft.logoUri ? tr('onboarding:business.logoSelected') : tr('onboarding:business.logoOptional')}
+          </Text>
+        </View>
       </View>
 
+      <FieldRow>
       <TextField
         label={tr('onboarding:business.name')}
         value={draft.name}
@@ -104,6 +115,8 @@ export default function BusinessStep() {
         onChangeText={(v) => set({ legalName: v })}
         placeholder={tr('onboarding:business.legalNamePlaceholder')}
       />
+      </FieldRow>
+      <FieldRow>
       <PickerField label={tr('onboarding:business.type')} value={tr(`onboarding:businessType.${draft.businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
       <PickerField
         label={tr('onboarding:business.plan')}
@@ -116,6 +129,7 @@ export default function BusinessStep() {
             : tr('onboarding:business.planHintSales')
         }
       />
+      </FieldRow>
 
       <TextField
         label={tr('onboarding:business.address')}
@@ -125,6 +139,7 @@ export default function BusinessStep() {
         icon="map-marker-outline"
       />
 
+      <FieldRow>
       <PickerField
         label={tr('onboarding:business.state')}
         value={draft.address.state || undefined}
@@ -154,7 +169,9 @@ export default function BusinessStep() {
           containerStyle={{ flex: 1 }}
         />
       </View>
+      </FieldRow>
 
+      <FieldRow>
       <TextField
         label={tr('onboarding:business.email')}
         value={draft.email}
@@ -174,6 +191,7 @@ export default function BusinessStep() {
         icon="phone-outline"
         error={errors.phone}
       />
+      </FieldRow>
 
       <SelectSheet
         visible={typeOpen}

@@ -14,6 +14,7 @@ import { ComplianceSettings, TransportMode, VehicleType } from '@esmart/core/typ
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency, useComplianceSettings, useComplianceSummary } from '../../../store/selectors';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
@@ -50,7 +51,7 @@ export default function EInvoicingSettings() {
 
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         keyboardShouldPersistTaps="handled"
       >
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>

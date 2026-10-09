@@ -1,28 +1,26 @@
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import AuthLayout from '@esmart/app/screens/(auth)/_layout';
-import { FORM_MAX_WIDTH, useIsDesktop } from '../../src/layout';
+import { useBreakpoint } from '../../src/layout';
+import { AuthBrandPanel } from '../../src/shell/AuthBrandPanel';
 
-/** On a desktop the phone-shaped flow sits in a centred card, not full-bleed. */
+/**
+ * Sign-in on a desktop is a split screen: the brand panel on the left, the
+ * form column on the right (AuthShell lays itself out for this). A window too
+ * narrow for both drops the panel; a phone-width window is the phone flow.
+ */
 export default function WebAuthLayout() {
   const t = useTheme();
-  const desktop = useIsDesktop();
-  if (!desktop) return <AuthLayout />;
+  const breakpoint = useBreakpoint();
+  if (breakpoint === 'phone') return <AuthLayout />;
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.canvas, alignItems: 'center', justifyContent: 'center', padding: t.spacing.xl }}>
-      <View
-        style={{
-          flex: 1,
-          width: '100%',
-          maxWidth: FORM_MAX_WIDTH,
-          maxHeight: 900,
-          borderRadius: t.radius.lg,
-          overflow: 'hidden',
-          backgroundColor: t.c.bg,
-          borderWidth: 1,
-          borderColor: t.c.line,
-        }}
-      >
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.c.paper }}>
+      {breakpoint === 'tablet' ? null : (
+        <View style={{ flex: 11 }}>
+          <AuthBrandPanel />
+        </View>
+      )}
+      <View style={{ flex: 13 }}>
         <AuthLayout />
       </View>
     </View>

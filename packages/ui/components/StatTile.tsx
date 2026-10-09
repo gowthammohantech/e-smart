@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text, TextTone } from './Text';
 import { Money } from '@esmart/core/lib/money';
 import { formatCompactMoney } from '@esmart/core/lib/format';
@@ -76,7 +77,10 @@ export function StatTile({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${display}`}
-      style={({ pressed }) => ({ flex, opacity: pressed ? 0.75 : 1 })}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressState;
+        return [{ flex, borderRadius: t.radius.lg, opacity: pressed ? 0.75 : hovered ? 0.88 : 1 }, focusRing(t, focused)];
+      }}
     >
       {body}
     </Pressable>

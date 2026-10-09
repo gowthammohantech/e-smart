@@ -11,12 +11,14 @@ import {
   Pressable,
   ScrollView,
   StyleProp,
+  StyleSheet,
   View,
   ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 
 type Props = {
@@ -41,7 +43,9 @@ type Props = {
 
 /**
  * Bottom sheet built on the platform Modal so it behaves natively on both
- * platforms without pulling in a gesture library.
+ * platforms without pulling in a gesture library. In a desktop browser it is
+ * a centred dialog instead; react-native-web's Modal closes it on Escape and
+ * keeps focus inside.
  */
 export function Sheet({
   visible,
@@ -59,6 +63,7 @@ export function Sheet({
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const insets = useSafeAreaInsets();
+  const dialog = useIsDesktop();
   // Lazy state rather than a ref, so the animated values are never read
   // during render.
   const [translate] = useState(() => new Animated.Value(600));
@@ -109,101 +114,124 @@ export function Sheet({
   );
   const Body = scroll ? ScrollView : View;
 
+  const panelStyle: StyleProp<ViewStyle> = dialog
+    ? {
+        width: '100%',
+        maxWidth: FORM_MAX_WIDTH,
+        maxHeight,
+        height: fillHeight ? maxHeight : undefined,
+        backgroundColor: t.c.paper,
+        borderRadius: t.radius.xl,
+        borderWidth: t.scheme === 'dark' ? 1 : 0,
+        borderColor: t.c.line,
+        overflow: 'hidden',
+        opacity: fade,
+      }
+    : {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: keyboardHeight,
+        maxHeight,
+        height: fillHeight ? maxHeight : undefined,
+        backgroundColor: t.c.paper,
+        borderTopLeftRadius: t.radius.xl,
+        borderTopRightRadius: t.radius.xl,
+        borderTopWidth: t.scheme === 'dark' ? 1 : 0,
+        borderColor: t.c.line,
+        paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom,
+        transform: [{ translateY: translate }],
+      };
+
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <Animated.View style={{ flex: 1, backgroundColor: t.c.overlay, opacity: fade }}>
         <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel={tr('common:component.close')} accessibilityRole="button" />
       </Animated.View>
 
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: keyboardHeight,
-            maxHeight,
-            height: fillHeight ? maxHeight : undefined,
-            backgroundColor: t.c.paper,
-            borderTopLeftRadius: t.radius.xl,
-            borderTopRightRadius: t.radius.xl,
-            borderTopWidth: t.scheme === 'dark' ? 1 : 0,
-            borderColor: t.c.line,
-            paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom,
-            transform: [{ translateY: translate }],
-          },
-          t.shadow.sheet,
-        ]}
+      <View
+        pointerEvents="box-none"
+        style={
+          dialog
+            ? [StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: t.spacing.xl }]
+            : StyleSheet.absoluteFill
+        }
       >
-        <View style={{ alignItems: 'center', paddingTop: t.spacing.sm }}>
-          <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: t.c.line }} />
-        </View>
-
-        {title ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingHorizontal: t.spacing.lg,
-              paddingTop: t.spacing.md,
-              paddingBottom: t.spacing.sm,
-              gap: t.spacing.md,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text variant="title">{title}</Text>
-              {subtitle ? (
-                <Text variant="small" tone="muted">
-                  {subtitle}
-                </Text>
-              ) : null}
+        <Animated.View style={[panelStyle, t.shadow.sheet]}>
+          {dialog ? (
+            <View style={{ height: t.spacing.sm }} />
+          ) : (
+            <View style={{ alignItems: 'center', paddingTop: t.spacing.sm }}>
+              <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: t.c.line }} />
             </View>
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={tr('common:component.close')}
+          )}
+
+          {title ? (
+            <View
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: t.c.card2,
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: t.spacing.lg,
+                paddingTop: t.spacing.md,
+                paddingBottom: t.spacing.sm,
+                gap: t.spacing.md,
               }}
             >
-              <MaterialCommunityIcons name="close" size={17} color={t.c.muted} />
-            </Pressable>
-          </View>
-        ) : null}
+              <View style={{ flex: 1 }}>
+                <Text variant="title">{title}</Text>
+                {subtitle ? (
+                  <Text variant="small" tone="muted">
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={onClose}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={tr('common:component.close')}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: t.c.card2,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialCommunityIcons name="close" size={17} color={t.c.muted} />
+              </Pressable>
+            </View>
+          ) : null}
 
-        {header}
+          {header}
 
-        <Body
-          style={fillHeight ? { flex: 1 } : scroll ? { flexGrow: 0 } : undefined}
-          contentContainerStyle={
-            scroll ? [{ paddingBottom: t.spacing.lg }, contentStyle] : undefined
-          }
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        >
-          {children}
-        </Body>
-
-        {footer ? (
-          <View
-            style={{
-              padding: t.spacing.lg,
-              borderTopWidth: 1,
-              borderTopColor: t.c.line,
-              backgroundColor: t.c.paper,
-            }}
+          <Body
+            style={fillHeight ? { flex: 1 } : scroll ? { flexGrow: 0 } : undefined}
+            contentContainerStyle={
+              scroll ? [{ paddingBottom: t.spacing.lg }, contentStyle] : undefined
+            }
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
-            {footer}
-          </View>
-        ) : null}
-      </Animated.View>
+            {children}
+          </Body>
+
+          {footer ? (
+            <View
+              style={{
+                padding: t.spacing.lg,
+                borderTopWidth: 1,
+                borderTopColor: t.c.line,
+                backgroundColor: t.c.paper,
+              }}
+            >
+              {footer}
+            </View>
+          ) : null}
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@esmart/ui/components/LixiOrb';
@@ -352,13 +353,17 @@ function Chip({ label, icon, onPress }: { label: string; icon?: string; onPress:
   );
 }
 
+/** Chat bubbles share the row on a phone; on a desktop they stop at a readable line length. */
+const BUBBLE_MAX_WIDTH = 640;
+
 function MyBubble({ text }: { text: string }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   return (
     <View
       style={{
         alignSelf: 'flex-end',
-        maxWidth: '82%',
+        maxWidth: desktop ? BUBBLE_MAX_WIDTH : '82%',
         paddingHorizontal: t.spacing.lg,
         paddingVertical: 10,
         borderRadius: t.radius.xl,
@@ -373,9 +378,10 @@ function MyBubble({ text }: { text: string }) {
 
 function LixiBubble({ reply, onAction }: { reply: LixiReply; onAction: (a: LixiAction) => void }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const toneColor = { good: t.c.good, warn: t.c.warn, bad: t.c.bad } as const;
   return (
-    <View style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'flex-start', maxWidth: '92%' }}>
+    <View style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'flex-start', maxWidth: desktop ? BUBBLE_MAX_WIDTH : '92%' }}>
       <View style={{ marginTop: 2 }}>
         <LixiMark size={26} />
       </View>

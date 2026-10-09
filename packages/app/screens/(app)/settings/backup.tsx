@@ -8,7 +8,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
+import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -24,6 +24,7 @@ import {
   useStockMovements,
 } from '../../../store/selectors';
 import { formatDateTime } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function BackupExport() {
   const t = useTheme();
@@ -99,7 +100,7 @@ export default function BackupExport() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.backupAndExport') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="database-export-outline" size={21} color={t.c.primary} />
@@ -151,21 +152,7 @@ export default function BackupExport() {
         </Card>
       </ScrollView>
 
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button title={tr('settings:backup.export')} icon="database-export-outline" onPress={() => setConfirmExport(true)} loading={busy} fullWidth size="lg" />
-      </View>
+      <PrimaryActionBar title={tr('settings:backup.export')} icon="database-export-outline" onPress={() => setConfirmExport(true)} loading={busy} />
 
       <ConfirmDialog
         visible={confirmExport}

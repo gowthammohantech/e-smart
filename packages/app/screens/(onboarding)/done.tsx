@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -25,6 +26,7 @@ export default function Done() {
   const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { draft, reset } = useOnboardingStore();
   const [busy, setBusy] = useState(false);
 
@@ -108,9 +110,12 @@ export default function Done() {
         paddingTop: insets.top + t.spacing.xxxl,
         paddingHorizontal: t.spacing.xl,
         paddingBottom: insets.bottom + t.spacing.xl,
+        // A desktop centres the page at a readable width instead of pinning
+        // the buttons to the bottom of a tall window.
+        ...(desktop ? { alignItems: 'center', justifyContent: 'center' } : null),
       }}
     >
-      <View style={{ flex: 1, gap: t.spacing.xxl }}>
+      <View style={desktop ? { width: '100%', maxWidth: 640, gap: t.spacing.xxl } : { flex: 1, gap: t.spacing.xxl }}>
         <View style={{ alignItems: 'center', gap: t.spacing.lg }}>
           <Illustration name="setup-complete" size="hero" />
           <View style={{ gap: 6 }}>
@@ -149,9 +154,24 @@ export default function Done() {
         </View>
       </View>
 
-      <View style={{ gap: t.spacing.md }}>
-        <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth size="lg" />
-        <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} fullWidth />
+      <View
+        style={
+          desktop
+            ? { width: '100%', maxWidth: 640, flexDirection: 'row', justifyContent: 'flex-end', gap: t.spacing.md, marginTop: t.spacing.xxl }
+            : { gap: t.spacing.md }
+        }
+      >
+        {desktop ? (
+          <>
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} />
+            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} iconRight="arrow-right" />
+          </>
+        ) : (
+          <>
+            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth size="lg" />
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} fullWidth />
+          </>
+        )}
       </View>
     </View>
   );

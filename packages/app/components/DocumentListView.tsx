@@ -11,14 +11,19 @@ import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Button } from '@esmart/ui/components/Button';
-import { Badge } from '@esmart/ui/components/Badge';
+import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
+import { Avatar } from '@esmart/ui/components/Avatar';
+import { Cell, DataTable, type Column } from '@esmart/ui/components/DataTable';
+import { FilterMenu } from '@esmart/ui/components/FilterMenu';
+import { outstandingOf } from '@esmart/core/domain/receivables';
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
-import { STATUS_TONE } from '@esmart/core/domain/documentStates';
+import { PURCHASE_KINDS, STATUS_TONE } from '@esmart/core/domain/documentStates';
 import { dateRangeLabel, documentKindLabel, statusLabel } from '@esmart/core/labels';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, inRange, resolveRange } from '@esmart/core/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money, sum, zero } from '@esmart/core/lib/money';
-import { useBaseCurrency, useParties } from '../store/selectors';
+import { useBaseCurrency, useParties, usePayments } from '../store/selectors';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export type DocumentListFilters = {
   query: string;
@@ -61,6 +66,8 @@ export function DocumentListView({
 
   const [filters, setFilters] = useState<DocumentListFilters>(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+  const desktop = useIsDesktop();
+  const payments = usePayments();
 
   const nameOf = useCallback(
     (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown',
@@ -108,6 +115,159 @@ export function DocumentListView({
       ...f,
       statuses: f.statuses.includes(s) ? f.statuses.filter((x) => x !== s) : [...f.statuses, s],
     }));
+
+  // A desktop shows the list as a sortable table under a one-row filter bar.
+  if (desktop) {
+    const purchase = PURCHASE_KINDS.includes(kind);
+    const owes = kind === 'invoice' || kind === 'purchaseBill';
+    const columns: Column<BusinessDocument>[] = [
+      { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number}</Cell>, sortValue: (d) => d.number },
+      {
+        key: 'party',
+        header: purchase ? tr('common:table.supplier') : tr('common:table.customer'),
+        flex: 2,
+        render: (d) => (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
+            <Avatar name={nameOf(d.partyId)} size={26} />
+            <Cell>{nameOf(d.partyId)}</Cell>
+          </View>
+        ),
+        sortValue: (d) => nameOf(d.partyId),
+      },
+      { key: 'date', header: tr('common:table.date'), width: 120, render: (d) => <Cell tone="muted">{formatDate(d.date, 'dd MMM yyyy')}</Cell>, sortValue: (d) => d.date },
+      {
+        key: 'due',
+        header: tr('common:table.due'),
+        width: 120,
+        secondary: true,
+        render: (d) => <Cell tone="muted">{d.dueDate || d.validUntil ? formatDate((d.dueDate ?? d.validUntil) as string, 'dd MMM yyyy') : '—'}</Cell>,
+        sortValue: (d) => d.dueDate ?? d.validUntil ?? '',
+      },
+      { key: 'status', header: tr('common:table.status'), width: 130, render: (d) => <StatusBadge status={d.status} size="sm" />, sortValue: (d) => d.status },
+      {
+        key: 'amount',
+        header: tr('common:table.amount'),
+        width: 150,
+        align: 'right',
+        render: (d) => <Cell weight="600" mono>{formatMoney(d.totals.grandTotal)}</Cell>,
+        sortValue: (d) => d.totals.grandTotal.minor * (d.exchangeRate || 1),
+      },
+      ...(owes
+        ? [
+            {
+              key: 'outstanding',
+              header: tr('common:table.outstanding'),
+              width: 150,
+              secondary: true,
+              align: 'right' as const,
+              render: (d: BusinessDocument) => {
+                if (['draft', 'cancelled'].includes(d.status)) return <Cell tone="muted">—</Cell>;
+                const due = outstandingOf(d, payments);
+                return (
+                  <Cell tone={due.minor > 0 ? 'default' : 'muted'} mono>
+                    {formatMoney(due)}
+                  </Cell>
+                );
+              },
+              sortValue: (d: BusinessDocument) => outstandingOf(d, payments).minor,
+            },
+          ]
+        : []),
+    ];
+
+    return (
+      <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
+          <View style={{ width: 300 }}>
+            <SearchBar
+              value={filters.query}
+              onChangeText={(query) => setFilters((f) => ({ ...f, query }))}
+              placeholder={tr('common:documentList.search', { kind: documentKindLabel(tr, kind, 2) })}
+            />
+          </View>
+          <FilterMenu
+            icon="calendar-range"
+            label={tr('common:filters.dateRange')}
+            value={filters.range}
+            neutralValue={'all' as DateRangePreset}
+            options={(['all', ...DATE_RANGE_PRESET_KEYS.filter((k) => k !== 'all')] as DateRangePreset[]).map((p) => ({ value: p, label: dateRangeLabel(tr, p) }))}
+            onChange={(range) => setFilters((f) => ({ ...f, range }))}
+          />
+          {availableStatuses.map((st) => {
+            const active = filters.statuses.includes(st);
+            return (
+              <Pressable
+                key={st}
+                onPress={() => toggleStatus(st)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={tr('common:documentList.filterByStatus', { status: statusLabel(tr, st) })}
+                style={{
+                  height: 36,
+                  justifyContent: 'center',
+                  paddingHorizontal: t.spacing.md,
+                  borderRadius: t.radius.pill,
+                  backgroundColor: active ? t.c.primary : t.c.paper,
+                  borderWidth: active ? 0 : 1,
+                  borderColor: t.c.line,
+                }}
+              >
+                <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
+                  {statusLabel(tr, st)} · {documents.filter((d) => d.status === st).length}
+                </Text>
+              </Pressable>
+            );
+          })}
+          {activeFilterCount || filters.query ? (
+            <Text variant="caption" tone="primary" weight="600" accessibilityRole="button" onPress={() => setFilters(DEFAULT_FILTERS)}>
+              {tr('common:table.clear')}
+            </Text>
+          ) : null}
+        </View>
+
+        {headerExtra}
+
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={(d) => d.id}
+          onRowPress={(d) => router.push(routeFor(d) as never)}
+          rowLabel={(d) => `${d.number}, ${nameOf(d.partyId)}, ${formatMoney(d.totals.grandTotal)}`}
+          footer={{
+            number: (
+              <Cell tone="muted">
+                {tr('common:documentList.count', { count: filtered.length, kind: documentKindLabel(tr, kind, filtered.length) })}
+              </Cell>
+            ),
+            amount: (
+              <Cell weight="700" mono>
+                {formatMoney(total)}
+              </Cell>
+            ),
+          }}
+          empty={
+            <EmptyState
+              illustration="no-documents"
+              icon="file-search-outline"
+              title={
+                documents.length === 0
+                  ? tr('common:documentList.emptyNoneTitle', { kind: documentKindLabel(tr, kind, 2) })
+                  : tr('common:documentList.emptyNoMatchTitle')
+              }
+              message={
+                documents.length === 0
+                  ? tr('common:documentList.emptyNoneMessage', { kind: documentKindLabel(tr, kind, 1) })
+                  : tr('common:documentList.emptyNoMatchMessage')
+              }
+              actionLabel={documents.length === 0 ? emptyAction : tr('common:documentList.clearFilters')}
+              onAction={documents.length === 0 ? onEmptyAction : () => setFilters(DEFAULT_FILTERS)}
+              compact
+            />
+          }
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -189,7 +349,7 @@ export function DocumentListView({
 
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <Card padded={false}>
           {filtered.length === 0 ? (

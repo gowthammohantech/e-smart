@@ -7,6 +7,7 @@ import { PickerField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
+import { FieldRow } from '@esmart/ui/components/Layout';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES } from '@esmart/core/data/masters';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
@@ -40,6 +41,7 @@ export default function CountryStep() {
         icon="earth"
         required
       />
+      <FieldRow>
       <PickerField
         label={tr('onboarding:country.baseCurrency')}
         value={currency ? `${currency.name} (${currency.symbol})` : undefined}
@@ -54,6 +56,7 @@ export default function CountryStep() {
         onPress={() => setFyOpen(true)}
         icon="calendar-range"
       />
+      </FieldRow>
 
       <Card variant="flat" style={{ gap: t.spacing.sm }}>
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>

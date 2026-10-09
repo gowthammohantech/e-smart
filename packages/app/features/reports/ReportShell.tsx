@@ -14,6 +14,7 @@ import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } fro
 import { dateRangeLabel } from '@esmart/core/labels';
 import { useActiveCompany, useBranches, useParties } from '../../store/selectors';
 import { ReportFilters } from '@esmart/core/domain/reports';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export type ReportScope = {
   filters: ReportFilters;
@@ -120,7 +121,7 @@ export function ReportShell({
         </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: 4 }}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>

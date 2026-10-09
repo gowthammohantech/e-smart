@@ -14,18 +14,10 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useAppStore } from '../../store/appStore';
 import { useNotifications } from '../../store/selectors';
-import { NotificationKind } from '@esmart/core/types';
+import { NOTIFICATION_META, notificationRoute } from '../../features/notifications/notificationMeta';
 import { formatRelative } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const META: Record<NotificationKind, { icon: keyof typeof MaterialCommunityIcons.glyphMap; tone: 'info' | 'success' | 'warning' | 'danger' | 'neutral' }> = {
-  invoiceSent: { icon: 'send-outline', tone: 'info' },
-  paymentReceived: { icon: 'cash-check', tone: 'success' },
-  invoiceOverdue: { icon: 'alert-circle-outline', tone: 'danger' },
-  lowStock: { icon: 'package-variant', tone: 'warning' },
-  compliance: { icon: 'shield-check-outline', tone: 'info' },
-  syncFailure: { icon: 'cloud-alert', tone: 'danger' },
-  system: { icon: 'information-outline', tone: 'neutral' },
-};
 
 export default function Notifications() {
   const t = useTheme();
@@ -47,16 +39,6 @@ export default function Notifications() {
   );
   const unread = notifications.filter((n) => !n.read).length;
 
-  const routeFor = (entityType?: string, entityId?: string): string | null => {
-    if (!entityType) return null;
-    if (entityType === 'invoice' && entityId) return `/(app)/sales/invoices/${entityId}`;
-    if (entityType === 'payment' && entityId) return `/(app)/payments/${entityId}`;
-    if (entityType === 'inventory') return '/(app)/inventory/low-stock';
-    if (entityType === 'ewayBill') return entityId ? `/(app)/compliance/eway/${entityId}` : '/(app)/compliance';
-    if (entityType === 'compliance') return '/(app)/compliance';
-    if (entityType === 'system') return '/(app)/reports/tax-summary';
-    return null;
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -84,7 +66,7 @@ export default function Notifications() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {rows.length === 0 ? (
           <Card padded={false}>
             <EmptyState
@@ -97,8 +79,8 @@ export default function Notifications() {
         ) : (
           <Card padded={false}>
             {rows.map((n, i) => {
-              const meta = META[n.kind];
-              const route = routeFor(n.entityType, n.entityId);
+              const meta = NOTIFICATION_META[n.kind];
+              const route = notificationRoute(n.entityType, n.entityId);
               return (
                 <Pressable
                   key={n.id}

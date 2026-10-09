@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
+import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { TextField } from '@esmart/ui/components/Field';
 import { ListRow } from '@esmart/ui/components/ListRow';
@@ -15,13 +15,13 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail, validPhone } from '@esmart/core/lib/validators';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function Profile() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const router = useRouter();
   const toast = useToast();
-  const insets = useSafeAreaInsets();
 
   const user = useCurrentUser();
   const companies = useCompanies();
@@ -54,7 +54,7 @@ export default function Profile() {
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xl }}>
           <Avatar name={user?.name ?? 'You'} size={72} color={user?.avatarColor} />
@@ -87,17 +87,9 @@ export default function Profile() {
         </Card>
       </ScrollView>
 
-      <View
-        style={{
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
+      <FormActions>
         <Button title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
-      </View>
+      </FormActions>
     </KeyboardAvoidingView>
   );
 }

@@ -8,6 +8,10 @@ import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Stepper } from './Stepper';
+import { SHOW_SCROLLBAR, useIsDesktop } from '../theme/breakpoints';
+
+/** The step content column on a desktop browser. */
+export const WIZARD_CONTENT_WIDTH = 760;
 
 export function WizardShell({
   title,
@@ -39,6 +43,65 @@ export function WizardShell({
   const { t: tr } = useTranslation(['common', 'onboarding']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
+
+  // On a desktop the web layout draws the step rail beside this, so the
+  // Stepper and round back button go; actions sit in a footer bar under the
+  // form, with Back on the left and the way forward on the right.
+  if (desktop) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingVertical: t.spacing.xxxl, paddingHorizontal: t.spacing.xxxl, alignItems: 'center' }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
+          <View style={{ width: '100%', maxWidth: WIZARD_CONTENT_WIDTH, gap: t.spacing.xl }}>
+            <View style={{ gap: t.spacing.sm }}>
+              {steps && currentStep !== undefined ? (
+                <Text variant="caption" tone="primary" weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  {tr('onboarding:stepProgress', {
+                    current: currentStep + 1,
+                    total: steps.length,
+                    step: tr(`onboarding:step.${steps[currentStep]}` as 'onboarding:step.tax'),
+                  })}
+                </Text>
+              ) : null}
+              <Text variant="h1">{title}</Text>
+              {subtitle ? (
+                <Text variant="body" tone="muted" style={{ lineHeight: 22 }}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+            <View style={{ gap: t.spacing.lg }}>{children}</View>
+          </View>
+        </ScrollView>
+
+        <View
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: t.c.line,
+            backgroundColor: t.c.paper,
+            paddingVertical: t.spacing.lg,
+            paddingHorizontal: t.spacing.xxxl,
+            alignItems: 'center',
+          }}
+        >
+          <View style={{ width: '100%', maxWidth: WIZARD_CONTENT_WIDTH, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+            {router.canGoBack() ? (
+              <Button title={tr('common:component.goBack')} variant="ghost" icon="arrow-left" onPress={() => router.back()} />
+            ) : null}
+            <View style={{ flex: 1 }} />
+            {onSkip ? <Button title={tr('common:component.skip')} variant="secondary" onPress={onSkip} /> : null}
+            {secondaryLabel && onSecondary ? <Button title={secondaryLabel} variant="ghost" onPress={onSecondary} /> : null}
+            <Button title={primaryLabel} onPress={onPrimary} disabled={primaryDisabled} iconRight="arrow-right" />
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -100,7 +163,7 @@ export function WizardShell({
           gap: t.spacing.lg,
         }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         {children}
       </ScrollView>

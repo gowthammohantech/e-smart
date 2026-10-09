@@ -4,6 +4,7 @@ import { Pressable, ScrollView, SectionList, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { AppHeader } from '../../../components/AppHeader';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -17,12 +18,13 @@ import { useBaseCurrency, useDocuments, useHasModule, useParties, usePayments } 
 import { buildOutstanding } from '@esmart/core/domain/receivables';
 import { money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 type Tab = 'customer' | 'supplier';
 
 export default function ContactsTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts']);
+  const { t: tr } = useTranslation(['contacts', 'common']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -31,6 +33,7 @@ export default function ContactsTab() {
   // Suppliers belong to buying; a Sales-plan company only sees customers.
   const tab: Tab = hasSuppliers ? pickedTab : 'customer';
   const [query, setQuery] = useState('');
+  const desktop = useIsDesktop();
 
   const parties = useParties(tab);
   const documents = useDocuments(tab === 'customer' ? 'invoice' : 'purchaseBill');
@@ -76,8 +79,15 @@ export default function ContactsTab() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <AppHeader title={hasSuppliers ? 'Contacts' : 'Customers'} subtitle={hasSuppliers ? 'Customers and suppliers' : 'Who you sell to'} />
 
-      <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md, paddingBottom: t.spacing.md }}>
+      <View
+        style={
+          desktop
+            ? { paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }
+            : { paddingHorizontal: t.spacing.lg, gap: t.spacing.md, paddingBottom: t.spacing.md }
+        }
+      >
         {hasSuppliers ? (
+          <View style={desktop ? { width: 260 } : undefined}>
           <Segmented
             options={[
               { value: 'customer', label: 'Customers' },
@@ -86,9 +96,12 @@ export default function ContactsTab() {
             value={tab}
             onChange={(v) => setTab(v as Tab)}
           />
+          </View>
         ) : null}
-        <SearchBar value={query} onChangeText={setQuery} placeholder={`Search ${tab === 'customer' ? 'customers' : 'suppliers'}`} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <View style={desktop ? { width: 300 } : undefined}>
+          <SearchBar value={query} onChangeText={setQuery} placeholder={`Search ${tab === 'customer' ? 'customers' : 'suppliers'}`} />
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
           <Text variant="caption" tone="muted">
             {filtered.length} {tab === 'customer' ? 'customers' : 'suppliers'}
           </Text>
@@ -98,7 +111,65 @@ export default function ContactsTab() {
         </View>
       </View>
 
-      {sections.length === 0 ? (
+      {desktop ? (
+        <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg }}>
+          <DataTable
+            columns={[
+              {
+                key: 'name',
+                header: tr('common:table.name'),
+                flex: 2,
+                render: (p) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
+                    <Avatar name={p.name} size={28} />
+                    <Cell weight="600">{p.name}</Cell>
+                    {p.status === 'inactive' ? <Badge label={tr('contacts:hub.inactive')} tone="neutral" size="sm" /> : null}
+                    {p.currency !== baseCurrency ? <Badge label={p.currency} tone="info" size="sm" /> : null}
+                  </View>
+                ),
+                sortValue: (p) => p.name,
+              },
+              { key: 'code', header: tr('common:table.code'), width: 110, render: (p) => <Cell tone="muted">{p.code}</Cell>, sortValue: (p) => p.code },
+              { key: 'taxId', secondary: true, header: tr('common:table.taxId'), width: 180, render: (p) => <Cell tone="muted">{p.taxId || '—'}</Cell> },
+              { key: 'phone', header: tr('common:table.phone'), width: 150, render: (p) => <Cell tone="muted">{p.phone || '—'}</Cell> },
+              { key: 'email', secondary: true, header: tr('common:table.email'), flex: 1.5, render: (p) => <Cell tone="muted">{p.email || '—'}</Cell> },
+              {
+                key: 'outstanding',
+                header: tr('common:table.outstanding'),
+                width: 150,
+                align: 'right',
+                render: (p) => {
+                  const due = outstandingByParty[p.id] ?? 0;
+                  return due > 0 ? (
+                    <Cell weight="700" tone={tab === 'customer' ? 'warn' : 'bad'} mono>
+                      {formatMoney(money(due, baseCurrency))}
+                    </Cell>
+                  ) : (
+                    <Cell tone="muted">{tr('contacts:hub.settled')}</Cell>
+                  );
+                },
+                sortValue: (p) => outstandingByParty[p.id] ?? 0,
+              },
+            ]}
+            rows={filtered}
+            rowKey={(p) => p.id}
+            initialSort={{ key: 'name', dir: 'asc' }}
+            onRowPress={(p) =>
+              router.push(tab === 'customer' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`)
+            }
+            rowLabel={(p) => p.name}
+            empty={
+              <EmptyState
+                illustration="no-contacts"
+                icon="account-group-outline"
+                title={parties.length === 0 ? `No ${tab === 'customer' ? 'customers' : 'suppliers'} yet` : 'No matches'}
+                message={parties.length === 0 ? 'Add one now, or they get created as you invoice.' : 'Try a different search term.'}
+                compact
+              />
+            }
+          />
+        </View>
+      ) : sections.length === 0 ? (
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>
           <Card padded={false}>
             <EmptyState
@@ -125,7 +196,7 @@ export default function ContactsTab() {
           keyExtractor={(p) => p.id}
           contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
           stickySectionHeadersEnabled={false}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
           renderSectionHeader={({ section }) => (
             <Text variant="caption" tone="muted" weight="700" style={{ paddingVertical: t.spacing.sm }}>
               {section.title}

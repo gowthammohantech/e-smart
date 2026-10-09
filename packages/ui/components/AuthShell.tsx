@@ -7,6 +7,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { BrandLogo } from './BrandLogo';
+import { SHOW_SCROLLBAR, useBreakpoint } from '../theme/breakpoints';
+import type { WebPressState } from '../theme/interaction';
+
+/** The sign-in form column on a desktop browser. */
+export const AUTH_FORM_WIDTH = 400;
 
 export function AuthShell({
   title,
@@ -23,6 +28,58 @@ export function AuthShell({
   const { t: tr } = useTranslation(['common']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const breakpoint = useBreakpoint();
+
+  // A desktop browser shows this beside the brand panel: a centred form
+  // column with a text back link, and no phone safe-area padding. The logo is
+  // left to the panel unless the window is too narrow to show it.
+  if (breakpoint !== 'phone') {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: t.c.paper }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: t.spacing.xxxl }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={{ width: '100%', maxWidth: AUTH_FORM_WIDTH, gap: t.spacing.xl }}>
+          {!hideBack && router.canGoBack() ? (
+            <Pressable
+              onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel={tr('common:component.goBack')}
+              style={(state) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                alignSelf: 'flex-start',
+                opacity: (state as WebPressState).hovered ? 0.7 : 1,
+              })}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={16} color={t.c.muted} />
+              <Text variant="small" tone="muted" weight="600">
+                {tr('common:component.goBack')}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <View style={{ gap: t.spacing.sm }}>
+            {breakpoint === 'tablet' ? (
+              <View style={{ marginBottom: t.spacing.md }}>
+                <BrandLogo height={36} />
+              </View>
+            ) : null}
+            <Text variant="h1">{title}</Text>
+            {subtitle ? (
+              <Text variant="body" tone="muted" style={{ lineHeight: 22 }}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={{ gap: t.spacing.lg }}>{children}</View>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -37,7 +94,7 @@ export function AuthShell({
           gap: t.spacing.xl,
         }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         {!hideBack && router.canGoBack() ? (
           <Pressable

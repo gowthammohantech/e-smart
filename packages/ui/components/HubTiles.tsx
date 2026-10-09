@@ -3,6 +3,8 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useBreakpoint } from '../theme/breakpoints';
+import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 
 export type HubTile = {
@@ -17,6 +19,12 @@ export type HubTile = {
 export function HubTiles({ tiles }: { tiles: HubTile[] }) {
   const t = useTheme();
   const router = useRouter();
+  const breakpoint = useBreakpoint();
+  // Two across on a phone, more as a desktop window widens. Empty fillers
+  // complete the last row so a lone tile doesn't stretch across it.
+  const columns = breakpoint === 'wide' ? 4 : breakpoint === 'phone' ? 2 : 3;
+  const tileWidth = columns === 2 ? '47.5%' : columns === 3 ? '30%' : '22%';
+  const fillers = (columns - (tiles.length % columns)) % columns;
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md }}>
@@ -26,17 +34,21 @@ export function HubTiles({ tiles }: { tiles: HubTile[] }) {
           onPress={() => router.push(tile.route as never)}
           accessibilityRole="button"
           accessibilityLabel={`${tile.label}${tile.count !== undefined ? `, ${tile.count}` : ''}`}
-          style={({ pressed }) => ({
-            width: '47.5%',
+          style={(state) => {
+            const { pressed, hovered, focused } = state as WebPressState;
+            return {
+            width: tileWidth,
             flexGrow: 1,
-            backgroundColor: t.c.card,
+            backgroundColor: hovered ? t.c.card2 : t.c.card,
             borderRadius: t.radius.lg,
             borderWidth: t.scheme === 'dark' ? 1 : 0,
             borderColor: t.c.line,
             padding: t.spacing.lg,
             gap: t.spacing.md,
             opacity: pressed ? 0.75 : 1,
-          })}
+            ...focusRing(t, focused),
+            };
+          }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View
@@ -66,6 +78,9 @@ export function HubTiles({ tiles }: { tiles: HubTile[] }) {
           </Text>
         </Pressable>
       ))}
+      {breakpoint === 'phone'
+        ? null
+        : Array.from({ length: fillers }, (_, i) => <View key={`filler-${i}`} style={{ width: tileWidth, flexGrow: 1 }} />)}
     </View>
   );
 }

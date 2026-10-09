@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { FormContainer } from '@esmart/ui/components/Layout';
 import { Button } from '@esmart/ui/components/Button';
+import { FormActions } from '@esmart/ui/components/ActionBar';
 import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -17,13 +18,13 @@ import { nowISO } from '@esmart/core/lib/date';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory']);
   const router = useRouter();
   const toast = useToast();
-  const insets = useSafeAreaInsets();
 
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
@@ -97,131 +98,125 @@ export function ItemForm({ item }: { item?: Item }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Segmented
-          options={[
-            { value: 'goods', label: 'Product' },
-            { value: 'service', label: 'Service' },
-          ]}
-          value={type}
-          onChange={(v) => {
-            setType(v as ItemType);
-            if (v === 'service') {
-              setTrackInventory(false);
-              setUnit('NOS');
-            }
-          }}
+      <FormContainer>
+        <ScrollView
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
+          <Segmented
+            options={[
+              { value: 'goods', label: 'Product' },
+              { value: 'service', label: 'Service' },
+            ]}
+            value={type}
+            onChange={(v) => {
+              setType(v as ItemType);
+              if (v === 'service') {
+                setTrackInventory(false);
+                setUnit('NOS');
+              }
+            }}
+          />
+
+          <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
+          <TextField
+            label={tr('inventory:form.sku')}
+            value={sku}
+            onChangeText={(v) => setSku(v.toUpperCase())}
+            placeholder={tr('inventory:form.skuHint')}
+            autoCapitalize="characters"
+            icon="barcode"
+            error={errors.sku}
+          />
+          <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
+
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
+            <AmountField label={tr('inventory:form.purchasePrice')} value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
+          </View>
+
+          <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" disabled={type === 'service'} hint={type === 'service' ? tr('inventory:form.serviceUnitHint') : undefined} />
+          <PickerField
+            label={tr('inventory:form.taxRate')}
+            value={category ? `${category.name} (${formatPercent(category.rate)})` : 'Select'}
+            onPress={() => setTaxOpen(true)}
+            icon="percent-outline"
+          />
+          <TextField
+            label={type === 'goods' ? 'HSN code' : 'SAC code'}
+            value={hsnCode}
+            onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
+            placeholder={type === 'goods' ? '84821011' : '998719'}
+            keyboardType="number-pad"
+            icon="numeric"
+            hint={tr('inventory:form.hsnHint')}
+            error={errors.hsn}
+            required={hsnRequired}
+          />
+
+          {type === 'goods' ? (
+            <>
+              <TextField label={tr('inventory:form.barcode')} value={barcode} onChangeText={setBarcode} placeholder={tr('inventory:form.barcodePlaceholder')} icon="barcode-scan" />
+              {hasInventory ? (
+              <SwitchField
+                label={tr('inventory:form.trackStock')}
+                description={tr('inventory:form.trackStockHintFull')}
+                value={trackInventory}
+                onValueChange={setTrackInventory}
+              />
+              ) : null}
+              {trackInventory && hasInventory ? (
+                <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                  <TextField
+                    label={tr('inventory:form.openingStock')}
+                    value={openingStock}
+                    onChangeText={(v) => setOpeningStock(v.replace(/[^0-9.]/g, ''))}
+                    placeholder="0"
+                    keyboardType="decimal-pad"
+                    containerStyle={{ flex: 1 }}
+                    editable={!item}
+                    hint={item ? 'Use a stock adjustment to change this.' : undefined}
+                  />
+                  <TextField
+                    label={tr('inventory:form.reorderLevel')}
+                    value={reorderLevel}
+                    onChangeText={(v) => setReorderLevel(v.replace(/[^0-9.]/g, ''))}
+                    placeholder="0"
+                    keyboardType="decimal-pad"
+                    containerStyle={{ flex: 1 }}
+                    hint={tr('inventory:form.reorderHint')}
+                  />
+                </View>
+              ) : null}
+            </>
+          ) : null}
+
+          <SwitchField label={tr('inventory:form.active')} description={tr('inventory:form.activeHint')} value={active} onValueChange={setActive} />
+        </ScrollView>
+
+        <FormActions>
+          <Button title={item ? 'Save changes' : 'Add item'} onPress={save} fullWidth size="lg" />
+        </FormActions>
+
+        <SelectSheet
+          visible={unitOpen}
+          onClose={() => setUnitOpen(false)}
+          title={tr('inventory:form.unit')}
+          options={unitsFor(type).map((u) => ({ value: u.code, label: u.name, trailing: u.code }))}
+          value={unit}
+          onSelect={setUnit}
         />
-
-        <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
-        <TextField
-          label={tr('inventory:form.sku')}
-          value={sku}
-          onChangeText={(v) => setSku(v.toUpperCase())}
-          placeholder={tr('inventory:form.skuHint')}
-          autoCapitalize="characters"
-          icon="barcode"
-          error={errors.sku}
+        <SelectSheet
+          visible={taxOpen}
+          onClose={() => setTaxOpen(false)}
+          title={tr('inventory:form.taxRate')}
+          options={taxCategories.map((c) => ({ value: c.id, label: c.name, description: c.description, trailing: formatPercent(c.rate) }))}
+          value={taxCategoryId}
+          onSelect={setTaxCategoryId}
+          searchable={false}
         />
-        <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
-
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
-          <AmountField label={tr('inventory:form.purchasePrice')} value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
-        </View>
-
-        <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" disabled={type === 'service'} hint={type === 'service' ? tr('inventory:form.serviceUnitHint') : undefined} />
-        <PickerField
-          label={tr('inventory:form.taxRate')}
-          value={category ? `${category.name} (${formatPercent(category.rate)})` : 'Select'}
-          onPress={() => setTaxOpen(true)}
-          icon="percent-outline"
-        />
-        <TextField
-          label={type === 'goods' ? 'HSN code' : 'SAC code'}
-          value={hsnCode}
-          onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
-          placeholder={type === 'goods' ? '84821011' : '998719'}
-          keyboardType="number-pad"
-          icon="numeric"
-          hint={tr('inventory:form.hsnHint')}
-          error={errors.hsn}
-          required={hsnRequired}
-        />
-
-        {type === 'goods' ? (
-          <>
-            <TextField label={tr('inventory:form.barcode')} value={barcode} onChangeText={setBarcode} placeholder={tr('inventory:form.barcodePlaceholder')} icon="barcode-scan" />
-            {hasInventory ? (
-            <SwitchField
-              label={tr('inventory:form.trackStock')}
-              description={tr('inventory:form.trackStockHintFull')}
-              value={trackInventory}
-              onValueChange={setTrackInventory}
-            />
-            ) : null}
-            {trackInventory && hasInventory ? (
-              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                <TextField
-                  label={tr('inventory:form.openingStock')}
-                  value={openingStock}
-                  onChangeText={(v) => setOpeningStock(v.replace(/[^0-9.]/g, ''))}
-                  placeholder="0"
-                  keyboardType="decimal-pad"
-                  containerStyle={{ flex: 1 }}
-                  editable={!item}
-                  hint={item ? 'Use a stock adjustment to change this.' : undefined}
-                />
-                <TextField
-                  label={tr('inventory:form.reorderLevel')}
-                  value={reorderLevel}
-                  onChangeText={(v) => setReorderLevel(v.replace(/[^0-9.]/g, ''))}
-                  placeholder="0"
-                  keyboardType="decimal-pad"
-                  containerStyle={{ flex: 1 }}
-                  hint={tr('inventory:form.reorderHint')}
-                />
-              </View>
-            ) : null}
-          </>
-        ) : null}
-
-        <SwitchField label={tr('inventory:form.active')} description={tr('inventory:form.activeHint')} value={active} onValueChange={setActive} />
-      </ScrollView>
-
-      <View
-        style={{
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button title={item ? 'Save changes' : 'Add item'} onPress={save} fullWidth size="lg" />
-      </View>
-
-      <SelectSheet
-        visible={unitOpen}
-        onClose={() => setUnitOpen(false)}
-        title={tr('inventory:form.unit')}
-        options={unitsFor(type).map((u) => ({ value: u.code, label: u.name, trailing: u.code }))}
-        value={unit}
-        onSelect={setUnit}
-      />
-      <SelectSheet
-        visible={taxOpen}
-        onClose={() => setTaxOpen(false)}
-        title={tr('inventory:form.taxRate')}
-        options={taxCategories.map((c) => ({ value: c.id, label: c.name, description: c.description, trailing: formatPercent(c.rate) }))}
-        value={taxCategoryId}
-        onSelect={setTaxCategoryId}
-        searchable={false}
-      />
+      </FormContainer>
     </KeyboardAvoidingView>
   );
 }

@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -55,6 +56,7 @@ import {
   useDocumentDraft,
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -88,6 +90,7 @@ export function DocumentEditor({
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -407,6 +410,7 @@ export function DocumentEditor({
         </Card>
       </Pressable>
 
+      <FieldRow>
       <DateField
         label={tr('common:documentEditor.dateLabel', { kind: kindName })}
         value={draft.date}
@@ -430,7 +434,9 @@ export function DocumentEditor({
           onChange={(validUntil) => patch({ validUntil })}
         />
       ) : null}
+      </FieldRow>
 
+      <FieldRow>
       {isPurchase ? (
         <TextField
           label={tr('sales:editor.supplierDocNumber')}
@@ -448,7 +454,9 @@ export function DocumentEditor({
         placeholder={tr('sales:editor.referencePlaceholder')}
         icon="link-variant"
       />
+      </FieldRow>
 
+      <FieldRow>
       {branches.length > 1 ? (
         <PickerField label={tr('sales:editor.branch')} value={branch?.name} onPress={() => setBranchOpen(true)} icon="warehouse" />
       ) : null}
@@ -488,6 +496,7 @@ export function DocumentEditor({
           icon="cash-multiple"
         />
       ) : null}
+      </FieldRow>
 
       {draft.currency !== baseCurrency ? (
         <TextField
@@ -756,223 +765,274 @@ export function DocumentEditor({
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, paddingBottom: t.spacing.sm }}>
-        <Stepper steps={STEPS.map((k) => tr(`common:editorStep.${k}` as 'common:editorStep.party'))} current={step} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {step === 0 ? renderParty() : step === 1 ? renderItems() : step === 2 ? renderExtras() : renderReview()}
-      </ScrollView>
-
-      <View
-        style={{
-          paddingHorizontal: t.spacing.lg,
-          paddingTop: t.spacing.md,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-          gap: t.spacing.sm,
-        }}
-      >
-        {draft.lines.length > 0 ? (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-            <Text variant="caption" tone="muted">{tr('sales:editor.total')}</Text>
-            <Text variant="title" weight="700">
-              {formatMoney(totals.grandTotal)}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          {step > 0 ? (
-            <Button title={tr('sales:editor.back')} variant="ghost" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
-          ) : null}
-          {step < STEPS.length - 1 ? (
-            <Button
-              title={tr('sales:editor.continue')}
-              onPress={() => setStep((s) => s + 1)}
-              disabled={!canAdvance}
-              style={{ flex: 2 }}
+      <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>
+        {desktop ? (
+          <>
+            <Stack.Screen
+              options={{
+                headerRight: () => (
+                  <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+                    <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} disabled={!draft.partyId} />
+                    <Button title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} disabled={!draft.partyId || draft.lines.length === 0} />
+                  </View>
+                ),
+              }}
             />
-          ) : (
-            <>
-              <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} style={{ flex: 1 }} />
-              <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} style={{ flex: 1 }} />
-            </>
-          )}
-        </View>
-      </View>
+            <ScrollView
+              contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+            >
+              <SplitPane
+                sideWidth={360}
+                main={
+                  <View style={{ gap: t.spacing.xxl }}>
+                    {(
+                      [
+                        ['party', renderParty()],
+                        ['items', renderItems()],
+                        ['extras', renderExtras()],
+                      ] as const
+                    ).map(([key, body]) => (
+                      <View key={key} style={{ gap: t.spacing.md }}>
+                        <Text variant="caption" tone="muted" weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                          {tr(`common:editorStep.${key}` as 'common:editorStep.party')}
+                        </Text>
+                        {body}
+                      </View>
+                    ))}
+                  </View>
+                }
+                side={renderReview()}
+              />
+            </ScrollView>
+          </>
+        ) : (
+          <>
+          <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, paddingBottom: t.spacing.sm }}>
+            <Stepper steps={STEPS.map((k) => tr(`common:editorStep.${k}` as 'common:editorStep.party'))} current={step} />
+          </View>
 
-      {/* ---------------- sheets ---------------- */}
+          <ScrollView
+            contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+          >
+            {step === 0 ? renderParty() : step === 1 ? renderItems() : step === 2 ? renderExtras() : renderReview()}
+          </ScrollView>
 
-      <SelectSheet
-        visible={partyOpen}
-        onClose={() => setPartyOpen(false)}
-        title={isPurchase ? 'Select supplier' : 'Select customer'}
-        options={parties.map((p) => ({
-          value: p.id,
-          label: p.name,
-          description: [p.displayName, p.taxId, p.phone].filter(Boolean).join(' · '),
-          trailing: p.currency !== baseCurrency ? p.currency : undefined,
-        }))}
-        value={draft.partyId}
-        onSelect={pickParty}
-        searchPlaceholder={isPurchase ? 'Search suppliers' : 'Search customers'}
-        footer={
-          <Button
-            title={isPurchase ? 'Add new supplier' : 'Add new customer'}
-            variant="secondary"
-            icon="plus"
-            fullWidth
-            onPress={() => {
-              setPartyOpen(false);
-              router.push(isPurchase ? '/(app)/contacts/suppliers/new' : '/(app)/contacts/customers/new');
+          <View
+            style={{
+              paddingHorizontal: t.spacing.lg,
+              paddingTop: t.spacing.md,
+              paddingBottom: insets.bottom + t.spacing.md,
+              borderTopWidth: 1,
+              borderTopColor: t.c.line,
+              backgroundColor: t.c.paper,
+              gap: t.spacing.sm,
             }}
-          />
-        }
-      />
+          >
+            {draft.lines.length > 0 ? (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                <Text variant="caption" tone="muted">{tr('sales:editor.total')}</Text>
+                <Text variant="title" weight="700">
+                  {formatMoney(totals.grandTotal)}
+                </Text>
+              </View>
+            ) : null}
 
-      <SelectSheet
-        visible={itemOpen}
-        onClose={() => setItemOpen(false)}
-        title={tr('sales:editor.addItem')}
-        subtitle={sourceDoc ? tr('sales:editor.returnFrom', { number: sourceDoc.number }) : undefined}
-        options={
-          sourceDoc
-            ? sourceDoc.lines.map((l) => ({
-                value: l.id,
-                label: l.name,
-                description: `${formatQty(l.quantity)} ${l.unit} × ${formatMoney(l.unitPrice)}`,
-                trailing: formatPercent(l.taxRate),
-              }))
-            : items.map((i) => ({
-                value: i.id,
-                label: i.name,
-                description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
-                trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
-              }))
-        }
-        onSelect={(id) => {
-          if (sourceDoc) {
-            const src = sourceDoc.lines.find((l) => l.id === id);
-            const already = src && draft.lines.find((l) => (src.itemId ? l.itemId === src.itemId : l.name === src.name));
-            if (src && !already) addLine({ ...src, id: uid('ln') });
-            return;
-          }
-          const item = items.find((i) => i.id === id);
-          if (item) addLine(lineFromItem(item, isPurchase, taxCategories));
-        }}
-        searchPlaceholder="Search by name or SKU"
-        footer={
-          sourceDoc ? undefined : (
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <Button
-                title={tr('sales:editor.oneOffLine')}
-                variant="ghost"
-                icon="pencil-plus-outline"
-                style={{ flex: 1 }}
-                onPress={() => {
-                  // Added to the draft only when saved, so closing the sheet leaves no blank line behind.
-                  setItemOpen(false);
-                  setEditingLine(blankLine(draft.currency, taxCategories));
-                }}
-              />
-              <Button
-                title={tr('sales:editor.newItem')}
-                variant="secondary"
-                icon="plus"
-                style={{ flex: 1 }}
-                onPress={() => {
-                  setItemOpen(false);
-                  router.push('/(app)/catalog/items/new');
-                }}
-              />
+              {step > 0 ? (
+                <Button title={tr('sales:editor.back')} variant="ghost" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
+              ) : null}
+              {step < STEPS.length - 1 ? (
+                <Button
+                  title={tr('sales:editor.continue')}
+                  onPress={() => setStep((s) => s + 1)}
+                  disabled={!canAdvance}
+                  style={{ flex: 2 }}
+                />
+              ) : (
+                <>
+                  <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} style={{ flex: 1 }} />
+                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} style={{ flex: 1 }} />
+                </>
+              )}
             </View>
-          )
-        }
-      />
+          </View>
+          </>
+        )}
 
-      <SelectSheet
-        visible={currencyOpen}
-        onClose={() => setCurrencyOpen(false)}
-        title={tr('sales:editor.documentCurrency')}
-        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
-        value={draft.currency}
-        onSelect={(code) =>
-          setCurrency(code, code === baseCurrency ? 1 : resolveRate(exchangeRates, code, baseCurrency, draft.date))
-        }
-      />
+        {/* ---------------- sheets ---------------- */}
 
-      <SelectSheet
-        visible={posOpen}
-        onClose={() => setPosOpen(false)}
-        title={tr('sales:editor.placeOfSupply')}
-        subtitle={tr('sales:editor.posHint')}
-        options={[
-          ...INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code })),
-          { value: OTHER_COUNTRY_CODE, label: tr('sales:editor.otherCountry'), trailing: OTHER_COUNTRY_CODE },
-        ]}
-        value={draft.placeOfSupplyStateCode}
-        onSelect={(placeOfSupplyStateCode) => patch({ placeOfSupplyStateCode })}
-      />
+        <SelectSheet
+          visible={partyOpen}
+          onClose={() => setPartyOpen(false)}
+          title={isPurchase ? 'Select supplier' : 'Select customer'}
+          options={parties.map((p) => ({
+            value: p.id,
+            label: p.name,
+            description: [p.displayName, p.taxId, p.phone].filter(Boolean).join(' · '),
+            trailing: p.currency !== baseCurrency ? p.currency : undefined,
+          }))}
+          value={draft.partyId}
+          onSelect={pickParty}
+          searchPlaceholder={isPurchase ? 'Search suppliers' : 'Search customers'}
+          footer={
+            <Button
+              title={isPurchase ? 'Add new supplier' : 'Add new customer'}
+              variant="secondary"
+              icon="plus"
+              fullWidth
+              onPress={() => {
+                setPartyOpen(false);
+                router.push(isPurchase ? '/(app)/contacts/suppliers/new' : '/(app)/contacts/customers/new');
+              }}
+            />
+          }
+        />
 
-      <SelectSheet
-        visible={branchOpen}
-        onClose={() => setBranchOpen(false)}
-        title={tr('sales:editor.branch')}
-        options={branches.map((b) => ({ value: b.id, label: b.name, description: b.code }))}
-        value={branchId}
-        onSelect={(id) => patch({ branchId: id })}
-        searchable={false}
-      />
+        <SelectSheet
+          visible={itemOpen}
+          onClose={() => setItemOpen(false)}
+          title={tr('sales:editor.addItem')}
+          subtitle={sourceDoc ? tr('sales:editor.returnFrom', { number: sourceDoc.number }) : undefined}
+          options={
+            sourceDoc
+              ? sourceDoc.lines.map((l) => ({
+                  value: l.id,
+                  label: l.name,
+                  description: `${formatQty(l.quantity)} ${l.unit} × ${formatMoney(l.unitPrice)}`,
+                  trailing: formatPercent(l.taxRate),
+                }))
+              : items.map((i) => ({
+                  value: i.id,
+                  label: i.name,
+                  description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
+                  trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
+                }))
+          }
+          multiple
+          confirmLabel={(count) => tr('sales:editor.addItems', { count })}
+          onConfirm={(ids) =>
+            ids.forEach((id) => {
+              if (sourceDoc) {
+                const src = sourceDoc.lines.find((l) => l.id === id);
+                const already = src && draft.lines.find((l) => (src.itemId ? l.itemId === src.itemId : l.name === src.name));
+                if (src && !already) addLine({ ...src, id: uid('ln') });
+                return;
+              }
+              const item = items.find((i) => i.id === id);
+              if (item) addLine(lineFromItem(item, isPurchase, taxCategories));
+            })
+          }
+          searchPlaceholder="Search by name or SKU"
+          footer={
+            sourceDoc ? undefined : (
+              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                <Button
+                  title={tr('sales:editor.oneOffLine')}
+                  variant="ghost"
+                  icon="pencil-plus-outline"
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    // Added to the draft only when saved, so closing the sheet leaves no blank line behind.
+                    setItemOpen(false);
+                    setEditingLine(blankLine(draft.currency, taxCategories));
+                  }}
+                />
+                <Button
+                  title={tr('sales:editor.newItem')}
+                  variant="secondary"
+                  icon="plus"
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setItemOpen(false);
+                    router.push('/(app)/catalog/items/new');
+                  }}
+                />
+              </View>
+            )
+          }
+        />
 
-      <LineEditorSheet
-        visible={!!editingLine}
-        line={editingLine}
-        currency={draft.currency}
-        taxCategories={taxCategories}
-        taxContext={docTaxContext}
-        onClose={() => setEditingLine(null)}
-        onSave={(p) => {
-          if (!editingLine) return;
-          if (editingIsNew) addLine({ ...editingLine, ...p });
-          else updateLine(editingLine.id, p);
-        }}
-        onRemove={editingIsNew ? undefined : () => editingLine && removeLine(editingLine.id)}
-        hsnRequired={needsHsn}
-        maxQuantity={maxReturnQty(editingLine)}
-      />
+        <SelectSheet
+          visible={currencyOpen}
+          onClose={() => setCurrencyOpen(false)}
+          title={tr('sales:editor.documentCurrency')}
+          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+          value={draft.currency}
+          onSelect={(code) =>
+            setCurrency(code, code === baseCurrency ? 1 : resolveRate(exchangeRates, code, baseCurrency, draft.date))
+          }
+        />
 
-      <ConfirmDialog
-        visible={!!creditWarning}
-        title={tr('sales:editor.creditLimitTitle')}
-        message={creditWarning ?? ''}
-        confirmLabel={tr('sales:editor.creditLimitProceed')}
-        icon="alert-outline"
-        onCancel={() => setCreditWarning(null)}
-        onConfirm={() => {
-          setCreditWarning(null);
-          setConfirmFinalize(true);
-        }}
-      />
+        <SelectSheet
+          visible={posOpen}
+          onClose={() => setPosOpen(false)}
+          title={tr('sales:editor.placeOfSupply')}
+          subtitle={tr('sales:editor.posHint')}
+          options={[
+            ...INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code })),
+            { value: OTHER_COUNTRY_CODE, label: tr('sales:editor.otherCountry'), trailing: OTHER_COUNTRY_CODE },
+          ]}
+          value={draft.placeOfSupplyStateCode}
+          onSelect={(placeOfSupplyStateCode) => patch({ placeOfSupplyStateCode })}
+        />
 
-      <ConfirmDialog
-        visible={confirmFinalize}
-        title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
-        message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
-        confirmLabel={tr('sales:editor.finalise')}
-        icon="check-decagram-outline"
-        onCancel={() => setConfirmFinalize(false)}
-        onConfirm={() => {
-          setConfirmFinalize(false);
-          save(true);
-        }}
-      />
+        <SelectSheet
+          visible={branchOpen}
+          onClose={() => setBranchOpen(false)}
+          title={tr('sales:editor.branch')}
+          options={branches.map((b) => ({ value: b.id, label: b.name, description: b.code }))}
+          value={branchId}
+          onSelect={(id) => patch({ branchId: id })}
+          searchable={false}
+        />
+
+        <LineEditorSheet
+          visible={!!editingLine}
+          line={editingLine}
+          currency={draft.currency}
+          taxCategories={taxCategories}
+          taxContext={docTaxContext}
+          onClose={() => setEditingLine(null)}
+          onSave={(p) => {
+            if (!editingLine) return;
+            if (editingIsNew) addLine({ ...editingLine, ...p });
+            else updateLine(editingLine.id, p);
+          }}
+          onRemove={editingIsNew ? undefined : () => editingLine && removeLine(editingLine.id)}
+          hsnRequired={needsHsn}
+          maxQuantity={maxReturnQty(editingLine)}
+        />
+
+        <ConfirmDialog
+          visible={!!creditWarning}
+          title={tr('sales:editor.creditLimitTitle')}
+          message={creditWarning ?? ''}
+          confirmLabel={tr('sales:editor.creditLimitProceed')}
+          icon="alert-outline"
+          onCancel={() => setCreditWarning(null)}
+          onConfirm={() => {
+            setCreditWarning(null);
+            setConfirmFinalize(true);
+          }}
+        />
+
+        <ConfirmDialog
+          visible={confirmFinalize}
+          title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
+          message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
+          confirmLabel={tr('sales:editor.finalise')}
+          icon="check-decagram-outline"
+          onCancel={() => setConfirmFinalize(false)}
+          onConfirm={() => {
+            setConfirmFinalize(false);
+            save(true);
+          }}
+        />
+      </FormContainer>
     </KeyboardAvoidingView>
   );
 }

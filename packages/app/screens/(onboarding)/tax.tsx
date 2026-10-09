@@ -44,7 +44,7 @@ export default function TaxStep() {
       onSkip={() => router.push(nextStepRoute('tax', draft.plan))}
     >
       <SwitchField
-        label={`I'm registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`}
+        label={tr('onboarding:tax.registeredFor', { regime: country?.regime === 'VAT' ? 'VAT' : 'GST' })}
         description={tr('onboarding:tax.registeredHint')}
         value={draft.taxRegistered}
         onValueChange={(v) => set({ taxRegistered: v })}
@@ -83,7 +83,7 @@ export default function TaxStep() {
               ))}
             </View>
             <Text variant="caption" tone="muted">
-              These are created for you. Add or edit slabs any time in Settings → Taxes.
+              {tr('onboarding:tax.slabsNote')}
             </Text>
           </Card>
         </>

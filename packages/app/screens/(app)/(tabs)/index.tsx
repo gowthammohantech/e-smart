@@ -9,6 +9,7 @@ import { Screen, SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
+import { Columns, StatGrid } from '@esmart/ui/components/Layout';
 import { QuickActions , quickActions } from '../../../components/QuickActions';
 import { BarChart } from '@esmart/ui/components/charts/BarChart';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
@@ -236,7 +237,7 @@ export default function Home() {
         </View>
 
         <SectionHeader title={tr('reports:home.thisMonth')} />
-        <View style={{ gap: t.spacing.md }}>
+        <StatGrid>
           <StatRow>
             <StatTile
               label={tr('reports:home.sales')}
@@ -293,138 +294,147 @@ export default function Home() {
             />
           </StatRow>
           )}
-        </View>
+        </StatGrid>
 
-        <SectionHeader title={tr('reports:home.salesTrend')} action="Reports" onAction={() => router.push('/(app)/reports/sales-summary')} />
-        <Card>
-          <BarChart data={salesTrend} caption={tr('reports:home.salesTrendCaption')} />
-        </Card>
+        <Columns
+          left={
+            <>
+              <SectionHeader title={tr('reports:home.salesTrend')} action="Reports" onAction={() => router.push('/(app)/reports/sales-summary')} />
+              <Card>
+                <BarChart data={salesTrend} caption={tr('reports:home.salesTrendCaption')} />
+              </Card>
 
-        <SectionHeader title={tr('reports:home.owedToYou')} action="View all" onAction={() => router.push('/(app)/receivables')} />
-        <Card style={{ gap: t.spacing.lg }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <View style={{ gap: 3 }}>
-              <Text variant="caption" tone="muted">{tr('reports:home.totalReceivable')}</Text>
-              <Text variant="h2" weight="700">
-                {formatMoney(receivables.summary.total)}
-              </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 5 }}>
-              <Badge label={`${formatMoney(receivables.summary.overdue)} overdue`} tone="danger" size="sm" />
-              <Badge label={`${formatMoney(receivables.summary.dueSoon)} due soon`} tone="warning" size="sm" />
-            </View>
-          </View>
-          <AgingBars
-            buckets={receivables.summary.buckets.map((b) => ({
-              key: b.key,
-              label: b.label,
-              amount: b.amount,
-              count: b.count,
-            }))}
-          />
-        </Card>
-
-        {full ? (
-        <>
-        <SectionHeader title={tr('reports:home.youOwe')} action="View all" onAction={() => router.push('/(app)/payables')} />
-        <Card
-          onPress={() => router.push('/(app)/payables')}
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <View style={{ gap: 3 }}>
-            <Text variant="caption" tone="muted">{tr('reports:home.totalPayable')}</Text>
-            <Text variant="h3" weight="700">
-              {formatMoney(payables.summary.total)}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Badge label={`${formatMoney(payables.summary.overdue)} overdue`} tone="danger" size="sm" />
-            <Text variant="micro" tone="muted">
-              {payables.outstanding.length} open bills
-            </Text>
-          </View>
-        </Card>
-        </>
-        ) : null}
-
-        {attention.length > 0 ? (
-          <>
-            <SectionHeader title={tr('reports:home.attention')} />
-            <Card padded={false}>
-              {attention.map((a, i) => (
-                <Pressable
-                  key={a.label}
-                  onPress={() => router.push(a.route as never)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${a.count} ${a.label}`}
-                  style={({ pressed }) => ({
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: t.spacing.md,
-                    padding: t.spacing.lg,
-                    borderBottomWidth: i < attention.length - 1 ? 0.5 : 0,
-                    borderBottomColor: t.c.line,
-                    backgroundColor: pressed ? t.c.card2 : 'transparent',
-                  })}
-                >
-                  <MaterialCommunityIcons
-                    name={a.icon}
-                    size={20}
-                    color={a.tone === 'danger' ? t.c.bad : a.tone === 'warning' ? t.c.warn : t.c.primary}
-                  />
-                  <Text variant="body" style={{ flex: 1 }}>
-                    {a.label}
-                  </Text>
-                  <Badge label={String(a.count)} tone={a.tone} size="sm" />
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
-                </Pressable>
-              ))}
-            </Card>
-          </>
-        ) : null}
-
-        {overdueInvoices.length > 0 ? (
-          <>
-            <SectionHeader title={tr('reports:home.attentionCaption')} action="Receivables" onAction={() => router.push('/(app)/receivables')} />
-            <Card padded={false}>
-              {overdueInvoices.map((o, i) => (
-                <DocumentRow
-                  key={o.document.id}
-                  document={o.document}
-                  partyName={nameOf(o.document.partyId)}
-                  outstandingLabel={`${o.daysOverdue}d overdue`}
-                  divider={i < overdueInvoices.length - 1}
-                  onPress={() => router.push(`/(app)/sales/invoices/${o.document.id}`)}
+              <SectionHeader title={tr('reports:home.owedToYou')} action="View all" onAction={() => router.push('/(app)/receivables')} />
+              <Card style={{ gap: t.spacing.lg }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ gap: 3 }}>
+                    <Text variant="caption" tone="muted">{tr('reports:home.totalReceivable')}</Text>
+                    <Text variant="h2" weight="700">
+                      {formatMoney(receivables.summary.total)}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 5 }}>
+                    <Badge label={`${formatMoney(receivables.summary.overdue)} overdue`} tone="danger" size="sm" />
+                    <Badge label={`${formatMoney(receivables.summary.dueSoon)} due soon`} tone="warning" size="sm" />
+                  </View>
+                </View>
+                <AgingBars
+                  buckets={receivables.summary.buckets.map((b) => ({
+                    key: b.key,
+                    label: b.label,
+                    amount: b.amount,
+                    count: b.count,
+                  }))}
                 />
-              ))}
-            </Card>
-          </>
-        ) : null}
+              </Card>
 
-        <SectionHeader title={tr('reports:home.recentInvoices')} action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
-        <Card padded={false}>
-          {recent.length === 0 ? (
-            <EmptyState
-              illustration="no-documents"
-              icon="file-document-outline"
-              title={tr('reports:home.noInvoices')}
-              message={tr('reports:home.noInvoicesBody')}
-              actionLabel={tr('reports:home.newInvoice')}
-              onAction={() => router.push('/(app)/sales/invoices/new')}
-              compact
-            />
-          ) : (
-            recent.map((d, i) => (
-              <DocumentRow
-                key={d.id}
-                document={d}
-                partyName={nameOf(d.partyId)}
-                divider={i < recent.length - 1}
-                onPress={() => router.push(`/(app)/sales/invoices/${d.id}`)}
-              />
-            ))
-          )}
-        </Card>
+              {full ? (
+                <>
+              <SectionHeader title={tr('reports:home.youOwe')} action="View all" onAction={() => router.push('/(app)/payables')} />
+              <Card
+                onPress={() => router.push('/(app)/payables')}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <View style={{ gap: 3 }}>
+                  <Text variant="caption" tone="muted">{tr('reports:home.totalPayable')}</Text>
+                  <Text variant="h3" weight="700">
+                    {formatMoney(payables.summary.total)}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Badge label={`${formatMoney(payables.summary.overdue)} overdue`} tone="danger" size="sm" />
+                  <Text variant="micro" tone="muted">
+                    {payables.outstanding.length} open bills
+                  </Text>
+                </View>
+              </Card>
+                </>
+              ) : null}
+            </>
+          }
+          right={
+            <>
+              {attention.length > 0 ? (
+                <>
+                  <SectionHeader title={tr('reports:home.attention')} />
+                  <Card padded={false}>
+                    {attention.map((a, i) => (
+                      <Pressable
+                        key={a.label}
+                        onPress={() => router.push(a.route as never)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${a.count} ${a.label}`}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: t.spacing.md,
+                          padding: t.spacing.lg,
+                          borderBottomWidth: i < attention.length - 1 ? 0.5 : 0,
+                          borderBottomColor: t.c.line,
+                          backgroundColor: pressed ? t.c.card2 : 'transparent',
+                        })}
+                      >
+                        <MaterialCommunityIcons
+                          name={a.icon}
+                          size={20}
+                          color={a.tone === 'danger' ? t.c.bad : a.tone === 'warning' ? t.c.warn : t.c.primary}
+                        />
+                        <Text variant="body" style={{ flex: 1 }}>
+                          {a.label}
+                        </Text>
+                        <Badge label={String(a.count)} tone={a.tone} size="sm" />
+                        <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                      </Pressable>
+                    ))}
+                  </Card>
+                </>
+              ) : null}
+
+              {overdueInvoices.length > 0 ? (
+                <>
+                  <SectionHeader title={tr('reports:home.attentionCaption')} action="Receivables" onAction={() => router.push('/(app)/receivables')} />
+                  <Card padded={false}>
+                    {overdueInvoices.map((o, i) => (
+                      <DocumentRow
+                        key={o.document.id}
+                        document={o.document}
+                        partyName={nameOf(o.document.partyId)}
+                        outstandingLabel={`${o.daysOverdue}d overdue`}
+                        divider={i < overdueInvoices.length - 1}
+                        onPress={() => router.push(`/(app)/sales/invoices/${o.document.id}`)}
+                      />
+                    ))}
+                  </Card>
+                </>
+              ) : null}
+
+              <SectionHeader title={tr('reports:home.recentInvoices')} action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
+              <Card padded={false}>
+                {recent.length === 0 ? (
+                  <EmptyState
+                    illustration="no-documents"
+                    icon="file-document-outline"
+                    title={tr('reports:home.noInvoices')}
+                    message={tr('reports:home.noInvoicesBody')}
+                    actionLabel={tr('reports:home.newInvoice')}
+                    onAction={() => router.push('/(app)/sales/invoices/new')}
+                    compact
+                  />
+                ) : (
+                  recent.map((d, i) => (
+                    <DocumentRow
+                      key={d.id}
+                      document={d}
+                      partyName={nameOf(d.partyId)}
+                      divider={i < recent.length - 1}
+                      onPress={() => router.push(`/(app)/sales/invoices/${d.id}`)}
+                    />
+                  ))
+                )}
+              </Card>
+            </>
+          }
+        />
       </Screen>
 
       <Fab icon="plus" onPress={() => setActionsOpen(true)} bottom={0} />

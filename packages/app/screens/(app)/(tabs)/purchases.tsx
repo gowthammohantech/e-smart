@@ -7,6 +7,7 @@ import { AppHeader } from '../../../components/AppHeader';
 import { SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
+import { StatGrid } from '@esmart/ui/components/Layout';
 import { HubTiles } from '@esmart/ui/components/HubTiles';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -23,6 +24,7 @@ import {
 } from '../../../store/selectors';
 import { money, sum } from '@esmart/core/lib/money';
 import { inRange, resolveRange } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function PurchasesTab() {
   const t = useTheme();
@@ -86,42 +88,41 @@ export default function PurchasesTab() {
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        <StatRow>
-          <StatTile
-            label={tr('purchases:hub.thisMonth')}
-            value={monthPurchases}
-            icon="cart-outline"
-            onPress={() => router.push('/(app)/purchases/bills')}
-          />
-          <StatTile
-            label={tr('purchases:hub.expenses')}
-            value={monthExpenses}
-            tone="warn"
-            icon="receipt-text-outline"
-            onPress={() => router.push('/(app)/expenses')}
-          />
-        </StatRow>
-
-        <View style={{ height: t.spacing.md }} />
-
-        <StatRow>
-          <StatTile
-            label={tr('purchases:hub.payable')}
-            value={payables.summary.total}
-            icon="file-clock-outline"
-            caption={`${payables.outstanding.length} open bills`}
-            onPress={() => router.push('/(app)/payables')}
-          />
-          <StatTile
-            label={tr('purchases:hub.overdue')}
-            value={payables.summary.overdue}
-            tone="bad"
-            icon="alert-circle-outline"
-            onPress={() => router.push('/(app)/payables')}
-          />
-        </StatRow>
+        <StatGrid>
+          <StatRow>
+            <StatTile
+              label={tr('purchases:hub.thisMonth')}
+              value={monthPurchases}
+              icon="cart-outline"
+              onPress={() => router.push('/(app)/purchases/bills')}
+            />
+            <StatTile
+              label={tr('purchases:hub.expenses')}
+              value={monthExpenses}
+              tone="warn"
+              icon="receipt-text-outline"
+              onPress={() => router.push('/(app)/expenses')}
+            />
+          </StatRow>
+          <StatRow>
+            <StatTile
+              label={tr('purchases:hub.payable')}
+              value={payables.summary.total}
+              icon="file-clock-outline"
+              caption={`${payables.outstanding.length} open bills`}
+              onPress={() => router.push('/(app)/payables')}
+            />
+            <StatTile
+              label={tr('purchases:hub.overdue')}
+              value={payables.summary.overdue}
+              tone="bad"
+              icon="alert-circle-outline"
+              onPress={() => router.push('/(app)/payables')}
+            />
+          </StatRow>
+        </StatGrid>
 
         <SectionHeader title={tr('purchases:hub.documents')} />
         <HubTiles

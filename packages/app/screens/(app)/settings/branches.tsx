@@ -8,6 +8,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
+import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { PickerField, TextField, SwitchField } from '@esmart/ui/components/Field';
@@ -24,6 +25,7 @@ import { Errors, hasErrors, validGstin } from '@esmart/core/lib/validators';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function BranchSettings() {
   const t = useTheme();
@@ -130,7 +132,7 @@ export default function BranchSettings() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.branches') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             Branches let you keep stock and documents separate by location. Every document records which branch it belongs
@@ -160,21 +162,7 @@ export default function BranchSettings() {
         </Card>
       </ScrollView>
 
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button title={tr('settings:branches.add')} icon="plus" onPress={() => open()} fullWidth size="lg" />
-      </View>
+      <PrimaryActionBar title={tr('settings:branches.add')} icon="plus" onPress={() => open()} />
 
       <Sheet
         visible={!!editing}

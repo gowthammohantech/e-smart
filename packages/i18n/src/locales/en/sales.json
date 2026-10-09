@@ -25,6 +25,8 @@
     "currency": "Currency",
     "rateStored": "The rate is stored on the document so it stays reproducible.",
     "addItem": "Add item",
+    "addItems_one": "Add {{count}} item",
+    "addItems_other": "Add {{count}} items",
     "noLines": "No lines yet",
     "noLinesBody": "Add a product or service, or create a one-off line.",
     "inclusive": "Incl.",
@@ -81,7 +83,16 @@
     "items": "Items",
     "payments": "Payments",
     "notes": "Notes",
-    "terms": "Terms"
+    "terms": "Terms",
+    "tabDetails": "Details",
+    "tabPreview": "Preview",
+    "edit": "Edit",
+    "lineItem": "Item",
+    "qty": "Qty",
+    "rate": "Rate",
+    "discount": "Discount",
+    "taxRate": "Tax",
+    "lineAmount": "Amount"
   },
   "line": {
     "editLine": "Edit line",
@@ -169,7 +180,8 @@
     "print": "Print",
     "sharePdf": "Share PDF",
     "pdfFailed": "Could not generate the PDF on this device",
-    "printUnavailable": "Printing is not available here"
+    "printUnavailable": "Printing is not available here",
+    "savePdf": "Save as PDF"
   },
   "pdf": {
     "billTo": "Bill to",

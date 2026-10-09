@@ -154,5 +154,22 @@
       "confirm": "Sign out"
     },
     "build": "Elixir Books Smart · prototype build {{version}}"
+  },
+  "shell": {
+    "searchPlaceholder": "Search invoices, customers, items…",
+    "searchShortcut": "⌘K",
+    "businesses": "Businesses",
+    "branches": "Branches",
+    "notifications": "Notifications",
+    "allCaughtUp": "You're all caught up",
+    "viewAll": "View all",
+    "account": "Account",
+    "settings": "Settings",
+    "quickActions": "Quick actions",
+    "goTo": "Go to",
+    "typeToSearch": "Type at least two characters to search your records.",
+    "noMatches": "No matches for “{{query}}”",
+    "paletteHint": "↑↓ to move · Enter to open · Esc to close",
+    "allSettings": "All settings"
   }
 }

@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
-import { Pressable, ScrollView, Share, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -44,6 +44,11 @@ import { ComplianceCard } from '../compliance/ComplianceCard';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { isEwayBillRequired } from '@esmart/core/domain/ewayBill';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { SplitPane } from '@esmart/ui/components/Layout';
+import { Segmented } from '@esmart/ui/components/Field';
+import { HtmlPreview, printHtml } from './HtmlPreview';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
@@ -73,6 +78,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [complianceSheet, setComplianceSheet] = useState<'generate' | 'cancel' | null>(null);
   const [busy, setBusy] = useState(false);
+  const desktop = useIsDesktop();
+  const [desktopTab, setDesktopTab] = useState<'details' | 'preview'>('details');
 
   const eInvoiceApplicable = useMemo(
     () =>
@@ -105,18 +112,28 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
+  const documentHtml = () =>
+    buildDocumentHtml({
+      t: tr,
+      language,
+      document: doc,
+      company,
+      party,
+      branch,
+      ewayBill,
+    });
+
   const shareDocument = async () => {
+    // A browser has no share sheet for files: its print dialog saves the PDF.
+    if (Platform.OS === 'web') {
+      printHtml(documentHtml()).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'));
+      setActionsOpen(false);
+      if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
+      return;
+    }
     setBusy(true);
     try {
-      const html = buildDocumentHtml({
-        t: tr,
-        language,
-        document: doc,
-        company,
-        party,
-        branch,
-        ewayBill,
-      });
+      const html = documentHtml();
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
@@ -181,264 +198,421 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
 
+  const headerCard = (
+    <>
+      {/* Header */}
+      <Card style={{ gap: t.spacing.lg }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ gap: 4, flex: 1 }}>
+            <Text variant="caption" tone="muted">
+              {kindName}
+            </Text>
+            <Text variant="h3" weight="700">
+              {doc.number}
+            </Text>
+            <Text variant="caption" tone="muted">
+              {formatDate(doc.date)}
+              {branch ? ` · ${branch.name}` : ''}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <StatusBadge status={doc.status} />
+            {doc.status === 'overdue' && overdueDays > 0 ? (
+              <Text variant="micro" tone="bad" weight="600">
+                {overdueDays} days late
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={{ height: 1, backgroundColor: t.c.line }} />
+
+        <Pressable
+          onPress={() =>
+            party &&
+            router.push(
+              party.kind === 'customer'
+                ? `/(app)/contacts/customers/${party.id}`
+                : `/(app)/contacts/suppliers/${party.id}`,
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${party?.name ?? 'contact'}`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
+        >
+          <Avatar name={party?.name ?? '?'} size={42} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text variant="body" weight="600">
+              {party?.name ?? 'Unknown'}
+            </Text>
+            <Text variant="caption" tone="muted" numberOfLines={1}>
+              {party?.taxId ?? party?.phone ?? party?.email ?? '—'}
+            </Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+        </Pressable>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+          {doc.dueDate ? <Badge label={`Due ${formatDate(doc.dueDate, 'dd MMM')}`} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
+          {doc.validUntil ? <Badge label={`Valid to ${formatDate(doc.validUntil, 'dd MMM')}`} tone="neutral" /> : null}
+          {doc.currency !== baseCurrency ? <Badge label={`${doc.currency} @ ${doc.exchangeRate.toFixed(2)}`} tone="info" /> : null}
+          {doc.placeOfSupplyStateCode ? (
+            <Badge label={`PoS ${INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode}`} tone="neutral" />
+          ) : null}
+          {doc.reference ? <Badge label={`Ref ${doc.reference}`} tone="neutral" /> : null}
+          {doc.supplierDocNumber ? <Badge label={`Their no. ${doc.supplierDocNumber}`} tone="neutral" /> : null}
+        </View>
+      </Card>
+    </>
+  );
+  const paymentCard = (
+    <>
+      {/* Payment status */}
+      {isPayable && isFinalized(doc.status) ? (
+        <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ gap: 3 }}>
+              <Text variant="caption" tone="muted">{tr('sales:detail.outstanding')}</Text>
+              <Text variant="h3" weight="700" tone={outstanding.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
+                {formatMoney(outstanding)}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 3 }}>
+              <Text variant="caption" tone="muted">
+                Paid
+              </Text>
+              <Text variant="title" weight="600" tone="good">
+                {formatMoney(paid)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ height: 8, borderRadius: 4, backgroundColor: t.c.card2, overflow: 'hidden' }}>
+            <View
+              style={{
+                width: `${Math.min(100, (paid.minor / Math.max(1, doc.totals.grandTotal.minor)) * 100)}%`,
+                height: '100%',
+                backgroundColor: t.c.good,
+              }}
+            />
+          </View>
+
+          {outstanding.minor > 0 ? (
+            <Button
+              title={doc.kind === 'invoice' ? 'Record payment' : 'Pay supplier'}
+              icon={doc.kind === 'invoice' ? 'cash-plus' : 'cash-minus'}
+              onPress={() =>
+                router.push(
+                  `/(app)/payments/new?direction=${doc.kind === 'invoice' ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}`,
+                )
+              }
+              fullWidth
+            />
+          ) : null}
+        </Card>
+      ) : null}
+    </>
+  );
+  const linesSection = (
+    <>
+      {/* Lines */}
+      <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.items')}</Text>
+      <Card padded={false}>
+        {doc.lines.map((line, i) => (
+          <View
+            key={line.id}
+            style={{
+              flexDirection: 'row',
+              gap: t.spacing.md,
+              padding: t.spacing.lg,
+              borderBottomWidth: i < doc.lines.length - 1 ? 0.5 : 0,
+              borderBottomColor: t.c.line,
+            }}
+          >
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text variant="body" weight="600">
+                {line.name}
+              </Text>
+              <Text variant="caption" tone="muted">
+                {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
+                {line.discountValue > 0
+                  ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, doc.currency))}`
+                  : ''}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
+                <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
+                {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
+              </View>
+            </View>
+            <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}
+            </Text>
+          </View>
+        ))}
+      </Card>
+    </>
+  );
+  const totalsCard = (
+    <>
+      {/* Totals */}
+      <Card style={{ marginTop: t.spacing.md }}>
+        <TotalsPanel
+          totals={doc.totals}
+          currency={doc.currency}
+          baseCurrency={baseCurrency}
+          exchangeRate={doc.exchangeRate}
+        />
+      </Card>
+    </>
+  );
+  const paymentsSection = (
+    <>
+      {/* Payments */}
+      {relatedPayments.length > 0 ? (
+        <>
+          <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.payments')}</Text>
+          <Card padded={false}>
+            {relatedPayments.map((p, i) => {
+              const alloc = p.allocations.find((a) => a.documentId === doc.id);
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={() => router.push(`/(app)/payments/${p.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Payment ${p.number}`}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: t.spacing.md,
+                    padding: t.spacing.lg,
+                    borderBottomWidth: i < relatedPayments.length - 1 ? 0.5 : 0,
+                    borderBottomColor: t.c.line,
+                    backgroundColor: pressed ? t.c.card2 : 'transparent',
+                  })}
+                >
+                  <MaterialCommunityIcons name="cash-check" size={20} color={t.c.good} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text variant="body" weight="600">
+                      {p.number}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {formatDate(p.date)} · {p.method}
+                      {p.reference ? ` · ${p.reference}` : ''}
+                    </Text>
+                  </View>
+                  <Text variant="body" weight="700" tone="good">
+                    {formatMoney(alloc?.amount ?? p.amount)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </Card>
+        </>
+      ) : null}
+    </>
+  );
+  const complianceSection = (
+    <>
+      {/* Compliance */}
+      <ComplianceCard document={doc} />
+    </>
+  );
+  const notesCard = (
+    <>
+      {/* Notes */}
+      {doc.notes || doc.terms ? (
+        <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
+          {doc.notes ? (
+            <View style={{ gap: 4 }}>
+              <Text variant="caption" tone="muted" weight="600">{tr('sales:detail.notes')}</Text>
+              <Text variant="small" style={{ lineHeight: 20 }}>
+                {doc.notes}
+              </Text>
+            </View>
+          ) : null}
+          {doc.terms ? (
+            <View style={{ gap: 4 }}>
+              <Text variant="caption" tone="muted" weight="600">{tr('sales:detail.terms')}</Text>
+              <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
+                {doc.terms}
+              </Text>
+            </View>
+          ) : null}
+        </Card>
+      ) : null}
+    </>
+  );
+
+  // A desktop lays the lines out as a table, with the actions in the page
+  // header instead of a sticky footer.
+  const desktopLines = (
+    <View style={{ gap: t.spacing.sm, marginTop: t.spacing.md }}>
+      <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        {tr('sales:detail.items')}
+      </Text>
+      <DataTable
+        scroll={false}
+        columns={[
+          {
+            key: 'item',
+            header: tr('sales:detail.lineItem'),
+            flex: 3,
+            render: (line) => (
+              <View style={{ gap: 2, maxWidth: '100%' }}>
+                <Cell weight="600">{line.name}</Cell>
+                {line.hsnCode ? <Cell tone="muted">{`HSN ${line.hsnCode}`}</Cell> : null}
+              </View>
+            ),
+          },
+          { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${line.unit}`}</Cell> },
+          { key: 'rate', header: tr('sales:detail.rate'), width: 130, align: 'right', render: (line) => <Cell mono>{formatMoney(line.unitPrice)}</Cell> },
+          {
+            key: 'discount',
+            header: tr('sales:detail.discount'),
+            width: 110,
+            align: 'right',
+            render: (line) => (
+              <Cell tone="muted" mono>
+                {line.discountValue > 0
+                  ? line.discountMode === 'percent'
+                    ? formatPercent(line.discountValue)
+                    : formatMoney(money(line.discountValue * 100, doc.currency))
+                  : '—'}
+              </Cell>
+            ),
+          },
+          { key: 'tax', header: tr('sales:detail.taxRate'), width: 80, align: 'right', render: (line) => <Cell tone="muted">{formatPercent(line.taxRate)}</Cell> },
+          {
+            key: 'amount',
+            header: tr('sales:detail.lineAmount'),
+            width: 140,
+            align: 'right',
+            render: (line) => (
+              <Cell weight="700" mono>
+                {formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}
+              </Cell>
+            ),
+          },
+        ]}
+        rows={doc.lines}
+        rowKey={(line) => line.id}
+      />
+    </View>
+  );
+
+  const desktopActions = (
+    <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+      {!isFinalized(doc.status) ? (
+        <Button
+          title={tr('sales:detail.edit')}
+          variant="ghost"
+          icon="pencil-outline"
+          onPress={() => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never)}
+        />
+      ) : null}
+      <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
+      {!isFinalized(doc.status) ? (
+        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={() => setStatusOpen(true)} />
+      ) : (
+        <Button title={tr('sales:print.savePdf')} icon="file-download-outline" onPress={shareDocument} loading={busy} />
+      )}
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <Card style={{ gap: t.spacing.lg }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <View style={{ gap: 4, flex: 1 }}>
-              <Text variant="caption" tone="muted">
-                {kindName}
-              </Text>
-              <Text variant="h3" weight="700">
-                {doc.number}
-              </Text>
-              <Text variant="caption" tone="muted">
-                {formatDate(doc.date)}
-                {branch ? ` · ${branch.name}` : ''}
-              </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 6 }}>
-              <StatusBadge status={doc.status} />
-              {doc.status === 'overdue' && overdueDays > 0 ? (
-                <Text variant="micro" tone="bad" weight="600">
-                  {overdueDays} days late
-                </Text>
-              ) : null}
-            </View>
-          </View>
-
-          <View style={{ height: 1, backgroundColor: t.c.line }} />
-
-          <Pressable
-            onPress={() =>
-              party &&
-              router.push(
-                party.kind === 'customer'
-                  ? `/(app)/contacts/customers/${party.id}`
-                  : `/(app)/contacts/suppliers/${party.id}`,
-              )
-            }
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${party?.name ?? 'contact'}`}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
-          >
-            <Avatar name={party?.name ?? '?'} size={42} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="body" weight="600">
-                {party?.name ?? 'Unknown'}
-              </Text>
-              <Text variant="caption" tone="muted" numberOfLines={1}>
-                {party?.taxId ?? party?.phone ?? party?.email ?? '—'}
-              </Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
-          </Pressable>
-
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-            {doc.dueDate ? <Badge label={`Due ${formatDate(doc.dueDate, 'dd MMM')}`} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
-            {doc.validUntil ? <Badge label={`Valid to ${formatDate(doc.validUntil, 'dd MMM')}`} tone="neutral" /> : null}
-            {doc.currency !== baseCurrency ? <Badge label={`${doc.currency} @ ${doc.exchangeRate.toFixed(2)}`} tone="info" /> : null}
-            {doc.placeOfSupplyStateCode ? (
-              <Badge label={`PoS ${INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode}`} tone="neutral" />
-            ) : null}
-            {doc.reference ? <Badge label={`Ref ${doc.reference}`} tone="neutral" /> : null}
-            {doc.supplierDocNumber ? <Badge label={`Their no. ${doc.supplierDocNumber}`} tone="neutral" /> : null}
-          </View>
-        </Card>
-
-        {/* Payment status */}
-        {isPayable && isFinalized(doc.status) ? (
-          <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View style={{ gap: 3 }}>
-                <Text variant="caption" tone="muted">{tr('sales:detail.outstanding')}</Text>
-                <Text variant="h3" weight="700" tone={outstanding.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
-                  {formatMoney(outstanding)}
-                </Text>
-              </View>
-              <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                <Text variant="caption" tone="muted">
-                  Paid
-                </Text>
-                <Text variant="title" weight="600" tone="good">
-                  {formatMoney(paid)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ height: 8, borderRadius: 4, backgroundColor: t.c.card2, overflow: 'hidden' }}>
-              <View
-                style={{
-                  width: `${Math.min(100, (paid.minor / Math.max(1, doc.totals.grandTotal.minor)) * 100)}%`,
-                  height: '100%',
-                  backgroundColor: t.c.good,
-                }}
+      {desktop ? (
+        <>
+          <Stack.Screen options={{ headerRight: () => desktopActions }} />
+          <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, flexDirection: 'row' }}>
+            <View style={{ width: 240 }}>
+              <Segmented
+                size="sm"
+                options={[
+                  { value: 'details', label: tr('sales:detail.tabDetails') },
+                  { value: 'preview', label: tr('sales:detail.tabPreview') },
+                ]}
+                value={desktopTab}
+                onChange={(v) => setDesktopTab(v as 'details' | 'preview')}
               />
             </View>
-
-            {outstanding.minor > 0 ? (
-              <Button
-                title={doc.kind === 'invoice' ? 'Record payment' : 'Pay supplier'}
-                icon={doc.kind === 'invoice' ? 'cash-plus' : 'cash-minus'}
-                onPress={() =>
-                  router.push(
-                    `/(app)/payments/new?direction=${doc.kind === 'invoice' ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}`,
-                  )
-                }
-                fullWidth
-              />
-            ) : null}
-          </Card>
-        ) : null}
-
-        {/* Lines */}
-        <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.items')}</Text>
-        <Card padded={false}>
-          {doc.lines.map((line, i) => (
-            <View
-              key={line.id}
-              style={{
-                flexDirection: 'row',
-                gap: t.spacing.md,
-                padding: t.spacing.lg,
-                borderBottomWidth: i < doc.lines.length - 1 ? 0.5 : 0,
-                borderBottomColor: t.c.line,
-              }}
+          </View>
+          {desktopTab === 'preview' ? (
+            <View style={{ flex: 1, backgroundColor: t.c.canvas, borderRadius: t.radius.lg, marginHorizontal: t.spacing.lg, marginBottom: t.spacing.lg, padding: t.spacing.xl, alignItems: 'center' }}>
+              <View style={[{ flex: 1, width: '100%', maxWidth: 860, borderRadius: t.radius.sm, overflow: 'hidden' }, t.shadow.card]}>
+                <HtmlPreview html={documentHtml()} />
+              </View>
+            </View>
+          ) : (
+            <ScrollView
+              contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+              showsVerticalScrollIndicator={SHOW_SCROLLBAR}
             >
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text variant="body" weight="600">
-                  {line.name}
-                </Text>
-                <Text variant="caption" tone="muted">
-                  {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
-                  {line.discountValue > 0
-                    ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, doc.currency))}`
-                    : ''}
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
-                  <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
-                  {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
-                </View>
-              </View>
-              <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-                {formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}
-              </Text>
-            </View>
-          ))}
-        </Card>
+              <SplitPane
+                main={
+                  <View style={{ gap: t.spacing.md }}>
+                    {headerCard}
+                    {desktopLines}
+                    {totalsCard}
+                    {notesCard}
+                  </View>
+                }
+                side={
+                  <>
+                    {paymentCard}
+                    {paymentsSection}
+                    {complianceSection}
+                  </>
+                }
+              />
+            </ScrollView>
+          )}
+        </>
+      ) : (
+        <>
+        <ScrollView
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
+          {headerCard}
+          {paymentCard}
+          {linesSection}
+          {totalsCard}
+          {paymentsSection}
+          {complianceSection}
+          {notesCard}
+        </ScrollView>
 
-        {/* Totals */}
-        <Card style={{ marginTop: t.spacing.md }}>
-          <TotalsPanel
-            totals={doc.totals}
-            currency={doc.currency}
-            baseCurrency={baseCurrency}
-            exchangeRate={doc.exchangeRate}
-          />
-        </Card>
-
-        {/* Payments */}
-        {relatedPayments.length > 0 ? (
-          <>
-            <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.payments')}</Text>
-            <Card padded={false}>
-              {relatedPayments.map((p, i) => {
-                const alloc = p.allocations.find((a) => a.documentId === doc.id);
-                return (
-                  <Pressable
-                    key={p.id}
-                    onPress={() => router.push(`/(app)/payments/${p.id}`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Payment ${p.number}`}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: t.spacing.md,
-                      padding: t.spacing.lg,
-                      borderBottomWidth: i < relatedPayments.length - 1 ? 0.5 : 0,
-                      borderBottomColor: t.c.line,
-                      backgroundColor: pressed ? t.c.card2 : 'transparent',
-                    })}
-                  >
-                    <MaterialCommunityIcons name="cash-check" size={20} color={t.c.good} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text variant="body" weight="600">
-                        {p.number}
-                      </Text>
-                      <Text variant="caption" tone="muted">
-                        {formatDate(p.date)} · {p.method}
-                        {p.reference ? ` · ${p.reference}` : ''}
-                      </Text>
-                    </View>
-                    <Text variant="body" weight="700" tone="good">
-                      {formatMoney(alloc?.amount ?? p.amount)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </Card>
-          </>
-        ) : null}
-
-        {/* Compliance */}
-        <ComplianceCard document={doc} />
-
-        {/* Notes */}
-        {doc.notes || doc.terms ? (
-          <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
-            {doc.notes ? (
-              <View style={{ gap: 4 }}>
-                <Text variant="caption" tone="muted" weight="600">{tr('sales:detail.notes')}</Text>
-                <Text variant="small" style={{ lineHeight: 20 }}>
-                  {doc.notes}
-                </Text>
-              </View>
-            ) : null}
-            {doc.terms ? (
-              <View style={{ gap: 4 }}>
-                <Text variant="caption" tone="muted" weight="600">{tr('sales:detail.terms')}</Text>
-                <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
-                  {doc.terms}
-                </Text>
-              </View>
-            ) : null}
-          </Card>
-        ) : null}
-      </ScrollView>
-
-      {/* Sticky actions */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-          flexDirection: 'row',
-          gap: t.spacing.md,
-        }}
-      >
-        {!isFinalized(doc.status) ? (
-          <Button
-            title={tr('sales:detail.finalise')}
-            icon="check-decagram-outline"
-            onPress={() => setStatusOpen(true)}
-            style={{ flex: 1 }}
-          />
-        ) : (
-          <Button title={tr('sales:detail.share')} icon="share-variant" onPress={shareDocument} loading={busy} style={{ flex: 1 }} />
-        )}
-        <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
-      </View>
+        {/* Sticky actions */}
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: t.spacing.lg,
+            paddingBottom: insets.bottom + t.spacing.md,
+            borderTopWidth: 1,
+            borderTopColor: t.c.line,
+            backgroundColor: t.c.paper,
+            flexDirection: 'row',
+            gap: t.spacing.md,
+          }}
+        >
+          {!isFinalized(doc.status) ? (
+            <Button
+              title={tr('sales:detail.finalise')}
+              icon="check-decagram-outline"
+              onPress={() => setStatusOpen(true)}
+              style={{ flex: 1 }}
+            />
+          ) : (
+            <Button title={tr('sales:detail.share')} icon="share-variant" onPress={shareDocument} loading={busy} style={{ flex: 1 }} />
+          )}
+          <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
+        </View>
+        </>
+      )}
 
       {/* Action sheet */}
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>

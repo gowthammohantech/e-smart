@@ -20,6 +20,7 @@ import { useUiStore } from '../../../store/uiStore';
 import { formatRelative } from '@esmart/core/lib/date';
 import { isRemote, remoteSession, syncNow, useRemoteMeta } from '../../../remote';
 import { drop } from '../../../remote/outbox';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function SyncStatus() {
   const t = useTheme();
@@ -46,7 +47,7 @@ export default function SyncStatus() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.syncStatus') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
           <Illustration name={offline ? 'offline' : 'all-settled'} size="full" />
           <Text variant="title" weight="700">

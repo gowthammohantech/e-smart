@@ -68,7 +68,9 @@
     "composition": "Composition scheme",
     "compositionHint": "Turn on if you file under the composition scheme — invoices will not show a tax breakdown.",
     "defaultSlabs": "Default tax slabs",
-    "unregisteredNote": "Your invoices will be raised without a tax breakdown. You can register later without losing any history."
+    "unregisteredNote": "Your invoices will be raised without a tax breakdown. You can register later without losing any history.",
+    "registeredFor": "I'm registered for {{regime}}",
+    "slabsNote": "These are created for you. Add or edit slabs any time in Settings → Taxes."
   },
   "numbering": {
     "title": "Invoice numbering",
@@ -76,7 +78,9 @@
     "prefix": "Prefix",
     "startFrom": "Start from",
     "includeFy": "Include financial year",
-    "nextWillBe": "Your next invoice will be"
+    "nextWillBe": "Your next invoice will be",
+    "includeFyHint": "Adds {{fy}} to every number and restarts the sequence each year.",
+    "seriesNote": "Quotes, purchase bills, payments and expenses each get their own series with matching settings. You can tune them individually in Settings → Numbering."
   },
   "branches": {
     "title": "Locations",
@@ -108,5 +112,16 @@
     },
     "allSet": "Tax slabs, numbering and your first location are all set up."
   },
-  "stepProgress": "Step {{current}} of {{total}} · {{step}}"
+  "stepProgress": "Step {{current}} of {{total}} · {{step}}",
+  "stepHint": {
+    "business": "Name, plan and address",
+    "country": "Currency and financial year",
+    "tax": "GSTIN and tax scheme",
+    "numbering": "How invoices are numbered",
+    "branches": "Other shops and warehouses"
+  },
+  "rail": {
+    "title": "Set up your business",
+    "signedInAs": "Signed in as {{name}}"
+  }
 }

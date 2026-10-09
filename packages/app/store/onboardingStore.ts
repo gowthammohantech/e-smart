@@ -51,7 +51,8 @@ type OnboardingState = {
 const initial: OnboardingDraft = {
   name: '',
   legalName: '',
-  businessType: 'Retail shop',
+  // A slug from BUSINESS_TYPES; labels live in `onboarding:businessType.*`.
+  businessType: 'retail',
   plan: 'basic',
   address: emptyAddress,
   email: '',

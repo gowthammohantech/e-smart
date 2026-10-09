@@ -12,6 +12,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { useAuditEvents } from '../../../store/selectors';
 import { formatDateTime } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
   created: 'plus-circle-outline',
@@ -47,7 +48,7 @@ export default function AuditTrail() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
           {filtered.length === 0 ? (
             <EmptyState icon="history" title={tr('settings:audit.none')} message={tr('settings:audit.noneBody')} compact />

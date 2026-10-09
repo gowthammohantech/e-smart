@@ -18,6 +18,7 @@ import { useBranches, useItems, useStockMovements } from '../../../store/selecto
 import { stockOnHand } from '@esmart/core/domain/stockLedger';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function StockTransfer() {
   const t = useTheme();
@@ -72,7 +73,7 @@ export default function StockTransfer() {
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <PickerField
           label={tr('inventory:transfer.item')}

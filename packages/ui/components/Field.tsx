@@ -253,6 +253,9 @@ export function PickerField({
   const { t: tr } = useTranslation(['common']);
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
+      {/* The clear button sits beside the field's button, not inside it: on
+          web each is a <button>, and a button can't contain another. */}
+      <View>
       <Pressable
         onPress={onPress}
         disabled={disabled}
@@ -279,13 +282,23 @@ export function PickerField({
         {disabled ? (
           <MaterialCommunityIcons name="lock-outline" size={16} color={t.c.muted} />
         ) : clearable && value ? (
-          <Pressable onPress={onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.clear')}>
-            <MaterialCommunityIcons name="close-circle" size={17} color={t.c.muted} />
-          </Pressable>
+          <View style={{ width: 17 }} />
         ) : (
           <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} />
         )}
       </Pressable>
+      {!disabled && clearable && value ? (
+        <Pressable
+          onPress={onClear}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={tr('common:component.clear')}
+          style={{ position: 'absolute', right: t.spacing.md, top: 0, bottom: 0, justifyContent: 'center' }}
+        >
+          <MaterialCommunityIcons name="close-circle" size={17} color={t.c.muted} />
+        </Pressable>
+      ) : null}
+      </View>
     </FieldShell>
   );
 }

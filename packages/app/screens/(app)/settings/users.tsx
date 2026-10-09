@@ -8,6 +8,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
+import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -21,6 +22,7 @@ import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
 import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const ROLES: { value: UserRole; label: string; description: string }[] = [
   { value: 'owner', label: 'Owner', description: 'Full access, including billing and deleting the business.' },
@@ -87,7 +89,7 @@ export default function UserSettings() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.usersAndRoles') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
           {users.map((u, i) => (
             <ListRow
@@ -124,21 +126,7 @@ export default function UserSettings() {
         </Card>
       </ScrollView>
 
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button title={tr('settings:users.invite')} icon="account-plus-outline" onPress={() => open()} fullWidth size="lg" />
-      </View>
+      <PrimaryActionBar title={tr('settings:users.invite')} icon="account-plus-outline" onPress={() => open()} />
 
       <Sheet
         visible={!!editing}

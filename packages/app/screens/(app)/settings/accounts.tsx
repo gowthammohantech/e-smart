@@ -8,6 +8,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
+import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
@@ -20,6 +21,7 @@ import { useActiveCompany, useBaseCurrency, useExpenses, usePaymentAccounts, use
 import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function AccountSettings() {
   const t = useTheme();
@@ -78,7 +80,7 @@ export default function AccountSettings() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.paymentAccounts') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: 5, paddingVertical: t.spacing.xl }}>
           <Text variant="caption" tone="muted">{tr('settings:accounts.cashAndBank')}</Text>
           <Text variant="h1" weight="700" tone={totalCash >= 0 ? 'default' : 'bad'}>
@@ -112,21 +114,7 @@ export default function AccountSettings() {
         </Card>
       </ScrollView>
 
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-        }}
-      >
-        <Button title={tr('settings:accounts.add')} icon="plus" onPress={() => open()} fullWidth size="lg" />
-      </View>
+      <PrimaryActionBar title={tr('settings:accounts.add')} icon="plus" onPress={() => open()} />
 
       <Sheet
         visible={!!editing}

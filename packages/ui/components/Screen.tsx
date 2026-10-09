@@ -3,6 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleProp, View, ViewStyle } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
+import { SHOW_SCROLLBAR } from '../theme/breakpoints';
 
 type Props = {
   children: React.ReactNode;
@@ -50,7 +51,7 @@ export function Screen({
       style={[{ flex: 1, backgroundColor: bg }, style]}
       contentContainerStyle={inner}
       keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       refreshControl={
         onRefresh ? (
           <RefreshControl

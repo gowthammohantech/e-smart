@@ -14,6 +14,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { mockExtract, useOcrStore } from '../../../features/ocr/ocrStore';
 import { recognizeText } from '../../../features/ocr/recognize';
 import { parseReceiptText } from '@esmart/core/domain/parseReceipt';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const STEPS = [
   { icon: 'camera-outline' as const, label: 'Capture', body: 'Photograph the bill or pick one from your gallery.' },
@@ -83,7 +84,7 @@ export default function OcrCapture() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.scanABill') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Segmented
           options={[
             { value: 'expense', label: 'Expense receipt' },

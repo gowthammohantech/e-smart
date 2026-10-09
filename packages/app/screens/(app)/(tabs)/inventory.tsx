@@ -19,6 +19,7 @@ import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '..
 import { summarizeStock } from '@esmart/core/domain/reports';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Filter = 'all' | 'low' | 'out' | 'services';
 
@@ -56,7 +57,7 @@ export default function InventoryTab() {
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <StatRow>
           <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={`${report.trackedCount} tracked items`} />

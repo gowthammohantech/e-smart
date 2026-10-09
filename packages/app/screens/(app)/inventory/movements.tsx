@@ -14,6 +14,7 @@ import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger
 import { StockMovementType } from '@esmart/core/types';
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
 
@@ -79,7 +80,7 @@ export default function StockMovements() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
           {filtered.length === 0 ? (
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />

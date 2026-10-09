@@ -9,6 +9,7 @@ import { SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
+import { StatGrid } from '@esmart/ui/components/Layout';
 import { BarChart } from '@esmart/ui/components/charts/BarChart';
 import {
   useBaseCurrency,
@@ -25,6 +26,7 @@ import { profitSnapshot, summarizeStock } from '@esmart/core/domain/reports';
 import { lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type ReportLink = {
   key: string;
@@ -84,28 +86,27 @@ export default function ReportsTab() {
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         {/* Profit and stock need the buying side of the books, so the Sales plan starts at the list. */}
         {full ? (
           <>
-        <StatRow>
-          <StatTile label={tr('reports:hub.revenueFy')} value={profit.revenue} icon="trending-up" />
-          <StatTile
-            label={tr('reports:hub.netProfit')}
-            value={profit.netProfit}
-            tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
-            icon="chart-line"
-            caption={`${formatPercent(profit.margin)} margin`}
-          />
-        </StatRow>
-
-        <View style={{ height: t.spacing.md }} />
-
-        <StatRow>
-          <StatTile label={tr('reports:hub.receivable')} value={receivables.summary.total} tone="warn" icon="clock-alert-outline" />
-          <StatTile label={tr('reports:hub.payable')} value={payables.summary.total} tone="bad" icon="file-clock-outline" />
-        </StatRow>
+        <StatGrid>
+          <StatRow>
+            <StatTile label={tr('reports:hub.revenueFy')} value={profit.revenue} icon="trending-up" />
+            <StatTile
+              label={tr('reports:hub.netProfit')}
+              value={profit.netProfit}
+              tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
+              icon="chart-line"
+              caption={`${formatPercent(profit.margin)} margin`}
+            />
+          </StatRow>
+          <StatRow>
+            <StatTile label={tr('reports:hub.receivable')} value={receivables.summary.total} tone="warn" icon="clock-alert-outline" />
+            <StatTile label={tr('reports:hub.payable')} value={payables.summary.total} tone="bad" icon="file-clock-outline" />
+          </StatRow>
+        </StatGrid>
 
         <SectionHeader title={tr('reports:hub.monthlyProfit')} action="Open" onAction={() => router.push('/(app)/reports/profit')} />
         <Card>

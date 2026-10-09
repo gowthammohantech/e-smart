@@ -16,6 +16,7 @@ import { PLANS, moduleSetFor, planInfo } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '../../../features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
 import type { PlanTier } from '@esmart/core/types';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Cycle = 'monthly' | 'yearly';
 
@@ -46,7 +47,7 @@ export default function PlanBilling() {
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('plan:billing.title') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="star-circle-outline" size={22} color={t.c.primary} />

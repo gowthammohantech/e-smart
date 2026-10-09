@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useResolvedLanguage } from '../../../i18n/I18nProvider';
 import { Platform, Share, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { WebView } from 'react-native-webview';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +20,8 @@ import {
   useDocument,
   useParty,
 } from '../../../store/selectors';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { HtmlPreview, printHtml } from '../../../features/documents/HtmlPreview';
 
 export default function DocumentPreview() {
   const t = useTheme();
@@ -36,6 +37,7 @@ export default function DocumentPreview() {
   const branches = useBranches();
   const ewayBill = useActiveEwayBill(doc?.id);
   const [busy, setBusy] = useState(false);
+  const desktop = useIsDesktop();
 
   const html = useMemo(
     () =>
@@ -65,6 +67,11 @@ export default function DocumentPreview() {
   const label = documentKindLabel(tr, doc.kind, 1);
 
   const share = async () => {
+    // A browser has no share sheet for files: its print dialog saves the PDF.
+    if (Platform.OS === 'web') {
+      printHtml(html).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'));
+      return;
+    }
     setBusy(true);
     try {
       const { uri } = await Print.printToFileAsync({ html });
@@ -84,13 +91,16 @@ export default function DocumentPreview() {
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <Stack.Screen options={{ title: `${label} preview` }} />
 
-      <WebView
-        originWhitelist={['*']}
-        source={{ html }}
-        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
-        scalesPageToFit
-        showsVerticalScrollIndicator={false}
-      />
+      {desktop ? (
+        // A desktop shows the page as a sheet of paper on the canvas.
+        <View style={{ flex: 1, backgroundColor: t.c.canvas, padding: t.spacing.xl, alignItems: 'center' }}>
+          <View style={[{ flex: 1, width: '100%', maxWidth: 860, borderRadius: t.radius.sm, overflow: 'hidden' }, t.shadow.card]}>
+            <HtmlPreview html={html} />
+          </View>
+        </View>
+      ) : (
+        <HtmlPreview html={html} />
+      )}
 
       <View
         style={{
@@ -107,12 +117,17 @@ export default function DocumentPreview() {
           title={tr('sales:print.print')}
           variant="ghost"
           icon="printer-outline"
-          onPress={() => Print.printAsync({ html }).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'))}
+          onPress={() => printHtml(html).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'))}
           style={{ flex: 1 }}
         />
-        <Button title={tr('sales:print.sharePdf')} icon="share-variant" onPress={share} loading={busy} style={{ flex: 1 }} />
+        <Button
+          title={Platform.OS === 'web' ? tr('sales:print.savePdf') : tr('sales:print.sharePdf')}
+          icon={Platform.OS === 'web' ? 'file-download-outline' : 'share-variant'}
+          onPress={share}
+          loading={busy}
+          style={{ flex: 1 }}
+        />
       </View>
-      {Platform.OS === 'web' ? null : null}
     </View>
   );
 }

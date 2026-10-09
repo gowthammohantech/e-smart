@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 
 type Props = {
@@ -102,7 +103,10 @@ export function ListRow({
       onPress={onPress}
       onLongPress={onLongPress}
       disabled={disabled}
-      style={({ pressed }) => (pressed ? { backgroundColor: t.c.card2 } : null)}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressState;
+        return [pressed || hovered ? { backgroundColor: t.c.card2 } : null, focusRing(t, focused)];
+      }}
     >
       {content}
     </Pressable>

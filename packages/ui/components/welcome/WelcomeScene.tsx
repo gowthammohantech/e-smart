@@ -20,7 +20,7 @@ const ORB = { x: 312, y: 46 };
  * no assets. Each piece floats on its own phase; motion stops under Reduce
  * Motion. Decorative: the tagline beside it carries the meaning.
  */
-export function WelcomeScene() {
+export function WelcomeScene({ width: fixedWidth }: { width?: number } = {}) {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth']);
   const p = useScenePalette();
@@ -28,7 +28,8 @@ export function WelcomeScene() {
   const { bob, twinkle } = useLoopPhase();
 
   // Fit the width, but leave room for the logo and buttons on short phones.
-  const width = Math.min(winW - t.spacing.xl * 2, 340, winH * 0.36 * (VW / VH));
+  // A desktop brand panel passes its own width instead.
+  const width = fixedWidth ?? Math.min(winW - t.spacing.xl * 2, 340, winH * 0.36 * (VW / VH));
   const s = width / VW;
   const height = VH * s;
 

@@ -86,6 +86,7 @@ export default function SignUp() {
         icon="lock-outline"
         error={errors.password}
         required
+        onSubmitEditing={submit}
       />
 
       <View style={{ gap: 4 }}>

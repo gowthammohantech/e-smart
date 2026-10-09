@@ -21,6 +21,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { money, sum, zero } from '@esmart/core/lib/money';
 import { useBaseCurrency, useParties, usePayables, useReceivables } from '../../store/selectors';
+import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Mode = 'all' | 'overdue' | 'dueSoon';
 
@@ -95,7 +96,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
           <StatTile
             label={isReceivable ? 'Total receivable' : 'Total payable'}
