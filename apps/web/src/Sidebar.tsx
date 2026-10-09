@@ -256,7 +256,7 @@ export function Sidebar() {
           borderBottomColor: t.c.line,
         }}
       >
-        {compact ? <BrandLogo variant="mark" height={30} /> : <BrandLogo height={30} />}
+        {compact ? <BrandLogo variant="mark" height={30} /> : <BrandLogo height={42} />}
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: t.spacing.sm, gap: 2 }}>
         {TABS.filter((tab) => canOpen(plan, tabPath(tab.name)) && tab.name !== 'more').map((tab) => {
