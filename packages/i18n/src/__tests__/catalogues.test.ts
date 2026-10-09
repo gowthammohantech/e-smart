@@ -39,8 +39,17 @@ function params(value: string): string[] {
  * Latin in a `ta` value means the key was never translated — key parity cannot
  * catch that, because a copy-pasted English value has a perfectly valid key.
  */
-const TA_LATIN_ALLOWLIST =
-  /^(GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|LUT|B2B|B2C|FY|PDF|OTP|CSV|QR|UPI|OCR|SKU|HSN|PO|SEZ|UTR|LR|ID|URP|GSP|IRN|IRP|EWB|EWBs|HDFC|ERP|SDK|Expo|Storyset|Gati|Logistics|TRANSIN|JSON|Part-A|Part-B|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E)$/;
+const TA_LATIN_ALLOWLIST = new RegExp(
+  `^(${[
+    'GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|LUT|B2B|B2C|FY|PDF|OTP|CSV|QR|UPI|OCR|SKU|HSN|PO|SEZ|UTR|LR|ID|URP|GSP|IRN|IRP|EWB|EWBs|HDFC|ERP|SDK|Expo|Storyset|Gati|Logistics|TRANSIN|JSON|Part-A|Part-B|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E',
+    // Platforms and products, named as their makers write them ("Expo Go").
+    'Android|iPhone|Go|Excel|xlsx',
+    // Keyboard keys, as printed on the key.
+    'Enter|Esc',
+    // The postal code, which Indian forms call a PIN in every language.
+    'PIN',
+  ].join('|')})$`,
+);
 
 function suspiciousLatin(value: string): string[] {
   const withoutParams = value
