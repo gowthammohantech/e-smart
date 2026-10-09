@@ -22,6 +22,8 @@ export default function WebAppLayout() {
   // Settings pages get their own list of pages beside them (and a narrower,
   // form-width column); everything else uses the full content width.
   const inSettings = pathname.startsWith('/settings');
+  // Plan & billing lays its tiers side by side, so it takes the full column.
+  const wideSettings = pathname.startsWith('/settings/plan');
   usePlanGuard();
 
   const stack = (
@@ -81,7 +83,7 @@ export default function WebAppLayout() {
             >
               {/* Kept in place (null when hidden) so the Stack never remounts. */}
               {inSettings ? <SettingsNav /> : null}
-              <View style={{ flex: 1, maxWidth: inSettings ? 880 : undefined }}>{stack}</View>
+              <View style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined }}>{stack}</View>
             </Animated.View>
           </View>
         </View>
