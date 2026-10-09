@@ -118,6 +118,7 @@
   },
   "payment": {
     "selectContact": "Select contact",
+    "details": "Payment details",
     "amount": "Amount",
     "date": "Payment date",
     "method": "Payment method",
@@ -133,6 +134,7 @@
     "notes": "Notes",
     "notesPlaceholder": "Internal note",
     "applyTo": "Apply to",
+    "summary": "Summary",
     "autoAllocateShort": "Auto-allocate",
     "payAll": "Pay all",
     "heldAsAdvance": "Held as an advance",

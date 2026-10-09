@@ -2,6 +2,8 @@ import React from 'react';
 import { StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { FORM_MAX_WIDTH, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
+import { Card } from './Card';
+import { Text } from './Text';
 
 /**
  * Two columns side by side on a desktop browser; on a phone the left column
@@ -77,6 +79,25 @@ export function FieldRow({ children }: { children: React.ReactNode }) {
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
       {React.Children.map(children, (child) => (child ? <View style={{ flex: 1, minWidth: 0 }}>{child}</View> : null))}
     </View>
+  );
+}
+
+/**
+ * A titled card grouping related fields, for desktop form layouts. `action`
+ * sits at the right of the title (e.g. a pair of text links).
+ */
+export function FormSection({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  const t = useTheme();
+  return (
+    <Card style={{ gap: t.spacing.lg }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
+        <Text variant="caption" tone="muted" weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+          {title}
+        </Text>
+        {action}
+      </View>
+      {children}
+    </Card>
   );
 }
 

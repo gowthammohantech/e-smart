@@ -118,6 +118,7 @@
   },
   "payment": {
     "selectContact": "தொடர்பைத் தேர்வுசெய்",
+    "details": "கட்டண விவரங்கள்",
     "amount": "தொகை",
     "date": "கட்டணத் தேதி",
     "method": "கட்டண முறை",
@@ -133,6 +134,7 @@
     "notes": "குறிப்புகள்",
     "notesPlaceholder": "உள் குறிப்பு",
     "applyTo": "எதற்குப் பகிர",
+    "summary": "சுருக்கம்",
     "autoAllocateShort": "தானாகப் பகிர்",
     "payAll": "எல்லாம் செலுத்து",
     "heldAsAdvance": "முன்பணமாக வைக்கப்பட்டது",

@@ -5,7 +5,8 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FormContainer } from '@esmart/ui/components/Layout';
+import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
+import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -41,14 +42,17 @@ import {
   usePayments,
   usePrimaryBranchId,
 } from '../../../store/selectors';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 
 export default function NewPayment() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'sales']);
+  const { t: tr } = useTranslation(['domain', 'sales', 'common']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
+  // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
+  const breakpoint = useBreakpoint();
+  const desktop = breakpoint !== 'phone';
 
   const params = useLocalSearchParams<{ direction?: string; partyId?: string; documentId?: string }>();
   // Paying suppliers is part of payables, which the Sales plan leaves out.
@@ -298,291 +302,425 @@ export default function NewPayment() {
     router.replace(`/(app)/payments/${id}`);
   };
 
+  // Every block is built once and placed twice: stacked in one column on a
+  // phone, grouped into cards across two columns on a desktop browser.
+  const partyCard = (
+    <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        {party ? (
+          <>
+            <Avatar name={party.name} size={42} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="body" weight="600">
+                {party.name}
+              </Text>
+              <Text variant="caption" tone="muted">
+                {outstanding.length} open {outstanding.length === 1 ? 'document' : 'documents'}
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <View
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                backgroundColor: t.c.chip,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
+            </View>
+            <Text variant="body" weight="600" style={{ flex: 1 }}>
+              Select {direction === 'received' ? 'customer' : 'supplier'}
+            </Text>
+          </>
+        )}
+        <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+      </Card>
+    </Pressable>
+  );
+  // On a desktop the contact is one field among the others rather than a card of its own.
+  const partyField = (
+    <PickerField
+      label={tr(direction === 'received' ? 'common:table.customer' : 'common:table.supplier')}
+      value={party?.name}
+      onPress={() => setPartyOpen(true)}
+      icon="account-search-outline"
+      hint={party ? `${outstanding.length} open ${outstanding.length === 1 ? 'document' : 'documents'}` : undefined}
+      required
+    />
+  );
+
+  // Large on a phone, where it is the screen's focus; field-sized on a desktop so it lines up in its row.
+  const amountField = (size?: 'lg') => (
+    <AmountField
+      label={tr('sales:payment.amount')}
+      value={amountText}
+      onChangeValue={onAmountChange}
+      currency={currency}
+      size={size}
+      required
+    />
+  );
+
+  const dateField = <DateField label={tr('sales:payment.date')} value={date} onChange={setDate} required />;
+
+  const currencyField = (
+    <PickerField
+      label={tr('sales:payment.currency')}
+      value={`${currency}${currency !== baseCurrency ? ` · 1 ${currency} = ${exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
+      onPress={() => setCurrencyOpen(true)}
+      icon="cash-multiple"
+    />
+  );
+
+  const methodField = (
+    <PickerField
+      label={tr('sales:payment.method')}
+      value={paymentMethodLabel(tr, method)}
+      onPress={() => setMethodOpen(true)}
+      icon="credit-card-outline"
+    />
+  );
+
+  const accountField = (
+    <PickerField
+      label={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
+      value={methodAccounts.find((a) => a.id === accountId)?.name}
+      onPress={() => setAccountOpen(true)}
+      icon="bank-outline"
+      required
+      error={
+        methodAccounts.length === 0
+          ? tr('sales:payment.noAccountForMethod')
+          : balanceBlocks
+            ? tr('sales:payment.insufficientCash', { balance: formatMoney(money(balance ?? 0, baseCurrency)) })
+            : undefined
+      }
+      hint={
+        direction === 'paid' && balance !== undefined
+          ? shortfall
+            ? tr('sales:payment.insufficientBalance', { balance: formatMoney(money(balance, baseCurrency)) })
+            : tr('sales:payment.accountBalance', { balance: formatMoney(money(balance, baseCurrency)) })
+          : undefined
+      }
+    />
+  );
+  const addAccountLink =
+    methodAccounts.length === 0 ? (
+      <Pressable onPress={() => router.push('/(app)/settings/accounts')} accessibilityRole="link" hitSlop={6}>
+        <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.addAccount')}</Text>
+      </Pressable>
+    ) : null;
+
+  const referenceField = (
+    <TextField
+      label={tr('sales:payment.reference')}
+      value={reference}
+      onChangeText={setReference}
+      placeholder={tr('sales:payment.referencePlaceholder')}
+      icon="pound"
+    />
+  );
+
+  const rateField =
+    currency !== baseCurrency ? (
+      <TextField
+        label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
+        value={String(exchangeRate)}
+        onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
+        keyboardType="decimal-pad"
+        icon="swap-horizontal"
+        hint={tr('sales:payment.fxHint')}
+      />
+    ) : null;
+
+  const advanceCard =
+    partyId && advance.minor > 0 && outstanding.length > 0 ? (
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        <MaterialCommunityIcons name="wallet-outline" size={22} color={t.c.primary} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
+          <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
+        </View>
+        <Button title={tr('sales:payment.adjustAdvance')} onPress={() => adjustAdvance()} size="sm" variant="secondary" />
+      </Card>
+    ) : null;
+
+  const allocationLinks = (
+    <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+      <Pressable onPress={autoAllocate} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.autoAllocate')}>
+        <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.autoAllocateShort')}</Text>
+      </Pressable>
+      <Pressable onPress={payFull} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.payEverything')}>
+        <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.payAll')}</Text>
+      </Pressable>
+    </View>
+  );
+
+  const openDocuments = !partyId ? (
+    <EmptyState icon="account-search-outline" title={tr('sales:payment.pickContact')} compact />
+  ) : outstanding.length === 0 ? (
+    <EmptyState
+      illustration="all-settled"
+    icon="check-all"
+      title={tr('sales:payment.nothingOutstanding')}
+      message={tr('sales:payment.advanceHint')}
+      compact
+    />
+  ) : (
+    outstanding.map((o, i) => {
+      const selected = !!allocations[o.document.id];
+      return (
+        <View
+          key={o.document.id}
+          style={{
+            padding: t.spacing.lg,
+            borderBottomWidth: i < outstanding.length - 1 ? 0.5 : 0,
+            borderBottomColor: t.c.line,
+            gap: t.spacing.sm,
+          }}
+        >
+          <Pressable
+            onPress={() => toggleAllocation(o.document.id, o.outstanding)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selected }}
+            accessibilityLabel={`Allocate to ${o.document.number}`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
+          >
+            <MaterialCommunityIcons
+              name={selected ? 'checkbox-marked' : 'checkbox-blank-outline'}
+              size={21}
+              color={selected ? t.c.primary : t.c.muted}
+            />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="body" weight="600">
+                {o.document.number}
+              </Text>
+              <Text variant="caption" tone="muted">
+                {formatDate(o.document.date, 'dd MMM')} · due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 3 }}>
+              <Text variant="small" weight="700">
+                {formatMoney(o.outstanding)}
+              </Text>
+              {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d late`} tone="danger" size="sm" /> : null}
+            </View>
+          </Pressable>
+
+          {advance.minor > 0 ? (
+            <Pressable
+              onPress={() => adjustAdvance(o.document.id)}
+              hitSlop={6}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}
+            >
+              <MaterialCommunityIcons name="wallet-outline" size={15} color={t.c.primary} />
+              <Text variant="caption" tone="primary" weight="600">
+                {tr('sales:payment.useAdvanceHere', {
+                  amount: formatMoney(money(Math.min(advance.minor, o.outstanding.minor), currency)),
+                })}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {selected ? (
+            <AmountField
+              value={allocations[o.document.id]}
+              onChangeValue={(v) => setRowAllocation(o.document.id, v, o.outstanding)}
+              currency={currency}
+              label={tr('sales:payment.applying')}
+            />
+          ) : null}
+        </View>
+      );
+    })
+  );
+
+  const summaryRows = (
+    <>
+      {[
+        { label: 'Payment amount', value: formatMoney(amount) },
+        { label: 'Allocated', value: formatMoney(allocatedTotal) },
+      ].map((r) => (
+        <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text variant="small" tone="muted">
+            {r.label}
+          </Text>
+          <Text variant="small" weight="600">
+            {r.value}
+          </Text>
+        </View>
+      ))}
+      <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
+          {overAllocated ? 'Over-allocated by' : 'Unallocated (advance)'}
+        </Text>
+        <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
+          {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
+        </Text>
+      </View>
+      {fxGainLoss && fxGainLoss.minor !== 0 ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+          <Text variant="caption" tone="muted">
+            FX {fxGainLoss.minor >= 0 ? 'gain' : 'loss'}
+          </Text>
+          <Text variant="caption" weight="600" tone={fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
+            {formatMoney(fxGainLoss, { signed: true })}
+          </Text>
+        </View>
+      ) : null}
+    </>
+  );
+
+  const notesField = <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />;
+
+  const submitTitle = direction === 'received' ? 'Record payment' : 'Record payment made';
+
+  const phoneForm = (
+    <ScrollView
+      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {partyCard}
+      {amountField('lg')}
+      {dateField}
+      {currencyField}
+      {methodField}
+      {accountField}
+      {addAccountLink}
+      {referenceField}
+      {rateField}
+      {advanceCard}
+
+      {/* Allocation */}
+      <View style={{ gap: t.spacing.sm }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
+          {allocationLinks}
+        </View>
+
+        <Card padded={false}>{openDocuments}</Card>
+      </View>
+
+      {/* Allocation summary */}
+      <Card style={{ gap: t.spacing.sm }}>{summaryRows}</Card>
+
+      {notesField}
+    </ScrollView>
+  );
+
+  const details = (
+    <FormSection title={tr('sales:payment.details')}>
+      <FieldRow>
+        {partyField}
+        {dateField}
+      </FieldRow>
+      <FieldRow>
+        {amountField()}
+        {currencyField}
+      </FieldRow>
+      <FieldRow>
+        {methodField}
+        {accountField}
+      </FieldRow>
+      {addAccountLink}
+      <FieldRow>
+        {referenceField}
+        {/* Holds the column when there's no settlement rate, so reference keeps its width. */}
+        {rateField ?? <View />}
+      </FieldRow>
+    </FormSection>
+  );
+  const allocation = (
+    <FormSection title={tr('sales:payment.applyTo')} action={allocationLinks}>
+      <View style={{ borderWidth: 1, borderColor: t.c.line, borderRadius: t.radius.md, overflow: 'hidden' }}>{openDocuments}</View>
+    </FormSection>
+  );
+  const summary = (
+    <FormSection title={tr('sales:payment.summary')}>
+      <View style={{ gap: t.spacing.sm }}>{summaryRows}</View>
+    </FormSection>
+  );
+  // Notes sit beside the summary so the documents to apply the payment to stay high on the page.
+  const notesCard = <Card>{notesField}</Card>;
+
+  const desktopForm = (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
+      {breakpoint === 'tablet' ? (
+        <View style={{ gap: t.spacing.lg }}>
+          {details}
+          {advanceCard}
+          {allocation}
+          {summary}
+          {notesCard}
+        </View>
+      ) : (
+        <SplitPane
+          sideWidth={360}
+          main={
+            <View style={{ gap: t.spacing.lg }}>
+              {details}
+              {advanceCard}
+              {allocation}
+            </View>
+          }
+          side={
+            <>
+              {summary}
+              {notesCard}
+            </>
+          }
+        />
+      )}
+    </ScrollView>
+  );
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <FormContainer wide>
+      <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>
         <Stack.Screen options={{ title: direction === 'received' ? 'Receive payment' : 'Make payment' }} />
 
-        <ScrollView
-          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
-        >
-          <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
-            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-              {party ? (
-                <>
-                  <Avatar name={party.name} size={42} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text variant="body" weight="600">
-                      {party.name}
-                    </Text>
-                    <Text variant="caption" tone="muted">
-                      {outstanding.length} open {outstanding.length === 1 ? 'document' : 'documents'}
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <View
-                    style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 21,
-                      backgroundColor: t.c.chip,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
-                  </View>
-                  <Text variant="body" weight="600" style={{ flex: 1 }}>
-                    Select {direction === 'received' ? 'customer' : 'supplier'}
-                  </Text>
-                </>
-              )}
-              <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
-            </Card>
-          </Pressable>
+        {desktop ? desktopForm : phoneForm}
 
-          <AmountField
-            label={tr('sales:payment.amount')}
-            value={amountText}
-            onChangeValue={onAmountChange}
-            currency={currency}
-            size="lg"
-            required
-          />
-
-          <DateField label={tr('sales:payment.date')} value={date} onChange={setDate} required />
-
-          <PickerField
-            label={tr('sales:payment.currency')}
-            value={`${currency}${currency !== baseCurrency ? ` · 1 ${currency} = ${exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
-            onPress={() => setCurrencyOpen(true)}
-            icon="cash-multiple"
-          />
-
-          <PickerField
-            label={tr('sales:payment.method')}
-            value={paymentMethodLabel(tr, method)}
-            onPress={() => setMethodOpen(true)}
-            icon="credit-card-outline"
-          />
-
-          <PickerField
-            label={direction === 'received' ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
-            value={methodAccounts.find((a) => a.id === accountId)?.name}
-            onPress={() => setAccountOpen(true)}
-            icon="bank-outline"
-            required
-            error={
-              methodAccounts.length === 0
-                ? tr('sales:payment.noAccountForMethod')
-                : balanceBlocks
-                  ? tr('sales:payment.insufficientCash', { balance: formatMoney(money(balance ?? 0, baseCurrency)) })
-                  : undefined
-            }
-            hint={
-              direction === 'paid' && balance !== undefined
-                ? shortfall
-                  ? tr('sales:payment.insufficientBalance', { balance: formatMoney(money(balance, baseCurrency)) })
-                  : tr('sales:payment.accountBalance', { balance: formatMoney(money(balance, baseCurrency)) })
-                : undefined
-            }
-          />
-          {methodAccounts.length === 0 ? (
-            <Pressable onPress={() => router.push('/(app)/settings/accounts')} accessibilityRole="link" hitSlop={6}>
-              <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.addAccount')}</Text>
-            </Pressable>
-          ) : null}
-
-          <TextField
-            label={tr('sales:payment.reference')}
-            value={reference}
-            onChangeText={setReference}
-            placeholder={tr('sales:payment.referencePlaceholder')}
-            icon="pound"
-          />
-
-          {currency !== baseCurrency ? (
-            <TextField
-              label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
-              value={String(exchangeRate)}
-              onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
-              keyboardType="decimal-pad"
-              icon="swap-horizontal"
-              hint={tr('sales:payment.fxHint')}
+        {desktop ? (
+          <FormActions>
+            <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => router.back()} />
+            <Button title={submitTitle} onPress={save} disabled={!canSave} />
+          </FormActions>
+        ) : (
+          <View
+            style={{
+              padding: t.spacing.lg,
+              paddingBottom: insets.bottom + t.spacing.md,
+              borderTopWidth: 1,
+              borderTopColor: t.c.line,
+              backgroundColor: t.c.paper,
+            }}
+          >
+            <Button
+              title={submitTitle}
+              onPress={save}
+              disabled={!canSave}
+              fullWidth
+              size="lg"
             />
-          ) : null}
-
-          {partyId && advance.minor > 0 && outstanding.length > 0 ? (
-            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-              <MaterialCommunityIcons name="wallet-outline" size={22} color={t.c.primary} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
-                <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
-              </View>
-              <Button title={tr('sales:payment.adjustAdvance')} onPress={() => adjustAdvance()} size="sm" variant="secondary" />
-            </Card>
-          ) : null}
-
-          {/* Allocation */}
-          <View style={{ gap: t.spacing.sm }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
-              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                <Pressable onPress={autoAllocate} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.autoAllocate')}>
-                  <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.autoAllocateShort')}</Text>
-                </Pressable>
-                <Pressable onPress={payFull} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('sales:payment.payEverything')}>
-                  <Text variant="caption" tone="primary" weight="600">{tr('sales:payment.payAll')}</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <Card padded={false}>
-              {!partyId ? (
-                <EmptyState icon="account-search-outline" title={tr('sales:payment.pickContact')} compact />
-              ) : outstanding.length === 0 ? (
-                <EmptyState
-                  illustration="all-settled"
-                icon="check-all"
-                  title={tr('sales:payment.nothingOutstanding')}
-                  message={tr('sales:payment.advanceHint')}
-                  compact
-                />
-              ) : (
-                outstanding.map((o, i) => {
-                  const selected = !!allocations[o.document.id];
-                  return (
-                    <View
-                      key={o.document.id}
-                      style={{
-                        padding: t.spacing.lg,
-                        borderBottomWidth: i < outstanding.length - 1 ? 0.5 : 0,
-                        borderBottomColor: t.c.line,
-                        gap: t.spacing.sm,
-                      }}
-                    >
-                      <Pressable
-                        onPress={() => toggleAllocation(o.document.id, o.outstanding)}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: selected }}
-                        accessibilityLabel={`Allocate to ${o.document.number}`}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
-                      >
-                        <MaterialCommunityIcons
-                          name={selected ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                          size={21}
-                          color={selected ? t.c.primary : t.c.muted}
-                        />
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text variant="body" weight="600">
-                            {o.document.number}
-                          </Text>
-                          <Text variant="caption" tone="muted">
-                            {formatDate(o.document.date, 'dd MMM')} · due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                          <Text variant="small" weight="700">
-                            {formatMoney(o.outstanding)}
-                          </Text>
-                          {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d late`} tone="danger" size="sm" /> : null}
-                        </View>
-                      </Pressable>
-
-                      {advance.minor > 0 ? (
-                        <Pressable
-                          onPress={() => adjustAdvance(o.document.id)}
-                          hitSlop={6}
-                          accessibilityRole="button"
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}
-                        >
-                          <MaterialCommunityIcons name="wallet-outline" size={15} color={t.c.primary} />
-                          <Text variant="caption" tone="primary" weight="600">
-                            {tr('sales:payment.useAdvanceHere', {
-                              amount: formatMoney(money(Math.min(advance.minor, o.outstanding.minor), currency)),
-                            })}
-                          </Text>
-                        </Pressable>
-                      ) : null}
-
-                      {selected ? (
-                        <AmountField
-                          value={allocations[o.document.id]}
-                          onChangeValue={(v) => setRowAllocation(o.document.id, v, o.outstanding)}
-                          currency={currency}
-                          label={tr('sales:payment.applying')}
-                        />
-                      ) : null}
-                    </View>
-                  );
-                })
-              )}
-            </Card>
           </View>
-
-          {/* Allocation summary */}
-          <Card style={{ gap: t.spacing.sm }}>
-            {[
-              { label: 'Payment amount', value: formatMoney(amount) },
-              { label: 'Allocated', value: formatMoney(allocatedTotal) },
-            ].map((r) => (
-              <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text variant="small" tone="muted">
-                  {r.label}
-                </Text>
-                <Text variant="small" weight="600">
-                  {r.value}
-                </Text>
-              </View>
-            ))}
-            <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
-                {overAllocated ? 'Over-allocated by' : 'Unallocated (advance)'}
-              </Text>
-              <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
-                {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
-              </Text>
-            </View>
-            {fxGainLoss && fxGainLoss.minor !== 0 ? (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                <Text variant="caption" tone="muted">
-                  FX {fxGainLoss.minor >= 0 ? 'gain' : 'loss'}
-                </Text>
-                <Text variant="caption" weight="600" tone={fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
-                  {formatMoney(fxGainLoss, { signed: true })}
-                </Text>
-              </View>
-            ) : null}
-          </Card>
-
-          <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />
-        </ScrollView>
-
-        <View
-          style={{
-            padding: t.spacing.lg,
-            paddingBottom: insets.bottom + t.spacing.md,
-            borderTopWidth: 1,
-            borderTopColor: t.c.line,
-            backgroundColor: t.c.paper,
-          }}
-        >
-          <Button
-            title={direction === 'received' ? 'Record payment' : 'Record payment made'}
-            onPress={save}
-            disabled={!canSave}
-            fullWidth
-            size="lg"
-          />
-        </View>
+        )}
 
         <SelectSheet
           visible={partyOpen}

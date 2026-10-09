@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
-import { Card } from '@esmart/ui/components/Card';
+import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
@@ -488,15 +487,3 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   );
 }
 
-/** A titled card grouping related fields on the desktop layout. */
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const t = useTheme();
-  return (
-    <Card style={{ gap: t.spacing.lg }}>
-      <Text variant="caption" tone="muted" weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
-        {title}
-      </Text>
-      {children}
-    </Card>
-  );
-}
