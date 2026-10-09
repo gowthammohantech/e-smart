@@ -53,6 +53,11 @@
     "inputTax": "உள்ளீட்டு வரி",
     "claimable": "கோரத்தக்கது",
     "noExpenses": "செலவுகள் இல்லை",
-    "allCategories": "அனைத்து வகைகளும்"
+    "allCategories": "அனைத்து வகைகளும்",
+    "details": "செலவு விவரங்கள்",
+    "amount": "தொகை",
+    "total": "மொத்தம்",
+    "supplier": "வழங்குநர்",
+    "attachments": "இணைப்புகள்"
   }
 }

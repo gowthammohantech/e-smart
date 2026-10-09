@@ -53,6 +53,11 @@
     "inputTax": "Input tax",
     "claimable": "Claimable",
     "noExpenses": "No expenses",
-    "allCategories": "All categories"
+    "allCategories": "All categories",
+    "details": "Expense details",
+    "amount": "Amount",
+    "total": "Total",
+    "supplier": "Supplier",
+    "attachments": "Attachments"
   }
 }
