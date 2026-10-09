@@ -24,6 +24,7 @@ export async function openSession(
   device: DeviceInfo | undefined,
   ip: string | undefined,
 ) {
+  await assertAccountActive(db, user.accountId);
   const refreshToken = randomToken();
   const sessionId = newId('ses');
   await db.insert(schema.deviceSessions).values({
@@ -39,6 +40,14 @@ export async function openSession(
   return { sessionId, refreshToken, accessToken: signAccess(app, deps, { sub: user.id, sid: sessionId, acc: user.accountId }) };
 }
 
+const accountSuspended = () => unauthorized('ACCOUNT_SUSPENDED', 'This account has been suspended. Contact support.');
+
+/** No new tokens for a suspended account, whichever way the user signs in. */
+async function assertAccountActive(db: DbOrTx, accountId: string) {
+  const [account] = await db.select({ suspendedAt: schema.accounts.suspendedAt }).from(schema.accounts).where(eq(schema.accounts.id, accountId));
+  if (account?.suspendedAt) throw accountSuspended();
+}
+
 export function signAccess(app: FastifyInstance, deps: Deps, claims: AccessClaims): string {
   return app.jwt.sign(claims, { expiresIn: deps.config.ACCESS_TOKEN_TTL_SECONDS });
 }
@@ -47,14 +56,21 @@ export function signAccess(app: FastifyInstance, deps: Deps, claims: AccessClaim
 export async function rotateSession(app: FastifyInstance, deps: Deps, refreshToken: string) {
   const hash = sha256(refreshToken);
   const [session] = await deps.db
-    .select({ s: schema.deviceSessions, accountId: schema.users.accountId, status: schema.users.status })
+    .select({
+      s: schema.deviceSessions,
+      accountId: schema.users.accountId,
+      status: schema.users.status,
+      suspendedAt: schema.accounts.suspendedAt,
+    })
     .from(schema.deviceSessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.deviceSessions.userId))
+    .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
     .where(eq(schema.deviceSessions.refreshTokenHash, hash));
   if (!session || session.s.revokedAt || session.s.refreshExpiresAt < deps.now()) {
     throw unauthorized('REFRESH_TOKEN_INVALID', 'Sign in again');
   }
   if (session.status === 'disabled') throw unauthorized('USER_DISABLED');
+  if (session.suspendedAt) throw accountSuspended();
   const next = randomToken();
   const updated = await deps.db
     .update(schema.deviceSessions)

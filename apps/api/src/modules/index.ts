@@ -26,6 +26,7 @@ import { exportsHandlers } from './exports/handlers';
 import { syncHandlers } from './sync/handlers';
 import { referenceHandlers } from './reference/handlers';
 import { lixiHandlers } from './lixi/handlers';
+import { platformHandlers } from './platform/handlers';
 export { webhookHandlers } from './webhooks/handlers';
 
 /** Every module's handlers, keyed by operationId. */
@@ -57,4 +58,5 @@ export const handlers: Handlers = {
   ...syncHandlers,
   ...referenceHandlers,
   ...lixiHandlers,
+  ...platformHandlers,
 };

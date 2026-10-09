@@ -2191,6 +2191,215 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/metrics/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform totals, plan mix, and daily signups and document volume for a date range (default the last 30 days) */
+        get: operations["getPlatformOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every tenant account, newest first. `q` matches the account, company or owner name and the owner's email. */
+        get: operations["listPlatformAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/accounts/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        /** One account with its companies and users */
+        get: operations["getPlatformAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/accounts/{accountId}/suspend": {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lock every user of the account out and sign them out everywhere. Sign-in and refresh fail with ACCOUNT_SUSPENDED until it is reactivated. */
+        post: operations["suspendAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/accounts/{accountId}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lift a suspension. Users sign in again; their old sessions stay revoked. */
+        post: operations["reactivateAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/companies/{companyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** One company with its subscription, plan history and document counts */
+        get: operations["getPlatformCompany"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/companies/{companyId}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a company's plan by hand (comps, trials, support fixes). Recorded as an `adminOverride` subscription event. A provider-managed subscription may be changed back by its next billing webhook; the response warns when that applies. */
+        put: operations["overrideCompanyPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Users across every account, newest first. `q` matches name, email or phone. */
+        get: operations["listPlatformUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{userId}/disable": {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a user and sign them out everywhere. Platform operators can't be disabled here. */
+        post: operations["disablePlatformUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{userId}/enable": {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-enable a disabled user */
+        post: operations["enablePlatformUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every action platform operators have taken, newest first */
+        get: operations["listPlatformAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export interface webhooks {
     razorpayEvent: {
@@ -2306,6 +2515,8 @@ export interface components {
             onboardingComplete?: boolean;
             companies?: components["schemas"]["Company"][];
             defaultCompanyId?: string;
+            /** @description Set only for platform operators, who can use `/admin/*` */
+            platformRole?: components["schemas"]["PlatformRole"] | null;
         };
         /** @enum {string} */
         PlanTier: "free" | "basic" | "pro" | "business";
@@ -3063,6 +3274,159 @@ export interface components {
             device?: string;
             /** Format: date-time */
             createdAt?: string;
+        };
+        /** @enum {string} */
+        PlatformRole: "superadmin" | "support";
+        PlatformReason: {
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+        };
+        PlatformAccount: {
+            id: string;
+            name: string;
+            ownerUserId?: string | null;
+            ownerName?: string | null;
+            ownerEmail?: string | null;
+            /** @enum {string} */
+            status: "active" | "suspended";
+            /** Format: date-time */
+            suspendedAt?: string | null;
+            suspendedReason?: string | null;
+            companyCount: number;
+            userCount: number;
+            /** @description Distinct plans across the account's companies */
+            plans: components["schemas"]["PlanTier"][];
+            /** Format: date-time */
+            lastActiveAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PlatformCompany: {
+            id: string;
+            accountId: string;
+            name: string;
+            legalName?: string | null;
+            country: string;
+            city?: string;
+            taxIdentifier?: string | null;
+            plan: components["schemas"]["PlanTier"];
+            /** @enum {string} */
+            subscriptionStatus: "active" | "trialing" | "pastDue" | "cancelled" | "none";
+            /** Format: date-time */
+            onboardingCompletedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PlatformUser: {
+            id: string;
+            accountId: string;
+            accountName?: string;
+            name: string;
+            email: string;
+            phone?: string | null;
+            role: components["schemas"]["UserRole"];
+            platformRole?: components["schemas"]["PlatformRole"] | null;
+            /** @enum {string} */
+            status: "active" | "invited" | "disabled";
+            accountSuspended: boolean;
+            /** Format: date-time */
+            lastActiveAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PlatformAccountDetail: {
+            account: components["schemas"]["PlatformAccount"];
+            companies: components["schemas"]["PlatformCompany"][];
+            users: components["schemas"]["PlatformUser"][];
+        };
+        PlatformCompanyDetail: {
+            company: components["schemas"]["PlatformCompany"];
+            accountName: string;
+            accountSuspended?: boolean;
+            subscription: components["schemas"]["Subscription"] | null;
+            planHistory: {
+                id: string;
+                fromPlan?: components["schemas"]["PlanTier"] | null;
+                toPlan?: components["schemas"]["PlanTier"] | null;
+                event: string;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            documentCounts: {
+                kind: string;
+                count: number;
+            }[];
+            userCount: number;
+        };
+        PlatformPlanOverride: {
+            plan: components["schemas"]["PlanTier"];
+            /**
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "trialing";
+            /**
+             * @default monthly
+             * @enum {string}
+             */
+            cycle: "monthly" | "yearly";
+            /**
+             * Format: date-time
+             * @description Shown as the end of the current period. Nothing downgrades automatically when it passes; omit or null for open-ended
+             */
+            currentPeriodEnd?: string | null;
+            reason: string;
+        };
+        PlatformOverview: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            totals: {
+                accounts: number;
+                suspendedAccounts: number;
+                companies: number;
+                users: number;
+                /** @description Users seen in the 30 days up to now */
+                activeUsers30d: number;
+            };
+            /** @description Companies per plan, every tier listed */
+            plans: {
+                plan: components["schemas"]["PlanTier"];
+                companies: number;
+            }[];
+            /** @description One row per day in the range, zero-filled */
+            signups: {
+                /** Format: date */
+                date: string;
+                accounts: number;
+                companies: number;
+            }[];
+            /** @description Documents created per day in the range, zero-filled */
+            documents: {
+                /** Format: date */
+                date: string;
+                count: number;
+            }[];
+        };
+        PlatformAuditEvent: {
+            id: string;
+            actorId: string;
+            actorEmail: string;
+            /** @example account.suspend */
+            action: string;
+            /** @enum {string} */
+            targetType: "account" | "company" | "user";
+            targetId: string;
+            targetLabel: string;
+            reason: string;
+            /** @description JSON snapshot */
+            before?: string;
+            /** @description JSON snapshot */
+            after?: string;
+            ipAddress?: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         Integration: {
             id?: string;
@@ -7809,6 +8173,332 @@ export interface operations {
                 content?: never;
             };
             502: components["responses"]["UpstreamError"];
+        };
+    };
+    getPlatformOverview: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listPlatformAccounts: {
+        parameters: {
+            query?: {
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+                status?: "active" | "suspended";
+                /** @description Accounts with at least one company on this plan */
+                plan?: components["schemas"]["PlanTier"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["PlatformAccount"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getPlatformAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAccountDetail"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    suspendAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReason"];
+            };
+        };
+        responses: {
+            /** @description Suspended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAccount"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    reactivateAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReason"];
+            };
+        };
+        responses: {
+            /** @description Reactivated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAccount"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getPlatformCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformCompanyDetail"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    overrideCompanyPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformPlanOverride"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        company: components["schemas"]["PlatformCompany"];
+                        subscription: components["schemas"]["Subscription"];
+                        warning?: string | null;
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    listPlatformUsers: {
+        parameters: {
+            query?: {
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+                status?: "active" | "invited" | "disabled";
+                accountId?: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["PlatformUser"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    disablePlatformUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReason"];
+            };
+        };
+        responses: {
+            /** @description Disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUser"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    enablePlatformUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReason"];
+            };
+        };
+        responses: {
+            /** @description Enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUser"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    listPlatformAuditEvents: {
+        parameters: {
+            query?: {
+                actorId?: string;
+                targetType?: "account" | "company" | "user";
+                targetId?: string;
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["PlatformAuditEvent"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
         };
     };
     razorpayWebhook: {

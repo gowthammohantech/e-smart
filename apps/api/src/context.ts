@@ -4,7 +4,7 @@ import type { OperationId, operations } from '@esmart/api-contract';
 import type { Db, schema } from '@esmart/db';
 import type { Config } from './config';
 import type { Providers } from './providers';
-import type { Operation, Role } from './openapi/spec';
+import type { Operation, PlatformRole, Role } from './openapi/spec';
 
 export type Deps = {
   db: Db;
@@ -22,6 +22,8 @@ export type AuthUser = {
   name: string;
   email: string;
   role: Role;
+  /** Platform operator access (`/admin/*`); null for tenant users. */
+  platformRole: PlatformRole | null;
   status: 'active' | 'invited' | 'disabled';
   locale: string | null;
   /** Companies the user may open. */

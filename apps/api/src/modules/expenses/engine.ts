@@ -80,6 +80,7 @@ async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
     name: `${u?.name ?? 'Unknown'} (recurring)`,
     email: '',
     role: 'owner',
+    platformRole: null,
     status: 'active',
     locale: null,
     companyIds: [],
