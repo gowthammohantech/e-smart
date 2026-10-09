@@ -6,6 +6,7 @@ import { usePlanGuard } from '@esmart/app/navigation/usePlanGuard';
 import { Sidebar } from '../../src/Sidebar';
 import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth } from '../../src/sidebarState';
 import { TopBar } from '../../src/shell/TopBar';
+import { LixiPanel } from '../../src/shell/LixiPanel';
 import { SettingsNav } from '../../src/shell/SettingsNav';
 import { CONTENT_MAX_WIDTH, useIsDesktop } from '../../src/layout';
 
@@ -87,6 +88,7 @@ export default function WebAppLayout() {
             </Animated.View>
           </View>
         </View>
+        <LixiPanel />
       </View>
     </PageActionsProvider>
   );

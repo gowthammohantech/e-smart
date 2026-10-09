@@ -62,7 +62,10 @@ export function DataTable<T>({
   rowLabel?: (row: T) => string;
 }) {
   const t = useTheme();
-  const narrow = useBreakpoint() === 'tablet';
+  const breakpoint = useBreakpoint();
+  const narrow = breakpoint === 'tablet';
+  // Only a desktop window scrolls sideways; a phone never reaches this table.
+  const desktop = breakpoint !== 'phone';
   const columns = narrow ? allColumns.filter((c) => !c.secondary) : allColumns;
   const [sort, setSort] = useState<Sort | null>(initialSort ?? null);
 
@@ -179,6 +182,25 @@ export function DataTable<T>({
     </View>
   ) : null;
 
+  const content = (
+    <>
+      {header}
+      {scroll ? (
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+          {body}
+        </ScrollView>
+      ) : (
+        body
+      )}
+      {footerRow}
+    </>
+  );
+
+  // Every column keeps at least its minimum width, so when the window is
+  // squeezed (Lixi's panel open, say) the table scrolls sideways instead of
+  // crushing its columns.
+  const minWidth = columns.reduce((sum, c) => sum + (c.width ?? 120), 0) + 8;
+
   return (
     <View
       style={{
@@ -190,15 +212,18 @@ export function DataTable<T>({
         overflow: 'hidden',
       }}
     >
-      {header}
-      {scroll ? (
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-          {body}
+      {desktop ? (
+        <ScrollView
+          horizontal
+          style={{ flex: scroll ? 1 : undefined }}
+          contentContainerStyle={{ flexGrow: 1, minWidth }}
+          showsHorizontalScrollIndicator={SHOW_SCROLLBAR}
+        >
+          <View style={{ flexGrow: 1 }}>{content}</View>
         </ScrollView>
       ) : (
-        body
+        content
       )}
-      {footerRow}
     </View>
   );
 }
