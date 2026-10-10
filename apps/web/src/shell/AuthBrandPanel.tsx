@@ -13,6 +13,9 @@ type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 /** The panel's copy column: centred, at a comfortable reading width. */
 const CONTENT_WIDTH = 460;
 
+/** Below this the panel is a tablet-width half. */
+const NARROW_WIDTH = 512;
+
 const FEATURES: { key: 'gst' | 'money' | 'stock' | 'lixi'; icon: IconName }[] = [
   { key: 'gst', icon: 'shield-check-outline' },
   { key: 'money', icon: 'cash-check' },
@@ -28,8 +31,10 @@ export function AuthBrandPanel() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth']);
   const [width, setWidth] = useState(0);
+  // A tablet-width half is narrow, so the margin tightens there.
+  const pad = width < NARROW_WIDTH ? t.spacing.xl : t.spacing.xxxl;
   // The hero fills the content column but stops before it crowds the copy.
-  const sceneWidth = Math.min(Math.max(width - t.spacing.xxxl * 2, 0), CONTENT_WIDTH, 380);
+  const sceneWidth = Math.min(Math.max(width - pad * 2, 0), CONTENT_WIDTH, 380);
 
   return (
     <View
@@ -37,7 +42,7 @@ export function AuthBrandPanel() {
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
       <WelcomeBackdrop />
-      <View style={{ flex: 1, padding: t.spacing.xxxl, justifyContent: 'space-between', gap: t.spacing.xxl }}>
+      <View style={{ flex: 1, padding: pad, justifyContent: 'space-between', gap: t.spacing.xxl }}>
         <View style={{ width: '100%', maxWidth: CONTENT_WIDTH, alignSelf: 'center' }}>
           <BrandLogo height={34} />
         </View>

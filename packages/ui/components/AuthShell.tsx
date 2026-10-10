@@ -32,12 +32,17 @@ export function AuthShell({
 
   // A desktop browser shows this beside the brand panel: a centred form
   // column with a text back link, and no phone safe-area padding. The logo is
-  // left to the panel unless the window is too narrow to show it.
+  // left to the panel. A tablet-width half is narrow, so the margin tightens.
   if (breakpoint !== 'phone') {
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: t.c.paper }}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: t.spacing.xxxl }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: breakpoint === 'tablet' ? t.spacing.xl : t.spacing.xxxl,
+        }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ width: '100%', maxWidth: AUTH_FORM_WIDTH, gap: t.spacing.xxl }}>
@@ -62,11 +67,6 @@ export function AuthShell({
           ) : null}
 
           <View style={{ gap: t.spacing.sm }}>
-            {breakpoint === 'tablet' ? (
-              <View style={{ marginBottom: t.spacing.md }}>
-                <BrandLogo height={36} />
-              </View>
-            ) : null}
             <Text variant="h2">{title}</Text>
             {subtitle ? (
               <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>

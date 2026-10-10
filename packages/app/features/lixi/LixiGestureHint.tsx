@@ -5,6 +5,7 @@ import { Animated, AppState, Keyboard, Pressable, View } from 'react-native';
 import { useIsFocused } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { NATIVE_DRIVER } from '@esmart/ui/theme/motion';
 import { Text } from '@esmart/ui/components/Text';
 import { LixiHintKey, useUiStore } from '../../store/uiStore';
 import { LixiOrb } from '@esmart/ui/components/LixiOrb';
@@ -85,8 +86,8 @@ export function LixiGestureHint({ bottom }: { bottom: number }) {
     if (rendered !== 'swipeUp' && rendered !== 'swipeTabs') return;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(bob, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(bob, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 1, duration: 500, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(bob, { toValue: 0, duration: 500, useNativeDriver: NATIVE_DRIVER }),
       ]),
     );
     loop.start();

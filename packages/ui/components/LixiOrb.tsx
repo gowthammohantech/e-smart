@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, View } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { NATIVE_DRIVER } from '../theme/motion';
 
 const LOGO = require('../assets/lixi/lixi-orb.png');
 
@@ -31,8 +32,8 @@ export function LixiOrb({ size = 56, thinking = false }: { size?: number; thinki
     if (reduce) return;
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(breath, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: NATIVE_DRIVER }),
       ]),
     );
     pulse.start();
@@ -44,7 +45,7 @@ export function LixiOrb({ size = 56, thinking = false }: { size?: number; thinki
     if (!thinking || reduce) return;
     spin.setValue(0);
     const turn = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration: 1100, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(spin, { toValue: 1, duration: 1100, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
     );
     turn.start();
     return () => turn.stop();

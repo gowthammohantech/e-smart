@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing } from 'react-native';
+import { NATIVE_DRIVER } from '../../theme/motion';
 
 const STEPS = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
 const wave = (p: number, shift: number) => Math.sin((p + shift) * Math.PI * 2);
@@ -17,7 +18,7 @@ export function useLoopPhase(duration = 3600) {
     let cancelled = false;
     AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
       if (reduce || cancelled) return;
-      loop = Animated.loop(Animated.timing(phase, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true }));
+      loop = Animated.loop(Animated.timing(phase, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }));
       loop.start();
     });
     return () => {

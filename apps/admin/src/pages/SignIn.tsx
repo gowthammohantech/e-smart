@@ -3,11 +3,15 @@ import { Navigate, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthProvider';
 import { errorMessage } from '../lib/api';
 
+/** The seeded demo owner (see `packages/db/src/seed.ts`), pre-filled in development builds only. */
+const DEV_EMAIL = import.meta.env.DEV ? 'gowtham@vertextraders.in' : '';
+const DEV_PASSWORD = import.meta.env.DEV ? 'demo1234' : '';
+
 export function SignIn() {
   const { state, signIn } = useAuth();
   const location = useLocation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(DEV_EMAIL);
+  const [password, setPassword] = useState(DEV_PASSWORD);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

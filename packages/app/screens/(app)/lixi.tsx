@@ -17,6 +17,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { NATIVE_DRIVER } from '@esmart/ui/theme/motion';
 import { Text } from '@esmart/ui/components/Text';
 import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
@@ -522,7 +523,7 @@ function TypingDots() {
 
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.timing(phase, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(phase, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
     );
     loop.start();
     return () => loop.stop();
