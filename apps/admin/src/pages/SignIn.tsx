@@ -3,9 +3,13 @@ import { Navigate, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthProvider';
 import { errorMessage } from '../lib/api';
 
-/** The seeded demo owner (see `packages/db/src/seed.ts`), pre-filled in development builds only. */
-const DEV_EMAIL = import.meta.env.DEV ? 'gowtham@vertextraders.in' : '';
-const DEV_PASSWORD = import.meta.env.DEV ? 'demo1234' : '';
+/**
+ * The seeded demo owner (see `packages/db/src/seed.ts`), pre-filled on the dev
+ * server only. Not `DEV`: that is true under Vitest too, and tests type their own.
+ */
+const PREFILL = import.meta.env.MODE === 'development';
+const DEV_EMAIL = PREFILL ? 'gowtham@vertextraders.in' : '';
+const DEV_PASSWORD = PREFILL ? 'demo1234' : '';
 
 export function SignIn() {
   const { state, signIn } = useAuth();
