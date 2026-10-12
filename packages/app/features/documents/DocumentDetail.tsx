@@ -40,7 +40,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { detailRouteFor } from './DocumentEditor';
+import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
@@ -50,6 +50,7 @@ import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview, printHtml } from './HtmlPreview';
+import { useGoBack } from '../../navigation/useGoBack';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
@@ -57,6 +58,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const language = useResolvedLanguage();
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -736,7 +738,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           removeDocument(doc.id);
           setConfirmDelete(false);
           toast.show(tr('sales:detail.draftDeleted'), 'success');
-          router.back();
+          goBack(listRouteFor(doc.kind));
         }}
       />
 

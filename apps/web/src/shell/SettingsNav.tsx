@@ -7,11 +7,9 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
 import { useMoreGroups, type MoreEntry } from '@esmart/app/navigation/moreGroups';
+import { SETTINGS_GROUPS } from '@esmart/app/navigation/pages';
 
 export const SETTINGS_NAV_WIDTH = 240;
-
-/** The groups of the More list that are settings rather than tools. */
-const SETTINGS_GROUPS = ['businessSetup', 'dataCompliance', 'account'] as const;
 
 /** A route as the browser shows it: no `(group)` segments, no query. */
 function publicPath(route: string): string {

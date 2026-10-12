@@ -11,6 +11,7 @@ import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useUiStore } from '../../store/uiStore';
 import { useGlobalSearch } from '../../features/search/useGlobalSearch';
+import { matchPages, useAppPages } from '../../navigation/pages';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 /** Global search across every record the active company owns. */
@@ -25,6 +26,8 @@ export default function GlobalSearch() {
   const clearHistory = useUiStore((s) => s.clearSearchHistory);
 
   const { results, grouped } = useGlobalSearch(query);
+  // Screens match too, so "invoices" can open the Invoices list itself.
+  const pages = matchPages(useAppPages(), query);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -83,10 +86,56 @@ export default function GlobalSearch() {
               message={tr('common:search.subtitleFull')}
             />
           )
-        ) : results.length === 0 ? (
+        ) : results.length === 0 && pages.length === 0 ? (
           <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={`Nothing in ${'this business'} matches "${query}".`} />
         ) : (
-          grouped.map(([group, rows]) => (
+          <>
+          {pages.length > 0 ? (
+            <View style={{ marginBottom: t.spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, marginBottom: t.spacing.sm }}>
+                <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                  {tr('nav:shell.pages')}
+                </Text>
+                <Badge label={String(pages.length)} tone="neutral" size="sm" />
+              </View>
+              <Card padded={false}>
+                {pages.map((p, i) => (
+                  <Pressable
+                    key={p.key}
+                    onPress={() => {
+                      pushSearch(query);
+                      router.push(p.route as never);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={p.title}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: t.spacing.md,
+                      padding: t.spacing.lg,
+                      borderBottomWidth: i < pages.length - 1 ? 0.5 : 0,
+                      borderBottomColor: t.c.line,
+                      backgroundColor: pressed ? t.c.card2 : 'transparent',
+                    })}
+                  >
+                    <MaterialCommunityIcons name={p.icon} size={19} color={t.c.primary} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text variant="body" weight="600" numberOfLines={1}>
+                        {p.title}
+                      </Text>
+                      {p.subtitle ? (
+                        <Text variant="caption" tone="muted" numberOfLines={1}>
+                          {p.subtitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                  </Pressable>
+                ))}
+              </Card>
+            </View>
+          ) : null}
+          {grouped.map(([group, rows]) => (
             <View key={group} style={{ marginBottom: t.spacing.lg }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, marginBottom: t.spacing.sm }}>
                 <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
@@ -132,7 +181,8 @@ export default function GlobalSearch() {
                 ))}
               </Card>
             </View>
-          ))
+          ))}
+          </>
         )}
       </ScrollView>
     </View>

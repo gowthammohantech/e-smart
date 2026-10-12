@@ -14,6 +14,7 @@ import { useAppStore } from '../../store/appStore';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES, stateName } from '@esmart/core/data/masters';
 import { uid } from '@esmart/core/lib/id';
+import { joinPhone } from '@esmart/core/lib/phone';
 
 const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey: string; bodyKey: string }[] = [
   { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody' },
@@ -50,7 +51,7 @@ export default function Done() {
       baseCurrency: draft.baseCurrency,
       address: draft.address,
       email: draft.email || undefined,
-      phone: draft.phone || undefined,
+      phone: joinPhone(draft.phoneDialCode, draft.phone) || undefined,
       fiscalYearStartMonth: draft.fiscalYearStartMonth,
       taxRegistration: {
         regime: country?.regime ?? 'NONE',

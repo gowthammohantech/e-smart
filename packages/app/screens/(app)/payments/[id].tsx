@@ -19,12 +19,14 @@ import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function PaymentDetail() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -238,7 +240,7 @@ export default function PaymentDetail() {
           removePayment(payment.id);
           setConfirmDelete(false);
           toast.show(tr('sales:payment.deleted'), 'success');
-          router.back();
+          goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
         }}
       />
     </View>
