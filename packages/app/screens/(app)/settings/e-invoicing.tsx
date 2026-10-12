@@ -12,14 +12,16 @@ import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/compo
 import { useToast } from '@esmart/ui/components/Toast';
 import { ComplianceSettings, TransportMode, VehicleType } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useComplianceSettings, useComplianceSummary } from '../../../store/selectors';
+import { compliance } from '../../../remote';
+import { describeError } from '../../../remote/errors';
+import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary } from '../../../store/selectors';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['compliance', 'nav']);
+  const { t: tr } = useTranslation(['compliance', 'nav', 'auth']);
   const router = useRouter();
   const toast = useToast();
   // Always false in the native apps, so the desktop header action only ever reaches a browser.
@@ -36,6 +38,49 @@ export default function EInvoicingSettings() {
   const [ewayThreshold, setEwayThreshold] = useState(String(toMajor(stored.ewayBillThreshold)));
 
   const patch = (over: Partial<ComplianceSettings>) => setDraft((d) => ({ ...d, ...over }));
+
+  // Portal credentials are write-only: the server encrypts them and only ever shows the masked client id.
+  const company = useActiveCompany();
+  const [cred, setCred] = useState({ gspProvider: '', username: stored.irpUsername ?? '', password: '', clientId: '', clientSecret: '' });
+  const [credBusy, setCredBusy] = useState<'save' | 'test' | null>(null);
+  const [credMessage, setCredMessage] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
+
+  const saveCredentials = () => {
+    if (!company || !cred.username.trim() || !cred.password) {
+      setCredMessage({ tone: 'bad', text: tr('compliance:settings.credentialsMissing') });
+      return;
+    }
+    setCredBusy('save');
+    compliance
+      .saveCredentials(company.id, {
+        environment: draft.irpEnvironment,
+        username: cred.username.trim(),
+        password: cred.password,
+        gspProvider: cred.gspProvider.trim() || undefined,
+        clientId: cred.clientId.trim() || undefined,
+        clientSecret: cred.clientSecret || undefined,
+      })
+      .then(() => {
+        setCred((c) => ({ ...c, password: '', clientId: '', clientSecret: '' }));
+        setCredMessage({ tone: 'good', text: tr('compliance:settings.credentialsSaved') });
+      })
+      .catch((err: unknown) => setCredMessage({ tone: 'bad', text: describeError(err, tr) }))
+      .finally(() => setCredBusy(null));
+  };
+
+  const testConnection = () => {
+    if (!company) return;
+    setCredBusy('test');
+    compliance
+      .testConnection(company.id)
+      .then((r) => {
+        const ok = !!r.irp?.ok && !!r.ewb?.ok;
+        const parts = [`IRP: ${r.irp?.message ?? (r.irp?.ok ? 'OK' : '—')}`, `EWB: ${r.ewb?.message ?? (r.ewb?.ok ? 'OK' : '—')}`];
+        setCredMessage({ tone: ok ? 'good' : 'bad', text: `${ok ? tr('compliance:settings.connectionOk') : tr('compliance:settings.connectionFailed')} ${parts.join(' · ')}` });
+      })
+      .catch((err: unknown) => setCredMessage({ tone: 'bad', text: describeError(err, tr) }))
+      .finally(() => setCredBusy(null));
+  };
 
   const onSave = () => {
     save({
@@ -66,13 +111,6 @@ export default function EInvoicingSettings() {
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         keyboardShouldPersistTaps="handled"
       >
-        <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
-          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Nothing leaves this device. The portal is simulated locally — but the IRN, the signed QR and
-            the validity rules are the real ones, so what you see here is what a live portal would return.
-          </Text>
-        </Card>
-
         {/* ---------------- e-invoice ---------------- */}
         <SectionLabel>{tr('compliance:settings.eInvoice')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
@@ -119,19 +157,44 @@ export default function EInvoicingSettings() {
         <SectionLabel>{tr('compliance:settings.portalCredentials')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
           <TextField
+            label={tr('compliance:settings.gspProvider')}
+            value={cred.gspProvider}
+            onChangeText={(v) => setCred((c) => ({ ...c, gspProvider: v }))}
+            placeholder="cleartax, masters-india, nic-direct"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextField
             label={tr('compliance:settings.portalUsername')}
-            value={draft.irpUsername ?? ''}
-            onChangeText={(v) => patch({ irpUsername: v })}
+            value={cred.username}
+            onChangeText={(v) => setCred((c) => ({ ...c, username: v }))}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextField
+            label={tr('compliance:settings.portalPassword')}
+            value={cred.password}
+            onChangeText={(v) => setCred((c) => ({ ...c, password: v }))}
+            secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
           />
           <TextField
             label={tr('compliance:settings.gspClientId')}
-            value={draft.irpClientIdMasked ?? ''}
-            onChangeText={(v) => patch({ irpClientIdMasked: v })}
-            autoCapitalize="characters"
+            value={cred.clientId}
+            onChangeText={(v) => setCred((c) => ({ ...c, clientId: v }))}
+            placeholder={stored.irpClientIdMasked ?? undefined}
+            autoCapitalize="none"
             autoCorrect={false}
-            hint={tr('compliance:settings.credentialHint')}
+            hint={stored.irpClientIdMasked ? tr('compliance:settings.storedClientId', { masked: stored.irpClientIdMasked }) : tr('compliance:settings.credentialHint')}
+          />
+          <TextField
+            label={tr('compliance:settings.gspClientSecret')}
+            value={cred.clientSecret}
+            onChangeText={(v) => setCred((c) => ({ ...c, clientSecret: v }))}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
           />
           <View style={{ gap: t.spacing.sm, marginTop: t.spacing.xs }}>
             <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.environment')}</Text>
@@ -143,11 +206,16 @@ export default function EInvoicingSettings() {
               value={draft.irpEnvironment}
               onChange={(v) => patch({ irpEnvironment: v })}
             />
-            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-              Sandbox adds a switch to the generate sheet for simulating a rejection, so the failed state
-              can be seen without breaking an invoice.
-            </Text>
           </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.xs }}>
+            <Button title={tr('compliance:settings.saveCredentials')} icon="lock-outline" loading={credBusy === 'save'} onPress={saveCredentials} />
+            <Button title={tr('compliance:settings.testConnection')} variant="secondary" icon="lan-connect" loading={credBusy === 'test'} onPress={testConnection} />
+          </View>
+          {credMessage ? (
+            <Text variant="caption" tone={credMessage.tone} style={{ lineHeight: 18 }}>
+              {credMessage.text}
+            </Text>
+          ) : null}
         </Card>
 
         {/* ---------------- e-way bill ---------------- */}

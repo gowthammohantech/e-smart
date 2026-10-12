@@ -12,9 +12,8 @@ import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
-import { isRemote, useRemoteMeta } from '../remote';
+import { useRemoteMeta } from '../remote';
 import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
-import { useUiStore } from '../store/uiStore';
 import { countLabel } from '@esmart/core/lib/format';
 
 /**
@@ -36,9 +35,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const setActiveCompany = useAppStore((s) => s.setActiveCompany);
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const unread = useUnreadCount();
-  const simulatedOffline = useUiStore((s) => s.offlineMode);
-  const online = useRemoteMeta((m) => m.online);
-  const offline = isRemote() ? !online : simulatedOffline;
+  const offline = !useRemoteMeta((m) => m.online);
   const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status !== 'synced').length);
 
   const [switcherOpen, setSwitcherOpen] = useState(false);

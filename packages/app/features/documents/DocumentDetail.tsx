@@ -2,10 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
 import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -49,7 +48,10 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
-import { HtmlPreview, printHtml } from './HtmlPreview';
+import { HtmlPreview } from './HtmlPreview';
+import { deliverFile } from '../reports/exportFiles';
+import { documentPdf, paymentLink, pdfFileName, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
+import { describeError } from '../../remote/errors';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
@@ -125,40 +127,45 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       ewayBill,
     });
 
+  /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
   const shareDocument = async () => {
-    // A browser has no share sheet for files: its print dialog saves the PDF.
-    if (Platform.OS === 'web') {
-      printHtml(documentHtml()).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'));
-      setActionsOpen(false);
-      if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
-      return;
-    }
     setBusy(true);
     try {
-      const html = documentHtml();
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: tr('common:documentDetail.shareTitle', { kind: kindName, number: doc.number }),
-        });
-      } else {
-        await Share.share({
-          message: tr('common:documentDetail.shareMessage', {
-            kind: kindName,
-            number: doc.number,
-            amount: formatMoney(doc.totals.grandTotal),
-          }),
-        });
-      }
+      const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
+      await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
       if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
-    } catch {
-      toast.show(tr('sales:detail.pdfFailed'), 'error');
+    } catch (err) {
+      toast.show(`${tr('sales:detail.pdfFailed')} ${describeError(err, tr)}`, 'error');
     } finally {
       setBusy(false);
       setActionsOpen(false);
     }
   };
+
+  /** A link copied in a browser, or offered to the share sheet on a phone. */
+  const handOverLink = async (url: string) => {
+    if (Platform.OS === 'web') {
+      await Clipboard.setStringAsync(url);
+      toast.show(tr('common:documentDetail.linkCopied'), 'success');
+      return;
+    }
+    await Share.share({
+      message: tr('common:documentDetail.shareMessage', { kind: kindName, number: doc.number, amount: formatMoney(doc.totals.grandTotal) }) + `\n${url}`,
+    });
+  };
+
+  const runRemote = (job: () => Promise<void>) => {
+    setBusy(true);
+    job()
+      .catch((err: unknown) => toast.show(describeError(err, tr), 'error'))
+      .finally(() => setBusy(false));
+  };
+
+  const send = (channel: SendChannel) =>
+    runRemote(async () => {
+      await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
+      toast.show(tr('common:documentDetail.sent'), 'success');
+    });
 
   const convert = (target: DocumentKind) => {
     const id = convertDocument(doc.id, target);
@@ -620,7 +627,15 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>
         {[
           ...(isFinalized(doc.status)
-            ? [{ label: 'Share as PDF', icon: 'file-pdf-box' as const, onPress: shareDocument }]
+            ? [
+                { label: 'Share as PDF', icon: 'file-pdf-box' as const, onPress: shareDocument },
+                ...(party?.email ? [{ label: 'Send by email', icon: 'email-outline' as const, onPress: () => send('email') }] : []),
+                ...(party?.phone ? [{ label: 'Send on WhatsApp', icon: 'whatsapp' as const, onPress: () => send('whatsapp') }] : []),
+                { label: 'Share link', icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await shareLink(doc.companyId, doc.id))) },
+                ...(doc.kind === 'invoice' && outstanding.minor > 0
+                  ? [{ label: 'Payment link', icon: 'credit-card-outline' as const, onPress: () => runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url)) }]
+                  : []),
+              ]
             : [{ label: 'Edit', icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
           { label: 'Preview document', icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
           ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'

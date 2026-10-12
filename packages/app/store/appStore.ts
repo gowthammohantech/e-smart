@@ -8,11 +8,9 @@ import {
   AppNotification,
   Branch,
   BusinessDocument,
-  CancelReasonCode,
   Company,
   PlanTier,
   Transporter,
-  ComplianceInfo,
   ComplianceIssue,
   ComplianceSettings,
   DeviceSession,
@@ -20,7 +18,6 @@ import {
   DocumentKind,
   DocumentLine,
   EwayBill,
-  EwayBillPartBUpdate,
   EwayExtendReasonCode,
   EwayPlace,
   EwaySubSupplyType,
@@ -45,74 +42,15 @@ import {
 import { Money, zero } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import { isRemote } from '../remote/config';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { formatNumber } from '@esmart/core/domain/numbering';
 import { initialStatus, isFinalized } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
-import {
-  EInvoiceContext,
-  blockingIssues,
-  buildIrpPayload,
-  canCancelEInvoice,
-  isEInvoiceApplicable,
-  mainHsnCodeOf,
-  validateEInvoice,
-} from '@esmart/core/domain/eInvoice';
-import {
-  buildEwbPayload,
-  canCancelEwayBill,
-  canUpdatePartB,
-  ewayDocTypeFor,
-  isEwayBillRequired,
-  subSupplyTypeFor,
-  validatePartA,
-  validatePartB,
-} from '@esmart/core/domain/ewayBill';
-import {
-  IrpSimulation,
-  cancelEwayBillAtPortal,
-  cancelIrn,
-  extendEwayBillAtPortal,
-  submitEwayBill,
-  submitInvoice,
-} from '@esmart/core/domain/irpAdapter';
-import { INTEGRATIONS, LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
-import { isValidGstin } from '@esmart/core/domain/gstin';
+import { LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
-import {
-  ACCOUNT_ID,
-  CURRENT_USER_ID,
-  PRIMARY_COMPANY_ID,
-  defaultComplianceSettings,
-  seedBranches,
-  seedCompanies,
-  seedDevices,
-  seedExchangeRates,
-  seedExpenseCategories,
-  seedItems,
-  seedComplianceSettings,
-  seedNumberingSeries,
-  seedParties,
-  seedPaymentAccounts,
-  seedTaxCategories,
-  seedTransporters,
-  seedUsers,
-} from '@esmart/core/data/seed';
-import {
-  seedAttachments,
-  seedAudit,
-  seedCompliance,
-  seedDocuments,
-  seedExpenses,
-  seedNotifications,
-  seedPayments,
-  seedStockMovements,
-  seedSyncQueue,
-} from '@esmart/core/data/seedTransactions';
 
 export type AppData = {
   accountId: string;
@@ -148,7 +86,7 @@ export type Session = {
   signedInAt?: string;
 };
 
-/** Remote mode starts empty: everything arrives from the API on sign-in. */
+/** The store starts empty: everything arrives from the API on sign-in. */
 export function emptyData(): AppData {
   return {
     accountId: '',
@@ -178,70 +116,8 @@ export function emptyData(): AppData {
   };
 }
 
-export function buildSeedData(): AppData {
-  const companies = seedCompanies();
-  const branches = seedBranches();
-  const users = seedUsers();
-  const parties = seedParties();
-  const items = seedItems();
-  const taxCategories = seedTaxCategories();
-  const series = seedNumberingSeries();
-  const complianceSettings = seedComplianceSettings();
-  const { documents, ewayBills } = seedCompliance(
-    seedDocuments({ items, parties, taxCategories, series }),
-    companies,
-    parties,
-    branches,
-    complianceSettings,
-  );
-  const payments = seedPayments(documents, series);
-  const expenses = seedExpenses(series);
-  const stockMovements = seedStockMovements(items, documents);
-
-  // Advance each series past the numbers the seed data already consumed.
-  const advanced = series.map((s) => {
-    const used =
-      s.kind === 'payment'
-        ? payments.filter((p) => p.companyId === s.companyId).length
-        : s.kind === 'expense'
-          ? expenses.filter((e) => e.companyId === s.companyId).length
-          : documents.filter((d) => d.companyId === s.companyId && d.kind === s.kind).length;
-    return { ...s, nextNumber: used + 1 };
-  });
-
-  return {
-    accountId: ACCOUNT_ID,
-    users,
-    devices: seedDevices(),
-    companies,
-    branches,
-    parties,
-    items,
-    taxCategories,
-    expenseCategories: seedExpenseCategories(),
-    paymentAccounts: seedPaymentAccounts(),
-    exchangeRates: seedExchangeRates(),
-    numberingSeries: advanced,
-    documents,
-    payments,
-    expenses,
-    stockMovements,
-    attachments: seedAttachments(),
-    notifications: seedNotifications(documents, payments, ewayBills),
-    auditEvents: seedAudit(documents, payments, ewayBills),
-    syncQueue: seedSyncQueue(),
-    integrations: INTEGRATIONS.map((i) => ({ ...i })),
-    complianceSettings,
-    ewayBills,
-    transporters: seedTransporters(),
-  };
-}
-
 type Actions = {
-  /* session */
-  signIn: (email: string) => void;
-  signInWithOtp: (phone: string) => void;
-  signUp: (name: string, email: string) => void;
+  /* session: signing in goes through remote/session */
   signOut: () => void;
   completeOnboarding: () => void;
   revokeDevice: (id: string) => void;
@@ -301,9 +177,7 @@ type Actions = {
   addStockMovement: (m: Omit<StockMovement, 'id' | 'createdAt' | 'createdBy'>) => void;
   transferStock: (args: { itemId: string; fromBranchId: string; toBranchId: string; quantity: number; date: string; notes?: string }) => void;
 
-  /* supporting */
-  addAttachment: (a: Omit<Attachment, 'id' | 'uploadedAt'>) => string;
-  removeAttachment: (id: string) => void;
+  /* supporting: attachments upload through remote/attachments */
   pushNotification: (n: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -314,20 +188,7 @@ type Actions = {
   saveComplianceSettings: (settings: ComplianceSettings) => void;
   saveTransporter: (transporter: Transporter) => void;
   removeTransporter: (id: string) => void;
-  generateEInvoice: (documentId: string, opts?: { simulation?: IrpSimulation }) => ComplianceResult;
-  cancelEInvoice: (documentId: string, reasonCode: CancelReasonCode, remark?: string) => ComplianceResult;
-  generateEwayBill: (input: NewEwayBillInput) => ComplianceResult & { ewayBillId?: string };
-  updateEwayBillPartB: (
-    id: string,
-    update: Omit<EwayBillPartBUpdate, 'id' | 'updatedAt' | 'updatedBy'>,
-  ) => ComplianceResult;
-  extendEwayBill: (id: string, args: ExtendEwayBillInput) => ComplianceResult;
-  cancelEwayBill: (id: string, reasonCode: CancelReasonCode, remark?: string) => ComplianceResult;
-  retrySync: (id: string) => void;
-  clearSyncQueue: () => void;
-
-  /* demo control */
-  resetDemoData: () => void;
+  /* persistence */
   hydrated: boolean;
   setHydrated: (v: boolean) => void;
 };
@@ -380,7 +241,6 @@ export type NewEwayBillInput = {
   transportDocNumber?: string;
   transportDocDate?: string;
   distanceKm: number;
-  simulation?: IrpSimulation;
 };
 
 export type ExtendEwayBillInput = {
@@ -396,19 +256,10 @@ export type ExtendEwayBillInput = {
 const emptySession: Session = { userId: null, authenticated: false, onboardingComplete: false };
 
 /**
- * Version 2 introduced e-way bills and compliance settings, which refer to
- * documents by id. Ids are minted with `uid()`, which is not stable across
- * seed runs, so a saved v1 dataset and a freshly built v2 one cannot be
- * stitched together — every seeded bill would point at a document that no
- * longer exists. Rebuilding the demo data is the only coherent answer, and
- * the sign-in and the active company are carried over so nobody is bounced
- * back to the welcome screen.
- *
- * Version 3 put a plan on every company. Anyone who already has data was
- * using the whole app, so they land on Pro and nothing disappears. It also
- * started checking the GSTIN check digit, which the demo GSTINs used to get
- * wrong: a saved demo company or party whose GSTIN differs from the seed's
- * only in that digit is given the seed's corrected one.
+ * Data saved by an older build. The store only ever holds what the API sent,
+ * so anything that predates a shape change is simply loaded again from the
+ * server: versions before 3 (when the bundled demo dataset still lived here)
+ * start empty and signed out.
  *
  * Version 4 turned `Company.businessType` from an English display label into
  * a stable slug, so it survives a language switch. The eight labels that
@@ -419,41 +270,10 @@ const emptySession: Session = { userId: null, authenticated: false, onboardingCo
  * required category it could not fill.
  */
 export function migratePersisted(persisted: unknown, version: number): AppState {
-  if (version < 2) {
-    const prior = persisted as Partial<AppState> | undefined;
-    return {
-      ...buildSeedData(),
-      session: prior?.session ?? emptySession,
-      activeCompanyId: prior?.activeCompanyId ?? PRIMARY_COMPANY_ID,
-      activeBranchId: prior?.activeBranchId ?? 'brn_mum',
-    } as AppState;
+  if (version < 3) {
+    return { ...emptyData(), session: emptySession, activeCompanyId: '', activeBranchId: '' } as AppState;
   }
   let state = persisted as AppState;
-  if (version < 3) {
-    const seedGstin = new Map<string, string>();
-    seedCompanies().forEach((c) => c.taxRegistration?.identifier && seedGstin.set(c.id, c.taxRegistration.identifier));
-    seedParties().forEach((p) => p.taxId && seedGstin.set(p.id, p.taxId));
-    const repair = (id: string, gstin: string | undefined) => {
-      const fixed = seedGstin.get(id);
-      return gstin && fixed && !isValidGstin(gstin) && gstin.slice(0, 14) === fixed.slice(0, 14) ? fixed : gstin;
-    };
-    state = {
-      ...state,
-      companies: (state.companies ?? []).map((c) => ({
-        ...c,
-        plan: c.plan ?? 'pro',
-        taxRegistration: c.taxRegistration && {
-          ...c.taxRegistration,
-          identifier: repair(c.id, c.taxRegistration.identifier),
-        },
-      })),
-      parties: (state.parties ?? []).map((p) => ({ ...p, taxId: repair(p.id, p.taxId) })),
-      transporters: state.transporters ?? seedTransporters(),
-      complianceSettings: (state.complianceSettings ?? []).map((c) =>
-        c.defaultTransporterId === '27AABCT5512M1ZQ' ? { ...c, defaultTransporterId: '27AABCT5512M1Z6' } : c,
-      ),
-    };
-  }
   if (version < 4) {
     // Business type used to persist its English label, so it stopped matching
     // the picker the moment the app spoke another language. It is a slug now;
@@ -487,6 +307,16 @@ function starterExpenseCategories(companyId: string): ExpenseCategory[] {
   return defaultExpenseCategories(companyId).map((c) => ({ ...c, id: uid('exc') }));
 }
 
+/** Where the store persists on the device. */
+const PERSIST_KEY = 'ebs.remote.v1';
+
+/**
+ * Builds before the app went API-only kept a bundled demo dataset under its
+ * own key. It belongs to no account, so it is dropped, once, on first launch.
+ */
+const LEGACY_DEMO_KEY = 'ebs.data.v1';
+void AsyncStorage.removeItem(LEGACY_DEMO_KEY).catch(() => {});
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => {
@@ -506,7 +336,7 @@ export const useAppStore = create<AppState>()(
         const event: AuditEvent = {
           id: uid('aud'),
           companyId: s.activeCompanyId,
-          actorId: actor?.id ?? CURRENT_USER_ID,
+          actorId: actor?.id ?? '',
           actorName: actor?.name ?? 'You',
           action,
           entityType,
@@ -590,7 +420,7 @@ export const useAppStore = create<AppState>()(
       const defaultBranchId = (): string => {
         const s = get();
         const own = s.branches.filter((b) => b.companyId === s.activeCompanyId);
-        return own.find((b) => b.isPrimary)?.id ?? s.activeBranchId ?? own[0]?.id ?? 'brn_mum';
+        return own.find((b) => b.isPrimary)?.id ?? s.activeBranchId ?? own[0]?.id ?? '';
       };
 
       const consumeSeriesNumber = (kind: NumberingSeries['kind'], date: string): string => {
@@ -641,179 +471,24 @@ export const useAppStore = create<AppState>()(
             date: doc.date,
             referenceId: doc.id,
             referenceNumber: doc.number,
-            createdBy: s.session.userId ?? CURRENT_USER_ID,
+            createdBy: s.session.userId ?? '',
             createdAt: nowISO(),
           });
         });
         if (moves.length) set({ stockMovements: [...get().stockMovements, ...moves] });
       };
 
-      /* -------------------------------------------------------------- */
-      /* compliance helpers                                             */
-      /* -------------------------------------------------------------- */
-
-      const settingsFor = (companyId: string): ComplianceSettings =>
-        get().complianceSettings.find((c) => c.companyId === companyId) ??
-        defaultComplianceSettings(companyId, companyOf(companyId)?.baseCurrency ?? 'INR');
-
-      const eInvoiceContextFor = (doc: BusinessDocument): EInvoiceContext | null => {
-        const s = get();
-        const company = companyOf(doc.companyId);
-        if (!company) return null;
-        return {
-          document: doc,
-          company,
-          buyer: s.parties.find((p) => p.id === doc.partyId),
-          settings: settingsFor(doc.companyId),
-          items: s.items.filter((i) => i.companyId === doc.companyId),
-          existingIrns: s.documents
-            .filter((d) => d.companyId === doc.companyId && d.id !== doc.id && !!d.compliance?.irn)
-            .map((d) => d.compliance!.irn!),
-          now: nowISO(),
-        };
-      };
-
-      /**
-       * Write compliance state without going through `updateDocument`: a
-       * reported IRN must not recalculate totals, consume a number, or land in
-       * the audit trail as an ordinary edit.
-       */
-      const writeCompliance = (documentId: string, patch: Partial<ComplianceInfo>) => {
-        set({
-          documents: get().documents.map((d) =>
-            d.id === documentId
-              ? { ...d, compliance: { ...d.compliance, ...patch }, updatedAt: nowISO() }
-              : d,
-          ),
-        });
-      };
-
-      const fail = (issues: ComplianceIssue[]): ComplianceResult => ({ ok: false, issues });
-
-      /**
-       * Report a freshly finalised document, where the company has asked for
-       * that to happen automatically.
-       *
-       * An e-way bill is only raised here when the settings carry enough to
-       * raise one without asking — which for road transport they never do,
-       * because nobody can configure a vehicle number in advance. In that case
-       * the document is marked pending and the user is prompted, rather than a
-       * bill being invented with a blank Part-B.
-       */
-      const autoReportCompliance = (documentId: string) => {
-        const doc = get().documents.find((d) => d.id === documentId);
-        if (!doc) return;
-        const settings = settingsFor(doc.companyId);
-
-        if (settings.autoGenerateEInvoiceOnFinalise) {
-          const ctx = eInvoiceContextFor(doc);
-          if (ctx && isEInvoiceApplicable(ctx).applicable) get().generateEInvoice(documentId);
-        }
-
-        if (!settings.autoGenerateEwayBillOnFinalise) return;
-
-        const items = get().items.filter((i) => i.companyId === doc.companyId);
-        if (!isEwayBillRequired({ document: doc, items, settings }).required) return;
-
-        const company = companyOf(doc.companyId);
-        const buyer = get().parties.find((p) => p.id === doc.partyId);
-        const branch = get().branches.find((b) => b.id === doc.branchId);
-        const canRaiseUnattended =
-          settings.defaultTransportMode !== 'road' && !!settings.defaultTransporterId;
-
-        if (!company || !buyer || !branch || !canRaiseUnattended) {
-          writeCompliance(documentId, { ewayBillStatus: 'pending' });
-          notify(
-            'compliance',
-            'E-way bill needed',
-            `${doc.number} needs a vehicle number before a bill can be raised.`,
-            doc.kind,
-            doc.id,
-          );
-          return;
-        }
-
-        const shipTo = buyer.shippingAddress ?? buyer.billingAddress;
-        get().generateEwayBill({
-          documentId,
-          subSupplyType: subSupplyTypeFor(doc.kind),
-          transactionType: 1,
-          from: {
-            legalName: company.legalName ?? company.name,
-            gstin: company.taxRegistration?.identifier ?? 'URP',
-            address1: branch.address.line1,
-            address2: branch.address.line2,
-            place: branch.address.city,
-            pincode: branch.address.postalCode,
-            stateCode: branch.address.stateCode ?? '',
-          },
-          to: {
-            legalName: buyer.name,
-            gstin: buyer.taxId ?? 'URP',
-            address1: shipTo.line1,
-            address2: shipTo.line2,
-            place: shipTo.city,
-            pincode: shipTo.postalCode,
-            stateCode: shipTo.stateCode ?? '',
-          },
-          transporterId: settings.defaultTransporterId,
-          transporterName: settings.defaultTransporterName,
-          transportMode: settings.defaultTransportMode,
-          vehicleType: settings.defaultVehicleType,
-          transportDocNumber: `AUTO/${doc.number}`,
-          transportDocDate: doc.date,
-          distanceKm: settings.defaultDistanceKm,
-        });
-      };
-
-      const seed = isRemote() ? emptyData() : buildSeedData();
-
       return {
-        ...seed,
+        ...emptyData(),
         session: emptySession,
-        activeCompanyId: isRemote() ? '' : PRIMARY_COMPANY_ID,
-        activeBranchId: isRemote() ? '' : 'brn_mum',
+        activeCompanyId: '',
+        activeBranchId: '',
         hydrated: false,
         setHydrated: (hydrated) => set({ hydrated }),
 
         /* ------------------------------------------------------------ */
         /* session                                                      */
         /* ------------------------------------------------------------ */
-        signIn: (email) => {
-          const user = get().users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? get().users[0];
-          set({
-            session: {
-              userId: user.id,
-              authenticated: true,
-              onboardingComplete: true,
-              signedInAt: nowISO(),
-            },
-          });
-        },
-        signInWithOtp: () => {
-          const user = get().users[0];
-          set({
-            session: { userId: user.id, authenticated: true, onboardingComplete: true, signedInAt: nowISO() },
-          });
-        },
-        signUp: (name, email) => {
-          const user: User = {
-            id: uid('usr'),
-            accountId: get().accountId,
-            name,
-            email,
-            role: 'owner',
-            companyIds: [],
-            branchIds: [],
-            avatarColor: '#007AFF',
-            status: 'active',
-            lastActiveAt: nowISO(),
-          };
-          set({
-            users: [user, ...get().users],
-            session: { userId: user.id, authenticated: true, onboardingComplete: false, signedInAt: nowISO() },
-          });
-        },
         signOut: () => set({ session: emptySession }),
         completeOnboarding: () =>
           set({ session: { ...get().session, onboardingComplete: true } }),
@@ -970,7 +645,7 @@ export const useAppStore = create<AppState>()(
               unitCost: item.purchasePrice,
               date: today(),
               notes: 'Opening stock',
-              createdBy: get().session.userId ?? CURRENT_USER_ID,
+              createdBy: get().session.userId ?? '',
               createdAt: nowISO(),
             };
             set({ stockMovements: [...get().stockMovements, m] });
@@ -1085,7 +760,7 @@ export const useAppStore = create<AppState>()(
               grandTotal: zero(draft.currency),
               grandTotalBase: zero(draft.currency),
             },
-            createdBy: s.session.userId ?? CURRENT_USER_ID,
+            createdBy: s.session.userId ?? '',
             createdAt: nowISO(),
             updatedAt: nowISO(),
           };
@@ -1149,8 +824,8 @@ export const useAppStore = create<AppState>()(
                     : existing.kind === 'goodsReceipt'
                       ? 'received'
                       : 'issued';
+          // The server reports to the GST portals on finalise where the company asked for that.
           get().setDocumentStatus(id, target);
-          autoReportCompliance(id);
         },
 
         removeDocument: (id) => {
@@ -1316,7 +991,7 @@ export const useAppStore = create<AppState>()(
           const movement: StockMovement = {
             ...m,
             id: uid('stk'),
-            createdBy: get().session.userId ?? CURRENT_USER_ID,
+            createdBy: get().session.userId ?? '',
             createdAt: nowISO(),
           };
           set({ stockMovements: [...get().stockMovements, movement] });
@@ -1334,7 +1009,7 @@ export const useAppStore = create<AppState>()(
             unitCost: item?.purchasePrice ?? zero('INR'),
             date,
             notes,
-            createdBy: s.session.userId ?? CURRENT_USER_ID,
+            createdBy: s.session.userId ?? '',
             createdAt: nowISO(),
           };
           set({
@@ -1350,12 +1025,6 @@ export const useAppStore = create<AppState>()(
         /* ------------------------------------------------------------ */
         /* supporting                                                   */
         /* ------------------------------------------------------------ */
-        addAttachment: (a) => {
-          const attachment: Attachment = { ...a, id: uid('att'), uploadedAt: nowISO() };
-          set({ attachments: [...get().attachments, attachment] });
-          return attachment.id;
-        },
-        removeAttachment: (id) => set({ attachments: get().attachments.filter((a) => a.id !== id) }),
         pushNotification: (n) => notify(n.kind, n.title, n.body, n.entityType, n.entityId),
         markNotificationRead: (id) =>
           set({ notifications: get().notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) }),
@@ -1396,468 +1065,10 @@ export const useAppStore = create<AppState>()(
           if (gone) audit('deleted', 'transporter', id, gone.name);
         },
 
-        generateEInvoice: (documentId, opts) => {
-          const doc = get().documents.find((d) => d.id === documentId);
-          if (!doc) return fail([]);
-
-          const ctx = eInvoiceContextFor(doc);
-          if (!ctx) return fail([]);
-
-          const applicability = isEInvoiceApplicable(ctx);
-          if (!applicability.applicable) {
-            writeCompliance(documentId, {
-              eInvoiceStatus: 'notApplicable',
-              lastMessage: applicability.reason,
-            });
-            return fail([
-              { code: 'NA', field: 'document', message: applicability.reason, severity: 'blocking' },
-            ]);
-          }
-
-          const issues = validateEInvoice(ctx);
-          const blocking = blockingIssues(issues);
-          if (blocking.length) {
-            writeCompliance(documentId, {
-              eInvoiceStatus: 'failed',
-              eInvoiceIssues: issues,
-              lastAttemptAt: nowISO(),
-              lastMessage: blocking[0].message,
-            });
-            audit('e-invoice rejected', doc.kind, doc.id, doc.number, { after: blocking[0].code });
-            notify(
-              'compliance',
-              'E-invoice rejected',
-              `${doc.number}: ${blocking[0].message}`,
-              doc.kind,
-              doc.id,
-            );
-            return fail(issues);
-          }
-
-          const response = submitInvoice({
-            payload: buildIrpPayload(ctx),
-            existingIrns: ctx.existingIrns ?? [],
-            now: ctx.now,
-            simulation: opts?.simulation,
-          });
-
-          if (!response.ok) {
-            writeCompliance(documentId, {
-              eInvoiceStatus: 'failed',
-              eInvoiceIssues: response.errors,
-              lastAttemptAt: nowISO(),
-              lastMessage: response.errors[0]?.message,
-            });
-            audit('e-invoice rejected', doc.kind, doc.id, doc.number, {
-              after: response.errors[0]?.code,
-            });
-            notify(
-              'compliance',
-              'E-invoice rejected',
-              `${doc.number}: ${response.errors[0]?.message ?? 'The portal refused the invoice'}`,
-              doc.kind,
-              doc.id,
-            );
-            return fail(response.errors);
-          }
-
-          writeCompliance(documentId, {
-            eInvoiceStatus: 'generated',
-            eInvoiceDocType: applicability.docType ?? undefined,
-            eInvoiceSupplyType: applicability.supplyType ?? undefined,
-            irn: response.irn,
-            ackNo: response.ackNo,
-            ackDate: response.ackDate,
-            signedQrPayload: response.signedQrPayload,
-            irnGeneratedAt: ctx.now,
-            irnCancelledAt: undefined,
-            irnCancelReasonCode: undefined,
-            irnCancelRemark: undefined,
-            eInvoiceIssues: issues.length ? issues : undefined,
-            lastAttemptAt: ctx.now,
-            lastMessage: undefined,
-          });
-
-          audit('generated e-invoice', doc.kind, doc.id, doc.number, { after: response.irn });
-          notify(
-            'compliance',
-            'IRN generated',
-            `${doc.number} · Ack ${response.ackNo}`,
-            doc.kind,
-            doc.id,
-          );
-          return { ok: true, issues };
-        },
-
-        cancelEInvoice: (documentId, reasonCode, remark) => {
-          const doc = get().documents.find((d) => d.id === documentId);
-          if (!doc) return fail([]);
-
-          const now = nowISO();
-          const allowed = canCancelEInvoice(doc.compliance, now);
-          if (!allowed.allowed) {
-            return fail([
-              {
-                code: 'CANCEL',
-                field: 'irn',
-                message: allowed.reason ?? 'This IRN cannot be cancelled',
-                severity: 'blocking',
-              },
-            ]);
-          }
-
-          const response = cancelIrn({
-            irn: doc.compliance!.irn!,
-            irnGeneratedAt: doc.compliance!.irnGeneratedAt!,
-            reasonCode,
-            remark,
-            now,
-          });
-          if (!response.ok) return fail(response.errors);
-
-          writeCompliance(documentId, {
-            eInvoiceStatus: 'cancelled',
-            irnCancelledAt: now,
-            irnCancelReasonCode: reasonCode,
-            irnCancelRemark: remark,
-            lastMessage: `IRN cancelled on the portal: ${response.reason.toLowerCase()}`,
-          });
-
-          audit('cancelled e-invoice', doc.kind, doc.id, doc.number, {
-            before: doc.compliance?.irn,
-            after: response.reason,
-          });
-          notify('compliance', 'IRN cancelled', `${doc.number} · ${response.reason}`, doc.kind, doc.id);
-          return { ok: true, issues: [] };
-        },
-
-        generateEwayBill: (input) => {
-          const s = get();
-          const doc = s.documents.find((d) => d.id === input.documentId);
-          if (!doc) return fail([]);
-
-          const settings = settingsFor(doc.companyId);
-          const items = s.items.filter((i) => i.companyId === doc.companyId);
-          const requirement = isEwayBillRequired({ document: doc, items, settings });
-          if (!requirement.required) {
-            return fail([
-              { code: 'EWB001', field: 'document', message: requirement.reason, severity: 'blocking' },
-            ]);
-          }
-
-          const now = nowISO();
-          const currency = doc.totals.grandTotal.currency;
-          const componentTotal = (type: 'CGST' | 'SGST' | 'IGST') =>
-            doc.totals.taxLines
-              .flatMap((l) => l.components)
-              .filter((c) => c.type === type)
-              .reduce((acc, c) => acc + c.amount.minor, 0);
-
-          const partA = validatePartA({
-            from: input.from,
-            to: input.to,
-            subSupplyType: input.subSupplyType,
-            subSupplyDescription: input.subSupplyDescription,
-            documentNumber: doc.number,
-            documentDate: doc.date,
-            consignmentValueMinor: doc.totals.grandTotal.minor,
-            mainHsnCode: mainHsnCodeOf(doc),
-          });
-          const partB = validatePartB({
-            transportMode: input.transportMode,
-            vehicleNumber: input.vehicleNumber,
-            vehicleType: input.vehicleType,
-            transporterId: input.transporterId,
-            transportDocNumber: input.transportDocNumber,
-            transportDocDate: input.transportDocDate,
-            distanceKm: input.distanceKm,
-            now,
-          });
-
-          const issues = [...partA, ...partB];
-          if (blockingIssues(issues).length) return fail(issues);
-
-          const draft = {
-            companyId: doc.companyId,
-            branchId: doc.branchId,
-            documentId: doc.id,
-            documentKind: doc.kind,
-            documentNumber: doc.number,
-            documentDate: doc.date,
-            partyId: doc.partyId,
-            docType: ewayDocTypeFor(doc.kind),
-            supplyType: 'outward' as const,
-            subSupplyType: input.subSupplyType,
-            subSupplyDescription: input.subSupplyDescription,
-            transactionType: input.transactionType,
-            from: input.from,
-            to: input.to,
-            consignmentValue: doc.totals.grandTotal,
-            taxableValue: doc.totals.taxableAmount,
-            cgst: { minor: componentTotal('CGST'), currency },
-            sgst: { minor: componentTotal('SGST'), currency },
-            igst: { minor: componentTotal('IGST'), currency },
-            mainHsnCode: mainHsnCodeOf(doc),
-            itemCount: doc.lines.length,
-            transporterId: input.transporterId,
-            transporterName: input.transporterName,
-            transportMode: input.transportMode,
-            vehicleNumber: input.vehicleNumber,
-            vehicleType: input.vehicleType,
-            transportDocNumber: input.transportDocNumber,
-            transportDocDate: input.transportDocDate,
-            distanceKm: input.distanceKm,
-            generatedAt: now,
-            generatedBy: s.session.userId ?? CURRENT_USER_ID,
-            cancelledAt: undefined,
-            cancelReasonCode: undefined,
-            cancelRemark: undefined,
-          };
-
-          const response = submitEwayBill({
-            payload: buildEwbPayload(draft),
-            vehicleType: input.vehicleType,
-            now,
-            simulation: input.simulation,
-          });
-          if (!response.ok) return fail(response.errors);
-
-          const bill: EwayBill = {
-            ...draft,
-            id: uid('ewb'),
-            ewayBillNumber: response.ewayBillNumber,
-            validFrom: response.validFrom,
-            validUpto: response.validUpto,
-            status: 'active',
-            partBUpdates: [
-              {
-                id: uid('pb'),
-                mode: input.transportMode,
-                vehicleNumber: input.vehicleNumber,
-                vehicleType: input.vehicleType,
-                transportDocNumber: input.transportDocNumber,
-                transportDocDate: input.transportDocDate,
-                fromPlace: input.from.place,
-                fromStateCode: input.from.stateCode,
-                reasonCode: '1',
-                updatedAt: now,
-                updatedBy: s.session.userId ?? CURRENT_USER_ID,
-              },
-            ],
-            extensions: [],
-            createdAt: now,
-            updatedAt: now,
-          };
-
-          set({ ewayBills: [bill, ...get().ewayBills] });
-          writeCompliance(doc.id, {
-            ewayBillStatus: 'generated',
-            ewayBillId: bill.id,
-            ewayBillNumber: bill.ewayBillNumber,
-            ewayBillValidUpto: bill.validUpto,
-          });
-
-          audit('generated e-way bill', 'ewayBill', bill.id, bill.ewayBillNumber, { after: doc.number });
-          notify(
-            'compliance',
-            `E-way bill ${bill.ewayBillNumber}`,
-            `${doc.number} · valid until ${bill.validUpto.slice(0, 10)}`,
-            'ewayBill',
-            bill.id,
-          );
-          return { ok: true, issues, ewayBillId: bill.id };
-        },
-
-        updateEwayBillPartB: (id, update) => {
-          const s = get();
-          const bill = s.ewayBills.find((b) => b.id === id);
-          if (!bill) return fail([]);
-
-          const now = nowISO();
-          const allowed = canUpdatePartB(bill, now);
-          if (!allowed.allowed) {
-            return fail([
-              {
-                code: 'EWB210',
-                field: 'status',
-                message: allowed.reason ?? 'Part-B cannot be updated',
-                severity: 'blocking',
-              },
-            ]);
-          }
-
-          const issues = validatePartB({
-            transportMode: update.mode,
-            vehicleNumber: update.vehicleNumber,
-            vehicleType: update.vehicleType,
-            transportDocNumber: update.transportDocNumber,
-            transportDocDate: update.transportDocDate,
-            distanceKm: bill.distanceKm,
-            now,
-          });
-          if (blockingIssues(issues).length) return fail(issues);
-
-          const entry: EwayBillPartBUpdate = {
-            ...update,
-            id: uid('pb'),
-            updatedAt: now,
-            updatedBy: s.session.userId ?? CURRENT_USER_ID,
-          };
-
-          set({
-            ewayBills: get().ewayBills.map((b) =>
-              b.id === id
-                ? {
-                    ...b,
-                    transportMode: update.mode,
-                    vehicleNumber: update.vehicleNumber,
-                    vehicleType: update.vehicleType,
-                    transportDocNumber: update.transportDocNumber,
-                    transportDocDate: update.transportDocDate,
-                    partBUpdates: [...b.partBUpdates, entry],
-                    updatedAt: now,
-                  }
-                : b,
-            ),
-          });
-
-          audit('updated Part-B', 'ewayBill', bill.id, bill.ewayBillNumber, {
-            after: update.vehicleNumber ?? update.transportDocNumber,
-          });
-          return { ok: true, issues };
-        },
-
-        extendEwayBill: (id, args) => {
-          const s = get();
-          const bill = s.ewayBills.find((b) => b.id === id);
-          if (!bill) return fail([]);
-
-          const now = nowISO();
-          const response = extendEwayBillAtPortal({
-            bill,
-            remainingDistanceKm: args.remainingDistanceKm,
-            reasonCode: args.reasonCode,
-            now,
-          });
-          if (!response.ok) return fail(response.errors);
-
-          const extension = {
-            id: uid('ext'),
-            extendedAt: now,
-            extendedBy: s.session.userId ?? CURRENT_USER_ID,
-            reasonCode: args.reasonCode,
-            remark: args.remark,
-            transitType: args.transitType,
-            currentPlace: args.currentPlace,
-            currentPincode: args.currentPincode,
-            currentStateCode: args.currentStateCode,
-            remainingDistanceKm: args.remainingDistanceKm,
-            previousValidUpto: bill.validUpto,
-            newValidUpto: response.newValidUpto,
-          };
-
-          set({
-            ewayBills: get().ewayBills.map((b) =>
-              b.id === id
-                ? {
-                    ...b,
-                    validUpto: response.newValidUpto,
-                    extensions: [...b.extensions, extension],
-                    updatedAt: now,
-                  }
-                : b,
-            ),
-          });
-          writeCompliance(bill.documentId, { ewayBillValidUpto: response.newValidUpto });
-
-          audit('extended e-way bill', 'ewayBill', bill.id, bill.ewayBillNumber, {
-            before: bill.validUpto,
-            after: response.newValidUpto,
-          });
-          notify(
-            'compliance',
-            'E-way bill extended',
-            `${bill.ewayBillNumber} now runs to ${response.newValidUpto.slice(0, 10)}`,
-            'ewayBill',
-            bill.id,
-          );
-          return { ok: true, issues: [] };
-        },
-
-        cancelEwayBill: (id, reasonCode, remark) => {
-          const bill = get().ewayBills.find((b) => b.id === id);
-          if (!bill) return fail([]);
-
-          const now = nowISO();
-          const allowed = canCancelEwayBill(bill, now);
-          if (!allowed.allowed) {
-            return fail([
-              {
-                code: 'EWB220',
-                field: 'status',
-                message: allowed.reason ?? 'This bill cannot be cancelled',
-                severity: 'blocking',
-              },
-            ]);
-          }
-
-          const response = cancelEwayBillAtPortal({
-            ewayBillNumber: bill.ewayBillNumber,
-            reasonCode,
-            remark,
-            now,
-          });
-          if (!response.ok) return fail(response.errors);
-
-          set({
-            ewayBills: get().ewayBills.map((b) =>
-              b.id === id
-                ? {
-                    ...b,
-                    status: 'cancelled' as const,
-                    cancelledAt: now,
-                    cancelReasonCode: reasonCode,
-                    cancelRemark: remark,
-                    updatedAt: now,
-                  }
-                : b,
-            ),
-          });
-          writeCompliance(bill.documentId, { ewayBillStatus: 'cancelled' });
-
-          audit('cancelled e-way bill', 'ewayBill', bill.id, bill.ewayBillNumber, {
-            after: response.reason,
-          });
-          notify(
-            'compliance',
-            'E-way bill cancelled',
-            `${bill.ewayBillNumber} · ${response.reason}`,
-            'ewayBill',
-            bill.id,
-          );
-          return { ok: true, issues: [] };
-        },
-
-        retrySync: (id) =>
-          set({ syncQueue: get().syncQueue.filter((q) => q.id !== id) }),
-        clearSyncQueue: () => set({ syncQueue: [] }),
-
-        /* ------------------------------------------------------------ */
-        /* demo control                                                 */
-        /* ------------------------------------------------------------ */
-        resetDemoData: () => {
-          const fresh = buildSeedData();
-          set({
-            ...fresh,
-            activeCompanyId: PRIMARY_COMPANY_ID,
-            activeBranchId: 'brn_mum',
-          });
-        },
       };
     },
     {
-      // Remote data never shares storage with the demo dataset.
-      name: isRemote() ? 'ebs.remote.v1' : 'ebs.data.v1',
+      name: PERSIST_KEY,
       version: 5,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => {

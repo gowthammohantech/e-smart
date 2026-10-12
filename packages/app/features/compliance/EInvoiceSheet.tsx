@@ -10,7 +10,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { SwitchField, TextField } from '@esmart/ui/components/Field';
+import { TextField } from '@esmart/ui/components/Field';
 import { useToast } from '@esmart/ui/components/Toast';
 import { QrCode } from '@esmart/ui/components/QrCode';
 import { MIN_READABLE_QR_SIZE } from '@esmart/core/lib/qr';
@@ -64,7 +64,6 @@ export function EInvoiceSheet({
 
   const [busy, setBusy] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
-  const [simulateFailure, setSimulateFailure] = useState(false);
   const [reasonCode, setReasonCode] = useState<CancelReasonCode>('2');
   const [remark, setRemark] = useState('');
   const [result, setResult] = useState<ComplianceIssue[] | null>(null);
@@ -96,9 +95,7 @@ export function EInvoiceSheet({
 
   const generate = async () => {
     setBusy(true);
-    const outcome = await compliance.generateEInvoice(doc.id, {
-      simulation: simulateFailure ? { fail: 'SIM001' } : undefined,
-    });
+    const outcome = await compliance.generateEInvoice(doc.id);
     setBusy(false);
     setResult(outcome.issues);
     if (outcome.ok) {
@@ -333,14 +330,6 @@ export function EInvoiceSheet({
               </Card>
             ) : null}
 
-            {settings.irpEnvironment === 'sandbox' ? (
-              <SwitchField
-                label={tr('compliance:einv.simulateRejection')}
-                description={tr('compliance:einv.sandboxHint')}
-                value={simulateFailure}
-                onValueChange={setSimulateFailure}
-              />
-            ) : null}
           </>
         ) : null}
 

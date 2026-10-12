@@ -89,7 +89,9 @@
     "cancelKind": "{{kind}} ரத்து செய்",
     "createdDraft": "{{kind}} வரைவு உருவாக்கப்பட்டது",
     "shareTitle": "{{kind}} {{number}}",
-    "shareMessage": "{{kind}} {{number}} — {{amount}}"
+    "shareMessage": "{{kind}} {{number}} — {{amount}}",
+    "sent": "வாடிக்கையாளருக்கு அனுப்பப்படுகிறது",
+    "linkCopied": "இணைப்பு நகலெடுக்கப்பட்டது"
   },
   "component": {
     "confirm": "உறுதிப்படுத்து",

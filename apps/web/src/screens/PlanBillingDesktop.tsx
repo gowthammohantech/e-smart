@@ -47,18 +47,12 @@ export function PlanBillingDesktop() {
     }
   };
 
-  const usage = [
-    {
-      label: tr('plan:billing.usageBusinesses'),
-      value: tr('plan:billing.ofTotal', { used: companies.length, total: 3 }),
-      ratio: companies.length / 3,
-    },
+  // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md), so no meters.
+  const teamSize = useAppStore((s) => s.users.filter((u) => u.status !== 'disabled' && u.companyIds.includes(s.activeCompanyId)).length);
+  const usage: { label: string; value: string; ratio: number | null }[] = [
+    { label: tr('plan:billing.usageBusinesses'), value: String(companies.length), ratio: null },
     { label: tr('plan:billing.usageInvoices'), value: String(invoices.length), ratio: null },
-    {
-      label: tr('plan:billing.usageUsers'),
-      value: tr('plan:billing.ofTotal', { used: 4, total: 6 }),
-      ratio: 4 / 6,
-    },
+    { label: tr('plan:billing.usageUsers'), value: String(teamSize), ratio: null },
   ];
 
   return (

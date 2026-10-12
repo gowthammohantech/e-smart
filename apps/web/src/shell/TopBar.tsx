@@ -13,8 +13,7 @@ import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart
 import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useUiStore } from '@esmart/app/store/uiStore';
-import { isRemote, useRemoteMeta } from '@esmart/app/remote';
+import { useRemoteMeta } from '@esmart/app/remote';
 import { useActiveCompany, useBranches, useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
@@ -134,9 +133,7 @@ export function TopBar() {
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const signOut = useSignOut();
 
-  const simulatedOffline = useUiStore((s) => s.offlineMode);
-  const online = useRemoteMeta((m) => m.online);
-  const offline = isRemote() ? !online : simulatedOffline;
+  const offline = !useRemoteMeta((m) => m.online);
   const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status !== 'synced').length);
 
   const { setAnchor: companyAnchor, rect: companyRect, open: openCompanyMenu, close: closeCompanyMenu } = useMenuAnchor();

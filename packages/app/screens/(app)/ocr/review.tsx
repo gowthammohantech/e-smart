@@ -177,12 +177,7 @@ export default function OcrReview() {
           <Card padded={false} style={{ height: 240, overflow: 'hidden' }}>
             <Image source={{ uri: result.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
           </Card>
-        ) : (
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <MaterialCommunityIcons name="file-document-outline" size={22} color={t.c.muted} />
-            <Text variant="small" tone="muted" style={{ flex: 1, lineHeight: 19 }}>{tr('inventory:ocr.sampleUsed')}</Text>
-          </Card>
-        )}
+        ) : null}
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
@@ -233,12 +228,7 @@ export default function OcrReview() {
           <Card padded={false} style={{ height: 180 }}>
             <Image source={{ uri: result.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
           </Card>
-        ) : (
-          <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <MaterialCommunityIcons name="file-document-outline" size={22} color={t.c.muted} />
-            <Text variant="small" tone="muted" style={{ flex: 1 }}>{tr('inventory:ocr.sampleUsed')}</Text>
-          </Card>
-        )}
+        ) : null}
 
         <Card
           style={{

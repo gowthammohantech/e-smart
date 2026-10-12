@@ -22,7 +22,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@esmart/ui/components/LixiOrb';
-import { answer, greet, lixiSuggestions, LixiAction, LixiContext, LixiReply } from '../../features/lixi/brain';
+import { greet, lixiSuggestions, LixiAction, LixiContext, LixiReply } from '../../features/lixi/brain';
 import { askRemote, confirmRemote, remoteLixiAvailable, type PendingLixiAction } from '../../features/lixi/remote';
 import { detailRouteFor } from '../../features/documents/DocumentEditor';
 import { describeError } from '../../remote/errors';
@@ -45,9 +45,6 @@ import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { resolveRange } from '@esmart/core/lib/date';
 
 type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply };
-
-/** Long enough to read as thought, short enough not to feel slow. */
-const THINK_MS = 650;
 
 type LixiChatProps = {
   /** Set when the chat sits in the web desktop's side panel instead of being a screen. */
@@ -117,11 +114,6 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   // A write the server's Lixi prepared; nothing happens until it is confirmed.
   const [action, setAction] = useState<PendingLixiAction | null>(null);
   const scroll = useRef<ScrollView>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
 
   const send = (raw: string) => {
     const text = raw.trim();
@@ -129,22 +121,23 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
     if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
     setDraft('');
     setMessages((m) => [...m, { id: `${Date.now()}-me`, from: 'me', reply: { text } }]);
-    setThinking(true);
-    if (remote) {
-      const turns = [...messages, { from: 'me' as const, reply: { text } }].map((m) => ({
-        role: m.from === 'me' ? ('user' as const) : ('assistant' as const),
-        text: m.reply.text,
-      }));
-      askRemote(turns, i18n.language)
-        // Offline or the model is down: the local brain answers instead.
-        .then((res) => {
-          say(res?.reply ?? answer(text, ctx));
-          if (res?.pendingAction) setAction(res.pendingAction);
-        })
-        .catch((err) => say({ text: describeError(err, tr) }));
+    if (!remote) {
+      // No company open yet: nothing to answer from.
+      say({ text: tr('lixi:ui.unavailable') });
       return;
     }
-    timer.current = setTimeout(() => say(answer(text, ctx)), THINK_MS);
+    setThinking(true);
+    const turns = [...messages, { from: 'me' as const, reply: { text } }].map((m) => ({
+      role: m.from === 'me' ? ('user' as const) : ('assistant' as const),
+      text: m.reply.text,
+    }));
+    askRemote(turns, i18n.language)
+      .then((res) => {
+        // Offline or the model is down: say so, and offer to ask again.
+        say(res?.reply ?? { text: tr('lixi:ui.unavailable'), actions: [{ type: 'ask', label: tr('lixi:ui.tryAgain'), question: text }] });
+        if (res?.pendingAction) setAction(res.pendingAction);
+      })
+      .catch((err) => say({ text: describeError(err, tr) }));
   };
 
   const say = (reply: LixiReply) => {
@@ -205,7 +198,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
               Lixi
             </Text>
             <Text variant="caption" style={{ color: thinking ? LIXI.blue : t.c.muted }}>
-              {thinking ? tr('lixi:ui.reading') : 'AI assistant · preview'}
+              {thinking ? tr('lixi:ui.reading') : tr('lixi:ui.subtitleRemote')}
             </Text>
           </View>
           {messages.length ? (
@@ -270,7 +263,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             Lixi
           </Text>
           <Text variant="caption" style={{ color: thinking ? LIXI.blue : t.c.muted }}>
-            {thinking ? tr('lixi:ui.reading') : tr(remote ? 'lixi:ui.subtitleRemote' : 'lixi:ui.subtitleLocal')}
+            {thinking ? tr('lixi:ui.reading') : tr('lixi:ui.subtitleRemote')}
           </Text>
         </View>
         {messages.length ? (

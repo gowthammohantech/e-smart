@@ -28,6 +28,7 @@ export default function NewExpense() {
       supplierId: matchParty(suppliers, { gstin: field('gstin'), name: vendor }),
       categoryId: category ? categories.find((c) => c.name.toLowerCase() === category)?.id : undefined,
       receiptUri: scan.imageUri,
+      receiptAttachmentId: scan.attachmentId,
     };
   }
 

@@ -9,7 +9,6 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
-import { SwitchField } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -17,8 +16,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useUiStore } from '@esmart/app/store/uiStore';
-import { isRemote, remoteSession, syncNow, useRemoteMeta } from '@esmart/app/remote';
+import { remoteSession, retryFailed, retrySync, syncNow, useRemoteMeta } from '@esmart/app/remote';
 import { drop } from '@esmart/app/remote/outbox';
 
 function SectionTitle({ children }: { children: string }) {
@@ -85,35 +83,24 @@ export function SyncStatusDesktop() {
   const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
 
-  const remote = isRemote();
   const allEntries = useAppStore((s) => s.syncQueue);
-  // Remote mode lists what is still to send; the demo lists its seeded rows.
-  const queue = remote ? allEntries.filter((q) => q.status !== 'synced') : allEntries;
+  // What is still to send.
+  const queue = allEntries.filter((q) => q.status !== 'synced');
   const online = useRemoteMeta((m) => m.online);
   const syncing = useRemoteMeta((m) => m.syncing);
   const lastSyncAt = useRemoteMeta((m) => m.lastSyncAt);
   const [open, setOpen] = useState<SyncQueueEntry | null>(null);
-  const retrySync = useAppStore((s) => s.retrySync);
-  const clearSyncQueue = useAppStore((s) => s.clearSyncQueue);
-  const simulatedOffline = useUiStore((s) => s.offlineMode);
-  const offline = remote ? !online : simulatedOffline;
-  const setOffline = useUiStore((s) => s.setOfflineMode);
-  const simulateLatency = useUiStore((s) => s.simulateLatency);
-  const setSimulateLatency = useUiStore((s) => s.setSimulateLatency);
+  const offline = !online;
 
   const failed = queue.filter((q) => q.status === 'failed').length;
-  const canRetryAll = failed > 0 || (!remote && queue.length > 0);
+  const canRetryAll = failed > 0;
   const lastSynced = offline
     ? tr('settings:sync.offlineNow')
     : lastSyncAt
       ? tr('settings:sync.lastSynced', { when: formatRelative(lastSyncAt.slice(0, 10)) })
       : tr('settings:sync.neverSynced');
 
-  const openEntry = (q: SyncQueueEntry) => {
-    if (remote) return setOpen(q);
-    retrySync(q.id);
-    toast.show(tr('settings:sync.synced'), 'success');
-  };
+  const openEntry = (q: SyncQueueEntry) => setOpen(q);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -132,11 +119,9 @@ export function SyncStatusDesktop() {
                   icon={offline ? 'cloud-off-outline' : 'cloud-check-outline'}
                   size="sm"
                 />
-                {remote ? (
-                  <Text variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                    {lastSynced}
-                  </Text>
-                ) : null}
+                <Text variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {lastSynced}
+                </Text>
               </View>
               <Text variant="h2" weight="700">
                 {offline ? 'Working offline' : queue.length ? `${queue.length} waiting to sync` : 'Everything is synced'}
@@ -146,17 +131,15 @@ export function SyncStatusDesktop() {
                   ? 'You can keep drafting. Anything you create is queued and sent as soon as you are back online.'
                   : 'Finalised financial records are validated on the server before they count, so your books stay authoritative.'}
               </Text>
-              {remote ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
-                  <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncNow()} />
-                  <Button
-                    title={tr('settings:sync.reload')}
-                    variant="ghost"
-                    icon="cloud-download-outline"
-                    onPress={() => void syncNow().then(remoteSession.resync)}
-                  />
-                </View>
-              ) : null}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
+                <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncNow()} />
+                <Button
+                  title={tr('settings:sync.reload')}
+                  variant="ghost"
+                  icon="cloud-download-outline"
+                  onPress={() => void syncNow().then(remoteSession.resync)}
+                />
+              </View>
             </View>
           </View>
         </Card>
@@ -181,7 +164,7 @@ export function SyncStatusDesktop() {
             icon={offline ? 'cloud-off-outline' : 'cloud-check-outline'}
             label="Connection"
             value={offline ? 'Offline' : 'Online'}
-            caption={remote ? lastSynced : 'Demo data on this device'}
+            caption={lastSynced}
             color={offline ? t.c.warn : t.c.good}
           />
         </View>
@@ -198,8 +181,8 @@ export function SyncStatusDesktop() {
                   size="sm"
                   icon="sync"
                   onPress={() => {
-                    clearSyncQueue();
-                    toast.show(tr('settings:sync.allSynced'), 'success');
+                    retryFailed();
+                    toast.show(tr('settings:sync.retrying'), 'success');
                   }}
                 />
               ) : null}
@@ -273,26 +256,6 @@ export function SyncStatusDesktop() {
 
           {/* Controls and the note */}
           <View style={{ flexGrow: 2, flexBasis: 300, gap: t.spacing.lg, minWidth: 0 }}>
-            {remote ? null : (
-              <View style={{ gap: t.spacing.md }}>
-                <SectionTitle>{tr('settings:sync.prototypeControls')}</SectionTitle>
-                <Card>
-                  <SwitchField
-                    label={tr('settings:sync.simulateOffline')}
-                    description={tr('settings:sync.offlineHint')}
-                    value={offline}
-                    onValueChange={setOffline}
-                  />
-                  <SwitchField
-                    label={tr('settings:sync.simulateLatency')}
-                    description={tr('settings:sync.latencyHint')}
-                    value={simulateLatency}
-                    onValueChange={setSimulateLatency}
-                  />
-                </Card>
-              </View>
-            )}
-
             <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
               <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
               <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>

@@ -53,7 +53,7 @@ export function ScanBarcodeDesktop() {
                 <Illustration name="scanning" height={150} />
                 <Text weight="600">{tr('inventory:scan.pointCamera')}</Text>
                 <Text variant="caption" tone="muted" center style={{ maxWidth: 380, lineHeight: 18 }}>
-                  {tr('inventory:scan.prototypeNote')}
+                  {tr('inventory:scan.manualNote')}
                 </Text>
               </Card>
 

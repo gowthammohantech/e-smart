@@ -13,8 +13,6 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Badge } from '@esmart/ui/components/Badge';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
-import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
 import { useMoreGroups } from '../../../navigation/moreGroups';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -23,15 +21,12 @@ export default function MoreTab() {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'nav']);
   const router = useRouter();
-  const toast = useToast();
 
   const user = useCurrentUser();
   const company = useActiveCompany();
   const signOut = useSignOut();
-  const resetDemoData = useAppStore((s) => s.resetDemoData);
 
   const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
 
   const groups = useMoreGroups();
   // A desktop shows the groups as a grid of cards, a settings hub.
@@ -84,15 +79,7 @@ export default function MoreTab() {
         ))}
         </View>
 
-        <SectionHeader title={tr('nav:more.group.prototype')} />
-        <Card padded={false}>
-          <ListRow
-            title={tr('nav:more.reset.row')}
-            subtitle={tr('nav:more.reset.rowSubtitle')}
-            icon="restore"
-            iconColor={t.c.warn}
-            onPress={() => setConfirmReset(true)}
-          />
+        <Card padded={false} style={{ marginTop: t.spacing.xl }}>
           <ListRow
             title={tr('nav:more.signOut.row')}
             icon="logout"
@@ -107,20 +94,6 @@ export default function MoreTab() {
           {tr('nav:more.build', { version: '1.0.0' })}
         </Text>
       </ScrollView>
-
-      <ConfirmDialog
-        visible={confirmReset}
-        title={tr('nav:more.reset.title')}
-        message={tr('nav:more.reset.message')}
-        confirmLabel={tr('nav:more.reset.confirm')}
-        destructive
-        onCancel={() => setConfirmReset(false)}
-        onConfirm={() => {
-          resetDemoData();
-          setConfirmReset(false);
-          toast.show(tr('nav:more.reset.done'), 'success');
-        }}
-      />
 
       <ConfirmDialog
         visible={confirmSignOut}

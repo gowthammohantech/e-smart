@@ -30,7 +30,7 @@ export default function About() {
         <Card padded={false}>
           <ListRow title={tr('settings:about.version')} icon="information-outline" right={<Text variant="small" tone="muted">1.0.0 (1)</Text>} />
           <ListRow title={tr('settings:about.platform')} icon="cellphone" right={<Text variant="small" tone="muted">{tr('settings:about.sdk')}</Text>} />
-          <ListRow title={tr('settings:about.data')} icon="database-outline" right={<Text variant="small" tone="muted">{tr('settings:about.localData')}</Text>} divider={false} />
+          <ListRow title={tr('settings:about.data')} icon="database-outline" right={<Text variant="small" tone="muted">{tr('settings:about.syncedData')}</Text>} divider={false} />
         </Card>
 
         <Card padded={false}>
@@ -49,8 +49,8 @@ export default function About() {
         <Card variant="flat" style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:about.noteHeading')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 19 }}>
-            This is a UI prototype. Every screen is driven by a seeded local dataset — calculations, tax splits, stock
-            movements and aging are real, but nothing is sent to a server and no compliance filing actually happens.
+            Your books live on the server. This device keeps a working copy, so you can carry on offline; changes are
+            queued and sent when you are back online, and the server validates every finalised record before it counts.
           </Text>
         </Card>
       </ScrollView>

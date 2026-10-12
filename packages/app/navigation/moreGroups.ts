@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { MaterialCommunityIcons } from '@expo/vector-icons';
 import { countLabel } from '@esmart/core/lib/format';
 import { useCanOpen, useComplianceSummary, useModuleSet, useUnreadCount } from '../store/selectors';
-import { useUiStore } from '../store/uiStore';
+import { useRemoteMeta } from '../remote/meta';
 
 export type MoreEntry = {
   label: string;
@@ -22,7 +22,7 @@ export type MoreGroup = { key: MoreGroupKey; title: string; entries: MoreEntry[]
 export function useMoreGroups(): MoreGroup[] {
   const { t: tr } = useTranslation(['common', 'nav']);
   const unread = useUnreadCount();
-  const offline = useUiStore((s) => s.offlineMode);
+  const offline = !useRemoteMeta((m) => m.online);
   const complianceSummary = useComplianceSummary();
   const canOpen = useCanOpen();
   const moduleSet = useModuleSet();
