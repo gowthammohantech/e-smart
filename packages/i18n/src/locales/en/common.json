@@ -110,6 +110,7 @@
     "skip": "Skip",
     "noChartData": "No data for this period",
     "quantity": "Quantity",
+    "countryCode": "Country code",
     "useTyped": "Use “{{value}}”",
     "city": "City",
     "selectCity": "Select city",

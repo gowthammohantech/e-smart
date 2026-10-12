@@ -9,12 +9,12 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Avatar } from '@esmart/ui/components/Avatar';
-import { TextField } from '@esmart/ui/components/Field';
+import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
-import { Errors, hasErrors, required, validEmail, validPhone } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
@@ -32,18 +32,18 @@ export default function Profile() {
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
-  const [phone, setPhone] = useState(user?.phone ?? '');
+  const phone = usePhoneInput(user?.phone);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone'>>({});
 
   const save = () => {
     const next: Errors<'name' | 'email' | 'phone'> = {
       name: required(name, 'Name'),
       email: required(email, 'Email') ?? validEmail(email),
-      phone: validPhone(phone),
+      phone: phone.error(),
     };
     setErrors(next);
     if (hasErrors(next) || !user) return;
-    saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.trim() || undefined });
+    saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.value || undefined });
     toast.show(tr('settings:profile.saved'), 'success');
     goBack('/(app)/(tabs)/more');
   };
@@ -67,7 +67,7 @@ export default function Profile() {
 
         <TextField label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
         <TextField label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />
-        <TextField label={tr('settings:profile.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="cellphone" error={errors.phone} />
+        <PhoneField label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:profile.yourBusinesses')}</Text>
         <Card padded={false}>

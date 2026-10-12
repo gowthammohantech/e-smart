@@ -10,7 +10,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { TextField } from '@esmart/ui/components/Field';
+import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -34,14 +34,16 @@ export default function TransportersSettings() {
   const [editing, setEditing] = useState<Transporter | null>(null);
   const [name, setName] = useState('');
   const [transporterId, setTransporterId] = useState('');
-  const [phone, setPhone] = useState('');
+  const phone = usePhoneInput();
+  const [phoneError, setPhoneError] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
 
   const open = (transporter?: Transporter) => {
     setEditing(transporter ?? null);
     setName(transporter?.name ?? '');
     setTransporterId(transporter?.transporterId ?? '');
-    setPhone(transporter?.phone ?? '');
+    phone.reset(transporter?.phone);
+    setPhoneError(undefined);
     setError(undefined);
     setSheetOpen(true);
   };
@@ -53,12 +55,16 @@ export default function TransportersSettings() {
     if (!isValidTransporterId(transporterId)) {
       return setError('Transporter ID must be a valid 15-character GSTIN or TRANSIN');
     }
+    setError(undefined);
+    const badPhone = phone.error();
+    setPhoneError(badPhone);
+    if (badPhone) return;
     saveTransporter({
       id: editing?.id ?? uid('trn'),
       companyId: editing?.companyId ?? activeCompanyId,
       name: name.trim(),
       transporterId: transporterId.trim().toUpperCase(),
-      phone: phone.trim() || undefined,
+      phone: phone.value || undefined,
       status: 'active',
     });
     toast.show(editing ? 'Transporter updated' : 'Transporter added', 'success');
@@ -152,7 +158,7 @@ export default function TransportersSettings() {
             error={error}
             hint={tr('settings:transporters.idHint')}
           />
-          <TextField label={tr('settings:transporters.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+91 22 6789 1000" />
+          <PhoneField label={tr('settings:transporters.phone')} {...phone.field} placeholder="22 6789 1000" error={phoneError} />
         </View>
       </Sheet>
     </>

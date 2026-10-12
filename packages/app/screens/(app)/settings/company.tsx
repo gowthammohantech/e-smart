@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -42,7 +42,7 @@ export default function CompanySettings() {
   const [legalName, setLegalName] = useState(company?.legalName ?? '');
   const [businessType, setBusinessType] = useState(company?.businessType ?? BUSINESS_TYPES[0]);
   const [email, setEmail] = useState(company?.email ?? '');
-  const [phone, setPhone] = useState(company?.phone ?? '');
+  const phone = usePhoneInput(company?.phone);
   const [website, setWebsite] = useState(company?.website ?? '');
   const [line1, setLine1] = useState(company?.address.line1 ?? '');
   const [city, setCity] = useState(company?.address.city ?? '');
@@ -64,15 +64,16 @@ export default function CompanySettings() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'taxId' | 'postalCode'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = () => {
-    const next: Errors<'name' | 'email' | 'taxId' | 'postalCode'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'> = {
       name: required(name, 'Business name'),
       email: validEmail(email),
+      phone: phone.error(),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       postalCode: validPostalCode(postalCode, company?.country),
     };
@@ -85,7 +86,7 @@ export default function CompanySettings() {
       legalName: legalName.trim() || undefined,
       businessType,
       email: email.trim() || undefined,
-      phone: phone.trim() || undefined,
+      phone: phone.value || undefined,
       website: website.trim() || undefined,
       fiscalYearStartMonth: fyMonth,
       allowNegativeStock,
@@ -134,7 +135,7 @@ export default function CompanySettings() {
         <PickerField label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
 
         <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
-        <TextField label={tr('settings:company.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
+        <PhoneField label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />
         <TextField label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>

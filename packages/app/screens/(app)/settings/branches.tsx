@@ -11,7 +11,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { PickerField, TextField, SwitchField } from '@esmart/ui/components/Field';
+import { PhoneField, PickerField, TextField, SwitchField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -46,12 +46,12 @@ export default function BranchSettings() {
   const [city, setCity] = useState('');
   const [stateCode, setStateCode] = useState('');
   const [stateOpen, setStateOpen] = useState(false);
-  const [phone, setPhone] = useState('');
+  const phone = usePhoneInput();
   const [line1, setLine1] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [gstin, setGstin] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
-  const [errors, setErrors] = useState<Errors<'gstin' | 'postalCode'>>({});
+  const [errors, setErrors] = useState<Errors<'gstin' | 'postalCode' | 'phone'>>({});
 
   const open = (branch?: Branch) => {
     // A new branch starts with a blank address: copying head office's street
@@ -74,7 +74,7 @@ export default function BranchSettings() {
     setCity(branch?.address.city ?? company.address.city);
     setStateCode(branch?.address.stateCode ?? company.address.stateCode ?? '');
     setGstin(branch?.gstin ?? '');
-    setPhone(branch?.phone ?? '');
+    phone.reset(branch?.phone);
     setIsPrimary(branch?.isPrimary ?? false);
     setErrors({});
   };
@@ -91,7 +91,7 @@ export default function BranchSettings() {
   const save = () => {
     if (!editing || !name.trim()) return;
     const cleanGstin = gstin ? normalizeGstin(gstin) : '';
-    const next: Errors<'gstin' | 'postalCode'> = {
+    const next: Errors<'gstin' | 'postalCode' | 'phone'> = {
       gstin: cleanGstin
         ? validGstin(cleanGstin) ??
           (stateCode && cleanGstin.slice(0, 2) !== stateCode
@@ -99,6 +99,7 @@ export default function BranchSettings() {
             : undefined)
         : undefined,
       postalCode: validPostalCode(postalCode, company.address.country),
+      phone: phone.error(),
     };
     setErrors(next);
     if (hasErrors(next)) return;
@@ -109,7 +110,7 @@ export default function BranchSettings() {
       companyId: company.id,
       name: name.trim(),
       code: (code || name.slice(0, 3)).toUpperCase(),
-      phone: phone.trim() || undefined,
+      phone: phone.value || undefined,
       gstin: cleanGstin || undefined,
       isPrimary,
       address: {
@@ -225,7 +226,7 @@ export default function BranchSettings() {
             icon="mailbox-outline"
             error={errors.postalCode}
           />
-          <TextField label={tr('settings:branches.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="phone-outline" />
+          <PhoneField label={tr('settings:branches.phone')} {...phone.field} error={errors.phone} />
           <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} />
         </View>
       </Sheet>

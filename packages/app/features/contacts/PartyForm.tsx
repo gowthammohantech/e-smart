@@ -7,7 +7,7 @@ import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/comp
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -20,7 +20,7 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO } from '@esmart/core/lib/date';
-import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPhone, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
@@ -61,7 +61,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [countryOpen, setCountryOpen] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [email, setEmail] = useState(party?.email ?? '');
-  const [phone, setPhone] = useState(party?.phone ?? '');
+  const phone = usePhoneInput(party?.phone);
   const [currency, setCurrency] = useState(party?.currency ?? baseCurrency);
   const [terms, setTerms] = useState(party?.paymentTermsDays ?? 30);
   const [creditLimit, setCreditLimit] = useState(party?.creditLimit ? String(toMajor(party.creditLimit)) : '');
@@ -98,7 +98,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'> = {
       name: required(name, `${label} name`),
       email: validEmail(email),
-      phone: validPhone(phone),
+      phone: phone.error(),
       taxId:
         partyGstinError(registration, gstin) ??
         (gstin && stateCode && gstin.slice(0, 2) !== stateCode
@@ -128,7 +128,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       taxId: gstin || undefined,
       gstRegistrationType: registration,
       email: email.trim() || undefined,
-      phone: phone.trim() || undefined,
+      phone: phone.value || undefined,
       currency,
       billingAddress: {
         line1: line1.trim(),
@@ -196,7 +196,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       required
     />
   ) : null;
-  const phoneField = <TextField label={tr('contacts:form.phone')} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="phone-outline" error={errors.phone} />;
+  const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
   const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
 
   const addressField = <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />;
