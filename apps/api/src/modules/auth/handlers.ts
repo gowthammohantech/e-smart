@@ -108,7 +108,7 @@ export const authHandlers = defineHandlers({
     });
     const text = `${code} is your Elixir Books sign-in code. It expires in 5 minutes.`;
     if (channel === 'whatsapp') await ctx.deps.providers.whatsapp.send({ to: phone, text });
-    else await ctx.deps.providers.sms.send(phone, text);
+    else await ctx.deps.providers.sms.send(phone, text, { kind: 'otp', code });
     return { requestId, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_AFTER_SECONDS };
   },
 
