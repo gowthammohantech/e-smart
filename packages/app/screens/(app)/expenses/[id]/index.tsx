@@ -22,12 +22,14 @@ import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
+import { useGoBack } from '../../../../navigation/useGoBack';
 
 export default function ExpenseDetail() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const bp = useBreakpoint();
@@ -68,7 +70,7 @@ export default function ExpenseDetail() {
         removeExpense(expense.id);
         setConfirmDelete(false);
         toast.show(tr('purchases:expense.deleted'), 'success');
-        router.back();
+        goBack('/(app)/expenses');
       }}
     />
   );

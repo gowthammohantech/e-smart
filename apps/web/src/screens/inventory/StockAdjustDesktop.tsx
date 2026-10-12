@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -14,6 +14,7 @@ import { useBranches, useItems, useStockLevels } from '@esmart/app/store/selecto
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
+import { useGoBack } from '@esmart/app/navigation/useGoBack';
 
 /**
  * Stock adjustment for a desktop: the form on the left, what the change does
@@ -23,7 +24,7 @@ import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from '.
 export function StockAdjustDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
-  const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
@@ -70,7 +71,7 @@ export function StockAdjustDesktop() {
       notes: reason || undefined,
     });
     toast.show(tr('inventory:adjust.done'), 'success');
-    router.back();
+    goBack(`/(app)/catalog/items/${item.id}`);
   };
 
   return (
@@ -171,7 +172,7 @@ export function StockAdjustDesktop() {
         />
 
         <FormFooter>
-          <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
+          <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/(tabs)/inventory')} />
           <Button title={tr('inventory:adjust.submit')} onPress={save} disabled={!canSave} />
         </FormFooter>
       </ScrollView>

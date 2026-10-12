@@ -43,11 +43,13 @@ import {
   usePrimaryBranchId,
 } from '../../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function NewPayment() {
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'sales', 'common']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
@@ -699,7 +701,7 @@ export default function NewPayment() {
 
         {desktop ? (
           <FormActions>
-            <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => router.back()} />
+            <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made')} />
             <Button title={submitTitle} onPress={save} disabled={!canSave} />
           </FormActions>
         ) : (

@@ -43,6 +43,7 @@ import {
 import { summarizeTax } from '@esmart/core/domain/reports';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { resolveRange } from '@esmart/core/lib/date';
+import { useGoBack } from '../../navigation/useGoBack';
 
 type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply };
 
@@ -60,6 +61,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   const t = useTheme();
   const { t: tr, i18n } = useTranslation(['lixi']);
   const router = useRouter();
+  const goBack = useGoBack();
   const remote = remoteLixiAvailable();
   // Set when Lixi was opened by holding a tab: the question to answer first.
   const { ask: routeAsk } = useLocalSearchParams<{ ask?: string }>();
@@ -256,7 +258,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
         }}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack('/(app)/(tabs)')}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={tr('lixi:ui.closeLixi')}

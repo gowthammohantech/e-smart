@@ -20,6 +20,7 @@ import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
+import { useGoBack } from '@esmart/app/navigation/useGoBack';
 
 type Allocation = { documentId: string; documentNumber: string; amount: ReturnType<typeof money> };
 
@@ -55,6 +56,7 @@ export function PaymentDetailDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -332,7 +334,7 @@ export function PaymentDetailDesktop() {
           removePayment(payment.id);
           setConfirmDelete(false);
           toast.show(tr('sales:payment.deleted'), 'success');
-          router.back();
+          goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
         }}
       />
     </View>

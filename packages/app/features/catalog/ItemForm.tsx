@@ -19,11 +19,13 @@ import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/cor
 import { useAppStore } from '../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../navigation/useGoBack';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const baseCurrency = useBaseCurrency();
@@ -92,7 +94,7 @@ export function ItemForm({ item }: { item?: Item }) {
 
     saveItem(record);
     toast.show(item ? 'Item updated' : 'Item added', 'success');
-    if (item) router.back();
+    if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${record.id}`);
   };
 

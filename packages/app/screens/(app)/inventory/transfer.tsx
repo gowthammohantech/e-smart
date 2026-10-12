@@ -19,11 +19,13 @@ import { stockOnHand } from '@esmart/core/domain/stockLedger';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function StockTransfer() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
@@ -143,7 +145,7 @@ export default function StockTransfer() {
             if (!canSave || !itemId) return;
             transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
             toast.show(tr('inventory:transfer.done'), 'success');
-            router.back();
+            goBack(`/(app)/catalog/items/${itemId}`);
           }}
           disabled={!canSave}
           fullWidth

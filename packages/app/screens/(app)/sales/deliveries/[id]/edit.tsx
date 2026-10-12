@@ -1,17 +1,18 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { DocumentEditor } from '../../../../../features/documents/DocumentEditor';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { draftFromDocument } from '../../../../../features/documents/useDocumentDraft';
 import { useDocument } from '../../../../../store/selectors';
+import { useGoBack } from '../../../../../navigation/useGoBack';
 
 export default function EditDelivery() {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'nav']);
-  const router = useRouter();
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const document = useDocument(id);
 
@@ -31,7 +32,7 @@ export default function EditDelivery() {
         kind="delivery"
         documentId={document.id}
         initialDraft={draftFromDocument(document)}
-        onSaved={() => router.back()}
+        onSaved={() => goBack(`/(app)/sales/deliveries/${document.id}`)}
       />
     </>
   );

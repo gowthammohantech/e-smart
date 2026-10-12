@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -22,13 +22,14 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../../navigation/useGoBack';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export default function CompanySettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding']);
-  const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -108,7 +109,7 @@ export default function CompanySettings() {
       },
     });
     toast.show(tr('settings:company.saved'), 'success');
-    router.back();
+    goBack('/(app)/(tabs)/more');
   };
 
   return (

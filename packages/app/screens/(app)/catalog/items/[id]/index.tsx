@@ -29,6 +29,7 @@ import { formatDate } from '@esmart/core/lib/date';
 import { multiply } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
+import { useGoBack } from '../../../../../navigation/useGoBack';
 
 export default function ItemDetail() {
   const t = useTheme();
@@ -36,6 +37,7 @@ export default function ItemDetail() {
   const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['common', 'inventory', 'nav']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -355,7 +357,7 @@ export default function ItemDetail() {
           removeItem(item.id);
           setConfirmDelete(false);
           toast.show(tr('inventory:detail.deleted'), 'success');
-          router.back();
+          goBack('/(app)/catalog/items');
         }}
       />
     </View>

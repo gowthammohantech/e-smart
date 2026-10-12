@@ -18,6 +18,7 @@ import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/cor
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '@esmart/app/store/selectors';
 import { Divider, Panel, Row, SummaryRow, TwoColumns } from './parts';
+import { useGoBack } from '@esmart/app/navigation/useGoBack';
 
 /**
  * Add an item, laid out for a desktop: the item's identity and prices in the
@@ -29,6 +30,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const baseCurrency = useBaseCurrency();
@@ -98,7 +100,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
 
     saveItem(record);
     toast.show(item ? 'Item updated' : 'Item added', 'success');
-    if (item) router.back();
+    if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${record.id}`);
   };
 
@@ -110,7 +112,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           // The page's actions sit in the header, right of the title.
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-              <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
+              <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/catalog/items')} />
               <Button title={item ? 'Save changes' : 'Add item'} onPress={save} />
             </View>
           ),

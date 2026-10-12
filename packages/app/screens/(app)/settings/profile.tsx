@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -16,11 +16,12 @@ import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail, validPhone } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function Profile() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const user = useCurrentUser();
@@ -44,7 +45,7 @@ export default function Profile() {
     if (hasErrors(next) || !user) return;
     saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.trim() || undefined });
     toast.show(tr('settings:profile.saved'), 'success');
-    router.back();
+    goBack('/(app)/(tabs)/more');
   };
 
   return (

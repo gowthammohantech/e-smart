@@ -24,6 +24,7 @@ import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEm
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../navigation/useGoBack';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 
@@ -31,6 +32,9 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['contacts', 'common']);
   const router = useRouter();
+  const goBack = useGoBack();
+  // Where Cancel and Save land when there is no screen to go back to.
+  const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
   const toast = useToast();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
@@ -154,7 +158,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
     saveParty(record);
     toast.show(party ? `${label} updated` : `${label} added`, 'success');
-    if (party) router.back();
+    if (party) goBack(backTo);
     else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${record.id}` : `/(app)/contacts/suppliers/${record.id}`);
   };
 
@@ -415,7 +419,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
         <FormActions>
           {desktop ? (
             <>
-              <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => router.back()} />
+              <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(backTo)} />
               <Button title={submitTitle} onPress={save} />
             </>
           ) : (
