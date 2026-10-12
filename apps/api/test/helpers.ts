@@ -97,9 +97,10 @@ export function setupApi(): TestContext {
   const url = process.env.TEST_DATABASE_URL!;
   const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, LOG_LEVEL: 'silent', DEMO_OTP: 'false', RATE_LIMIT_PER_MINUTE: '100000' });
   const pool = createPool(url, 5);
-  const providers = createProviders(config, { info: () => {} });
+  const db = createDb(pool);
+  const providers = createProviders(config, { info: () => {} }, db);
   let now: Date | null = null;
-  const deps: Deps = { db: createDb(pool), pool, config, providers, now: () => (now ? new Date(now) : new Date()) };
+  const deps: Deps = { db, pool, config, providers, now: () => (now ? new Date(now) : new Date()) };
   let app: FastifyInstance | null = null;
   let operations: Operation[] = [];
   let problem: object = {};

@@ -6,8 +6,9 @@ import { createProviders } from './providers';
 
 const config = loadConfig();
 const pool = createPool(config.DATABASE_URL);
-const providers = createProviders(config, console);
-const deps = { db: createDb(pool), pool, config, providers, now: () => new Date() };
+const db = createDb(pool);
+const providers = createProviders(config, console, db);
+const deps = { db, pool, config, providers, now: () => new Date() };
 const app = await buildApp(deps);
 
 const purge = setInterval(() => void purgeIdempotencyKeys(deps).catch((err) => app.log.warn({ err }, 'idempotency purge failed')), 3_600_000);

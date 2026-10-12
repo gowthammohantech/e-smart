@@ -1,4 +1,3 @@
-import { seedCompanies, seedParties } from '../../data/seed';
 import {
   formatGstin,
   gstinChecksum,
@@ -67,15 +66,12 @@ describe('GSTIN', () => {
   });
 });
 
-describe('seeded GSTINs', () => {
-  // The demo book is what people try e-invoicing on; a GSTIN that fails its
-  // own check digit would be rejected before it ever reached the portal.
+describe('real-shaped GSTINs', () => {
+  // Fixtures in the shape the demo book uses (its own copy is checked in the
+  // API's demo-seed test): a GSTIN that fails its own check digit would be
+  // rejected before it ever reached the portal.
   it('all pass the check digit', () => {
-    const gstins = [
-      ...seedCompanies().map((c) => c.taxRegistration?.identifier),
-      ...seedParties().map((p) => p.taxId),
-    ].filter((g): g is string => Boolean(g));
-    expect(gstins.length).toBeGreaterThan(0);
+    const gstins = ['27AABCV1234F1ZO', '29AACFA9876P1ZH', '29AADCL5544K1Z4', '29AAECI7788M1ZK', '27AABCT5512M1Z6', '29AABCG4321K1ZM'];
     expect(gstins.filter((g) => !isValidGstin(g))).toEqual([]);
   });
 });

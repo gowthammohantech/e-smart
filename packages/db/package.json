@@ -2,11 +2,12 @@
   "name": "@esmart/db",
   "version": "0.0.0",
   "private": true,
-  "description": "Postgres schema (Drizzle), migrations and the demo seed.",
+  "description": "Postgres schema (Drizzle), migrations, reference data and the env-gated demo seed.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
+    "./demo": "./src/demo/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
@@ -14,7 +15,7 @@
     "db:migrate": "tsx --env-file-if-exists=../../apps/api/.env src/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=../../apps/api/.env src/seed.ts",
     "db:platform-admin": "tsx --env-file-if-exists=../../apps/api/.env src/platform-admin.ts",
-    "db:reset": "tsx --env-file-if-exists=../../apps/api/.env src/reset.ts && tsx --env-file-if-exists=../../apps/api/.env src/migrate.ts && tsx --env-file-if-exists=../../apps/api/.env src/seed.ts",
+    "db:reset": "tsx --env-file-if-exists=../../apps/api/.env src/reset.ts && tsx --env-file-if-exists=../../apps/api/.env src/migrate.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

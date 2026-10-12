@@ -1,5 +1,5 @@
 import { and, eq, or } from 'drizzle-orm';
-import { defaultComplianceSettings } from '@esmart/core/data/seed';
+import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
 import { isValidTransporterId, normalizeGstin } from '@esmart/core/domain/gstin';
 import type { BusinessDocument, ComplianceIssue, ComplianceSettings, Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';

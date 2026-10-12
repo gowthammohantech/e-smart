@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import type { Db } from '@esmart/db';
 import type { Config } from '../config';
 import { createAssistantProvider, type AssistantProvider } from './assistant';
 import { createComplianceProvider, type ComplianceProvider } from './compliance';
@@ -29,9 +30,10 @@ export type Providers = {
 
 /**
  * Picks each third-party integration from config. Every one has an
- * in-process stand-in, so development and tests need only Postgres.
+ * in-process stand-in, so development and tests need only Postgres; config
+ * refuses the stand-ins when NODE_ENV=production.
  */
-export function createProviders(config: Config, log: FastifyBaseLogger | { info: (m: string) => void }): Providers {
+export function createProviders(config: Config, log: FastifyBaseLogger | { info: (m: string) => void }, db: Db): Providers {
   const outbox = new Outbox();
   const messaging = createMessaging(config, outbox, (m) => log.info(m));
   return {
@@ -40,7 +42,7 @@ export function createProviders(config: Config, log: FastifyBaseLogger | { info:
     storage: createStorage(config),
     pdf: config.PDF_PROVIDER === 'chromium' ? new ChromiumPdf(config) : new StubPdf(),
     compliance: createComplianceProvider(config),
-    gstin: createGstinProvider(config),
+    gstin: createGstinProvider(config, db),
     ocr: createOcrProvider(config),
     fx: createFxProvider(config),
     payments: createPaymentsProvider(config),

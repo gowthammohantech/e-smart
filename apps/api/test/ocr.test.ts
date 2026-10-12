@@ -81,6 +81,24 @@ describe('ocr', () => {
     expect(res.body.matchedPartyId).toBeUndefined();
   });
 
+  it('with OCR_PROVIDER=disabled, parses device text but answers 503 for an image alone', async () => {
+    const { createOcrProvider } = await import('../src/providers/ocr');
+    const original = t.providers.ocr;
+    t.providers.ocr = createOcrProvider({ ...t.deps.config, OCR_PROVIDER: 'disabled' });
+    try {
+      const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
+      const attachmentId = await uploadedScan(t, c, token);
+      const none = await t.post(`${c}/ocr/extractions`, { attachmentId, kind: 'expense' }, { token });
+      expect(none.status).toBe(503);
+      expect(none.body.code).toBe('FEATURE_UNAVAILABLE');
+      const read = await t.post(`${c}/ocr/extractions`, { attachmentId, kind: 'purchaseBill', text: BILL }, { token });
+      expect(read.status).toBe(202);
+      expect(read.body.status).toBe('completed');
+    } finally {
+      t.providers.ocr = original;
+    }
+  });
+
   it('refuses a pending or foreign attachment and hides other companies’ extractions', async () => {
     const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
     const other = await ownerWithCompany(t, { plan: 'pro' });

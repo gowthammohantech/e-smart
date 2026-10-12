@@ -7,7 +7,35 @@ import { AzureBlobStorage } from './storage';
 const AZURITE =
   'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;';
 
-const production = { NODE_ENV: 'production', JWT_SECRET: 'x'.repeat(32), CREDENTIALS_KEY: Buffer.alloc(32, 1).toString('base64') };
+// Every other provider real, so only the Azure settings decide.
+const production = {
+  NODE_ENV: 'production',
+  JWT_SECRET: 'x'.repeat(32),
+  CREDENTIALS_KEY: Buffer.alloc(32, 1).toString('base64'),
+  CORS_ORIGINS: 'https://app.example.in',
+  SMS_PROVIDER: 'msg91',
+  MSG91_AUTH_KEY: 'k',
+  MSG91_TEMPLATE_ID: 't',
+  EMAIL_FROM: 'DoNotReply@example.azurecomm.net',
+  WHATSAPP_PROVIDER: 'meta',
+  WHATSAPP_TOKEN: 'w',
+  WHATSAPP_PHONE_NUMBER_ID: '1',
+  WHATSAPP_WEBHOOK_SECRET: 'live',
+  PUSH_PROVIDER: 'expo',
+  PDF_PROVIDER: 'chromium',
+  COMPLIANCE_PROVIDER: 'gsp',
+  GSP_BASE_URL: 'https://gsp.example.in',
+  GSTIN_PROVIDER: 'disabled',
+  OCR_PROVIDER: 'disabled',
+  FX_PROVIDER: 'openexchangerates',
+  OPENEXCHANGERATES_APP_ID: 'o',
+  PAYMENTS_PROVIDER: 'razorpay',
+  RAZORPAY_KEY_ID: 'r',
+  RAZORPAY_KEY_SECRET: 's',
+  RAZORPAY_WEBHOOK_SECRET: 'live',
+  ASSISTANT_PROVIDER: 'anthropic',
+  ANTHROPIC_API_KEY: 'a',
+};
 
 describe('Azure config', () => {
   it('keeps the in-process defaults outside production', () => {

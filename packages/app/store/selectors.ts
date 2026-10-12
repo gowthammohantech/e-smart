@@ -22,7 +22,7 @@ import { stockMap } from '@esmart/core/domain/stockLedger';
 import { PURCHASE_KINDS, SALES_KINDS } from '@esmart/core/domain/documentStates';
 import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
-import { defaultComplianceSettings } from '@esmart/core/data/seed';
+import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
 import { nowISO } from '@esmart/core/lib/date';
 import { Module, ModuleSet, canOpen, hasModule, moduleSetFor } from '@esmart/core/domain/plan';
 

@@ -2266,7 +2266,7 @@ paths:
       tags: [OCR]
       operationId: createOcrExtraction
       summary: Extract fields from an uploaded bill or receipt image
-      description: Replaces `mockExtract` in `src/features/ocr/ocrStore.ts`. Upload the image as an attachment first. Poll the extraction, or wait for the `ocr.completed` push.
+      description: Upload the image as an attachment first. Send `text` when the device already read the image (ML Kit); with OCR_PROVIDER=disabled that is the only way in, and an image alone answers 503. Poll the extraction, or wait for the `ocr.completed` push.
       x-roles: [owner, admin, accountant]
       x-plan-module: ocr
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
@@ -2280,12 +2280,14 @@ paths:
               properties:
                 attachmentId: { type: string }
                 kind: { type: string, enum: [expense, purchaseBill] }
+                text: { type: string, maxLength: 20000, description: 'Text the device already read off the image; skips recognition' }
       responses:
         '202':
           description: Accepted
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OcrExtraction' }
+        '503': { $ref: '#/components/responses/FeatureUnavailable' }
   /companies/{companyId}/ocr/extractions/{id}:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -2909,6 +2911,7 @@ paths:
                   state: { type: string }
                   stateCode: { type: string }
         '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/FeatureUnavailable' }
   /reference/distance:
     get:
       tags: [Reference]
@@ -2927,6 +2930,7 @@ paths:
                 properties:
                   distanceKm: { type: integer }
                   source: { type: string, enum: [ewb-portal, maps] }
+        '503': { $ref: '#/components/responses/FeatureUnavailable' }
   /reference/currencies:
     get:
       tags: [Reference]
@@ -2998,6 +3002,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { description: Check digit invalid }
         '502': { $ref: '#/components/responses/UpstreamError' }
+        '503': { $ref: '#/components/responses/FeatureUnavailable' }
 
   # ------------------------------------------------------------------ Platform (operators)
   # Cross-tenant routes for platform operators (`users.platform_role`).
@@ -3327,6 +3332,9 @@ components:
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     UpstreamError:
       description: The IRP, EWB or GST portal rejected the request or was unreachable. The portal's code is in `issues[].code`.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    FeatureUnavailable:
+      description: '`FEATURE_UNAVAILABLE`: this server has no provider for the feature yet (GSTIN_PROVIDER or OCR_PROVIDER=disabled). Fall back to manual entry.'
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
 
   schemas:

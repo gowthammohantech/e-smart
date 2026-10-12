@@ -1,114 +1,67 @@
 /**
- * Loads the app's demo dataset (the "Vertex Traders" account the prototype
- * ships with) into Postgres, so the API serves the same books the app shows.
+ * Loads the demo dataset (the "Vertex Traders" account, `./demo`) into
+ * Postgres, under its own account `acct_elixir_demo`.
  *
- * The data comes from `@esmart/core/data/seed*`, assembled the way the app's
- * `buildSeedData()` does it, with every relative date computed from today.
- * Running it again first deletes everything under the demo account (its
- * companies, users and all their rows), so it is idempotent and never touches
- * another account. Reference data is left alone: migrate loads it.
+ * Gated by environment, so it may run anywhere, production included:
  *
- * `npm run db:seed -w @esmart/db` (DATABASE_URL, default the local dev db).
+ *   SEED_DEMO_ACCOUNT=true       turn the seed on (migrate runs it after reference data)
+ *   DEMO_ACCOUNT_EMAIL           the demo owner's sign-in (default gowtham@vertextraders.in)
+ *   DEMO_ACCOUNT_PASSWORD        required; in production at least 12 characters and not demo1234
+ *
+ * Every relative date is computed from the day it runs. It is idempotent: if
+ * the demo account already exists it does nothing. `--reset` first deletes
+ * everything under the demo account (its companies, users and all their
+ * rows) and writes a fresh copy; it never touches another account.
+ *
+ * `npm run db:seed -w @esmart/db [-- --reset]` (DATABASE_URL, default the local dev db).
  */
-import { randomBytes, createHash } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { PgInsertValue, PgTable } from 'drizzle-orm/pg-core';
 import { hash } from '@node-rs/argon2';
-import {
-  ACCOUNT_ID,
-  CURRENT_USER_ID,
-  seedBranches,
-  seedCompanies,
-  seedComplianceSettings,
-  seedDevices,
-  seedExchangeRates,
-  seedExpenseCategories,
-  seedItems,
-  seedNumberingSeries,
-  seedParties,
-  seedPaymentAccounts,
-  seedTaxCategories,
-  seedTransporters,
-  seedUsers,
-} from '@esmart/core/data/seed';
-import {
-  seedAudit,
-  seedCompliance,
-  seedDocuments,
-  seedExpenses,
-  seedNotifications,
-  seedPayments,
-  seedStockMovements,
-} from '@esmart/core/data/seedTransactions';
-import { INTEGRATIONS, UNITS } from '@esmart/core/data/masters';
+import { UNITS } from '@esmart/core/data/masters';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { signedQuantity } from '@esmart/core/domain/stockLedger';
 import { financialYearOf, today } from '@esmart/core/lib/date';
 import type { Address, BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
+import { ACCOUNT_ID, CURRENT_USER_ID, buildDemoData, type DemoData } from './demo';
 import { createDb, createPool, type Db } from './index';
 import { HSN_STARTER } from './reference';
 import * as s from './schema';
 
-/** The password the sign-in screen pre-fills for the demo owner. */
-export const DEMO_EMAIL = 'gowtham@vertextraders.in';
-export const DEMO_PASSWORD = 'demo1234';
+export { buildDemoData, type DemoData } from './demo';
 
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+export const DEFAULT_DEMO_EMAIL = 'gowtham@vertextraders.in';
 
-/**
- * The demo dataset exactly as the app assembles it in `buildSeedData()`
- * (packages/app/store/appStore.ts), numbering series advanced past what the
- * seed consumed.
- */
-export function buildDemoData() {
-  const companies = seedCompanies();
-  const branches = seedBranches();
-  const users = seedUsers();
-  const parties = seedParties();
-  const items = seedItems();
-  const taxCategories = seedTaxCategories();
-  const series = seedNumberingSeries();
-  const complianceSettings = seedComplianceSettings();
-  const { documents, ewayBills } = seedCompliance(seedDocuments({ items, parties, taxCategories, series }), companies, parties, branches, complianceSettings);
-  const payments = seedPayments(documents, series);
-  const expenses = seedExpenses(series);
-  const stockMovements = seedStockMovements(items, documents);
-  const numberingSeries = series.map((x) => {
-    const used =
-      x.kind === 'payment'
-        ? payments.filter((p) => p.companyId === x.companyId).length
-        : x.kind === 'expense'
-          ? expenses.filter((e) => e.companyId === x.companyId).length
-          : documents.filter((d) => d.companyId === x.companyId && d.kind === x.kind).length;
-    return { ...x, nextNumber: used + 1 };
-  });
-  return {
-    accountId: ACCOUNT_ID,
-    users,
-    devices: seedDevices(),
-    companies,
-    branches,
-    parties,
-    items,
-    taxCategories,
-    expenseCategories: seedExpenseCategories(),
-    paymentAccounts: seedPaymentAccounts(),
-    exchangeRates: seedExchangeRates(),
-    numberingSeries,
-    documents,
-    payments,
-    expenses,
-    stockMovements,
-    notifications: seedNotifications(documents, payments, ewayBills),
-    auditEvents: seedAudit(documents, payments, ewayBills),
-    integrations: INTEGRATIONS.map((i) => ({ ...i })),
-    complianceSettings,
-    ewayBills,
-    transporters: seedTransporters(),
-  };
+/** The well-known development password; never accepted in production. */
+const DEV_PASSWORD = 'demo1234';
+
+export interface DemoAccountConfig {
+  email: string;
+  password: string;
 }
 
-export type DemoData = ReturnType<typeof buildDemoData>;
+const truthy = (v: string | undefined) => v === 'true' || v === '1';
+
+/** Whether SEED_DEMO_ACCOUNT asks for the demo account. */
+export function demoSeedEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return truthy(env.SEED_DEMO_ACCOUNT);
+}
+
+/** The demo owner's credentials from the environment, validated. Throws with a clear message. */
+export function demoAccountConfig(env: Record<string, string | undefined> = process.env): DemoAccountConfig {
+  const email = (env.DEMO_ACCOUNT_EMAIL ?? '').trim() || DEFAULT_DEMO_EMAIL;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`DEMO_ACCOUNT_EMAIL is not an email address: ${email}`);
+  const password = env.DEMO_ACCOUNT_PASSWORD ?? '';
+  if (!password) throw new Error('DEMO_ACCOUNT_PASSWORD must be set to seed the demo account.');
+  if (env.NODE_ENV === 'production') {
+    if (password === DEV_PASSWORD) throw new Error('DEMO_ACCOUNT_PASSWORD may not be the development password in production.');
+    if (password.length < 12) throw new Error('DEMO_ACCOUNT_PASSWORD must be at least 12 characters in production.');
+  }
+  return { email, password };
+}
+
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /** Statuses the API derives at read time (documents/lifecycle.ts); the row stores the base status. */
 const DERIVED: DocStatus[] = ['paid', 'partiallyPaid', 'overdue'];
@@ -117,7 +70,13 @@ const DERIVED: DocStatus[] = ['paid', 'partiallyPaid', 'overdue'];
 const draftNumber = (kind: DocumentKind) => `${kind.toUpperCase()}-DRAFT`;
 
 const at = (isoString: string) => new Date(isoString);
-const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+
+/**
+ * A stable id for a row the dataset has no id for, derived from its parts.
+ * Hashed rather than truncated: the seed's own ids vary in length, and cutting
+ * them to the 40-character column could make two rows collide.
+ */
+const derivedId = (prefix: string, ...parts: (string | number)[]) => `${prefix}_${createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 32)}`;
 
 function address(prefix: 'address' | 'billing' | 'shipping', a: Address | undefined) {
   return {
@@ -231,20 +190,34 @@ async function insertAll<T extends PgTable>(tx: Tx, table: T, values: PgInsertVa
   for (let i = 0; i < values.length; i += 500) await tx.insert(table).values(values.slice(i, i + 500));
 }
 
+export interface SeedDemoOptions {
+  /** Delete the demo account first and write a fresh copy. Without it, an existing demo account is left alone. */
+  reset?: boolean;
+  data?: DemoData;
+}
+
 /**
- * Replaces the demo account's data with a fresh copy of the demo dataset,
- * in one transaction. Returns the dataset that was written.
+ * Writes the demo account in one transaction. Returns the dataset written, or
+ * null when the account already existed and `reset` was not asked for.
  */
-export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promise<DemoData> {
-  if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed demo data into a production database.');
-  const passwordHash = await hash(DEMO_PASSWORD);
+export async function seedDemo(db: Db, account: DemoAccountConfig, { reset = false, data = buildDemoData() }: SeedDemoOptions = {}): Promise<DemoData | null> {
+  data = {
+    ...data,
+    users: data.users.map((u) => (u.id === CURRENT_USER_ID ? { ...u, email: account.email } : u)),
+  };
+  const passwordHash = await hash(account.password);
   const now = new Date();
   const companyCreated = new Map(data.companies.map((c) => [c.id, at(c.createdAt)]));
   const accountCreated = new Date(Math.min(...data.companies.map((c) => at(c.createdAt).getTime())));
 
-  await db.transaction(async (tx) => {
+  const written = await db.transaction(async (tx) => {
     // Every FK is DEFERRABLE; checking at commit tolerates the cycles.
     await tx.execute(sql`set constraints all deferred`);
+
+    if (!reset) {
+      const existing = await tx.execute(sql`select 1 from accounts where id = ${data.accountId}`);
+      if (existing.rows.length) return false;
+    }
 
     const clash = await tx.execute<{ email: string }>(
       sql`select email from users where email in ${list(data.users.map((u) => u.email))} and account_id <> ${data.accountId} and id not in ${list(data.users.map((u) => u.id))}`,
@@ -351,23 +324,6 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
     await tx.update(s.accounts).set({ ownerUserId: owner.id }).where(sql`${s.accounts.id} = ${data.accountId}`);
     await insertAll(tx, s.userCompanies, data.users.flatMap((u) => u.companyIds.map((companyId) => ({ userId: u.id, companyId }))));
     await insertAll(tx, s.userBranches, data.users.flatMap((u) => u.branchIds.map((branchId) => ({ userId: u.id, branchId }))));
-
-    await insertAll(
-      tx,
-      s.deviceSessions,
-      data.devices.map((d) => ({
-        id: d.id,
-        userId: owner.id,
-        label: d.label,
-        platform: d.platform,
-        location: d.location ?? null,
-        // Nobody holds these tokens: the rows only populate the devices list.
-        refreshTokenHash: sha256(randomBytes(32).toString('base64url')),
-        refreshExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
-        lastActiveAt: at(d.lastActiveAt),
-        createdAt: at(d.lastActiveAt),
-      })),
-    );
 
     /* ---- company masters --------------------------------------------- */
     await insertAll(
@@ -476,11 +432,11 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
       })),
     );
 
-    // The backup screen shows a nightly cloud backup taken six hours ago.
+    // The same defaults a new company gets; no backup has run yet.
     await insertAll(
       tx,
       s.backupSettings,
-      data.companies.map((c) => ({ companyId: c.id, automatic: true, frequency: 'daily' as const, destination: 'elixir-cloud' as const, lastBackupAt: new Date(now.getTime() - 6 * 3600_000), updatedAt: now })),
+      data.companies.map((c) => ({ companyId: c.id })),
     );
 
     // Integrations are account-wide in the app; each demo company gets the connected ones.
@@ -559,7 +515,7 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
     // Aurora's quote and invoice share one line array, so a repeated line id gets a suffix.
     const lineIds = new Set<string>();
     const lineId = (id: string, documentId: string) => {
-      const out = lineIds.has(id) ? `${id}_${documentId}`.slice(0, 40) : id;
+      const out = lineIds.has(id) ? derivedId('ln', id, documentId) : id;
       lineIds.add(out);
       return out;
     };
@@ -587,7 +543,7 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
         })),
       ),
     );
-    const taxLines = data.documents.flatMap((d) => d.totals.taxLines.map((t, i) => ({ doc: d, line: t, id: `dtl_${d.id}_${i}`.slice(0, 40) })));
+    const taxLines = data.documents.flatMap((d) => d.totals.taxLines.map((t, i) => ({ doc: d, line: t, id: derivedId('dtl', d.id, i) })));
     await insertAll(
       tx,
       s.documentTaxLines,
@@ -605,7 +561,7 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
       tx,
       s.documentTaxComponents,
       taxLines.flatMap(({ line, id }) =>
-        line.components.map((c, j) => ({ id: `${id.slice(0, 36)}_${j}`, taxLineId: id, type: c.type, label: c.label, rate: String(c.rate), amountMinor: c.amount.minor })),
+        line.components.map((c, j) => ({ id: derivedId('dtc', id, j), taxLineId: id, type: c.type, label: c.label, rate: String(c.rate), amountMinor: c.amount.minor })),
       ),
     );
 
@@ -778,7 +734,7 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
     await insertAll(
       tx,
       s.paymentAllocations,
-      data.payments.flatMap((p) => p.allocations.map((a, i) => ({ id: `pal_${p.id}_${i}`.slice(0, 40), paymentId: p.id, documentId: a.documentId, documentNumber: a.documentNumber, amountMinor: a.amount.minor }))),
+      data.payments.flatMap((p) => p.allocations.map((a, i) => ({ id: derivedId('pal', p.id, i), paymentId: p.id, documentId: a.documentId, documentNumber: a.documentNumber, amountMinor: a.amount.minor }))),
     );
 
     await insertAll(
@@ -821,7 +777,7 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
         let transferGroupId: string | null = null;
         if (m.type === 'transferIn' || m.type === 'transferOut') {
           const key = `${m.itemId}:${m.date}:${m.createdAt}:${m.quantity}`;
-          transferGroupId = transferGroups.get(key) ?? `trf_${m.id}`.slice(0, 40);
+          transferGroupId = transferGroups.get(key) ?? derivedId('trf', m.id);
           transferGroups.set(key, transferGroupId);
         }
         return {
@@ -884,9 +840,10 @@ export async function seedDemo(db: Db, data: DemoData = buildDemoData()): Promis
     );
 
     await insertAll(tx, s.changeLog, changeLogRows(data, now));
+    return true;
   });
 
-  return data;
+  return written ? data : null;
 }
 
 function documentRow(d: BusinessDocument, amountPaidMinor: number): typeof s.documents.$inferInsert {
@@ -966,14 +923,23 @@ function changeLogRows(data: DemoData, changedAt: Date): (typeof s.changeLog.$in
   return out;
 }
 
+/**
+ * Seeds the demo account when SEED_DEMO_ACCOUNT is on; otherwise does nothing.
+ * Migrate calls this after reference data, so a deploy seeds with no extra step.
+ */
+export async function seedDemoFromEnv(db: Db, { reset = false, env = process.env }: { reset?: boolean; env?: Record<string, string | undefined> } = {}): Promise<string> {
+  if (!demoSeedEnabled(env)) return 'Demo account not seeded (SEED_DEMO_ACCOUNT is not true).';
+  const account = demoAccountConfig(env);
+  const data = await seedDemo(db, account, { reset });
+  if (!data) return `Demo account ${ACCOUNT_ID} already exists; left as is (db:seed -- --reset to rebuild it).`;
+  return `Demo account loaded: ${data.companies.length} companies, ${data.parties.length} parties, ${data.items.length} items, ${data.documents.length} documents, ${data.payments.length} payments, ${data.expenses.length} expenses. Sign in as ${account.email}.`;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.DATABASE_URL ?? 'postgres://esmart:esmart@localhost:5432/esmart';
   const pool = createPool(url, 1);
   try {
-    const data = await seedDemo(createDb(pool));
-    console.log(
-      `Demo data loaded: ${data.companies.length} companies, ${data.parties.length} parties, ${data.items.length} items, ${data.documents.length} documents, ${data.payments.length} payments, ${data.expenses.length} expenses. Sign in as ${DEMO_EMAIL} / ${DEMO_PASSWORD}.`,
-    );
+    console.log(await seedDemoFromEnv(createDb(pool), { reset: process.argv.includes('--reset') }));
   } finally {
     await pool.end();
   }

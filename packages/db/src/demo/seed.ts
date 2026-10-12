@@ -3,7 +3,6 @@ import {
   Branch,
   Company,
   ComplianceSettings,
-  DeviceSession,
   ExpenseCategory,
   ExchangeRate,
   Item,
@@ -13,12 +12,13 @@ import {
   PaymentAccount,
   TaxCategory,
   User,
-} from '../types';
-import { gstinChecksum } from '../domain/gstin';
-import { fromMajor, zero } from '../lib/money';
-import { addDaysISO, nowISO, today } from '../lib/date';
-import { DEFAULT_PREFIXES, defaultSeries } from '../domain/numbering';
-import { INDIAN_STATES, expenseCategories, gstCategories } from './masters';
+} from '@esmart/core/types';
+import { gstinChecksum } from '@esmart/core/domain/gstin';
+import { fromMajor, zero } from '@esmart/core/lib/money';
+import { addDaysISO, today } from '@esmart/core/lib/date';
+import { DEFAULT_PREFIXES, defaultSeries } from '@esmart/core/domain/numbering';
+import { INDIAN_STATES, expenseCategories, gstCategories } from '@esmart/core/data/masters';
+import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
 import { makeRng } from './rng';
 
 export const ACCOUNT_ID = 'acct_elixir_demo';
@@ -181,14 +181,6 @@ export function seedUsers(): User[] {
       avatarColor: '#C77DFF',
       status: 'invited',
     },
-  ];
-}
-
-export function seedDevices(): DeviceSession[] {
-  return [
-    { id: 'dev_1', label: 'iPhone 15 Pro', platform: 'iOS 18.2', lastActiveAt: new Date().toISOString(), current: true, location: 'Mumbai, IN' },
-    { id: 'dev_2', label: 'Pixel 8', platform: 'Android 15', lastActiveAt: daysAgo(2), current: false, location: 'Pune, IN' },
-    { id: 'dev_3', label: 'iPad Air', platform: 'iPadOS 18.1', lastActiveAt: daysAgo(11), current: false, location: 'Mumbai, IN' },
   ];
 }
 
@@ -487,34 +479,6 @@ export function seedNumberingSeries(): NumberingSeries[] {
     });
   });
   return out;
-}
-
-/**
- * Compliance configuration, one row per company (FRD 16).
- *
- * Kept as its own record rather than a field on `Company`, because the business
- * profile form replaces the whole company object on save and would otherwise
- * wipe this on an unrelated edit.
- */
-export function defaultComplianceSettings(companyId: string, baseCurrency = 'INR'): ComplianceSettings {
-  return {
-    companyId,
-    eInvoiceEnabled: true,
-    annualTurnover: zero(baseCurrency),
-    // Mandatory for businesses at or above 5 crore of aggregate turnover.
-    eInvoiceTurnoverThreshold: fromMajor('50000000', baseCurrency),
-    reportingWindowDays: 30,
-    autoGenerateEInvoiceOnFinalise: false,
-    irpEnvironment: 'sandbox',
-    ewayBillEnabled: true,
-    // The statute sets 50,000; several states set a higher intra-state figure.
-    ewayBillThreshold: fromMajor('50000', baseCurrency),
-    autoGenerateEwayBillOnFinalise: false,
-    defaultDistanceKm: 120,
-    defaultTransportMode: 'road',
-    defaultVehicleType: 'regular',
-    updatedAt: nowISO(),
-  };
 }
 
 export function seedTransporters(): Transporter[] {
