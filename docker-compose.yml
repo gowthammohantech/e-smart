@@ -25,6 +25,15 @@ services:
     ports: ['9000:9000', '9001:9001']
     volumes: ['miniodata:/data']
 
+  # Azure Blob Storage emulator. Set STORAGE_PROVIDER=azure
+  # AZURE_STORAGE_CONNECTION_STRING=UseDevelopmentStorage=true, then create the
+  # container: az storage container create -n esmart --connection-string UseDevelopmentStorage=true
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: azurite-blob --blobHost 0.0.0.0 --loose
+    ports: ['10000:10000']
+    volumes: ['azuritedata:/data']
+
   # Catches outgoing email in development: http://localhost:8025
   mailpit:
     image: axllent/mailpit:latest
@@ -33,3 +42,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  azuritedata:

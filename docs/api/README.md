@@ -46,18 +46,27 @@ them sits behind the backend; the mobile app never calls them directly.
 | **GSTIN verification** | `lookupGstin`, party and company autofill | GST public search API through a GSP |
 | **SMS / OTP** | `requestOtp`, reminders, invites | MSG91, Twilio, Gupshup (India needs a DLT-registered sender and templates) |
 | **WhatsApp Business** | `sendDocument`, `sendPaymentReminder`, OTP fallback | Meta Cloud API, Gupshup, Interakt |
-| **Email** | invites, password reset, sending documents | Amazon SES, SendGrid, Postmark |
+| **Email** | invites, password reset, sending documents | Azure Communication Services (`EMAIL_PROVIDER=acs`), Amazon SES (`ses`) |
 | **Payments** | `createPaymentLink`, `razorpayWebhook` | Razorpay (payment links, UPI) |
 | **Subscriptions** | `startCheckout`, plan changes | Razorpay Subscriptions, or App Store / Play Billing if sold in-app |
 | **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`) |
 | **OCR** | `createOcrExtraction` (replaces `mockExtract`) | Google Document AI, AWS Textract, Azure Document Intelligence, or an LLM vision model |
-| **Object storage** | attachments, logos, item images, PDFs, exports | S3, GCS, Cloudflare R2 (pre-signed URLs) |
+| **Object storage** | attachments, logos, item images, PDFs, exports | Azure Blob Storage (`STORAGE_PROVIDER=azure`, SAS URLs), S3 or R2 (`s3`, pre-signed URLs) |
 | **PDF rendering** | `getDocumentPdf`, receipts, statements, reports | Headless Chromium (Puppeteer or Gotenberg) running the same template as `documentHtml.ts` |
 | **Push notifications** | `registerPushToken`, notification fan-out | Expo Push, or FCM / APNs |
 | **FX rates** | `refreshExchangeRates` | Open Exchange Rates, exchangerate.host, RBI reference rates |
 | **Reference data** | HSN/SAC search, PIN codes, cities | CBIC HSN master, India Post PIN directory (loaded into your own DB) |
 | **Google Drive** | backup destination (`int_drive`) | Google Drive API (OAuth) |
 | **Secrets** | IRP/EWB credentials (`saveComplianceCredentials`) | AWS KMS, GCP KMS, Vault |
+
+On Azure, set up the storage account once:
+
+- Create the container named by `AZURE_STORAGE_CONTAINER`. The API does not create it.
+- `AZURE_STORAGE_CONNECTION_STRING` must include `AccountKey`, because the upload and download links are SAS URLs signed with it.
+- Add a Blob CORS rule for the web app origin. It must allow `PUT` and `GET`, and allow the headers `content-type` and `x-ms-blob-type`.
+- Clients must send every header in `uploadHeaders` with the PUT. Azure rejects an upload without `x-ms-blob-type: BlockBlob`.
+
+For ACS email, `EMAIL_FROM` must be a verified sender address. A `Name <addr>` form is accepted, but only the address is used: ACS sets the display name on the sender username.
 
 ## How the apps use it
 

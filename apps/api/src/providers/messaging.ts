@@ -1,4 +1,5 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
+import { EmailClient } from '@azure/communication-email';
 import type { Config } from '../config';
 
 export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; at: Date };
@@ -33,6 +34,14 @@ export interface PushProvider {
   send(tokens: string[], msg: { title: string; body: string; data?: Record<string, string> }): Promise<void>;
 }
 
+/**
+ * The bare address from `Name <addr>`. ACS takes only the address; the display
+ * name is set on the sender username in Azure.
+ */
+export function emailAddress(from: string): string {
+  return /<([^>]+)>/.exec(from)?.[1]?.trim() ?? from.trim();
+}
+
 let seq = 0;
 const localId = (p: string) => `${p}_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 
@@ -60,8 +69,23 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
         };
 
   let ses: SESv2Client | null = null;
+  let acs: EmailClient | null = null;
   const email: EmailProvider =
-    config.EMAIL_PROVIDER === 'ses'
+    config.EMAIL_PROVIDER === 'acs'
+      ? {
+          async send(msg) {
+            acs ??= new EmailClient(config.ACS_CONNECTION_STRING ?? '');
+            const poller = await acs.beginSend({
+              senderAddress: emailAddress(config.EMAIL_FROM),
+              content: { subject: msg.subject, plainText: msg.text, ...(msg.html ? { html: msg.html } : {}) },
+              recipients: { to: [{ address: msg.to }] },
+            });
+            const out = await poller.pollUntilDone();
+            if (out.status !== 'Succeeded') throw new Error(`ACS email ${out.status}${out.error?.message ? `: ${out.error.message}` : ''}`);
+            return { providerMessageId: out.id };
+          },
+        }
+      : config.EMAIL_PROVIDER === 'ses'
       ? {
           async send(msg) {
             ses ??= new SESv2Client({ region: config.S3_REGION });

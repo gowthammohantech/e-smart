@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { BlobSASPermissions, BlobServiceClient, RestError, StorageSharedKeyCredential, type ContainerClient } from '@azure/storage-blob';
 import type { FastifyInstance } from 'fastify';
 import type { Config } from '../config';
 import { safeEqual } from '../lib/crypto';
@@ -134,3 +135,59 @@ export class S3Storage implements StorageProvider {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.config.S3_BUCKET, Key: key }));
   }
 }
+
+/**
+ * Azure Blob Storage. Links are service SAS URLs signed with the account key,
+ * so the connection string must carry one (`AccountKey=…`, or Azurite's
+ * `UseDevelopmentStorage=true`).
+ */
+export class AzureBlobStorage implements StorageProvider {
+  private readonly container: ContainerClient;
+  constructor(config: Config) {
+    const service = BlobServiceClient.fromConnectionString(config.AZURE_STORAGE_CONNECTION_STRING ?? '');
+    if (!(service.credential instanceof StorageSharedKeyCredential)) {
+      throw new Error('AZURE_STORAGE_CONNECTION_STRING needs an AccountKey to sign upload and download links.');
+    }
+    this.container = service.getContainerClient(config.AZURE_STORAGE_CONTAINER);
+  }
+  async uploadUrl(key: string, contentType: string, ttlSeconds = DEFAULT_TTL) {
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+    const url = await this.container.getBlobClient(key).generateSasUrl({ permissions: BlobSASPermissions.parse('cw'), expiresOn: expiresAt });
+    // Azure refuses a PUT without x-ms-blob-type.
+    return { url, method: 'PUT' as const, headers: { 'content-type': contentType, 'x-ms-blob-type': 'BlockBlob' }, expiresAt };
+  }
+  async downloadUrl(key: string, opts: { ttlSeconds?: number; filename?: string } = {}) {
+    const expiresAt = new Date(Date.now() + (opts.ttlSeconds ?? DEFAULT_TTL) * 1000);
+    const url = await this.container.getBlobClient(key).generateSasUrl({
+      permissions: BlobSASPermissions.parse('r'),
+      expiresOn: expiresAt,
+      contentDisposition: opts.filename ? `attachment; filename="${opts.filename}"` : undefined,
+    });
+    return { url, method: 'GET' as const, headers: {}, expiresAt };
+  }
+  async put(key: string, body: Buffer, contentType: string) {
+    await this.container.getBlockBlobClient(key).uploadData(body, { blobHTTPHeaders: { blobContentType: contentType } });
+  }
+  async get(key: string) {
+    try {
+      return await this.container.getBlobClient(key).downloadToBuffer();
+    } catch (err) {
+      if (isNotFound(err)) return null;
+      throw err;
+    }
+  }
+  async head(key: string) {
+    try {
+      const out = await this.container.getBlobClient(key).getProperties();
+      return { size: out.contentLength ?? 0, contentType: out.contentType ?? 'application/octet-stream' };
+    } catch (err) {
+      if (isNotFound(err)) return null;
+      throw err;
+    }
+  }
+  async delete(key: string) {
+    await this.container.getBlobClient(key).deleteIfExists();
+  }
+}
+
+const isNotFound = (err: unknown) => err instanceof RestError && err.statusCode === 404;

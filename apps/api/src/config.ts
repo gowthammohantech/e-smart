@@ -34,7 +34,9 @@ const Env = z.object({
   SMS_PROVIDER: z.enum(['log', 'msg91']).default('log'),
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_TEMPLATE_ID: z.string().optional(),
-  EMAIL_PROVIDER: z.enum(['log', 'ses']).default('log'),
+  EMAIL_PROVIDER: z.enum(['log', 'ses', 'acs']).default('log'),
+  /** Azure Communication Services: `endpoint=https://…;accesskey=…`. */
+  ACS_CONNECTION_STRING: z.string().optional(),
   EMAIL_FROM: z.string().default('Elixir Books <no-reply@elixirbooks.example>'),
   WHATSAPP_PROVIDER: z.enum(['log', 'meta']).default('log'),
   WHATSAPP_TOKEN: z.string().optional(),
@@ -42,7 +44,10 @@ const Env = z.object({
   WHATSAPP_WEBHOOK_SECRET: z.string().default('dev-whatsapp-secret'),
   PUSH_PROVIDER: z.enum(['log', 'expo']).default('log'),
 
-  STORAGE_PROVIDER: z.enum(['memory', 's3']).default('memory'),
+  STORAGE_PROVIDER: z.enum(['memory', 's3', 'azure']).default('memory'),
+  /** Needs the account key: SAS upload and download links are signed with it. */
+  AZURE_STORAGE_CONNECTION_STRING: z.string().optional(),
+  AZURE_STORAGE_CONTAINER: z.string().default('esmart'),
   S3_BUCKET: z.string().default('esmart'),
   S3_REGION: z.string().default('ap-south-1'),
   S3_ENDPOINT: z.string().optional(),
@@ -81,6 +86,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     if (config.JWT_SECRET.startsWith('dev-only')) throw new Error('JWT_SECRET must be set in production.');
     if (config.DEMO_OTP) throw new Error('DEMO_OTP must be off in production.');
     if (env.CREDENTIALS_KEY === undefined) throw new Error('CREDENTIALS_KEY must be set in production.');
+    if (config.STORAGE_PROVIDER === 'memory') throw new Error('STORAGE_PROVIDER=memory loses uploads on restart; use azure or s3 in production.');
+    if (config.STORAGE_PROVIDER === 'azure' && !config.AZURE_STORAGE_CONNECTION_STRING) throw new Error('AZURE_STORAGE_CONNECTION_STRING must be set for STORAGE_PROVIDER=azure.');
+    if (config.EMAIL_PROVIDER === 'acs' && !config.ACS_CONNECTION_STRING) throw new Error('ACS_CONNECTION_STRING must be set for EMAIL_PROVIDER=acs.');
     if (config.ASSISTANT_PROVIDER === 'anthropic' && !config.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY must be set for ASSISTANT_PROVIDER=anthropic.');
   }
   return config;

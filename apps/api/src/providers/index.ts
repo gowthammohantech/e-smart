@@ -8,7 +8,7 @@ import { createMessaging, Outbox, type EmailProvider, type PushProvider, type Sm
 import { createOcrProvider, type OcrProvider } from './ocr';
 import { createPaymentsProvider, type PaymentsProvider } from './payments';
 import { ChromiumPdf, StubPdf, type PdfProvider } from './pdf';
-import { MemoryStorage, S3Storage, type StorageProvider } from './storage';
+import { AzureBlobStorage, MemoryStorage, S3Storage, type StorageProvider } from './storage';
 
 export type Providers = {
   /** Messages the log providers "sent". Always present; empty with real providers. */
@@ -37,7 +37,7 @@ export function createProviders(config: Config, log: FastifyBaseLogger | { info:
   return {
     outbox,
     ...messaging,
-    storage: config.STORAGE_PROVIDER === 's3' ? new S3Storage(config) : new MemoryStorage(config.PUBLIC_BASE_URL, config.JWT_SECRET),
+    storage: createStorage(config),
     pdf: config.PDF_PROVIDER === 'chromium' ? new ChromiumPdf(config) : new StubPdf(),
     compliance: createComplianceProvider(config),
     gstin: createGstinProvider(config),
@@ -46,6 +46,17 @@ export function createProviders(config: Config, log: FastifyBaseLogger | { info:
     payments: createPaymentsProvider(config),
     assistant: createAssistantProvider(config),
   };
+}
+
+function createStorage(config: Config): StorageProvider {
+  switch (config.STORAGE_PROVIDER) {
+    case 'azure':
+      return new AzureBlobStorage(config);
+    case 's3':
+      return new S3Storage(config);
+    case 'memory':
+      return new MemoryStorage(config.PUBLIC_BASE_URL, config.JWT_SECRET);
+  }
 }
 
 export { MemoryStorage, Outbox };
