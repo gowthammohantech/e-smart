@@ -7,9 +7,8 @@ import { allCities, citiesForState } from '@esmart/core/data/cities';
 import { stateName } from '@esmart/core/data/masters';
 
 /**
- * City picker scoped to the state chosen alongside it. The list is curated,
- * not exhaustive, so whatever the user types in the search box can be kept
- * as-is — nobody is blocked on a town the list doesn't know.
+ * City picker scoped to the state chosen alongside it. Only a city from the
+ * list can be picked; a search that finds none says so.
  */
 export function CityField({
   label,
@@ -72,7 +71,9 @@ export function CityField({
         options={options}
         value={value}
         onSelect={onChange}
-        onCreate={onChange}
+        // Typing a city the list doesn't have is turned off: a city has to come from the list.
+        // onCreate={onChange}
+        emptyMessage={tr('common:component.noCityMatch')}
         searchPlaceholder={tr('common:component.searchCity')}
       />
     </>
