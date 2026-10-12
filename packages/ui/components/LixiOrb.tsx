@@ -5,16 +5,19 @@ import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { NATIVE_DRIVER } from '../theme/motion';
 
 const LOGO = require('../assets/lixi/lixi-orb.png');
+/** The orb as a turning head: a rendered sphere looking left and right, looping. */
+const ANIMATED = require('../assets/lixi/lixi-orb-animated.webp');
 
 /** Lixi's palette, sampled from the logo. Fixed rather than themed: it's a brand mark. */
 export const LIXI = { blue: '#0B5FE0', cyan: '#2BB6F0', red: '#E5171F', yellow: '#F6BE1A' };
 
 /**
  * Lixi's orb: the logo breathing inside a soft halo in its own colours.
- * While `thinking`, an aurora ring appears and turns around it. Motion stops
- * under Reduce Motion; the logo alone still reads.
+ * While `thinking`, an aurora ring appears and turns around it. With `face`,
+ * the orb in the middle is the animated head, inside the same halo and ring.
+ * Motion stops under Reduce Motion; the logo alone still reads.
  */
-export function LixiOrb({ size = 56, thinking = false }: { size?: number; thinking?: boolean }) {
+export function LixiOrb({ size = 56, thinking = false, face = false }: { size?: number; thinking?: boolean; face?: boolean }) {
   const [spin] = useState(() => new Animated.Value(0));
   const [breath] = useState(() => new Animated.Value(0));
   const [ringIn] = useState(() => new Animated.Value(thinking ? 1 : 0));
@@ -95,7 +98,13 @@ export function LixiOrb({ size = 56, thinking = false }: { size?: number; thinki
       </Animated.View>
 
       <Animated.View style={{ transform: [{ scale: logoScale }] }}>
-        <Image source={LOGO} style={{ width: logo, height: logo }} contentFit="contain" accessibilityIgnoresInvertColors />
+        <Image
+          source={face && !reduce ? ANIMATED : LOGO}
+          style={{ width: logo, height: logo }}
+          contentFit="contain"
+          autoplay
+          accessibilityIgnoresInvertColors
+        />
       </Animated.View>
     </View>
   );

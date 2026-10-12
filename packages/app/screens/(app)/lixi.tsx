@@ -299,7 +299,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
       >
         {messages.length === 0 ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.spacing.lg, paddingVertical: t.spacing.xxl }}>
-            <LixiOrb size={96} />
+            <LixiOrb size={96} thinking={thinking} face />
             <Text variant="h3" center>{tr('lixi:ui.prompt')}</Text>
             <Text tone="muted" center style={{ maxWidth: 300 }}>
               {intro.text}
