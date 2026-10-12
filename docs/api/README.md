@@ -2,8 +2,8 @@
 
 The contract between the apps and the server. The server that implements
 it is `apps/api` (every operation, with the portals, OCR and GSTIN lookup
-behind simulators by default), and the apps talk to it in remote mode
-(`packages/app/remote`); see the root README. This page lists the APIs, the
+behind simulators in development; production refuses them), and the apps
+always talk to it (`packages/app/remote`); see the root README. This page lists the APIs, the
 third-party services behind them, and the rules the server enforces.
 
 - **[openapi.yaml](../../packages/api-contract/openapi.yaml)**: the contract, in OpenAPI 3.1. It has 124
@@ -50,7 +50,7 @@ them sits behind the backend; the mobile app never calls them directly.
 | **Payments** | `createPaymentLink`, `razorpayWebhook` | Razorpay (payment links, UPI) |
 | **Subscriptions** | `startCheckout`, plan changes | Razorpay Subscriptions, or App Store / Play Billing if sold in-app |
 | **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`) |
-| **OCR** | `createOcrExtraction` (replaces `mockExtract`) | Google Document AI, AWS Textract, Azure Document Intelligence, or an LLM vision model |
+| **OCR** | `createOcrExtraction` | Google Document AI, AWS Textract, Azure Document Intelligence, or an LLM vision model |
 | **Object storage** | attachments, logos, item images, PDFs, exports | Azure Blob Storage (`STORAGE_PROVIDER=azure`, SAS URLs), S3 or R2 (`s3`, pre-signed URLs) |
 | **PDF rendering** | `getDocumentPdf`, receipts, statements, reports | Headless Chromium (Puppeteer or Gotenberg) running the same template as `documentHtml.ts` |
 | **Push notifications** | `registerPushToken`, notification fan-out | Expo Push, or FCM / APNs |
@@ -73,12 +73,52 @@ For ACS email, `EMAIL_FROM` must be a verified sender address. A `Name <addr>` f
 The apps stay local-first. Store actions still update the local store at once
 and queue the matching operation in `syncQueue`. It drains through
 `/sync/push`, and `/sync/pull` brings back what the server decided.
-Compliance calls (IRP, e-way bill) go straight to the API. The seeded demo
-mode is still the default build. Tokens live in `expo-secure-store`.
+Compliance calls (IRP, e-way bill), attachment uploads, OCR, document PDFs,
+share and payment links, sending, exports and Lixi go straight to the API.
+There is no local demo build: the store starts empty and fills from the API
+on sign-in. Tokens live in `expo-secure-store`.
+
+## Environment
+
+Every setting is in `apps/api/.env.example`. Two groups matter for a deploy:
+
+**Production guards.** With `NODE_ENV=production`, `loadConfig()`
+(`apps/api/src/config.ts`) refuses to start, listing every problem at once,
+when:
+
+- `SMS_PROVIDER`, `EMAIL_PROVIDER`, `WHATSAPP_PROVIDER` or `PUSH_PROVIDER` is `log`;
+- `PDF_PROVIDER=stub`, `FX_PROVIDER=static` or `STORAGE_PROVIDER=memory`;
+- `COMPLIANCE_PROVIDER`, `PAYMENTS_PROVIDER`, `ASSISTANT_PROVIDER`,
+  `GSTIN_PROVIDER` or `OCR_PROVIDER` is `simulator`;
+- a chosen provider lacks its credentials (MSG91, ACS, SES, Meta WhatsApp,
+  Azure Blob, GSP, Razorpay, Open Exchange Rates, Anthropic), or `EMAIL_FROM`
+  is still the example sender;
+- `RAZORPAY_WEBHOOK_SECRET` or `WHATSAPP_WEBHOOK_SECRET` is the development default;
+- `CORS_ORIGINS` contains `*`;
+- `JWT_SECRET` or `CREDENTIALS_KEY` is unset, or `DEMO_OTP` is on.
+
+GSTIN lookup and OCR have no production adapter yet, so they take
+`disabled`: lookups, PIN codes the directory lacks and portal distances
+answer `503 FEATURE_UNAVAILABLE`; OCR still parses text the phone read, and
+answers 503 for an image alone. The apps fall back to manual entry.
+
+**The demo account.** `npm run db:migrate -w @esmart/db` (Railway's
+`preDeploy`) seeds the demo account `acct_elixir_demo` after the reference
+data when `SEED_DEMO_ACCOUNT=true`, in any environment. It is idempotent: an
+existing demo account is left alone, and `db:seed -- --reset` rebuilds it.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SEED_DEMO_ACCOUNT` | off | `true` seeds the demo account on migrate |
+| `DEMO_ACCOUNT_EMAIL` | `gowtham@vertextraders.in` | The demo owner's sign-in |
+| `DEMO_ACCOUNT_PASSWORD` | none (required) | In production: at least 12 characters, not `demo1234` |
+
+The clients' sign-in prefill (`EXPO_PUBLIC_DEMO_LOGIN_*`, `VITE_DEMO_LOGIN_*`)
+is compiled into their bundles; set it only on a demo or sandbox deployment.
 
 ## Gaps the server must close
 
-The prototype allows some things a real backend must refuse:
+The apps allow some things the server must refuse:
 
 - Deleting a party, item, tax category or branch that records still reference
   (`removeParty`, `removeItem`, …). The server returns `409 …_IN_USE`.
