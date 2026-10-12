@@ -43,7 +43,8 @@ export default function ItemDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = useItem(id);
   const baseCurrency = useBaseCurrency();
-  const movements = useStockMovements(id);
+  // The item's own id: the route's may be the one it had before the server saved it.
+  const movements = useStockMovements(item?.id ?? id);
   const hasInventory = useHasModule('inventory');
   const hasPurchases = useHasModule('purchases');
   const taxCategories = useTaxCategories();
