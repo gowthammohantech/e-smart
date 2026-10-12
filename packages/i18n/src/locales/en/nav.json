@@ -167,7 +167,8 @@
     "settings": "Settings",
     "quickActions": "Quick actions",
     "goTo": "Go to",
-    "typeToSearch": "Type at least two characters to search your records.",
+    "pages": "Pages",
+    "typeToSearch": "Type at least two characters to search pages and your records.",
     "noMatches": "No matches for “{{query}}”",
     "paletteHint": "↑↓ to move · Enter to open · Esc to close",
     "allSettings": "All settings"
