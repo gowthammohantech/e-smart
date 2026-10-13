@@ -61,8 +61,8 @@ function portalIssue(code: IrpErrorCode, message?: string): ComplianceIssue {
  * Derive a fixed-length run of digits from a hash.
  *
  * The portals issue opaque numeric identifiers. Deriving them from the hash of
- * the request keeps them stable for a given request — regenerate the demo data
- * and the same invoice gets the same acknowledgement number.
+ * the request, submission time included, keeps them deterministic: the same
+ * request always yields the same number, which keeps tests reproducible.
  */
 function digitsFrom(seed: string, length: number): string {
   const hex = sha256Hex(seed);
