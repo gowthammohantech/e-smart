@@ -83,4 +83,46 @@ describe('createApiClient', () => {
     expect((err as ApiError).code).toBe('VALIDATION_FAILED');
     expect((err as ApiError).problem.issues?.[0].field).toBe('name');
   });
+
+  // expo/fetch (Expo 57 on a phone) returns its own response class, not the global Response.
+  describe('with a fetch whose responses are not the global Response', () => {
+    function foreign(res: Response): Response {
+      return {
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText,
+        headers: res.headers,
+        body: res.body,
+        bodyUsed: false,
+        clone: () => foreign(res.clone()),
+        json: () => res.json(),
+        text: () => res.text(),
+        arrayBuffer: () => res.arrayBuffer(),
+        blob: () => res.blob(),
+      } as unknown as Response;
+    }
+
+    it('reads a successful response', async () => {
+      const { api } = setup(() => foreign(json(200, { user: { id: 'usr_1' } })));
+      const { data } = await api.GET('/me');
+      expect(data).toEqual({ user: { id: 'usr_1' } });
+    });
+
+    it('replays after a refresh', async () => {
+      let calls = 0;
+      const { api } = setup((req) => {
+        if (req.url.endsWith('/auth/refresh')) return foreign(json(200, { accessToken: 'new', refreshToken: 'r2' }));
+        calls++;
+        return foreign(calls === 1 ? json(401, { code: 'TOKEN_EXPIRED' }, 'application/problem+json') : json(200, { user: { id: 'usr_1' } }));
+      });
+      const { data } = await api.GET('/me');
+      expect(data).toEqual({ user: { id: 'usr_1' } });
+    });
+
+    it('still throws ApiError for a problem response', async () => {
+      const { api } = setup(() => foreign(json(401, { status: 401, code: 'INVALID_CREDENTIALS' }, 'application/problem+json')));
+      const err = await api.POST('/auth/sign-in', { body: { email: 'a@b.co', password: 'x' } as never }).catch((e: unknown) => e);
+      expect((err as ApiError).code).toBe('INVALID_CREDENTIALS');
+    });
+  });
 });
