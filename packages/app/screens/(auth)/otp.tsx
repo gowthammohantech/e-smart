@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, TextInput, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ApiError } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { Button } from '@esmart/ui/components/Button';
@@ -16,6 +17,7 @@ const LENGTH = 6;
 export default function Otp() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth']);
+  const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone?: string }>();
 
   const [digits, setDigits] = useState<string[]>(Array(LENGTH).fill(''));
@@ -80,6 +82,11 @@ export default function Otp() {
     // The root layout routes on once the session and its data are in.
     remoteSession.verifyOtp(requestId, code).catch((err: unknown) => {
       setBusy(false);
+      // A correct code for a number with no account: the number is now proven, so carry on to sign-up.
+      if (err instanceof ApiError && err.code === 'PHONE_NOT_REGISTERED') {
+        router.replace({ pathname: '/(auth)/sign-up', params: { phone: toE164(String(phone ?? '')), verificationId: requestId } });
+        return;
+      }
       setError(describeError(err, tr));
     });
   };

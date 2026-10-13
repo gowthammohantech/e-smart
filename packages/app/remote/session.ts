@@ -44,7 +44,7 @@ export async function signIn(email: string, password: string) {
   await begin(data!);
 }
 
-export async function signUp(input: { name: string; email: string; phone?: string; password: string; locale?: string }) {
+export async function signUp(input: { name: string; email: string; phone?: string; phoneVerificationId?: string; password: string; locale?: string }) {
   const { data } = await api.POST('/auth/sign-up', { body: { ...input, email: input.email.trim(), phone: input.phone || undefined } });
   await begin(data!);
 }

@@ -72,6 +72,31 @@ describe('auth', () => {
     expect((await t.post('/auth/otp/verify', { requestId: req.body.requestId, code })).status).toBe(401);
   });
 
+  it('turns an OTP for an unknown phone into a verified sign-up', async () => {
+    const phone = '+919123456789';
+    const req = await t.post('/auth/otp/request', { phone });
+    const code = t.providers.outbox.last('sms', phone)!.text.slice(0, 6);
+    const verify = await t.post('/auth/otp/verify', { requestId: req.body.requestId, code });
+    expect(verify.status).toBe(401);
+    expect(verify.body.code).toBe('PHONE_NOT_REGISTERED');
+
+    // A different phone can't borrow this verification.
+    const stolen = await t.post('/auth/sign-up', { name: 'X', email: 'x@example.com', password: 'long enough pw', phone: '+919000000000', phoneVerificationId: req.body.requestId });
+    expect(stolen.status).toBe(401);
+    // Neither can an unverified request.
+    const other = await t.post('/auth/otp/request', { phone: '+919000000001' });
+    const unverified = await t.post('/auth/sign-up', { name: 'X', email: 'x@example.com', password: 'long enough pw', phoneVerificationId: other.body.requestId });
+    expect(unverified.status).toBe(401);
+
+    const signUp = await t.post('/auth/sign-up', { name: 'New Person', email: 'new@example.com', password: 'long enough pw', phone, phoneVerificationId: req.body.requestId });
+    expect(signUp.status).toBe(201);
+    expect(signUp.body.user.phone).toBe(phone);
+    // The verification is spent once its phone has an account.
+    const again = await t.post('/auth/sign-up', { name: 'Y', email: 'y@example.com', password: 'long enough pw', phoneVerificationId: req.body.requestId });
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('PHONE_TAKEN');
+  });
+
   it('throttles OTP requests per number', async () => {
     await t.post('/auth/otp/request', { phone: '+919800000001' });
     const again = await t.post('/auth/otp/request', { phone: '+919800000001' });

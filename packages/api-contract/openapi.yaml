@@ -100,6 +100,7 @@ paths:
                 name: { type: string, maxLength: 120 }
                 email: { type: string, format: email }
                 phone: { type: string, description: E.164 }
+                phoneVerificationId: { type: string, description: 'The `requestId` of an OTP just verified for a phone with no account (`PHONE_NOT_REGISTERED`). The account takes that phone, marked verified.' }
                 password: { type: string, minLength: 8, writeOnly: true }
                 locale: { type: string, example: en }
       responses:
@@ -162,6 +163,7 @@ paths:
       operationId: verifyOtp
       security: []
       summary: Exchange an OTP for a session
+      description: A correct code for a phone with no account answers 401 `PHONE_NOT_REGISTERED`; the code is then spent as proof of the phone, and the client continues to sign-up with `phoneVerificationId` set to this `requestId`.
       requestBody:
         required: true
         content:

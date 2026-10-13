@@ -67,7 +67,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Exchange an OTP for a session */
+        /**
+         * Exchange an OTP for a session
+         * @description A correct code for a phone with no account answers 401 `PHONE_NOT_REGISTERED`; the code is then spent as proof of the phone, and the client continues to sign-up with `phoneVerificationId` set to this `requestId`.
+         */
         post: operations["verifyOtp"];
         delete?: never;
         options?: never;
@@ -3855,6 +3858,8 @@ export interface operations {
                     email: string;
                     /** @description E.164 */
                     phone?: string;
+                    /** @description The `requestId` of an OTP just verified for a phone with no account (`PHONE_NOT_REGISTERED`). The account takes that phone, marked verified. */
+                    phoneVerificationId?: string;
                     password: string;
                     /** @example en */
                     locale?: string;
