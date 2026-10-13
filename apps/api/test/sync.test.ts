@@ -119,7 +119,8 @@ describe('sync pull', () => {
     // B was deleted: a snapshot leaves it out. A appears once, at its latest version.
     expect(byId.has(b.body.id)).toBe(false);
     expect(byId.get(a.body.id)).toEqual({ companyId: company.id, entityType: 'party', entityId: a.body.id, op: 'upsert', version: 2, data: (await t.get(`${c}/parties/${a.body.id}`, { token })).body });
-    expect((byId.get(company.id) as { data: { name: string } }).data.name).toBe('Vertex Traders');
+    // Singletons (compliance and backup settings) share the company's id, so find the company by type.
+    expect(snap.body.changes.find((ch: { entityType: string }) => ch.entityType === 'company').data.name).toBe('Vertex Traders');
     // Branches have no single GET; their data comes from the list.
     const branchChange = snap.body.changes.find((ch: { entityType: string }) => ch.entityType === 'branch');
     if (branchChange) expect(branchChange.data.companyId).toBe(company.id);
@@ -139,6 +140,19 @@ describe('sync pull', () => {
     expect(delta.body.changes[1].data).toBeUndefined();
   });
 
+  it("hands a new company's defaults to the apps, so lines can use its tax categories", async () => {
+    const { token, c, company } = await ownerWithCompany(t);
+    const snap = await t.get('/sync/pull', { token });
+    const ofType = (type: string) => snap.body.changes.filter((ch: { entityType: string; companyId: string }) => ch.entityType === type && ch.companyId === company.id);
+
+    const server = (await t.get(`${c}/tax-categories`, { token })).body.data.map((x: { id: string }) => x.id).sort();
+    expect(ofType('tax_category').map((ch: { entityId: string }) => ch.entityId).sort()).toEqual(server);
+    expect(ofType('tax_category')[0].data.companyId).toBe(company.id);
+    for (const type of ['branch', 'numbering_series', 'expense_category', 'payment_account', 'compliance_settings', 'backup_settings']) {
+      expect(ofType(type).length, type).toBeGreaterThan(0);
+    }
+  });
+
   it('pages with limit and hasMore, and scopes to reachable companies', async () => {
     const { token, c } = await ownerWithCompany(t);
     const other = await ownerWithCompany(t);
@@ -147,7 +161,8 @@ describe('sync pull', () => {
 
     const seen: string[] = [];
     let since: string | undefined;
-    for (let i = 0; i < 10; i++) {
+    // A new company's defaults (branch, series, tax categories…) come first.
+    for (let i = 0; i < 50; i++) {
       const page: { body: { changes: { entityId: string; data?: { name?: string } }[]; cursor: string; hasMore: boolean } } = await t.get('/sync/pull', { token, query: { limit: 2, since } });
       seen.push(...page.body.changes.map((ch) => ch.data?.name ?? ch.entityId));
       since = page.body.cursor;
