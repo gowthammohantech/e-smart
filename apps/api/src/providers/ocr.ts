@@ -1,5 +1,6 @@
 import { parseReceiptText, type OcrResult } from '@esmart/core/domain/parseReceipt';
 import type { Config } from '../config';
+import { featureUnavailable } from '../http/errors';
 
 export type OcrKind = OcrResult['kind'];
 
@@ -59,10 +60,31 @@ class SimulatedOcrProvider implements OcrProvider {
 }
 
 /**
+ * No recognition engine. Text the device already read (ML Kit on mobile) is
+ * still parsed; an image with no text answers 503 FEATURE_UNAVAILABLE, so the
+ * app falls back to manual entry. Allowed in production until an OCR adapter
+ * exists.
+ */
+class DisabledOcrProvider implements OcrProvider {
+  readonly name = 'disabled';
+  async extract(input: OcrInput) {
+    const text = input.text?.trim();
+    if (!text) throw featureUnavailable('Reading bills from images is not available yet. Enter the details by hand.');
+    return { ...parseReceiptText(text, input.kind), text };
+  }
+}
+
+/**
  * Google Document AI needs a service account and a processor per region; no
  * adapter is wired in yet, so asking for it fails at boot.
  */
 export function createOcrProvider(config: Config): OcrProvider {
-  if (config.OCR_PROVIDER === 'document-ai') throw new Error('OCR_PROVIDER=document-ai has no adapter yet; use the simulator.');
-  return new SimulatedOcrProvider();
+  switch (config.OCR_PROVIDER) {
+    case 'document-ai':
+      throw new Error('OCR_PROVIDER=document-ai has no adapter yet; use disabled (or simulator outside production).');
+    case 'disabled':
+      return new DisabledOcrProvider();
+    case 'simulator':
+      return new SimulatedOcrProvider();
+  }
 }

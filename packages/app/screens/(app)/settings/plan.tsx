@@ -27,6 +27,7 @@ export default function PlanBilling() {
 
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const companies = useAppStore((s) => s.companies);
+  const teamSize = useAppStore((s) => s.users.filter((u) => u.status !== 'disabled' && u.companyIds.includes(s.activeCompanyId)).length);
   const invoices = useDocuments('invoice');
   const company = useActiveCompany();
   const setPlan = useAppStore((s) => s.setPlan);
@@ -63,12 +64,10 @@ export default function PlanBilling() {
           </Text>
           <View style={{ height: 1, backgroundColor: t.c.line }} />
           {[
-            {
-              label: tr('plan:billing.usageBusinesses'),
-              value: tr('plan:billing.ofTotal', { used: companies.length, total: 3 }),
-            },
+            // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md).
+            { label: tr('plan:billing.usageBusinesses'), value: String(companies.length) },
             { label: tr('plan:billing.usageInvoices'), value: String(invoices.length) },
-            { label: tr('plan:billing.usageUsers'), value: tr('plan:billing.ofTotal', { used: 4, total: 6 }) },
+            { label: tr('plan:billing.usageUsers'), value: String(teamSize) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="small" tone="muted">

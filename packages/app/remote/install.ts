@@ -1,19 +1,13 @@
 import { Linking } from 'react-native';
 import type { PlanTier } from '@esmart/core/types';
-import { useAppStore, type AppState, type ComplianceResult } from '../store/appStore';
+import { useAppStore, type AppState } from '../store/appStore';
 import { api } from './api';
-import { isRemote } from './config';
 import { MUTATIONS } from './mutations';
 import * as outbox from './outbox';
-import { resync, signOut, watchSessionEnd } from './session';
+import { signOut, watchSessionEnd } from './session';
 import { syncSoon } from './sync';
 
 let installed = false;
-
-const ONLINE_ONLY: ComplianceResult = {
-  ok: false,
-  issues: [{ code: 'ONLINE_ONLY', message: 'This needs the GST portal; use the e-invoice or e-way bill screen while online.', severity: 'blocking' } as never],
-};
 
 /**
  * Turns the store into the local half of an offline-first client. Every
@@ -24,7 +18,7 @@ const ONLINE_ONLY: ComplianceResult = {
  * `createDocument` internally, and the server has its own duplicate.
  */
 export function installRemote() {
-  if (installed || !isRemote()) return;
+  if (installed) return;
   installed = true;
   const store = useAppStore;
   const original = store.getState();
@@ -48,10 +42,7 @@ export function installRemote() {
   }
 
   Object.assign(patch, {
-    // The session lives on the server now; the auth screens call remote/session.
-    signIn: () => {},
-    signInWithOtp: () => {},
-    signUp: () => {},
+    // The session lives on the server; signing out tells it so.
     signOut: () => void signOut(),
     // Plans change through billing: checkout, then the webhook, then a pull.
     setPlan: (companyId: string, plan: PlanTier) => {
@@ -60,24 +51,6 @@ export function installRemote() {
         .then(({ data }) => (data?.checkoutUrl ? Linking.openURL(data.checkoutUrl) : undefined))
         .catch(() => {});
     },
-    // Demo reset becomes "reload everything from the server".
-    resetDemoData: () => void resync(),
-    retrySync: (id: string) => {
-      outbox.update(id, { status: 'pending', lastError: undefined, conflict: undefined });
-      syncSoon(0);
-    },
-    clearSyncQueue: () => {
-      for (const e of outbox.entries()) if (e.status === 'failed') outbox.update(e.id, { status: 'pending', lastError: undefined, conflict: undefined });
-      syncSoon(0);
-    },
-    // Local fallbacks the store calls internally (auto-report on finalise):
-    // the server reports to the portal itself, so the simulator must not run.
-    generateEInvoice: () => ONLINE_ONLY,
-    cancelEInvoice: () => ONLINE_ONLY,
-    generateEwayBill: () => ONLINE_ONLY,
-    updateEwayBillPartB: () => ONLINE_ONLY,
-    extendEwayBill: () => ONLINE_ONLY,
-    cancelEwayBill: () => ONLINE_ONLY,
   } satisfies Partial<AppState>);
 
   store.setState(patch);

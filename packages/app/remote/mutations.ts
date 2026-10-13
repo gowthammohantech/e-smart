@@ -20,8 +20,8 @@ import * as outbox from './outbox';
  * against the local store; a builder reads what changed (`before`, `after`,
  * the arguments and the return value) and queues the matching request.
  *
- * Actions that aren't listed are local only: switching company, the demo
- * reset, notifications the app raises itself, previews.
+ * Actions that aren't listed are local only: switching company,
+ * notifications the app raises itself, previews.
  */
 export type Call = { args: any[]; result: unknown; before: AppState; after: AppState };
 type Builder = (call: Call) => void;

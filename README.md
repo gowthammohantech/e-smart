@@ -5,12 +5,14 @@ bills, payments, stock, expenses and reports — as a monorepo with a
 React Native app for phones, the same app for the web, and the API behind
 both.
 
-The apps run in two modes. **Demo mode** (the default) needs no server: every
-screen runs against a seeded local dataset. **Remote mode** makes them an
-offline-first client of the API. Either way the calculations — tax splits,
-document totals, receivables aging, stock balances, FX settlement — are real
-implementations of the rules in the FRD, shared by the apps and the server
-from one package.
+The apps are an offline-first client of the API: every screen reads and
+writes the books on the server, and keeps working on a local copy when the
+connection drops. The calculations — tax splits, document totals, receivables
+aging, stock balances, FX settlement — are real implementations of the rules
+in the FRD, shared by the apps and the server from one package. A demo
+account lives in the database, seeded on demand; nothing demo ships in the
+apps. What is still to do before the production release is tracked in
+[docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md).
 
 ## Repository layout
 
@@ -22,15 +24,16 @@ apps/
   admin/           React + Vite console for platform operators (tenants, plans, audit)
 packages/
   core/            pure domain engines: money, tax, totals, numbering, ledgers,
-                   compliance, reports, types, seed data, invoice HTML
+                   compliance, reports, types, invoice HTML
   i18n/            message catalogues (English, Tamil) and the i18next instance
   ui/              theme, component kit, charts, illustrations and brand assets
-  app/             screens, features, stores, and remote mode (remote/)
+  app/             screens, features, stores, and the API client half (remote/)
   api-contract/    openapi.yaml and the TypeScript types generated from it
   api-client/      typed fetch client: auth refresh, idempotency, problem errors
-  db/              Drizzle schema, migrations, reference data and the demo seed
+  db/              Drizzle schema, migrations, reference data, and the demo
+                   account's dataset and seeder (src/demo/, src/seed.ts)
   tsconfig/, eslint-config/   shared presets
-docs/              API notes and the database diagram
+docs/              API notes, the database diagram and the production checklist
 story/             BRD, PRD, FRD and the module breakdown
 tools/             illustration generator, i18n report, import codemod
 ```
@@ -46,27 +49,39 @@ Needs Node 22 (`.nvmrc`) and, for the API, Postgres 16 (Docker works).
 ```bash
 npm install
 
-# Demo mode: no server
-npm run mobile            # Expo dev server for the phone app
-npm run web               # the web app in a browser
-
 # The API
 docker compose up -d                      # Postgres, MinIO (S3), Mailpit
-npm run db:migrate -w @esmart/db          # schema + reference data
-npm run db:seed -w @esmart/db             # the demo businesses
+cp apps/api/.env.example apps/api/.env    # then set the demo account, below
+npm run db:migrate -w @esmart/db          # schema + reference data (+ the demo account)
 npm run api                               # http://localhost:4000/v1
+
+# The apps (they always talk to the API at EXPO_PUBLIC_API_URL)
+npm run web               # the web app in a browser
+npm run mobile            # Expo dev server for the phone app
 
 # The platform admin console (needs the API)
 npm run db:platform-admin -w @esmart/db -- --email you@example.com --role superadmin
 npm run admin                             # http://localhost:5174
-
-# The apps against the API (remote mode)
-EXPO_PUBLIC_DATA_SOURCE=remote EXPO_PUBLIC_API_URL=http://localhost:4000 npm run web
 ```
 
-Demo sign-in, in both modes: **gowtham@vertextraders.in / demo1234**. In demo
-mode the phone OTP is `123456`; the API sends real codes (set `DEMO_OTP=true`
-in `apps/api/.env` to accept `123456` in development).
+**The demo account.** With `SEED_DEMO_ACCOUNT=true` and a
+`DEMO_ACCOUNT_PASSWORD` in `apps/api/.env`, `db:migrate` loads the demo
+businesses under their own account after the reference data (an existing
+demo account is left alone; `npm run db:seed -w @esmart/db -- --reset`
+rebuilds it). The owner signs in as `DEMO_ACCOUNT_EMAIL` (default
+`gowtham@vertextraders.in`). The seed is env-gated, so it may run in any
+environment; in production the password must be at least 12 characters and
+not `demo1234`. `npm run db:reset -w @esmart/db` drops everything and
+migrates again, seeding when the gate is on.
+
+**Prefilling the sign-in form.** `EXPO_PUBLIC_DEMO_LOGIN_EMAIL` /
+`EXPO_PUBLIC_DEMO_LOGIN_PASSWORD` (web and mobile) and `VITE_DEMO_LOGIN_EMAIL`
+/ `VITE_DEMO_LOGIN_PASSWORD` (admin) prefill the sign-in form. They are
+compiled into the client bundle, where anyone who loads it can read them:
+set them only on a demo or sandbox deployment. Unset, the form starts empty.
+
+The API sends real OTP codes; set `DEMO_OTP=true` in `apps/api/.env` to accept
+`123456` in development (production refuses it).
 
 | Command | What it does |
 |---|---|
@@ -82,17 +97,28 @@ Postgres service, builds the API and the admin console, and exports the web app.
 
 ### Configuration
 
-- **Apps:** `EXPO_PUBLIC_DATA_SOURCE` (`local` or `remote`) and
-  `EXPO_PUBLIC_API_URL`, fixed at build time.
-- **Admin console:** `VITE_API_URL` (the API origin, without `/v1`), fixed
-  at build time; see `apps/admin/.env.example`.
+- **Apps:** `EXPO_PUBLIC_API_URL`, and optionally the sign-in prefill
+  `EXPO_PUBLIC_DEMO_LOGIN_EMAIL` / `EXPO_PUBLIC_DEMO_LOGIN_PASSWORD`, fixed
+  at build time; see `apps/web/.env.example` and `apps/mobile/.env.example`.
+- **Admin console:** `VITE_API_URL` (the API origin, without `/v1`), and
+  optionally `VITE_DEMO_LOGIN_EMAIL` / `VITE_DEMO_LOGIN_PASSWORD`, fixed at
+  build time; see `apps/admin/.env.example`.
 - **API:** `apps/api/.env.example` lists every setting. All of them have a
   development default, so an empty `.env` works against the docker-compose
-  Postgres. Production must set `JWT_SECRET` and `CREDENTIALS_KEY`.
+  Postgres. With `NODE_ENV=production` the server refuses to start while any
+  provider is a simulator or log-only, a chosen provider lacks its
+  credentials, a webhook secret is still the development default,
+  `CORS_ORIGINS` is `*`, or `JWT_SECRET` / `CREDENTIALS_KEY` are unset.
+  GSTIN lookup and OCR have no real adapter yet, so production runs them as
+  `disabled` (503 `FEATURE_UNAVAILABLE`).
+- **Database:** `SEED_DEMO_ACCOUNT`, `DEMO_ACCOUNT_EMAIL` and
+  `DEMO_ACCOUNT_PASSWORD` control the demo account (above).
 
-## What's in the demo data
+## What's in the demo account
 
-Two businesses under one account, so company isolation is visible:
+Seeded into the database (`packages/db/src/demo/`) when
+`SEED_DEMO_ACCOUNT=true`. Two businesses under one account, so company
+isolation is visible:
 
 - **Vertex Traders** — a Mumbai wholesaler with 13 customers, 8 suppliers, 33
   items, ~60 documents across every type and status, payments, expenses and a
@@ -101,8 +127,8 @@ Two businesses under one account, so company isolation is visible:
 - **Aurora Design Studio** — a Bengaluru services business with its own
   contacts, numbering and books.
 
-Switch between them from the header. **More → Reset demo data** restores the
-original dataset.
+Switch between them from the header. `npm run db:seed -w @esmart/db -- --reset`
+restores the original dataset.
 
 ## The API
 
@@ -132,7 +158,8 @@ operation lacks a handler).
   Razorpay all sit behind interfaces. Each has an in-process stand-in (an
   outbox of sent messages, memory storage with signed URLs, a portal
   simulator over `@esmart/core/domain/irpAdapter`…), so development and tests
-  need only Postgres; environment variables switch in the real adapters.
+  need only Postgres; environment variables switch in the real adapters, and
+  production refuses to start on a stand-in.
 - **Tests** (`apps/api/test`) run against a real Postgres, and every response
   in every test is checked against the contract.
 
@@ -140,11 +167,10 @@ The database is `packages/db`: the baseline migration is the original SQL
 schema (Drizzle can't express its deferrable foreign keys), `src/schema.ts`
 mirrors it, and later migrations are generated from diffs of that file.
 
-## Remote mode: offline first
+## Offline first
 
-With `EXPO_PUBLIC_DATA_SOURCE=remote` the apps are an offline-first client of
-the API (`packages/app/remote/`). It is the outbox pattern, one code path
-whether or not there is a network:
+The apps are an offline-first client of the API (`packages/app/remote/`). It
+is the outbox pattern, one code path whether or not there is a network:
 
 1. Every action still updates the local store at once, so the app is instant
    and keeps working offline.
@@ -164,9 +190,11 @@ whether or not there is a network:
    syncs. A change that lost a race (412) stays in **Settings → Sync** with the
    server's copy shown, to send again or discard.
 
-E-invoicing and e-way bills go straight to the API instead of the queue,
-because the GST portals need a connection. Tokens are kept in the Keychain /
-Keystore (`expo-secure-store`), or localStorage on the web.
+E-invoicing and e-way bills, attachments and OCR, PDFs, share and payment
+links, sending documents, exports and Lixi go straight to the API instead of
+the queue, because they need the server (or the GST portal) to answer. Tokens
+are kept in the Keychain / Keystore (`expo-secure-store`), or localStorage on
+the web.
 
 ## How the domain works
 
@@ -271,8 +299,10 @@ n = 1 only); Hindi's does not — it counts zero as singular — so the
 
 ### Data and state in the apps
 
-`packages/app/store/appStore.ts` holds every entity in a Zustand store persisted to
-AsyncStorage, so anything created in the prototype survives a restart. Fields
+`packages/app/store/appStore.ts` holds the signed-in account's entities in a
+Zustand store persisted to AsyncStorage (`ebs.remote.v1`), so the app opens
+instantly and works offline. It starts empty and is filled from the API on
+sign-in; nothing is bundled. Fields
 that a person picks from a fixed list store a stable slug rather than the
 English label they saw — `Company.businessType` learned this the hard way, and
 a migration maps the labels that shipped. Seeded master data the user can then
@@ -285,8 +315,8 @@ that is how company isolation is enforced here.
 Writes also append an audit event and, where the PRD calls for it, raise a
 notification.
 
-In remote mode the same store is the local half of an offline-first client;
-see [Remote mode](#remote-mode-offline-first) above.
+The store is the local half of the offline-first client; see
+[Offline first](#offline-first) above.
 
 ### Charts
 
@@ -315,7 +345,7 @@ needed — `packages/ui/assets/illustrations/README.md` lists what belongs in ea
 
 ## What's covered
 
-Auth (email, phone OTP, Google) · five-step onboarding that creates a real
+Auth (email, phone OTP) · five-step onboarding that creates a real
 company · Home dashboard · quotations, sales orders, delivery notes, invoices,
 sales returns · purchase orders, goods receipts, purchase bills, purchase
 returns · expenses with recurrence and receipts · payments in and out with
@@ -324,7 +354,7 @@ with aging and reminders · e-invoicing with IRN, acknowledgement and a
 scannable signed QR, cancellation inside the 24-hour window, and a compliance
 register · e-way bills with Part-A and Part-B, distance-based validity,
 extension and cancellation · items, stock adjustments, branch transfers, opening
-stock, low stock, barcode lookup · customers and suppliers with full history ·
+stock, low stock, barcode lookup by typed code · customers and suppliers with full history ·
 nine reports with filters and CSV export · invoice PDF preview and share ·
 global search · notifications · OCR capture and review · an assistant that
 reads the books but confirms before acting · settings for company, branches,
@@ -343,20 +373,21 @@ downloads.
 
 ## Known limits
 
-- The GST portals, GSTIN lookup and OCR run on simulators; the e-invoice and
-  e-way bill provider has a GSP skeleton (`apps/api/src/providers/compliance.ts`
-  lists what a real one needs) and OCR and GSTIN lookup have none yet.
-  SMS (MSG91), email (SES), WhatsApp (Meta), push (Expo), storage (S3),
-  PDF (Chromium), FX (Open Exchange Rates) and Razorpay have real adapters.
+The full list of what is still pending before the production release —
+adapters to build, vendor accounts to provision, dead links, background jobs,
+ops and QA — lives in [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md).
+In short:
+
+- GSTIN lookup and OCR have no real adapter yet; production runs them as
+  `disabled`. The e-invoice and e-way bill provider has a GSP skeleton
+  (`apps/api/src/providers/compliance.ts` lists what a real one needs).
+  SMS (MSG91), email (ACS, SES), WhatsApp (Meta), push (Expo), storage
+  (Azure Blob, S3), PDF (Chromium), FX (Open Exchange Rates), Razorpay and
+  Lixi (Anthropic) have real adapters.
 - Recurring expenses are materialised by an exported function
   (`materializeRecurringExpenses`) that nothing schedules yet.
-- Share links are created, but the contract has no public page to open them.
+- Share links and payment links are created, but the public pages they point
+  at don't exist yet.
 - A company-wide notification has one read state for everyone in it.
-- Attachments picked in the app stay on the device in remote mode; the
-  pre-signed upload API exists, but the app doesn't call it yet.
-- In remote mode, Lixi runs on Claude (`ASSISTANT_PROVIDER=anthropic`), with its
-  tools also served over MCP at `/v1/companies/{id}/mcp`. In demo mode, and
-  whenever the server can't be reached, it falls back to the rule-based brain
-  over the local store.
-- Google sign-in exists only in demo mode.
+- Google sign-in is not built; barcode scanning takes a typed code, not the camera.
 - The illustrations are placeholders, not the real Storyset artwork.

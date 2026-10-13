@@ -43,7 +43,7 @@ const TA_LATIN_ALLOWLIST = new RegExp(
   `^(${[
     'GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|LUT|B2B|B2C|FY|PDF|OTP|CSV|QR|UPI|OCR|SKU|HSN|PO|SEZ|UTR|LR|ID|URP|GSP|IRN|IRP|EWB|EWBs|HDFC|ERP|SDK|Expo|Storyset|Gati|Logistics|TRANSIN|JSON|Part-A|Part-B|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E',
     // Platforms and products, named as their makers write them ("Expo Go").
-    'Android|iPhone|Go|Excel|xlsx',
+    'Android|iPhone|Go|Excel|xlsx|Tally|XML',
     // Keyboard keys, as printed on the key.
     'Enter|Esc',
     // The postal code, which Indian forms call a PIN in every language.

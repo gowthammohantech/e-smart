@@ -14,6 +14,8 @@ export type OcrField = {
 
 export type OcrResult = {
   imageUri?: string;
+  /** The uploaded image, once the server has it; an expense made from the scan links it as its receipt. */
+  attachmentId?: string;
   kind: 'expense' | 'purchaseBill';
   fields: OcrField[];
   lines: { name: string; quantity: number; unitPrice: number; confidence: number }[];

@@ -18,6 +18,7 @@ const TITLES: Record<number, string> = {
   500: 'Internal Server Error',
   501: 'Not Implemented',
   502: 'Bad Gateway',
+  503: 'Service Unavailable',
 };
 
 /**
@@ -48,6 +49,8 @@ export const unprocessable = (issues: Issue[], code = 'VALIDATION_FAILED', detai
 export const tooManyRequests = (detail?: string) => new ApiError(429, 'RATE_LIMITED', detail);
 export const upstream = (code: string, detail?: string, issues?: Issue[]) =>
   new ApiError(502, code, detail, issues ? { issues } : {});
+/** A feature this server has no provider for (GSTIN_PROVIDER or OCR_PROVIDER=disabled). */
+export const featureUnavailable = (detail?: string) => new ApiError(503, 'FEATURE_UNAVAILABLE', detail);
 export const planUpgradeRequired = (requiredPlan: PlanTier, module: string) =>
   new ApiError(403, 'PLAN_UPGRADE_REQUIRED', `The ${module} module needs the ${requiredPlan} plan`, { requiredPlan });
 

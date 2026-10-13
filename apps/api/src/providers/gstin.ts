@@ -1,9 +1,11 @@
 import type { Schema } from '@esmart/api-contract';
-import { seedBranches, seedCompanies, seedParties, seedTransporters } from '@esmart/core/data/seed';
 import { EWAY_MAX_DISTANCE_KM } from '@esmart/core/domain/ewayBill';
 import { isValidGstin, normalizeGstin, panOfGstin, stateCodeOfGstin } from '@esmart/core/domain/gstin';
 import { stateNameOf } from '@esmart/core/domain/stateCodes';
+import { sql } from 'drizzle-orm';
+import type { Db } from '@esmart/db';
 import type { Config } from '../config';
+import { featureUnavailable } from '../http/errors';
 
 /** What the GST public search returns for a GSTIN. */
 export type GstinRecord = {
@@ -138,42 +140,67 @@ export function simulatedDistanceKm(fromPincode: string, toPincode: string): num
 
 type Known = { legalName: string; tradeName?: string; address?: Schema<'Address'> };
 
-let known: Map<string, Known> | null = null;
-let knownPins: Map<string, PincodeRecord> | null = null;
+type AddressRow = {
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  state_code: string | null;
+  postal_code: string | null;
+  country: string | null;
+};
 
-/** The demo businesses from core's seed data, so the demo's GSTINs autofill with their own names. */
-function seedGstins(): Map<string, Known> {
-  if (known) return known;
-  known = new Map();
-  for (const c of seedCompanies()) {
-    const id = c.taxRegistration?.identifier;
-    if (id) known.set(normalizeGstin(id), { legalName: c.legalName ?? c.name, tradeName: c.name, address: c.address });
-  }
-  for (const p of seedParties()) {
-    if (p.taxId && !known.has(normalizeGstin(p.taxId))) known.set(normalizeGstin(p.taxId), { legalName: p.name, tradeName: p.displayName ? undefined : p.name, address: p.billingAddress });
-  }
-  for (const t of seedTransporters()) {
-    if (!known.has(normalizeGstin(t.transporterId))) known.set(normalizeGstin(t.transporterId), { legalName: t.name });
-  }
-  return known;
+function toAddress(r: AddressRow): Schema<'Address'> | undefined {
+  if (!r.line1 || !r.city || !r.postal_code || !r.country) return undefined;
+  return {
+    line1: r.line1,
+    ...(r.line2 ? { line2: r.line2 } : {}),
+    city: r.city,
+    ...(r.state ? { state: r.state } : {}),
+    ...(r.state_code ? { stateCode: r.state_code } : {}),
+    postalCode: r.postal_code,
+    country: r.country,
+  } as Schema<'Address'>;
 }
 
-/** PIN codes the simulator knows: every state centre plus the seed addresses. */
-function seedPincodes(): Map<string, PincodeRecord> {
-  if (knownPins) return knownPins;
-  knownPins = new Map();
-  for (const [stateCode, c] of Object.entries(STATE_CENTRES)) knownPins.set(c.pincode, { pincode: c.pincode, city: c.city, stateCode });
-  const addresses = [
-    ...seedCompanies().map((c) => c.address),
-    ...seedBranches().map((b) => b.address),
-    ...seedParties().map((p) => p.billingAddress),
-  ];
-  for (const a of addresses) {
-    if (a.country === 'IN' && a.stateCode && /^[1-9][0-9]{5}$/.test(a.postalCode) && !knownPins.has(a.postalCode)) {
-      knownPins.set(a.postalCode, { pincode: a.postalCode, city: a.city, stateCode: a.stateCode });
-    }
-  }
-  return knownPins;
+/**
+ * A GSTIN some business on this server already recorded: a company's own
+ * registration first, then a transporter, then a party. The simulator answers
+ * with that name, so seeded and hand-entered GSTINs autofill consistently.
+ */
+async function knownGstin(db: Db, gstin: string): Promise<Known | null> {
+  const company = await db.execute<{ legal_name: string | null; name: string } & AddressRow>(sql`
+    select legal_name, name, address_line1 as line1, address_line2 as line2, address_city as city, address_state as state,
+           address_state_code as state_code, address_postal_code as postal_code, address_country as country
+      from companies where upper(tax_identifier) = ${gstin} order by created_at limit 1`);
+  const c = company.rows[0];
+  if (c) return { legalName: c.legal_name ?? c.name, tradeName: c.name, address: toAddress(c) };
+
+  const transporter = await db.execute<{ name: string }>(sql`select name from transporters where upper(transporter_id) = ${gstin} order by created_at limit 1`);
+  if (transporter.rows[0]) return { legalName: transporter.rows[0].name };
+
+  const party = await db.execute<{ name: string; display_name: string | null } & AddressRow>(sql`
+    select name, display_name, billing_line1 as line1, billing_line2 as line2, billing_city as city, billing_state as state,
+           billing_state_code as state_code, billing_postal_code as postal_code, billing_country as country
+      from parties where upper(tax_id) = ${gstin} order by created_at limit 1`);
+  const p = party.rows[0];
+  if (p) return { legalName: p.name, tradeName: p.display_name ? undefined : p.name, address: toAddress(p) };
+  return null;
+}
+
+/** A PIN code from the state centres, or from any address already recorded on this server. */
+async function knownPincode(db: Db, pincode: string): Promise<PincodeRecord | null> {
+  for (const [stateCode, c] of Object.entries(STATE_CENTRES)) if (c.pincode === pincode) return { pincode, city: c.city, stateCode };
+  const found = await db.execute<{ city: string; state_code: string }>(sql`
+    select city, state_code from (
+      select address_city as city, address_state_code as state_code, address_country as country from companies where address_postal_code = ${pincode}
+      union all
+      select address_city, address_state_code, address_country from branches where address_postal_code = ${pincode}
+      union all
+      select billing_city, billing_state_code, billing_country from parties where billing_postal_code = ${pincode}
+    ) a where country = 'IN' and state_code is not null and city is not null limit 1`);
+  const r = found.rows[0];
+  return r ? { pincode, city: r.city, stateCode: r.state_code } : null;
 }
 
 const NAME_WORDS = [
@@ -207,7 +234,7 @@ function hashOf(s: string): number {
   return h;
 }
 
-/** A plausible, stable registration for any GSTIN the seed data doesn't know. */
+/** A plausible, stable registration for any GSTIN the database doesn't know. */
 function synthesize(gstin: string): GstinRecord {
   const pan = panOfGstin(gstin);
   const h = hashOf(pan);
@@ -232,23 +259,28 @@ function synthesize(gstin: string): GstinRecord {
   };
 }
 
-/** In-process stand-in for the GSP: validates, answers from seed data, and makes up the rest consistently. */
+/**
+ * In-process stand-in for the GSP: validates, answers from what the database
+ * already holds, and makes up the rest consistently. Development and tests only.
+ */
 class SimulatedGstinProvider implements GstinProvider {
   readonly name = 'simulator';
+
+  constructor(private readonly db: Db) {}
 
   async lookup(raw: string): Promise<GstinRecord | null> {
     const gstin = normalizeGstin(raw);
     if (!isValidGstin(gstin)) return null;
     // Entity number 0 is never issued; the simulator treats it as unregistered.
     if (gstin[12] === '0') return null;
-    const seed = seedGstins().get(gstin);
-    if (!seed) return synthesize(gstin);
     const base = synthesize(gstin);
-    return { ...base, legalName: seed.legalName, tradeName: seed.tradeName ?? seed.legalName, address: seed.address ?? base.address, registrationType: 'regular' };
+    const known = await knownGstin(this.db, gstin);
+    if (!known) return base;
+    return { ...base, legalName: known.legalName, tradeName: known.tradeName ?? known.legalName, address: known.address ?? base.address, registrationType: 'regular' };
   }
 
   async pincode(pincode: string): Promise<PincodeRecord | null> {
-    return seedPincodes().get(pincode) ?? null;
+    return knownPincode(this.db, pincode);
   }
 
   async distance(fromPincode: string, toPincode: string): Promise<RoadDistance> {
@@ -257,10 +289,38 @@ class SimulatedGstinProvider implements GstinProvider {
 }
 
 /**
+ * No GSTIN lookup at all. GSTINs are still checked locally (check digit, state
+ * code) by the callers; lookups, PIN codes the directory lacks and portal
+ * distances answer 503 FEATURE_UNAVAILABLE so the apps can fall back to
+ * manual entry. Allowed in production until a GSP adapter exists.
+ */
+class DisabledGstinProvider implements GstinProvider {
+  readonly name = 'disabled';
+  private unavailable(): never {
+    throw featureUnavailable('GSTIN lookup is not available yet. Enter the details by hand.');
+  }
+  async lookup(): Promise<GstinRecord | null> {
+    this.unavailable();
+  }
+  async pincode(): Promise<PincodeRecord | null> {
+    this.unavailable();
+  }
+  async distance(): Promise<RoadDistance> {
+    this.unavailable();
+  }
+}
+
+/**
  * GSP adapters differ per vendor in URL shape and auth, so none is wired in
  * yet: `GSTIN_PROVIDER=gsp` fails at boot rather than at the first lookup.
  */
-export function createGstinProvider(config: Config): GstinProvider {
-  if (config.GSTIN_PROVIDER === 'gsp') throw new Error('GSTIN_PROVIDER=gsp has no adapter yet; use the simulator.');
-  return new SimulatedGstinProvider();
+export function createGstinProvider(config: Config, db: Db): GstinProvider {
+  switch (config.GSTIN_PROVIDER) {
+    case 'gsp':
+      throw new Error('GSTIN_PROVIDER=gsp has no adapter yet; use disabled (or simulator outside production).');
+    case 'disabled':
+      return new DisabledGstinProvider();
+    case 'simulator':
+      return new SimulatedGstinProvider(db);
+  }
 }

@@ -13,8 +13,9 @@ export default defineRailway(() => {
   const api = service('api', {
     build: 'npm run build -w @esmart/api',
     start: 'npm run start -w @esmart/api',
-    // Schema and reference data, applied between build and deploy. Idempotent:
-    // Drizzle skips migrations already in drizzle.__drizzle_migrations.
+    // Schema and reference data, applied between build and deploy, then the
+    // demo account when SEED_DEMO_ACCOUNT=true. Idempotent: Drizzle skips
+    // migrations already applied, and an existing demo account is left alone.
     preDeploy: 'npm run db:migrate -w @esmart/db',
     healthcheck: '/health',
     healthcheckTimeout: 120,
@@ -25,11 +26,32 @@ export default defineRailway(() => {
       // The web app, for the links people open: password resets and invites.
       // Point this at the deployed web app once it has a URL.
       APP_URL: 'http://localhost:8081',
-      CORS_ORIGINS: '*',
+      // Production refuses '*': list the web and admin origins in Railway.
+      CORS_ORIGINS: preserve(),
       // Secrets stay in Railway: set once, never committed here.
       DATABASE_URL: preserve(),
       JWT_SECRET: preserve(),
       CREDENTIALS_KEY: preserve(),
+      // Production refuses every simulator and log-only provider: each one is
+      // chosen, with its credentials, in Railway (see apps/api/.env.example
+      // and docs/PRODUCTION_READINESS.md for the checklist).
+      SMS_PROVIDER: preserve(),
+      EMAIL_PROVIDER: preserve(),
+      WHATSAPP_PROVIDER: preserve(),
+      PUSH_PROVIDER: preserve(),
+      STORAGE_PROVIDER: preserve(),
+      PDF_PROVIDER: preserve(),
+      COMPLIANCE_PROVIDER: preserve(),
+      GSTIN_PROVIDER: preserve(),
+      OCR_PROVIDER: preserve(),
+      FX_PROVIDER: preserve(),
+      PAYMENTS_PROVIDER: preserve(),
+      ASSISTANT_PROVIDER: preserve(),
+      // The demo account (packages/db/src/seed.ts). Unset unless this
+      // environment is a demo: SEED_DEMO_ACCOUNT=true and a strong password.
+      SEED_DEMO_ACCOUNT: preserve(),
+      DEMO_ACCOUNT_EMAIL: preserve(),
+      DEMO_ACCOUNT_PASSWORD: preserve(),
     },
   });
 
@@ -44,8 +66,11 @@ export default defineRailway(() => {
     healthcheck: '/health',
     env: {
       NODE_ENV: 'production',
-      EXPO_PUBLIC_DATA_SOURCE: 'remote',
       EXPO_PUBLIC_API_URL: 'https://api-production-4abd.up.railway.app',
+      // Sign-in prefill, compiled into the bundle where anyone can read it.
+      // Unset unless this is a demo deployment.
+      EXPO_PUBLIC_DEMO_LOGIN_EMAIL: preserve(),
+      EXPO_PUBLIC_DEMO_LOGIN_PASSWORD: preserve(),
     },
   });
 
@@ -61,6 +86,9 @@ export default defineRailway(() => {
     env: {
       NODE_ENV: 'production',
       VITE_API_URL: 'https://api-production-4abd.up.railway.app',
+      // Sign-in prefill, compiled into the bundle. Unset unless this is a demo deployment.
+      VITE_DEMO_LOGIN_EMAIL: preserve(),
+      VITE_DEMO_LOGIN_PASSWORD: preserve(),
     },
   });
 

@@ -95,7 +95,7 @@
     "howApplied": "How a rate is applied"
   },
   "about": {
-    "build": "Prototype build {{version}}",
+    "build": "Version {{version}}",
     "version": "Version",
     "platform": "Platform",
     "data": "Data",
@@ -106,14 +106,14 @@
     "appName": "Elixir Books Smart",
     "pitch": "Everyday business management from a phone — invoices, payments, purchases and stock, without ERP complexity.",
     "sdk": "Expo SDK 57",
-    "localData": "Local demo data",
-    "noteHeading": "A note on this build"
+    "syncedData": "Synced with the server",
+    "noteHeading": "About your data"
   },
   "backup": {
     "json": "Machine-readable JSON",
     "jsonHint": "Full records, ready to import elsewhere",
-    "csv": "Per-report CSV",
-    "csvHint": "Open any report and export it individually",
+    "csv": "CSV files",
+    "csvHint": "Every table as a CSV file, zipped together",
     "nightly": "Nightly",
     "export": "Export this business",
     "exportTitle": "Export company data?",
@@ -122,7 +122,13 @@
     "prepared": "Export package prepared",
     "cancelled": "Export was cancelled",
     "formats": "Formats",
-    "automatic": "Automatic backup"
+    "automatic": "Automatic backup",
+    "tally": "Tally XML",
+    "tallyHint": "Vouchers to import into Tally",
+    "weekly": "Weekly",
+    "automaticSwitch": "Back up automatically",
+    "lastBackup": "Last backup {{when}}.",
+    "noBackupYet": "No backup has run yet."
   },
   "currencies": {
     "none": "No rates yet",
@@ -143,14 +149,7 @@
     "none": "Nothing queued",
     "noneBody": "Every change has reached the server.",
     "retryAll": "Retry all",
-    "simulateOffline": "Simulate offline",
-    "offlineHint": "Shows the offline badge and queues new work instead of syncing it.",
-    "simulateLatency": "Simulate network latency",
-    "latencyHint": "Adds a short delay with loading states so slow connections can be demonstrated.",
-    "synced": "Synced",
-    "allSynced": "All changes synced",
     "queue": "Queue",
-    "prototypeControls": "Prototype controls",
     "conflictNote": "Conflicts are surfaced for you to resolve rather than being overwritten silently.",
     "syncNow": "Sync now",
     "reload": "Reload everything from the server",

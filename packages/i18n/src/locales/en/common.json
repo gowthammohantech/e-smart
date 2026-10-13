@@ -89,7 +89,9 @@
     "cancelKind": "Cancel {{kind, lowercase}}",
     "createdDraft": "Created a draft {{kind, lowercase}}",
     "shareTitle": "{{kind}} {{number}}",
-    "shareMessage": "{{kind}} {{number}} — {{amount}}"
+    "shareMessage": "{{kind}} {{number}} — {{amount}}",
+    "sent": "On its way to the customer",
+    "linkCopied": "Link copied"
   },
   "component": {
     "confirm": "Confirm",

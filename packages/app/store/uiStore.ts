@@ -32,14 +32,6 @@ type UiState = {
   hydrated: boolean;
   setHydrated: (v: boolean) => void;
 
-  /** Simulated connectivity used by the offline/sync demo. */
-  offlineMode: boolean;
-  setOfflineMode: (v: boolean) => void;
-
-  /** Adds artificial latency + skeletons so loading states are demonstrable. */
-  simulateLatency: boolean;
-  setSimulateLatency: (v: boolean) => void;
-
   recents: RecentEntry[];
   pushRecent: (e: Omit<RecentEntry, 'at'>) => void;
 
@@ -76,12 +68,6 @@ export const useUiStore = create<UiState>()(
 
       hydrated: false,
       setHydrated: (hydrated) => set({ hydrated }),
-
-      offlineMode: false,
-      setOfflineMode: (offlineMode) => set({ offlineMode }),
-
-      simulateLatency: true,
-      setSimulateLatency: (simulateLatency) => set({ simulateLatency }),
 
       recents: [],
       pushRecent: (e) =>

@@ -1,10 +1,11 @@
 import type { Party } from '@esmart/core/types';
-import { PRIMARY_COMPANY_ID } from '@esmart/core/data/seed';
-import { buildSeedData, useAppStore } from '../../store/appStore';
+import { BOOK, buildTestBook } from '../../__fixtures__/book';
+import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
 import { installRemote } from '../install';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
+import { retrySync } from '../retry';
 import { syncNow } from '../sync';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -12,7 +13,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 jest.mock('expo-secure-store', () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
-jest.mock('../config', () => ({ isRemote: () => true, DATA_SOURCE: 'remote', API_BASE_URL: 'http://api.test/v1' }));
+jest.mock('../config', () => ({ API_BASE_URL: 'http://api.test/v1', DEMO_LOGIN: { email: '', password: '' } }));
 jest.mock('../api', () => ({
   api: { GET: jest.fn(), POST: jest.fn() },
   isNetworkError: (e: unknown) => e instanceof TypeError,
@@ -28,7 +29,7 @@ const queue = () => outbox.entries();
 function party(over: Partial<Party> = {}): Party {
   return {
     id: 'pty_offline1',
-    companyId: PRIMARY_COMPANY_ID,
+    companyId: BOOK.companyId,
     kind: 'customer',
     name: 'Offline Traders',
     code: 'C-900',
@@ -56,15 +57,15 @@ beforeEach(() => {
   GET.mockReset();
   quietServer();
   useRemoteMeta.getState().reset();
-  const seed = buildSeedData();
+  const seed = buildTestBook();
   useAppStore.setState({
     ...seed,
     syncQueue: [],
-    activeCompanyId: PRIMARY_COMPANY_ID,
-    activeBranchId: 'brn_mum',
+    activeCompanyId: BOOK.companyId,
+    activeBranchId: BOOK.branchId,
     session: { userId: seed.users[0].id, authenticated: true, onboardingComplete: true },
   });
-  // Everything in the seed counts as already on the server, at version 1.
+  // Everything in the book counts as already on the server, at version 1.
   const versions: Record<string, number> = {};
   for (const list of [seed.parties, seed.documents, seed.payments, seed.items, seed.companies]) for (const x of list) versions[x.id] = 1;
   useRemoteMeta.setState({ versions });
@@ -77,7 +78,7 @@ describe('queueing', () => {
     actions().saveParty(party());
     actions().saveParty(party({ name: 'Offline Traders LLP' }));
     expect(queue()).toHaveLength(1);
-    expect(queue()[0]).toMatchObject({ method: 'POST', path: `/companies/${PRIMARY_COMPANY_ID}/parties`, clientEntityId: 'pty_offline1', status: 'pending' });
+    expect(queue()[0]).toMatchObject({ method: 'POST', path: `/companies/${BOOK.companyId}/parties`, clientEntityId: 'pty_offline1', status: 'pending' });
     expect((queue()[0].body as Party).name).toBe('Offline Traders LLP');
   });
 
@@ -86,7 +87,7 @@ describe('queueing', () => {
     actions().saveParty({ ...existing, name: 'Renamed' });
     actions().saveParty({ ...existing, name: 'Renamed again' });
     expect(queue()).toHaveLength(1);
-    expect(queue()[0]).toMatchObject({ method: 'PUT', path: `/companies/${PRIMARY_COMPANY_ID}/parties/${existing.id}`, baseVersion: 1 });
+    expect(queue()[0]).toMatchObject({ method: 'PUT', path: `/companies/${BOOK.companyId}/parties/${existing.id}`, baseVersion: 1 });
     expect((queue()[0].body as Party).name).toBe('Renamed again');
   });
 
@@ -103,7 +104,7 @@ describe('queueing', () => {
 
     const copyId = actions().duplicateDocument(doc.id);
     expect(queue()).toHaveLength(1);
-    expect(queue()[0]).toMatchObject({ method: 'POST', path: `/companies/${PRIMARY_COMPANY_ID}/documents/${doc.id}/duplicate`, clientEntityId: copyId });
+    expect(queue()[0]).toMatchObject({ method: 'POST', path: `/companies/${BOOK.companyId}/documents/${doc.id}/duplicate`, clientEntityId: copyId });
   });
 
   it('passes an accepted credit-limit override to the server, and only then', () => {
@@ -158,7 +159,7 @@ describe('syncing', () => {
     expect(queue()[0]).toMatchObject({ status: 'failed', conflict: expect.objectContaining({ name: 'Theirs' }) });
 
     // Retrying sends the change again against the server's new version.
-    actions().retrySync(entry.id);
+    retrySync(entry.id);
     expect(queue()[0].status).toBe('pending');
   });
 

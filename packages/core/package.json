@@ -2,7 +2,7 @@
   "name": "@esmart/core",
   "version": "0.0.0",
   "private": true,
-  "description": "Pure business logic shared by the apps and the API: money, tax, totals, numbering, ledgers, compliance, seed data.",
+  "description": "Pure business logic shared by the apps and the API: money, tax, totals, numbering, ledgers, compliance.",
   "exports": {
     "./types": "./src/types/index.ts",
     "./*": "./src/*.ts"

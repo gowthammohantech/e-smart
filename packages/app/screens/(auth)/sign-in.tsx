@@ -8,8 +8,7 @@ import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { PhoneField, TextField, Segmented, usePhoneInput } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
-import { useAppStore } from '../../store/appStore';
-import { isRemote, remoteSession } from '../../remote';
+import { DEMO_LOGIN, remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { Errors, required, validEmail, hasErrors } from '@esmart/core/lib/validators';
 
@@ -19,13 +18,13 @@ export default function SignIn() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
-  const signIn = useAppStore((s) => s.signIn);
   const desktop = useIsDesktop();
 
   const [mode, setMode] = useState<Mode>('email');
-  const [email, setEmail] = useState('gowtham@vertextraders.in');
-  const [password, setPassword] = useState('demo1234');
-  const phone = usePhoneInput('+91 98200 41120');
+  // Prefilled only on builds that set EXPO_PUBLIC_DEMO_LOGIN_* (demo and sandbox deployments).
+  const [email, setEmail] = useState(DEMO_LOGIN.email);
+  const [password, setPassword] = useState(DEMO_LOGIN.password);
+  const phone = usePhoneInput();
   const [errors, setErrors] = useState<Errors<'email' | 'password' | 'phone'>>({});
   const [busy, setBusy] = useState(false);
 
@@ -37,18 +36,11 @@ export default function SignIn() {
     setErrors(next);
     if (hasErrors(next)) return;
     setBusy(true);
-    if (isRemote()) {
-      // The root layout routes on once the session and its data are in.
-      remoteSession.signIn(email, password).catch((err: unknown) => {
-        setBusy(false);
-        setErrors({ password: describeError(err, tr) });
-      });
-      return;
-    }
-    setTimeout(() => {
-      signIn(email);
-      router.replace('/(app)/(tabs)');
-    }, 450);
+    // The root layout routes on once the session and its data are in.
+    remoteSession.signIn(email, password).catch((err: unknown) => {
+      setBusy(false);
+      setErrors({ password: describeError(err, tr) });
+    });
   };
 
   const submitPhone = () => {
@@ -124,29 +116,6 @@ export default function SignIn() {
           />
           <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} fullWidth size="lg" />
         </View>
-      )}
-
-      {/* The API has no Google sign-in yet; the demo signs straight in. */}
-      {isRemote() ? null : (
-      <View style={{ alignItems: 'center', gap: t.spacing.md, marginTop: t.spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, alignSelf: 'stretch' }}>
-          <View style={{ flex: 1, height: 1, backgroundColor: t.c.line }} />
-          <Text variant="caption" tone="muted">
-            or continue with
-          </Text>
-          <View style={{ flex: 1, height: 1, backgroundColor: t.c.line }} />
-        </View>
-        <Button
-          title={tr('auth:signIn.google')}
-          variant="ghost"
-          icon="google"
-          fullWidth
-          onPress={() => {
-            signIn('gowtham@vertextraders.in');
-            router.replace('/(app)/(tabs)');
-          }}
-        />
-      </View>
       )}
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.lg }}>

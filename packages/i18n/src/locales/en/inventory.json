@@ -90,8 +90,8 @@
     "createItem": "Create item",
     "use": "Use",
     "pointCamera": "Point the camera at a barcode",
-    "prototypeNote": "Camera scanning runs on a real device. In this prototype you can type or pick a code below.",
-    "tryOne": "Try one of these"
+    "tryOne": "Try one of these",
+    "manualNote": "Camera scanning is not available yet. Type or paste the code from the label, or pick an item below."
   },
   "lowStock": {
     "needAttention": "Need attention",
@@ -119,15 +119,13 @@
     "scanBill": "Scan a bill",
     "rescan": "Rescan",
     "carriedFields": "Fields carried into the form",
-    "sampleUsed": "Sample bill used — no image was captured on this device.",
     "extractedFields": "Extracted fields",
     "lineItems": "Line items",
     "saveNote": "Saving opens a pre-filled form — nothing is written to your books until you finish it yourself.",
     "extractedTotal": "Extracted total",
     "takePhoto": "Take a photo",
     "fromGallery": "Choose from gallery",
-    "useSample": "Use a sample",
-    "cameraUnavailable": "Camera unavailable here. Choose a photo or use the sample.",
+    "cameraUnavailable": "Camera unavailable here. Choose a photo instead.",
     "howItWorks": "How it works",
     "howItWorksBody": "Nothing is saved until you confirm it. Low-confidence fields are flagged so you can correct them first.",
     "ocrUnavailable": "Bill scanning works in the installed Elixir Books app on Android or iPhone. It is not available in the browser or in Expo Go.",

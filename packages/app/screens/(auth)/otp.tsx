@@ -1,27 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, TextInput, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
-import { useAppStore } from '../../store/appStore';
-import { isRemote, remoteSession } from '../../remote';
+import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { toE164 } from '../../remote/phone';
 
 const LENGTH = 6;
-/** Fixed code so the prototype can be demonstrated without a real gateway. */
-const DEMO_CODE = '123456';
 
 export default function Otp() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth']);
-  const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone?: string }>();
-  const signInWithOtp = useAppStore((s) => s.signInWithOtp);
 
   const [digits, setDigits] = useState<string[]>(Array(LENGTH).fill(''));
   const [error, setError] = useState<string | undefined>();
@@ -32,9 +27,8 @@ export default function Otp() {
   const [requestId, setRequestId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Remote mode sends a real code, on arrival and on every resend.
+  // The server sends a code on arrival and on every resend.
   const request = React.useCallback(() => {
-    if (!isRemote()) return;
     remoteSession
       .requestOtp(toE164(String(phone ?? '')))
       .then((r) => {
@@ -81,21 +75,13 @@ export default function Otp() {
       setError(tr('auth:otp.enterAllDigits'));
       return;
     }
-    if (isRemote()) {
-      if (!requestId) return;
-      setBusy(true);
-      remoteSession.verifyOtp(requestId, code).catch((err: unknown) => {
-        setBusy(false);
-        setError(describeError(err, tr));
-      });
-      return;
-    }
-    if (code !== DEMO_CODE) {
-      setError(tr('auth:otp.incorrectDemo', { code: DEMO_CODE }));
-      return;
-    }
-    signInWithOtp(String(phone ?? ''));
-    router.replace('/(app)/(tabs)');
+    if (!requestId) return;
+    setBusy(true);
+    // The root layout routes on once the session and its data are in.
+    remoteSession.verifyOtp(requestId, code).catch((err: unknown) => {
+      setBusy(false);
+      setError(describeError(err, tr));
+    });
   };
 
   return (
@@ -143,11 +129,7 @@ export default function Otp() {
         <Text variant="caption" tone="bad">
           {error}
         </Text>
-      ) : isRemote() ? null : (
-        <Text variant="caption" tone="muted">
-          {tr('auth:otp.demoCode', { code: DEMO_CODE })}
-        </Text>
-      )}
+      ) : null}
 
       <Button title={tr('auth:otp.submit')} onPress={verify} loading={busy} fullWidth size="lg" />
 

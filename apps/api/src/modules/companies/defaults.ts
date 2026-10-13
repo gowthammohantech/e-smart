@@ -1,6 +1,6 @@
 import type { Schema } from '@esmart/api-contract';
 import { expenseCategories, gstCategories } from '@esmart/core/data/masters';
-import { defaultComplianceSettings } from '@esmart/core/data/seed';
+import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
 import { DEFAULT_PREFIXES, SERIES_KINDS, defaultSeries } from '@esmart/core/domain/numbering';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from '../../lib/audit';

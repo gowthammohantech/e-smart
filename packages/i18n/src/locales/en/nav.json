@@ -102,7 +102,6 @@
       "businessSetup": "Business setup",
       "dataCompliance": "Data & compliance",
       "account": "Account",
-      "prototype": "Prototype",
       "business": "People & reports"
     },
     "entry": {
@@ -139,21 +138,13 @@
       "appearanceAndLanguage": "Appearance & language",
       "about": "About"
     },
-    "reset": {
-      "row": "Reset demo data",
-      "rowSubtitle": "Restore the sample business to its original state",
-      "title": "Reset demo data?",
-      "message": "Everything you've created in this prototype will be replaced with the original sample business. This cannot be undone.",
-      "confirm": "Reset",
-      "done": "Demo data restored"
-    },
     "signOut": {
       "row": "Sign out",
       "title": "Sign out?",
-      "message": "You can sign back in with the same demo credentials at any time.",
+      "message": "You can sign back in at any time. Changes not yet synced stay on this device until you do.",
       "confirm": "Sign out"
     },
-    "build": "Elixir Books Smart · prototype build {{version}}"
+    "build": "Elixir Books Smart · version {{version}}"
   },
   "shell": {
     "searchPlaceholder": "Search invoices, customers, items…",

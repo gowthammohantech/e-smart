@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { seedParties } from '@esmart/core/data/seed';
+import { seedParties } from '@esmart/db/demo';
 import { gstinChecksum } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
-import { ownerWithCompany, setupApi } from './helpers';
+import { idem, ownerWithCompany, setupApi } from './helpers';
 
 const t = setupApi();
 
@@ -71,9 +71,15 @@ describe('reference data', () => {
 });
 
 describe('GSTIN lookup', () => {
-  it('answers seed GSTINs with their names and caches the result', async () => {
-    const { token } = await ownerWithCompany(t);
+  it('answers GSTINs already in the database with their names and caches the result', async () => {
+    const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
     const seeded = seedParties().find((p) => p.taxId && p.kind === 'supplier')!;
+    const party = await t.post(
+      `${c}/parties`,
+      { kind: 'supplier', name: seeded.name, taxId: seeded.taxId, currency: 'INR', billingAddress: seeded.billingAddress, openingBalance: { minor: 0, currency: 'INR' }, paymentTermsDays: 30 },
+      { token, headers: idem() },
+    );
+    expect(party.status).toBe(201);
     const res = await t.get(`/reference/gstin/${seeded.taxId}`, { token });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ gstin: seeded.taxId, legalName: seeded.name, status: 'Active', registrationType: 'regular' });
@@ -106,5 +112,24 @@ describe('GSTIN lookup', () => {
     expect(bad.body.code).toBe('INVALID_GSTIN');
     expect((await t.get(`/reference/gstin/${withCheck('27AAPFU0939F0Z')}`, { token })).status).toBe(404);
     expect((await t.get(`/reference/gstin/${withCheck('27AAPFU0939F1Z')}`)).status).toBe(401);
+  });
+});
+
+describe('GSTIN_PROVIDER=disabled', () => {
+  it('answers 503 FEATURE_UNAVAILABLE for lookups, PIN codes and distances', async () => {
+    const { createGstinProvider } = await import('../src/providers/gstin');
+    const disabled = createGstinProvider({ ...t.deps.config, GSTIN_PROVIDER: 'disabled' }, t.deps.db);
+    const original = t.providers.gstin;
+    t.providers.gstin = disabled;
+    try {
+      const { token } = await ownerWithCompany(t);
+      const res = await t.get(`/reference/gstin/${withCheck('33AAACZ9876K1Z')}`, { token });
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe('FEATURE_UNAVAILABLE');
+      expect((await t.get('/reference/pincodes/999998')).status).toBe(503);
+      expect((await t.get('/reference/distance', { token, query: { fromPincode: '400001', toPincode: '560001' } })).status).toBe(503);
+    } finally {
+      t.providers.gstin = original;
+    }
   });
 });

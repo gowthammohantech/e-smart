@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Share, View } from 'react-native';
+import { Linking, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,6 +12,9 @@ import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
+import { SwitchField } from '@esmart/ui/components/Field';
+import { exportCompany, getBackupSettings, saveBackupSettings, type BackupSettings, type ExportFormat } from '../../../remote/exports';
+import { describeError } from '../../../remote/errors';
 import { useAppStore } from '../../../store/appStore';
 import {
   useActiveCompany,
@@ -29,7 +32,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 export default function BackupExport() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'auth']);
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -43,9 +46,30 @@ export default function BackupExport() {
   const companies = useAppStore((s) => s.companies);
 
   const [busy, setBusy] = useState(false);
-  const [confirmExport, setConfirmExport] = useState(false);
-  // Captured once so the render stays pure.
-  const [lastBackupAt] = useState(() => new Date(Date.now() - 6 * 3600 * 1000).toISOString());
+  const [confirmExport, setConfirmExport] = useState<ExportFormat | null>(null);
+  // What the server holds; null until it answers (or when it can't be reached).
+  const [backup, setBackup] = useState<BackupSettings | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    getBackupSettings(company.id)
+      .then((b) => live && setBackup(b))
+      .catch(() => live && setBackup(null));
+    return () => {
+      live = false;
+    };
+  }, [company.id]);
+
+  const toggleAutomatic = (automatic: boolean) => {
+    const next = { ...(backup ?? {}), automatic };
+    setBackup(next);
+    saveBackupSettings(company.id, next)
+      .then(setBackup)
+      .catch((err: unknown) => {
+        setBackup(backup);
+        toast.show(describeError(err, tr), 'error');
+      });
+  };
 
   const counts = useMemo(
     () => [
@@ -60,39 +84,18 @@ export default function BackupExport() {
     [parties, items, documents, payments, expenses, movements, audit],
   );
 
-  const buildPackage = () =>
-    JSON.stringify(
-      {
-        format: 'elixir-books-smart/company-export',
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        company,
-        parties,
-        items,
-        documents,
-        payments,
-        expenses,
-        stockMovements: movements,
-        auditEvents: audit,
-      },
-      null,
-      2,
-    );
-
-  const doExport = async () => {
+  /** The server builds the package (every record of this business) and hands back a signed download link. */
+  const doExport = async (format: ExportFormat) => {
+    setConfirmExport(null);
     setBusy(true);
     try {
-      const payload = buildPackage();
-      await Share.share({
-        message: payload.length > 40000 ? `${payload.slice(0, 40000)}\n… truncated for sharing` : payload,
-        title: `${company.name} export`,
-      });
+      const url = await exportCompany(company.id, format);
+      await Linking.openURL(url);
       toast.show(tr('settings:backup.prepared'), 'success');
-    } catch {
-      toast.show(tr('settings:backup.cancelled'), 'error');
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
     } finally {
       setBusy(false);
-      setConfirmExport(false);
     }
   };
 
@@ -135,33 +138,35 @@ export default function BackupExport() {
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:backup.formats')}</Text>
         <Card padded={false}>
-          <ListRow title={tr('settings:backup.json')} subtitle={tr('settings:backup.jsonHint')} icon="code-json" chevron onPress={() => setConfirmExport(true)} />
-          <ListRow title={tr('settings:backup.csv')} subtitle={tr('settings:backup.csvHint')} icon="file-delimited-outline" chevron divider={false} />
+          <ListRow title={tr('settings:backup.json')} subtitle={tr('settings:backup.jsonHint')} icon="code-json" chevron onPress={() => setConfirmExport('json-backup')} />
+          <ListRow title={tr('settings:backup.csv')} subtitle={tr('settings:backup.csvHint')} icon="file-delimited-outline" chevron onPress={() => setConfirmExport('csv-zip')} />
+          <ListRow title={tr('settings:backup.tally')} subtitle={tr('settings:backup.tallyHint')} icon="file-code-outline" chevron divider={false} onPress={() => setConfirmExport('tally-xml')} />
         </Card>
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="cloud-check-outline" size={19} color={t.c.good} />
-            <Text variant="small" weight="600">{tr('settings:backup.automatic')}</Text>
-            <Badge label={tr('settings:backup.nightly')} tone="success" size="sm" />
+            <Text variant="small" weight="600" style={{ flex: 1 }}>{tr('settings:backup.automatic')}</Text>
+            {backup?.automatic ? <Badge label={backup.frequency === 'weekly' ? tr('settings:backup.weekly') : tr('settings:backup.nightly')} tone="success" size="sm" /> : null}
           </View>
+          {backup ? <SwitchField label={tr('settings:backup.automaticSwitch')} value={!!backup.automatic} onValueChange={toggleAutomatic} /> : null}
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Last backup {formatDateTime(lastBackupAt)}. Financial records subject to
-            statutory retention are kept even if you remove them from this device.
+            {backup?.lastBackupAt ? tr('settings:backup.lastBackup', { when: formatDateTime(backup.lastBackupAt) }) : tr('settings:backup.noBackupYet')}{' '}
+            Financial records subject to statutory retention are kept even if you remove them from this device.
           </Text>
         </Card>
       </ScrollView>
 
-      <PrimaryActionBar title={tr('settings:backup.export')} icon="database-export-outline" onPress={() => setConfirmExport(true)} loading={busy} />
+      <PrimaryActionBar title={tr('settings:backup.export')} icon="database-export-outline" onPress={() => setConfirmExport('json-backup')} loading={busy} />
 
       <ConfirmDialog
-        visible={confirmExport}
+        visible={confirmExport !== null}
         title={tr('settings:backup.exportTitle')}
         message={tr('settings:backup.exportMessage')}
         confirmLabel={tr('settings:backup.exportConfirm')}
         icon="database-export-outline"
-        onCancel={() => setConfirmExport(false)}
-        onConfirm={doExport}
+        onCancel={() => setConfirmExport(null)}
+        onConfirm={() => confirmExport && void doExport(confirmExport)}
       />
     </View>
   );

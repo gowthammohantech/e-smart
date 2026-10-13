@@ -21,7 +21,7 @@ import type { EwayBill as CoreEwayBill } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
-import { conflict, invalid, notFound, unprocessable } from '../../http/errors';
+import { ApiError, conflict, invalid, notFound, unprocessable } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -272,7 +272,12 @@ export const ewayHandlers = defineHandlers({
     // Distance 0 asks for the portal's road distance between the two PIN codes, as NIC does.
     let distanceKm = input.distanceKm;
     if (distanceKm === 0 && !validPincode(input.from.pincode) && !validPincode(input.to.pincode)) {
-      distanceKm = (await ctx.deps.providers.gstin.distance(input.from.pincode, input.to.pincode)).distanceKm;
+      try {
+        distanceKm = (await ctx.deps.providers.gstin.distance(input.from.pincode, input.to.pincode)).distanceKm;
+      } catch (err) {
+        // No distance lookup on this server (GSTIN_PROVIDER=disabled): send 0 and let the portal work it out.
+        if (!(err instanceof ApiError && err.code === 'FEATURE_UNAVAILABLE')) throw err;
+      }
     }
 
     const result = await ctx.db.transaction(async (tx) => {

@@ -14,8 +14,8 @@ import { useItems, useStockLevels } from '../../../store/selectors';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 
 /**
- * Barcode entry. A real build opens the camera through expo-camera; the
- * prototype accepts a typed code and offers the seeded barcodes as shortcuts.
+ * Barcode entry by hand: type or paste the code, or pick one of the items
+ * that carry a barcode. Camera scanning is still to come (docs/PRODUCTION_READINESS.md).
  */
 export default function ScanBarcode() {
   const t = useTheme();
@@ -47,7 +47,7 @@ export default function ScanBarcode() {
         >
           <Illustration name="scanning" size="full" />
           <Text variant="body" weight="600">{tr('inventory:scan.pointCamera')}</Text>
-          <Text variant="caption" tone="muted" center style={{ maxWidth: 260, lineHeight: 18 }}>{tr('inventory:scan.prototypeNote')}</Text>
+          <Text variant="caption" tone="muted" center style={{ maxWidth: 260, lineHeight: 18 }}>{tr('inventory:scan.manualNote')}</Text>
         </Card>
 
         <TextField label={tr('inventory:scan.barcode')} value={code} onChangeText={setCode} placeholder={tr('inventory:scan.barcodePlaceholder')} icon="barcode" autoFocus />

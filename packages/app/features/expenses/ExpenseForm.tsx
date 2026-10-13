@@ -23,6 +23,8 @@ import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
+import { uploadAttachment } from '../../remote/attachments';
+import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
 import {
   useBaseCurrency,
@@ -54,6 +56,8 @@ export type ExpenseInitial = {
   supplierId?: string;
   categoryId?: string;
   receiptUri?: string;
+  /** Already uploaded with the scan; linked as the receipt without uploading again. */
+  receiptAttachmentId?: string;
 };
 
 export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
@@ -74,7 +78,6 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
 
   const saveExpense = useAppStore((s) => s.saveExpense);
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
-  const addAttachment = useAppStore((s) => s.addAttachment);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const primaryBranchId = usePrimaryBranchId();
   const payments = usePayments();
@@ -103,6 +106,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(expense?.recurrence ?? 'none');
   const [billable, setBillable] = useState(expense?.billable ?? false);
   const [receiptUri, setReceiptUri] = useState<string | undefined>(initial?.receiptUri);
+  const [uploading, setUploading] = useState(false);
 
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [methodOpen, setMethodOpen] = useState(false);
@@ -145,7 +149,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     if (!result.canceled && result.assets[0]) setReceiptUri(result.assets[0].uri);
   };
 
-  const save = () => {
+  const save = async () => {
     if (amount.minor <= 0) return;
     if (!categoryId || !categories.some((c) => c.id === categoryId)) {
       setCategoryError(tr('purchases:form.categoryRequired'));
@@ -160,19 +164,23 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       return;
     }
 
-    const attachmentIds = expense?.attachmentIds ?? [];
+    const attachmentIds = [...(expense?.attachmentIds ?? [])];
     if (receiptUri) {
-      attachmentIds.push(
-        addAttachment({
-          companyId: activeCompanyId,
-          name: 'Receipt',
-          mimeType: 'image/jpeg',
-          size: 0,
-          uri: receiptUri,
-          entityType: 'expense',
-          entityId: expense?.id,
-        }),
-      );
+      // The scan already uploaded its image; a photo picked here goes up now. Uploads need a connection.
+      if (receiptUri === initial?.receiptUri && initial.receiptAttachmentId) {
+        attachmentIds.push(initial.receiptAttachmentId);
+      } else {
+        setUploading(true);
+        try {
+          const uploaded = await uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id });
+          attachmentIds.push(uploaded.id);
+        } catch (err) {
+          toast.show(tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }), 'error');
+          return;
+        } finally {
+          setUploading(false);
+        }
+      }
     }
 
     const record: Expense = {
@@ -468,11 +476,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
-            <Button title={submitTitle} onPress={save} disabled={amount.minor <= 0} />
+            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} />
           </FormActions>
         ) : (
           <FormActions>
-            <Button title={submitTitle} onPress={save} disabled={amount.minor <= 0} fullWidth size="lg" />
+            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
           </FormActions>
         )}
 

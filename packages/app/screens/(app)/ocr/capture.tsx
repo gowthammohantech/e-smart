@@ -11,23 +11,25 @@ import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
-import { mockExtract, useOcrStore } from '../../../features/ocr/ocrStore';
+import { useOcrStore } from '../../../features/ocr/ocrStore';
 import { recognizeText } from '../../../features/ocr/recognize';
-import { parseReceiptText } from '@esmart/core/domain/parseReceipt';
+import { useAppStore } from '../../../store/appStore';
+import { OcrUnavailableError, extractBill } from '../../../remote/ocr';
+import { describeError } from '../../../remote/errors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
 
 const STEPS = [
   { icon: 'camera-outline' as const, label: 'Capture', body: 'Photograph the bill or pick one from your gallery.' },
-  { icon: 'cellphone-lock' as const, label: 'Read', body: 'Text is read on your phone — the image is never uploaded.' },
+  { icon: 'cellphone-text' as const, label: 'Read', body: 'Text is read on your phone, and the bill is kept with your books.' },
   { icon: 'text-recognition' as const, label: 'Extract', body: 'Read the vendor, date, totals, tax and line items.' },
   { icon: 'clipboard-check-outline' as const, label: 'Review', body: 'You confirm every field before anything is saved.' },
 ];
 
 export default function OcrCapture() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'auth']);
   const router = useRouter();
   const toast = useToast();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
@@ -35,31 +37,24 @@ export default function OcrCapture() {
   const desktop = breakpoint !== 'phone';
 
   const setResult = useOcrStore((s) => s.setResult);
+  const companyId = useAppStore((s) => s.activeCompanyId);
   const [kind, setKind] = useState<'expense' | 'purchaseBill'>('expense');
   const [busy, setBusy] = useState(false);
-
-  /** The built-in sample bill, only when the person asks for it. */
-  const runSample = (uri?: string) => {
-    setResult(mockExtract(uri, kind));
-    router.push('/(app)/ocr/review');
-  };
 
   const run = async (uri: string) => {
     setBusy(true);
     try {
-      // Read on the device with ML Kit; nothing is uploaded.
+      // Read on the device with ML Kit where it can (null on web); the server parses that text,
+      // or reads the image itself when it has an OCR provider.
       const text = await recognizeText(uri);
-      if (text === null) {
-        // Say so, rather than passing the sample bill off as this photo.
-        toast.show(tr('inventory:ocr.ocrUnavailable'), 'error');
-        return;
-      }
-      if (!text.trim()) {
+      if (text !== null && !text.trim()) {
         toast.show(tr('inventory:ocr.noTextFound'), 'error');
         return;
       }
-      setResult(parseReceiptText(text, kind, uri));
+      setResult(await extractBill({ companyId, uri, kind, text }));
       router.push('/(app)/ocr/review');
+    } catch (err) {
+      toast.show(err instanceof OcrUnavailableError ? tr('inventory:ocr.ocrUnavailable') : describeError(err, tr), 'error');
     } finally {
       setBusy(false);
     }
@@ -133,8 +128,7 @@ export default function OcrCapture() {
         </Pressable>
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: t.spacing.md }}>
-          <Button title={tr('inventory:ocr.fromGallery')} variant="ghost" icon="image-outline" onPress={() => pick(false)} disabled={busy} />
-          <Button title={tr('inventory:ocr.useSample')} variant="secondary" icon="file-find-outline" onPress={() => runSample()} loading={busy} />
+          <Button title={tr('inventory:ocr.fromGallery')} variant="secondary" icon="image-outline" onPress={() => pick(false)} loading={busy} />
         </View>
 
         {/* Reading a bill needs the phone app; say so before the person tries it here. */}
@@ -228,8 +222,7 @@ export default function OcrCapture() {
         </Pressable>
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Button title={tr('inventory:ocr.fromGallery')} variant="ghost" icon="image-outline" onPress={() => pick(false)} style={{ flex: 1 }} disabled={busy} />
-          <Button title={tr('inventory:ocr.useSample')} variant="secondary" icon="file-find-outline" onPress={() => runSample()} style={{ flex: 1 }} loading={busy} />
+          <Button title={tr('inventory:ocr.fromGallery')} variant="secondary" icon="image-outline" onPress={() => pick(false)} style={{ flex: 1 }} loading={busy} />
         </View>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{tr('inventory:ocr.howItWorks')}</Text>

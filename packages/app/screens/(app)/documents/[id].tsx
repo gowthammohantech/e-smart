@@ -1,10 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useResolvedLanguage } from '../../../i18n/I18nProvider';
-import { Platform, Share, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
@@ -12,7 +10,6 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 import { documentKindLabel } from '@esmart/core/labels';
-import { formatMoney } from '@esmart/core/lib/format';
 import {
   useActiveCompany,
   useActiveEwayBill,
@@ -22,6 +19,9 @@ import {
 } from '../../../store/selectors';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { HtmlPreview, printHtml } from '../../../features/documents/HtmlPreview';
+import { deliverFile } from '../../../features/reports/exportFiles';
+import { documentPdf, pdfFileName } from '../../../remote/documents';
+import { describeError } from '../../../remote/errors';
 
 export default function DocumentPreview() {
   const t = useTheme();
@@ -66,22 +66,14 @@ export default function DocumentPreview() {
 
   const label = documentKindLabel(tr, doc.kind, 1);
 
+  /** The server's PDF, the same one the customer receives: downloaded in a browser, shared on a phone. */
   const share = async () => {
-    // A browser has no share sheet for files: its print dialog saves the PDF.
-    if (Platform.OS === 'web') {
-      printHtml(html).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'));
-      return;
-    }
     setBusy(true);
     try {
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label} ${doc.number}` });
-      } else {
-        await Share.share({ message: `${label} ${doc.number} — ${formatMoney(doc.totals.grandTotal)}` });
-      }
-    } catch {
-      toast.show(tr('sales:print.pdfFailed'), 'error');
+      const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
+      await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
+    } catch (err) {
+      toast.show(`${tr('sales:print.pdfFailed')} ${describeError(err, tr)}`, 'error');
     } finally {
       setBusy(false);
     }

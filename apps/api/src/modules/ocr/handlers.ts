@@ -3,7 +3,7 @@ import type { Schema } from '@esmart/api-contract';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
-import { invalid, notFound } from '../../http/errors';
+import { ApiError, invalid, notFound } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { compact } from '../../lib/wire';
@@ -134,7 +134,7 @@ export const ocrHandlers = defineHandlers({
   async createOcrExtraction(ctx) {
     const { attachmentId, kind } = ctx.body;
     // Text already read on device (or by a test) skips recognition.
-    const text = (ctx.body as { text?: unknown }).text;
+    const text = ctx.body.text;
     const ATT = schema.attachments;
     const [attachment] = await ctx.db.select().from(ATT).where(and(eq(ATT.companyId, ctx.company.id), eq(ATT.id, attachmentId)));
     if (!attachment) throw invalid('attachmentId', 'No such attachment in this company');
@@ -153,6 +153,11 @@ export const ocrHandlers = defineHandlers({
       const body = await ctx.deps.providers.storage.get(attachment.storageKey);
       result = await provider.extract({ kind, file: body ? { body, mimeType: attachment.mimeType } : null, text: typeof text === 'string' ? text : undefined });
     } catch (err) {
+      // No recognition on this server: nothing was extracted, so leave no row behind.
+      if (err instanceof ApiError && err.code === 'FEATURE_UNAVAILABLE') {
+        await ctx.db.delete(X).where(eq(X.id, started.id));
+        throw err;
+      }
       error = (err as Error).message || 'The OCR provider failed';
     }
 

@@ -6,7 +6,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
-jest.mock('../../../remote/config', () => ({ isRemote: () => true, DATA_SOURCE: 'remote', API_BASE_URL: 'http://api.test/v1' }));
+jest.mock('../../../remote/config', () => ({ API_BASE_URL: 'http://api.test/v1', DEMO_LOGIN: { email: '', password: '' } }));
 jest.mock('../../../remote/api', () => ({
   api: { POST: jest.fn() },
   isNetworkError: (e: unknown) => e instanceof TypeError,

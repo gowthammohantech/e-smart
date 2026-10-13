@@ -1,16 +1,14 @@
 import { ApiError, type Schema } from '@esmart/api-client';
 import type { DocumentKind } from '@esmart/core/types';
 import { api, isNetworkError } from '../../remote/api';
-import { isRemote } from '../../remote/config';
 import { useAppStore } from '../../store/appStore';
 import type { LixiAction, LixiReply } from './brain';
 
 /**
- * Lixi on the server's model, in remote mode. The server answers from the
- * books through the same routes the app uses, and never writes: a draft, a
- * payment or a message comes back as a pending action the user confirms
- * here. When the server can't be reached the chat falls back to the local,
- * rule-based brain, so Lixi keeps working offline.
+ * Lixi on the server's model. The server answers from the books through the
+ * same routes the app uses, and never writes: a draft, a payment or a message
+ * comes back as a pending action the user confirms here. When the server
+ * can't be reached the chat says so; there is no on-device fallback.
  */
 
 export type LixiTurn = { role: 'user' | 'assistant'; text: string };
@@ -32,21 +30,21 @@ export function toReply(wire: WireReply): LixiReply {
   return { text: wire.text, ...(wire.stats.length ? { stats: wire.stats } : {}), ...(actions.length ? { actions } : {}) };
 }
 
-/** Whether to ask the server at all: remote mode with a company open. */
+/** Whether to ask the server at all: a company is open. */
 export function remoteLixiAvailable(): boolean {
-  return isRemote() && !!useAppStore.getState().activeCompanyId;
+  return !!useAppStore.getState().activeCompanyId;
 }
 
 const companyPath = () => ({ companyId: useAppStore.getState().activeCompanyId });
 
-/** A failure the local brain should cover: offline, or the model is down. */
+/** A failure the chat reports as "Lixi can't be reached": offline, or the model is down. */
 function unavailable(err: unknown): boolean {
   return isNetworkError(err) || (err instanceof ApiError && (err.status >= 500 || err.status === 429));
 }
 
 /**
  * Asks the server. Resolves to null when it can't answer, and the caller
- * uses the local brain instead.
+ * shows that Lixi is unavailable.
  */
 export async function askRemote(history: LixiTurn[], locale?: string): Promise<RemoteAnswer | null> {
   try {

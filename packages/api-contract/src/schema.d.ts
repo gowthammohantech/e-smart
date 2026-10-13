@@ -1592,7 +1592,7 @@ export interface paths {
         put?: never;
         /**
          * Extract fields from an uploaded bill or receipt image
-         * @description Replaces `mockExtract` in `src/features/ocr/ocrStore.ts`. Upload the image as an attachment first. Poll the extraction, or wait for the `ocr.completed` push.
+         * @description Upload the image as an attachment first. Send `text` when the device already read the image (ML Kit); with OCR_PROVIDER=disabled that is the only way in, and an image alone answers 503. Poll the extraction, or wait for the `ocr.completed` push.
          */
         post: operations["createOcrExtraction"];
         delete?: never;
@@ -3800,6 +3800,15 @@ export interface components {
         };
         /** @description The IRP, EWB or GST portal rejected the request or was unreachable. The portal's code is in `issues[].code`. */
         UpstreamError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description `FEATURE_UNAVAILABLE`: this server has no provider for the feature yet (GSTIN_PROVIDER or OCR_PROVIDER=disabled). Fall back to manual entry. */
+        FeatureUnavailable: {
             headers: {
                 [name: string]: unknown;
             };
@@ -7185,6 +7194,8 @@ export interface operations {
                     attachmentId: string;
                     /** @enum {string} */
                     kind: "expense" | "purchaseBill";
+                    /** @description Text the device already read off the image; skips recognition */
+                    text?: string;
                 };
             };
         };
@@ -7198,6 +7209,7 @@ export interface operations {
                     "application/json": components["schemas"]["OcrExtraction"];
                 };
             };
+            503: components["responses"]["FeatureUnavailable"];
         };
     };
     getOcrExtraction: {
@@ -8048,6 +8060,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            503: components["responses"]["FeatureUnavailable"];
         };
     };
     getRoadDistance: {
@@ -8075,6 +8088,7 @@ export interface operations {
                     };
                 };
             };
+            503: components["responses"]["FeatureUnavailable"];
         };
     };
     listCurrencies: {
@@ -8173,6 +8187,7 @@ export interface operations {
                 content?: never;
             };
             502: components["responses"]["UpstreamError"];
+            503: components["responses"]["FeatureUnavailable"];
         };
     };
     getPlatformOverview: {

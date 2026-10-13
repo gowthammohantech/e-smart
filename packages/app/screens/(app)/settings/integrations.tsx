@@ -36,8 +36,8 @@ export default function Integrations() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Each provider sits behind an adapter, so swapping one out never changes how your documents work. In this
-            prototype the toggles are illustrative.
+            Each provider sits behind an adapter, so swapping one out never changes how your documents work. Turning
+            one on saves the choice for this business; providers that need an account ask you to connect it.
           </Text>
         </Card>
 

@@ -7,8 +7,7 @@ import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { PhoneField, TextField, SwitchField, usePhoneInput } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
-import { useAppStore } from '../../store/appStore';
-import { isRemote, remoteSession } from '../../remote';
+import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { toE164 } from '../../remote/phone';
 import { Errors, hasErrors, minLength, required, validEmail } from '@esmart/core/lib/validators';
@@ -17,7 +16,6 @@ export default function SignUp() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
-  const signUp = useAppStore((s) => s.signUp);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -39,18 +37,11 @@ export default function SignUp() {
     if (hasErrors(next)) return;
 
     setBusy(true);
-    if (isRemote()) {
-      // A new account has no company yet, so the root layout routes to onboarding.
-      remoteSession.signUp({ name: name.trim(), email, phone: phone.value ? toE164(phone.value) : undefined, password }).catch((err: unknown) => {
-        setBusy(false);
-        setErrors({ email: describeError(err, tr) });
-      });
-      return;
-    }
-    setTimeout(() => {
-      signUp(name.trim(), email.trim());
-      router.replace('/(onboarding)/business');
-    }, 450);
+    // A new account has no company yet, so the root layout routes to onboarding.
+    remoteSession.signUp({ name: name.trim(), email, phone: phone.value ? toE164(phone.value) : undefined, password }).catch((err: unknown) => {
+      setBusy(false);
+      setErrors({ email: describeError(err, tr) });
+    });
   };
 
   return (

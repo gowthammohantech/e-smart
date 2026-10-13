@@ -15,6 +15,6 @@ export default async function setup() {
   await client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
   await client.query(`CREATE DATABASE "${name}"`);
   await client.end();
-  await runMigrations(url.toString());
+  await runMigrations(url.toString(), {});
   process.env.TEST_DATABASE_URL = url.toString();
 }

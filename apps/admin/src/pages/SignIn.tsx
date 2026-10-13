@@ -4,18 +4,18 @@ import { useAuth } from '../auth/AuthProvider';
 import { errorMessage } from '../lib/api';
 
 /**
- * The seeded demo owner (see `packages/db/src/seed.ts`), pre-filled on the dev
- * server only. Not `DEV`: that is true under Vitest too, and tests type their own.
+ * Prefill for the form, from VITE_DEMO_LOGIN_EMAIL / VITE_DEMO_LOGIN_PASSWORD.
+ * Vite compiles them into the bundle, where anyone can read them: set them
+ * only on a demo or sandbox deployment. Unset, the form starts empty.
  */
-const PREFILL = import.meta.env.MODE === 'development';
-const DEV_EMAIL = PREFILL ? 'gowtham@vertextraders.in' : '';
-const DEV_PASSWORD = PREFILL ? 'demo1234' : '';
+const DEMO_EMAIL = import.meta.env.VITE_DEMO_LOGIN_EMAIL ?? '';
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_LOGIN_PASSWORD ?? '';
 
 export function SignIn() {
   const { state, signIn } = useAuth();
   const location = useLocation();
-  const [email, setEmail] = useState(DEV_EMAIL);
-  const [password, setPassword] = useState(DEV_PASSWORD);
+  const [email, setEmail] = useState(DEMO_EMAIL);
+  const [password, setPassword] = useState(DEMO_PASSWORD);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

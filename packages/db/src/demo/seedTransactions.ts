@@ -1,5 +1,4 @@
 import {
-  Attachment,
   AuditEvent,
   AppNotification,
   Branch,
@@ -19,13 +18,12 @@ import {
   Payment,
   PaymentMethod,
   StockMovement,
-  SyncQueueEntry,
   TaxCategory,
-} from '../types';
-import { Money, fromMajor, money, zero } from '../lib/money';
-import { addDaysISO, nowISO, today } from '../lib/date';
-import { calculateDocument } from '../domain/lineCalc';
-import { formatNumber } from '../domain/numbering';
+} from '@esmart/core/types';
+import { Money, fromMajor, money, zero } from '@esmart/core/lib/money';
+import { addDaysISO, nowISO, today } from '@esmart/core/lib/date';
+import { calculateDocument } from '@esmart/core/domain/lineCalc';
+import { formatNumber } from '@esmart/core/domain/numbering';
 import {
   EInvoiceContext,
   buildSignedQrPayload,
@@ -35,15 +33,15 @@ import {
   isEInvoiceApplicable,
   mainHsnCodeOf,
   portalDateTime,
-} from '../domain/eInvoice';
+} from '@esmart/core/domain/eInvoice';
 import {
   ewayBillStatusAt,
   ewayDocTypeFor,
   subSupplyTypeFor,
   validUptoFor,
-} from '../domain/ewayBill';
-import { ackNoFrom, ewayBillNumberFrom } from '../domain/irpAdapter';
-import { uid } from '../lib/id';
+} from '@esmart/core/domain/ewayBill';
+import { ackNoFrom, ewayBillNumberFrom } from '@esmart/core/domain/irpAdapter';
+import { uid } from '@esmart/core/lib/id';
 import { PRIMARY_COMPANY_ID, SECOND_COMPANY_ID, CURRENT_USER_ID } from './seed';
 import { makeRng } from './rng';
 
@@ -834,25 +832,6 @@ export function seedAudit(
   });
 
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function seedSyncQueue(): SyncQueueEntry[] {
-  return [
-    {
-      id: uid('sq'),
-      label: 'Expense EXP/26-27/0025 — Fuel',
-      entityType: 'expense',
-      entityId: 'pending_1',
-      action: 'create',
-      status: 'pending',
-      attempts: 1,
-      queuedAt: nowISO(),
-    },
-  ];
-}
-
-export function seedAttachments(): Attachment[] {
-  return [];
 }
 
 /* ------------------------------------------------------------------ */
