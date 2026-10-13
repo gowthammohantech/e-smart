@@ -32,9 +32,11 @@ const Env = z.object({
   DEMO_OTP: bool.default(false),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(300),
 
-  SMS_PROVIDER: z.enum(['log', 'msg91']).default('log'),
+  SMS_PROVIDER: z.enum(['log', 'msg91', 'pay4sms']).default('log'),
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_TEMPLATE_ID: z.string().optional(),
+  /** The only Pay4SMS secret; sender, template and URL are fixed in providers/pay4sms.ts. */
+  PAY4SMS_TOKEN: z.string().optional(),
   EMAIL_PROVIDER: z.enum(['log', 'ses', 'acs']).default('log'),
   /** Azure Communication Services: `endpoint=https://…;accesskey=…`. */
   ACS_CONNECTION_STRING: z.string().optional(),
@@ -79,6 +81,10 @@ const Env = z.object({
   LIXI_MAX_TOOL_ROUNDS: z.coerce.number().int().min(1).max(20).default(8),
   /** Lixi questions per user per minute; each one can cost several model calls. */
   LIXI_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(20),
+}).superRefine((env, ctx) => {
+  if (env.SMS_PROVIDER === 'pay4sms' && !env.PAY4SMS_TOKEN?.trim()) {
+    ctx.addIssue({ code: 'custom', path: ['PAY4SMS_TOKEN'], message: 'PAY4SMS_TOKEN must be set for SMS_PROVIDER=pay4sms.' });
+  }
 });
 
 export type Config = z.infer<typeof Env>;

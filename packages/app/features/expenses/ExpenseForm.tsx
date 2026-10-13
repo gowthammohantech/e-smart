@@ -37,6 +37,7 @@ import {
   useTaxCategories,
 } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../navigation/useGoBack';
 
 const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
   { value: 'none', label: 'Does not repeat' },
@@ -63,6 +64,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'purchases', 'common']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
@@ -213,7 +215,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       return;
     }
     toast.show(expense ? 'Expense updated' : 'Expense recorded', 'success');
-    if (expense) router.back();
+    if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };
 
@@ -473,7 +475,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
 
         {desktop ? (
           <FormActions>
-            <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => router.back()} />
+            <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
             <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} />
           </FormActions>
         ) : (

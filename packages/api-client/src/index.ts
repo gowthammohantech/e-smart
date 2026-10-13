@@ -39,6 +39,14 @@ function isPublic(url: string, baseUrl: string): boolean {
   return PUBLIC_PREFIXES.some((p) => path.startsWith(p)) && !path.startsWith('/auth/sign-out');
 }
 
+/** The same response as the global Response class, which some fetch implementations (expo/fetch) don't return. */
+async function asStandardResponse(res: Pick<Response, 'status' | 'statusText' | 'headers' | 'arrayBuffer'>): Promise<Response> {
+  if (res instanceof Response) return res;
+  // These statuses can't carry a body; the Response constructor rejects one.
+  const body = [204, 205, 304].includes(res.status) ? null : await res.arrayBuffer();
+  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
 /**
  * The typed client. Every call is checked against the contract at compile
  * time: `api.GET('/companies/{companyId}/parties', { params: { path: { companyId } } })`.
@@ -84,6 +92,7 @@ export function createApiClient(options: ApiClientOptions) {
       return request;
     },
     async onResponse({ request, response }) {
+      let retried: Response | undefined;
       if (response.status === 401 && !isPublic(request.url, options.baseUrl)) {
         refreshing ??= refresh().finally(() => {
           refreshing = null;
@@ -92,17 +101,22 @@ export function createApiClient(options: ApiClientOptions) {
         const copy = unsent.get(request);
         if (tokens && copy) {
           copy.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
-          response = await fetchImpl(copy);
+          retried = await fetchImpl(copy);
         }
       }
-      if (!response.ok) {
-        const type = response.headers.get('content-type') ?? '';
+      const final = retried ?? response;
+      if (!final.ok) {
+        const type = final.headers.get('content-type') ?? '';
         const problem: Problem = type.includes('json')
-          ? ((await response.clone().json()) as Problem)
-          : { status: response.status, title: response.statusText };
-        throw new ApiError(response.status, problem);
+          ? ((await final.clone().json()) as Problem)
+          : { status: final.status, title: final.statusText };
+        throw new ApiError(final.status, problem);
       }
-      return response;
+      // openapi-fetch only takes a returned value that is `instanceof Response`.
+      // In Expo, fetch comes from expo/fetch and its responses aren't the global
+      // Response, so hand back nothing when the response is unchanged and a
+      // standard Response when the retry replaced it.
+      return retried ? asStandardResponse(retried) : undefined;
     },
   };
 

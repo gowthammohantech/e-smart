@@ -10,6 +10,7 @@ import { canOpen } from '@esmart/core/domain/plan';
 import { quickActions } from '@esmart/app/components/QuickActions';
 import { TABS, tabPath } from '@esmart/app/navigation/tabs';
 import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
+import { matchPages, SETTINGS_GROUPS, useAppPages } from '@esmart/app/navigation/pages';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
 import { useUiStore } from '@esmart/app/store/uiStore';
 
@@ -34,13 +35,17 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [index, setIndex] = useState(0);
   const { results } = useGlobalSearch(query);
   const searching = query.trim().length >= 2;
+  // Every page the sidebar reaches: its sections, the pages under them, and settings.
+  const pages = useAppPages(SETTINGS_GROUPS);
 
   const entries = useMemo<Entry[]>(() => {
     if (searching) {
+      const group = tr('nav:shell.pages');
+      const matchedPages: Entry[] = matchPages(pages, query).map((p) => ({ ...p, key: `page-${p.key}`, group }));
       // Results arrive in date order across kinds; list each kind together.
       const byGroup = new Map<string, Entry[]>();
       results.slice(0, 40).forEach((r) => byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), { ...r, key: `${r.group}-${r.id}` }]));
-      return Array.from(byGroup.values()).flat();
+      return [...matchedPages, ...Array.from(byGroup.values()).flat()];
     }
     const actions: Entry[] = quickActions(tr, t.c.primary)
       .filter((a) => allowed(a.route))
@@ -53,7 +58,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       route: tab.name === 'index' ? '/(app)/(tabs)' : `/(app)/(tabs)/${tab.name}`,
     }));
     return [...actions, ...sections];
-  }, [searching, results, tr, t.c.primary, allowed, plan]);
+  }, [searching, query, pages, results, tr, t.c.primary, allowed, plan]);
 
   const open = (entry: Entry | undefined) => {
     if (!entry) return;

@@ -18,6 +18,13 @@ import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { currencySymbol } from '@esmart/core/lib/currencies';
 import { sanitizeAmountInput } from '@esmart/core/lib/format';
+import {
+  joinPhone,
+  maxNationalDigits,
+  sanitizePhoneNumber,
+  splitPhone,
+  validPhoneParts,
+} from '@esmart/core/lib/phone';
 
 const WEB = Platform.OS === 'web';
 
@@ -163,6 +170,112 @@ export function TextField({
       </View>
     </FieldShell>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* Phone input                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A country code and a number in one box. The code is fixed (India's unless a
+ * saved number has another); the number takes digits only, no more than the
+ * code's country allows. A country picker can take the code's place later.
+ */
+export function PhoneField({
+  label,
+  dialCode,
+  value,
+  onChangeText,
+  error,
+  hint,
+  required,
+  placeholder,
+  icon = 'phone-outline',
+  onSubmitEditing,
+  containerStyle,
+}: {
+  label?: string;
+  dialCode: string;
+  /** The number without the country code, digits only. */
+  value: string;
+  onChangeText: (number: string) => void;
+  onSubmitEditing?: () => void;
+  error?: string;
+  hint?: string;
+  required?: boolean;
+  placeholder?: string;
+  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  containerStyle?: StyleProp<ViewStyle>;
+}) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
+  const [focused, setFocused] = useState(false);
+  const desktop = useIsDesktop();
+  const input: TextStyle = {
+    color: t.c.text,
+    fontSize: t.fontSize.body,
+    paddingVertical: t.spacing.sm,
+    ...WEB_INPUT_RESET,
+  };
+
+  return (
+    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: t.spacing.sm,
+          backgroundColor: desktop ? t.c.paper : t.c.card2,
+          borderRadius: t.radius.md,
+          borderWidth: 1,
+          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
+          paddingHorizontal: t.spacing.md,
+          minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 42 : 48,
+          ...webFocusHalo(t, focused && !error),
+        }}
+      >
+        {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} /> : null}
+        <Text style={{ color: t.c.text, fontSize: t.fontSize.body }} accessibilityLabel={`${tr('common:component.countryCode')} ${dialCode}`}>
+          {dialCode}
+        </Text>
+        <View style={{ width: 1, alignSelf: 'stretch', marginVertical: t.spacing.sm, backgroundColor: t.c.line }} />
+        <TextInput
+          value={value}
+          onChangeText={(v) => onChangeText(sanitizePhoneNumber(v, dialCode))}
+          keyboardType="number-pad"
+          maxLength={maxNationalDigits(dialCode)}
+          placeholder={placeholder}
+          style={[input, { flex: 1 }]}
+          placeholderTextColor={t.c.muted}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          accessibilityLabel={label}
+          textContentType="telephoneNumber"
+          autoComplete="tel-national"
+          onSubmitEditing={onSubmitEditing}
+        />
+      </View>
+    </FieldShell>
+  );
+}
+
+/**
+ * State for a PhoneField holding a saved phone (`+91 98765 43210`).
+ * `field` spreads into the PhoneField; `value` is what to save back.
+ */
+export function usePhoneInput(stored?: string) {
+  const [parts, setParts] = useState(() => splitPhone(stored));
+  return {
+    field: {
+      dialCode: parts.code,
+      value: parts.number,
+      onChangeText: (number: string) => setParts((p) => ({ ...p, number })),
+    },
+    value: joinPhone(parts.code, parts.number),
+    error: () => validPhoneParts(parts.code, parts.number),
+    /** Load another saved phone, e.g. when a sheet opens on a different record. */
+    reset: (next?: string) => setParts(splitPhone(next)),
+  };
 }
 
 /* ------------------------------------------------------------------ */

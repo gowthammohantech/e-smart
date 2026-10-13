@@ -532,7 +532,10 @@ export function DocumentEditor({
 
   const renderItems = () => (
     <View style={{ gap: t.spacing.md }}>
-      <Button title={tr('sales:editor.addItem')} icon="plus" variant="secondary" onPress={() => setItemOpen(true)} fullWidth />
+      {/* With no lines yet, the empty state's own button is the one way to add; two would repeat. */}
+      {draft.lines.length > 0 ? (
+        <Button title={tr('sales:editor.addItem')} icon="plus" variant="secondary" onPress={() => setItemOpen(true)} fullWidth />
+      ) : null}
 
       {draft.lines.length === 0 ? (
         <Card padded={false}>

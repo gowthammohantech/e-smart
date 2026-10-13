@@ -4,13 +4,13 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
-import { TextField, SwitchField } from '@esmart/ui/components/Field';
+import { PhoneField, TextField, SwitchField, usePhoneInput } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { toE164 } from '../../remote/phone';
-import { Errors, hasErrors, minLength, required, validEmail, validPhone } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, minLength, required, validEmail } from '@esmart/core/lib/validators';
 
 export default function SignUp() {
   const t = useTheme();
@@ -19,7 +19,7 @@ export default function SignUp() {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const phone = usePhoneInput();
   const [password, setPassword] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'password' | 'terms'>>({});
@@ -29,7 +29,7 @@ export default function SignUp() {
     const next: Errors<'name' | 'email' | 'phone' | 'password' | 'terms'> = {
       name: required(name, tr('errors:field.yourName')),
       email: required(email, tr('errors:field.email')) ?? validEmail(email),
-      phone: validPhone(phone),
+      phone: phone.error(),
       password: required(password, tr('errors:field.password')) ?? minLength(password, 8, tr('errors:field.password')),
       terms: accepted ? undefined : tr('auth:signUp.acceptTerms'),
     };
@@ -38,7 +38,7 @@ export default function SignUp() {
 
     setBusy(true);
     // A new account has no company yet, so the root layout routes to onboarding.
-    remoteSession.signUp({ name: name.trim(), email, phone: phone.trim() ? toE164(phone) : undefined, password }).catch((err: unknown) => {
+    remoteSession.signUp({ name: name.trim(), email, phone: phone.value ? toE164(phone.value) : undefined, password }).catch((err: unknown) => {
       setBusy(false);
       setErrors({ email: describeError(err, tr) });
     });
@@ -58,12 +58,10 @@ export default function SignUp() {
         error={errors.email}
         required
       />
-      <TextField
+      <PhoneField
         label={tr('auth:signUp.mobile')}
-        value={phone}
-        onChangeText={setPhone}
-        placeholder="+91 98765 43210"
-        keyboardType="phone-pad"
+        {...phone.field}
+        placeholder="98765 43210"
         icon="cellphone"
         error={errors.phone}
         hint={tr('auth:signUp.mobileHint')}

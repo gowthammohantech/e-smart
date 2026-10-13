@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -16,11 +16,12 @@ import { useBranches, useItems, useStockLevels } from '../../../store/selectors'
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function StockAdjust() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
-  const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
@@ -68,7 +69,7 @@ export default function StockAdjust() {
       notes: reason || undefined,
     });
     toast.show(tr('inventory:adjust.done'), 'success');
-    router.back();
+    goBack(`/(app)/catalog/items/${item.id}`);
   };
 
   return (

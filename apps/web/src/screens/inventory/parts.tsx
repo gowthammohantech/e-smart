@@ -11,13 +11,22 @@ type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 export const PAGE_MAX_WIDTH = 1100;
 
 /** A form page: a main column and a narrower side column that wraps under it when tight. */
-export function TwoColumns({ main, side }: { main: React.ReactNode; side?: React.ReactNode }) {
+export function TwoColumns({
+  main,
+  side,
+  fill = false,
+}: {
+  main: React.ReactNode;
+  side?: React.ReactNode;
+  /** Use the whole content width instead of stopping at PAGE_MAX_WIDTH. */
+  fill?: boolean;
+}) {
   const t = useTheme();
   return (
     <View
       style={{
         width: '100%',
-        maxWidth: PAGE_MAX_WIDTH,
+        maxWidth: fill ? undefined : PAGE_MAX_WIDTH,
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: t.spacing.lg,

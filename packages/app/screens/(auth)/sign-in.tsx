@@ -5,12 +5,12 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
-import { TextField, Segmented } from '@esmart/ui/components/Field';
+import { PhoneField, TextField, Segmented, usePhoneInput } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { DEMO_LOGIN, remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
-import { Errors, required, validEmail, validPhone, hasErrors } from '@esmart/core/lib/validators';
+import { Errors, required, validEmail, hasErrors } from '@esmart/core/lib/validators';
 
 type Mode = 'email' | 'phone';
 
@@ -24,7 +24,7 @@ export default function SignIn() {
   // Prefilled only on builds that set EXPO_PUBLIC_DEMO_LOGIN_* (demo and sandbox deployments).
   const [email, setEmail] = useState(DEMO_LOGIN.email);
   const [password, setPassword] = useState(DEMO_LOGIN.password);
-  const [phone, setPhone] = useState('');
+  const phone = usePhoneInput();
   const [errors, setErrors] = useState<Errors<'email' | 'password' | 'phone'>>({});
   const [busy, setBusy] = useState(false);
 
@@ -44,10 +44,10 @@ export default function SignIn() {
   };
 
   const submitPhone = () => {
-    const next = { phone: required(phone, tr('errors:field.phoneNumber')) ?? validPhone(phone) };
+    const next = { phone: required(phone.field.value, tr('errors:field.phoneNumber')) ?? phone.error() };
     setErrors(next);
     if (hasErrors(next)) return;
-    router.push({ pathname: '/(auth)/otp', params: { phone } });
+    router.push({ pathname: '/(auth)/otp', params: { phone: phone.value } });
   };
 
   return (
@@ -105,12 +105,10 @@ export default function SignIn() {
         </View>
       ) : (
         <View style={{ gap: t.spacing.lg }}>
-          <TextField
+          <PhoneField
             label={tr('auth:signIn.mobile')}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="+91 98765 43210"
-            keyboardType="phone-pad"
+            {...phone.field}
+            placeholder="98765 43210"
             icon="cellphone"
             error={errors.phone}
             hint={tr('auth:signIn.otpHint')}

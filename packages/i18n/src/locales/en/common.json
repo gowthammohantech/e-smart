@@ -112,10 +112,12 @@
     "skip": "Skip",
     "noChartData": "No data for this period",
     "quantity": "Quantity",
+    "countryCode": "Country code",
     "useTyped": "Use “{{value}}”",
     "city": "City",
     "selectCity": "Select city",
-    "searchCity": "Search or type a city",
+    "searchCity": "Search for a city",
+    "noCityMatch": "This city isn’t in the list. Check the spelling, or pick the nearest city.",
     "allStates": "All states"
   },
   "totals": {

@@ -39,7 +39,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { detailRouteFor } from './DocumentEditor';
+import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
@@ -52,6 +52,7 @@ import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
+import { useGoBack } from '../../navigation/useGoBack';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
@@ -59,6 +60,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const language = useResolvedLanguage();
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -751,7 +753,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           removeDocument(doc.id);
           setConfirmDelete(false);
           toast.show(tr('sales:detail.draftDeleted'), 'success');
-          router.back();
+          goBack(listRouteFor(doc.kind));
         }}
       />
 

@@ -17,7 +17,8 @@ import { nowISO } from '@esmart/core/lib/date';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '@esmart/app/store/selectors';
-import { Divider, FormFooter, Panel, Row, SummaryRow, TwoColumns } from './parts';
+import { Divider, Panel, Row, SummaryRow, TwoColumns } from './parts';
+import { useGoBack } from '@esmart/app/navigation/useGoBack';
 
 /**
  * Add an item, laid out for a desktop: the item's identity and prices in the
@@ -29,6 +30,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const baseCurrency = useBaseCurrency();
@@ -98,15 +100,28 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
 
     saveItem(record);
     toast.show(item ? 'Item updated' : 'Item added', 'success');
-    if (item) router.back();
+    if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${record.id}`);
   };
 
   return (
     <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: tr('nav:title.newItem') }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
+      <Stack.Screen
+        options={{
+          title: item ? tr('nav:title.editNamed', { name: item.name }) : tr('nav:title.newItem'),
+          // The page's actions sit in the header, right of the title.
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+              <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/catalog/items')} />
+              <Button title={item ? 'Save changes' : 'Add item'} onPress={save} />
+            </View>
+          ),
+        }}
+      />
+      {/* Inset to line up with the page title and the header buttons. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
+          fill
           main={
             <>
               <Panel title="Item details" subtitle="What you sell and how it is identified" icon="tag-outline">
@@ -236,11 +251,6 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
             </>
           }
         />
-
-        <FormFooter>
-          <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
-          <Button title={item ? 'Save changes' : 'Add item'} onPress={save} />
-        </FormFooter>
       </ScrollView>
 
       <SelectSheet

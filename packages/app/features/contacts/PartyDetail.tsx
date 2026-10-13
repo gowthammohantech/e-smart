@@ -30,6 +30,7 @@ import { useBaseCurrency, usePartyHistory, usePayments } from '../../store/selec
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
+import { useGoBack } from '../../navigation/useGoBack';
 
 type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
@@ -38,6 +39,7 @@ export function PartyDetail({ party }: { party: Party }) {
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['contacts', 'domain']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const baseCurrency = useBaseCurrency();
@@ -464,7 +466,7 @@ export function PartyDetail({ party }: { party: Party }) {
           removeParty(party.id);
           setConfirmDelete(false);
           toast.show(tr('contacts:detail.deleted'), 'success');
-          router.back();
+          goBack('/(app)/(tabs)/contacts');
         }}
       />
     </View>

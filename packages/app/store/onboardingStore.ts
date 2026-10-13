@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Address, PlanTier } from '@esmart/core/types';
 import { moduleSetFor } from '@esmart/core/domain/plan';
 import { today } from '@esmart/core/lib/date';
+import { DEFAULT_DIAL_CODE } from '@esmart/core/lib/phone';
 
 export type OnboardingDraft = {
   name: string;
@@ -11,6 +12,9 @@ export type OnboardingDraft = {
   logoUri?: string;
   address: Address;
   email: string;
+  /** The country code, kept apart so it can become a picker. */
+  phoneDialCode: string;
+  /** The number without the code, digits only. */
   phone: string;
   country: string;
   baseCurrency: string;
@@ -56,6 +60,7 @@ const initial: OnboardingDraft = {
   plan: 'basic',
   address: emptyAddress,
   email: '',
+  phoneDialCode: DEFAULT_DIAL_CODE,
   phone: '',
   country: 'IN',
   baseCurrency: 'INR',

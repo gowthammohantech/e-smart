@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -18,11 +18,12 @@ import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function OpeningStock() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
-  const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   const insets = useSafeAreaInsets();
 
@@ -65,7 +66,7 @@ export default function OpeningStock() {
       });
     });
     toast.show(`Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`, 'success');
-    router.back();
+    goBack('/(app)/(tabs)/inventory');
   };
 
   return (

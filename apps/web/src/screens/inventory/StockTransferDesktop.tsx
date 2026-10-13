@@ -17,6 +17,7 @@ import { stockOnHand } from '@esmart/core/domain/stockLedger';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
+import { useGoBack } from '@esmart/app/navigation/useGoBack';
 
 /**
  * Branch transfer for a desktop: source and destination side by side with an
@@ -27,6 +28,7 @@ export function StockTransferDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
@@ -159,7 +161,7 @@ export function StockTransferDesktop() {
         />
 
         <FormFooter>
-          <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
+          <Button title="Cancel" variant="ghost" onPress={() => goBack(itemId ? `/(app)/catalog/items/${itemId}` : '/(app)/(tabs)/inventory')} />
           <Button
             title={tr('inventory:transfer.submit')}
             disabled={!canSave}
@@ -167,7 +169,7 @@ export function StockTransferDesktop() {
               if (!canSave || !itemId) return;
               transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
               toast.show(tr('inventory:transfer.done'), 'success');
-              router.back();
+              goBack(`/(app)/catalog/items/${itemId}`);
             }}
           />
         </FormFooter>

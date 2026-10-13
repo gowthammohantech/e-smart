@@ -1,6 +1,7 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { EmailClient } from '@azure/communication-email';
 import type { Config } from '../config';
+import { sendPay4smsOtp } from './pay4sms';
 
 export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; at: Date };
 
@@ -21,7 +22,8 @@ export class Outbox {
 export type SendResult = { providerMessageId: string };
 
 export interface SmsProvider {
-  send(to: string, text: string): Promise<SendResult>;
+  /** `meta` marks a sign-in code for providers that can only send a registered template. */
+  send(to: string, text: string, meta?: { kind: 'otp'; code: string; name?: string }): Promise<SendResult>;
 }
 export interface EmailProvider {
   send(msg: { to: string; subject: string; text: string; html?: string }): Promise<SendResult>;
@@ -45,9 +47,22 @@ export function emailAddress(from: string): string {
 let seq = 0;
 const localId = (p: string) => `${p}_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 
-export function createMessaging(config: Config, outbox: Outbox, log: (msg: string) => void) {
+export function createMessaging(config: Config, outbox: Outbox, log: (msg: string) => void, debug?: (msg: string) => void) {
   const sms: SmsProvider =
-    config.SMS_PROVIDER === 'msg91'
+    config.SMS_PROVIDER === 'pay4sms'
+      ? {
+          async send(to, text, meta) {
+            if (meta?.kind !== 'otp') {
+              // DLT: free text would be dropped silently by the operator.
+              outbox.push({ channel: 'sms', to, text });
+              log(`pay4sms: non-OTP SMS not sent, no DLT template registered [sms → ${to}] ${text}`);
+              return { providerMessageId: localId('sms') };
+            }
+            await sendPay4smsOtp(config.PAY4SMS_TOKEN ?? '', { phone: to, code: meta.code, name: meta.name }, debug);
+            return { providerMessageId: localId('pay4sms') };
+          },
+        }
+      : config.SMS_PROVIDER === 'msg91'
       ? {
           async send(to, text) {
             const res = await fetch('https://control.msg91.com/api/v5/flow/', {

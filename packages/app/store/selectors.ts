@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useAppStore } from './appStore';
+import { resolveId, useRemoteMeta } from '../remote/meta';
 import {
   BusinessDocument,
   Company,
@@ -91,8 +92,15 @@ export function useParties(kind?: 'customer' | 'supplier'): Party[] {
   );
 }
 
+/** A route's id, following the server's rename of a record first saved on this device. */
+function useCurrentId(id: string | undefined): string | undefined {
+  const aliases = useRemoteMeta((m) => m.idAliases);
+  return id ? resolveId(id, aliases) : id;
+}
+
 export function useParty(id: string | undefined): Party | undefined {
-  return useAppStore((s) => s.parties.find((p) => p.id === id));
+  const current = useCurrentId(id);
+  return useAppStore((s) => s.parties.find((p) => p.id === current));
 }
 
 export function useItems(opts: { activeOnly?: boolean } = {}): Item[] {
@@ -108,7 +116,8 @@ export function useItems(opts: { activeOnly?: boolean } = {}): Item[] {
 }
 
 export function useItem(id: string | undefined): Item | undefined {
-  return useAppStore((s) => s.items.find((i) => i.id === id));
+  const current = useCurrentId(id);
+  return useAppStore((s) => s.items.find((i) => i.id === current));
 }
 
 export function useTaxCategories() {
@@ -156,7 +165,8 @@ export function useDocuments(kind?: DocumentKind | DocumentKind[]): BusinessDocu
 }
 
 export function useDocument(id: string | undefined): BusinessDocument | undefined {
-  return useAppStore((s) => s.documents.find((d) => d.id === id));
+  const current = useCurrentId(id);
+  return useAppStore((s) => s.documents.find((d) => d.id === current));
 }
 
 export function usePayments(direction?: 'received' | 'paid'): Payment[] {
@@ -172,7 +182,8 @@ export function usePayments(direction?: 'received' | 'paid'): Payment[] {
 }
 
 export function usePayment(id: string | undefined): Payment | undefined {
-  return useAppStore((s) => s.payments.find((p) => p.id === id));
+  const current = useCurrentId(id);
+  return useAppStore((s) => s.payments.find((p) => p.id === current));
 }
 
 export function useExpenses(): Expense[] {
@@ -185,7 +196,8 @@ export function useExpenses(): Expense[] {
 }
 
 export function useExpense(id: string | undefined): Expense | undefined {
-  return useAppStore((s) => s.expenses.find((e) => e.id === id));
+  const current = useCurrentId(id);
+  return useAppStore((s) => s.expenses.find((e) => e.id === current));
 }
 
 export function useStockMovements(itemId?: string): StockMovement[] {
@@ -358,7 +370,8 @@ export function useEwayBills(filter?: { status?: EwayBillStatus; documentId?: st
 }
 
 export function useEwayBill(id: string | undefined): EwayBill | undefined {
-  return useAppStore((s) => s.ewayBills.find((b) => b.id === id));
+  const current = useCurrentId(id);
+  return useAppStore((s) => s.ewayBills.find((b) => b.id === current));
 }
 
 export function useEwayBillsForDocument(documentId: string | undefined): EwayBill[] {
