@@ -15,8 +15,11 @@ pg.types.setTypeParser(pg.types.builtins.DATE, (v) => v);
 // below 2^53, and a string would leak into every sum.
 pg.types.setTypeParser(pg.types.builtins.INT8, (v) => Number(v));
 
+// pg drops idle connections after 10s by default, so the first request after
+// a quiet spell pays a fresh TCP + TLS + auth handshake to a remote database.
+// Keep them for five minutes, and keep TCP alive so they survive NAT idling.
 export function createPool(url: string, max = 10): pg.Pool {
-  return new pg.Pool({ connectionString: url, max });
+  return new pg.Pool({ connectionString: url, max, idleTimeoutMillis: 300_000, keepAlive: true });
 }
 
 export function createDb(pool: pg.Pool): Db {
