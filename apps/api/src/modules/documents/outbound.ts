@@ -9,7 +9,7 @@ import { conflict, invalid } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
-import { addressFrom } from '../../lib/wire';
+import { requiredAddressFrom } from '../../lib/wire';
 import { companyCore, partyCore, type DocRow } from './engine';
 import { effectiveStatus, today } from './lifecycle';
 import { documentsToWire, toCoreDocument } from './wire';
@@ -39,7 +39,7 @@ export async function renderDocumentPdf(
   const eway = row.currentEwayBillId ? await db.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, row.currentEwayBillId)) : [];
   const language: LanguageCode = opts.locale ?? 'en';
   const coreBranch: Branch | undefined = branch
-    ? { id: branch.id, companyId: branch.companyId, name: branch.name, code: branch.code, address: addressFrom(branch, 'address')!, isPrimary: branch.isPrimary, phone: branch.phone ?? undefined, gstin: branch.gstin ?? undefined }
+    ? { id: branch.id, companyId: branch.companyId, name: branch.name, code: branch.code, address: requiredAddressFrom(branch, 'address'), isPrimary: branch.isPrimary, phone: branch.phone ?? undefined, gstin: branch.gstin ?? undefined }
     : undefined;
   const ewayBill = eway[0]
     ? ({ ewayBillNumber: eway[0].ewayBillNumber.trim(), validUpto: eway[0].validUpto.toISOString() } as EwayBill)

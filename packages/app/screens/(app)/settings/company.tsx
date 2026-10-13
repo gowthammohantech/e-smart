@@ -44,10 +44,10 @@ export default function CompanySettings() {
   const [email, setEmail] = useState(company?.email ?? '');
   const phone = usePhoneInput(company?.phone);
   const [website, setWebsite] = useState(company?.website ?? '');
-  const [line1, setLine1] = useState(company?.address.line1 ?? '');
-  const [city, setCity] = useState(company?.address.city ?? '');
-  const [stateCode, setStateCode] = useState(company?.address.stateCode ?? '');
-  const [postalCode, setPostalCode] = useState(company?.address.postalCode ?? '');
+  const [line1, setLine1] = useState(company?.address?.line1 ?? '');
+  const [city, setCity] = useState(company?.address?.city ?? '');
+  const [stateCode, setStateCode] = useState(company?.address?.stateCode ?? '');
+  const [postalCode, setPostalCode] = useState(company?.address?.postalCode ?? '');
   const [taxRegistered, setTaxRegistered] = useState(!!company?.taxRegistration?.registered);
   const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
   const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
@@ -94,9 +94,10 @@ export default function CompanySettings() {
         ...company.address,
         line1: line1.trim(),
         city: city.trim(),
-        state: INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? company.address.state,
+        state: INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? company.address?.state ?? '',
         stateCode: stateCode || undefined,
         postalCode: postalCode.trim(),
+        country: company.address?.country || company.country,
       },
       taxRegistration: {
         regime: country?.regime ?? 'NONE',

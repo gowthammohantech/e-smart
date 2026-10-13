@@ -13,7 +13,7 @@ import type { CompanyRow } from '../../context';
 import { planUpgradeRequired, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { addressFrom, iso } from '../../lib/wire';
+import { iso, requiredAddressFrom } from '../../lib/wire';
 import { partyToWire } from '../parties/wire';
 
 export type DocRow = typeof schema.documents.$inferSelect;
@@ -43,7 +43,7 @@ export function companyCore(row: CompanyRow): Company {
     businessType: row.businessType,
     country: row.country.trim(),
     baseCurrency: row.baseCurrency.trim(),
-    address: addressFrom(row, 'address')!,
+    address: requiredAddressFrom(row, 'address'),
     email: row.email ?? undefined,
     phone: row.phone ?? undefined,
     website: row.website ?? undefined,

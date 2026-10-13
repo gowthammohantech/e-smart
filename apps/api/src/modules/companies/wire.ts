@@ -1,7 +1,7 @@
 import type { Schema } from '@esmart/api-contract';
 import type { schema } from '@esmart/db';
 import type { Deps } from '../../context';
-import { addressFrom, addressTo, compact, versioned } from '../../lib/wire';
+import { addressTo, compact, requiredAddressFrom, versioned } from '../../lib/wire';
 
 type CompanyRow = typeof schema.companies.$inferSelect;
 type BranchRow = typeof schema.branches.$inferSelect;
@@ -17,7 +17,7 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
     businessType: row.businessType,
     country: row.country.trim(),
     baseCurrency: row.baseCurrency.trim(),
-    address: addressFrom(row, 'address')!,
+    address: requiredAddressFrom(row, 'address'),
     email: row.email,
     phone: row.phone,
     website: row.website,
@@ -71,7 +71,7 @@ export function branchToWire(row: BranchRow): Schema<'Branch'> {
     companyId: row.companyId,
     name: row.name,
     code: row.code,
-    address: addressFrom(row, 'address')!,
+    address: requiredAddressFrom(row, 'address'),
     isPrimary: row.isPrimary,
     phone: row.phone,
     gstin: row.gstin,

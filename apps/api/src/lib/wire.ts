@@ -52,16 +52,20 @@ type AddressColumns<P extends string, Req> = {
 
 /** Reads `billingLine1`, `billingCity`, … into an Address, or undefined if unset. */
 export function addressFrom<P extends string>(row: Record<string, unknown>, prefix: P): Address | undefined {
+  return row[`${prefix}Line1`] ? requiredAddressFrom(row, prefix) : undefined;
+}
+
+/** A required address: present even when line 1 is blank (e.g. only city and state were given). */
+export function requiredAddressFrom<P extends string>(row: Record<string, unknown>, prefix: P): Address {
   const r = row as Record<string, string | null | undefined>;
-  if (!r[`${prefix}Line1`]) return undefined;
   return compact({
-    line1: r[`${prefix}Line1`] as string,
+    line1: r[`${prefix}Line1`] ?? '',
     line2: r[`${prefix}Line2`] ?? undefined,
-    city: r[`${prefix}City`] as string,
-    state: r[`${prefix}State`] as string,
+    city: r[`${prefix}City`] ?? '',
+    state: r[`${prefix}State`] ?? '',
     stateCode: r[`${prefix}StateCode`] ?? undefined,
-    postalCode: r[`${prefix}PostalCode`] as string,
-    country: (r[`${prefix}Country`] as string)?.trim(),
+    postalCode: r[`${prefix}PostalCode`] ?? '',
+    country: (r[`${prefix}Country`] ?? '').trim(),
   });
 }
 

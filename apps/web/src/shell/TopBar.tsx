@@ -9,12 +9,12 @@ import { Text } from '@esmart/ui/components/Text';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { Badge } from '@esmart/ui/components/Badge';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
+import { Menu, MenuDivider, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useRemoteMeta } from '@esmart/app/remote';
-import { useActiveCompany, useBranches, useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
+import { useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
@@ -112,20 +112,14 @@ function LixiButton({ label }: { label: string }) {
 }
 
 /**
- * The desktop app's top bar: which business and branch you're in, search
- * (⌘K), sync state, Lixi, notifications and your account.
+ * The desktop app's top bar: search (⌘K), sync state, Lixi, notifications
+ * and your account. The business switcher lives at the top of the sidebar.
  */
 export function TopBar() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'common', 'onboarding']);
+  const { t: tr } = useTranslation(['nav', 'common']);
   const router = useRouter();
 
-  const company = useActiveCompany();
-  const companies = useAppStore((s) => s.companies);
-  const branches = useBranches();
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
-  const setActiveCompany = useAppStore((s) => s.setActiveCompany);
-  const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const user = useCurrentUser();
   const notifications = useNotifications();
   const unread = useUnreadCount();
@@ -136,13 +130,10 @@ export function TopBar() {
   const offline = !useRemoteMeta((m) => m.online);
   const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status !== 'synced').length);
 
-  const { setAnchor: companyAnchor, rect: companyRect, open: openCompanyMenu, close: closeCompanyMenu } = useMenuAnchor();
   const { setAnchor: bellAnchor, rect: bellRect, open: openBellMenu, close: closeBellMenu } = useMenuAnchor();
   const { setAnchor: accountAnchor, rect: accountRect, open: openAccountMenu, close: closeAccountMenu } = useMenuAnchor();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
-
-  const branch = branches.find((b) => b.id === activeBranchId);
 
   // ⌘K / Ctrl+K anywhere, or "/" outside a text field, opens search.
   useEffect(() => {
@@ -177,40 +168,6 @@ export function TopBar() {
         borderBottomColor: t.c.line,
       }}
     >
-      <Pressable
-        ref={companyAnchor}
-        onPress={openCompanyMenu}
-        accessibilityRole="button"
-        accessibilityLabel={`${tr('common:business.switch')}: ${company?.name ?? ''}`}
-        style={(state) => {
-          const { hovered, focused } = state as WebPressState;
-          return [
-            {
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: t.spacing.sm,
-              paddingVertical: 6,
-              paddingHorizontal: t.spacing.sm,
-              borderRadius: t.radius.md,
-              maxWidth: 280,
-              backgroundColor: hovered ? t.c.card2 : 'transparent',
-            },
-            focusRing(t, focused),
-          ];
-        }}
-      >
-        <Avatar name={company?.name ?? '?'} size={30} />
-        <View style={{ flexShrink: 1 }}>
-          <Text variant="small" weight="700" numberOfLines={1}>
-            {company?.name ?? tr('common:component.business')}
-          </Text>
-          <Text variant="micro" tone="muted" numberOfLines={1}>
-            {branch?.name ?? tr('common:component.allBranches')} · {company?.baseCurrency}
-          </Text>
-        </View>
-        <MaterialCommunityIcons name="unfold-more-horizontal" size={16} color={t.c.muted} />
-      </Pressable>
-
       <Pressable
         onPress={() => setPaletteOpen(true)}
         accessibilityRole="search"
@@ -263,51 +220,6 @@ export function TopBar() {
       >
         <Avatar name={user?.name ?? '?'} size={34} color={user?.avatarColor} />
       </Pressable>
-
-      <Menu anchor={companyRect} onClose={closeCompanyMenu} width={300}>
-        <MenuSection title={tr('nav:shell.businesses')} />
-        {companies.map((c) => (
-          <MenuItem
-            key={c.id}
-            icon="domain"
-            label={c.name}
-            description={`${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`}
-            selected={c.id === company?.id}
-            onPress={() => {
-              setActiveCompany(c.id);
-              closeCompanyMenu();
-            }}
-          />
-        ))}
-        {branches.length > 0 ? (
-          <>
-            <MenuDivider />
-            <MenuSection title={tr('nav:shell.branches')} />
-            {branches.map((b) => (
-              <MenuItem
-                key={b.id}
-                icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
-                label={b.name}
-                description={b.code}
-                selected={b.id === activeBranchId}
-                onPress={() => {
-                  setActiveBranch(b.id);
-                  closeCompanyMenu();
-                }}
-              />
-            ))}
-          </>
-        ) : null}
-        <MenuDivider />
-        <MenuItem
-          icon="cog-outline"
-          label={tr('nav:more.entry.businessProfile')}
-          onPress={() => {
-            closeCompanyMenu();
-            go('/(app)/settings/company');
-          }}
-        />
-      </Menu>
 
       <Menu anchor={bellRect} onClose={closeBellMenu} align="right" width={380}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm }}>

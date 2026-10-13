@@ -162,6 +162,15 @@
     "typeToSearch": "Type at least two characters to search pages and your records.",
     "noMatches": "No matches for “{{query}}”",
     "paletteHint": "↑↓ to move · Enter to open · Esc to close",
-    "allSettings": "All settings"
+    "allSettings": "All settings",
+    "group": {
+      "transactions": "Transactions",
+      "compliance": "Compliance",
+      "manage": "Manage"
+    },
+    "showPages": "Show {{label}} pages",
+    "hidePages": "Hide {{label}} pages",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar"
   }
 }

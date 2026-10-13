@@ -1,7 +1,7 @@
 import type { Schema } from '@esmart/api-contract';
 import type { schema } from '@esmart/db';
 import type { PartyBalance } from '../../lib/balances';
-import { addressFrom, addressTo, compact, maybeMoney, money, versioned } from '../../lib/wire';
+import { addressFrom, addressTo, compact, maybeMoney, money, requiredAddressFrom, versioned } from '../../lib/wire';
 
 type PartyRow = typeof schema.parties.$inferSelect;
 
@@ -19,7 +19,7 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
     email: row.email,
     phone: row.phone,
     currency,
-    billingAddress: addressFrom(row, 'billing')!,
+    billingAddress: requiredAddressFrom(row, 'billing'),
     shippingAddress: addressFrom(row, 'shipping'),
     creditLimit: maybeMoney(row.creditLimitMinor, currency),
     openingBalance: money(row.openingBalanceMinor, currency),
