@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { PhoneField, TextField, SwitchField, usePhoneInput } from '@esmart/ui/components/Field';
@@ -19,7 +19,10 @@ export default function SignUp() {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const phone = usePhoneInput();
+  // Arriving from a verified OTP, the phone is already proven and can't be changed.
+  const { phone: verifiedPhone, verificationId } = useLocalSearchParams<{ phone?: string; verificationId?: string }>();
+  const verified = !!(verificationId && verifiedPhone);
+  const phone = usePhoneInput(verified ? verifiedPhone : undefined);
   const [password, setPassword] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'password' | 'terms'>>({});
@@ -38,10 +41,18 @@ export default function SignUp() {
 
     setBusy(true);
     // A new account has no company yet, so the root layout routes to onboarding.
-    remoteSession.signUp({ name: name.trim(), email, phone: phone.value ? toE164(phone.value) : undefined, password }).catch((err: unknown) => {
-      setBusy(false);
-      setErrors({ email: describeError(err, tr) });
-    });
+    remoteSession
+      .signUp({
+        name: name.trim(),
+        email,
+        phone: phone.value ? toE164(phone.value) : undefined,
+        phoneVerificationId: verified ? verificationId : undefined,
+        password,
+      })
+      .catch((err: unknown) => {
+        setBusy(false);
+        setErrors({ email: describeError(err, tr) });
+      });
   };
 
   return (
@@ -61,10 +72,11 @@ export default function SignUp() {
       <PhoneField
         label={tr('auth:signUp.mobile')}
         {...phone.field}
+        disabled={verified}
         placeholder="98765 43210"
-        icon="cellphone"
+        icon={verified ? 'check-circle-outline' : 'cellphone'}
         error={errors.phone}
-        hint={tr('auth:signUp.mobileHint')}
+        hint={verified ? tr('auth:signUp.mobileVerified') : tr('auth:signUp.mobileHint')}
       />
       <TextField
         label={tr('auth:signUp.password')}

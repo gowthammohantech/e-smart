@@ -14,6 +14,8 @@ const OTP_RESEND_AFTER_SECONDS = 30;
 const OTP_MAX_PER_HOUR = 5;
 const OTP_MAX_ATTEMPTS = 5;
 const RESET_TTL_MS = 3_600_000;
+// How long a verified phone may be used to finish signing up.
+const PHONE_VERIFICATION_TTL_MS = 900_000;
 
 type AnyCtx = Ctx<'signIn'>;
 
@@ -36,8 +38,20 @@ export const authHandlers = defineHandlers({
     const email = normalizeEmail(ctx.body.email);
     const [taken] = await ctx.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email));
     if (taken) throw conflict('EMAIL_TAKEN', 'An account with this email already exists');
-    if (ctx.body.phone) {
-      const [phoneTaken] = await ctx.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.phone, ctx.body.phone));
+    let phone = ctx.body.phone ?? null;
+    let phoneVerified = false;
+    if (ctx.body.phoneVerificationId) {
+      // The phone was proven by an OTP just before; it is the only number this sign-up may use.
+      const [otp] = await ctx.db.select().from(schema.otpRequests).where(eq(schema.otpRequests.id, ctx.body.phoneVerificationId));
+      if (!otp?.verifiedAt || ctx.now.getTime() - otp.verifiedAt.getTime() > PHONE_VERIFICATION_TTL_MS || (phone && phone !== otp.phone)) {
+        throw unauthorized('OTP_INVALID', 'Verify your phone number again to sign up');
+      }
+      phone = otp.phone;
+      phoneVerified = true;
+    }
+    if (phone) {
+      // A used verification fails here too: its phone now belongs to an account.
+      const [phoneTaken] = await ctx.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.phone, phone));
       if (phoneTaken) throw conflict('PHONE_TAKEN', 'This phone number is already registered');
     }
     const passwordHash = await hashPassword(ctx.body.password);
@@ -53,7 +67,8 @@ export const authHandlers = defineHandlers({
           accountId,
           name: ctx.body.name.trim(),
           email,
-          phone: ctx.body.phone ?? null,
+          phone,
+          phoneVerifiedAt: phoneVerified ? ctx.now : null,
           passwordHash,
           role: 'owner',
           avatarColor: avatarColorFor(email),
@@ -130,7 +145,7 @@ export const authHandlers = defineHandlers({
     }
     await ctx.db.update(schema.otpRequests).set({ verifiedAt: ctx.now }).where(eq(schema.otpRequests.id, otp.id));
     const [user] = await ctx.db.select().from(schema.users).where(eq(schema.users.phone, otp.phone));
-    if (!user) throw unauthorized('PHONE_NOT_REGISTERED', 'No account uses this phone number; sign up first');
+    if (!user) throw unauthorized('PHONE_NOT_REGISTERED', 'No account uses this phone number yet; finish signing up');
     if (user.status === 'disabled') throw unauthorized('USER_DISABLED', 'This user has been disabled');
     if (!user.phoneVerifiedAt) await ctx.db.update(schema.users).set({ phoneVerifiedAt: ctx.now }).where(eq(schema.users.id, user.id));
     return sessionResponse(ctx as unknown as AnyCtx, user, ctx.body.device);

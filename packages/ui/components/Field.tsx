@@ -193,6 +193,7 @@ export function PhoneField({
   icon = 'phone-outline',
   onSubmitEditing,
   containerStyle,
+  disabled,
 }: {
   label?: string;
   dialCode: string;
@@ -206,6 +207,8 @@ export function PhoneField({
   placeholder?: string;
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Shown grayed out and not editable, e.g. a phone already verified by OTP. */
+  disabled?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -225,17 +228,18 @@ export function PhoneField({
           flexDirection: 'row',
           alignItems: 'center',
           gap: t.spacing.sm,
-          backgroundColor: desktop ? t.c.paper : t.c.card2,
+          backgroundColor: disabled ? t.c.line : desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
           borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
           minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 42 : 48,
           ...webFocusHalo(t, focused && !error),
+          ...(disabled ? { opacity: 0.65 } : null),
         }}
       >
         {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} /> : null}
-        <Text style={{ color: t.c.text, fontSize: t.fontSize.body }} accessibilityLabel={`${tr('common:component.countryCode')} ${dialCode}`}>
+        <Text style={{ color: disabled ? t.c.muted : t.c.text, fontSize: t.fontSize.body }} accessibilityLabel={`${tr('common:component.countryCode')} ${dialCode}`}>
           {dialCode}
         </Text>
         <View style={{ width: 1, alignSelf: 'stretch', marginVertical: t.spacing.sm, backgroundColor: t.c.line }} />
@@ -245,11 +249,13 @@ export function PhoneField({
           keyboardType="number-pad"
           maxLength={maxNationalDigits(dialCode)}
           placeholder={placeholder}
-          style={[input, { flex: 1 }]}
+          style={[input, { flex: 1 }, disabled && { color: t.c.muted }]}
           placeholderTextColor={t.c.muted}
+          editable={!disabled}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           accessibilityLabel={label}
+          accessibilityState={{ disabled: !!disabled }}
           textContentType="telephoneNumber"
           autoComplete="tel-national"
           onSubmitEditing={onSubmitEditing}
