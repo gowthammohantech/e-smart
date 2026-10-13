@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { expenseCategories, gstCategories } from '@esmart/core/data/masters';
 import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
@@ -99,4 +100,40 @@ export async function seedCompanyDefaults(
   });
 
   await tx.insert(schema.backupSettings).values({ companyId: company.id }).onConflictDoNothing();
+}
+
+/**
+ * Puts what a new company starts with (branches, series and the seeded
+ * defaults) in the change log, so /sync/pull hands them to the apps. The app
+ * drops its own local copies once the company syncs and waits for these.
+ */
+export async function logCompanyDefaults(tx: DbOrTx, companyId: string) {
+  const rows = async (entityType: string, table: typeof schema.branches | typeof schema.numberingSeries | typeof schema.taxCategories | typeof schema.expenseCategories | typeof schema.paymentAccounts) =>
+    (await tx.select({ id: table.id, version: table.version }).from(table).where(eq(table.companyId, companyId))).map((r) => ({
+      companyId,
+      entityType,
+      entityId: r.id,
+      op: 'upsert',
+      version: r.version,
+    }));
+  // One per company: the entity id is the company id.
+  const singleton = async (entityType: string, table: typeof schema.complianceSettings | typeof schema.backupSettings) =>
+    (await tx.select({ version: table.version }).from(table).where(eq(table.companyId, companyId))).map((r) => ({
+      companyId,
+      entityType,
+      entityId: companyId,
+      op: 'upsert',
+      version: r.version,
+    }));
+
+  const changes = [
+    ...(await rows('branch', schema.branches)),
+    ...(await rows('numbering_series', schema.numberingSeries)),
+    ...(await rows('tax_category', schema.taxCategories)),
+    ...(await rows('expense_category', schema.expenseCategories)),
+    ...(await rows('payment_account', schema.paymentAccounts)),
+    ...(await singleton('compliance_settings', schema.complianceSettings)),
+    ...(await singleton('backup_settings', schema.backupSettings)),
+  ];
+  if (changes.length) await tx.insert(schema.changeLog).values(changes);
 }

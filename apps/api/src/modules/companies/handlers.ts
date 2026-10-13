@@ -12,7 +12,7 @@ import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { addressTo } from '../../lib/wire';
 import { branchHandlers } from './branches';
-import { createNumberingSeries, seedCompanyDefaults } from './defaults';
+import { createNumberingSeries, logCompanyDefaults, seedCompanyDefaults } from './defaults';
 import { logoHandlers } from './logo';
 import { branchToWire, companyColumns, companyToWire } from './wire';
 
@@ -87,6 +87,7 @@ export const companiesHandlers = defineHandlers({
       if (!me?.d) await tx.update(schema.users).set({ defaultCompanyId: companyId }).where(eq(schema.users.id, ctx.user.id));
 
       await recordChange(tx, ctx.user, { companyId, action: 'created', entityType: 'company', entityId: companyId, entityLabel: company.name, version: company.version });
+      await logCompanyDefaults(tx, companyId);
       return company;
     });
     setEtag(ctx.reply, row.version);
