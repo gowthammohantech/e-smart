@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
@@ -18,6 +18,7 @@ import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
 import { Divider, Note, Panel, SummaryRow, TwoColumns } from './parts';
+import { useGoBack } from '@esmart/app/navigation/useGoBack';
 
 /**
  * Opening stock for a desktop: every tracked item in a table with a quantity
@@ -27,7 +28,7 @@ import { Divider, Note, Panel, SummaryRow, TwoColumns } from './parts';
 export function OpeningStockDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
-  const router = useRouter();
+  const goBack = useGoBack();
   const toast = useToast();
 
   const items = useItems().filter((i) => i.trackInventory);
@@ -69,7 +70,7 @@ export function OpeningStockDesktop() {
       });
     });
     toast.show(`Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`, 'success');
-    router.back();
+    goBack('/(app)/(tabs)/inventory');
   };
 
   return (

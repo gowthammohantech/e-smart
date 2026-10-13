@@ -80,20 +80,23 @@ export const authHandlers = defineHandlers({
 
   async requestOtp(ctx) {
     const phone = ctx.body.phone.trim();
-    const hourAgo = new Date(ctx.now.getTime() - 3_600_000);
-    const [{ count }] = await ctx.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.otpRequests)
-      .where(and(eq(schema.otpRequests.phone, phone), gt(schema.otpRequests.createdAt, hourAgo)));
-    if (count >= OTP_MAX_PER_HOUR) throw tooManyRequests('Too many codes requested for this number; try again later');
-    const [latest] = await ctx.db
-      .select({ createdAt: schema.otpRequests.createdAt })
-      .from(schema.otpRequests)
-      .where(eq(schema.otpRequests.phone, phone))
-      .orderBy(desc(schema.otpRequests.createdAt))
-      .limit(1);
-    if (latest && ctx.now.getTime() - latest.createdAt.getTime() < OTP_RESEND_AFTER_SECONDS * 1000) {
-      throw tooManyRequests(`Wait ${OTP_RESEND_AFTER_SECONDS} seconds before asking for another code`);
+    // Local development is never throttled; every other environment is.
+    if (ctx.deps.config.NODE_ENV !== 'development') {
+      const hourAgo = new Date(ctx.now.getTime() - 3_600_000);
+      const [{ count }] = await ctx.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.otpRequests)
+        .where(and(eq(schema.otpRequests.phone, phone), gt(schema.otpRequests.createdAt, hourAgo)));
+      if (count >= OTP_MAX_PER_HOUR) throw tooManyRequests('Too many codes requested for this number; try again later');
+      const [latest] = await ctx.db
+        .select({ createdAt: schema.otpRequests.createdAt })
+        .from(schema.otpRequests)
+        .where(eq(schema.otpRequests.phone, phone))
+        .orderBy(desc(schema.otpRequests.createdAt))
+        .limit(1);
+      if (latest && ctx.now.getTime() - latest.createdAt.getTime() < OTP_RESEND_AFTER_SECONDS * 1000) {
+        throw tooManyRequests(`Wait ${OTP_RESEND_AFTER_SECONDS} seconds before asking for another code`);
+      }
     }
 
     const code = ctx.deps.config.DEMO_OTP ? '123456' : String(randomInt(0, 1_000_000)).padStart(6, '0');
@@ -108,7 +111,11 @@ export const authHandlers = defineHandlers({
     });
     const text = `${code} is your Elixir Books sign-in code. It expires in 5 minutes.`;
     if (channel === 'whatsapp') await ctx.deps.providers.whatsapp.send({ to: phone, text });
-    else await ctx.deps.providers.sms.send(phone, text);
+    else {
+      // Name for providers whose template greets the user; sign-ups have no user yet.
+      const [owner] = await ctx.db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.phone, phone)).limit(1);
+      await ctx.deps.providers.sms.send(phone, text, { kind: 'otp', code, name: owner?.name });
+    }
     return { requestId, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_AFTER_SECONDS };
   },
 

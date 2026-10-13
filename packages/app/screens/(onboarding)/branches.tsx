@@ -102,24 +102,6 @@ export default function BranchesStep() {
 
       <View style={{ gap: t.spacing.md }}>
         <TextField label={tr('onboarding:branches.name')} value={name} onChangeText={setName} placeholder={tr('onboarding:branches.namePlaceholder')} icon="warehouse" />
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <TextField
-            label={tr('onboarding:branches.code')}
-            value={code}
-            onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))}
-            placeholder="PUN"
-            autoCapitalize="characters"
-            containerStyle={{ flex: 1 }}
-          />
-          <CityField
-            label={tr('onboarding:branches.city')}
-            value={city}
-            onChange={setCity}
-            stateCode={stateCode}
-            placeholder={tr('onboarding:branches.cityPlaceholder')}
-            containerStyle={{ flex: 1 }}
-          />
-        </View>
         <TextField
           label={tr('settings:branches.address')}
           value={line1}
@@ -127,11 +109,20 @@ export default function BranchesStep() {
           placeholder={tr('settings:branches.addressPlaceholder')}
           icon="map-marker-outline"
         />
+        {/* State before city: the city list depends on the state. */}
+        <PickerField
+          label={tr('settings:branches.state')}
+          value={stateCode ? stateName(stateCode) : undefined}
+          onPress={() => setStateOpen(true)}
+          icon="map-outline"
+        />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <PickerField
-            label={tr('settings:branches.state')}
-            value={stateCode ? stateName(stateCode) : undefined}
-            onPress={() => setStateOpen(true)}
+          <CityField
+            label={tr('onboarding:branches.city')}
+            value={city}
+            onChange={setCity}
+            stateCode={stateCode}
+            placeholder={tr('onboarding:branches.cityPlaceholder')}
             containerStyle={{ flex: 1 }}
           />
           <TextField
@@ -144,6 +135,13 @@ export default function BranchesStep() {
             containerStyle={{ flex: 1 }}
           />
         </View>
+        <TextField
+          label={tr('onboarding:branches.code')}
+          value={code}
+          onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))}
+          placeholder="PUN"
+          autoCapitalize="characters"
+        />
         <TextField
           label={tr('settings:branches.gstin')}
           value={gstin}

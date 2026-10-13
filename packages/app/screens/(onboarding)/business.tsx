@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { WizardShell } from '@esmart/ui/components/WizardShell';
-import { TextField, PickerField } from '@esmart/ui/components/Field';
+import { TextField, PickerField, PhoneField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { Text } from '@esmart/ui/components/Text';
@@ -17,7 +17,8 @@ import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { PLANS, moduleSetFor, planInfo } from '@esmart/core/domain/plan';
 import type { PlanTier } from '@esmart/core/types';
-import { Errors, hasErrors, required, validEmail, validPhone, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
+import { validPhoneParts } from '@esmart/core/lib/phone';
 
 export default function BusinessStep() {
   const t = useTheme();
@@ -47,7 +48,7 @@ export default function BusinessStep() {
       city: required(draft.address.city, 'City'),
       state: required(draft.address.state, 'State'),
       email: validEmail(draft.email),
-      phone: validPhone(draft.phone),
+      phone: validPhoneParts(draft.phoneDialCode, draft.phone),
       postalCode: validPostalCode(draft.address.postalCode, draft.address.country),
     };
     setErrors(nextErrors);
@@ -185,13 +186,12 @@ export default function BusinessStep() {
         icon="email-outline"
         error={errors.email}
       />
-      <TextField
+      <PhoneField
         label={tr('onboarding:business.phone')}
+        dialCode={draft.phoneDialCode}
         value={draft.phone}
         onChangeText={(v) => set({ phone: v })}
-        placeholder="+91 98765 43210"
-        keyboardType="phone-pad"
-        icon="phone-outline"
+        placeholder="98765 43210"
         error={errors.phone}
       />
       </FieldRow>

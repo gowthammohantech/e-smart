@@ -50,6 +50,8 @@ export function remapIds(map: Record<string, string>) {
     session: { ...s.session, userId: s.session.userId ? (ids.get(s.session.userId) ?? s.session.userId) : null },
   } as never);
   const meta = useRemoteMeta.getState();
+  // A screen may still hold the old id (its route param), so remember where it went.
+  meta.addAliases(Object.fromEntries(ids));
   for (const [from, to] of ids) {
     if (meta.versions[from] !== undefined) {
       meta.setVersion(to, meta.versions[from]);

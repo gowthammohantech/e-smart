@@ -10,9 +10,10 @@ import { Text } from '@esmart/ui/components/Text';
 import { BrandLogo } from '@esmart/ui/components/BrandLogo';
 import { canOpen } from '@esmart/core/domain/plan';
 import { countLabel } from '@esmart/core/lib/format';
-import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
+import { TABS, tabForPath, tabPath } from '@esmart/app/navigation/tabs';
 import { usePlan } from '@esmart/app/store/selectors';
 import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth as width, useSidebarCollapsed } from './sidebarState';
+import { SECTION_LINKS, SETTINGS_HREF } from './navLinks';
 
 export { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH };
 
@@ -97,42 +98,6 @@ function NavItem({
     </Pressable>
   );
 }
-
-type SubLink = { href: string; labelKey: string };
-
-/**
- * The pages under each section, so a desktop user reaches a list in one
- * click. Only the open section shows them.
- */
-const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
-  sales: [
-    { href: '/sales/invoices', labelKey: 'nav:title.invoices' },
-    { href: '/sales/quotes', labelKey: 'nav:title.quotations' },
-    { href: '/sales/orders', labelKey: 'nav:title.salesOrders' },
-    { href: '/sales/deliveries', labelKey: 'nav:title.deliveryNotes' },
-    { href: '/sales/returns', labelKey: 'nav:title.salesReturns' },
-    { href: '/payments/received', labelKey: 'nav:title.paymentsReceived' },
-    { href: '/receivables', labelKey: 'nav:title.receivables' },
-  ],
-  purchases: [
-    { href: '/purchases/bills', labelKey: 'nav:title.purchaseBills' },
-    { href: '/purchases/orders', labelKey: 'nav:title.purchaseOrders' },
-    { href: '/purchases/receipts', labelKey: 'nav:title.goodsReceipts' },
-    { href: '/purchases/returns', labelKey: 'nav:title.purchaseReturns' },
-    { href: '/payments/made', labelKey: 'nav:title.paymentsMade' },
-    { href: '/payables', labelKey: 'nav:title.payables' },
-    { href: '/expenses', labelKey: 'nav:title.expenses' },
-  ],
-  inventory: [
-    { href: '/catalog/items', labelKey: 'nav:title.itemsAndServices' },
-    { href: '/inventory/movements', labelKey: 'nav:title.stockMovements' },
-    { href: '/inventory/low-stock', labelKey: 'nav:title.lowStock' },
-  ],
-  gst: [
-    { href: '/compliance', labelKey: 'nav:more.entry.gstCompliance' },
-    { href: '/gst/gstr1', labelKey: 'nav:title.gstr1' },
-  ],
-};
 
 function SubItem({ href, label, active }: { href: string; label: string; active: boolean }) {
   const t = useTheme();
@@ -292,7 +257,7 @@ export function Sidebar() {
           icon="cog-outline"
           label={tr('nav:shell.settings')}
           active={inSettings || current === 'more'}
-          href="/settings/company"
+          href={SETTINGS_HREF}
           compact={compact}
         />
       </View>

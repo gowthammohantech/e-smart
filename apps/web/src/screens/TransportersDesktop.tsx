@@ -9,7 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
-import { TextField } from '@esmart/ui/components/Field';
+import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -42,18 +42,20 @@ export function TransportersDesktop() {
   const [editing, setEditing] = useState<Transporter | null>(null);
   const [name, setName] = useState('');
   const [transporterId, setTransporterId] = useState('');
-  const [phone, setPhone] = useState('');
+  const phone = usePhoneInput();
   const [nameError, setNameError] = useState<string | undefined>();
   const [idError, setIdError] = useState<string | undefined>();
+  const [phoneError, setPhoneError] = useState<string | undefined>();
   const [fade] = useState(() => new Animated.Value(0));
 
   const open = (transporter?: Transporter) => {
     setEditing(transporter ?? null);
     setName(transporter?.name ?? '');
     setTransporterId(transporter?.transporterId ?? '');
-    setPhone(transporter?.phone ?? '');
+    phone.reset(transporter?.phone);
     setNameError(undefined);
     setIdError(undefined);
+    setPhoneError(undefined);
     fade.setValue(0);
     setSheetOpen(true);
     Animated.timing(fade, { toValue: 1, duration: 160, useNativeDriver: true }).start();
@@ -66,13 +68,15 @@ export function TransportersDesktop() {
     const badId = !isValidTransporterId(transporterId);
     setNameError(missingName ? 'Name is required' : undefined);
     setIdError(badId ? 'Transporter ID must be a valid 15-character GSTIN or TRANSIN' : undefined);
-    if (missingName || badId) return;
+    const badPhone = phone.error();
+    setPhoneError(badPhone);
+    if (missingName || badId || badPhone) return;
     saveTransporter({
       id: editing?.id ?? uid('trn'),
       companyId: editing?.companyId ?? activeCompanyId,
       name: name.trim(),
       transporterId: transporterId.trim().toUpperCase(),
-      phone: phone.trim() || undefined,
+      phone: phone.value || undefined,
       status: 'active',
     });
     toast.show(editing ? 'Transporter updated' : 'Transporter added', 'success');
@@ -257,13 +261,11 @@ export function TransportersDesktop() {
                   />
                 </View>
                 <View style={{ flex: 2 }}>
-                  <TextField
+                  <PhoneField
                     label={tr('settings:transporters.phone')}
-                    icon="phone-outline"
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    placeholder="+91 22 6789 1000"
+                    {...phone.field}
+                    placeholder="22 6789 1000"
+                    error={phoneError}
                   />
                 </View>
               </View>
