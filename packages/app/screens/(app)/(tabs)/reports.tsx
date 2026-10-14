@@ -26,7 +26,8 @@ import { profitSnapshot, summarizeStock } from '@esmart/core/domain/reports';
 import { lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 
 type ReportLink = {
   key: string;
@@ -64,6 +65,11 @@ export default function ReportsTab() {
   const full = useModuleSet() === 'full';
   const reports = REPORTS.filter((r) => canOpen(`/reports/${r.key}`));
   const range = resolveRange('thisFY');
+  // Always 'phone' in the native apps, so the desktop layouts below only ever reach a browser.
+  const bp = useBreakpoint();
+  const desktop = bp !== 'phone';
+  // The chart and the snapshot sit side by side once there is room for both.
+  const wide = bp === 'desktop' || bp === 'wide';
 
   const profit = useMemo(
     () => profitSnapshot(documents, expenses, items, baseCurrency, { range }),
@@ -79,6 +85,22 @@ export default function ReportsTab() {
       return { label: monthLabelNarrow(key), value: row?.profit ?? money(0, baseCurrency) };
     });
   }, [profit.byMonth, baseCurrency]);
+
+  const snapshot = [
+    { label: 'Gross profit', value: formatMoney(profit.grossProfit) },
+    { label: 'Cost of goods sold', value: formatMoney(profit.costOfGoods) },
+    { label: 'Operating expenses', value: formatMoney(profit.expenses) },
+    { label: 'Stock on hand', value: formatMoney(stock.totalValue) },
+  ];
+
+  // Three to a row on a desktop, two on a tablet, the last row padded so every card keeps the same width.
+  const perRow = wide ? 3 : 2;
+  const grid: (ReportLink | null)[][] = [];
+  for (let i = 0; i < reports.length; i += perRow) {
+    const row: (ReportLink | null)[] = reports.slice(i, i + perRow);
+    while (row.length < perRow) row.push(null);
+    grid.push(row);
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -108,6 +130,43 @@ export default function ReportsTab() {
           </StatRow>
         </StatGrid>
 
+        {wide ? (
+          // A desktop puts the snapshot beside the chart, both the same height.
+          <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: t.spacing.xl }}>
+            <View style={{ flex: 2, minWidth: 0 }}>
+              <SectionHeader title={tr('reports:hub.monthlyProfit')} action="Open" onAction={() => router.push('/(app)/reports/profit')} />
+              <Card style={{ flex: 1 }}>
+                <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />
+              </Card>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <SectionHeader title={tr('reports:hub.snapshot')} />
+              <Card style={{ flex: 1, justifyContent: 'space-around' }}>
+                {snapshot.map((row, i) => (
+                  <View
+                    key={row.label}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingVertical: t.spacing.md,
+                      borderTopWidth: i === 0 ? 0 : 0.5,
+                      borderTopColor: t.c.line,
+                    }}
+                  >
+                    <Text variant="small" tone="muted">
+                      {row.label}
+                    </Text>
+                    <Text variant="body" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                      {row.value}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            </View>
+          </View>
+        ) : (
+          <>
         <SectionHeader title={tr('reports:hub.monthlyProfit')} action="Open" onAction={() => router.push('/(app)/reports/profit')} />
         <Card>
           <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />
@@ -115,12 +174,7 @@ export default function ReportsTab() {
 
         <SectionHeader title={tr('reports:hub.snapshot')} />
         <Card style={{ gap: t.spacing.md }}>
-          {[
-            { label: 'Gross profit', value: formatMoney(profit.grossProfit) },
-            { label: 'Cost of goods sold', value: formatMoney(profit.costOfGoods) },
-            { label: 'Operating expenses', value: formatMoney(profit.expenses) },
-            { label: 'Stock on hand', value: formatMoney(stock.totalValue) },
-          ].map((row) => (
+          {snapshot.map((row) => (
             <View key={row.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="small" tone="muted">
                 {row.label}
@@ -132,9 +186,70 @@ export default function ReportsTab() {
           ))}
         </Card>
           </>
+        )}
+          </>
         ) : null}
 
         <SectionHeader title={tr('reports:hub.allReports')} />
+        {desktop ? (
+          <View style={{ gap: t.spacing.md }}>
+            {grid.map((row, ri) => (
+              <View key={ri} style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                {row.map((r, i) =>
+                  r ? (
+                    <Pressable
+                      key={r.key}
+                      onPress={() => router.push(`/(app)/reports/${r.key}`)}
+                      accessibilityRole="button"
+                      accessibilityLabel={r.label}
+                      style={(state) => {
+                        const { hovered, pressed, focused } = state as WebPressState;
+                        return {
+                          flex: 1,
+                          minWidth: 0,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: t.spacing.md,
+                          padding: t.spacing.lg,
+                          borderRadius: t.radius.lg,
+                          borderWidth: 1,
+                          borderColor: hovered ? t.c.primary : t.c.line,
+                          backgroundColor: hovered || pressed ? t.c.card2 : t.c.card,
+                          ...focusRing(t, focused),
+                        };
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: t.radius.md,
+                          backgroundColor: t.c.chip,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <MaterialCommunityIcons name={r.icon} size={22} color={t.c.primary} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                        <Text variant="body" weight="600" numberOfLines={1}>
+                          {r.label}
+                        </Text>
+                        <Text variant="caption" tone="muted" numberOfLines={2}>
+                          {r.description}
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                    </Pressable>
+                  ) : (
+                    // Sized like a card (padding and border count towards flex) so the columns line up.
+                    <View key={`pad-${i}`} style={{ flex: 1, padding: t.spacing.lg, borderWidth: 1, borderColor: 'transparent' }} />
+                  ),
+                )}
+              </View>
+            ))}
+          </View>
+        ) : (
         <Card padded={false}>
           {reports.map((r, i) => (
             <Pressable
@@ -176,6 +291,7 @@ export default function ReportsTab() {
             </Pressable>
           ))}
         </Card>
+        )}
       </ScrollView>
     </View>
   );

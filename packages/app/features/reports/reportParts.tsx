@@ -1,17 +1,51 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { createContext, useContext } from 'react';
+import { StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useBreakpoint, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable as UiDataTable } from '@esmart/ui/components/DataTable';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 
+// Set inside a ReportRow, so its sections and their cards stretch to the row's height.
+const InRow = createContext(false);
+
+/**
+ * Two report sections side by side, the same height, on a desktop browser
+ * wide enough for both. Anywhere narrower, and always on a phone, the
+ * sections simply follow each other as before. `top` keeps each section at
+ * its own height, for a short chart beside a long table.
+ */
+export function ReportRow({ children, top = false }: { children: React.ReactNode; top?: boolean }) {
+  const t = useTheme();
+  const bp = useBreakpoint();
+  if (bp !== 'desktop' && bp !== 'wide') return <>{children}</>;
+  return (
+    <InRow.Provider value={!top}>
+      <View style={{ flexDirection: 'row', alignItems: top ? 'flex-start' : 'stretch', gap: t.spacing.xl }}>
+        {React.Children.map(children, (child) => (child ? <View style={{ flex: 1, minWidth: 0 }}>{child}</View> : null))}
+      </View>
+    </InRow.Provider>
+  );
+}
+
+/** A report section's card: in a ReportRow it fills the height its neighbour sets. */
+export function SectionCard({ children, style, padded }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
+  const inRow = useContext(InRow);
+  return (
+    <Card padded={padded} style={[inRow ? { flex: 1 } : null, style]}>
+      {children}
+    </Card>
+  );
+}
+
 export function KeyFigures({ rows }: { rows: { label: string; value: string; tone?: 'good' | 'bad' | 'warn' }[] }) {
   const t = useTheme();
+  const inRow = useContext(InRow);
   return (
-    <Card style={{ gap: t.spacing.md }}>
+    // In a row the figures spread over the card's height, divided by hairlines.
+    <Card style={inRow ? { flex: 1, justifyContent: 'space-around' } : { gap: t.spacing.md }}>
       {rows.map((r, i) => (
         <View
           key={r.label}
@@ -20,6 +54,7 @@ export function KeyFigures({ rows }: { rows: { label: string; value: string; ton
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingTop: i === 0 ? 0 : 0,
+            ...(inRow ? { paddingVertical: t.spacing.md, borderTopWidth: i === 0 ? 0 : 0.5, borderTopColor: t.c.line } : null),
           }}
         >
           <Text variant="small" tone="muted">
@@ -65,8 +100,9 @@ export function HeroFigure({
 
 export function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
   const t = useTheme();
+  const inRow = useContext(InRow);
   return (
-    <View style={{ marginTop: t.spacing.xl }}>
+    <View style={{ marginTop: t.spacing.xl, flex: inRow ? 1 : undefined }}>
       <Text
         variant="caption"
         tone="muted"

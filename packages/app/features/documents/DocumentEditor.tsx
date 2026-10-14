@@ -32,7 +32,7 @@ import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
-import { stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -218,6 +218,23 @@ export function DocumentEditor({
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
   const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
   const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
+
+  // The item list shows stock at this branch when finalising this document moves
+  // stock: not for a quote or an order, nor an invoice whose stock already left
+  // with the delivery it came from.
+  const movesStock =
+    ['invoice', 'delivery', 'goodsReceipt', 'purchaseBill', 'salesReturn', 'purchaseReturn'].includes(kind) &&
+    !(draft.sourceDocumentId && movements.some((m) => m.referenceId === draft.sourceDocumentId));
+  const stockByItem = itemOpen && movesStock ? stockMap(movements, branchId) : undefined;
+  const stockNote = (item: (typeof items)[number]) => {
+    if (!stockByItem || !item.trackInventory || item.type !== 'goods') return undefined;
+    const qty = stockByItem[item.id] ?? 0;
+    if (qty <= 0) return { text: tr('sales:editor.itemOutOfStock'), tone: 'bad' as const };
+    const args = { qty: formatQty(qty), unit: item.unit };
+    return isLowStock(item, qty)
+      ? { text: tr('sales:editor.itemLowStock', args), tone: 'warn' as const }
+      : { text: tr('sales:editor.itemInStock', args), tone: 'good' as const };
+  };
   const maxReturnQty = (line: DocumentLine | null) => {
     if (!sourceDoc || !line) return undefined;
     const src = sourceDoc.lines.find((l) => (line.itemId ? l.itemId === line.itemId : l.name === line.name));
@@ -943,6 +960,7 @@ export function DocumentEditor({
                   label: i.name,
                   description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
                   trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
+                  note: stockNote(i),
                 }))
           }
           multiple

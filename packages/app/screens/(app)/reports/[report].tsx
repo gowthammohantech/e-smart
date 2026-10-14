@@ -10,10 +10,12 @@ import { BarChart, RankedBars } from '@esmart/ui/components/charts/BarChart';
 import { DonutChart } from '@esmart/ui/components/charts/DonutChart';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
 import type { ReportTable } from '../../../features/reports/reportTable';
 import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
+import { ReportDesktop } from '../../../features/reports/ReportDesktop';
 
 import {
   profitSnapshot,
@@ -62,6 +64,8 @@ export default function Report() {
   const { report } = useLocalSearchParams<{ report: string }>();
   const key = String(report);
   const meta = TITLES[key];
+  // Always false in the native apps, so the desktop layout only ever reaches a browser.
+  const desktop = useIsDesktop();
 
   const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' ? 'thisFY' : 'last90');
 
@@ -466,6 +470,16 @@ export default function Report() {
         ['Month', 'Revenue', 'Cost of goods', 'Expenses', 'Profit'],
         profit.byMonth.map((m) => [m.key, toMajor(m.revenue), toMajor(m.cost), toMajor(m.expenses), toMajor(m.profit)]),
       );
+  }
+
+  // A desktop browser gets its own layout; the phone keeps the single column above.
+  if (desktop) {
+    body = (
+      <ReportDesktop
+        report={key}
+        data={{ sales, purchases, expenseSummary, receivables, payables, stock, tax, paymentSummary, profit, parties, branches, expenseCategories }}
+      />
+    );
   }
 
   return (

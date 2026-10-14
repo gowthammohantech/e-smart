@@ -46,6 +46,7 @@ export function DataTable<T>({
   initialSort,
   scroll = true,
   rowLabel,
+  pageSize,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -60,6 +61,8 @@ export function DataTable<T>({
   scroll?: boolean;
   /** Screen-reader label for a row. */
   rowLabel?: (row: T) => string;
+  /** Shows this many rows at a time, with a pager under the table. */
+  pageSize?: number;
 }) {
   const t = useTheme();
   const breakpoint = useBreakpoint();
@@ -81,8 +84,17 @@ export function DataTable<T>({
     });
   }, [rows, sort, columns]);
 
-  const toggleSort = (key: string) =>
+  const toggleSort = (key: string) => {
     setSort((s) => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+    setPageIndex(0);
+  };
+
+  // Paged after sorting, so a sort orders every row, not just the page in view.
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageCount = pageSize ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
+  // Fewer rows than before (a narrower filter) can leave the page past the end.
+  const page = Math.min(pageIndex, pageCount - 1);
+  const visible = pageSize ? sorted.slice(page * pageSize, (page + 1) * pageSize) : sorted;
 
   const header = (
     <View
@@ -136,7 +148,7 @@ export function DataTable<T>({
     sorted.length === 0 && empty ? (
       empty
     ) : (
-      sorted.map((row, i) => {
+      visible.map((row, i) => {
         const cells = columns.map((c) => (
           <View key={c.key} style={cellStyle(c)}>
             {c.render(row)}
@@ -148,7 +160,7 @@ export function DataTable<T>({
           minHeight: 52,
           paddingHorizontal: 4,
           paddingVertical: 6,
-          borderBottomWidth: i < sorted.length - 1 || footer ? 1 : 0,
+          borderBottomWidth: i < visible.length - 1 || footer ? 1 : 0,
           borderBottomColor: t.c.line,
         };
         return onRowPress ? (
@@ -182,6 +194,61 @@ export function DataTable<T>({
     </View>
   ) : null;
 
+  const pageButton = (icon: 'chevron-left' | 'chevron-right', label: string, to: number, disabled: boolean) => (
+    <Pressable
+      onPress={() => setPageIndex(to)}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      style={(state) => {
+        const { hovered, focused } = state as WebPressState;
+        return [
+          {
+            width: 30,
+            height: 30,
+            borderRadius: t.radius.sm,
+            borderWidth: 1,
+            borderColor: t.c.line,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: hovered && !disabled ? t.c.card2 : 'transparent',
+            opacity: disabled ? 0.4 : 1,
+          },
+          focusRing(t, focused),
+        ];
+      }}
+    >
+      <MaterialCommunityIcons name={icon} size={18} color={t.c.text} />
+    </Pressable>
+  );
+
+  const pager =
+    pageSize && sorted.length > pageSize ? (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          minHeight: 48,
+          paddingHorizontal: 16,
+          borderTopWidth: 1,
+          borderTopColor: t.c.line,
+        }}
+      >
+        <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+          {`${page * pageSize + 1}–${Math.min((page + 1) * pageSize, sorted.length)} of ${sorted.length}`}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {pageButton('chevron-left', 'Previous page', page - 1, page === 0)}
+          <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'], minWidth: 64, textAlign: 'center' }}>
+            {`Page ${page + 1} of ${pageCount}`}
+          </Text>
+          {pageButton('chevron-right', 'Next page', page + 1, page >= pageCount - 1)}
+        </View>
+      </View>
+    ) : null;
+
   const content = (
     <>
       {header}
@@ -193,6 +260,7 @@ export function DataTable<T>({
         body
       )}
       {footerRow}
+      {pager}
     </>
   );
 
