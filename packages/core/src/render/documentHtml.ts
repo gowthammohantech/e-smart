@@ -193,7 +193,7 @@ export function buildDocumentHtml({
   <div class="head">
     <div>
       <div class="brand">${esc(company?.name)}</div>
-      <div class="muted">${addressBlock(branch?.address.line1 ? branch.address : company?.address)}</div>
+      <div class="muted">${addressBlock(branch?.address?.line1 ? branch.address : company?.address)}</div>
       ${company?.phone ? `<div class="muted">${esc(company.phone)}</div>` : ''}
       ${company?.email ? `<div class="muted">${esc(company.email)}</div>` : ''}
       ${sellerTaxId ? `<div style="margin-top:5px"><strong>${esc(company?.taxRegistration?.identifierLabel ?? 'GSTIN')}:</strong> ${esc(sellerTaxId)}</div>` : ''}

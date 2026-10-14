@@ -40,6 +40,8 @@ import { inRange, lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/co
 import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
+import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function Home() {
   const t = useTheme();
@@ -63,6 +65,8 @@ export default function Home() {
   const full = useModuleSet() === 'full';
 
   const [actionsOpen, setActionsOpen] = useState(false);
+  // Always false in the native apps.
+  const desktop = useIsDesktop();
 
   const thisMonth = resolveRange('thisMonth');
 
@@ -147,6 +151,20 @@ export default function Home() {
   // A business created moments ago has nothing to summarise — a wall of zeroes
   // and empty charts reads as broken, so show a first-run block instead.
   const isFirstRun = invoices.length === 0 && payments.length === 0 && expenses.length === 0;
+
+  // A desktop browser has the room for its own first-run layout; a phone keeps the one below.
+  if (isFirstRun && desktop) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+        <AppHeader />
+        <Screen bottomInset={80}>
+          <FirstRunDesktop />
+        </Screen>
+
+        <Fab icon="plus" label={tr('reports:home.invoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />
+      </View>
+    );
+  }
 
   if (isFirstRun) {
     return (

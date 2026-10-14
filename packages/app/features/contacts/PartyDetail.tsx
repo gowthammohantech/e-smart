@@ -298,7 +298,7 @@ export function PartyDetail({ party }: { party: Party }) {
         { label: 'Opening balance', value: formatMoney(party.openingBalance) },
         {
           label: 'Billing address',
-          value: [party.billingAddress.line1, party.billingAddress.city, party.billingAddress.state, party.billingAddress.postalCode]
+          value: [party.billingAddress?.line1, party.billingAddress?.city, party.billingAddress?.state, party.billingAddress?.postalCode]
             .filter(Boolean)
             .join(', ') || '—',
         },

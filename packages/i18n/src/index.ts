@@ -75,4 +75,11 @@ export function initI18n(lng: LanguageCode = FALLBACK_LANGUAGE, options: InitOpt
   return i18n;
 }
 
+/**
+ * The shared instance by name. Node code run from TypeScript source (the API
+ * under tsx) gets this package's whole module object from a default import,
+ * so it imports `{ i18nInstance }`; the default stays for the apps.
+ */
+export { i18n as i18nInstance };
+
 export default i18n;
