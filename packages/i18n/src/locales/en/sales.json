@@ -83,6 +83,7 @@
     "cancelDocument": "Cancel document",
     "pdfFailed": "Could not generate the PDF on this device",
     "draftDeleted": "Draft deleted",
+    "against": "Against {{kind}} {{number}}",
     "documentCancelled": "Document cancelled",
     "outstanding": "Outstanding",
     "items": "Items",

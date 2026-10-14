@@ -83,6 +83,7 @@
     "cancelDocument": "ஆவணத்தை ரத்து செய்",
     "pdfFailed": "இந்தச் சாதனத்தில் PDF உருவாக்க முடியவில்லை",
     "draftDeleted": "வரைவு நீக்கப்பட்டது",
+    "against": "{{kind}} {{number}} அடிப்படையில்",
     "documentCancelled": "ஆவணம் ரத்து செய்யப்பட்டது",
     "outstanding": "நிலுவை",
     "items": "பொருட்கள்",

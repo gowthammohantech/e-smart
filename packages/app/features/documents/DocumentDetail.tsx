@@ -36,6 +36,7 @@ import {
   useBaseCurrency,
   useBranches,
   useComplianceSettings,
+  useDocument,
   useParty,
   usePayments,
 } from '../../store/selectors';
@@ -67,6 +68,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const baseCurrency = useBaseCurrency();
   const branches = useBranches();
   const party = useParty(doc.partyId);
+  // The order, receipt or invoice this one was made from, e.g. the PO behind a goods receipt.
+  const sourceDoc = useDocument(doc.sourceDocumentId);
   const allPayments = usePayments();
   const ewayBill = useActiveEwayBill(doc.id);
   const complianceSettings = useComplianceSettings();
@@ -225,6 +228,18 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
               {formatDate(doc.date)}
               {branch ? ` · ${branch.name}` : ''}
             </Text>
+            {sourceDoc ? (
+              <Pressable
+                onPress={() => router.push(detailRouteFor(sourceDoc.kind, sourceDoc.id) as never)}
+                accessibilityRole="link"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 2 }}
+              >
+                <MaterialCommunityIcons name="link-variant" size={14} color={t.c.primary} />
+                <Text variant="caption" tone="primary" weight="600">
+                  {tr('sales:detail.against', { kind: documentKindLabel(tr, sourceDoc.kind, 1), number: sourceDoc.number })}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             <StatusBadge status={doc.status} />
