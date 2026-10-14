@@ -12,6 +12,27 @@
   },
   "home": {
     "firstSteps": "First steps",
+    "gettingStarted": "Getting started",
+    "welcome": "Welcome, {{name}}",
+    "welcomeBody": "{{company}} is ready. Raise your first invoice and this page fills in with your sales, collections and what you are owed.",
+    "setUpSteps": "Set up in three steps",
+    "stepsDone": "{{done}} of {{total}} done",
+    "stepNumber": "Step {{n}}",
+    "quickActions": "Quick actions",
+    "step": {
+      "customer": {
+        "title": "Add a customer",
+        "body": "Who you sell to, with their GSTIN and address for the invoice."
+      },
+      "item": {
+        "title": "Add a product or service",
+        "body": "What you sell, with its price and GST rate, so lines fill in for you."
+      },
+      "invoice": {
+        "title": "Create your first invoice",
+        "body": "Bill a customer and send it as a PDF, link or WhatsApp."
+      }
+    },
     "invoice": "Invoice",
     "thisMonth": "This month",
     "sales": "Sales",
