@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Sheet } from '../Sheet';
 import { SearchBar } from '../SearchBar';
-import { Text } from '../Text';
+import { Text, TextTone } from '../Text';
 import { EmptyState } from '../EmptyState';
 import { Button } from '../Button';
 
@@ -16,6 +16,8 @@ export type SelectOption = {
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
   trailing?: string;
   disabled?: boolean;
+  /** A coloured line under the description, e.g. an item's stock. */
+  note?: { text: string; tone?: TextTone };
 };
 
 /**
@@ -193,6 +195,11 @@ export function SelectSheet({
                 {o.description ? (
                   <Text variant="caption" tone="muted" numberOfLines={1}>
                     {o.description}
+                  </Text>
+                ) : null}
+                {o.note ? (
+                  <Text variant="caption" weight="600" tone={o.note.tone ?? 'muted'} numberOfLines={1}>
+                    {o.note.text}
                   </Text>
                 ) : null}
               </View>
