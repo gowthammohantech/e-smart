@@ -1,5 +1,5 @@
 import { and, eq, gt } from 'drizzle-orm';
-import i18n from '@esmart/i18n';
+import { i18nInstance as i18n } from '@esmart/i18n';
 import type { LanguageCode } from '@esmart/i18n/config';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 import type { Branch, EwayBill } from '@esmart/core/types';
