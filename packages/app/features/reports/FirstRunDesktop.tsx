@@ -12,6 +12,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { SectionHeader } from '@esmart/ui/components/Screen';
 import { quickActions } from '../../components/QuickActions';
+import type { Company } from '@esmart/core/types';
 import { useActiveCompany, useCanOpen, useCurrentUser, useDocuments, useItems, useParties } from '../../store/selectors';
 
 type Step = {
@@ -32,7 +33,8 @@ export function FirstRunDesktop() {
   const router = useRouter();
   const canOpen = useCanOpen();
   const user = useCurrentUser();
-  const company = useActiveCompany();
+  // Briefly undefined while signing out, before the router leaves this screen.
+  const company = useActiveCompany() as Company | undefined;
   const customers = useParties('customer');
   const items = useItems({ activeOnly: true });
   const invoices = useDocuments('invoice');
@@ -66,7 +68,7 @@ export function FirstRunDesktop() {
             <Badge label={tr('reports:home.gettingStarted')} tone="info" icon="rocket-launch-outline" />
             <Text variant="h1">{tr('reports:home.welcome', { name: user?.name?.split(' ')[0] ?? '' }).trim()}</Text>
             <Text variant="body" tone="muted" style={{ maxWidth: 520, lineHeight: 22 }}>
-              {tr('reports:home.welcomeBody', { company: company.name })}
+              {tr('reports:home.welcomeBody', { company: company?.name ?? '' })}
             </Text>
             <View style={{ flexDirection: 'row', gap: t.spacing.md, marginTop: t.spacing.sm }}>
               <Button title={tr('reports:home.step.invoice.title')} icon="file-document-edit-outline" onPress={() => router.push('/(app)/sales/invoices/new')} />
