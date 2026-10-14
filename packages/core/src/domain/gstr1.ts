@@ -206,7 +206,7 @@ export function gstr1Summary(args: {
     const placeOfSupply =
       doc.placeOfSupplyStateCode ??
       party.shippingAddress?.stateCode ??
-      party.billingAddress.stateCode ??
+      party.billingAddress?.stateCode ??
       homeState;
     const interState = !!homeState && placeOfSupply !== homeState;
     const invoiceValue = toBase(doc.totals.grandTotal, rate);

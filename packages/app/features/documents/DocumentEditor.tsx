@@ -132,7 +132,8 @@ export function DocumentEditor({
   /** What choosing a party sets on the draft; shared by the picker and `prefill`. */
   const partyFields = (p: Party, date: string, dueDate?: string): Partial<DraftState> => ({
     partyId: p.id,
-    placeOfSupplyStateCode: p.billingAddress.stateCode,
+    // A party synced from an older API can arrive without an address.
+    placeOfSupplyStateCode: p.billingAddress?.stateCode,
     currency: p.currency,
     exchangeRate: p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, date),
     dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(date, p.paymentTermsDays) : dueDate,

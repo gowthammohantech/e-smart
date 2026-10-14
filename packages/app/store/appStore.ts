@@ -743,7 +743,7 @@ export const useAppStore = create<AppState>()(
             charges: draft.charges ?? zero(draft.currency),
             applyRoundOff: draft.applyRoundOff ?? draft.currency === 'INR',
             roundOffManual: draft.roundOffManual,
-            placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress.stateCode,
+            placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress?.stateCode,
             notes: draft.notes,
             terms: draft.terms,
             attachmentIds: draft.attachmentIds ?? [],
