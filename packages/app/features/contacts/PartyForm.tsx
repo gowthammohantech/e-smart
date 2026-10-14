@@ -54,10 +54,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   );
   const overseas = registration === 'overseas';
   const needsGstin = gstinRequiredFor(registration);
-  const [country, setCountry] = useState(
-    party?.billingAddress.country && party.billingAddress.country !== 'IN' ? party.billingAddress.country : '',
-  );
-  const [region, setRegion] = useState(overseas ? (party?.billingAddress.state ?? '') : '');
+  // A party synced from an older API can arrive without an address.
+  const billing = party?.billingAddress;
+  const [country, setCountry] = useState(billing?.country && billing.country !== 'IN' ? billing.country : '');
+  const [region, setRegion] = useState(overseas ? (billing?.state ?? '') : '');
   const [countryOpen, setCountryOpen] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [email, setEmail] = useState(party?.email ?? '');
@@ -68,10 +68,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [openingBalance, setOpeningBalance] = useState(
     party?.openingBalance && party.openingBalance.minor !== 0 ? String(toMajor(party.openingBalance)) : '',
   );
-  const [line1, setLine1] = useState(party?.billingAddress.line1 ?? '');
-  const [city, setCity] = useState(party?.billingAddress.city ?? '');
-  const [stateCode, setStateCode] = useState(party?.billingAddress.stateCode ?? '');
-  const [postalCode, setPostalCode] = useState(party?.billingAddress.postalCode ?? '');
+  const [line1, setLine1] = useState(billing?.line1 ?? '');
+  const [city, setCity] = useState(billing?.city ?? '');
+  const [stateCode, setStateCode] = useState(billing?.stateCode ?? '');
+  const [postalCode, setPostalCode] = useState(billing?.postalCode ?? '');
   const [sameShipping, setSameShipping] = useState(!party?.shippingAddress);
   const [shipLine1, setShipLine1] = useState(party?.shippingAddress?.line1 ?? '');
   const [shipCity, setShipCity] = useState(party?.shippingAddress?.city ?? '');
