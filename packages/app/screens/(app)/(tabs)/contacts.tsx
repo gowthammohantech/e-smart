@@ -4,7 +4,7 @@ import { Pressable, ScrollView, SectionList, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { AppHeader } from '../../../components/AppHeader';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -114,6 +114,7 @@ export default function ContactsTab() {
       {desktop ? (
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg }}>
           <DataTable
+            pageSize={TABLE_PAGE_SIZE}
             columns={[
               {
                 key: 'name',

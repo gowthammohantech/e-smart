@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { StatTile } from '@esmart/ui/components/StatTile';
-import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, Column, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { BarChart, RankedBars } from '@esmart/ui/components/charts/BarChart';
 import { DonutChart } from '@esmart/ui/components/charts/DonutChart';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
@@ -29,9 +29,6 @@ import { Money } from '@esmart/core/lib/money';
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { useReceivables } from '../../store/selectors';
 import { KeyFigures, ReportRow, ReportSection, SectionCard } from './reportParts';
-
-/** How many rows a long table shows before its pager takes over. */
-const PAGE_SIZE = 10;
 
 type Aging = ReturnType<typeof useReceivables>;
 
@@ -422,7 +419,7 @@ function TableSection<T>({
         rowKey={rowKey}
         onRowPress={onRowPress}
         initialSort={initialSort}
-        pageSize={PAGE_SIZE}
+        pageSize={TABLE_PAGE_SIZE}
         empty={
           <View style={{ padding: t.spacing.lg }}>
             <Text variant="small" tone="muted">

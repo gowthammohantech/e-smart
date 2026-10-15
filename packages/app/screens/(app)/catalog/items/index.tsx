@@ -9,7 +9,7 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Badge } from '@esmart/ui/components/Badge';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
-import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, Column, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { Segmented } from '@esmart/ui/components/Field';
 import { useItems, useStockLevels } from '../../../../store/selectors';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
@@ -66,6 +66,7 @@ export default function ItemList() {
             </View>
           </View>
           <DataTable
+            pageSize={TABLE_PAGE_SIZE}
             columns={([
               { key: 'name', header: tr('common:table.name'), flex: 2, render: (i) => <Cell weight="600">{i.name}</Cell>, sortValue: (i) => i.name },
               { key: 'sku', header: tr('common:table.sku'), width: 130, render: (i) => <Cell tone="muted">{i.sku}</Cell>, sortValue: (i) => i.sku },

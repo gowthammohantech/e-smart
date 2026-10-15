@@ -18,7 +18,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money, sum, zero } from '@esmart/core/lib/money';
 import { dateRangeLabel, paymentMethodLabel } from '@esmart/core/labels';
 import { SHOW_SCROLLBAR, useBreakpoint, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 
@@ -163,11 +163,21 @@ export default function ExpensesList() {
             options={[{ value: 'all', label: tr('purchases:expense.allCategories') }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
             onChange={(v) => setCategoryId(v === 'all' ? null : v)}
           />
+          {/* How many match and what they add up to, at the right end of the filter row. */}
+          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+            <Text variant="small" tone="muted">
+              {`${filtered.length} entries · tax ${formatMoney(taxTotal)}`}
+            </Text>
+            <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney(total)}
+            </Text>
+          </View>
         </View>
         <SplitPane
           sideWidth={300}
           main={
             <DataTable
+              pageSize={TABLE_PAGE_SIZE}
               columns={[
                 { key: 'number', header: tr('common:table.number'), width: 150, render: (e) => <Cell weight="600">{e.number}</Cell>, sortValue: (e) => e.number },
                 { key: 'date', header: tr('common:table.date'), width: 110, render: (e) => <Cell tone="muted">{formatDate(e.date, 'dd MMM yyyy')}</Cell>, sortValue: (e) => e.date },
@@ -194,11 +204,6 @@ export default function ExpensesList() {
               rowKey={(e) => e.id}
               onRowPress={(e) => router.push(`/(app)/expenses/${e.id}`)}
               rowLabel={(e) => `${e.number}, ${formatMoney(e.amount)}`}
-              footer={{
-                number: <Cell tone="muted">{`${filtered.length} entries`}</Cell>,
-                tax: <Cell weight="600" mono>{formatMoney(taxTotal)}</Cell>,
-                amount: <Cell weight="700" mono>{formatMoney(total)}</Cell>,
-              }}
               empty={
                 <EmptyState
                   illustration="no-expenses"

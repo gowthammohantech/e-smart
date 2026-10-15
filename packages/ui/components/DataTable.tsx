@@ -23,6 +23,9 @@ export type Column<T> = {
 
 type Sort = { key: string; dir: 'asc' | 'desc' };
 
+/** Rows per page for every list table in the web app, so they all page alike. */
+export const TABLE_PAGE_SIZE = 10;
+
 function cellStyle<T>(column: Column<T>) {
   return {
     ...(column.width ? { width: column.width } : { flex: column.flex ?? 1, minWidth: 120 }),
@@ -91,6 +94,12 @@ export function DataTable<T>({
 
   // Paged after sorting, so a sort orders every row, not just the page in view.
   const [pageIndex, setPageIndex] = useState(0);
+  // A search or filter that changes the list starts it again from page 1.
+  const [pagedLength, setPagedLength] = useState(rows.length);
+  if (rows.length !== pagedLength) {
+    setPagedLength(rows.length);
+    setPageIndex(0);
+  }
   const pageCount = pageSize ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
   // Fewer rows than before (a narrower filter) can leave the page past the end.
   const page = Math.min(pageIndex, pageCount - 1);
