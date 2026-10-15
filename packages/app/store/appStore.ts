@@ -863,7 +863,8 @@ export const useAppStore = create<AppState>()(
 
         convertDocument: (id, target) => {
           const src = get().documents.find((d) => d.id === id);
-          if (!src) return '';
+          // Nothing is made from a cancelled document.
+          if (!src || src.status === 'cancelled') return '';
           const party = get().parties.find((p) => p.id === src.partyId);
           const newId = get().createDocument({
             kind: target,
