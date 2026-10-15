@@ -13,7 +13,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { Button } from '@esmart/ui/components/Button';
 import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
 import { Avatar } from '@esmart/ui/components/Avatar';
-import { Cell, DataTable, type Column } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE, type Column } from '@esmart/ui/components/DataTable';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
@@ -223,28 +223,26 @@ export function DocumentListView({
               {tr('common:table.clear')}
             </Text>
           ) : null}
+          {/* How many match and what they add up to, at the right end of the filter row. */}
+          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+            <Text variant="small" tone="muted">
+              {tr('common:documentList.count', { count: filtered.length, kind: documentKindLabel(tr, kind, filtered.length) })}
+            </Text>
+            <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney(total)}
+            </Text>
+          </View>
         </View>
 
         {headerExtra}
 
         <DataTable
+          pageSize={TABLE_PAGE_SIZE}
           columns={columns}
           rows={filtered}
           rowKey={(d) => d.id}
           onRowPress={(d) => router.push(routeFor(d) as never)}
           rowLabel={(d) => `${d.number}, ${nameOf(d.partyId)}, ${formatMoney(d.totals.grandTotal)}`}
-          footer={{
-            number: (
-              <Cell tone="muted">
-                {tr('common:documentList.count', { count: filtered.length, kind: documentKindLabel(tr, kind, filtered.length) })}
-              </Cell>
-            ),
-            amount: (
-              <Cell weight="700" mono>
-                {formatMoney(total)}
-              </Cell>
-            ),
-          }}
           empty={
             <EmptyState
               illustration="no-documents"

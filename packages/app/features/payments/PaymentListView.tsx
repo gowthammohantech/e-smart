@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -111,7 +111,17 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
           })}
         </ScrollView>
         )}
-        {desktop ? null : (
+        {desktop ? (
+          // How many match and what they add up to, at the right end of the filter row.
+          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+            <Text variant="small" tone="muted">
+              {filtered.length} payments
+            </Text>
+            <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney(total)}
+            </Text>
+          </View>
+        ) : (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
             {filtered.length} payments
@@ -126,6 +136,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
       {desktop ? (
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg }}>
           <DataTable
+            pageSize={TABLE_PAGE_SIZE}
             columns={[
               { key: 'number', header: tr('common:table.number'), width: 150, render: (p) => <Cell weight="600">{p.number}</Cell>, sortValue: (p) => p.number },
               {
@@ -171,10 +182,6 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             rowKey={(p) => p.id}
             onRowPress={(p) => router.push(`/(app)/payments/${p.id}`)}
             rowLabel={(p) => `${p.number}, ${formatMoney(p.amount)}`}
-            footer={{
-              number: <Cell tone="muted">{`${filtered.length} payments`}</Cell>,
-              amount: <Cell weight="700" mono>{formatMoney(total)}</Cell>,
-            }}
             empty={
               <EmptyState
                 illustration="no-payments"

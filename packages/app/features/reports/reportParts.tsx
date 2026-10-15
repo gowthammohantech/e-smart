@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react';
 import { StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useBreakpoint, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { Cell, DataTable as UiDataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable as UiDataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Money } from '@esmart/core/lib/money';
@@ -135,6 +135,7 @@ export function DataTable({
     return (
       <UiDataTable
         scroll={false}
+        pageSize={TABLE_PAGE_SIZE}
         columns={headers.map((h, i) => ({
           key: String(i),
           header: h,

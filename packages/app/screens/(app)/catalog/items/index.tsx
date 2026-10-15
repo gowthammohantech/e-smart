@@ -9,7 +9,8 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Badge } from '@esmart/ui/components/Badge';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, Column, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
+import { Segmented } from '@esmart/ui/components/Field';
 import { useItems, useStockLevels } from '../../../../store/selectors';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -24,24 +25,49 @@ export default function ItemList() {
   const router = useRouter();
   const items = useItems();
   const [query, setQuery] = useState('');
+  // Goods and services in their own tabs, the way Contacts splits customers and suppliers.
+  const [tab, setTab] = useState<'goods' | 'service'>('goods');
   const desktop = useIsDesktop();
   const stock = useStockLevels();
 
+  const inTab = useMemo(() => items.filter((i) => i.type === tab), [items, tab]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? items.filter((i) => `${i.name} ${i.sku} ${i.hsnCode ?? ''}`.toLowerCase().includes(q)) : items;
-  }, [items, query]);
+    return q ? inTab.filter((i) => `${i.name} ${i.sku} ${i.hsnCode ?? ''}`.toLowerCase().includes(q)) : inTab;
+  }, [inTab, query]);
+
+  const tabs = (
+    <Segmented
+      options={[
+        { value: 'goods', label: tr('inventory:catalog.items') },
+        { value: 'service', label: tr('inventory:catalog.services') },
+      ]}
+      value={tab}
+      onChange={(v) => setTab(v as 'goods' | 'service')}
+    />
+  );
+  // Nothing in this tab at all (rather than nothing matching the search).
+  const emptyTitle = inTab.length ? 'No match' : tab === 'service' ? tr('inventory:catalog.noServices') : 'No items yet';
+  const emptyMessage = inTab.length
+    ? 'No item matches that search.'
+    : tab === 'service'
+      ? tr('inventory:catalog.noServicesBody')
+      : 'Add what you sell to put it on invoices in a tap.';
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.itemsAndServices') }} />
       {desktop ? (
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
-          <View style={{ width: 340 }}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+            <View style={{ width: 260 }}>{tabs}</View>
+            <View style={{ width: 340 }}>
+              <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
+            </View>
           </View>
           <DataTable
-            columns={[
+            pageSize={TABLE_PAGE_SIZE}
+            columns={([
               { key: 'name', header: tr('common:table.name'), flex: 2, render: (i) => <Cell weight="600">{i.name}</Cell>, sortValue: (i) => i.name },
               { key: 'sku', header: tr('common:table.sku'), width: 130, render: (i) => <Cell tone="muted">{i.sku}</Cell>, sortValue: (i) => i.sku },
               { key: 'hsn', secondary: true, header: tr('common:table.hsn'), width: 120, render: (i) => <Cell tone="muted">{i.hsnCode || '—'}</Cell> },
@@ -74,20 +100,14 @@ export default function ItemList() {
                 render: (i) => <Cell weight="600" mono>{formatMoney(i.salePrice)}</Cell>,
                 sortValue: (i) => i.salePrice.minor,
               },
-            ]}
+              // A service carries no stock (nor a goods unit to show as its type), so its tab leaves those out.
+            ] satisfies Column<(typeof items)[number]>[]).filter((c) => tab === 'goods' || (c.key !== 'onHand' && c.key !== 'type'))}
             rows={filtered}
             rowKey={(i) => i.id}
             initialSort={{ key: 'name', dir: 'asc' }}
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
             rowLabel={(i) => i.name}
-            empty={
-              <EmptyState
-                illustration="no-items"
-                title={items.length ? 'No match' : 'No items yet'}
-                message={items.length ? 'No item matches that search.' : 'Add what you sell to put it on invoices in a tap.'}
-                compact
-              />
-            }
+            empty={<EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
           />
         </View>
       ) : (
@@ -96,14 +116,15 @@ export default function ItemList() {
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         keyboardShouldPersistTaps="handled"
       >
+        {tabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
         {filtered.length === 0 ? (
           <EmptyState
             illustration="no-items"
-            title={items.length ? 'No match' : 'No items yet'}
-            message={items.length ? 'No item matches that search.' : 'Add what you sell to put it on invoices in a tap.'}
-            actionLabel={items.length ? undefined : 'Add item'}
-            onAction={items.length ? undefined : () => router.push('/(app)/catalog/items/new')}
+            title={emptyTitle}
+            message={emptyMessage}
+            actionLabel={inTab.length ? undefined : 'Add item'}
+            onAction={inTab.length ? undefined : () => router.push('/(app)/catalog/items/new')}
           />
         ) : (
           <Card padded={false}>

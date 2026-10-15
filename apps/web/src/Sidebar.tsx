@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Easing, Pressable, ScrollView, useWindowDimensions, View, type ViewStyle } from 'react-native';
-import { usePathname, useRouter } from 'expo-router';
+import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
@@ -11,7 +11,7 @@ import { BrandLogo } from '@esmart/ui/components/BrandLogo';
 import { canOpen } from '@esmart/core/domain/plan';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
-import { usePlan } from '@esmart/app/store/selectors';
+import { usePayment, usePlan } from '@esmart/app/store/selectors';
 import {
   SIDEBAR_COMPACT_WIDTH,
   SIDEBAR_WIDTH,
@@ -282,9 +282,10 @@ function Flyout({
   const estHeight = (links.length ? 44 : ROW_HEIGHT) + links.length * (SUB_ROW_HEIGHT + 2);
   const top = Math.max(8, Math.min(rect.y, window.height - estHeight - 8));
   return (
-    <Pressable
-      onHoverIn={onHoverIn}
-      onHoverOut={onHoverOut}
+    <View
+      // The browser's own enter and leave, not a Pressable's hover: that one
+      // ends as the pointer reaches a link inside, which closed the menu.
+      {...({ onPointerEnter: onHoverIn, onPointerLeave: onHoverOut } as object)}
       // Only the menu needs the pointer; a bare tooltip must not catch it.
       pointerEvents={links.length ? 'auto' : 'none'}
       accessibilityRole={links.length ? 'menu' : undefined}
@@ -326,7 +327,7 @@ function Flyout({
           onNavigate={onNavigate}
         />
       ))}
-    </Pressable>
+    </View>
   );
 }
 
@@ -368,7 +369,11 @@ export function Sidebar() {
   }, [folded]);
   const compact = folded && settled;
 
-  const current = tabForPath(pathname);
+  // A payment's page, or recording one, sits under Buy when the money went out.
+  const { direction } = useGlobalSearchParams<{ direction?: string }>();
+  const [, firstSegment, paymentId] = pathname.split('/');
+  const payment = usePayment(firstSegment === 'payments' ? paymentId : undefined);
+  const current = tabForPath(pathname, payment?.direction ?? (direction === 'paid' ? 'paid' : undefined));
   const inSettings = pathname.startsWith('/settings');
 
   // Arriving in a section lists its pages, so you can see where you are.

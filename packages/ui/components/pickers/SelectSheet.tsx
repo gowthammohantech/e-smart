@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { SearchBar } from '../SearchBar';
 import { Text, TextTone } from '../Text';
 import { EmptyState } from '../EmptyState';
 import { Button } from '../Button';
+import { useToast } from '../Toast';
 
 export type SelectOption = {
   value: string;
@@ -18,7 +19,18 @@ export type SelectOption = {
   disabled?: boolean;
   /** A coloured line under the description, e.g. an item's stock. */
   note?: { text: string; tone?: TextTone };
+  /** Why this row can't be picked: shown dimmed, and tapping it shows this message instead. */
+  blocked?: string;
 };
+
+/** Hands the sheet's own toast (see Sheet `ownToasts`) out to the rows' press handlers. */
+function ToastCapture({ intoRef }: { intoRef: React.MutableRefObject<ReturnType<typeof useToast> | null> }) {
+  const toast = useToast();
+  useEffect(() => {
+    intoRef.current = toast;
+  }, [intoRef, toast]);
+  return null;
+}
 
 /**
  * Search-first selection, per the PRD UX principles. Used for every list the
@@ -66,6 +78,9 @@ export function SelectSheet({
   const [query, setQuery] = useState('');
   // Kept in tap order so whatever is confirmed arrives in the order it was picked.
   const [picked, setPicked] = useState<string[]>([]);
+  // Only a list with rows that can't be picked needs its own toasts.
+  const hasBlocked = options.some((o) => o.blocked);
+  const sheetToastRef = useRef<ReturnType<typeof useToast> | null>(null);
 
   const close = () => {
     setQuery('');
@@ -139,6 +154,7 @@ export function SelectSheet({
         )
       }
       fillHeight={showSearch}
+      ownToasts={hasBlocked}
       header={
         showSearch ? (
           <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
@@ -147,6 +163,7 @@ export function SelectSheet({
         ) : null
       }
     >
+      {hasBlocked ? <ToastCapture intoRef={sheetToastRef} /> : null}
 
       {filtered.length === 0 ? (
         (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage} compact />)
@@ -159,6 +176,10 @@ export function SelectSheet({
               key={o.value}
               disabled={o.disabled}
               onPress={() => {
+                if (o.blocked) {
+                  sheetToastRef.current?.show(o.blocked, 'error');
+                  return;
+                }
                 if (multiple) {
                   setPicked((p) => (p.includes(o.value) ? p.filter((v) => v !== o.value) : [...p, o.value]));
                   return;
@@ -167,8 +188,9 @@ export function SelectSheet({
                 close();
               }}
               accessibilityRole={multiple ? 'checkbox' : 'button'}
-              accessibilityState={multiple ? { checked, disabled: !!o.disabled } : { selected, disabled: !!o.disabled }}
+              accessibilityState={multiple ? { checked, disabled: !!o.disabled || !!o.blocked } : { selected, disabled: !!o.disabled || !!o.blocked }}
               accessibilityLabel={o.label}
+              accessibilityHint={o.blocked}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -176,8 +198,8 @@ export function SelectSheet({
                 paddingVertical: t.spacing.md,
                 paddingHorizontal: t.spacing.lg,
                 minHeight: 52,
-                backgroundColor: pressed ? t.c.card2 : 'transparent',
-                opacity: o.disabled ? 0.4 : 1,
+                backgroundColor: pressed && !o.blocked ? t.c.card2 : 'transparent',
+                opacity: o.disabled ? 0.4 : o.blocked ? 0.55 : 1,
               })}
             >
               {multiple ? (

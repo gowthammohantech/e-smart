@@ -185,7 +185,10 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   };
 
   const conversions: { target: DocumentKind; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] =
-    doc.kind === 'quote'
+    // A cancelled document no longer counts, so nothing can be made from it.
+    doc.status === 'cancelled'
+      ? []
+      : doc.kind === 'quote'
       ? [
           { target: 'salesOrder', label: 'Convert to sales order', icon: 'clipboard-list-outline' },
           { target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' },

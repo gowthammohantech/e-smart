@@ -42,6 +42,10 @@
     "continue": "Continue",
     "saveDraft": "Save draft",
     "finalise": "Finalise",
+    "finaliseShortcut": "{{keys}} to finalise",
+    "zeroValueLines": "Rate and amount must be more than 0. Fix: {{names}}",
+    "zeroTotal": "The total must be more than 0.",
+    "dateBeforeSource": "Can't be before {{date}}, the date of {{kind}} {{number}}",
     "oneOffLine": "One-off line",
     "newItem": "New item",
     "documentCurrency": "Document currency",
@@ -60,6 +64,7 @@
     "itemInStock": "{{qty}} {{unit}} in stock",
     "itemLowStock": "Low stock · {{qty}} {{unit}} left",
     "itemOutOfStock": "Out of stock",
+    "itemOutOfStockBlocked": "{{name}} is out of stock at this branch. Add stock, or turn on “Allow negative stock” in company settings.",
     "creditLimitTitle": "Credit limit exceeded",
     "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
     "creditLimitProceed": "Continue anyway",
@@ -118,7 +123,9 @@
     "nameRequired": "Enter a name for this line",
     "quantityTooHigh": "Cannot exceed {{max}}, the quantity on the original document",
     "quantityMaxHint": "Up to {{max}} can be returned",
-    "hsnFromItem": "Taken from the item master"
+    "hsnFromItem": "Taken from the item master",
+    "rateRequired": "Rate must be more than 0",
+    "discountTooHigh": "The discount takes this line to 0. Lower the discount."
   },
   "payment": {
     "selectContact": "Select contact",

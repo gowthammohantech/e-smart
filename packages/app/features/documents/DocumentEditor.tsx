@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -27,12 +27,13 @@ import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { addDaysISO } from '@esmart/core/lib/date';
+import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
-import { isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -64,6 +65,10 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
+
+/** The finalise shortcut as a Mac or a PC writes it; only a browser ever shows it. */
+const SHORTCUT_KEYS =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '') ? '⌘ + Enter' : 'Ctrl + Enter';
 
 export function DocumentEditor({
   kind,
@@ -217,6 +222,16 @@ export function DocumentEditor({
   const branch = branches.find((b) => b.id === branchId);
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
   const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  // What this one was made from (the PO behind a goods receipt, say): it can't be dated before that.
+  const madeFrom = draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  const dateBeforeSource =
+    madeFrom && draft.date < madeFrom.date
+      ? tr('sales:editor.dateBeforeSource', {
+          date: formatDate(madeFrom.date),
+          kind: documentKindLabel(tr, madeFrom.kind, 1),
+          number: madeFrom.number,
+        })
+      : undefined;
   const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
 
   // The item list shows stock at this branch when finalising this document moves
@@ -234,6 +249,13 @@ export function DocumentEditor({
     return isLowStock(item, qty)
       ? { text: tr('sales:editor.itemLowStock', args), tone: 'warn' as const }
       : { text: tr('sales:editor.itemInStock', args), tone: 'good' as const };
+  };
+  // Where finalising would refuse it anyway (stock goes out, negative stock
+  // not allowed), an item with nothing on hand can't be picked at all.
+  const outOfStockBlock = (item: (typeof items)[number]) => {
+    if (!stockByItem || company?.allowNegativeStock || !OUTBOUND_KINDS.includes(kind)) return undefined;
+    if (!item.trackInventory || item.type !== 'goods' || (stockByItem[item.id] ?? 0) > 0) return undefined;
+    return tr('sales:editor.itemOutOfStockBlocked', { name: item.name });
   };
   const maxReturnQty = (line: DocumentLine | null) => {
     if (!sourceDoc || !line) return undefined;
@@ -271,8 +293,17 @@ export function DocumentEditor({
 
   /** Lines that cannot go on a finalised tax document yet. */
   const lineProblem = (): string | undefined => {
+    if (dateBeforeSource) return dateBeforeSource;
     const unnamed = draft.lines.find((l) => !l.name.trim());
     if (unnamed) return tr('sales:line.nameRequired');
+    // Every line, and the document, must be worth something: rate, gross and
+    // net (after discount) above 0. Catches a ₹0 item added straight from the list.
+    const zero = draft.lines.filter((l) => {
+      const b = calculateLine(l, draft.currency, docTaxContext);
+      return l.unitPrice.minor <= 0 || b.gross.minor <= 0 || b.taxable.minor <= 0;
+    });
+    if (zero.length) return tr('sales:editor.zeroValueLines', { names: zero.map((l) => l.name).join(', ') });
+    if (totals.grandTotal.minor <= 0) return tr('sales:editor.zeroTotal');
     if (needsHsn) {
       const missing = draft.lines.filter((l) => validHsn(l.hsnCode, { required: true }));
       if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });
@@ -324,6 +355,32 @@ export function DocumentEditor({
     if (warning) setCreditWarning(warning);
     else setConfirmFinalize(true);
   };
+
+  // Ctrl+Enter (⌘+Enter on a Mac, shown as SHORTCUT_KEYS) does what the Finalise button does: the same
+  // checks, then the same confirmation, so nothing is finalised without it.
+  // Only while this editor is the screen in view; a phone has no keyboard for it.
+  const finalizeShortcut = useRef(() => {});
+  useEffect(() => {
+    finalizeShortcut.current = () => {
+      if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
+      // Not over another sheet (picking an item, editing a line…): finish that first.
+      if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
+      requestFinalize();
+    };
+  });
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+        e.preventDefault();
+        finalizeShortcut.current();
+      };
+      // Capturing, so it still works from inside a text field, which keeps Enter to itself.
+      document.addEventListener('keydown', onKey, true);
+      return () => document.removeEventListener('keydown', onKey, true);
+    }, []),
+  );
 
   const save = (finalize: boolean) => {
     if (!draft.partyId) return;
@@ -453,6 +510,7 @@ export function DocumentEditor({
         value={draft.date}
         onChange={(date) => patch({ date })}
         required
+        error={dateBeforeSource}
       />
 
       {kind === 'invoice' || kind === 'purchaseBill' ? (
@@ -821,7 +879,11 @@ export function DocumentEditor({
             <Stack.Screen
               options={{
                 headerRight: () => (
-                  <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+                    {/* Tells a keyboard user about the shortcut wired up above. */}
+                    <Text variant="caption" tone="muted" style={{ marginRight: t.spacing.xs }}>
+                      {tr('sales:editor.finaliseShortcut', { keys: SHORTCUT_KEYS })}
+                    </Text>
                     <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} disabled={!draft.partyId} />
                     <Button title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} disabled={!draft.partyId || draft.lines.length === 0} />
                   </View>
@@ -961,6 +1023,7 @@ export function DocumentEditor({
                   description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
                   trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
                   note: stockNote(i),
+                  blocked: outOfStockBlock(i),
                 }))
           }
           multiple

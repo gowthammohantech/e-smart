@@ -28,14 +28,17 @@ export function tabPath(name: TabName): string {
 /**
  * Which tab a pathname belongs to, so a screen deep in a stack still lights
  * up its section. Settings and the other More destinations fall under More.
+ * A payment's page can't tell from its path which way the money went, so
+ * pass `paymentDirection` for those: payments made belong under Buy.
  */
-export function tabForPath(pathname: string): TabName {
-  const first = pathname.split('/')[1] ?? '';
+export function tabForPath(pathname: string, paymentDirection?: 'received' | 'paid'): TabName {
+  const [, first = '', second] = pathname.split('/');
   switch (first) {
     case '':
       return 'index';
-    case 'sales':
     case 'payments':
+      return second === 'made' || paymentDirection === 'paid' ? 'purchases' : 'sales';
+    case 'sales':
     case 'receivables':
       return 'sales';
     case 'purchases':
