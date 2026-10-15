@@ -28,6 +28,8 @@ export type AuthUser = {
   locale: string | null;
   /** Companies the user may open. */
   companyIds: string[];
+  /** Per-business role where it differs from `role` (a member invited from another account). */
+  companyRoles?: Record<string, Role>;
   /** Branches the user is limited to; empty means every branch. */
   branchIds: string[];
   sessionId: string;

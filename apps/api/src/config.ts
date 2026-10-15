@@ -37,10 +37,14 @@ const Env = z.object({
   MSG91_TEMPLATE_ID: z.string().optional(),
   /** The only Pay4SMS secret; sender, template and URL are fixed in providers/pay4sms.ts. */
   PAY4SMS_TOKEN: z.string().optional(),
-  EMAIL_PROVIDER: z.enum(['log', 'ses', 'acs']).default('log'),
+  EMAIL_PROVIDER: z.enum(['log', 'resend', 'ses', 'acs']).default('log'),
+  /** Resend: an API key from resend.com/api-keys. EMAIL_FROM must be on a domain verified there. */
+  RESEND_API_KEY: z.string().optional(),
   /** Azure Communication Services: `endpoint=https://…;accesskey=…`. */
   ACS_CONNECTION_STRING: z.string().optional(),
   EMAIL_FROM: z.string().default('Elixir Books <no-reply@elixirbooks.example>'),
+  /** Optional: where replies to our emails go (works with Resend and Azure). */
+  EMAIL_REPLY_TO: z.string().email().optional(),
   WHATSAPP_PROVIDER: z.enum(['log', 'meta']).default('log'),
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
@@ -122,7 +126,12 @@ export function productionProblems(config: Config, env: Record<string, string | 
 
   // Credentials for the providers that were chosen.
   need(config.SMS_PROVIDER === 'msg91' && (!config.MSG91_AUTH_KEY || !config.MSG91_TEMPLATE_ID), 'MSG91_AUTH_KEY and MSG91_TEMPLATE_ID must be set for SMS_PROVIDER=msg91.');
+  need(config.EMAIL_PROVIDER === 'resend' && !config.RESEND_API_KEY, 'RESEND_API_KEY must be set for EMAIL_PROVIDER=resend.');
   need(config.EMAIL_PROVIDER === 'acs' && !config.ACS_CONNECTION_STRING, 'ACS_CONNECTION_STRING must be set for EMAIL_PROVIDER=acs.');
+  need(
+    config.EMAIL_PROVIDER === 'acs' && !!config.ACS_CONNECTION_STRING && !/endpoint=https?:\/\/[^;]+;\s*accesskey=.+/i.test(config.ACS_CONNECTION_STRING),
+    'ACS_CONNECTION_STRING must look like endpoint=https://<resource>.communication.azure.com/;accesskey=<key> (copy it from the Keys page of the Azure resource).',
+  );
   need(
     config.EMAIL_PROVIDER === 'ses' && !((env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) || env.AWS_WEB_IDENTITY_TOKEN_FILE || env.AWS_PROFILE),
     'AWS credentials (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or a role) must be set for EMAIL_PROVIDER=ses.',

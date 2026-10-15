@@ -393,6 +393,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        /** What an invitation link is for, before it is accepted */
+        get: operations["getInvite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/invites/{token}/accept": {
         parameters: {
             query?: never;
@@ -2525,6 +2544,18 @@ export interface components {
         PlanTier: "free" | "basic" | "pro" | "business";
         /** @enum {string} */
         UserRole: "owner" | "admin" | "accountant" | "sales" | "viewer";
+        InviteDetails: {
+            email: string;
+            name: string;
+            role: components["schemas"]["UserRole"];
+            inviterName: string;
+            businesses: string[];
+            companyIds: string[];
+            /** @description They already have an account; accepting needs no new password */
+            existingUser: boolean;
+            /** Format: date-time */
+            expiresAt: string;
+        };
         TaxRegistration: {
             /** @enum {string} */
             regime: "GST" | "VAT" | "NONE";
@@ -4597,6 +4628,35 @@ export interface operations {
         responses: {
             /** @description Sent */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteDetails"];
+                };
+            };
+            /** @description The link is invalid or has expired */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

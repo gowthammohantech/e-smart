@@ -64,6 +64,27 @@ export const PLANS: PlanInfo[] = [
   },
 ];
 
+/**
+ * How many people can use one business at once, owner included; null is
+ * unlimited. Matches the `users` / `businesses` copy in `plan:tier.*`.
+ */
+export const USER_LIMITS: Record<PlanTier, number | null> = {
+  free: 1,
+  basic: 2,
+  pro: 6,
+  business: null,
+};
+
+export function userLimit(tier: PlanTier): number | null {
+  return USER_LIMITS[tier];
+}
+
+/** The next tier up that allows more people, or null when `tier` is already unlimited. */
+export function nextUserPlan(tier: PlanTier): PlanTier | null {
+  const at = PLANS.findIndex((p) => p.key === tier);
+  return PLANS.slice(at + 1).find((p) => (USER_LIMITS[p.key] ?? Infinity) > (USER_LIMITS[tier] ?? Infinity))?.key ?? null;
+}
+
 /** The cheapest tier that includes the full module set — the upsell target. */
 export const FULL_PLAN: PlanTier = 'pro';
 

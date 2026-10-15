@@ -54,6 +54,15 @@ export const featureUnavailable = (detail?: string) => new ApiError(503, 'FEATUR
 export const planUpgradeRequired = (requiredPlan: PlanTier, module: string) =>
   new ApiError(403, 'PLAN_UPGRADE_REQUIRED', `The ${module} module needs the ${requiredPlan} plan`, { requiredPlan });
 
+/** The plan's user limit is used up; `requiredPlan` is the next tier that allows more people (absent when none does). */
+export const planLimitReached = (plan: PlanTier, limit: number, requiredPlan: PlanTier | null) =>
+  new ApiError(
+    403,
+    'PLAN_LIMIT_REACHED',
+    `Your ${plan} plan includes ${limit} ${limit === 1 ? 'user' : 'users'}. Upgrade your plan to add more people.`,
+    requiredPlan ? { requiredPlan } : {},
+  );
+
 /** One blocking issue, for the common single-field case. */
 export const invalid = (field: string, message: string, code = 'VALIDATION_FAILED') =>
   unprocessable([{ field, message, severity: 'blocking' }], code);

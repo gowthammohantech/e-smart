@@ -201,6 +201,10 @@
     "role": "Role",
     "removeMessage": "They immediately lose access to this business. Documents they created stay in your books.",
     "removed": "User removed",
+    "limitTitle": "Upgrade to invite more people",
+    "limitMessage_one": "Your {{plan}} plan includes {{count}} user, and that seat is taken (a pending invitation counts). Upgrade to invite more people.",
+    "limitMessage_other": "Your {{plan}} plan includes {{count}} users, and every seat is taken (pending invitations count). Upgrade to invite more people.",
+    "seePlans": "See plans",
     "rolesHeading": "What each role can do"
   },
   "profile": {

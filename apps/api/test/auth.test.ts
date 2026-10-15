@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { setupApi, signUpOwner } from './helpers';
 
 const t = setupApi();
@@ -121,5 +121,18 @@ describe('auth', () => {
     const res = await t.get('/me');
     expect(res.status).toBe(401);
     expect(res.headers['content-type']).toContain('application/problem+json');
+  });
+
+  it('emails a reset link, and answers the same when the email cannot be sent', async () => {
+    const owner = await signUpOwner(t);
+    expect((await t.post('/auth/password/forgot', { email: owner.email })).status).toBe(202);
+    const mail = t.providers.outbox.last('email', owner.email);
+    expect(mail?.subject).toContain('Reset');
+    expect(mail?.text).toMatch(/\/reset-password\?token=[\w-]+/);
+
+    const send = vi.spyOn(t.providers.email, 'send').mockRejectedValueOnce(new Error('provider down'));
+    const failed = await t.post('/auth/password/forgot', { email: owner.email });
+    send.mockRestore();
+    expect(failed.status).toBe(202);
   });
 });
