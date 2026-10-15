@@ -135,6 +135,10 @@
   },
   "catalog": {
     "search": "Search by name, SKU or HSN",
-    "service": "Service"
+    "service": "Service",
+    "items": "Items",
+    "services": "Services",
+    "noServices": "No services yet",
+    "noServicesBody": "Add the work you charge for, like installation or maintenance, to put it on invoices in a tap."
   }
 }
