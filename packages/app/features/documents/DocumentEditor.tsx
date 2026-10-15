@@ -33,6 +33,7 @@ import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -284,6 +285,14 @@ export function DocumentEditor({
   const lineProblem = (): string | undefined => {
     const unnamed = draft.lines.find((l) => !l.name.trim());
     if (unnamed) return tr('sales:line.nameRequired');
+    // Every line, and the document, must be worth something: rate, gross and
+    // net (after discount) above 0. Catches a ₹0 item added straight from the list.
+    const zero = draft.lines.filter((l) => {
+      const b = calculateLine(l, draft.currency, docTaxContext);
+      return l.unitPrice.minor <= 0 || b.gross.minor <= 0 || b.taxable.minor <= 0;
+    });
+    if (zero.length) return tr('sales:editor.zeroValueLines', { names: zero.map((l) => l.name).join(', ') });
+    if (totals.grandTotal.minor <= 0) return tr('sales:editor.zeroTotal');
     if (needsHsn) {
       const missing = draft.lines.filter((l) => validHsn(l.hsnCode, { required: true }));
       if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });

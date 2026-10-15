@@ -68,7 +68,7 @@ function LineEditorForm({
   const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; hsn?: string; quantity?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; hsn?: string; quantity?: string; rate?: string; discount?: string }>({});
   const item = useItems().find((i) => i.id === line?.itemId);
   // Services bill in 'Nos' only; one-off lines are treated as goods.
   const itemType = item?.type ?? 'goods';
@@ -106,9 +106,13 @@ function LineEditorForm({
         maxQuantity !== undefined && quantity > maxQuantity
           ? tr('sales:line.quantityTooHigh', { max: maxQuantity })
           : undefined,
+      // No line is worth nothing: the rate, and what's left after the discount, must be above 0.
+      rate: fromMajor(price || '0', currency).minor > 0 ? undefined : tr('sales:line.rateRequired'),
+      discount:
+        fromMajor(price || '0', currency).minor > 0 && preview.taxable.minor <= 0 ? tr('sales:line.discountTooHigh') : undefined,
     };
     setErrors(next);
-    if (next.name || next.hsn || next.quantity) return;
+    if (next.name || next.hsn || next.quantity || next.rate || next.discount) return;
     onSave({
       name: name.trim(),
       quantity: quantity > 0 ? quantity : 1,
@@ -194,7 +198,7 @@ function LineEditorForm({
           required={hsnRequired}
         />
 
-        <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} />
+        <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} error={errors.rate} required />
 
         <View style={{ gap: 6 }}>
           <Text variant="caption" tone="muted" weight="600">{tr('sales:line.discount')}</Text>
@@ -217,6 +221,11 @@ function LineEditorForm({
               containerStyle={{ flex: 1 }}
             />
           </View>
+          {errors.discount ? (
+            <Text variant="caption" tone="bad">
+              {errors.discount}
+            </Text>
+          ) : null}
         </View>
 
         <PickerField
