@@ -562,6 +562,20 @@ paths:
       x-roles: [owner, admin]
       responses:
         '202': { description: Sent }
+  /invites/{token}:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Users]
+      operationId: getInvite
+      security: []
+      summary: What an invitation link is for, before it is accepted
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteDetails' }
+        '400': { description: The link is invalid or has expired }
   /invites/{token}/accept:
     parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
     post:
@@ -3409,6 +3423,18 @@ components:
           oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }]
     PlanTier: { type: string, enum: [free, basic, pro, business] }
     UserRole: { type: string, enum: [owner, admin, accountant, sales, viewer] }
+    InviteDetails:
+      type: object
+      required: [email, name, role, inviterName, businesses, companyIds, existingUser, expiresAt]
+      properties:
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: '#/components/schemas/UserRole' }
+        inviterName: { type: string }
+        businesses: { type: array, items: { type: string } }
+        companyIds: { type: array, items: { type: string } }
+        existingUser: { type: boolean, description: 'They already have an account; accepting needs no new password' }
+        expiresAt: { type: string, format: date-time }
     TaxRegistration:
       type: object
       required: [regime, identifierLabel, registered]

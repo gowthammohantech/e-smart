@@ -1,4 +1,4 @@
-import { eq, inArray, isNotNull, and } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { DbOrTx } from '../../lib/audit';
@@ -36,15 +36,20 @@ export async function userToWire(db: DbOrTx, row: UserRow): Promise<Schema<'User
   });
 }
 
-/** Onboarding is done once any company the user can open has finished it. */
+/**
+ * Onboarding (setting up a business) is for someone with no business of their
+ * own to run. Anyone given access to a business, in any role, goes straight
+ * in; so does an owner whose business finished setup. Only a person with no
+ * business, or an owner partway through setting theirs up, sees onboarding.
+ */
 export async function onboardingComplete(db: DbOrTx, userId: string): Promise<boolean> {
   const rows = await db
-    .select({ id: schema.companies.id })
+    .select({ onboarded: schema.companies.onboardingCompletedAt, owner: schema.accounts.ownerUserId })
     .from(schema.companies)
     .innerJoin(schema.userCompanies, eq(schema.userCompanies.companyId, schema.companies.id))
-    .where(and(eq(schema.userCompanies.userId, userId), isNotNull(schema.companies.onboardingCompletedAt)))
-    .limit(1);
-  return rows.length > 0;
+    .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
+    .where(eq(schema.userCompanies.userId, userId));
+  return rows.some((r) => r.onboarded !== null || r.owner !== userId);
 }
 
 export async function findUsers(db: DbOrTx, ids: string[]) {

@@ -18,7 +18,7 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
   // the same instant; it keeps the rule airtight without relying on that.
   if (row.suspendedAt) throw forbidden('ACCOUNT_SUSPENDED', 'This account has been suspended. Contact support.');
   const [companies, branches] = await Promise.all([
-    deps.db.select({ id: schema.userCompanies.companyId }).from(schema.userCompanies).where(eq(schema.userCompanies.userId, row.u.id)),
+    deps.db.select({ id: schema.userCompanies.companyId, role: schema.userCompanies.role }).from(schema.userCompanies).where(eq(schema.userCompanies.userId, row.u.id)),
     deps.db.select({ id: schema.userBranches.branchId }).from(schema.userBranches).where(eq(schema.userBranches.userId, row.u.id)),
   ]);
   return {
@@ -31,6 +31,7 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
     status: row.u.status,
     locale: row.u.locale,
     companyIds: companies.map((c) => c.id),
+    companyRoles: Object.fromEntries(companies.filter((c) => c.role).map((c) => [c.id, c.role!])),
     branchIds: branches.map((b) => b.id),
     sessionId: claims.sid,
   };
@@ -62,8 +63,14 @@ export async function authenticate(app: FastifyInstance, deps: Deps, req: Fastif
 /** The company in a path, if the caller may open it. */
 export async function companyFor(deps: Deps, user: AuthUser, companyId: string): Promise<CompanyRow> {
   const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
-  if (!company || company.accountId !== user.accountId || !user.companyIds.includes(companyId)) {
+  // Membership is what grants access. It usually matches the account, but a member invited from another account has no row in their own.
+  if (!company || !user.companyIds.includes(companyId)) {
     throw forbidden('COMPANY_ACCESS_DENIED', 'You do not have access to this company');
+  }
+  if (company.accountId !== user.accountId) {
+    // Someone else's business: its account being suspended closes it to its guests too.
+    const [owner] = await deps.db.select({ suspendedAt: schema.accounts.suspendedAt }).from(schema.accounts).where(eq(schema.accounts.id, company.accountId));
+    if (owner?.suspendedAt) throw forbidden('ACCOUNT_SUSPENDED', 'This business has been suspended. Contact support.');
   }
   return company;
 }
@@ -94,7 +101,12 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
     }
 
     const companyId = (req.params as { companyId?: string }).companyId;
-    if (companyId) req.company = await companyFor(deps, user, companyId);
+    if (companyId) {
+      req.company = await companyFor(deps, user, companyId);
+      // Here they act with the role they were given in this business.
+      const here = user.companyRoles?.[companyId];
+      if (here) user.role = here;
+    }
 
     if (op.roles && !op.roles.includes(user.role)) {
       throw new ApiError(403, 'ROLE_FORBIDDEN', `This needs one of: ${op.roles.join(', ')}`);

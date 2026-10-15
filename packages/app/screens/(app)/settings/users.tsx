@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -17,8 +17,11 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { User, UserRole } from '@esmart/core/types';
+import { nextUserPlan, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
+import { remoteUsers } from '../../../remote';
+import { describeError } from '../../../remote/errors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
 import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -37,6 +40,7 @@ export default function UserSettings() {
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
+  const router = useRouter();
 
   const company = useActiveCompany();
   const currentUser = useCurrentUser();
@@ -52,37 +56,74 @@ export default function UserSettings() {
 
   const [editing, setEditing] = useState<User | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<User | null>(null);
+  const [limitOpen, setLimitOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('sales');
   const [roleOpen, setRoleOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'email'>>({});
+  const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  // A pending invitation holds its seat, as it does on the server.
+  const limit = userLimit(company.plan);
+  const seatsUsed = users.filter((u) => u.status !== 'disabled').length;
+  const atLimit = limit !== null && seatsUsed >= limit;
 
   const open = (u?: User) => {
+    if (!u && atLimit) {
+      setLimitOpen(true);
+      return;
+    }
     setEditing(u ?? ({ id: '', accountId: '', name: '', email: '', role: 'sales', companyIds: [company.id], branchIds: [], avatarColor: '#007AFF', status: 'invited' } as User));
     setName(u?.name ?? '');
     setEmail(u?.email ?? '');
     setRole(u?.role ?? 'sales');
     setErrors({});
+    setServerError(null);
   };
+
+  // Someone from another account: managed by removing and inviting again, not edited here.
+  const isGuest = !!editing?.id && !!editing.accountId && editing.accountId !== currentUser.accountId;
 
   const save = () => {
     const next: Errors<'name' | 'email'> = { name: required(name, 'Name'), email: required(email, 'Email') ?? validEmail(email) };
     setErrors(next);
     if (hasErrors(next) || !editing) return;
 
-    saveUser({
-      ...editing,
-      id: editing.id || uid('usr'),
-      accountId: editing.accountId || currentUser.accountId,
-      name: name.trim(),
-      email: email.trim(),
-      role,
-      companyIds: editing.companyIds.includes(company.id) ? editing.companyIds : [...editing.companyIds, company.id],
-      status: editing.id ? editing.status : 'invited',
-    });
-    toast.show(editing.id ? 'User updated' : 'Invitation sent', 'success');
-    setEditing(null);
+    if (editing.id) {
+      saveUser({ ...editing, name: name.trim(), role });
+      toast.show('User updated', 'success');
+      setEditing(null);
+      return;
+    }
+
+    // A new invitation goes to the server now, so its answer (plan limit, address in use,
+    // email not sent) is shown here rather than a row that appears and then disappears.
+    setBusy(true);
+    setServerError(null);
+    remoteUsers
+      .inviteUser({ name, email, role, companyIds: [company.id] })
+      .then(() => {
+        toast.show('Invitation sent', 'success');
+        setEditing(null);
+      })
+      .catch((err: unknown) => setServerError(describeError(err, tr)))
+      .finally(() => setBusy(false));
+  };
+
+  const resend = () => {
+    if (!editing?.id) return;
+    setBusy(true);
+    setServerError(null);
+    remoteUsers
+      .resendInvite(editing.id)
+      .then(() => {
+        toast.show('Invitation sent again', 'success');
+        setEditing(null);
+      })
+      .catch((err: unknown) => setServerError(describeError(err, tr)))
+      .finally(() => setBusy(false));
   };
 
   return (
@@ -96,7 +137,7 @@ export default function UserSettings() {
               key={u.id}
               title={u.name}
               subtitle={u.email}
-              meta={u.lastActiveAt ? `Last active ${formatRelative(u.lastActiveAt.slice(0, 10))}` : 'Invitation pending'}
+              meta={u.lastActiveAt ? `Last active ${formatRelative(u.lastActiveAt.slice(0, 10))}` : u.status === 'invited' ? 'Invitation pending' : undefined}
               left={<Avatar name={u.name} size={40} color={u.avatarColor} />}
               divider={i < users.length - 1}
               right={
@@ -146,7 +187,10 @@ export default function UserSettings() {
                 }}
               />
             ) : null}
-            <Button title={editing?.id ? 'Save' : 'Send invitation'} onPress={save} style={{ flex: 2 }} />
+            {editing?.id && editing.status === 'invited' ? (
+              <Button title="Resend invite" variant="secondary" loading={busy} onPress={resend} style={{ flex: 2 }} />
+            ) : null}
+            {isGuest ? null : <Button title={editing?.id ? 'Save' : 'Send invitation'} onPress={save} loading={busy} style={{ flex: 2 }} />}
           </View>
         }
       >
@@ -170,6 +214,16 @@ export default function UserSettings() {
             icon="shield-account-outline"
             hint={ROLES.find((r) => r.value === role)?.description}
           />
+          {isGuest ? (
+            <Text variant="small" tone="muted">
+              This person has their own Elixir Books account. To change their access, remove them and invite them again.
+            </Text>
+          ) : null}
+          {serverError ? (
+            <Text variant="small" tone="bad">
+              {serverError}
+            </Text>
+          ) : null}
         </View>
       </Sheet>
 
@@ -181,6 +235,18 @@ export default function UserSettings() {
         value={role}
         onSelect={(v) => setRole(v as UserRole)}
         searchable={false}
+      />
+
+      <ConfirmDialog
+        visible={limitOpen}
+        title={tr('settings:users.limitTitle')}
+        message={tr('settings:users.limitMessage', { plan: planInfo(company.plan).name, count: limit ?? 0, next: nextUserPlan(company.plan) ? planInfo(nextUserPlan(company.plan)!).name : '' })}
+        confirmLabel={tr('settings:users.seePlans')}
+        onCancel={() => setLimitOpen(false)}
+        onConfirm={() => {
+          setLimitOpen(false);
+          router.push('/(app)/settings/plan');
+        }}
       />
 
       <ConfirmDialog

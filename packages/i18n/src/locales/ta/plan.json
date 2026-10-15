@@ -55,6 +55,7 @@
     "usageBusinesses": "வணிகங்கள்",
     "usageInvoices": "இந்த ஆண்டு விலைப்பட்டியல்கள்",
     "usageUsers": "பயனர்கள்",
+    "usagePending": "நிலுவையில் உள்ள அழைப்புகள்",
     "ofTotal": "{{total}}-இல் {{used}}",
     "monthly": "மாதந்தோறும்",
     "yearlySave": "ஆண்டுதோறும் · 2 மாதம் மிச்சம்",

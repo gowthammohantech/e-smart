@@ -7,6 +7,7 @@ import { defineHandlers, type Ctx } from '../../context';
 import { badRequest, conflict, tooManyRequests, unauthorized } from '../../http/errors';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
+import { buildResetEmail } from '../../lib/resetEmail';
 import { avatarColorFor, onboardingComplete, userToWire } from './users';
 
 const OTP_TTL_SECONDS = 300;
@@ -146,12 +147,13 @@ export const authHandlers = defineHandlers({
         tokenHash: sha256(token),
         expiresAt: new Date(ctx.now.getTime() + RESET_TTL_MS),
       });
-      const link = `${ctx.deps.config.APP_URL}/reset-password?token=${token}`;
-      await ctx.deps.providers.email.send({
-        to: user.email,
-        subject: 'Reset your Elixir Books password',
-        text: `Hi ${user.name},\n\nReset your password with this link. It works once and expires in an hour:\n${link}\n\nIf you didn't ask for this, ignore this email.`,
-      });
+      const mail = buildResetEmail({ appUrl: ctx.deps.config.APP_URL, token, name: user.name, expiresInMinutes: RESET_TTL_MS / 60_000 });
+      try {
+        await ctx.deps.providers.email.send({ to: user.email, ...mail });
+      } catch (err) {
+        // The answer must not depend on whether the address is registered, so a failed send is logged, not returned.
+        ctx.req.log.error({ err, to: user.email }, 'password reset email failed');
+      }
     }
     return undefined;
   },
