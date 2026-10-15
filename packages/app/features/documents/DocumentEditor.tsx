@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -64,6 +64,10 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
+
+/** The finalise shortcut as a Mac or a PC writes it; only a browser ever shows it. */
+const SHORTCUT_KEYS =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '') ? '⌘ + Enter' : 'Ctrl + Enter';
 
 export function DocumentEditor({
   kind,
@@ -331,6 +335,32 @@ export function DocumentEditor({
     if (warning) setCreditWarning(warning);
     else setConfirmFinalize(true);
   };
+
+  // Ctrl+Enter (⌘+Enter on a Mac, shown as SHORTCUT_KEYS) does what the Finalise button does: the same
+  // checks, then the same confirmation, so nothing is finalised without it.
+  // Only while this editor is the screen in view; a phone has no keyboard for it.
+  const finalizeShortcut = useRef(() => {});
+  useEffect(() => {
+    finalizeShortcut.current = () => {
+      if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
+      // Not over another sheet (picking an item, editing a line…): finish that first.
+      if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
+      requestFinalize();
+    };
+  });
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+        e.preventDefault();
+        finalizeShortcut.current();
+      };
+      // Capturing, so it still works from inside a text field, which keeps Enter to itself.
+      document.addEventListener('keydown', onKey, true);
+      return () => document.removeEventListener('keydown', onKey, true);
+    }, []),
+  );
 
   const save = (finalize: boolean) => {
     if (!draft.partyId) return;
@@ -828,7 +858,11 @@ export function DocumentEditor({
             <Stack.Screen
               options={{
                 headerRight: () => (
-                  <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+                    {/* Tells a keyboard user about the shortcut wired up above. */}
+                    <Text variant="caption" tone="muted" style={{ marginRight: t.spacing.xs }}>
+                      {tr('sales:editor.finaliseShortcut', { keys: SHORTCUT_KEYS })}
+                    </Text>
                     <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} disabled={!draft.partyId} />
                     <Button title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} disabled={!draft.partyId || draft.lines.length === 0} />
                   </View>

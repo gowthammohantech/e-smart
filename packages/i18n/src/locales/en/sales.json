@@ -42,6 +42,7 @@
     "continue": "Continue",
     "saveDraft": "Save draft",
     "finalise": "Finalise",
+    "finaliseShortcut": "{{keys}} to finalise",
     "oneOffLine": "One-off line",
     "newItem": "New item",
     "documentCurrency": "Document currency",
