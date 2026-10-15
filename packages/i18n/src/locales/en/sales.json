@@ -60,6 +60,7 @@
     "itemInStock": "{{qty}} {{unit}} in stock",
     "itemLowStock": "Low stock · {{qty}} {{unit}} left",
     "itemOutOfStock": "Out of stock",
+    "itemOutOfStockBlocked": "{{name}} is out of stock at this branch. Add stock, or turn on “Allow negative stock” in company settings.",
     "creditLimitTitle": "Credit limit exceeded",
     "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
     "creditLimitProceed": "Continue anyway",

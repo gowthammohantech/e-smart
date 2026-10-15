@@ -32,7 +32,7 @@ import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
-import { isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -234,6 +234,13 @@ export function DocumentEditor({
     return isLowStock(item, qty)
       ? { text: tr('sales:editor.itemLowStock', args), tone: 'warn' as const }
       : { text: tr('sales:editor.itemInStock', args), tone: 'good' as const };
+  };
+  // Where finalising would refuse it anyway (stock goes out, negative stock
+  // not allowed), an item with nothing on hand can't be picked at all.
+  const outOfStockBlock = (item: (typeof items)[number]) => {
+    if (!stockByItem || company?.allowNegativeStock || !OUTBOUND_KINDS.includes(kind)) return undefined;
+    if (!item.trackInventory || item.type !== 'goods' || (stockByItem[item.id] ?? 0) > 0) return undefined;
+    return tr('sales:editor.itemOutOfStockBlocked', { name: item.name });
   };
   const maxReturnQty = (line: DocumentLine | null) => {
     if (!sourceDoc || !line) return undefined;
@@ -961,6 +968,7 @@ export function DocumentEditor({
                   description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
                   trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
                   note: stockNote(i),
+                  blocked: outOfStockBlock(i),
                 }))
           }
           multiple

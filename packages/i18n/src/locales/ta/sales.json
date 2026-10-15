@@ -60,6 +60,7 @@
     "itemInStock": "இருப்பு {{qty}} {{unit}}",
     "itemLowStock": "குறைந்த இருப்பு · {{qty}} {{unit}} மீதம்",
     "itemOutOfStock": "இருப்பு இல்லை",
+    "itemOutOfStockBlocked": "இந்தக் கிளையில் {{name}} இருப்பு இல்லை. இருப்பைச் சேர்க்கவும் அல்லது நிறுவன அமைப்புகளில் “எதிர்மறை இருப்பை அனுமதி” என்பதை இயக்கவும்.",
     "creditLimitTitle": "கடன் வரம்பு மீறப்பட்டது",
     "creditLimitExceeded": "{{party}}-க்கான கடன் வரம்பு {{limit}}. இந்த விலைப்பட்டியலுடன் நிலுவை {{exposure}} ஆகும்.",
     "creditLimitProceed": "இருந்தாலும் தொடரவும்",

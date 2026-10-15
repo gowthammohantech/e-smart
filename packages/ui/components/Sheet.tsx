@@ -20,6 +20,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
+import { ToastProvider } from './Toast';
 
 type Props = {
   visible: boolean;
@@ -39,6 +40,11 @@ type Props = {
    */
   fillHeight?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
+  /**
+   * Show toasts raised from inside the sheet over it. The app's own toasts
+   * draw under the Modal, so a message about the open sheet would be hidden.
+   */
+  ownToasts?: boolean;
 };
 
 /**
@@ -59,6 +65,7 @@ export function Sheet({
   header,
   fillHeight = false,
   contentStyle,
+  ownToasts = false,
 }: Props) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -143,8 +150,8 @@ export function Sheet({
         transform: [{ translateY: translate }],
       };
 
-  return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+  const content = (
+    <>
       <Animated.View style={{ flex: 1, backgroundColor: t.c.overlay, opacity: fade }}>
         <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel={tr('common:component.close')} accessibilityRole="button" />
       </Animated.View>
@@ -232,6 +239,12 @@ export function Sheet({
           ) : null}
         </Animated.View>
       </View>
+    </>
+  );
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      {ownToasts ? <ToastProvider>{content}</ToastProvider> : content}
     </Modal>
   );
 }
