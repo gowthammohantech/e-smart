@@ -45,6 +45,7 @@
     "finaliseShortcut": "{{keys}} to finalise",
     "zeroValueLines": "Rate and amount must be more than 0. Fix: {{names}}",
     "zeroTotal": "The total must be more than 0.",
+    "dateBeforeSource": "Can't be before {{date}}, the date of {{kind}} {{number}}",
     "oneOffLine": "One-off line",
     "newItem": "New item",
     "documentCurrency": "Document currency",

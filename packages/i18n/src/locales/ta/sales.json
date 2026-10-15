@@ -45,6 +45,7 @@
     "finaliseShortcut": "இறுதி செய்ய {{keys}}",
     "zeroValueLines": "விலையும் தொகையும் 0-ஐ விட அதிகமாக இருக்க வேண்டும். சரிசெய்யவும்: {{names}}",
     "zeroTotal": "மொத்தத் தொகை 0-ஐ விட அதிகமாக இருக்க வேண்டும்.",
+    "dateBeforeSource": "{{kind}} {{number}} தேதியான {{date}}-க்கு முன் இருக்க முடியாது",
     "oneOffLine": "ஒருமுறை வரிசை",
     "newItem": "புதிய பொருள்",
     "documentCurrency": "ஆவண நாணயம்",

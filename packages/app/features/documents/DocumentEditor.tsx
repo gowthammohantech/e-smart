@@ -27,7 +27,7 @@ import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { addDaysISO } from '@esmart/core/lib/date';
+import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
@@ -222,6 +222,16 @@ export function DocumentEditor({
   const branch = branches.find((b) => b.id === branchId);
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
   const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  // What this one was made from (the PO behind a goods receipt, say): it can't be dated before that.
+  const madeFrom = draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  const dateBeforeSource =
+    madeFrom && draft.date < madeFrom.date
+      ? tr('sales:editor.dateBeforeSource', {
+          date: formatDate(madeFrom.date),
+          kind: documentKindLabel(tr, madeFrom.kind, 1),
+          number: madeFrom.number,
+        })
+      : undefined;
   const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
 
   // The item list shows stock at this branch when finalising this document moves
@@ -283,6 +293,7 @@ export function DocumentEditor({
 
   /** Lines that cannot go on a finalised tax document yet. */
   const lineProblem = (): string | undefined => {
+    if (dateBeforeSource) return dateBeforeSource;
     const unnamed = draft.lines.find((l) => !l.name.trim());
     if (unnamed) return tr('sales:line.nameRequired');
     // Every line, and the document, must be worth something: rate, gross and
@@ -499,6 +510,7 @@ export function DocumentEditor({
         value={draft.date}
         onChange={(date) => patch({ date })}
         required
+        error={dateBeforeSource}
       />
 
       {kind === 'invoice' || kind === 'purchaseBill' ? (
