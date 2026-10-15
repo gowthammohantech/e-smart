@@ -215,6 +215,13 @@ export const invites = pgTable("invites", {
 	acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: 'date' }),
 	lastSentAt: timestamp("last_sent_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	/**
+	 * Set only when the invitee already has an account of their own: the access
+	 * they are offered in the inviter's businesses. Granted on accept, not before.
+	 */
+	role: userRole(),
+	companyIds: jsonb("company_ids").$type<string[]>(),
+	branchIds: jsonb("branch_ids").$type<string[]>(),
 }, (table): PgTableExtraConfigValue[] => [
 	foreignKey({
 			columns: [table.userId],
@@ -1722,6 +1729,8 @@ export const expenseCategories = pgTable("expense_categories", {
 export const userCompanies = pgTable("user_companies", {
 	userId: varchar("user_id", { length: 40 }).notNull(),
 	companyId: varchar("company_id", { length: 40 }).notNull(),
+	/** The role in this business when it differs from the user's own (someone invited from another account). */
+	role: userRole(),
 }, (table): PgTableExtraConfigValue[] => [
 	foreignKey({
 			columns: [table.userId],

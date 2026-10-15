@@ -12,7 +12,7 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useDocuments } from '../../../store/selectors';
-import { PLANS, moduleSetFor, planInfo } from '@esmart/core/domain/plan';
+import { PLANS, moduleSetFor, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '../../../features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
 import type { PlanTier } from '@esmart/core/types';
@@ -27,12 +27,15 @@ export default function PlanBilling() {
 
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const companies = useAppStore((s) => s.companies);
-  const teamSize = useAppStore((s) => s.users.filter((u) => u.status !== 'disabled' && u.companyIds.includes(s.activeCompanyId)).length);
+  // Only people who have accepted count; a pending invitation is not a user yet.
+  const teamSize = useAppStore((s) => s.users.filter((u) => u.status === 'active' && u.companyIds.includes(s.activeCompanyId)).length);
+  const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
   const invoices = useDocuments('invoice');
   const company = useActiveCompany();
   const setPlan = useAppStore((s) => s.setPlan);
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
+  const seatLimit = userLimit(currentPlan);
 
   const choose = (tier: PlanTier) => {
     setPlan(company.id, tier);
@@ -67,7 +70,8 @@ export default function PlanBilling() {
             // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md).
             { label: tr('plan:billing.usageBusinesses'), value: String(companies.length) },
             { label: tr('plan:billing.usageInvoices'), value: String(invoices.length) },
-            { label: tr('plan:billing.usageUsers'), value: String(teamSize) },
+            { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }) },
+            ...(pendingInvites > 0 ? [{ label: tr('plan:billing.usagePending'), value: String(pendingInvites) }] : []),
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="small" tone="muted">

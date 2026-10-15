@@ -15,7 +15,7 @@ const device = () => ({ label: Platform.OS === 'web' ? 'Web browser' : `${Platfo
  * account's data into an empty store, then marks the session signed in, so
  * the first screen the router shows already has data.
  */
-async function begin(auth: AuthSession) {
+async function begin(auth: AuthSession, preferCompanyId?: string) {
   if (!auth.accessToken || !auth.refreshToken || !auth.user?.id) throw new Error('The server returned an incomplete session');
   await setTokens({ accessToken: auth.accessToken, refreshToken: auth.refreshToken });
   useRemoteMeta.getState().reset();
@@ -30,7 +30,7 @@ async function begin(auth: AuthSession) {
   await loadSnapshot();
 
   const s = useAppStore.getState();
-  const companyId = me?.defaultCompanyId ?? s.companies[0]?.id ?? '';
+  const companyId = (preferCompanyId && s.companies.some((c) => c.id === preferCompanyId) ? preferCompanyId : undefined) ?? me?.defaultCompanyId ?? s.companies[0]?.id ?? '';
   const branches = s.branches.filter((b) => b.companyId === companyId);
   useAppStore.setState({
     activeCompanyId: companyId,
@@ -104,8 +104,18 @@ export async function resetPassword(token: string, password: string) {
   await api.POST('/auth/password/reset', { body: { token, password } });
 }
 
-/** Accepts a team invitation and signs straight in. */
-export async function acceptInvite(token: string, password: string) {
-  const { data } = await api.POST('/invites/{token}/accept', { params: { path: { token } }, body: { password } });
-  await begin(data as AuthSession);
+/** What an invitation link is for (business, inviter, role), before it is accepted. */
+export async function getInvite(token: string) {
+  const { data } = await api.GET('/invites/{token}', { params: { path: { token } } });
+  return data as Schema<'InviteDetails'>;
+}
+
+/**
+ * Accepts a team invitation and signs straight in. A new person sends the
+ * password they chose; someone who already has an account sends none, and
+ * lands in the business they just joined.
+ */
+export async function acceptInvite(token: string, password?: string, joinedCompanyId?: string) {
+  const { data } = await api.POST('/invites/{token}/accept', { params: { path: { token } }, body: password ? { password } : {} });
+  await begin(data as AuthSession, joinedCompanyId);
 }

@@ -55,6 +55,7 @@
     "usageBusinesses": "Businesses",
     "usageInvoices": "Invoices this year",
     "usageUsers": "Users",
+    "usagePending": "Pending invitations",
     "ofTotal": "{{used}} of {{total}}",
     "monthly": "Monthly",
     "yearlySave": "Yearly · save 2 months",

@@ -1,6 +1,7 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { EmailClient } from '@azure/communication-email';
 import type { Config } from '../config';
+import { LOGO_CID, LOGO_PNG_BASE64 } from '../lib/emailLogo';
 import { sendPay4smsOtp } from './pay4sms';
 
 export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; at: Date };
@@ -25,6 +26,9 @@ export interface SmsProvider {
   /** `meta` marks a sign-in code for providers that can only send a registered template. */
   send(to: string, text: string, meta?: { kind: 'otp'; code: string; name?: string }): Promise<SendResult>;
 }
+/** The logo goes along as an inline attachment when the email's HTML refers to it. */
+const inlineLogo = (html?: string) => (html?.includes(`cid:${LOGO_CID}`) ? { name: 'logo.png', contentType: 'image/png', base64: LOGO_PNG_BASE64, cid: LOGO_CID } : undefined);
+
 export interface EmailProvider {
   send(msg: { to: string; subject: string; text: string; html?: string }): Promise<SendResult>;
 }
@@ -85,15 +89,34 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
 
   let ses: SESv2Client | null = null;
   let acs: EmailClient | null = null;
+  // Add a provider by adding a branch here and a value to EMAIL_PROVIDER; callers only see EmailProvider.
   const email: EmailProvider =
-    config.EMAIL_PROVIDER === 'acs'
+    config.EMAIL_PROVIDER === 'resend'
+      ? {
+          async send(msg) {
+            // Plain fetch against Resend's REST API, so there is no SDK to carry.
+            const logo = inlineLogo(msg.html);
+            const res = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { authorization: `Bearer ${config.RESEND_API_KEY ?? ''}`, 'content-type': 'application/json' },
+              body: JSON.stringify({ from: config.EMAIL_FROM, to: [msg.to], subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}), ...(config.EMAIL_REPLY_TO ? { reply_to: config.EMAIL_REPLY_TO } : {}), ...(logo ? { attachments: [{ filename: logo.name, content: logo.base64, content_type: logo.contentType, content_id: logo.cid }] } : {}) }),
+            });
+            const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
+            if (!res.ok) throw new Error(`Resend ${res.status}${body.message ? `: ${body.message}` : ''}`);
+            return { providerMessageId: body.id ?? localId('resend') };
+          },
+        }
+      : config.EMAIL_PROVIDER === 'acs'
       ? {
           async send(msg) {
             acs ??= new EmailClient(config.ACS_CONNECTION_STRING ?? '');
+            const logo = inlineLogo(msg.html);
             const poller = await acs.beginSend({
               senderAddress: emailAddress(config.EMAIL_FROM),
               content: { subject: msg.subject, plainText: msg.text, ...(msg.html ? { html: msg.html } : {}) },
               recipients: { to: [{ address: msg.to }] },
+              ...(config.EMAIL_REPLY_TO ? { replyTo: [{ address: config.EMAIL_REPLY_TO }] } : {}),
+              ...(logo ? { attachments: [{ name: logo.name, contentType: logo.contentType, contentInBase64: logo.base64, contentId: logo.cid }] } : {}),
             });
             const out = await poller.pollUntilDone();
             if (out.status !== 'Succeeded') throw new Error(`ACS email ${out.status}${out.error?.message ? `: ${out.error.message}` : ''}`);

@@ -11,3 +11,4 @@ export { syncNow } from './sync';
 export { retrySync, retryFailed } from './retry';
 export * as remoteSession from './session';
 export * as compliance from './compliance';
+export * as remoteUsers from './users';
