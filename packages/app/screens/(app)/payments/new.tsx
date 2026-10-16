@@ -40,7 +40,7 @@ import {
   useParties,
   usePaymentAccounts,
   usePayments,
-  usePrimaryBranchId,
+  useDefaultBranchId,
 } from '../../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
@@ -71,7 +71,7 @@ export default function NewPayment() {
   const expenses = useExpenses();
   const savePayment = useAppStore((s) => s.savePayment);
   const applyAdvances = useAppStore((s) => s.applyAdvances);
-  const primaryBranchId = usePrimaryBranchId();
+  const defaultBranchId = useDefaultBranchId();
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
   const [partyId, setPartyId] = useState<string | null>(params.partyId ?? null);
@@ -275,7 +275,7 @@ export default function NewPayment() {
     const payment: Payment = {
       id: uid('pay'),
       companyId: activeCompanyId,
-      branchId: primaryBranchId ?? '',
+      branchId: defaultBranchId ?? '',
       number: '',
       direction,
       partyId,

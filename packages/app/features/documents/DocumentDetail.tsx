@@ -731,6 +731,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                 if (short.length) {
                   toast.show(
                     tr('sales:editor.insufficientStock', {
+                      date: formatDate(doc.date),
                       names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
                     }),
                     'error',

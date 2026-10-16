@@ -47,7 +47,7 @@ export type StockShortfall = { itemId: string; name: string; unit: string; onHan
  * it came from (an invoice made from a delivery).
  */
 export function stockShortfalls(args: {
-  doc: Pick<BusinessDocument, 'kind' | 'branchId' | 'lines' | 'sourceDocumentId'>;
+  doc: Pick<BusinessDocument, 'kind' | 'branchId' | 'lines' | 'sourceDocumentId'> & { date?: string };
   items: Item[];
   movements: StockMovement[];
   allowNegativeStock?: boolean;
@@ -59,11 +59,13 @@ export function stockShortfalls(args: {
   doc.lines.forEach((l) => {
     if (l.itemId) needed.set(l.itemId, (needed.get(l.itemId) ?? 0) + Math.abs(l.quantity));
   });
+  // Dated, a document can only use stock that was there on its date.
+  const available = doc.date ? stockMapOn(movements, doc.date, doc.branchId) : undefined;
   const out: StockShortfall[] = [];
   needed.forEach((qty, itemId) => {
     const item = items.find((i) => i.id === itemId);
     if (!item || !item.trackInventory || item.type !== 'goods') return;
-    const onHand = stockOnHand(itemId, movements, doc.branchId);
+    const onHand = available ? (available[itemId] ?? 0) : stockOnHand(itemId, movements, doc.branchId);
     if (onHand < qty) out.push({ itemId, name: item.name, unit: item.unit, onHand, needed: qty });
   });
   return out;
@@ -74,6 +76,37 @@ export function stockMap(movements: StockMovement[], branchId?: string): Record<
   movements.forEach((m) => {
     if (branchId && m.branchId !== branchId) return;
     out[m.itemId] = (out[m.itemId] ?? 0) + signedQuantity(m);
+  });
+  return out;
+}
+
+/**
+ * Stock of each item that a document dated `date` (yyyy-MM-dd) can take out:
+ * what was there by the end of that day, but never more than the lowest the
+ * stock gets on any later day. Stock bought the day after can't be sold the
+ * day before, and a back-dated sale can't take stock a later sale already used.
+ */
+export function stockMapOn(movements: StockMovement[], date: string, branchId?: string): Record<string, number> {
+  const byItem = new Map<string, StockMovement[]>();
+  movements.forEach((m) => {
+    if (branchId && m.branchId !== branchId) return;
+    const list = byItem.get(m.itemId);
+    if (list) list.push(m);
+    else byItem.set(m.itemId, [m]);
+  });
+  const out: Record<string, number> = {};
+  byItem.forEach((list, itemId) => {
+    const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date));
+    let balance = 0;
+    let i = 0;
+    for (; i < sorted.length && sorted[i].date <= date; i++) balance += signedQuantity(sorted[i]);
+    let lowest = balance;
+    // The balance at the end of each later day.
+    for (; i < sorted.length; i++) {
+      balance += signedQuantity(sorted[i]);
+      if (i === sorted.length - 1 || sorted[i + 1].date !== sorted[i].date) lowest = Math.min(lowest, balance);
+    }
+    out[itemId] = lowest;
   });
   return out;
 }

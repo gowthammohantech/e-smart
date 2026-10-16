@@ -33,7 +33,7 @@ import {
   useParties,
   usePaymentAccounts,
   usePayments,
-  usePrimaryBranchId,
+  useDefaultBranchId,
   useTaxCategories,
 } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
@@ -79,7 +79,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const saveExpense = useAppStore((s) => s.saveExpense);
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
-  const primaryBranchId = usePrimaryBranchId();
+  const defaultBranchId = useDefaultBranchId();
   const payments = usePayments();
   const expenses = useExpenses();
 
@@ -186,7 +186,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     const record: Expense = {
       id: expense?.id ?? uid('exp'),
       companyId: expense?.companyId ?? activeCompanyId,
-      branchId: expense?.branchId ?? primaryBranchId ?? '',
+      branchId: expense?.branchId ?? defaultBranchId ?? '',
       number: expense?.number ?? '',
       categoryId,
       supplierId: supplierId ?? undefined,

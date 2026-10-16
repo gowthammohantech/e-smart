@@ -1,5 +1,5 @@
 import { allocateAdvances, availableAdvance, buildOutstanding, bucketFor, checkCreditLimit, outstandingOf, summarizeAging } from '../receivables';
-import { ledgerFor, signedQuantity, stockOnHand, stockShortfalls } from '../stockLedger';
+import { ledgerFor, signedQuantity, stockMapOn, stockOnHand, stockShortfalls } from '../stockLedger';
 import { resolveRate, settlementGainLoss } from '../fx';
 import { BusinessDocument, DocumentLine, ExchangeRate, Item, Payment, StockMovement } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
@@ -193,6 +193,29 @@ describe('stock ledger (FRD 13)', () => {
       expect(check('invoice', [ln('i1', 500)], { allowNegativeStock: true })).toEqual([]);
       const delivered = [...movements, { ...base, id: 'm9', type: 'salesIssue' as const, quantity: 500, referenceId: 'dn1' }];
       expect(stockShortfalls({ doc: { kind: 'invoice', branchId: 'b1', lines: [ln('i1', 500)], sourceDocumentId: 'dn1' }, items: [rod], movements: delivered })).toEqual([]);
+    });
+
+    describe('as on the document date', () => {
+      const dated = [
+        { ...base, id: 'd1', type: 'purchaseReceipt' as const, quantity: 10, date: '2026-10-16' },
+        { ...base, id: 'd2', type: 'purchaseReceipt' as const, quantity: 10, date: '2026-10-01' },
+        { ...base, id: 'd3', type: 'salesIssue' as const, quantity: 8, date: '2026-10-20' },
+      ];
+      const sell = (date: string, qty: number) =>
+        stockShortfalls({ doc: { kind: 'invoice', branchId: 'b1', lines: [ln('i1', qty)], date }, items: [rod], movements: dated });
+
+      it("can't sell stock bought the day after", () => {
+        expect(sell('2026-10-15', 11)).toEqual([{ itemId: 'i1', name: 'Rod', unit: 'PCS', onHand: 10, needed: 11 }]);
+        expect(sell('2026-10-15', 10)).toEqual([]);
+        expect(sell('2026-09-30', 1)).toHaveLength(1);
+      });
+
+      it("can't take stock a later sale already used", () => {
+        // 20 by the 16th, but the 20th's sale leaves 12, so only 12 can go back-dated.
+        expect(stockMapOn(dated, '2026-10-16', 'b1').i1).toBe(12);
+        expect(sell('2026-10-16', 13)).toHaveLength(1);
+        expect(sell('2026-10-25', 12)).toEqual([]);
+      });
     });
   });
 });

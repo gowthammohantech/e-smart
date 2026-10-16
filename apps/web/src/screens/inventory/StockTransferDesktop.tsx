@@ -12,7 +12,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBranches, useItems, useStockMovements } from '@esmart/app/store/selectors';
+import { useBranches, useDefaultBranchId, useItems, useStockMovements } from '@esmart/app/store/selectors';
 import { stockOnHand } from '@esmart/core/domain/stockLedger';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
@@ -34,12 +34,14 @@ export function StockTransferDesktop() {
 
   const items = useItems().filter((i) => i.trackInventory);
   const branches = useBranches();
+  // From the branch picked in the switcher, to the first other one.
+  const defaultBranchId = useDefaultBranchId();
   const movements = useStockMovements();
   const transferStock = useAppStore((s) => s.transferStock);
 
   const [itemId, setItemId] = useState<string | null>(params.itemId ?? null);
-  const [fromBranchId, setFromBranchId] = useState(branches[0]?.id ?? '');
-  const [toBranchId, setToBranchId] = useState(branches[1]?.id ?? '');
+  const [fromBranchId, setFromBranchId] = useState(defaultBranchId ?? branches[0]?.id ?? '');
+  const [toBranchId, setToBranchId] = useState(branches.find((b) => b.id !== (defaultBranchId ?? branches[0]?.id))?.id ?? '');
   const [quantity, setQuantity] = useState('');
   const [date, setDate] = useState(today());
   const [notes, setNotes] = useState('');

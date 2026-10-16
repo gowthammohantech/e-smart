@@ -10,7 +10,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBranches, useItems, useStockLevels } from '@esmart/app/store/selectors';
+import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
@@ -33,10 +33,10 @@ export function StockAdjustDesktop() {
   const stock = useStockLevels();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const defaultBranchId = useDefaultBranchId();
 
   const [itemId, setItemId] = useState<string | null>(params.itemId ?? null);
-  const [branchId, setBranchId] = useState(activeBranchId ?? branches[0]?.id ?? '');
+  const [branchId, setBranchId] = useState(defaultBranchId ?? branches[0]?.id ?? '');
   const [direction, setDirection] = useState<'increase' | 'decrease'>('decrease');
   const [quantity, setQuantity] = useState('');
   const [date, setDate] = useState(today());

@@ -32,7 +32,7 @@ import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
-import { OUTBOUND_KINDS, isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, isLowStock, stockMapOn, stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
@@ -47,7 +47,7 @@ import {
   useItems,
   useParties,
   usePayments,
-  usePrimaryBranchId,
+  useDefaultBranchId,
   useStockMovements,
   useTaxCategories,
 } from '../../store/selectors';
@@ -110,7 +110,6 @@ export function DocumentEditor({
   const items = useItems({ activeOnly: true });
   const allItems = useItems();
   const movements = useStockMovements();
-  const primaryBranchId = usePrimaryBranchId();
   const documents = useDocuments();
   const payments = usePayments();
   const hsnRequired = hsnMandatory(company?.taxRegistration);
@@ -122,7 +121,7 @@ export function DocumentEditor({
   const updateDocument = useAppStore((s) => s.updateDocument);
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
   const nextNumberFor = useAppStore((s) => s.nextNumberFor);
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const defaultBranchId = useDefaultBranchId();
 
   const taxContext = useMemo(
     () => ({
@@ -147,7 +146,7 @@ export function DocumentEditor({
   // A prefill seeds the draft and the opening step, as if the person had
   // picked the party and item by hand. Read once, like `initialDraft`.
   const [seed] = useState(() => {
-    const empty: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: primaryBranchId };
+    const empty: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: defaultBranchId };
     if (!prefill) return { missingParty: false, draft: empty, step: 0 };
     const base: DraftState = {
       ...empty,
@@ -218,7 +217,7 @@ export function DocumentEditor({
 
   const kindName = documentKindLabel(tr, kind, 1);
   const party = parties.find((p) => p.id === draft.partyId);
-  const branchId = draft.branchId ?? primaryBranchId ?? activeBranchId ?? undefined;
+  const branchId = draft.branchId ?? defaultBranchId ?? undefined;
   const branch = branches.find((b) => b.id === branchId);
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
   const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
@@ -240,7 +239,8 @@ export function DocumentEditor({
   const movesStock =
     ['invoice', 'delivery', 'goodsReceipt', 'purchaseBill', 'salesReturn', 'purchaseReturn'].includes(kind) &&
     !(draft.sourceDocumentId && movements.some((m) => m.referenceId === draft.sourceDocumentId));
-  const stockByItem = itemOpen && movesStock ? stockMap(movements, branchId) : undefined;
+  // What the branch holds on the document date, not today.
+  const stockByItem = itemOpen && movesStock ? stockMapOn(movements, draft.date, branchId) : undefined;
   const stockNote = (item: (typeof items)[number]) => {
     if (!stockByItem || !item.trackInventory || item.type !== 'goods') return undefined;
     const qty = stockByItem[item.id] ?? 0;
@@ -309,13 +309,14 @@ export function DocumentEditor({
       if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });
     }
     const short = stockShortfalls({
-      doc: { kind, branchId: branchId ?? '', lines: draft.lines, sourceDocumentId: draft.sourceDocumentId },
+      doc: { kind, branchId: branchId ?? '', lines: draft.lines, sourceDocumentId: draft.sourceDocumentId, date: draft.date },
       items: allItems,
       movements,
       allowNegativeStock: company?.allowNegativeStock,
     });
     if (short.length) {
       return tr('sales:editor.insufficientStock', {
+        date: formatDate(draft.date),
         names: short.map((s) => tr('sales:editor.stockShort', { name: s.name, onHand: s.onHand, needed: s.needed, unit: s.unit })).join(', '),
       });
     }
