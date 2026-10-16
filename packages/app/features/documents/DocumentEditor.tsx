@@ -15,7 +15,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
-import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
@@ -29,10 +29,10 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
-import { INDIAN_STATES } from '@esmart/core/data/masters';
+import { factorOf, fromMajor, money, subtract, toMajor } from '@esmart/core/lib/money';
+import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
-import { OUTBOUND_KINDS, isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, isLowStock, stockMapOn, stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
@@ -47,7 +47,7 @@ import {
   useItems,
   useParties,
   usePayments,
-  usePrimaryBranchId,
+  useDefaultBranchId,
   useStockMovements,
   useTaxCategories,
 } from '../../store/selectors';
@@ -110,7 +110,6 @@ export function DocumentEditor({
   const items = useItems({ activeOnly: true });
   const allItems = useItems();
   const movements = useStockMovements();
-  const primaryBranchId = usePrimaryBranchId();
   const documents = useDocuments();
   const payments = usePayments();
   const hsnRequired = hsnMandatory(company?.taxRegistration);
@@ -122,7 +121,7 @@ export function DocumentEditor({
   const updateDocument = useAppStore((s) => s.updateDocument);
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
   const nextNumberFor = useAppStore((s) => s.nextNumberFor);
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const defaultBranchId = useDefaultBranchId();
 
   const taxContext = useMemo(
     () => ({
@@ -147,7 +146,7 @@ export function DocumentEditor({
   // A prefill seeds the draft and the opening step, as if the person had
   // picked the party and item by hand. Read once, like `initialDraft`.
   const [seed] = useState(() => {
-    const empty: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: primaryBranchId };
+    const empty: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: defaultBranchId };
     if (!prefill) return { missingParty: false, draft: empty, step: 0 };
     const base: DraftState = {
       ...empty,
@@ -218,7 +217,7 @@ export function DocumentEditor({
 
   const kindName = documentKindLabel(tr, kind, 1);
   const party = parties.find((p) => p.id === draft.partyId);
-  const branchId = draft.branchId ?? primaryBranchId ?? activeBranchId ?? undefined;
+  const branchId = draft.branchId ?? defaultBranchId ?? undefined;
   const branch = branches.find((b) => b.id === branchId);
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
   const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
@@ -240,7 +239,8 @@ export function DocumentEditor({
   const movesStock =
     ['invoice', 'delivery', 'goodsReceipt', 'purchaseBill', 'salesReturn', 'purchaseReturn'].includes(kind) &&
     !(draft.sourceDocumentId && movements.some((m) => m.referenceId === draft.sourceDocumentId));
-  const stockByItem = itemOpen && movesStock ? stockMap(movements, branchId) : undefined;
+  // What the branch holds on the document date, not today.
+  const stockByItem = itemOpen && movesStock ? stockMapOn(movements, draft.date, branchId) : undefined;
   const stockNote = (item: (typeof items)[number]) => {
     if (!stockByItem || !item.trackInventory || item.type !== 'goods') return undefined;
     const qty = stockByItem[item.id] ?? 0;
@@ -309,13 +309,14 @@ export function DocumentEditor({
       if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });
     }
     const short = stockShortfalls({
-      doc: { kind, branchId: branchId ?? '', lines: draft.lines, sourceDocumentId: draft.sourceDocumentId },
+      doc: { kind, branchId: branchId ?? '', lines: draft.lines, sourceDocumentId: draft.sourceDocumentId, date: draft.date },
       items: allItems,
       movements,
       allowNegativeStock: company?.allowNegativeStock,
     });
     if (short.length) {
       return tr('sales:editor.insufficientStock', {
+        date: formatDate(draft.date),
         names: short.map((s) => tr('sales:editor.stockShort', { name: s.name, onHand: s.onHand, needed: s.needed, unit: s.unit })).join(', '),
       });
     }
@@ -627,48 +628,69 @@ export function DocumentEditor({
       ) : (
         <Card padded={false}>
           {draft.lines.map((line, i) => {
-            const lineTotal = money(
-              Math.round(line.unitPrice.minor * line.quantity * (1 - (line.discountMode === 'percent' ? line.discountValue / 100 : 0))),
-              draft.currency,
-            );
+            // After the line's discount, % or amount, as the totals work it out.
+            const calc = calculateLine(line, draft.currency, docTaxContext);
+            const lineTotal = subtract(calc.gross, calc.discount);
+            const maxQty = maxReturnQty(line);
             return (
-              <Pressable
-                key={line.id}
-                onPress={() => setEditingLine(line)}
-                accessibilityRole="button"
-                accessibilityLabel={`Edit ${line.name}`}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  gap: t.spacing.md,
-                  padding: t.spacing.lg,
-                  borderBottomWidth: i < draft.lines.length - 1 ? 0.5 : 0,
-                  borderBottomColor: t.c.line,
-                  backgroundColor: pressed ? t.c.card2 : 'transparent',
-                })}
-              >
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text variant="body" weight="600" numberOfLines={1}>
-                    {line.name || 'Untitled line'}
-                  </Text>
+              <View key={line.id} style={{ borderBottomWidth: i < draft.lines.length - 1 ? 0.5 : 0, borderBottomColor: t.c.line }}>
+                <Pressable
+                  onPress={() => setEditingLine(line)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${line.name}`}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    gap: t.spacing.md,
+                    paddingHorizontal: t.spacing.lg,
+                    paddingTop: t.spacing.lg,
+                    paddingBottom: t.spacing.sm,
+                    backgroundColor: pressed ? t.c.card2 : 'transparent',
+                  })}
+                >
+                  <View style={{ flex: 1, gap: 5 }}>
+                    <Text variant="body" weight="600" numberOfLines={1}>
+                      {line.name || 'Untitled line'}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 5 }}>
+                      <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
+                      {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
+                      {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+                      {formatMoney(lineTotal)}
+                    </Text>
+                    <MaterialCommunityIcons name="pencil-outline" size={15} color={t.c.muted} />
+                  </View>
+                </Pressable>
+                {/* The quantity changes right here, outside the tap that opens the full editor. */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: t.spacing.sm,
+                    paddingHorizontal: t.spacing.lg,
+                    paddingBottom: t.spacing.lg,
+                  }}
+                >
+                  <QuantityStepper
+                    compact
+                    positive
+                    value={line.quantity}
+                    onChange={(q) => updateLine(line.id, { quantity: maxQty !== undefined ? Math.min(q, maxQty) : q })}
+                    min={0}
+                    decimals={unitDecimals(line.unit)}
+                  />
                   <Text variant="caption" tone="muted">
-                    {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
+                    {line.unit} × {formatMoney(line.unitPrice)}
                     {line.discountValue > 0
                       ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, draft.currency))}`
                       : ''}
                   </Text>
-                  <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
-                    <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
-                    {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
-                    {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
-                  </View>
                 </View>
-                <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-                    {formatMoney(lineTotal)}
-                  </Text>
-                  <MaterialCommunityIcons name="pencil-outline" size={15} color={t.c.muted} />
-                </View>
-              </Pressable>
+              </View>
             );
           })}
         </Card>

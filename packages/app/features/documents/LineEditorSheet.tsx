@@ -58,10 +58,12 @@ function LineEditorForm({
   const { t: tr } = useTranslation(['sales']);
 
   const [name, setName] = useState(line?.name ?? '');
+  // The line's own description, filled from the item's when it was added.
+  const [description, setDescription] = useState(line?.description ?? '');
   const [quantity, setQuantity] = useState(line?.quantity ?? 1);
   const [unit, setUnit] = useState(line?.unit ?? 'NOS');
   const [price, setPrice] = useState(line ? String(toMajor(line.unitPrice)) : '0');
-  const [discountMode, setDiscountMode] = useState<'percent' | 'amount'>(line?.discountMode ?? 'percent');
+  const [discountMode, setDiscountMode] = useState<'percent' | 'amount'>(line?.discountMode ?? 'amount');
   const [discountValue, setDiscountValue] = useState(String(line?.discountValue ?? 0));
   const [taxCategoryId, setTaxCategoryId] = useState(line?.taxCategoryId ?? '');
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
@@ -115,6 +117,7 @@ function LineEditorForm({
     if (next.name || next.hsn || next.quantity || next.rate || next.discount) return;
     onSave({
       name: name.trim(),
+      description: description.trim() || undefined,
       quantity: quantity > 0 ? quantity : 1,
       unit: fromCatalogue && item ? item.unit : unit,
       hsnCode: hsnCode.trim() || undefined,
@@ -153,13 +156,23 @@ function LineEditorForm({
       }
     >
       <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
+        {/* A catalogue line takes its name from the item (shown in the title); only a one-off line types one. */}
+        {fromCatalogue ? null : (
+          <TextField
+            label={tr('sales:line.itemOrService')}
+            value={name}
+            onChangeText={setName}
+            placeholder={tr('sales:line.itemOrService')}
+            error={errors.name}
+            required
+          />
+        )}
         <TextField
           label={tr('sales:line.description')}
-          value={name}
-          onChangeText={setName}
-          placeholder={tr('sales:line.itemOrService')}
-          error={errors.name}
-          required
+          value={description}
+          onChangeText={setDescription}
+          placeholder={tr('sales:line.descriptionPlaceholder')}
+          multiline
         />
 
         <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'flex-end' }}>

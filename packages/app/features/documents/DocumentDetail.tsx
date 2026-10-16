@@ -46,7 +46,7 @@ import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
@@ -480,6 +480,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         {tr('sales:detail.items')}
       </Text>
       <DataTable
+        pageSize={TABLE_PAGE_SIZE}
         scroll={false}
         columns={[
           {
@@ -731,6 +732,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                 if (short.length) {
                   toast.show(
                     tr('sales:editor.insufficientStock', {
+                      date: formatDate(doc.date),
                       names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
                     }),
                     'error',

@@ -13,7 +13,7 @@ import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useItems, useStockLevels } from '../../../store/selectors';
+import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
@@ -32,7 +32,7 @@ export default function OpeningStock() {
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const defaultBranchId = useDefaultBranchId();
 
   const [query, setQuery] = useState('');
   const [date, setDate] = useState(today());
@@ -56,7 +56,7 @@ export default function OpeningStock() {
       if (!item) return;
       addStockMovement({
         companyId: activeCompanyId,
-        branchId: activeBranchId ?? 'brn_mum',
+        branchId: defaultBranchId ?? '',
         itemId,
         type: 'opening',
         quantity: Number(v),

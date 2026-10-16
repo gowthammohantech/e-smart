@@ -78,10 +78,9 @@ export default function ItemDetail() {
   const value = stockValue(item, movements, baseCurrency);
   const low = isLowStock(item, onHand);
   const category = taxCategories.find((c) => c.id === item.taxCategoryId);
-  const margin =
-    item.purchasePrice.minor > 0
-      ? ((item.salePrice.minor - item.purchasePrice.minor) / item.purchasePrice.minor) * 100
-      : 0;
+  // The share of the sale price that's profit, as the item form shows it.
+  const hasMargin = item.salePrice.minor > 0 && item.purchasePrice.minor > 0;
+  const margin = hasMargin ? ((item.salePrice.minor - item.purchasePrice.minor) / item.salePrice.minor) * 100 : 0;
 
   const headerCard = (
     <>
@@ -135,7 +134,8 @@ export default function ItemDetail() {
       <StatTile label={tr('inventory:detail.salePrice')} value={item.salePrice} icon="tag-outline" caption={`per ${item.unit}`} />
       <StatTile
         label={tr('inventory:detail.margin')}
-        value={item.purchasePrice.minor > 0 ? formatPercent(margin) : '—'}
+        // One decimal, like the item form.
+        value={hasMargin ? formatPercent(Math.round(margin * 10) / 10) : '—'}
         tone={margin > 0 ? 'good' : 'default'}
         icon="trending-up"
         caption={`cost ${formatMoney(item.purchasePrice)}`}

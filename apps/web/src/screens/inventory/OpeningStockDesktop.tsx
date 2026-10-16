@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
@@ -13,7 +13,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import type { Item } from '@esmart/core/types';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBaseCurrency, useItems, useStockLevels } from '@esmart/app/store/selectors';
+import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
@@ -36,7 +36,7 @@ export function OpeningStockDesktop() {
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const defaultBranchId = useDefaultBranchId();
 
   const [query, setQuery] = useState('');
   const [date, setDate] = useState(today());
@@ -60,7 +60,7 @@ export function OpeningStockDesktop() {
       if (!item) return;
       addStockMovement({
         companyId: activeCompanyId,
-        branchId: activeBranchId ?? 'brn_mum',
+        branchId: defaultBranchId ?? '',
         itemId,
         type: 'opening',
         quantity: Number(v),
@@ -90,6 +90,7 @@ export function OpeningStockDesktop() {
                 </Card>
               ) : (
                 <DataTable<Item>
+                  pageSize={TABLE_PAGE_SIZE}
                   scroll={false}
                   columns={[
                     {

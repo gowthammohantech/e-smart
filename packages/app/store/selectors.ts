@@ -76,6 +76,14 @@ export function usePrimaryBranchId(): string | undefined {
   return branches.find((b) => b.isPrimary)?.id ?? activeBranchId ?? branches[0]?.id;
 }
 
+/** Where a new entry starts: the branch picked in the switcher, or the main one when all branches are showing. */
+export function useDefaultBranchId(): string | undefined {
+  const branches = useBranches();
+  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const primaryBranchId = usePrimaryBranchId();
+  return activeBranchId && branches.some((b) => b.id === activeBranchId) ? activeBranchId : primaryBranchId;
+}
+
 export function useCompanies() {
   return useAppStore((s) => s.companies);
 }

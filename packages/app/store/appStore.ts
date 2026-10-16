@@ -416,11 +416,11 @@ export const useAppStore = create<AppState>()(
         });
       };
 
-      /** Where an entry lands when none was chosen: the active company's primary branch. */
+      /** Where an entry lands when none was chosen: the branch picked in the switcher, else the company's primary one. */
       const defaultBranchId = (): string => {
         const s = get();
         const own = s.branches.filter((b) => b.companyId === s.activeCompanyId);
-        return own.find((b) => b.isPrimary)?.id ?? s.activeBranchId ?? own[0]?.id ?? '';
+        return own.find((b) => b.id === s.activeBranchId)?.id ?? own.find((b) => b.isPrimary)?.id ?? own[0]?.id ?? '';
       };
 
       const consumeSeriesNumber = (kind: NumberingSeries['kind'], date: string): string => {
