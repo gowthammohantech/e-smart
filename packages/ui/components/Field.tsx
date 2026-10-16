@@ -587,24 +587,33 @@ export function QuantityStepper({
   min = 0,
   step = 1,
   decimals = 0,
+  compact = false,
+  positive = false,
 }: {
   value: number;
   onChange: (v: number) => void;
   min?: number;
   step?: number;
   decimals?: number;
+  /** Smaller buttons and a fixed-width number, to sit inside a list row. */
+  compact?: boolean;
+  /** Never 0: the minus button stops before it, and 0 or nothing left in the box goes back to 1. */
+  positive?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const btn = (icon: 'minus' | 'plus', delta: number, label: string) => (
     <Pressable
-      onPress={() => onChange(Math.max(min, Number((value + delta).toFixed(decimals))))}
+      onPress={() => {
+        const next = Math.max(min, Number((value + delta).toFixed(decimals)));
+        if (!positive || next > 0) onChange(next);
+      }}
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={6}
       style={({ pressed }) => ({
-        width: 34,
-        height: 34,
+        width: compact ? 30 : 34,
+        height: compact ? 30 : 34,
         borderRadius: t.radius.sm,
         backgroundColor: t.c.card2,
         borderWidth: 1,
@@ -644,11 +653,16 @@ export function QuantityStepper({
           const n = Number(clean);
           onChange(Number.isFinite(n) ? n : min);
         }}
-        onBlur={() => setText(String(value))}
+        onBlur={() => {
+          if (positive && !(value > 0)) {
+            onChange(1);
+            setText('1');
+          } else setText(String(value));
+        }}
         keyboardType={decimals > 0 ? 'decimal-pad' : 'number-pad'}
         accessibilityLabel={tr('common:component.quantity')}
         style={{
-          minWidth: 52,
+          ...(compact ? { width: 56 } : { minWidth: 52 }),
           textAlign: 'center',
           color: t.c.text,
           fontSize: t.fontSize.body,

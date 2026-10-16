@@ -15,7 +15,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
-import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
@@ -30,7 +30,7 @@ import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
-import { INDIAN_STATES } from '@esmart/core/data/masters';
+import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
@@ -631,44 +631,66 @@ export function DocumentEditor({
               Math.round(line.unitPrice.minor * line.quantity * (1 - (line.discountMode === 'percent' ? line.discountValue / 100 : 0))),
               draft.currency,
             );
+            const maxQty = maxReturnQty(line);
             return (
-              <Pressable
-                key={line.id}
-                onPress={() => setEditingLine(line)}
-                accessibilityRole="button"
-                accessibilityLabel={`Edit ${line.name}`}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  gap: t.spacing.md,
-                  padding: t.spacing.lg,
-                  borderBottomWidth: i < draft.lines.length - 1 ? 0.5 : 0,
-                  borderBottomColor: t.c.line,
-                  backgroundColor: pressed ? t.c.card2 : 'transparent',
-                })}
-              >
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text variant="body" weight="600" numberOfLines={1}>
-                    {line.name || 'Untitled line'}
-                  </Text>
+              <View key={line.id} style={{ borderBottomWidth: i < draft.lines.length - 1 ? 0.5 : 0, borderBottomColor: t.c.line }}>
+                <Pressable
+                  onPress={() => setEditingLine(line)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${line.name}`}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    gap: t.spacing.md,
+                    paddingHorizontal: t.spacing.lg,
+                    paddingTop: t.spacing.lg,
+                    paddingBottom: t.spacing.sm,
+                    backgroundColor: pressed ? t.c.card2 : 'transparent',
+                  })}
+                >
+                  <View style={{ flex: 1, gap: 5 }}>
+                    <Text variant="body" weight="600" numberOfLines={1}>
+                      {line.name || 'Untitled line'}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 5 }}>
+                      <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
+                      {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
+                      {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+                      {formatMoney(lineTotal)}
+                    </Text>
+                    <MaterialCommunityIcons name="pencil-outline" size={15} color={t.c.muted} />
+                  </View>
+                </Pressable>
+                {/* The quantity changes right here, outside the tap that opens the full editor. */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: t.spacing.sm,
+                    paddingHorizontal: t.spacing.lg,
+                    paddingBottom: t.spacing.lg,
+                  }}
+                >
+                  <QuantityStepper
+                    compact
+                    positive
+                    value={line.quantity}
+                    onChange={(q) => updateLine(line.id, { quantity: maxQty !== undefined ? Math.min(q, maxQty) : q })}
+                    min={0}
+                    decimals={unitDecimals(line.unit)}
+                  />
                   <Text variant="caption" tone="muted">
-                    {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
+                    {line.unit} × {formatMoney(line.unitPrice)}
                     {line.discountValue > 0
                       ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, draft.currency))}`
                       : ''}
                   </Text>
-                  <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
-                    <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
-                    {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
-                    {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
-                  </View>
                 </View>
-                <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-                    {formatMoney(lineTotal)}
-                  </Text>
-                  <MaterialCommunityIcons name="pencil-outline" size={15} color={t.c.muted} />
-                </View>
-              </Pressable>
+              </View>
             );
           })}
         </Card>

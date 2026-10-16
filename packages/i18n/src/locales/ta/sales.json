@@ -110,6 +110,7 @@
     "remove": "அகற்று",
     "saveLine": "வரிசையைச் சேமி",
     "description": "விவரம்",
+    "descriptionPlaceholder": "இந்த வரிக்கான கூடுதல் விவரங்கள் (விருப்பம்)",
     "itemOrService": "பொருள் அல்லது சேவை",
     "unit": "அலகு",
     "rate": "விலை",

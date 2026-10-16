@@ -110,6 +110,7 @@
     "remove": "Remove",
     "saveLine": "Save line",
     "description": "Description",
+    "descriptionPlaceholder": "Optional details for this line",
     "itemOrService": "Item or service",
     "unit": "Unit",
     "rate": "Rate",
