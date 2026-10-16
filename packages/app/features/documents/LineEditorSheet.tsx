@@ -63,7 +63,7 @@ function LineEditorForm({
   const [quantity, setQuantity] = useState(line?.quantity ?? 1);
   const [unit, setUnit] = useState(line?.unit ?? 'NOS');
   const [price, setPrice] = useState(line ? String(toMajor(line.unitPrice)) : '0');
-  const [discountMode, setDiscountMode] = useState<'percent' | 'amount'>(line?.discountMode ?? 'percent');
+  const [discountMode, setDiscountMode] = useState<'percent' | 'amount'>(line?.discountMode ?? 'amount');
   const [discountValue, setDiscountValue] = useState(String(line?.discountValue ?? 0));
   const [taxCategoryId, setTaxCategoryId] = useState(line?.taxCategoryId ?? '');
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);

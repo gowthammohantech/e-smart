@@ -29,7 +29,7 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import { factorOf, fromMajor, money, toMajor } from '@esmart/core/lib/money';
+import { factorOf, fromMajor, money, subtract, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
 import { checkCreditLimit } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, isLowStock, stockMap, stockShortfalls } from '@esmart/core/domain/stockLedger';
@@ -627,10 +627,9 @@ export function DocumentEditor({
       ) : (
         <Card padded={false}>
           {draft.lines.map((line, i) => {
-            const lineTotal = money(
-              Math.round(line.unitPrice.minor * line.quantity * (1 - (line.discountMode === 'percent' ? line.discountValue / 100 : 0))),
-              draft.currency,
-            );
+            // After the line's discount, % or amount, as the totals work it out.
+            const calc = calculateLine(line, draft.currency, docTaxContext);
+            const lineTotal = subtract(calc.gross, calc.discount);
             const maxQty = maxReturnQty(line);
             return (
               <View key={line.id} style={{ borderBottomWidth: i < draft.lines.length - 1 ? 0.5 : 0, borderBottomColor: t.c.line }}>
