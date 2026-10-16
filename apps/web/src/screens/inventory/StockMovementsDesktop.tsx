@@ -8,7 +8,7 @@ import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import type { StockMovement, StockMovementType } from '@esmart/core/types';
@@ -18,8 +18,6 @@ import { formatDate } from '@esmart/core/lib/date';
 import { useBranches, useItems, useStockMovements } from '@esmart/app/store/selectors';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
-
-const LIMIT = 200;
 
 /**
  * Stock movements for a desktop: search and type filters in one toolbar, then
@@ -52,7 +50,6 @@ export function StockMovementsDesktop() {
       .sort((a, b) => (b.date === a.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
   }, [movements, query, type, itemOf]);
 
-  const shown = filtered.slice(0, LIMIT);
   const showBranch = branches.length > 1;
 
   return (
@@ -100,12 +97,13 @@ export function StockMovementsDesktop() {
           </View>
         </View>
 
-        {shown.length === 0 ? (
+        {filtered.length === 0 ? (
           <Card padded={false}>
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />
           </Card>
         ) : (
           <DataTable<StockMovement>
+            pageSize={TABLE_PAGE_SIZE}
             scroll={false}
             columns={[
               {
@@ -186,7 +184,7 @@ export function StockMovementsDesktop() {
                 },
               },
             ]}
-            rows={shown}
+            rows={filtered}
             rowKey={(m) => m.id}
             onRowPress={(m) => {
               const item = itemOf(m.itemId);

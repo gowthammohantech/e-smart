@@ -8,7 +8,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -199,6 +199,7 @@ export function SyncStatusDesktop() {
               </Card>
             ) : (
               <DataTable<SyncQueueEntry>
+                pageSize={TABLE_PAGE_SIZE}
                 scroll={false}
                 columns={[
                   {

@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
@@ -90,6 +90,7 @@ export function OpeningStockDesktop() {
                 </Card>
               ) : (
                 <DataTable<Item>
+                  pageSize={TABLE_PAGE_SIZE}
                   scroll={false}
                   columns={[
                     {
