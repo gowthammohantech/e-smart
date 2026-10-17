@@ -32,7 +32,7 @@ export default function BranchesStep() {
   const [gstin, setGstin] = useState('');
   const [stateOpen, setStateOpen] = useState(false);
   const gstinError = validGstin(gstin);
-  const pinError = validPostalCode(postalCode, draft.address.country);
+  const pinError = validPostalCode(postalCode, draft.address.country, stateCode);
 
   const add = () => {
     if (!name.trim() || gstinError || pinError) return;

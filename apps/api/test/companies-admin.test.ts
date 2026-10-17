@@ -73,6 +73,14 @@ describe('company profile', () => {
     const notImage = multipart('file', 'logo.png', 'image/png', Buffer.from('hello'));
     expect((await t.put(`${c}/logo`, notImage.body, { token, headers: notImage.headers })).status).toBe(415);
 
+    // A phone photo of a few MB goes through; past 5 MB it doesn't.
+    const photo = multipart('file', 'logo.png', 'image/png', Buffer.concat([PNG, Buffer.alloc(3 * 1024 * 1024)]));
+    expect((await t.put(`${c}/logo`, photo.body, { token, headers: photo.headers })).status).toBe(200);
+    const huge = multipart('file', 'logo.png', 'image/png', Buffer.concat([PNG, Buffer.alloc(6 * 1024 * 1024)]));
+    const tooBig = await t.put(`${c}/logo`, huge.body, { token, headers: huge.headers });
+    expect(tooBig.status).toBe(422);
+    expect(tooBig.body.code).toBe('FILE_TOO_LARGE');
+
     expect((await t.del(`${c}/logo`, { token })).status).toBe(204);
     const got = await t.get(c, { token });
     expect(got.body.logoUri).toBeUndefined();

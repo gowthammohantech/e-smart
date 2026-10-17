@@ -11,6 +11,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useAppStore } from '../../store/appStore';
+import { queueLogo } from '../../remote/logo';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES, stateName } from '@esmart/core/data/masters';
 import { uid } from '@esmart/core/lib/id';
@@ -62,6 +63,9 @@ export default function Done() {
         placeOfSupplyStateCode: draft.address.stateCode,
       },
     });
+
+    // Uploads by itself once the business has reached the server; until then the picked image is what shows.
+    if (draft.logoUri) queueLogo(companyId, draft.logoUri);
 
     draft.branches.forEach((b) => {
       saveBranch({

@@ -98,7 +98,7 @@ export default function BranchSettings() {
             ? tr('settings:branches.gstinStateMismatch', { state: stateName(cleanGstin.slice(0, 2)) })
             : undefined)
         : undefined,
-      postalCode: validPostalCode(postalCode, company.address.country),
+      postalCode: validPostalCode(postalCode, company.address.country, stateCode),
       phone: phone.error(),
     };
     setErrors(next);

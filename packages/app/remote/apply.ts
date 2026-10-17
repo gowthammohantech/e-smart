@@ -1,6 +1,7 @@
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { useAppStore } from '../store/appStore';
 import { COLLECTIONS, COMPANY_DEFAULTS, type CollectionKey } from './collections';
+import { useLogoQueue } from './logoQueue';
 import { knownToServer, useRemoteMeta } from './meta';
 
 type Row = Record<string, unknown>;
@@ -49,6 +50,7 @@ export function remapIds(map: Record<string, string>) {
     activeBranchId: s.activeBranchId ? (ids.get(s.activeBranchId) ?? s.activeBranchId) : s.activeBranchId,
     session: { ...s.session, userId: s.session.userId ? (ids.get(s.session.userId) ?? s.session.userId) : null },
   } as never);
+  useLogoQueue.getState().remap(ids);
   const meta = useRemoteMeta.getState();
   // A screen may still hold the old id (its route param), so remember where it went.
   meta.addAliases(Object.fromEntries(ids));

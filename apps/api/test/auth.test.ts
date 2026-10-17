@@ -57,8 +57,19 @@ describe('auth', () => {
     expect((await t.get('/me', { token: other.body.accessToken })).status).toBe(200);
   });
 
+  /** Proves a phone by OTP and returns the verification to hand to sign-up. */
+  async function verifyPhone(phone: string) {
+    const req = await t.post('/auth/otp/request', { phone });
+    const code = t.providers.outbox.last('sms', phone)!.text.slice(0, 6);
+    const res = await t.post('/auth/otp/verify', { requestId: req.body.requestId, code });
+    return { requestId: req.body.requestId as string, res };
+  }
+
   it('signs in with a phone OTP sent over SMS', async () => {
-    await signUpOwner(t, { phone: '+919876543210' });
+    const phone = '+919876543210';
+    const { requestId } = await verifyPhone(phone);
+    expect((await t.post('/auth/sign-up', { name: 'Owner', email: 'owner@example.com', password: 'long enough pw', phone, phoneVerificationId: requestId })).status).toBe(201);
+    t.setNow(new Date(Date.now() + 60_000).toISOString());
     const req = await t.post('/auth/otp/request', { phone: '+919876543210' });
     expect(req.status).toBe(200);
     const code = t.providers.outbox.last('sms', '+919876543210')!.text.slice(0, 6);
@@ -95,6 +106,40 @@ describe('auth', () => {
     const again = await t.post('/auth/sign-up', { name: 'Y', email: 'y@example.com', password: 'long enough pw', phoneVerificationId: req.body.requestId });
     expect(again.status).toBe(409);
     expect(again.body.code).toBe('PHONE_TAKEN');
+  });
+
+  it('lets many accounts list one number but only the verifier signs in with it', async () => {
+    const phone = '+919555000111';
+    // Two people type the same number without verifying it; both are allowed.
+    const first = await t.post('/auth/sign-up', { name: 'A', email: 'a@example.com', password: 'long enough pw', phone });
+    const second = await t.post('/auth/sign-up', { name: 'B', email: 'b@example.com', password: 'long enough pw', phone });
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+
+    // The number is not verified for either, so it can't sign anyone in: the code only proves it for a new sign-up.
+    const attempt = await verifyPhone(phone);
+    expect(attempt.res.status).toBe(401);
+    expect(attempt.res.body.code).toBe('PHONE_NOT_REGISTERED');
+
+    // The real owner signs up with that proven number, even though others listed it.
+    const owner = await t.post('/auth/sign-up', { name: 'Real Owner', email: 'real@example.com', password: 'long enough pw', phone, phoneVerificationId: attempt.requestId });
+    expect(owner.status).toBe(201);
+
+    // From now on the number signs in to the owner's account only.
+    t.setNow(new Date(Date.now() + 60_000).toISOString());
+    const req = await t.post('/auth/otp/request', { phone });
+    const code = t.providers.outbox.last('sms', phone)!.text.slice(0, 6);
+    const login = await t.post('/auth/otp/verify', { requestId: req.body.requestId, code });
+    expect(login.status).toBe(200);
+    expect(login.body.user.email).toBe('real@example.com');
+
+    // The others still sign in with email and password.
+    expect((await t.post('/auth/sign-in', { email: 'a@example.com', password: 'long enough pw' })).status).toBe(200);
+
+    // A number someone else verified can still be typed in, but not verified a second time.
+    const third = await t.post('/auth/sign-up', { name: 'C', email: 'c@example.com', password: 'long enough pw', phone });
+    expect(third.status).toBe(201);
+    expect(third.body.user.phone).toBe(phone);
   });
 
   it('throttles OTP requests per number', async () => {

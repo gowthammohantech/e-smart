@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import type { Schema } from '@esmart/api-client';
 import { emptyData, useAppStore } from '../store/appStore';
 import { api } from './api';
+import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
 import { loadSnapshot } from './sync';
 import { onTokensChange, setTokens } from './tokens';
@@ -67,6 +68,8 @@ export async function forgotPassword(email: string) {
 /** Forgets the session and everything loaded for it on this device. */
 function clearLocal() {
   useRemoteMeta.getState().reset();
+  // A logo waiting to upload belongs to the account that left.
+  useLogoQueue.getState().reset();
   useAppStore.setState({
     ...emptyData(),
     activeCompanyId: '',

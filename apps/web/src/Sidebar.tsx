@@ -50,6 +50,31 @@ function groupOf(name: TabName): GroupKey | null {
 /** react-native-web passes `fixed` through; the native types don't know it. */
 const FIXED = 'fixed' as ViewStyle['position'];
 
+/** The logo at the top of the sidebar: a link to Home, as a logo is on most sites. */
+function HomeLogo({ compact }: { compact: boolean }) {
+  const t = useTheme();
+  const router = useRouter();
+  const { t: tr } = useTranslation(['nav']);
+  const home = tabPath('index');
+  const label = tr('nav:tab.index');
+  return (
+    <Pressable
+      // A real link, so it can be middle-clicked or opened in a new tab; a plain click navigates in the app.
+      {...({ href: home } as object)}
+      onPress={(e) => {
+        e.preventDefault();
+        router.navigate(home as never);
+      }}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={(state) => ({ borderRadius: 6, ...focusRing(t, (state as WebPressState).focused) })}
+    >
+      {compact ? <BrandLogo variant="mark" height={30} /> : <BrandLogo height={42} />}
+    </Pressable>
+  );
+}
+
 function NavItem({
   icon,
   label,
@@ -428,7 +453,7 @@ export function Sidebar() {
             alignItems: compact ? 'center' : 'flex-start',
           }}
         >
-          {compact ? <BrandLogo variant="mark" height={30} /> : <BrandLogo height={42} />}
+          <HomeLogo compact={!!compact} />
         </View>
         <View style={{ paddingHorizontal: t.spacing.sm }}>
           <CompanySwitcher compact={compact} />

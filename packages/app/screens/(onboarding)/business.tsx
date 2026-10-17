@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
+import { pickLogo } from '../../features/company/pickLogo';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { WizardShell } from '@esmart/ui/components/WizardShell';
 import { TextField, PickerField, PhoneField } from '@esmart/ui/components/Field';
@@ -12,6 +13,7 @@ import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { Text } from '@esmart/ui/components/Text';
 import { FieldRow } from '@esmart/ui/components/Layout';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useSignOut } from '../../features/session/useSignOut';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -26,20 +28,24 @@ export default function BusinessStep() {
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
   const desktop = useIsDesktop();
+  const signOut = useSignOut();
 
   const [typeOpen, setTypeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode'>>({});
 
-  const pickLogo = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.6,
-    });
-    if (!result.canceled && result.assets[0]) set({ logoUri: result.assets[0].uri });
+  const [logoError, setLogoError] = useState<string | undefined>();
+
+  const chooseLogo = async () => {
+    setLogoError(undefined);
+    const picked = await pickLogo();
+    if (!picked) return;
+    if ('error' in picked) {
+      setLogoError(tr(picked.error === 'tooLarge' ? 'onboarding:business.logoTooLarge' : 'onboarding:business.logoBadType'));
+      return;
+    }
+    set({ logoUri: picked.uri });
   };
 
   const next = () => {
@@ -49,7 +55,7 @@ export default function BusinessStep() {
       state: required(draft.address.state, 'State'),
       email: validEmail(draft.email),
       phone: validPhoneParts(draft.phoneDialCode, draft.phone),
-      postalCode: validPostalCode(draft.address.postalCode, draft.address.country),
+      postalCode: validPostalCode(draft.address.postalCode, draft.address.country, draft.address.stateCode),
     };
     setErrors(nextErrors);
     if (hasErrors(nextErrors)) return;
@@ -63,18 +69,19 @@ export default function BusinessStep() {
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('business', draft.plan)}
       onPrimary={next}
+      onSignOut={signOut}
     >
       <View style={desktop ? { flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg } : { alignItems: 'center', gap: t.spacing.sm }}>
         <Pressable
-          onPress={pickLogo}
+          onPress={chooseLogo}
           accessibilityRole="button"
-          accessibilityLabel={tr('onboarding:business.addLogo')}
+          accessibilityLabel={draft.logoUri ? tr('onboarding:business.logoChange') : tr('onboarding:business.addLogo')}
           style={{
             width: 84,
             height: 84,
-            borderRadius: t.radius.lg,
+            borderRadius: 17,
             backgroundColor: t.c.card2,
-            borderWidth: 1,
+            borderWidth: draft.logoUri ? 0 : 1,
             borderStyle: 'dashed',
             borderColor: t.c.line,
             alignItems: 'center',
@@ -83,9 +90,7 @@ export default function BusinessStep() {
           }}
         >
           {draft.logoUri ? (
-            <View style={{ width: '100%', height: '100%', backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialCommunityIcons name="check" size={26} color={t.c.primary} />
-            </View>
+            <CompanyLogo uri={draft.logoUri} name={draft.name || 'Business'} size={84} />
           ) : (
             <MaterialCommunityIcons name="image-plus" size={26} color={t.c.muted} />
           )}
@@ -96,9 +101,28 @@ export default function BusinessStep() {
               {tr('onboarding:business.addLogo')}
             </Text>
           ) : null}
-          <Text variant="caption" tone="muted">
-            {draft.logoUri ? tr('onboarding:business.logoSelected') : tr('onboarding:business.logoOptional')}
+          <Text variant="caption" tone={logoError ? 'bad' : 'muted'} center={!desktop}>
+            {logoError ?? (draft.logoUri ? tr('onboarding:business.logoSelected') : tr('onboarding:business.logoOptional'))}
           </Text>
+          {draft.logoUri ? (
+            <View style={{ flexDirection: 'row', gap: t.spacing.lg, marginTop: 2 }}>
+              <Text variant="small" tone="primary" weight="600" accessibilityRole="button" onPress={chooseLogo}>
+                {tr('onboarding:business.logoChange')}
+              </Text>
+              <Text
+                variant="small"
+                tone="muted"
+                weight="600"
+                accessibilityRole="button"
+                onPress={() => {
+                  setLogoError(undefined);
+                  set({ logoUri: undefined });
+                }}
+              >
+                {tr('onboarding:business.logoRemove')}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
 

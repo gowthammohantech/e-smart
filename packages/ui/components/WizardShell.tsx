@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { Text } from './Text';
 import { Button } from './Button';
 import { Stepper } from './Stepper';
 import { SHOW_SCROLLBAR, useIsDesktop } from '../theme/breakpoints';
+import { ScrollKeepContext, type ScrollKeep } from './ScrollKeep';
 
 /** The step content column on a desktop browser. */
 export const WIZARD_CONTENT_WIDTH = 760;
@@ -25,6 +26,7 @@ export function WizardShell({
   secondaryLabel,
   onSecondary,
   onSkip,
+  onSignOut,
 }: {
   title: string;
   subtitle?: string;
@@ -38,6 +40,8 @@ export function WizardShell({
   secondaryLabel?: string;
   onSecondary?: () => void;
   onSkip?: () => void;
+  /** On a phone's first step there is no back; this offers the way out to sign-in. */
+  onSignOut?: () => void;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'onboarding']);
@@ -45,13 +49,28 @@ export function WizardShell({
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
 
+  // Pickers on the form restore this position when their sheet closes.
+  const scrollRef = useRef<ScrollView>(null);
+  const offset = useRef(0);
+  const keep = useMemo<ScrollKeep>(
+    () => ({ y: offset, scrollTo: (y) => scrollRef.current?.scrollTo({ y, animated: false }) }),
+    [],
+  );
+  const track = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offset.current = e.nativeEvent.contentOffset.y;
+  };
+
   // On a desktop the web layout draws the step rail beside this, so the
   // Stepper and round back button go; actions sit in a footer bar under the
   // form, with Back on the left and the way forward on the right.
   if (desktop) {
     return (
+      <ScrollKeepContext.Provider value={keep}>
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <ScrollView
+          ref={scrollRef}
+          onScroll={track}
+          scrollEventThrottle={16}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingVertical: t.spacing.xxxl, paddingHorizontal: t.spacing.xxxl, alignItems: 'center' }}
           keyboardShouldPersistTaps="handled"
@@ -100,10 +119,12 @@ export function WizardShell({
           </View>
         </View>
       </View>
+      </ScrollKeepContext.Provider>
     );
   }
 
   return (
+    <ScrollKeepContext.Provider value={keep}>
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -134,6 +155,10 @@ export function WizardShell({
             >
               <MaterialCommunityIcons name="arrow-left" size={19} color={t.c.text} />
             </Pressable>
+          ) : onSignOut ? (
+            <Pressable onPress={onSignOut} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.signOut')}>
+              <Text variant="small" tone="primary" weight="600">{tr('common:component.signOut')}</Text>
+            </Pressable>
           ) : (
             <View style={{ width: 36 }} />
           )}
@@ -157,6 +182,9 @@ export function WizardShell({
       </View>
 
       <ScrollView
+        ref={scrollRef}
+        onScroll={track}
+        scrollEventThrottle={16}
         contentContainerStyle={{
           paddingHorizontal: t.spacing.xl,
           paddingBottom: t.spacing.xxxl,
@@ -185,5 +213,6 @@ export function WizardShell({
         ) : null}
       </View>
     </KeyboardAvoidingView>
+    </ScrollKeepContext.Provider>
   );
 }
