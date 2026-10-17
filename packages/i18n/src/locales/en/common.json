@@ -1,0 +1,218 @@
+{
+  "action": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "done": "Done",
+    "retry": "Retry",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "edit": "Edit",
+    "share": "Share",
+    "search": "Search",
+    "clear": "Clear",
+    "apply": "Apply",
+    "reset": "Reset",
+    "confirm": "Confirm"
+  },
+  "placeholder": {
+    "none": "—",
+    "unknown": "Unknown"
+  },
+  "dateRange": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last7": "Last 7 days",
+    "last30": "Last 30 days",
+    "thisMonth": "This month",
+    "lastMonth": "Last month",
+    "last90": "Last 90 days",
+    "thisFY": "This financial year",
+    "lastFY": "Last financial year",
+    "all": "All time",
+    "custom": "Custom"
+  },
+  "relative": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "inDays_one": "in {{count}} day",
+    "inDays_other": "in {{count}} days"
+  },
+  "dateTime": {
+    "at": "{{date}} at {{time}}"
+  },
+  "fy": {
+    "label": "FY {{from}}-{{to}}"
+  },
+  "compact": {
+    "thousand": "K",
+    "lakh": "L",
+    "crore": "Cr",
+    "million": "M",
+    "billion": "B"
+  },
+  "list": {
+    "pair": "{{first}} and {{second}}",
+    "end": "{{list}} and {{last}}",
+    "separator": "{{list}}, {{item}}"
+  },
+  "documentList": {
+    "search": "Search {{kind, lowercase}}",
+    "count_one": "{{count}} {{kind, lowercase}}",
+    "count_other": "{{count}} {{kind, lowercase}}",
+    "filterByStatus": "Filter by {{status}}",
+    "emptyNoneTitle": "No {{kind, lowercase}} yet",
+    "emptyNoneMessage": "Create your first {{kind, lowercase}} to see it here.",
+    "emptyNoMatchTitle": "Nothing matches",
+    "emptyNoMatchMessage": "Try clearing a filter or searching for something else.",
+    "clearFilters": "Clear filters",
+    "statusSection": "Status"
+  },
+  "documentEditor": {
+    "finalised": "{{kind}} finalised",
+    "savedDraft": "Saved as draft",
+    "dateLabel": "{{kind}} date",
+    "numberLabel": "{{kind}} number",
+    "finaliseTitle": "Finalise this {{kind, lowercase}}?",
+    "finaliseMessage": "A permanent number will be assigned and the {{kind, lowercase}} can no longer be edited freely.",
+    "prefillMissingParty": "That customer isn't available any more. Pick one to continue."
+  },
+  "documentDetail": {
+    "changeStatus": "Change status",
+    "currently": "Currently {{status, lowercase}}",
+    "marked": "Marked {{status, lowercase}}",
+    "markAs": "Mark {{status}}",
+    "cancelKind": "Cancel {{kind, lowercase}}",
+    "createdDraft": "Created a draft {{kind, lowercase}}",
+    "shareTitle": "{{kind}} {{number}}",
+    "shareMessage": "{{kind}} {{number}} — {{amount}}",
+    "sent": "On its way to the customer",
+    "linkCopied": "Link copied"
+  },
+  "component": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "search": "Search",
+    "clearSearch": "Clear search",
+    "close": "Close",
+    "create": "Create",
+    "offline": "Offline",
+    "notifications": "Notifications",
+    "business": "Business",
+    "allBranches": "All branches",
+    "switchBranch": "Switch branch. Current: {{branch}}",
+    "clear": "Clear",
+    "done": "Done",
+    "noMatches": "No matches",
+    "goBack": "Go back",
+    "signOut": "Sign out",
+    "skip": "Skip",
+    "noChartData": "No data for this period",
+    "quantity": "Quantity",
+    "countryCode": "Country code",
+    "useTyped": "Use “{{value}}”",
+    "city": "City",
+    "selectCity": "Select city",
+    "searchCity": "Search for a city",
+    "noCityMatch": "This city isn’t in the list. Check the spelling, or pick the nearest city.",
+    "allStates": "All states"
+  },
+  "totals": {
+    "subtotal": "Subtotal",
+    "lineDiscounts": "Line discounts",
+    "taxableValue": "Taxable value",
+    "discountOnTotal": "Discount on total",
+    "otherCharges": "Other charges",
+    "roundOff": "Round off",
+    "total": "Total"
+  },
+  "quickAction": {
+    "newInvoice": "New invoice",
+    "newQuote": "New quote",
+    "receivePayment": "Receive payment",
+    "addExpense": "Add expense",
+    "addCustomer": "Add customer",
+    "addItem": "Add item"
+  },
+  "editorStep": {
+    "party": "Who",
+    "items": "What",
+    "extras": "Tax & terms",
+    "review": "Review"
+  },
+  "notFound": {
+    "title": "Not found",
+    "document": "This document may have been deleted.",
+    "contact": "This contact may have been deleted.",
+    "expense": "This expense may have been deleted.",
+    "item": "This item may have been deleted.",
+    "payment": "This payment may have been deleted."
+  },
+  "notifications": {
+    "markAllRead": "Mark all read",
+    "emptyBody": "Invoices sent, payments received, overdue reminders and stock alerts land here.",
+    "deliveryNote": "Delivered in-app · push, email and WhatsApp are configured under Integrations",
+    "clearAll": "Clear all",
+    "clearTitle": "Clear all notifications?",
+    "clearMessage": "They will be removed from this business",
+    "clear": "Clear",
+    "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched."
+  },
+  "search": {
+    "placeholder": "Invoices, contacts, items, payments…",
+    "clearHistory": "Clear history",
+    "title": "Search everything",
+    "subtitle": "Find an invoice number, a customer, an item",
+    "noMatches": "No matches",
+    "recent": "Recent searches",
+    "clear": "Clear",
+    "subtitleFull": "Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in."
+  },
+  "filters": {
+    "title": "Filters",
+    "reset": "Reset",
+    "apply": "Apply",
+    "clearParty": "Clear party filter",
+    "dateRange": "Date range",
+    "status": "Status"
+  },
+  "business": {
+    "switch": "Switch business",
+    "switchHint": "Each business keeps its own books, numbering and reports.",
+    "branch": "Branch"
+  },
+  "table": {
+    "number": "Number",
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "party": "Party",
+    "date": "Date",
+    "due": "Due",
+    "status": "Status",
+    "amount": "Amount",
+    "outstanding": "Balance due",
+    "name": "Name",
+    "code": "Code",
+    "taxId": "Tax ID",
+    "phone": "Phone",
+    "email": "Email",
+    "sku": "SKU",
+    "hsn": "HSN/SAC",
+    "price": "Price",
+    "unit": "Unit",
+    "onHand": "On hand",
+    "type": "Type",
+    "category": "Category",
+    "method": "Method",
+    "tax": "Tax",
+    "applied": "Applied",
+    "reference": "Reference",
+    "total": "Total",
+    "allDates": "All dates",
+    "clear": "Clear filters"
+  }
+}

@@ -1,0 +1,80 @@
+import type { Schema } from '@esmart/api-contract';
+import type { schema } from '@esmart/db';
+import type { Deps } from '../../context';
+import { addressTo, compact, requiredAddressFrom, versioned } from '../../lib/wire';
+
+type CompanyRow = typeof schema.companies.$inferSelect;
+type BranchRow = typeof schema.branches.$inferSelect;
+
+export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: string | null): Promise<Schema<'Company'>> {
+  const logoUri = logoKey ? (await deps.providers.storage.downloadUrl(logoKey, { ttlSeconds: 3600 })).url : undefined;
+  return compact({
+    id: row.id,
+    accountId: row.accountId,
+    name: row.name,
+    legalName: row.legalName,
+    logoUri,
+    businessType: row.businessType,
+    country: row.country.trim(),
+    baseCurrency: row.baseCurrency.trim(),
+    address: requiredAddressFrom(row, 'address'),
+    email: row.email,
+    phone: row.phone,
+    website: row.website,
+    taxRegistration: {
+      regime: row.taxRegime,
+      identifier: row.taxIdentifier,
+      identifierLabel: row.taxIdentifierLabel,
+      registered: row.taxRegistered,
+      compositionScheme: row.compositionScheme,
+      placeOfSupplyStateCode: row.placeOfSupplyStateCode,
+      lutNumber: row.lutNumber,
+      lutValidTill: row.lutValidTill,
+    },
+    fiscalYearStartMonth: row.fiscalYearStartMonth,
+    allowNegativeStock: row.allowNegativeStock,
+    plan: row.plan,
+    ...versioned(row),
+  });
+}
+
+/** Columns for a Company body. Server-owned fields (plan, ids) are not touched. */
+export function companyColumns(body: Schema<'Company'>) {
+  const tax = body.taxRegistration;
+  return {
+    name: body.name.trim(),
+    legalName: body.legalName ?? null,
+    businessType: body.businessType,
+    country: body.country,
+    baseCurrency: body.baseCurrency,
+    ...addressTo('address', body.address),
+    email: body.email ?? null,
+    phone: body.phone ?? null,
+    website: body.website ?? null,
+    taxRegime: tax?.regime ?? 'NONE',
+    taxIdentifier: tax?.identifier?.trim().toUpperCase() || null,
+    taxIdentifierLabel: tax?.identifierLabel ?? 'GSTIN',
+    taxRegistered: tax?.registered ?? false,
+    compositionScheme: tax?.compositionScheme ?? false,
+    placeOfSupplyStateCode: tax?.placeOfSupplyStateCode ?? body.address.stateCode ?? null,
+    lutNumber: tax?.lutNumber?.trim().toUpperCase() || null,
+    lutValidTill: tax?.lutNumber?.trim() ? (tax.lutValidTill ?? null) : null,
+    fiscalYearStartMonth: body.fiscalYearStartMonth,
+    // Left alone when a client that predates the setting saves the company.
+    ...(body.allowNegativeStock !== undefined && { allowNegativeStock: body.allowNegativeStock }),
+  };
+}
+
+export function branchToWire(row: BranchRow): Schema<'Branch'> {
+  return compact({
+    id: row.id,
+    companyId: row.companyId,
+    name: row.name,
+    code: row.code,
+    address: requiredAddressFrom(row, 'address'),
+    isPrimary: row.isPrimary,
+    phone: row.phone,
+    gstin: row.gstin,
+    ...versioned(row),
+  });
+}

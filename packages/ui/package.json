@@ -1,0 +1,37 @@
+{
+  "name": "@esmart/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Design tokens, theme and React Native components. Renders on iOS, Android and web.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@esmart/core": "*",
+    "@esmart/i18n": "*"
+  },
+  "peerDependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-community/datetimepicker": "^9.1.0",
+    "expo-haptics": "~57.0.3",
+    "expo-image": "~57.0.5",
+    "expo-router": "~57.0.21",
+    "react": "19.2.3",
+    "react-i18next": "^17.0.14",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "^15.15.4"
+  },
+  "devDependencies": {
+    "@esmart/eslint-config": "*",
+    "@esmart/tsconfig": "*",
+    "@types/jest": "^30.0.0",
+    "@types/react": "~19.2.2",
+    "eslint": "^9.39.5",
+    "jest": "^30.5.1",
+    "jest-expo": "~57.0.5",
+    "typescript": "~6.0.3"
+  }
+}

@@ -1,0 +1,488 @@
+# Elixir Books Smart: backend API contract
+
+The contract between the apps and the server. The server that implements
+it is `apps/api` (every operation, with the portals, OCR and GSTIN lookup
+behind simulators in development; production refuses them), and the apps
+always talk to it (`packages/app/remote`); see the root README. This page lists the APIs, the
+third-party services behind them, and the rules the server enforces.
+
+- **[openapi.yaml](../../packages/api-contract/openapi.yaml)**: the contract, in OpenAPI 3.1. It has 124
+  paths, 165 operations and 2 inbound webhooks, and it passes `redocly lint`
+  (missing operation summaries are warnings). Entity schemas mirror
+  `packages/core/src/types/index.ts` field for field.
+
+View it with `npx @redocly/cli preview-docs packages/api-contract/openapi.yaml`, or paste
+the file into <https://editor.swagger.io>. Its TypeScript types are generated into
+`packages/api-contract/src/schema.d.ts` with `npm run generate -w @esmart/api-contract`,
+and `@esmart/api-client` wraps them in a typed fetch client.
+
+## Contract rules, in brief
+
+The full list is in the spec's `info.description`. The rules that shape
+every endpoint:
+
+| Rule | What it means |
+|---|---|
+| Company-scoped paths | Business data lives under `/companies/{companyId}/…`. The server checks the caller's `companyIds` and `branchIds`. |
+| Money is `{ minor, currency }` | Amounts are integer minor units, as in `packages/core/src/lib/money.ts`. There are no floats anywhere. |
+| Server is authoritative | The server recomputes totals, tax splits, stock, outstanding amounts and derived statuses (`paid`, `partiallyPaid`, `overdue`) with `packages/core/src/domain/*`, the same code the apps run for instant previews. |
+| Server assigns numbers | Documents, payments and expenses get their number when finalised, and a number is never reused. |
+| `version` + `If-Match` | Optimistic concurrency on every write. A stale write gets `412`. |
+| `Idempotency-Key` on POST | Makes offline-queue retries safe. |
+| Problem+JSON errors | Each error has a stable `code`. Validation and portal rejections also carry `issues[]` in the same shape as `ComplianceIssue`. |
+| Plan gating | A module outside the plan returns `403 PLAN_UPGRADE_REQUIRED`, which follows `packages/core/src/domain/plan.ts`. Operations carry `x-plan-module`. |
+| Roles | Operations carry `x-roles` (owner, admin, accountant, sales, viewer). |
+| Platform operators | `/admin/*` operations carry `x-platform-roles` (superadmin, support) instead. Tenant roles never grant them; anyone else gets `403 PLATFORM_FORBIDDEN`. |
+
+## Third-party services required
+
+These are the external dependencies needed to go fully online. Every one of
+them sits behind the backend; the mobile app never calls them directly.
+
+| Need | Used by | Candidates |
+|---|---|---|
+| **GST e-invoice (IRP)** | `generateEInvoice`, `cancelEInvoice` | NIC IRP through a GSP/ASP: ClearTax, Masters India, IRIS, or NIC direct API access |
+| **E-way bill portal** | `generateEwayBill`, Part-B, extend, cancel, `getRoadDistance` | NIC EWB API (usually from the same GSP as the IRP) |
+| **GSTIN verification** | `lookupGstin`, party and company autofill | GST public search API through a GSP |
+| **SMS / OTP** | `requestOtp`, reminders, invites | MSG91, Twilio, Gupshup (India needs a DLT-registered sender and templates) |
+| **WhatsApp Business** | `sendDocument`, `sendPaymentReminder`, OTP fallback | Meta Cloud API, Gupshup, Interakt |
+| **Email** | invites, password reset, sending documents | Azure Communication Services (`EMAIL_PROVIDER=acs`), Amazon SES (`ses`) |
+| **Payments** | `createPaymentLink`, `razorpayWebhook` | Razorpay (payment links, UPI) |
+| **Subscriptions** | `startCheckout`, plan changes | Razorpay Subscriptions, or App Store / Play Billing if sold in-app |
+| **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`) |
+| **OCR** | `createOcrExtraction` | Google Document AI, AWS Textract, Azure Document Intelligence, or an LLM vision model |
+| **Object storage** | attachments, logos, item images, PDFs, exports | Azure Blob Storage (`STORAGE_PROVIDER=azure`, SAS URLs), S3 or R2 (`s3`, pre-signed URLs) |
+| **PDF rendering** | `getDocumentPdf`, receipts, statements, reports | Headless Chromium (Puppeteer or Gotenberg) running the same template as `documentHtml.ts` |
+| **Push notifications** | `registerPushToken`, notification fan-out | Expo Push, or FCM / APNs |
+| **FX rates** | `refreshExchangeRates` | Open Exchange Rates, exchangerate.host, RBI reference rates |
+| **Reference data** | HSN/SAC search, PIN codes, cities | CBIC HSN master, India Post PIN directory (loaded into your own DB) |
+| **Google Drive** | backup destination (`int_drive`) | Google Drive API (OAuth) |
+| **Secrets** | IRP/EWB credentials (`saveComplianceCredentials`) | AWS KMS, GCP KMS, Vault |
+
+On Azure, set up the storage account once:
+
+- Create the container named by `AZURE_STORAGE_CONTAINER`. The API does not create it.
+- `AZURE_STORAGE_CONNECTION_STRING` must include `AccountKey`, because the upload and download links are SAS URLs signed with it.
+- Add a Blob CORS rule for the web app origin. It must allow `PUT` and `GET`, and allow the headers `content-type` and `x-ms-blob-type`.
+- Clients must send every header in `uploadHeaders` with the PUT. Azure rejects an upload without `x-ms-blob-type: BlockBlob`.
+
+For ACS email, `EMAIL_FROM` must be a verified sender address. A `Name <addr>` form is accepted, but only the address is used: ACS sets the display name on the sender username.
+
+## How the apps use it
+
+The apps stay local-first. Store actions still update the local store at once
+and queue the matching operation in `syncQueue`. It drains through
+`/sync/push`, and `/sync/pull` brings back what the server decided.
+Compliance calls (IRP, e-way bill), attachment uploads, OCR, document PDFs,
+share and payment links, sending, exports and Lixi go straight to the API.
+There is no local demo build: the store starts empty and fills from the API
+on sign-in. Tokens live in `expo-secure-store`.
+
+## Environment
+
+Every setting is in `apps/api/.env.example`. Two groups matter for a deploy:
+
+**Production guards.** With `NODE_ENV=production`, `loadConfig()`
+(`apps/api/src/config.ts`) refuses to start, listing every problem at once,
+when:
+
+- `SMS_PROVIDER`, `EMAIL_PROVIDER`, `WHATSAPP_PROVIDER` or `PUSH_PROVIDER` is `log`;
+- `PDF_PROVIDER=stub`, `FX_PROVIDER=static` or `STORAGE_PROVIDER=memory`;
+- `COMPLIANCE_PROVIDER`, `PAYMENTS_PROVIDER`, `ASSISTANT_PROVIDER`,
+  `GSTIN_PROVIDER` or `OCR_PROVIDER` is `simulator`;
+- a chosen provider lacks its credentials (MSG91, ACS, SES, Meta WhatsApp,
+  Azure Blob, GSP, Razorpay, Open Exchange Rates, Anthropic), or `EMAIL_FROM`
+  is still the example sender;
+- `RAZORPAY_WEBHOOK_SECRET` or `WHATSAPP_WEBHOOK_SECRET` is the development default;
+- `CORS_ORIGINS` contains `*`;
+- `JWT_SECRET` or `CREDENTIALS_KEY` is unset, or `DEMO_OTP` is on.
+
+GSTIN lookup and OCR have no production adapter yet, so they take
+`disabled`: lookups, PIN codes the directory lacks and portal distances
+answer `503 FEATURE_UNAVAILABLE`; OCR still parses text the phone read, and
+answers 503 for an image alone. The apps fall back to manual entry.
+
+**The demo account.** `npm run db:migrate -w @esmart/db` (Railway's
+`preDeploy`) seeds the demo account `acct_elixir_demo` after the reference
+data when `SEED_DEMO_ACCOUNT=true`, in any environment. It is idempotent: an
+existing demo account is left alone, and `db:seed -- --reset` rebuilds it.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SEED_DEMO_ACCOUNT` | off | `true` seeds the demo account on migrate |
+| `DEMO_ACCOUNT_EMAIL` | `gowtham@vertextraders.in` | The demo owner's sign-in |
+| `DEMO_ACCOUNT_PASSWORD` | none (required) | In production: at least 12 characters, not `demo1234` |
+
+The clients' sign-in prefill (`EXPO_PUBLIC_DEMO_LOGIN_*`, `VITE_DEMO_LOGIN_*`)
+is compiled into their bundles; set it only on a demo or sandbox deployment.
+
+## Gaps the server must close
+
+The apps allow some things the server must refuse:
+
+- Deleting a party, item, tax category or branch that records still reference
+  (`removeParty`, `removeItem`, …). The server returns `409 …_IN_USE`.
+- Deleting a finalised document. Only drafts can be deleted; anything else is
+  cancelled, so its number is never lost.
+- Moving a series' `nextNumber` backwards.
+- Clients setting `paid`, `partiallyPaid` or `overdue` directly. The server
+  derives these statuses.
+- Credentials: `irpClientIdMasked` is display-only. Real secrets are
+  write-only and encrypted.
+
+## Endpoint list
+
+`…` stands for `/companies/{companyId}`.
+
+### Auth
+
+| Method | Path | Operation |
+|---|---|---|
+| POST | `/auth/sign-up` | signUp |
+| POST | `/auth/sign-in` | signIn |
+| POST | `/auth/otp/request` | requestOtp |
+| POST | `/auth/otp/verify` | verifyOtp |
+| POST | `/auth/password/forgot` | forgotPassword |
+| POST | `/auth/password/reset` | resetPassword |
+| POST | `/auth/refresh` | refreshToken |
+| POST | `/auth/sign-out` | signOut |
+
+### Me
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `/me` | getMe |
+| PATCH | `/me` | updateProfile |
+| POST | `/me/onboarding/complete` | completeOnboarding |
+| GET | `/me/devices` | listDevices |
+| DELETE | `/me/devices/{deviceId}` | revokeDevice |
+| POST | `/me/push-tokens` | registerPushToken |
+| DELETE | `/me/push-tokens/{token}` | unregisterPushToken |
+
+### Companies
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `/companies` | listCompanies |
+| POST | `/companies` | createCompany |
+| GET | `…` | getCompany |
+| PUT | `…` | saveCompany |
+| PUT | `…/logo` | uploadCompanyLogo |
+| DELETE | `…/logo` | removeCompanyLogo |
+| GET | `…/branches` | listBranches |
+| POST | `…/branches` | createBranch |
+| PUT | `…/branches/{branchId}` | saveBranch |
+| DELETE | `…/branches/{branchId}` | removeBranch |
+
+### Users
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `/users` | listUsers |
+| POST | `/users` | inviteUser |
+| PUT | `/users/{userId}` | saveUser |
+| DELETE | `/users/{userId}` | removeUser |
+| POST | `/users/{userId}/resend-invite` | resendInvite |
+| POST | `/invites/{token}/accept` | acceptInvite |
+
+### Billing
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `/plans` | listPlans |
+| GET | `…/subscription` | getSubscription |
+| POST | `…/subscription/checkout` | startCheckout |
+| POST | `…/subscription/cancel` | cancelSubscription |
+
+### Settings
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/tax-categories` | listTaxCategories |
+| POST | `…/tax-categories` | createTaxCategory |
+| PUT | `…/tax-categories/{id}` | saveTaxCategory |
+| DELETE | `…/tax-categories/{id}` | removeTaxCategory |
+| GET | `…/expense-categories` | listExpenseCategories |
+| POST | `…/expense-categories` | createExpenseCategory |
+| PUT | `…/expense-categories/{id}` | saveExpenseCategory |
+| DELETE | `…/expense-categories/{id}` | removeExpenseCategory |
+| GET | `…/payment-accounts` | listPaymentAccounts |
+| POST | `…/payment-accounts` | createPaymentAccount |
+| PUT | `…/payment-accounts/{id}` | savePaymentAccount |
+| DELETE | `…/payment-accounts/{id}` | removePaymentAccount |
+| GET | `…/exchange-rates` | listExchangeRates |
+| POST | `…/exchange-rates` | createExchangeRate |
+| PUT | `…/exchange-rates/{id}` | saveExchangeRate |
+| DELETE | `…/exchange-rates/{id}` | removeExchangeRate |
+| GET | `…/transporters` | listTransporters |
+| POST | `…/transporters` | createTransporter |
+| PUT | `…/transporters/{id}` | saveTransporter |
+| DELETE | `…/transporters/{id}` | removeTransporter |
+| POST | `…/exchange-rates/refresh` | refreshExchangeRates |
+| GET | `…/numbering-series` | listNumberingSeries |
+| PUT | `…/numbering-series/{id}` | saveNumberingSeries |
+| GET | `…/numbering-series/{id}/preview` | previewNextNumber |
+
+### Compliance
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/compliance-settings` | getComplianceSettings |
+| PUT | `…/compliance-settings` | saveComplianceSettings |
+| PUT | `…/compliance-settings/credentials` | saveComplianceCredentials |
+| POST | `…/compliance-settings/test-connection` | testComplianceConnection |
+| GET | `…/documents/{id}/e-invoice` | getEInvoice |
+| POST | `…/documents/{id}/e-invoice` | generateEInvoice |
+| POST | `…/documents/{id}/e-invoice/cancel` | cancelEInvoice |
+| GET | `…/eway-bills` | listEwayBills |
+| POST | `…/eway-bills` | generateEwayBill |
+| GET | `…/eway-bills/{id}` | getEwayBill |
+| GET | `…/eway-bills/{id}/pdf` | getEwayBillPdf |
+| POST | `…/eway-bills/{id}/part-b` | updateEwayBillPartB |
+| POST | `…/eway-bills/{id}/extend` | extendEwayBill |
+| POST | `…/eway-bills/{id}/cancel` | cancelEwayBill |
+
+### Parties
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/parties` | listParties |
+| POST | `…/parties` | createParty |
+| GET | `…/parties/{id}` | getParty |
+| PUT | `…/parties/{id}` | saveParty |
+| DELETE | `…/parties/{id}` | removeParty |
+| GET | `…/parties/{id}/statement` | getPartyStatement |
+
+### Catalog
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/items` | listItems |
+| POST | `…/items` | createItem |
+| GET | `…/items/{id}` | getItem |
+| PUT | `…/items/{id}` | saveItem |
+| DELETE | `…/items/{id}` | removeItem |
+| PUT | `…/items/{id}/image` | uploadItemImage |
+
+### Documents
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/documents` | listDocuments |
+| POST | `…/documents` | createDocument |
+| POST | `…/documents/calculate` | calculateDocument |
+| GET | `…/documents/{id}` | getDocument |
+| PATCH | `…/documents/{id}` | updateDocument |
+| DELETE | `…/documents/{id}` | removeDocument |
+| POST | `…/documents/{id}/finalize` | finalizeDocument |
+| POST | `…/documents/{id}/status` | setDocumentStatus |
+| POST | `…/documents/{id}/convert` | convertDocument |
+| POST | `…/documents/{id}/duplicate` | duplicateDocument |
+| GET | `…/documents/{id}/pdf` | getDocumentPdf |
+| POST | `…/documents/{id}/share-link` | createShareLink |
+| POST | `…/documents/{id}/send` | sendDocument |
+| POST | `…/documents/{id}/payment-link` | createPaymentLink |
+
+### Payments
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/payments` | listPayments |
+| POST | `…/payments` | createPayment |
+| GET | `…/payments/{id}` | getPayment |
+| PUT | `…/payments/{id}` | savePayment |
+| DELETE | `…/payments/{id}` | removePayment |
+| GET | `…/payments/{id}/receipt` | getPaymentReceiptPdf |
+
+### Expenses
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/expenses` | listExpenses |
+| POST | `…/expenses` | createExpense |
+| GET | `…/expenses/{id}` | getExpense |
+| PUT | `…/expenses/{id}` | saveExpense |
+| DELETE | `…/expenses/{id}` | removeExpense |
+
+### Inventory
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/stock/levels` | getStockLevels |
+| GET | `…/stock/movements` | listStockMovements |
+| POST | `…/stock/adjustments` | adjustStock |
+| POST | `…/stock/transfers` | transferStock |
+
+### Attachments
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/attachments` | listAttachments |
+| POST | `…/attachments` | createAttachmentUpload |
+| POST | `…/attachments/{id}/complete` | completeAttachmentUpload |
+| GET | `…/attachments/{id}` | getAttachment |
+| DELETE | `…/attachments/{id}` | removeAttachment |
+
+### OCR
+
+| Method | Path | Operation |
+|---|---|---|
+| POST | `…/ocr/extractions` | createOcrExtraction |
+| GET | `…/ocr/extractions/{id}` | getOcrExtraction |
+
+### Ledger
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/receivables` | getReceivables |
+| GET | `…/payables` | getPayables |
+| POST | `…/receivables/reminders` | sendPaymentReminder |
+
+### Reports
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/reports/{reportKey}` | getReport |
+
+### GST
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/gst/gstr1` | getGstr1 |
+| GET | `…/gst/gstr1/export` | exportGstr1 |
+
+### Dashboard
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/dashboard` | getDashboard |
+
+### Search
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/search` | search |
+
+### Assistant
+
+| Method | Path | Operation |
+|---|---|---|
+| POST | `…/lixi/messages` | lixiChat |
+| POST | `…/lixi/actions` | lixiConfirmAction |
+| POST | `/companies/{companyId}/mcp` | MCP (Streamable HTTP; not in the contract) |
+
+Lixi's tools live in `apps/api/src/lixi/tools.ts`. Each one calls a contract
+route in-process, as the caller, so it can never do more than the user could.
+Reads answer directly. Writes return a pending action (`lixi/confirm.ts`): a
+signed token, bound to user, session and company, valid for five minutes, and
+used as the inner request's Idempotency-Key.
+
+**Using the MCP endpoint.** Point any MCP client that speaks Streamable HTTP at
+`https://<api>/v1/companies/<companyId>/mcp` with the user's access token as
+`Authorization: Bearer …`. For example, with Claude Code:
+
+```sh
+claude mcp add --transport http elixir-books \
+  https://api.example/v1/companies/<companyId>/mcp \
+  --header "Authorization: Bearer <accessToken>"
+```
+
+Access tokens last 15 minutes, so this suits trying things out; a
+long-lived integration needs OAuth on this endpoint (not built yet). Write tools
+return `{token, summary, preview}`; `confirm_action` runs one and is marked
+destructive, so clients ask the person first.
+
+### Notifications
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/notifications` | listNotifications |
+| DELETE | `…/notifications` | clearNotifications |
+| POST | `…/notifications/{id}/read` | markNotificationRead |
+| POST | `…/notifications/read-all` | markAllNotificationsRead |
+
+### Audit
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/audit-events` | listAuditEvents |
+
+### Integrations
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/integrations` | listIntegrations |
+| POST | `…/integrations/{integrationId}/connect` | connectIntegration |
+| POST | `…/integrations/{integrationId}/disconnect` | disconnectIntegration |
+
+### Exports
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `…/exports` | listExports |
+| POST | `…/exports` | createExport |
+| GET | `…/exports/{id}` | getExport |
+| GET | `…/backup-settings` | getBackupSettings |
+| PUT | `…/backup-settings` | saveBackupSettings |
+
+### Sync
+
+| Method | Path | Operation |
+|---|---|---|
+| POST | `/sync/push` | syncPush |
+| GET | `/sync/pull` | syncPull |
+
+### Reference
+
+| Method | Path | Operation |
+|---|---|---|
+| GET | `/reference/countries` | listCountries |
+| GET | `/reference/states` | listStates |
+| GET | `/reference/cities` | searchCities |
+| GET | `/reference/pincodes/{pincode}` | lookupPincode |
+| GET | `/reference/distance` | getRoadDistance |
+| GET | `/reference/currencies` | listCurrencies |
+| GET | `/reference/hsn` | searchHsn |
+| GET | `/reference/gstin/{gstin}` | lookupGstin |
+
+### Platform (operators)
+
+Cross-tenant routes for the admin console (`apps/admin`). Every one needs a
+platform role on the caller (`users.platform_role`); `support` can read,
+only `superadmin` can act. Each action takes a `reason` and writes a
+`platform_audit_events` row in the same transaction.
+
+| Method | Path | Operation | Roles |
+|---|---|---|---|
+| GET | `/admin/metrics/overview` | getPlatformOverview | support, superadmin |
+| GET | `/admin/accounts` | listPlatformAccounts | support, superadmin |
+| GET | `/admin/accounts/{accountId}` | getPlatformAccount | support, superadmin |
+| POST | `/admin/accounts/{accountId}/suspend` | suspendAccount | superadmin |
+| POST | `/admin/accounts/{accountId}/reactivate` | reactivateAccount | superadmin |
+| GET | `/admin/companies/{companyId}` | getPlatformCompany | support, superadmin |
+| PUT | `/admin/companies/{companyId}/plan` | overrideCompanyPlan | superadmin |
+| GET | `/admin/users` | listPlatformUsers | support, superadmin |
+| POST | `/admin/users/{userId}/disable` | disablePlatformUser | superadmin |
+| POST | `/admin/users/{userId}/enable` | enablePlatformUser | superadmin |
+| GET | `/admin/audit-events` | listPlatformAuditEvents | support, superadmin |
+
+- **Suspending an account** revokes every session of its users at once.
+  Sign-in, OTP, invite acceptance and token refresh then fail with
+  `401 ACCOUNT_SUSPENDED` until it is reactivated. An account that has a
+  platform operator can't be suspended (`409 PLATFORM_ACCOUNT`).
+- **A plan override** sets `companies.plan`, upserts the subscription, logs an
+  `adminOverride` subscription event and records the change in the company's
+  own audit trail as "(platform support)". A provider-billed subscription can
+  be changed back by its next webhook; the response carries a `warning` when
+  that applies.
+- **Granting access** is deliberately not an API: run
+  `npm run db:platform-admin -w @esmart/db -- --email you@example.com --role superadmin`
+  (`support`, or `none` to revoke) against the database. The user must
+  already exist.
+
+### Inbound webhooks
+
+| Path | Source | Effect |
+|---|---|---|
+| `POST /webhooks/razorpay` | Razorpay | `payment_link.paid` records a payment and allocates it to the document; subscription events update `Company.plan` |
+| `POST /webhooks/whatsapp` | WhatsApp provider | Delivery and read receipts for sent documents and reminders |

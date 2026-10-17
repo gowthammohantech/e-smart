@@ -1,0 +1,30 @@
+{
+  "name": "@esmart/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Message catalogues and the i18next instance. No React, so the API can use it too.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./locales/*": "./src/locales/*/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "i18next": "^26.4.2",
+    "intl-pluralrules": "^2.0.1"
+  },
+  "devDependencies": {
+    "@esmart/eslint-config": "*",
+    "@esmart/tsconfig": "*",
+    "@swc/core": "^1.16.12",
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30.0.0",
+    "eslint": "^9.39.5",
+    "jest": "^30.5.1",
+    "typescript": "~6.0.3"
+  }
+}

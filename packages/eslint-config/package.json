@@ -1,0 +1,12 @@
+{
+  "name": "@esmart/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "eslint-config-expo": "~57.0.2"
+  },
+  "peerDependencies": {
+    "eslint": "^9"
+  }
+}

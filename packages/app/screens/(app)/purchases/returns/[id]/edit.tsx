@@ -1,0 +1,39 @@
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { DocumentEditor } from '../../../../../features/documents/DocumentEditor';
+import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { draftFromDocument } from '../../../../../features/documents/useDocumentDraft';
+import { useDocument } from '../../../../../store/selectors';
+import { useGoBack } from '../../../../../navigation/useGoBack';
+
+export default function EditPurchaseReturn() {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['common', 'nav']);
+  const goBack = useGoBack();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const document = useDocument(id);
+
+  if (!document) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+        <Stack.Screen options={{ title: tr('nav:title.edit') }} />
+        <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <Stack.Screen options={{ title: tr('nav:title.editNamed', { name: document.number }) }} />
+      <DocumentEditor
+        kind="purchaseReturn"
+        documentId={document.id}
+        initialDraft={draftFromDocument(document)}
+        onSaved={() => goBack(`/(app)/purchases/returns/${document.id}`)}
+      />
+    </>
+  );
+}

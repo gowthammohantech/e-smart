@@ -1,0 +1,38 @@
+{
+  "name": "@esmart/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Postgres schema (Drizzle), migrations, reference data and the env-gated demo seed.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./demo": "./src/demo/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=../../apps/api/.env src/migrate.ts",
+    "db:seed": "tsx --env-file-if-exists=../../apps/api/.env src/seed.ts",
+    "db:platform-admin": "tsx --env-file-if-exists=../../apps/api/.env src/platform-admin.ts",
+    "db:reset": "tsx --env-file-if-exists=../../apps/api/.env src/reset.ts && tsx --env-file-if-exists=../../apps/api/.env src/migrate.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@esmart/core": "*",
+    "@node-rs/argon2": "^2.2.1",
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@esmart/eslint-config": "*",
+    "@esmart/tsconfig": "*",
+    "@types/node": "^22",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.39.5",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3"
+  }
+}

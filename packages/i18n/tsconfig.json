@@ -1,0 +1,7 @@
+{
+  "extends": "@esmart/tsconfig/base.json",
+  "compilerOptions": {
+    "types": ["jest"]
+  },
+  "include": ["src"]
+}

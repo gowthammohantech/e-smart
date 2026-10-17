@@ -1,0 +1,578 @@
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
+import { Text } from '@esmart/ui/components/Text';
+import { Card } from '@esmart/ui/components/Card';
+import { Button } from '@esmart/ui/components/Button';
+import { FormActions } from '@esmart/ui/components/ActionBar';
+import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
+import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { Sheet } from '@esmart/ui/components/Sheet';
+import { useToast } from '@esmart/ui/components/Toast';
+import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
+import { PAYMENT_METHODS } from '@esmart/core/data/masters';
+import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { paymentMethodLabel } from '@esmart/core/labels';
+import { formatMoney, formatPercent } from '@esmart/core/lib/format';
+import { addDaysISO, today } from '@esmart/core/lib/date';
+import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
+import { uid } from '@esmart/core/lib/id';
+import { uploadAttachment } from '../../remote/attachments';
+import { describeError } from '../../remote/errors';
+import { useAppStore } from '../../store/appStore';
+import {
+  useBaseCurrency,
+  useExpenseCategories,
+  useExpenses,
+  useParties,
+  usePaymentAccounts,
+  usePayments,
+  useDefaultBranchId,
+  useTaxCategories,
+} from '../../store/selectors';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { useGoBack } from '../../navigation/useGoBack';
+
+const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
+  { value: 'none', label: 'Does not repeat' },
+  { value: 'weekly', label: 'Every week' },
+  { value: 'monthly', label: 'Every month' },
+  { value: 'quarterly', label: 'Every quarter' },
+  { value: 'yearly', label: 'Every year' },
+];
+
+/** Values to start a new expense from, e.g. a scanned receipt. */
+export type ExpenseInitial = {
+  amount?: string;
+  date?: string;
+  reference?: string;
+  notes?: string;
+  supplierId?: string;
+  categoryId?: string;
+  receiptUri?: string;
+  /** Already uploaded with the scan; linked as the receipt without uploading again. */
+  receiptAttachmentId?: string;
+};
+
+export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['domain', 'purchases', 'common']);
+  const router = useRouter();
+  const goBack = useGoBack();
+  const toast = useToast();
+  // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
+  const breakpoint = useBreakpoint();
+  const desktop = breakpoint !== 'phone';
+
+  const baseCurrency = useBaseCurrency();
+  const categories = useExpenseCategories();
+  const accounts = usePaymentAccounts();
+  const taxCategories = useTaxCategories();
+  const suppliers = useParties('supplier');
+
+  const saveExpense = useAppStore((s) => s.saveExpense);
+  const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
+  const activeCompanyId = useAppStore((s) => s.activeCompanyId);
+  const defaultBranchId = useDefaultBranchId();
+  const payments = usePayments();
+  const expenses = useExpenses();
+
+  // No silent default: the person recording the expense chooses its category.
+  const [categoryId, setCategoryId] = useState(expense?.categoryId ?? initial?.categoryId ?? '');
+  const [amountText, setAmountText] = useState(expense ? String(toMajor(expense.amount)) : (initial?.amount ?? ''));
+  const [date, setDate] = useState(expense?.date ?? initial?.date ?? today());
+  const [method, setMethod] = useState<PaymentMethod>(
+    () => expense?.method ?? (defaultAccountFor('upi', accounts) ? 'upi' : 'cash'),
+  );
+  const [pickedAccountId, setAccountId] = useState(
+    () => expense?.accountId ?? defaultAccountFor(method, accounts)?.id ?? '',
+  );
+  const methodAccounts = accountsForMethod(method, accounts);
+  const accountId = methodAccounts.some((a) => a.id === pickedAccountId)
+    ? pickedAccountId
+    : (defaultAccountFor(method, accounts)?.id ?? '');
+  const [accountError, setAccountError] = useState<string | undefined>();
+  const [supplierId, setSupplierId] = useState<string | null>(expense?.supplierId ?? initial?.supplierId ?? null);
+  const [taxCategoryId, setTaxCategoryId] = useState<string | null>(expense?.taxCategoryId ?? null);
+  const [taxInclusive, setTaxInclusive] = useState(expense?.taxInclusive ?? true);
+  const [reference, setReference] = useState(expense?.reference ?? initial?.reference ?? '');
+  const [notes, setNotes] = useState(expense?.notes ?? initial?.notes ?? '');
+  const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(expense?.recurrence ?? 'none');
+  const [billable, setBillable] = useState(expense?.billable ?? false);
+  const [receiptUri, setReceiptUri] = useState<string | undefined>(initial?.receiptUri);
+  const [uploading, setUploading] = useState(false);
+
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [supplierOpen, setSupplierOpen] = useState(false);
+  const [taxOpen, setTaxOpen] = useState(false);
+  const [recurrenceOpen, setRecurrenceOpen] = useState(false);
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState<string | undefined>();
+
+  const addCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const id = uid('exc');
+    saveExpenseCategory({ id, companyId: activeCompanyId, name, icon: 'shape-outline', color: '#8E98AC' });
+    setCategoryId(id);
+    setCategoryError(undefined);
+    setNewCategoryName('');
+    setNewCategoryOpen(false);
+  };
+
+  const amount = fromMajor(amountText || '0', baseCurrency);
+  const taxRate = taxCategories.find((c) => c.id === taxCategoryId)?.rate ?? 0;
+  const taxAmount = taxRate > 0 ? (taxInclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);
+  const netAmount = taxInclusive ? subtract(amount, taxAmount) : amount;
+  const totalPaid = taxInclusive ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
+
+  // Cash in hand cannot pay out more than it holds (an edit gives back its own amount first).
+  const account = accounts.find((a) => a.id === accountId);
+  const cashBalance = useMemo(() => {
+    if (!account || account.type !== 'cash') return undefined;
+    const others = expenses.filter((e) => e.id !== expense?.id);
+    return accountBalances(accounts, payments, others)[account.id];
+  }, [account, accounts, payments, expenses, expense?.id]);
+  const cashShort = cashBalance !== undefined && totalPaid.minor > cashBalance;
+
+  const attachReceipt = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
+    if (!result.canceled && result.assets[0]) setReceiptUri(result.assets[0].uri);
+  };
+
+  const save = async () => {
+    if (amount.minor <= 0) return;
+    if (!categoryId || !categories.some((c) => c.id === categoryId)) {
+      setCategoryError(tr('purchases:form.categoryRequired'));
+      return;
+    }
+    if (!accountId) {
+      setAccountError(tr('purchases:form.accountRequired'));
+      return;
+    }
+    if (cashShort) {
+      setAccountError(tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }));
+      return;
+    }
+
+    const attachmentIds = [...(expense?.attachmentIds ?? [])];
+    if (receiptUri) {
+      // The scan already uploaded its image; a photo picked here goes up now. Uploads need a connection.
+      if (receiptUri === initial?.receiptUri && initial.receiptAttachmentId) {
+        attachmentIds.push(initial.receiptAttachmentId);
+      } else {
+        setUploading(true);
+        try {
+          const uploaded = await uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id });
+          attachmentIds.push(uploaded.id);
+        } catch (err) {
+          toast.show(tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }), 'error');
+          return;
+        } finally {
+          setUploading(false);
+        }
+      }
+    }
+
+    const record: Expense = {
+      id: expense?.id ?? uid('exp'),
+      companyId: expense?.companyId ?? activeCompanyId,
+      branchId: expense?.branchId ?? defaultBranchId ?? '',
+      number: expense?.number ?? '',
+      categoryId,
+      supplierId: supplierId ?? undefined,
+      date,
+      amount: totalPaid,
+      currency: baseCurrency,
+      exchangeRate: 1,
+      taxCategoryId: taxCategoryId ?? undefined,
+      taxAmount,
+      taxInclusive,
+      accountId,
+      method,
+      reference: reference.trim() || undefined,
+      notes: notes.trim() || undefined,
+      billable,
+      recurrence,
+      nextRecurrenceDate: recurrence === 'none' ? undefined : addDaysISO(date, recurrence === 'weekly' ? 7 : recurrence === 'monthly' ? 30 : recurrence === 'quarterly' ? 91 : 365),
+      attachmentIds,
+      createdBy: expense?.createdBy ?? '',
+      createdAt: expense?.createdAt ?? new Date().toISOString(),
+    };
+
+    const id = saveExpense(record);
+    if (!id) {
+      setAccountError(tr('purchases:form.accountRequired'));
+      return;
+    }
+    toast.show(expense ? 'Expense updated' : 'Expense recorded', 'success');
+    if (expense) goBack(`/(app)/expenses/${expense.id}`);
+    else router.replace(`/(app)/expenses/${id}`);
+  };
+
+  // Every field is built once and placed twice: stacked in one column on a
+  // phone, grouped into cards across two columns on a desktop browser.
+  const amountField = (
+    <AmountField
+      label={tr('purchases:form.amount')}
+      value={amountText}
+      onChangeValue={setAmountText}
+      currency={baseCurrency}
+      // Large on a phone, where it is the screen's focus; field-sized on a desktop so it lines up in its row.
+      size={desktop ? 'md' : 'lg'}
+      autoFocus={!expense}
+      required
+    />
+  );
+  const categoryField = (
+    <PickerField
+      label={tr('purchases:form.category')}
+      value={categories.find((c) => c.id === categoryId)?.name}
+      onPress={() => (categories.length ? setCategoryOpen(true) : setNewCategoryOpen(true))}
+      placeholder={categories.length ? undefined : tr('purchases:form.addCategory')}
+      icon="shape-outline"
+      required
+      error={categoryError}
+    />
+  );
+  const dateField = <DateField label={tr('purchases:form.date')} value={date} onChange={setDate} required />;
+  const methodField = (
+    <PickerField label={tr('purchases:form.paidBy')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
+  );
+  const accountField = (
+    <PickerField
+      label={tr('purchases:form.paidFrom')}
+      value={methodAccounts.find((a) => a.id === accountId)?.name}
+      onPress={() => setAccountOpen(true)}
+      icon="bank-outline"
+      required
+      error={accountError ?? (cashShort ? tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }) : undefined)}
+    />
+  );
+  const supplierField = (
+    <PickerField
+      label={tr('purchases:form.supplier')}
+      value={suppliers.find((s) => s.id === supplierId)?.name}
+      placeholder={tr('purchases:form.optional')}
+      onPress={() => setSupplierOpen(true)}
+      icon="truck-outline"
+      clearable
+      onClear={() => setSupplierId(null)}
+    />
+  );
+  const taxField = (
+    <PickerField
+      label={tr('purchases:form.tax')}
+      value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : 'No tax'}
+      onPress={() => setTaxOpen(true)}
+      icon="percent-outline"
+      clearable
+      onClear={() => setTaxCategoryId(null)}
+    />
+  );
+  const inclusiveField = <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />;
+  const referenceField = (
+    <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />
+  );
+  const notesField = (
+    <TextField label={tr('purchases:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('purchases:form.notesPlaceholder')} multiline />
+  );
+  const repeatsField = (
+    <PickerField label={tr('purchases:form.repeats')} value={RECURRENCES.find((r) => r.value === recurrence)?.label} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
+  );
+  const billableField = (
+    <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
+  );
+  const receiptCard = (
+    <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
+      <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        <MaterialCommunityIcons name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
+        <View style={{ flex: 1 }}>
+          <Text variant="body" weight="600">
+            {receiptUri ? 'Receipt attached' : 'Attach a receipt'}
+          </Text>
+          <Text variant="caption" tone="muted">
+            {receiptUri ? 'Tap to replace' : 'Photo or scan of the bill'}
+          </Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+      </Card>
+    </Pressable>
+  );
+  const scanButton = (
+    <Button
+      title={tr('purchases:form.scanInstead')}
+      variant="ghost"
+      icon="text-recognition"
+      onPress={() => router.push('/(app)/ocr/capture')}
+      fullWidth
+    />
+  );
+  const submitTitle = expense ? 'Save changes' : 'Record expense';
+
+  const phoneForm = (
+    <ScrollView
+      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {amountField}
+
+      {categoryField}
+
+      {dateField}
+
+      {methodField}
+      {accountField}
+      {supplierField}
+
+      {taxField}
+
+      {taxRate > 0 ? (
+        <>
+          {inclusiveField}
+          <Card variant="flat" style={{ gap: t.spacing.sm }}>
+            {[
+              { label: 'Net amount', value: formatMoney(netAmount) },
+              { label: `Input tax (${formatPercent(taxRate)})`, value: formatMoney(taxAmount) },
+              { label: 'Total paid', value: formatMoney(totalPaid) },
+            ].map((r) => (
+              <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text variant="caption" tone="muted">
+                  {r.label}
+                </Text>
+                <Text variant="caption" weight="600">
+                  {r.value}
+                </Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      {referenceField}
+      {notesField}
+
+      {repeatsField}
+      {billableField}
+
+      {receiptCard}
+
+      {scanButton}
+    </ScrollView>
+  );
+
+  const summaryRow = (label: string, value: string, strong = false) => (
+    <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
+      <Text variant={strong ? 'body' : 'small'} tone={strong ? undefined : 'muted'} weight={strong ? '700' : undefined}>
+        {label}
+      </Text>
+      <Text variant={strong ? 'body' : 'small'} weight={strong ? '700' : '600'} style={{ fontVariant: ['tabular-nums'] }}>
+        {value}
+      </Text>
+    </View>
+  );
+
+  const details = (
+    <FormSection title={tr('purchases:expense.details')}>
+      <FieldRow>
+        {amountField}
+        {dateField}
+      </FieldRow>
+      <FieldRow>
+        {categoryField}
+        {supplierField}
+      </FieldRow>
+      <FieldRow>
+        {methodField}
+        {accountField}
+      </FieldRow>
+      <FieldRow>
+        {referenceField}
+        {repeatsField}
+      </FieldRow>
+      {notesField}
+    </FormSection>
+  );
+  const tax = (
+    <FormSection title={tr('purchases:form.tax')}>
+      <FieldRow>
+        {taxField}
+        {/* The switch sits level with the picker's box rather than its label. */}
+        {taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : <View />}
+      </FieldRow>
+    </FormSection>
+  );
+  const summary = (
+    <FormSection title={tr('purchases:form.summary')}>
+      <View style={{ gap: t.spacing.md }}>
+        {taxRate > 0 ? summaryRow('Net amount', formatMoney(netAmount)) : null}
+        {taxRate > 0 ? summaryRow(`Input tax (${formatPercent(taxRate)})`, formatMoney(taxAmount)) : null}
+        {taxRate > 0 ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
+        {summaryRow('Total paid', formatMoney(totalPaid), true)}
+      </View>
+    </FormSection>
+  );
+  const receipt = (
+    <FormSection title={tr('purchases:form.receipt')}>
+      <View style={{ gap: t.spacing.sm }}>
+        {receiptCard}
+        {scanButton}
+      </View>
+    </FormSection>
+  );
+  const billableCard = <Card>{billableField}</Card>;
+
+  const desktopForm = (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+    >
+      {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
+      {breakpoint === 'tablet' ? (
+        <View style={{ gap: t.spacing.lg }}>
+          {details}
+          {tax}
+          {summary}
+          {billableCard}
+          {receipt}
+        </View>
+      ) : (
+        <SplitPane
+          sideWidth={360}
+          main={
+            <View style={{ gap: t.spacing.lg }}>
+              {details}
+              {tax}
+            </View>
+          }
+          side={
+            <>
+              {summary}
+              {billableCard}
+              {receipt}
+            </>
+          }
+        />
+      )}
+    </ScrollView>
+  );
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
+        {desktop ? desktopForm : phoneForm}
+
+        {desktop ? (
+          <FormActions>
+            <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
+            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} />
+          </FormActions>
+        ) : (
+          <FormActions>
+            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
+          </FormActions>
+        )}
+
+        <SelectSheet
+          visible={categoryOpen}
+          onClose={() => setCategoryOpen(false)}
+          title={tr('purchases:form.category')}
+          options={categories.map((c) => ({ value: c.id, label: c.name, icon: c.icon as never }))}
+          value={categoryId}
+          onSelect={(id) => {
+            setCategoryId(id);
+            setCategoryError(undefined);
+          }}
+          footer={
+            <Button
+              title={tr('purchases:form.addCategory')}
+              icon="plus"
+              variant="ghost"
+              onPress={() => {
+                setCategoryOpen(false);
+                setNewCategoryOpen(true);
+              }}
+              fullWidth
+            />
+          }
+        />
+        <Sheet
+          visible={newCategoryOpen}
+          onClose={() => setNewCategoryOpen(false)}
+          title={tr('purchases:form.addCategory')}
+          footer={<Button title={tr('purchases:form.saveCategory')} onPress={addCategory} disabled={!newCategoryName.trim()} fullWidth />}
+        >
+          <View style={{ padding: t.spacing.lg }}>
+            <TextField
+              label={tr('purchases:form.categoryName')}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              autoFocus
+            />
+          </View>
+        </Sheet>
+        <SelectSheet
+          visible={methodOpen}
+          onClose={() => setMethodOpen(false)}
+          title={tr('purchases:form.paymentMethod')}
+          options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
+          value={method}
+          onSelect={(v) => {
+            setMethod(v as PaymentMethod);
+            setAccountId((current) => accountIdAfterMethodChange(v as PaymentMethod, current, accounts));
+          }}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={accountOpen}
+          onClose={() => setAccountOpen(false)}
+          title={tr('purchases:form.paidFrom')}
+          options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
+          value={accountId}
+          onSelect={(id) => {
+            setAccountId(id);
+            setAccountError(undefined);
+          }}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={supplierOpen}
+          onClose={() => setSupplierOpen(false)}
+          title={tr('purchases:form.supplier')}
+          options={suppliers.map((s) => ({ value: s.id, label: s.name, description: s.phone ?? s.code }))}
+          value={supplierId}
+          onSelect={setSupplierId}
+        />
+        <SelectSheet
+          visible={taxOpen}
+          onClose={() => setTaxOpen(false)}
+          title={tr('purchases:form.tax')}
+          options={taxCategories.map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate) }))}
+          value={taxCategoryId}
+          onSelect={setTaxCategoryId}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={recurrenceOpen}
+          onClose={() => setRecurrenceOpen(false)}
+          title={tr('purchases:form.repeats')}
+          options={RECURRENCES.map((r) => ({ value: r.value, label: r.label }))}
+          value={recurrence}
+          onSelect={(v) => setRecurrence(v as RecurrenceFrequency)}
+          searchable={false}
+        />
+      </FormContainer>
+    </KeyboardAvoidingView>
+  );
+}

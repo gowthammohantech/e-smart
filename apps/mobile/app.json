@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "Elixir Books Smart",
+    "slug": "elixir-books-smart",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "elixirsmart",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E121A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elixir.bookssmart",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan receipts, supplier bills and barcodes.",
+        "NSPhotoLibraryUsageDescription": "Attach receipts and your business logo to records.",
+        "CFBundleLocalizations": [
+          "en",
+          "ta"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.elixir.bookssmart",
+      "versionCode": 2,
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attach receipts and your business logo."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan receipts, bills and barcodes."
+        }
+      ],
+      "expo-splash-screen",
+      "expo-web-browser",
+      "expo-localization",
+      "./plugins/withSceneLifecycle",
+      "./plugins/withAndroidSigning"
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "inlineModules": {
+        "watchedDirectories": [
+          "native/ios"
+        ]
+      }
+    },
+    "locales": {
+      "ta": "./src/i18n/native/ta.json"
+    }
+  }
+}

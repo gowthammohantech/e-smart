@@ -1,0 +1,35 @@
+{
+  "name": "e-smart",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "mobile": "npm run start -w @esmart/mobile",
+    "web": "npm run start -w @esmart/web",
+    "admin": "npm run dev -w @esmart/admin",
+    "api": "npm run dev -w @esmart/api"
+  },
+  "devDependencies": {
+    "@esmart/eslint-config": "*",
+    "eslint": "^9.39.5",
+    "railway": "^3.12.0",
+    "turbo": "^2.11.5"
+  },
+  "packageManager": "npm@10.9.7",
+  "engines": {
+    "node": ">=22"
+  },
+  "version": "1.0.0",
+  "dependencies": {
+    "expo": "~57.0.23",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  }
+}

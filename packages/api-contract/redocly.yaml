@@ -1,0 +1,8 @@
+# Structural problems fail the lint. Missing operation summaries are reported
+# but don't: 91 operations have a description instead, and inventing summary
+# text for them would add nothing.
+extends:
+  - recommended
+rules:
+  operation-summary: warn
+  info-license: off

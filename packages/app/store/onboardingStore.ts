@@ -1,0 +1,133 @@
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Address, PlanTier } from '@esmart/core/types';
+import { moduleSetFor } from '@esmart/core/domain/plan';
+import { today } from '@esmart/core/lib/date';
+import { DEFAULT_DIAL_CODE } from '@esmart/core/lib/phone';
+
+export type OnboardingDraft = {
+  name: string;
+  legalName: string;
+  businessType: string;
+  plan: PlanTier;
+  logoUri?: string;
+  address: Address;
+  email: string;
+  /** The country code, kept apart so it can become a picker. */
+  phoneDialCode: string;
+  /** The number without the code, digits only. */
+  phone: string;
+  country: string;
+  baseCurrency: string;
+  fiscalYearStartMonth: number;
+  taxRegistered: boolean;
+  taxIdentifier: string;
+  compositionScheme: boolean;
+  invoicePrefix: string;
+  invoiceNextNumber: string;
+  includeFiscalYear: boolean;
+  branches: {
+    name: string;
+    code: string;
+    city: string;
+    line1?: string;
+    stateCode?: string;
+    postalCode?: string;
+    gstin?: string;
+  }[];
+};
+
+const emptyAddress: Address = {
+  line1: '',
+  city: '',
+  state: '',
+  stateCode: '',
+  postalCode: '',
+  country: 'IN',
+};
+
+type OnboardingState = {
+  draft: OnboardingDraft;
+  set: (patch: Partial<OnboardingDraft>) => void;
+  setAddress: (patch: Partial<Address>) => void;
+  reset: () => void;
+};
+
+const initial: OnboardingDraft = {
+  name: '',
+  legalName: '',
+  // A slug from BUSINESS_TYPES; labels live in `onboarding:businessType.*`.
+  businessType: 'retail',
+  plan: 'basic',
+  address: emptyAddress,
+  email: '',
+  phoneDialCode: DEFAULT_DIAL_CODE,
+  phone: '',
+  country: 'IN',
+  baseCurrency: 'INR',
+  fiscalYearStartMonth: 4,
+  taxRegistered: true,
+  taxIdentifier: '',
+  compositionScheme: false,
+  invoicePrefix: 'INV',
+  invoiceNextNumber: '1',
+  includeFiscalYear: true,
+  branches: [],
+};
+
+/**
+ * The draft persists on the device (localStorage on the web), so a refresh or
+ * a relaunch halfway through setup keeps what was typed. `done` and sign-out
+ * call `reset`, which clears it.
+ */
+export const useOnboardingStore = create<OnboardingState>()(
+  persist(
+    (set, get) => ({
+      draft: initial,
+      set: (patch) => set({ draft: { ...get().draft, ...patch } }),
+      setAddress: (patch) => set({ draft: { ...get().draft, address: { ...get().draft.address, ...patch } } }),
+      reset: () => set({ draft: { ...initial } }),
+    }),
+    {
+      name: 'ebs.onboarding.v1',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s) => ({ draft: s.draft }),
+      // Fields added since a draft was saved fall back to their defaults.
+      merge: (persisted, current) => {
+        const saved = (persisted as { draft?: Partial<OnboardingDraft> } | undefined)?.draft;
+        return saved
+          ? { ...current, draft: { ...initial, ...saved, address: { ...emptyAddress, ...saved.address } } }
+          : current;
+      },
+    },
+  ),
+);
+
+/** Step order. Names live in `onboarding:step.*`. */
+export const ONBOARDING_STEPS = ['business', 'country', 'tax', 'numbering', 'branches'] as const;
+
+export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number];
+
+/**
+ * A sales-only plan sells in India and has one location, so it skips the
+ * country and branch steps: the defaults (India, INR, head office) stand.
+ */
+export function onboardingSteps(plan: PlanTier) {
+  return moduleSetFor(plan) === 'full'
+    ? (ONBOARDING_STEPS as readonly OnboardingStepKey[])
+    : ONBOARDING_STEPS.filter((s) => s !== 'country' && s !== 'branches');
+}
+
+export function stepIndex(key: OnboardingStepKey, plan: PlanTier = 'pro'): number {
+  return onboardingSteps(plan).indexOf(key);
+}
+
+/** Where "Continue" goes from a step, given the plan chosen on the first one. */
+export function nextStepRoute(key: OnboardingStepKey, plan: PlanTier) {
+  const steps = onboardingSteps(plan);
+  const next = steps[steps.indexOf(key) + 1];
+  return (next ? `/(onboarding)/${next}` : '/(onboarding)/done') as `/(onboarding)/${OnboardingStepKey | 'done'}`;
+}
+
+export { today };
