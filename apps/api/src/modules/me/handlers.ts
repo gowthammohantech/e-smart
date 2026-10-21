@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { conflict, invalid, notFound, preconditionFailed } from '../../http/errors';
@@ -39,17 +39,13 @@ export const meHandlers = defineHandlers({
     if (name !== undefined && !name.trim()) throw invalid('name', 'Name cannot be empty');
     if (avatarColor !== undefined && !HEX_COLOR.test(avatarColor)) throw invalid('avatarColor', 'Use a hex colour such as #4DA3FF');
     const nextPhone = phone === undefined ? current.phone : phone.trim() || null;
-    if (nextPhone && nextPhone !== current.phone) {
-      const [taken] = await ctx.db.select({ id: U.id }).from(U).where(and(eq(U.phone, nextPhone), ne(U.id, current.id)));
-      if (taken) throw conflict('PHONE_TAKEN', 'This phone number is already registered');
-    }
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(U)
         .set({
           name: name?.trim() ?? current.name,
           phone: nextPhone,
-          // A new number has to be verified again before OTP sign-in trusts it.
+          // Any number may be typed in; it has to be verified before OTP sign-in trusts it.
           phoneVerifiedAt: nextPhone === current.phone ? current.phoneVerifiedAt : null,
           avatarColor: avatarColor ?? current.avatarColor,
           locale: locale ?? current.locale,

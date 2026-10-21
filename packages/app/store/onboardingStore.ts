@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Address, PlanTier } from '@esmart/core/types';
 import { moduleSetFor } from '@esmart/core/domain/plan';
 import { today } from '@esmart/core/lib/date';
@@ -74,12 +76,33 @@ const initial: OnboardingDraft = {
   branches: [],
 };
 
-export const useOnboardingStore = create<OnboardingState>((set, get) => ({
-  draft: initial,
-  set: (patch) => set({ draft: { ...get().draft, ...patch } }),
-  setAddress: (patch) => set({ draft: { ...get().draft, address: { ...get().draft.address, ...patch } } }),
-  reset: () => set({ draft: { ...initial } }),
-}));
+/**
+ * The draft persists on the device (localStorage on the web), so a refresh or
+ * a relaunch halfway through setup keeps what was typed. `done` and sign-out
+ * call `reset`, which clears it.
+ */
+export const useOnboardingStore = create<OnboardingState>()(
+  persist(
+    (set, get) => ({
+      draft: initial,
+      set: (patch) => set({ draft: { ...get().draft, ...patch } }),
+      setAddress: (patch) => set({ draft: { ...get().draft, address: { ...get().draft.address, ...patch } } }),
+      reset: () => set({ draft: { ...initial } }),
+    }),
+    {
+      name: 'ebs.onboarding.v1',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s) => ({ draft: s.draft }),
+      // Fields added since a draft was saved fall back to their defaults.
+      merge: (persisted, current) => {
+        const saved = (persisted as { draft?: Partial<OnboardingDraft> } | undefined)?.draft;
+        return saved
+          ? { ...current, draft: { ...initial, ...saved, address: { ...emptyAddress, ...saved.address } } }
+          : current;
+      },
+    },
+  ),
+);
 
 /** Step order. Names live in `onboarding:step.*`. */
 export const ONBOARDING_STEPS = ['business', 'country', 'tax', 'numbering', 'branches'] as const;

@@ -4360,7 +4360,7 @@ export interface operations {
                 "multipart/form-data": {
                     /**
                      * Format: binary
-                     * @description PNG or JPEG, up to 2 MB
+                     * @description PNG or JPEG, up to 5 MB
                      */
                     file?: string;
                 };

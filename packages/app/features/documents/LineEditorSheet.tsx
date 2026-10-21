@@ -62,9 +62,11 @@ function LineEditorForm({
   const [description, setDescription] = useState(line?.description ?? '');
   const [quantity, setQuantity] = useState(line?.quantity ?? 1);
   const [unit, setUnit] = useState(line?.unit ?? 'NOS');
-  const [price, setPrice] = useState(line ? String(toMajor(line.unitPrice)) : '0');
+  // A zero rate or discount starts as an empty box showing "0" as a placeholder, not as typed text.
+  // Empty reads as zero everywhere below (`price || '0'`, `Number(discountValue) || 0`).
+  const [price, setPrice] = useState(line && line.unitPrice.minor !== 0 ? String(toMajor(line.unitPrice)) : '');
   const [discountMode, setDiscountMode] = useState<'percent' | 'amount'>(line?.discountMode ?? 'amount');
-  const [discountValue, setDiscountValue] = useState(String(line?.discountValue ?? 0));
+  const [discountValue, setDiscountValue] = useState(line?.discountValue ? String(line.discountValue) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(line?.taxCategoryId ?? '');
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
   const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
@@ -211,7 +213,7 @@ function LineEditorForm({
           required={hsnRequired}
         />
 
-        <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} error={errors.rate} required />
+        <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} placeholder="0" error={errors.rate} required />
 
         <View style={{ gap: 6 }}>
           <Text variant="caption" tone="muted" weight="600">{tr('sales:line.discount')}</Text>

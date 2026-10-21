@@ -23,6 +23,7 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
+import { LogoSection } from '../../../features/company/LogoSection';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -75,7 +76,7 @@ export default function CompanySettings() {
       email: validEmail(email),
       phone: phone.error(),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
-      postalCode: validPostalCode(postalCode, company?.country),
+      postalCode: validPostalCode(postalCode, company?.country, stateCode),
     };
     setErrors(next);
     if (hasErrors(next) || !company) return;
@@ -131,6 +132,7 @@ export default function CompanySettings() {
             </Text>
           </Card>
         ) : null}
+        <LogoSection />
         <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
         <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
         <PickerField label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />

@@ -2,6 +2,7 @@ import { ApiError } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
 import { applyChanges, applyEntity, purgeLocalDefaults, remapIds, replaceForCompany, unwrap } from './apply';
+import { flushPendingLogos, refreshLogoLinks } from './logo';
 import { useRemoteMeta } from './meta';
 import * as outbox from './outbox';
 
@@ -88,8 +89,12 @@ async function runOnce() {
   meta.patch({ syncing: true });
   try {
     await pushAll();
+    // A logo picked during setup goes up once its business exists on the server.
+    await flushPendingLogos();
     await pullAll();
     await refreshLists();
+    // Best effort: a logo link that can't refresh now is retried on the next run.
+    await refreshLogoLinks().catch(() => undefined);
     meta.patch({ online: true, lastSyncAt: new Date().toISOString(), lastError: undefined });
     clearRetry();
   } catch (err) {

@@ -6,7 +6,7 @@ import { ownerWithCompany, setupApi, signUpOwner } from './helpers';
 const t = setupApi();
 
 describe('me', () => {
-  it('updates the profile, and refuses a phone number someone else has', async () => {
+  it('updates the profile, and accepts a phone number someone else has listed', async () => {
     const other = await signUpOwner(t, { phone: '+919800000001' });
     const { token } = await ownerWithCompany(t);
     const res = await t.patch('/me', { name: 'Priya S.', avatarColor: '#34C88A', locale: 'ta', phone: '+919800000002' }, { token });
@@ -16,9 +16,12 @@ describe('me', () => {
     expect(row.locale).toBe('ta');
     expect(row.version).toBe(2);
 
-    const taken = await t.patch('/me', { phone: '+919800000001' }, { token });
-    expect(taken.status).toBe(409);
-    expect(taken.body.code).toBe('PHONE_TAKEN');
+    // Another account listing a number doesn't block this one; it just stays unverified.
+    const shared = await t.patch('/me', { phone: '+919800000001' }, { token });
+    expect(shared.status).toBe(200);
+    expect(shared.body.phone).toBe('+919800000001');
+    const [sharedRow] = await t.deps.db.select().from(schema.users).where(eq(schema.users.id, shared.body.id));
+    expect(sharedRow.phoneVerifiedAt).toBeNull();
     const badColour = await t.patch('/me', { avatarColor: 'blue' }, { token });
     expect(badColour.status).toBe(422);
     void other;

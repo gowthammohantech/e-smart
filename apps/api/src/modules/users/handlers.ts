@@ -349,10 +349,6 @@ export const usersHandlers = defineHandlers({
       if (taken.status === 'disabled') throw conflict('EMAIL_TAKEN', 'Someone already uses this email');
       return inviteExistingUser(ctx, taken, body);
     }
-    if (phone) {
-      const [phoneTaken] = await ctx.db.select({ id: U.id }).from(U).where(eq(U.phone, phone));
-      if (phoneTaken) throw conflict('PHONE_TAKEN', 'This phone number is already registered');
-    }
     if (!body.name.trim()) throw invalid('name', 'Name is required');
     const access = await resolveAccess(ctx.db, ctx.user, body.role, body.companyIds, body.branchIds ?? []);
     await assertSeatsFree(ctx.db, access.companies, ctx.now);
@@ -425,14 +421,6 @@ export const usersHandlers = defineHandlers({
       const reactivated = current.status === 'disabled';
       await assertSeatsFree(ctx.db, reactivated ? access.companies : access.companies.filter((id) => !beforeCompanies.includes(id)), ctx.now, current.id);
     }
-    if (body.phone !== undefined) {
-      const phone = body.phone.trim() || null;
-      if (phone && phone !== current.phone) {
-        const [taken] = await ctx.db.select({ id: U.id }).from(U).where(eq(U.phone, phone));
-        if (taken) throw conflict('PHONE_TAKEN', 'This phone number is already registered');
-      }
-    }
-
     const row = await ctx.db.transaction(async (tx) => {
       const before = await userToWire(tx, current);
       const phone = body.phone === undefined ? current.phone : body.phone.trim() || null;

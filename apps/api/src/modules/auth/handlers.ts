@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import { hashPassword, verifyPassword } from '../../auth/passwords';
 import { openSession, rotateSession } from '../../auth/sessions';
@@ -34,6 +34,9 @@ async function sessionResponse(ctx: AnyCtx, user: typeof schema.users.$inferSele
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
+/** The one account that has proven it owns this number; a number merely typed into a profile doesn't match. */
+const verifiedPhone = (phone: string) => and(eq(schema.users.phone, phone), isNotNull(schema.users.phoneVerifiedAt));
+
 export const authHandlers = defineHandlers({
   async signUp(ctx) {
     const email = normalizeEmail(ctx.body.email);
@@ -50,10 +53,11 @@ export const authHandlers = defineHandlers({
       phone = otp.phone;
       phoneVerified = true;
     }
-    if (phone) {
-      // A used verification fails here too: its phone now belongs to an account.
-      const [phoneTaken] = await ctx.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.phone, phone));
-      if (phoneTaken) throw conflict('PHONE_TAKEN', 'This phone number is already registered');
+    if (phoneVerified) {
+      // Only one account can own a verified number, so a used verification fails here.
+      // Numbers other people merely typed in don't count: they never block anyone.
+      const [owner] = await ctx.db.select({ id: schema.users.id }).from(schema.users).where(verifiedPhone(phone!));
+      if (owner) throw conflict('PHONE_TAKEN', 'This phone number is already registered');
     }
     const passwordHash = await hashPassword(ctx.body.password);
     const accountId = newId('acc');
@@ -129,7 +133,7 @@ export const authHandlers = defineHandlers({
     if (channel === 'whatsapp') await ctx.deps.providers.whatsapp.send({ to: phone, text });
     else {
       // Name for providers whose template greets the user; sign-ups have no user yet.
-      const [owner] = await ctx.db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.phone, phone)).limit(1);
+      const [owner] = await ctx.db.select({ name: schema.users.name }).from(schema.users).where(verifiedPhone(phone)).limit(1);
       await ctx.deps.providers.sms.send(phone, text, { kind: 'otp', code, name: owner?.name });
     }
     return { requestId, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_AFTER_SECONDS };
@@ -145,10 +149,11 @@ export const authHandlers = defineHandlers({
       throw unauthorized('OTP_INVALID', 'That code is not valid');
     }
     await ctx.db.update(schema.otpRequests).set({ verifiedAt: ctx.now }).where(eq(schema.otpRequests.id, otp.id));
-    const [user] = await ctx.db.select().from(schema.users).where(eq(schema.users.phone, otp.phone));
+    // Only the account that verified this number signs in with it. A number someone typed in without
+    // verifying it is no account's phone, so the code proves it and the person finishes signing up.
+    const [user] = await ctx.db.select().from(schema.users).where(verifiedPhone(otp.phone));
     if (!user) throw unauthorized('PHONE_NOT_REGISTERED', 'No account uses this phone number yet; finish signing up');
     if (user.status === 'disabled') throw unauthorized('USER_DISABLED', 'This user has been disabled');
-    if (!user.phoneVerifiedAt) await ctx.db.update(schema.users).set({ phoneVerifiedAt: ctx.now }).where(eq(schema.users.id, user.id));
     return sessionResponse(ctx as unknown as AnyCtx, user, ctx.body.device);
   },
 

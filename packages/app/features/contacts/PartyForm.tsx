@@ -105,7 +105,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           ? `This GSTIN is registered in ${stateNameOf(gstin.slice(0, 2))}, not the state below`
           : undefined),
       country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
-      postalCode: validPostalCode(postalCode, overseas ? country : 'IN'),
+      postalCode: validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
     };
     setErrors(next);
     if (hasErrors(next)) return;

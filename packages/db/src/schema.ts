@@ -8,6 +8,7 @@
  * `npm run db:generate -w @esmart/db`, which writes a new migration.
  */
 import { pgTable, uniqueIndex, foreignKey, varchar, char, boolean, integer, timestamp, index, unique, smallint, inet, bigint, jsonb, numeric, date, text, bigserial, serial, primaryKey, uuid, pgEnum, customType, type PgTableExtraConfigValue } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
 
 /** Encrypted secrets. drizzle-kit has no built-in for bytea. */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -142,7 +143,8 @@ export const users = pgTable("users", {
 			name: "users_default_company_id_fkey"
 		}),
 	unique("users_email_key").on(table.email),
-	unique("users_phone_key").on(table.phone),
+	// Many accounts may list the same number; only one can have it verified, and only that one signs in with it.
+	uniqueIndex("users_verified_phone_idx").using("btree", table.phone.asc().nullsLast()).where(sql`${table.phoneVerifiedAt} IS NOT NULL`),
 ]);
 
 export const otpRequests = pgTable("otp_requests", {
