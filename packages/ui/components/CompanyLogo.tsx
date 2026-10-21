@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Image } from 'expo-image';
 import { initialsOf } from '@esmart/core/lib/format';
@@ -11,8 +11,9 @@ import { Text } from './Text';
  */
 export function CompanyLogo({ uri, name, size = 84 }: { uri?: string; name: string; size?: number }) {
   const t = useTheme();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [uri]);
+  // Remember which uri failed (not just "failed") so a new uri gets a fresh try.
+  const [failedUri, setFailedUri] = useState<string | undefined>();
+  const failed = failedUri === uri;
   const radius = Math.round(size * 0.2);
 
   if (uri && !failed) {
@@ -21,7 +22,7 @@ export function CompanyLogo({ uri, name, size = 84 }: { uri?: string; name: stri
         source={{ uri }}
         style={{ width: size, height: size, borderRadius: radius, backgroundColor: t.c.card2 }}
         contentFit="cover"
-        onError={() => setFailed(true)}
+        onError={() => setFailedUri(uri)}
         accessibilityIgnoresInvertColors
       />
     );
