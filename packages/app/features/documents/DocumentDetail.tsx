@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
-import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -171,6 +171,29 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
       toast.show(tr('common:documentDetail.sent'), 'success');
     });
+
+  /**
+   * Email / WhatsApp. A browser (or a party with no address on file) can't use
+   * the server's send, which only queues the message, so the person's own mail
+   * app or WhatsApp opens with the document's details and link filled in.
+   */
+  const compose = (channel: 'email' | 'whatsapp') =>
+    runRemote(async () => {
+      const url = await shareLink(doc.companyId, doc.id);
+      const text = `${tr('common:documentDetail.shareMessage', { kind: kindName, number: doc.number, amount: formatMoney(doc.totals.grandTotal) })}
+${url}`;
+      const target =
+        channel === 'whatsapp'
+          ? `https://wa.me/${(party?.phone ?? '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`
+          : `mailto:${party?.email ?? ''}?subject=${encodeURIComponent(`${kindName} ${doc.number}`)}&body=${encodeURIComponent(text)}`;
+      await Linking.openURL(target);
+    });
+
+  const sendVia = (channel: 'email' | 'whatsapp') => {
+    const hasContact = channel === 'email' ? !!party?.email : !!party?.phone;
+    if (Platform.OS === 'web' || !hasContact) compose(channel);
+    else send(channel);
+  };
 
   const convert = (target: DocumentKind) => {
     const id = convertDocument(doc.id, target);
@@ -650,14 +673,26 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           ...(isFinalized(doc.status)
             ? [
                 { label: 'Share as PDF', icon: 'file-pdf-box' as const, onPress: shareDocument },
-                ...(party?.email ? [{ label: 'Send by email', icon: 'email-outline' as const, onPress: () => send('email') }] : []),
-                ...(party?.phone ? [{ label: 'Send on WhatsApp', icon: 'whatsapp' as const, onPress: () => send('whatsapp') }] : []),
-                { label: 'Share link', icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await shareLink(doc.companyId, doc.id))) },
+                { label: 'Send by email', icon: 'email-outline' as const, onPress: () => sendVia('email') },
+                { label: 'Send on WhatsApp', icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
+                { label: Platform.OS === 'web' ? 'Copy link' : 'Share link', icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await shareLink(doc.companyId, doc.id))) },
                 ...(doc.kind === 'invoice' && outstanding.minor > 0
                   ? [{ label: 'Payment link', icon: 'credit-card-outline' as const, onPress: () => runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url)) }]
                   : []),
               ]
             : [{ label: 'Edit', icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
+          {
+            label: doc.kind === 'purchaseBill' ? 'Pay supplier' : 'Record payment',
+            icon: 'cash-plus' as const,
+            onPress: () => {
+              if (!isPayable) return toast.show(tr('common:documentDetail.noPayment', { kind: kindName }), 'info');
+              if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'info');
+              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info');
+              router.push(
+                `/(app)/payments/new?direction=${doc.kind === 'invoice' ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}` as never,
+              );
+            },
+          },
           { label: 'Preview document', icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
           ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'
             ? [{ label: 'Generate e-invoice', icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]

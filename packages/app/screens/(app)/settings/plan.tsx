@@ -9,13 +9,12 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
-import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useDocuments } from '../../../store/selectors';
-import { PLANS, moduleSetFor, planInfo, userLimit } from '@esmart/core/domain/plan';
+import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '../../../features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
-import type { PlanTier } from '@esmart/core/types';
+import { usePlanChange } from '../../../features/plan/usePlanChange';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Cycle = 'monthly' | 'yearly';
@@ -23,7 +22,6 @@ type Cycle = 'monthly' | 'yearly';
 export default function PlanBilling() {
   const t = useTheme();
   const { t: tr } = useTranslation(['plan']);
-  const toast = useToast();
 
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const companies = useAppStore((s) => s.companies);
@@ -32,20 +30,11 @@ export default function PlanBilling() {
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
   const invoices = useDocuments('invoice');
   const company = useActiveCompany();
-  const setPlan = useAppStore((s) => s.setPlan);
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
   const seatLimit = userLimit(currentPlan);
 
-  const choose = (tier: PlanTier) => {
-    setPlan(company.id, tier);
-    const name = planInfo(tier).name;
-    if (moduleSetFor(currentPlan) === 'full' && moduleSetFor(tier) === 'sales') {
-      toast.show(tr('plan:billing.downgraded', { plan: name }), 'info');
-    } else {
-      toast.show(tr('plan:billing.switched', { plan: name }), 'success');
-    }
-  };
+  const { choose, pending } = usePlanChange(company.id, cycle);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -150,6 +139,7 @@ export default function PlanBilling() {
                 }
                 variant={isCurrent ? 'ghost' : 'primary'}
                 disabled={isCurrent}
+                  loading={pending === p.key}
                 onPress={() => choose(p.key)}
                 fullWidth
               />

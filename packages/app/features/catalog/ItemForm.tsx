@@ -43,8 +43,8 @@ export function ItemForm({ item }: { item?: Item }) {
   const [sku, setSku] = useState(item?.sku ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
   const [unit, setUnit] = useState(item?.unit ?? (item?.type === 'service' ? 'NOS' : 'PCS'));
-  const [salePrice, setSalePrice] = useState(item ? String(toMajor(item.salePrice)) : '');
-  const [purchasePrice, setPurchasePrice] = useState(item ? String(toMajor(item.purchasePrice)) : '');
+  const [salePrice, setSalePrice] = useState(item && item.salePrice.minor !== 0 ? String(toMajor(item.salePrice)) : '');
+  const [purchasePrice, setPurchasePrice] = useState(item && item.purchasePrice.minor !== 0 ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
   const [barcode, setBarcode] = useState(item?.barcode ?? '');

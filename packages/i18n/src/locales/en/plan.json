@@ -67,6 +67,8 @@
     "choose": "Choose this plan",
     "switched": "Switched to {{plan}}",
     "downgraded": "{{plan}} — purchases, stock and expenses are hidden, not deleted",
+    "checkoutOpened": "Complete the payment to switch to {{plan}}. Your current plan stays until it is confirmed.",
+    "cancelScheduled": "Your plan moves to {{plan}} at the end of the current billing period.",
     "footnote": "Elixir Books Smart is priced separately from Elixir Books ERP. A plan change takes effect once the payment is confirmed."
   }
 }
