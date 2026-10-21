@@ -62,11 +62,9 @@ export default function OcrCapture() {
 
   const pick = async (fromCamera: boolean) => {
     try {
-      const permission = fromCamera
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        toast.show(tr(fromCamera ? 'inventory:ocr.cameraDenied' : 'inventory:ocr.galleryDenied'), 'error');
+      // The gallery goes through the system photo picker, which needs no permission.
+      if (fromCamera && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+        toast.show(tr('inventory:ocr.cameraDenied'), 'error');
         return;
       }
       const result = fromCamera
