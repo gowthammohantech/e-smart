@@ -110,10 +110,14 @@ export function TextField({
   containerStyle,
   style,
   multiline,
+  secureTextEntry,
   ...rest
 }: TextFieldProps) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const [focused, setFocused] = useState(false);
+  // A password can be shown while typing, to check it.
+  const [revealed, setRevealed] = useState(false);
   const desktop = useIsDesktop();
 
   return (
@@ -157,8 +161,19 @@ export function TextField({
           onBlur={() => setFocused(false)}
           multiline={multiline}
           accessibilityLabel={label}
+          secureTextEntry={secureTextEntry && !revealed}
           {...rest}
         />
+        {secureTextEntry ? (
+          <Pressable
+            onPress={() => setRevealed((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={tr(revealed ? 'common:component.hidePassword' : 'common:component.showPassword')}
+            hitSlop={8}
+          >
+            <MaterialCommunityIcons name={revealed ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.c.muted} />
+          </Pressable>
+        ) : null}
         {/* Text can't sit straight inside a View, so a plain unit such as "km" gets its own Text. */}
         {typeof suffix === 'string' || typeof suffix === 'number' ? (
           <Text variant="caption" tone="muted">
