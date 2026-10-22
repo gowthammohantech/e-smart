@@ -51,7 +51,7 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
-import { documentPdf, paymentLink, pdfFileName, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
+import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
 import { useGoBack } from '../../navigation/useGoBack';
 
@@ -675,7 +675,7 @@ ${url}`;
                 { label: 'Share as PDF', icon: 'file-pdf-box' as const, onPress: shareDocument },
                 { label: 'Send by email', icon: 'email-outline' as const, onPress: () => sendVia('email') },
                 { label: 'Send on WhatsApp', icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
-                { label: Platform.OS === 'web' ? 'Copy link' : 'Share link', icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await shareLink(doc.companyId, doc.id))) },
+                { label: Platform.OS === 'web' ? 'Copy link' : 'Share link', icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id))) },
                 ...(doc.kind === 'invoice' && outstanding.minor > 0
                   ? [{ label: 'Payment link', icon: 'credit-card-outline' as const, onPress: () => runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url)) }]
                   : []),

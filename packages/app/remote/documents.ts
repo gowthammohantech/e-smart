@@ -21,6 +21,13 @@ export async function shareLink(companyId: string, id: string): Promise<string> 
   return data.url;
 }
 
+/** A signed, expiring link straight to the invoice PDF in blob storage. */
+export async function pdfLink(companyId: string, id: string): Promise<string> {
+  const { data } = await api.POST('/companies/{companyId}/documents/{id}/share-link', { params: path(companyId, id) });
+  if (!data?.pdfUrl) throw new Error('The server returned no link');
+  return data.pdfUrl;
+}
+
 export type SendChannel = 'email' | 'whatsapp' | 'sms';
 
 /** Emails, WhatsApps or texts the document to the party; the server moves a draft quote or an issued invoice to sent. */

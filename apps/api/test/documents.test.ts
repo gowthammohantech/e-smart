@@ -355,6 +355,7 @@ describe('documents: output', () => {
 
     const share = await t.post(`${m.c}/documents/${inv.id}/share-link`, {}, { token: m.token });
     expect(share.body.url).toMatch(/^http:\/\/localhost:4000\/share\/[A-Za-z0-9_-]+$/);
+    expect(share.body.pdfUrl).toContain('INV-26-27-0001.pdf');
     const token = share.body.url.split('/').pop();
     const [stored] = await t.deps.db.select().from(schema.shareLinks).where(eq(schema.shareLinks.documentId, inv.id));
     expect(stored.tokenHash).toBe(sha256(token));
