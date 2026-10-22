@@ -1,5 +1,5 @@
 import { and, asc, eq, gte, inArray, lte, type SQL } from 'drizzle-orm';
-import { isLowStock, stockValue } from '@esmart/core/domain/stockLedger';
+import { isLowStock, stockMapOn, stockValue } from '@esmart/core/domain/stockLedger';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
 import { invalid, unprocessable, type Issue } from '../../http/errors';
@@ -215,12 +215,13 @@ export const inventoryHandlers = defineHandlers({
       if (!item) throw invalid('itemId', 'No such item in this company');
       if (!item.trackInventory || item.type !== 'goods') throw invalid('itemId', `${item.name} does not track stock`);
       const before = await stockOnHand(tx, ctx.company.id, [item.id], from.id);
-      const available = before.get(item.id) ?? 0;
-      if (available < body.quantity) {
-        throw insufficient([{ field: 'quantity', message: `${item.name} has ${available} ${item.unit} at ${from.name}`, severity: 'blocking' }]);
-      }
       const atSource = await coreMovements(tx, ctx.company.id, { itemIds: [item.id], branchIds: [from.id] });
-      const unitCostMinor = Math.round(stockValue(toCoreItem(item), atSource, base).minor / available);
+      // Only stock at the source on the transfer date can move, as for a sale.
+      const available = stockMapOn(atSource, body.date, from.id)[item.id] ?? 0;
+      if (available < body.quantity) {
+        throw insufficient([{ field: 'quantity', message: `${item.name} has ${available} ${item.unit} at ${from.name} on ${body.date}`, severity: 'blocking' }]);
+      }
+      const unitCostMinor = Math.round(stockValue(toCoreItem(item), atSource, base).minor / (before.get(item.id) ?? available));
 
       const group = newId('trf');
       const common = {

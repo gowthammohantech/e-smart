@@ -113,6 +113,8 @@
     "skip": "Skip",
     "noChartData": "No data for this period",
     "quantity": "Quantity",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "countryCode": "Country code",
     "useTyped": "Use “{{value}}”",
     "city": "City",

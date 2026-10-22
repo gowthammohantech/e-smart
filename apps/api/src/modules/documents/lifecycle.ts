@@ -1,8 +1,8 @@
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
-import { MOVEMENT_SIGN, signedQuantity } from '@esmart/core/domain/stockLedger';
-import type { BusinessDocument, DocStatus, DocumentKind, StockMovementType } from '@esmart/core/types';
+import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
+import type { BusinessDocument, DocStatus, DocumentKind, StockMovement, StockMovementType } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow } from '../../context';
 import { preconditionFailed, unprocessable } from '../../http/errors';
@@ -10,7 +10,6 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
-import { stockOnHand } from '../catalog/stock';
 import type { DocRow } from './engine';
 
 const D = schema.documents;
@@ -185,7 +184,14 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
   if (values.length && MOVEMENT_SIGN[type] < 0 && !company.allowNegativeStock) {
     const need = new Map<string, number>();
     for (const v of values) need.set(v.itemId, (need.get(v.itemId) ?? 0) + Math.abs(Number(v.quantity)));
-    const onHand = await stockOnHand(tx, row.companyId, [...need.keys()], row.branchId);
+    // Only stock there on the document date counts, and never more than the lowest it
+    // gets on a later day: the same rule the app checks before finalising.
+    const ledger = await tx
+      .select({ itemId: M.itemId, branchId: M.branchId, type: M.type, quantity: M.quantity, date: M.date })
+      .from(M)
+      .where(and(eq(M.companyId, row.companyId), eq(M.branchId, row.branchId), inArray(M.itemId, [...need.keys()])));
+    const available = stockMapOn(ledger.map((m) => ({ ...m, quantity: Number(m.quantity) }) as StockMovement), row.date, row.branchId);
+    const onHand = new Map([...need.keys()].map((id) => [id, available[id] ?? 0]));
     const short = [...need].filter(([id, qty]) => (onHand.get(id) ?? 0) < qty);
     if (short.length) {
       throw unprocessable(
@@ -194,7 +200,7 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
           const line = lines.find((l) => l.itemId === id)!;
           return {
             field: `lines[${line.position - 1}].quantity`,
-            message: `${item.name}: ${onHand.get(id) ?? 0} ${item.unit} in stock at this branch, ${qty} needed`,
+            message: `${item.name}: ${onHand.get(id) ?? 0} ${item.unit} in stock at this branch on ${row.date}, ${qty} needed`,
             severity: 'blocking' as const,
           };
         }),
