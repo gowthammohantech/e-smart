@@ -80,6 +80,8 @@ export default function Profile() {
               divider={i < companies.length - 1}
               right={c.id === activeCompanyId ? <Badge label={tr('settings:profile.active')} tone="success" size="sm" /> : undefined}
               onPress={() => {
+                // Already the active business: nothing switched, so no message.
+                if (c.id === activeCompanyId) return;
                 setActiveCompany(c.id);
                 toast.show(`Switched to ${c.name}`, 'success');
               }}

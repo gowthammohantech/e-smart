@@ -112,14 +112,18 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   createCompany: ({ result, after }) => {
     const company = byId(after.companies, result as string);
     if (!company) return;
-    const { id, accountId, createdAt, plan, ...body } = company as Company & Record<string, unknown>;
-    void accountId; void createdAt; void plan;
+    // The logo goes up on its own (remote/logo.ts); here logoUri is only a path on this device.
+    const { id, accountId, createdAt, plan, logoUri, ...body } = company as Company & Record<string, unknown>;
+    void accountId; void createdAt; void plan; void logoUri;
     outbox.push({ method: 'POST', path: '/companies', body: { ...body, seedDefaults: true, numberingSeries: [] }, entityType: 'company', entityId: id, label: company.name, clientEntityId: id });
   },
   saveCompany: ({ args, after }) => {
     const company = byId(after.companies, (args[0] as Company).id);
     if (!company) return;
-    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body: company, label: company.name });
+    // logoUri is the server's read-only link (or a local path); the logo has its own upload.
+    const { logoUri, ...body } = company;
+    void logoUri;
+    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body, label: company.name });
   },
   saveBranch: ({ args, after }) => {
     const b = byId(after.branches, (args[0] as Branch).id);

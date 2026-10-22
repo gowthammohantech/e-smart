@@ -7,7 +7,8 @@ import { sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { companyToWire } from './wire';
 
-const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+// A phone photo picked at reduced quality is a few MB; a logo has no use for more than this.
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
 /** PNG and JPEG by their magic bytes, not the client's word for it. */
 function sniffImage(bytes: Buffer): { mime: 'image/png' | 'image/jpeg'; ext: string } | null {
@@ -38,9 +39,9 @@ export const logoHandlers = defineHandlers({
     try {
       bytes = await file.toBuffer();
     } catch {
-      throw invalid('file', 'The logo must be 2 MB or smaller', 'FILE_TOO_LARGE');
+      throw invalid('file', 'The logo must be 5 MB or smaller', 'FILE_TOO_LARGE');
     }
-    if (bytes.length > MAX_LOGO_BYTES) throw invalid('file', 'The logo must be 2 MB or smaller', 'FILE_TOO_LARGE');
+    if (bytes.length > MAX_LOGO_BYTES) throw invalid('file', 'The logo must be 5 MB or smaller', 'FILE_TOO_LARGE');
     const kind = sniffImage(bytes);
     if (!kind) throw new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'The logo must be a PNG or JPEG image');
 

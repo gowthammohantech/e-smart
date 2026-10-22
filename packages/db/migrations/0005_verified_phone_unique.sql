@@ -1,0 +1,2 @@
+ALTER TABLE "users" DROP CONSTRAINT "users_phone_key";--> statement-breakpoint
+CREATE UNIQUE INDEX "users_verified_phone_idx" ON "users" USING btree ("phone") WHERE "users"."phone_verified_at" IS NOT NULL;

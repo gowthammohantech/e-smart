@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ApiError } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { PhoneField, TextField, SwitchField, usePhoneInput } from '@esmart/ui/components/Field';
@@ -51,7 +52,9 @@ export default function SignUp() {
       })
       .catch((err: unknown) => {
         setBusy(false);
-        setErrors({ email: describeError(err, tr) });
+        // A number someone else has already verified is a phone problem, not an email one.
+        const message = describeError(err, tr);
+        setErrors(err instanceof ApiError && err.code === 'PHONE_TAKEN' ? { phone: message } : { email: message });
       });
   };
 

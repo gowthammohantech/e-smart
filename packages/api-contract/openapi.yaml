@@ -413,7 +413,7 @@ paths:
             schema:
               type: object
               properties:
-                file: { type: string, format: binary, description: 'PNG or JPEG, up to 2 MB' }
+                file: { type: string, format: binary, description: 'PNG or JPEG, up to 5 MB' }
       responses:
         '200':
           description: Logo stored

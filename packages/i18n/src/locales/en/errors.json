@@ -13,6 +13,7 @@
     "hsnRequired": "HSN/SAC code is required for a GST-registered business",
     "hsnShape": "HSN/SAC code should be 4, 6 or 8 digits",
     "pincodeShape": "Enter a six-digit PIN code, e.g. 400001",
+    "pincodeState": "PIN code {{pin}} is in {{pinState}}, not {{state}}. Check the PIN code or the state.",
     "gstinRequiredForType": "Enter the GSTIN for a registered party",
     "gstinNotForType": "An unregistered or overseas party has no GSTIN"
   },

@@ -9,6 +9,7 @@ import { Text, TextTone } from '../Text';
 import { EmptyState } from '../EmptyState';
 import { Button } from '../Button';
 import { useToast } from '../Toast';
+import { useKeepScrollWhileOpen } from '../ScrollKeep';
 
 export type SelectOption = {
   value: string;
@@ -76,6 +77,8 @@ export function SelectSheet({
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const [query, setQuery] = useState('');
+  // The form behind the sheet stays where it was when the sheet closes.
+  useKeepScrollWhileOpen(visible);
   // Kept in tap order so whatever is confirmed arrives in the order it was picked.
   const [picked, setPicked] = useState<string[]>([]);
   // Only a list with rows that can't be picked needs its own toasts.

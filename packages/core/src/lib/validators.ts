@@ -1,4 +1,6 @@
 import { isValidGstin, normalizeGstin } from '../domain/gstin';
+import { pincodeContradictsState, statesForPincode } from '../domain/pincodeStates';
+import { stateNameOf } from '../domain/stateCodes';
 import i18n from '@esmart/i18n';
 
 /**
@@ -36,14 +38,20 @@ export function validGstin(value: string | undefined): string | undefined {
 export const PINCODE_RE = /^[1-9][0-9]{5}$/;
 
 /**
- * A postal code on any address. Indian PINs must be six digits; other
- * countries' codes are free-form. Empty passes — a caller that needs one
- * checks `required` too.
+ * A postal code on any address. Indian PINs must be six digits, and when the
+ * address's state is known (`stateCode`, a GST state code) the PIN has to be
+ * one that state can have; other countries' codes are free-form. Empty passes
+ * — a caller that needs one checks `required` too.
  */
-export function validPostalCode(value: string | undefined, country = 'IN'): string | undefined {
+export function validPostalCode(value: string | undefined, country = 'IN', stateCode?: string): string | undefined {
   const v = (value ?? '').trim();
   if (!v || country !== 'IN') return undefined;
-  return PINCODE_RE.test(v) ? undefined : i18n.t('errors:validation.pincodeShape');
+  if (!PINCODE_RE.test(v)) return i18n.t('errors:validation.pincodeShape');
+  if (pincodeContradictsState(v, stateCode)) {
+    const pinState = (statesForPincode(v) ?? []).map(stateNameOf).join(' / ');
+    return i18n.t('errors:validation.pincodeState', { pin: v, pinState, state: stateNameOf(stateCode) });
+  }
+  return undefined;
 }
 
 export const HSN_RE = /^\d{4}(\d{2})?(\d{2})?$/;
