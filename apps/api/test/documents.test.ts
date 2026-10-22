@@ -289,7 +289,7 @@ describe('documents: stock and plans', () => {
     const draft = await t.post(`${m.c}/documents`, invoiceBody(m, { lines: [line(m.gst(18)), line(m.gst(18), { itemId: rod, quantity: 3 })] }), { token: m.token });
     const short = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, {}, { token: m.token });
     expect(short.status).toBe(422);
-    expect(short.body).toMatchObject({ code: 'INSUFFICIENT_STOCK', issues: [{ field: 'lines[1].quantity', message: 'Steel rod: 0 NOS in stock at this branch, 3 needed' }] });
+    expect(short.body).toMatchObject({ code: 'INSUFFICIENT_STOCK', issues: [{ field: 'lines[1].quantity', message: 'Steel rod: 0 NOS in stock at this branch on 2026-09-29, 3 needed' }] });
     expect(await onHand(t, rod)).toBe(0);
     const [still] = await t.deps.db.select().from(schema.documents).where(eq(schema.documents.id, draft.body.id));
     expect(still.status).toBe('draft');

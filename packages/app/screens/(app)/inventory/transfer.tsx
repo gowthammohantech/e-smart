@@ -15,7 +15,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { useBranches, useDefaultBranchId, useItems, useStockMovements } from '../../../store/selectors';
-import { stockOnHand } from '@esmart/core/domain/stockLedger';
+import { stockMapOn } from '@esmart/core/domain/stockLedger';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -49,7 +49,8 @@ export default function StockTransfer() {
   const [toOpen, setToOpen] = useState(false);
 
   const item = items.find((i) => i.id === itemId);
-  const available = item ? stockOnHand(item.id, movements, fromBranchId) : 0;
+  // What the source branch holds on the transfer date, not today.
+  const available = item ? (stockMapOn(movements, date, fromBranchId)[item.id] ?? 0) : 0;
   const qty = Number(quantity) || 0;
   const exceeds = qty > available;
   const canSave = !!itemId && qty > 0 && fromBranchId !== toBranchId && !!toBranchId && !exceeds;
