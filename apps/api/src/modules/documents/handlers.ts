@@ -33,7 +33,7 @@ import {
   type LineInput,
 } from './engine';
 import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, finalizeInTx, reverseStock, today } from './lifecycle';
-import { createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf } from './outbound';
+import { createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
 import { documentsToWire, summariesToWire, type DocumentWire, type SummaryRow } from './wire';
 
 const D = schema.documents;
@@ -442,7 +442,8 @@ export const documentsHandlers = defineHandlers({
   async createShareLink(ctx) {
     const row = await findDocument(ctx, ctx.db, ctx.params.id);
     const link = await ctx.db.transaction((tx) => createShareLinkFor(tx, ctx.deps, ctx.user, row, ctx.now));
-    return { url: link.url, expiresAt: link.expiresAt.toISOString() };
+    const pdf = await storePdfLinkFor(ctx.db, ctx.deps, ctx.company, row, ctx.now);
+    return { url: link.url, expiresAt: link.expiresAt.toISOString(), pdfUrl: pdf.url, pdfExpiresAt: pdf.expiresAt.toISOString() };
   },
 
   async sendDocument(ctx) {
@@ -464,9 +465,7 @@ export const documentsHandlers = defineHandlers({
       const pay = body.includePaymentLink && payable ? await paymentLinkFor(tx, ctx.deps, ctx.company, ctx.user, row, ctx.now) : null;
       let pdfUrl: string | undefined;
       if (body.attachPdf ?? true) {
-        const key = `companies/${row.companyId}/documents/${row.id}/${pdfFilename(row.number)}`;
-        await ctx.deps.providers.storage.put(key, await renderDocumentPdf(tx, ctx.deps, ctx.company, row, { now: ctx.now }), 'application/pdf');
-        pdfUrl = (await ctx.deps.providers.storage.downloadUrl(key, { ttlSeconds: 7 * 86_400, filename: pdfFilename(row.number) })).url;
+        pdfUrl = (await storePdfLinkFor(tx, ctx.deps, ctx.company, row, ctx.now)).url;
       }
       const total = `${row.currency.trim()} ${(row.grandTotalMinor / 100).toFixed(2)}`;
       const text = [

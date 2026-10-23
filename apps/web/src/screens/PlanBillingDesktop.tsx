@@ -9,10 +9,9 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
-import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useDocuments } from '@esmart/app/store/selectors';
-import { PLANS, moduleSetFor, planInfo, userLimit } from '@esmart/core/domain/plan';
+import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '@esmart/app/features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
 import type { PlanTier } from '@esmart/core/types';
@@ -27,7 +26,6 @@ type Cycle = 'monthly' | 'yearly';
 export function PlanBillingDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['plan']);
-  const toast = useToast();
 
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const companies = useAppStore((s) => s.companies);
@@ -38,15 +36,8 @@ export function PlanBillingDesktop() {
   const current = planInfo(currentPlan);
   const seatLimit = userLimit(currentPlan);
 
-  const choose = (tier: PlanTier) => {
-    setPlan(company.id, tier);
-    const name = planInfo(tier).name;
-    if (moduleSetFor(currentPlan) === 'full' && moduleSetFor(tier) === 'sales') {
-      toast.show(tr('plan:billing.downgraded', { plan: name }), 'info');
-    } else {
-      toast.show(tr('plan:billing.switched', { plan: name }), 'success');
-    }
-  };
+  // No toast: plans can't be bought yet (no payment gateway), so nothing is confirmed here.
+  const choose = (tier: PlanTier) => setPlan(company.id, tier);
 
   // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md), so no meters.
   // Only people who have accepted count; a pending invitation is not a user yet.
