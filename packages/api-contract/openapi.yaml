@@ -1596,6 +1596,8 @@ paths:
                 properties:
                   url: { type: string, format: uri }
                   expiresAt: { type: string, format: date-time }
+                  pdfUrl: { type: string, format: uri, description: A signed link straight to the PDF in blob storage }
+                  pdfExpiresAt: { type: string, format: date-time }
   /companies/{companyId}/documents/{id}/send:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }

@@ -58,6 +58,13 @@ export async function renderDocumentPdf(
   return deps.providers.pdf.render(html);
 }
 
+/** Renders the PDF into object storage and returns a signed download link to that blob. */
+export async function storePdfLinkFor(db: DbOrTx, deps: Deps, company: CompanyRow, row: DocRow, now: Date, ttlSeconds = 7 * 86_400) {
+  const key = `companies/${row.companyId}/documents/${row.id}/${pdfFilename(row.number)}`;
+  await deps.providers.storage.put(key, await renderDocumentPdf(db, deps, company, row, { now }), 'application/pdf');
+  return deps.providers.storage.downloadUrl(key, { ttlSeconds, filename: pdfFilename(row.number) });
+}
+
 /** A public, expiring link to the document. Only a hash of the token is stored. */
 export async function createShareLinkFor(db: DbOrTx, deps: Deps, actor: AuthUser, row: DocRow, now: Date) {
   const token = randomToken(24);

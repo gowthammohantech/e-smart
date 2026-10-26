@@ -6240,6 +6240,13 @@ export interface operations {
                         url?: string;
                         /** Format: date-time */
                         expiresAt?: string;
+                        /**
+                         * Format: uri
+                         * @description A signed link straight to the PDF in blob storage
+                         */
+                        pdfUrl?: string;
+                        /** Format: date-time */
+                        pdfExpiresAt?: string;
                     };
                 };
             };

@@ -43,6 +43,10 @@ export class StubPdf implements PdfProvider {
   }
 }
 
+/** CSS pixels (96 dpi) of each sheet, and how much taller than a sheet a document may be and still stay on one page. */
+const PAGE_PX = { A4: { width: 794, height: 1123 }, Letter: { width: 816, height: 1056 } } as const;
+const MAX_ONE_PAGE_STRETCH = 1.5;
+
 /** Headless Chromium through playwright-core. One browser, reused. */
 export class ChromiumPdf implements PdfProvider {
   private browser: Promise<import('playwright-core').Browser> | null = null;
@@ -59,8 +63,22 @@ export class ChromiumPdf implements PdfProvider {
     const browser = await this.launch();
     const page = await browser.newPage();
     try {
+      const format = opts.format ?? 'A4';
+      const size = PAGE_PX[format];
+      await page.setViewportSize({ width: size.width, height: size.height });
       await page.setContent(html, { waitUntil: 'load' });
-      return await page.pdf({ format: opts.format ?? 'A4', printBackground: true, margin: { top: '12mm', bottom: '12mm', left: '10mm', right: '10mm' } });
+      // The preview in the app is one continuous page, so an invoice only a
+      // little taller than the sheet stays on one page (a single taller page)
+      // instead of spilling its terms and signature onto a second sheet. A
+      // genuinely long document still paginates normally.
+      const contentHeight = await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight));
+      const oneSheet = contentHeight > size.height && contentHeight <= size.height * MAX_ONE_PAGE_STRETCH;
+      // No page margins: the document template carries its own body padding, so
+      // margins here would double up and push a one-page invoice onto a second page.
+      const margin = { top: '0', bottom: '0', left: '0', right: '0' };
+      return oneSheet
+        ? await page.pdf({ width: `${size.width}px`, height: `${contentHeight + 1}px`, printBackground: true, margin })
+        : await page.pdf({ format, printBackground: true, margin });
     } finally {
       await page.close();
     }

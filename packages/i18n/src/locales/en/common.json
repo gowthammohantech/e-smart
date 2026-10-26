@@ -91,7 +91,10 @@
     "shareTitle": "{{kind}} {{number}}",
     "shareMessage": "{{kind}} {{number}} — {{amount}}",
     "sent": "On its way to the customer",
-    "linkCopied": "Link copied"
+    "linkCopied": "Link copied",
+    "noPayment": "No payment is taken against a {{kind}}.",
+    "issueFirst": "Issue it first; payment is recorded against an issued document.",
+    "nothingDue": "Nothing is due on this document."
   },
   "component": {
     "confirm": "Confirm",
