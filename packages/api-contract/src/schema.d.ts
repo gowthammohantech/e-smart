@@ -2705,7 +2705,7 @@ export interface components {
             /** @enum {string} */
             source?: "manual" | "provider";
         };
-        NumberingSeries: {
+        NumberingSeries: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             /** @enum {string} */

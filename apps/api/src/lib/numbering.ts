@@ -90,9 +90,14 @@ export async function assignNumber(
     number = format(next);
   }
 
+  const version = series.version + 1;
   await tx
     .update(S)
-    .set({ nextNumber: next + 1, lastResetAt, version: series.version + 1, updatedAt: new Date() })
+    .set({ nextNumber: next + 1, lastResetAt, version, updatedAt: new Date() })
     .where(eq(S.id, series.id));
+  // Clients pull the new version and next number; without it their next
+  // settings save carries a stale version and is refused. Not an audit event:
+  // drawing a number is part of the document's own change.
+  await tx.insert(schema.changeLog).values({ companyId: series.companyId, entityType: 'numbering_series', entityId: series.id, op: 'upsert', version });
   return number;
 }
