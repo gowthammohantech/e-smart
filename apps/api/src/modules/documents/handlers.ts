@@ -121,7 +121,8 @@ async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus, opts: {
  * Moves a document between statuses (not out of draft; see finalizeDraft)
  * under a row lock, re-checking the transition against the locked row.
  * Cancelling reverses its stock and withdraws its payment links; a document
- * with money allocated, or a live e-invoice, cannot be cancelled.
+ * with money allocated, a live e-way bill or a live e-invoice cannot be
+ * cancelled. The e-way bill comes first: the IRN can't go while it is live.
  */
 async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?: string): Promise<DocRow> {
   return ctx.db.transaction(async (tx) => {
@@ -131,6 +132,12 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
     if (!canTransition(locked.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${locked.kind} cannot go from ${from} to ${target}`);
     if (target === 'cancelled') {
       if (locked.amountPaidMinor > 0) throw conflict('DOCUMENT_HAS_PAYMENTS', 'Remove the payments allocated to this document before cancelling it');
+      if (locked.currentEwayBillId) {
+        const [bill] = await tx.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, locked.currentEwayBillId));
+        if (bill && bill.status === 'active' && bill.validUpto >= ctx.now) {
+          throw conflict('EWAY_BILL_ACTIVE', `Cancel e-way bill ${bill.ewayBillNumber.trim()} before cancelling the document`);
+        }
+      }
       if (await eInvoiceGenerated(tx, locked.id)) throw conflict('EINVOICE_ACTIVE', 'Cancel the e-invoice (IRN) before cancelling the document');
       await reverseStock(tx, ctx.company, locked, ctx.user.id, 'cancelled');
       await tx.update(schema.paymentLinks).set({ status: 'cancelled' }).where(and(eq(schema.paymentLinks.documentId, locked.id), eq(schema.paymentLinks.status, 'active')));

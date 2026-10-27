@@ -44,7 +44,7 @@ import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
-import { isEwayBillRequired } from '@esmart/core/domain/ewayBill';
+import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
@@ -713,7 +713,20 @@ ${url}`;
           } },
           ...(transitions.length ? [{ label: 'Change status', icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
           ...(doc.status !== 'cancelled' && isFinalized(doc.status)
-            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => { setActionsOpen(false); setConfirmCancel(true); } }]
+            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => {
+                setActionsOpen(false);
+                // The server refuses while the e-way bill or the IRN is live (in that
+                // order), so say so before the user confirms.
+                if (ewayBill && ewayBillStatusAt(ewayBill, new Date().toISOString()) === 'active') {
+                  toast.show(tr('sales:detail.cancelEwayFirst', { number: ewayBill.ewayBillNumber }), 'error');
+                  return;
+                }
+                if (doc.compliance?.eInvoiceStatus === 'generated') {
+                  toast.show(tr('sales:detail.cancelIrnFirst'), 'error');
+                  return;
+                }
+                setConfirmCancel(true);
+              } }]
             : []),
           ...(!isFinalized(doc.status)
             ? [{ label: 'Delete draft', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
