@@ -73,7 +73,7 @@ const Env = z.object({
   // same values drop in. Read when COMPLIANCE_PROVIDER or GSTIN_PROVIDER is `gsp`.
   /** The GSP account: `ADAEQUARE_GSP` or `WHITE_BOOKS_GSP`. Picks the gateway client too. */
   TAXATION_GSP_PROVIDER_CODE: z.string().min(1).default('ADAEQUARE_GSP'),
-  /** `adaequare` or `whitebooks`. Blank (normal) reads the code above. Whitebooks is sandbox only. */
+  /** `adaequare` or `whitebooks`. Blank (normal) reads the code above. Whitebooks needs TAXATION_GSTIN_ALLOW_SANDBOX=true. */
   TAXATION_TAXPAYER_PROVIDER: z.string().default(''),
   /** The gateway's base URL, e.g. https://gsp.adaequare.com/test/ or https://apisandbox.whitebooks.in */
   TAXATION_GSP_BASE_URL: z.string().optional(),
@@ -81,11 +81,15 @@ const Env = z.object({
   TAXATION_GSP_ACCOUNT_EMAIL: z.string().default(''),
   /** Whitebooks only: the public IP this server files from, as registered with the GSP. */
   TAXATION_GSP_IP_ADDRESS: z.string().default(''),
-  /** `false` skips the GSP token exchange, for stand-in gateways that mint nothing. Never in production. */
+  /** `false` skips the GSP token exchange, for stand-in gateways that mint nothing. Needs TAXATION_GSTIN_ALLOW_SANDBOX=true. */
   TAXATION_GSP_AUTH_REQUIRED: bool.default(true),
-  /** Admit NIC's sandbox GSTIN shape (`29AAGCB1286Q000`). Never in production. */
+  /**
+   * The one switch for NIC's sandbox. `true` admits the sandbox GSTIN shape (`29AAGCB1286Q000`) and is what allows
+   * the sandbox-only settings: the Whitebooks gateway, TAXATION_SANDBOX_BUYER_GSTIN and TAXATION_GSP_AUTH_REQUIRED=false.
+   * It is the deployment's own choice, whatever NODE_ENV says: leave it `false` on a live deployment.
+   */
   TAXATION_GSTIN_ALLOW_SANDBOX: bool.default(false),
-  /** Sandbox only: file every e-invoice against this buyer, looked up from NIC's register. Whitebooks only. */
+  /** Sandbox only: file every e-invoice against this buyer, looked up from NIC's register. Whitebooks only; needs TAXATION_GSTIN_ALLOW_SANDBOX=true. */
   TAXATION_SANDBOX_BUYER_GSTIN: z.string().trim().toUpperCase().default(''),
   /** Adaequare's only pair, and Whitebooks' GST taxpayer lookup pair. */
   TAXATION_GSP_APP_ID: z.string().trim().default(''),
@@ -150,6 +154,8 @@ const Env = z.object({
   } catch (err) {
     ctx.addIssue({ code: 'custom', path: ['TAXATION_TAXPAYER_PROVIDER'], message: (err as Error).message });
   }
+  // The sandbox-only settings are allowed by TAXATION_GSTIN_ALLOW_SANDBOX and by nothing else, in any NODE_ENV.
+  for (const message of sandboxProblems(env)) ctx.addIssue({ code: 'custom', path: ['TAXATION_GSTIN_ALLOW_SANDBOX'], message });
 });
 
 export type Config = z.infer<typeof Env>;
@@ -212,21 +218,45 @@ export function productionProblems(config: Config, env: Record<string, string | 
   return problems;
 }
 
-/** The GSP gateway settings a production `gsp` provider needs, and the sandbox-only ones it must not have. */
+/**
+ * The settings that only make sense against NIC's sandbox, each refused unless `TAXATION_GSTIN_ALLOW_SANDBOX=true`.
+ * That flag is the deployment's own declaration that it files against the sandbox, so none of this looks at
+ * `NODE_ENV`: a hosted staging deployment may run with NODE_ENV=production and still use Whitebooks.
+ */
+function sandboxProblems(env: {
+  COMPLIANCE_PROVIDER: string;
+  GSTIN_PROVIDER: string;
+  TAXATION_GSTIN_ALLOW_SANDBOX: boolean;
+  TAXATION_SANDBOX_BUYER_GSTIN: string;
+  TAXATION_GSP_AUTH_REQUIRED: boolean;
+  TAXATION_TAXPAYER_PROVIDER: string;
+  TAXATION_GSP_PROVIDER_CODE: string;
+}): string[] {
+  if (env.TAXATION_GSTIN_ALLOW_SANDBOX) return [];
+  const problems: string[] = [];
+  const usesGsp = env.COMPLIANCE_PROVIDER === 'gsp' || env.GSTIN_PROVIDER === 'gsp';
+  try {
+    const gateway = resolveGspGateway(env.TAXATION_TAXPAYER_PROVIDER, env.TAXATION_GSP_PROVIDER_CODE);
+    if (usesGsp && SANDBOX_ONLY_GATEWAYS.includes(gateway)) {
+      problems.push(`The "${gateway}" gateway is sandbox only: set TAXATION_GSTIN_ALLOW_SANDBOX=true to use it, or point TAXATION_GSP_PROVIDER_CODE at a production gateway.`);
+    }
+  } catch {
+    // An unknown gateway name is reported on its own, above.
+  }
+  if (env.TAXATION_SANDBOX_BUYER_GSTIN) problems.push('TAXATION_SANDBOX_BUYER_GSTIN files every e-invoice against a test buyer: it needs TAXATION_GSTIN_ALLOW_SANDBOX=true.');
+  if (!env.TAXATION_GSP_AUTH_REQUIRED) problems.push('TAXATION_GSP_AUTH_REQUIRED=false is for stand-in test gateways: it needs TAXATION_GSTIN_ALLOW_SANDBOX=true.');
+  return problems;
+}
+
+/** The GSP gateway settings a production `gsp` provider needs. The sandbox-only ones are `sandboxProblems`. */
 function gspProblems(config: Config): string[] {
   const problems: string[] = [];
   const uses = config.COMPLIANCE_PROVIDER === 'gsp' || config.GSTIN_PROVIDER === 'gsp';
   if (!uses) return problems;
   const gateway = resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE);
   if (!gspBaseUrl(config)) problems.push(`TAXATION_${gateway.toUpperCase()}_BASE_URL (or TAXATION_GSP_BASE_URL) must be set for COMPLIANCE_PROVIDER=gsp or GSTIN_PROVIDER=gsp.`);
-  if (SANDBOX_ONLY_GATEWAYS.includes(gateway)) {
-    problems.push(`The "${gateway}" gateway is sandbox only; point TAXATION_GSP_PROVIDER_CODE at a production gateway.`);
-  }
-  const app = gspApplication(config, gateway, 'TAXPAYER');
+  const app = gspApplication(config, gateway, config.COMPLIANCE_PROVIDER === 'gsp' && gateway === 'whitebooks' ? 'EINVOICE' : 'TAXPAYER');
   if (!app.clientId || !app.clientSecret) problems.push(`${app.variable} must be set for the ${gateway} gateway.`);
-  if (!config.TAXATION_GSP_AUTH_REQUIRED) problems.push('TAXATION_GSP_AUTH_REQUIRED=false is for stand-in gateways; GSP calls must be authenticated in production.');
-  if (config.TAXATION_GSTIN_ALLOW_SANDBOX) problems.push('TAXATION_GSTIN_ALLOW_SANDBOX=true admits sandbox GSTINs; not in production.');
-  if (config.TAXATION_SANDBOX_BUYER_GSTIN) problems.push('TAXATION_SANDBOX_BUYER_GSTIN would file every e-invoice against a test buyer; not in production.');
   return problems;
 }
 

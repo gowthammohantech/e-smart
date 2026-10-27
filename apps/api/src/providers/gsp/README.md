@@ -78,11 +78,12 @@ so there is no migration; behind a load balancer each instance mints its own
 | Duplicate IRN (2150) | `irnbydocdetails` lookup, then adopt | adopt the registration the refusal carries in `info` |
 | Extra settings | none | `TAXATION_WHITEBOOKS_ACCOUNT_EMAIL`, `TAXATION_WHITEBOOKS_IP_ADDRESS` |
 
-Whitebooks is refused at boot when `NODE_ENV=production`, as are
-`TAXATION_GSP_AUTH_REQUIRED=false`, `TAXATION_GSTIN_ALLOW_SANDBOX=true` and
-`TAXATION_SANDBOX_BUYER_GSTIN`. `TAXATION_GSTIN_ALLOW_SANDBOX` admits NIC's
-sandbox GSTIN shape (`29AAGCB1286Q000`) in `isValidGstin` (`@esmart/core`),
-which is how a sandbox company can pass validation.
+`TAXATION_GSTIN_ALLOW_SANDBOX=true` is the one switch for NIC's sandbox, and it is the deployment's
+own choice: nothing here looks at `NODE_ENV`, so a hosted staging deployment running with
+`NODE_ENV=production` can use it. It admits the sandbox GSTIN shape (`29AAGCB1286Q000`) in
+`isValidGstin` (`@esmart/core`), and it is what allows the sandbox-only settings. Without it the app
+refuses to start with the Whitebooks gateway, `TAXATION_SANDBOX_BUYER_GSTIN` or
+`TAXATION_GSP_AUTH_REQUIRED=false`. Leave it unset on a live deployment.
 
 ## What was confirmed, and what was not
 

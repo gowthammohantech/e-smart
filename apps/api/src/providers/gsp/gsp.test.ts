@@ -72,6 +72,7 @@ const whitebooksConfig = (extra: Record<string, string> = {}): Config =>
     TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'EINS-secret',
     TAXATION_WHITEBOOKS_EWAYBILL_APP_ID: 'EWBS-app',
     TAXATION_WHITEBOOKS_EWAYBILL_APP_SECRET: 'EWBS-secret',
+    TAXATION_GSTIN_ALLOW_SANDBOX: 'true',
     ...extra,
   });
 
@@ -122,8 +123,10 @@ describe('gateway selection', () => {
   });
 
   it('refuses a sandbox gateway in production and a sandbox buyer on Adaequare', () => {
-    expect(() => createGspGateway({ ...whitebooksConfig(), NODE_ENV: 'production' })).toThrow(/sandbox only/);
-    expect(() => createGspGateway(adaequareConfig({ TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1' }))).toThrow(/TAXATION_SANDBOX_BUYER_GSTIN/);
+    // Whitebooks needs TAXATION_GSTIN_ALLOW_SANDBOX, in production or out of it.
+    expect(() => createGspGateway({ ...whitebooksConfig(), TAXATION_GSTIN_ALLOW_SANDBOX: false })).toThrow(/sandbox only/);
+    expect(() => createGspGateway({ ...whitebooksConfig(), NODE_ENV: 'production' })).not.toThrow();
+    expect(() => createGspGateway(adaequareConfig({ TAXATION_GSTIN_ALLOW_SANDBOX: 'true', TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1' }))).toThrow(/TAXATION_SANDBOX_BUYER_GSTIN/);
   });
 });
 
@@ -138,6 +141,8 @@ describe('switching provider', () => {
     TAXATION_WHITEBOOKS_IP_ADDRESS: '203.0.113.7',
     TAXATION_WHITEBOOKS_EINVOICE_APP_ID: 'wb-id',
     TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'wb-secret',
+    // Whitebooks is allowed by this switch alone; switching provider is still the one code.
+    TAXATION_GSTIN_ALLOW_SANDBOX: 'true',
   };
 
   it('changes gateway, host and credentials with the one provider code', async () => {
@@ -203,7 +208,7 @@ describe('Adaequare', () => {
 
   it('skips the exchange for a stand-in gateway and sends no bearer', async () => {
     const t = fakeTransport({ '/enriched/ei/api/invoice': () => generated });
-    const gateway = new AdaequareGateway(adaequareConfig({ TAXATION_GSP_AUTH_REQUIRED: 'false' }), t.transport);
+    const gateway = new AdaequareGateway(adaequareConfig({ TAXATION_GSP_AUTH_REQUIRED: 'false', TAXATION_GSTIN_ALLOW_SANDBOX: 'true' }), t.transport);
     await gateway.submitInvoice(creds, { payload, existingIrns: [], now: NOW });
     expect(t.authenticated()).toBe(0);
     expect(t.calls[0].token).toBe('');

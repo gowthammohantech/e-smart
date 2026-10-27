@@ -125,17 +125,34 @@ describe('production config guards', () => {
       expect(loadConfig({ ...ready, TAXATION_ADAEQUARE_BASE_URL: undefined, GSP_BASE_URL: 'https://gsp.example.in' }).COMPLIANCE_PROVIDER).toBe('gsp');
     });
 
-    it('refuses Whitebooks in production, however it is selected', () => {
+    it('refuses Whitebooks unless the sandbox is allowed, however it is selected', () => {
       expect(() => loadConfig({ ...ready, TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP' })).toThrow(/sandbox only/);
       expect(() => loadConfig({ ...ready, TAXATION_TAXPAYER_PROVIDER: 'whitebooks' })).toThrow(/sandbox only/);
     });
 
-    it.each([
-      ['TAXATION_GSP_AUTH_REQUIRED', 'false'],
-      ['TAXATION_GSTIN_ALLOW_SANDBOX', 'true'],
-      ['TAXATION_SANDBOX_BUYER_GSTIN', '29AWGPV7107B1Z1'],
-    ])('refuses the sandbox setting %s=%s in production', (key, value) => {
-      expect(() => loadConfig({ ...ready, [key]: value })).toThrow(new RegExp(key));
+    it('allows the sandbox GSP by TAXATION_GSTIN_ALLOW_SANDBOX alone, whatever NODE_ENV says', () => {
+      const sandbox = {
+        ...ready,
+        TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP',
+        TAXATION_WHITEBOOKS_BASE_URL: 'https://apisandbox.example.in',
+        TAXATION_WHITEBOOKS_EINVOICE_APP_ID: 'EINS-id',
+        TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'EINS-secret',
+        TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1',
+        TAXATION_GSP_AUTH_REQUIRED: 'false',
+      };
+      // Off: each sandbox-only setting is refused, in production and out of it.
+      expect(() => loadConfig(sandbox)).toThrow(/sandbox only/);
+      expect(() => loadConfig({ ...sandbox, NODE_ENV: 'development' })).toThrow(/TAXATION_GSTIN_ALLOW_SANDBOX/);
+      // On: allowed, in production too. The other production checks stay on.
+      expect(loadConfig({ ...sandbox, TAXATION_GSTIN_ALLOW_SANDBOX: 'true' }).TAXATION_GSP_PROVIDER_CODE).toBe('WHITE_BOOKS_GSP');
+      expect(() => loadConfig({ ...sandbox, TAXATION_GSTIN_ALLOW_SANDBOX: 'true', SMS_PROVIDER: 'log' })).toThrow(/SMS_PROVIDER=log/);
+      expect(() => loadConfig({ ...sandbox, TAXATION_GSTIN_ALLOW_SANDBOX: 'true', TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: '' })).toThrow(/EINVOICE_APP/);
+    });
+
+    it('refuses the test buyer and the unauthenticated gateway unless the sandbox is allowed', () => {
+      expect(() => loadConfig({ TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1' })).toThrow(/TAXATION_SANDBOX_BUYER_GSTIN/);
+      expect(() => loadConfig({ TAXATION_GSP_AUTH_REQUIRED: 'false' })).toThrow(/TAXATION_GSP_AUTH_REQUIRED/);
+      expect(loadConfig({ TAXATION_GSTIN_ALLOW_SANDBOX: 'true', TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1' }).TAXATION_SANDBOX_BUYER_GSTIN).toBe('29AWGPV7107B1Z1');
     });
 
     it('refuses a half-set application pair, outside production too', () => {
