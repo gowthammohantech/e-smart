@@ -300,7 +300,8 @@ export default function Home() {
               tone="good"
               icon="shield-check-outline"
               caption={compliance.eInvoice.failed ? `${compliance.eInvoice.failed} rejected` : 'Reported to IRP'}
-              onPress={() => router.push('/(app)/(tabs)/gst')}
+              // Both cards name their tab: the GST tab stays mounted and would keep the last one.
+              onPress={() => router.push('/(app)/(tabs)/gst?tab=eInvoice')}
             />
             <StatTile
               label={tr('reports:home.ewayBills')}
@@ -308,7 +309,7 @@ export default function Home() {
               tone={compliance.expiringSoon ? 'warn' : 'default'}
               icon="truck-fast-outline"
               caption={compliance.expiringSoon ? `${compliance.expiringSoon} expire in 24 h` : 'Active'}
-              onPress={() => router.push('/(app)/(tabs)/gst')}
+              onPress={() => router.push('/(app)/(tabs)/gst?tab=eway')}
             />
           </StatRow>
           )}
