@@ -25,7 +25,7 @@ import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
-import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { CURRENCIES, currencyLocked } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -1101,7 +1101,7 @@ export function DocumentEditor({
           visible={currencyOpen}
           onClose={() => setCurrencyOpen(false)}
           title={tr('sales:editor.documentCurrency')}
-          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol, disabled: currencyLocked(c.code) }))}
           value={draft.currency}
           onSelect={(code) =>
             setCurrency(code, code === baseCurrency ? 1 : resolveRate(exchangeRates, code, baseCurrency, draft.date))

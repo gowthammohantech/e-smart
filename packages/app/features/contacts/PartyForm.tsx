@@ -16,7 +16,7 @@ import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf }
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { citiesForState } from '@esmart/core/data/cities';
 import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
-import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { CURRENCIES, currencyLocked } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO } from '@esmart/core/lib/date';
@@ -439,7 +439,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           visible={registrationOpen}
           onClose={() => setRegistrationOpen(false)}
           title={tr('contacts:form.gstRegistration')}
-          options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k] }))}
+          options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k], disabled: k === 'overseas' }))}
           value={registration}
           onSelect={(v) => {
             const type = v as GstRegistrationType;
@@ -473,7 +473,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           visible={currencyOpen}
           onClose={() => setCurrencyOpen(false)}
           title={tr('contacts:form.currency')}
-          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol, disabled: currencyLocked(c.code) }))}
           value={currency}
           onSelect={setCurrency}
         />
