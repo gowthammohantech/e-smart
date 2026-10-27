@@ -3578,20 +3578,22 @@ components:
         effectiveFrom: { type: string, format: date }
         source: { type: string, enum: [manual, provider] }
     NumberingSeries:
-      type: object
-      required: [kind, prefix, nextNumber, padding]
-      properties:
-        id: { type: string, readOnly: true }
-        companyId: { type: string, readOnly: true }
-        kind:
-          type: string
-          enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, payment, expense]
-        prefix: { type: string, example: INV }
-        nextNumber: { type: integer, minimum: 1 }
-        padding: { type: integer, minimum: 1, maximum: 8 }
-        includeFiscalYear: { type: boolean }
-        includeBranchCode: { type: boolean }
-        resetPolicy: { type: string, enum: [never, yearly, monthly] }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [kind, prefix, nextNumber, padding]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            kind:
+              type: string
+              enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, payment, expense]
+            prefix: { type: string, example: INV }
+            nextNumber: { type: integer, minimum: 1 }
+            padding: { type: integer, minimum: 1, maximum: 8 }
+            includeFiscalYear: { type: boolean }
+            includeBranchCode: { type: boolean }
+            resetPolicy: { type: string, enum: [never, yearly, monthly] }
     Transporter:
       type: object
       required: [name, transporterId]

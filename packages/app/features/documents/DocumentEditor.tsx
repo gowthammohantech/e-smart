@@ -25,7 +25,7 @@ import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
-import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { CURRENCIES, currencyLocked } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -60,6 +60,7 @@ import {
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useQueryParams } from '../../navigation/queryParams';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -280,10 +281,14 @@ export function DocumentEditor({
 
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
+  const [, setParams] = useQueryParams();
   const pickParty = (id: string) => {
     const p = parties.find((x) => x.id === id);
     if (!p) return;
     patch(partyFields(p, draft.date, draft.dueDate));
+    // A new document keeps its party in the URL (replaced, not pushed), so a
+    // refresh or a shared link reopens it with the same party.
+    if (!documentId) setParams({ partyId: id });
   };
 
   useEffect(() => {
@@ -1096,7 +1101,7 @@ export function DocumentEditor({
           visible={currencyOpen}
           onClose={() => setCurrencyOpen(false)}
           title={tr('sales:editor.documentCurrency')}
-          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol, disabled: currencyLocked(c.code) }))}
           value={draft.currency}
           onSelect={(code) =>
             setCurrency(code, code === baseCurrency ? 1 : resolveRate(exchangeRates, code, baseCurrency, draft.date))

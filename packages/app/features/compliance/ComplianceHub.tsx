@@ -29,6 +29,7 @@ import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useQueryParams } from '../../navigation/queryParams';
 
 type Tab = 'eInvoice' | 'eway';
 
@@ -58,9 +59,14 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
 
-  const [tab, setTab] = useState<Tab>('eInvoice');
-  const [eInvoiceFilter, setEInvoiceFilter] = useState<EInvoiceStatus | 'all'>('all');
-  const [ewayFilter, setEwayFilter] = useState<EwayBillStatus | 'all'>('all');
+  // Tab and status filters live in the URL (`?tab=eway&eway=active`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const tab: Tab = params.tab === 'eway' ? 'eway' : 'eInvoice';
+  const eInvoiceFilter = (params.einvoice ?? 'all') as EInvoiceStatus | 'all';
+  const ewayFilter = (params.eway ?? 'all') as EwayBillStatus | 'all';
+  const setTab = (v: Tab) => setParams({ tab: v === 'eInvoice' ? undefined : v });
+  const setEInvoiceFilter = (v: EInvoiceStatus | 'all') => setParams({ einvoice: v === 'all' ? undefined : v });
+  const setEwayFilter = (v: EwayBillStatus | 'all') => setParams({ eway: v === 'all' ? undefined : v });
   const [query, setQuery] = useState('');
 
   const settings = useComplianceSettings();

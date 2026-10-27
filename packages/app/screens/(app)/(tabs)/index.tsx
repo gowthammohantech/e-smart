@@ -134,11 +134,11 @@ export default function Home() {
 
   const attention: AttentionItem[] = ([
     { icon: 'alert-circle-outline', label: tr('reports:home.attn.overdueInvoices'), count: receivables.outstanding.filter((o) => o.daysOverdue > 0).length, route: '/(app)/receivables', tone: 'danger' },
-    { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: draftInvoices.length, route: '/(app)/sales/invoices', tone: 'warning' },
+    { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: draftInvoices.length, route: '/(app)/sales/invoices?status=draft', tone: 'warning' },
     { icon: 'file-percent-outline', label: tr('reports:home.attn.openQuotes'), count: openQuotes.length, route: '/(app)/sales/quotes', tone: 'info' },
     { icon: 'package-variant', label: tr('reports:home.attn.lowStock'), count: lowStockItems.length, route: '/(app)/inventory/low-stock', tone: 'warning' },
     { icon: 'shield-alert-outline', label: tr('reports:home.attn.eInvoiceRejected'), count: compliance.eInvoice.failed, route: '/(app)/compliance', tone: 'danger' },
-    { icon: 'clock-alert-outline', label: tr('reports:home.attn.ewbExpiring'), count: compliance.expiringSoon, route: '/(app)/compliance', tone: 'warning' },
+    { icon: 'clock-alert-outline', label: tr('reports:home.attn.ewbExpiring'), count: compliance.expiringSoon, route: '/(app)/compliance?tab=eway', tone: 'warning' },
   ] as AttentionItem[]).filter((a) => a.count > 0 && canOpen(a.route));
 
   const recent = useMemo(
@@ -300,7 +300,8 @@ export default function Home() {
               tone="good"
               icon="shield-check-outline"
               caption={compliance.eInvoice.failed ? `${compliance.eInvoice.failed} rejected` : 'Reported to IRP'}
-              onPress={() => router.push('/(app)/(tabs)/gst')}
+              // Both cards name their tab: the GST tab stays mounted and would keep the last one.
+              onPress={() => router.push('/(app)/(tabs)/gst?tab=eInvoice')}
             />
             <StatTile
               label={tr('reports:home.ewayBills')}
@@ -308,7 +309,7 @@ export default function Home() {
               tone={compliance.expiringSoon ? 'warn' : 'default'}
               icon="truck-fast-outline"
               caption={compliance.expiringSoon ? `${compliance.expiringSoon} expire in 24 h` : 'Active'}
-              onPress={() => router.push('/(app)/(tabs)/gst')}
+              onPress={() => router.push('/(app)/(tabs)/gst?tab=eway')}
             />
           </StatRow>
           )}

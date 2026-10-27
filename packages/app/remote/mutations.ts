@@ -6,6 +6,7 @@ import type {
   DocStatus,
   DocumentKind,
   NumberingSeries,
+  Party,
   Payment,
   StockMovement,
   User,
@@ -41,7 +42,8 @@ function documentBody(d: BusinessDocument) {
 }
 
 /** Saves of a company-scoped master: parties, items, categories… */
-function master(entityType: string, collection: keyof AppState, segment: string, label: (x: any) => string): Builder {
+/** `forCreate` reshapes the body while the server hasn't seen the record yet. */
+function master(entityType: string, collection: keyof AppState, segment: string, label: (x: any) => string, forCreate?: (x: any) => unknown): Builder {
   return ({ args, result, after }) => {
     const id = typeof result === 'string' && result ? result : (args[0] as { id: string }).id;
     const saved = byId(after[collection] as any[], id);
@@ -51,11 +53,18 @@ function master(entityType: string, collection: keyof AppState, segment: string,
       id,
       collectionPath: `${c(saved.companyId)}/${segment}`,
       itemPath: `${c(saved.companyId)}/${segment}/${id}`,
-      body: saved,
+      body: forCreate && !knownToServer(id) ? forCreate(saved) : saved,
       label: label(saved),
     });
   };
 }
+
+/**
+ * A new party's code is the server's to give: the next free one. The app's own
+ * guess (count + 1) collides once a party is deleted or another device adds one.
+ * The server's code replaces the placeholder when the create comes back.
+ */
+const withoutCode = ({ code: _placeholder, ...party }: Party) => party;
 
 function removal(entityType: string, collection: keyof AppState, segment: string, label: (x: any) => string): Builder {
   return ({ args, before }) => {
@@ -143,7 +152,7 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   },
 
   /* masters */
-  saveParty: master('party', 'parties', 'parties', named),
+  saveParty: master('party', 'parties', 'parties', named, withoutCode),
   removeParty: removal('party', 'parties', 'parties', named),
   saveItem: master('item', 'items', 'items', named),
   removeItem: removal('item', 'items', 'items', named),

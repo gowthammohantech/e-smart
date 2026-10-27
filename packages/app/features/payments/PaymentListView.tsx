@@ -19,6 +19,7 @@ import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRa
 import { money, sum, zero } from '@esmart/core/lib/money';
 import { useBaseCurrency, useParties, usePayments } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { presetParam, useQueryParams } from '../../navigation/queryParams';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
   const t = useTheme();
@@ -30,7 +31,10 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const parties = useParties();
 
   const [query, setQuery] = useState('');
-  const [range, setRange] = useState<DateRangePreset>('all');
+  // The range lives in the URL (`?range=thisMonth`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const range = presetParam(params.range, 'all');
+  const setRange = (r: DateRangePreset) => setParams({ range: r === 'all' ? undefined : r });
   const desktop = useIsDesktop();
 
   const nameOf = useCallback(

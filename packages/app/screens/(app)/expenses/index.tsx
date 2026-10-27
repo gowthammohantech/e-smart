@@ -21,6 +21,9 @@ import { SHOW_SCROLLBAR, useBreakpoint, useIsDesktop } from '@esmart/ui/theme/br
 import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
+import { presetParam, useQueryParams } from '../../../navigation/queryParams';
+
+const DEFAULT_RANGE: DateRangePreset = 'last30';
 
 export default function ExpensesList() {
   const t = useTheme();
@@ -32,8 +35,12 @@ export default function ExpensesList() {
   const categories = useExpenseCategories();
 
   const [query, setQuery] = useState('');
-  const [range, setRange] = useState<DateRangePreset>('last30');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  // Range and category live in the URL (`?range=thisMonth&category=…`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const range = presetParam(params.range, DEFAULT_RANGE);
+  const categoryId = params.category ?? null;
+  const setRange = (r: DateRangePreset) => setParams({ range: r === DEFAULT_RANGE ? undefined : r });
+  const setCategoryId = (id: string | null) => setParams({ category: id ?? undefined });
   const desktop = useIsDesktop();
   // Too narrow for the summary column too; the table footer has the totals.
   const narrow = useBreakpoint() === 'tablet';

@@ -171,7 +171,7 @@ export function TextField({
             accessibilityLabel={tr(revealed ? 'common:component.hidePassword' : 'common:component.showPassword')}
             hitSlop={8}
           >
-            <MaterialCommunityIcons name={revealed ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.c.muted} />
+            <MaterialCommunityIcons name={!revealed ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.c.muted} />
           </Pressable>
         ) : null}
         {/* Text can't sit straight inside a View, so a plain unit such as "km" gets its own Text. */}

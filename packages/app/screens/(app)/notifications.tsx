@@ -18,6 +18,7 @@ import { NOTIFICATION_META, notificationRoute } from '../../features/notificatio
 import { formatRelative } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { useQueryParams } from '../../navigation/queryParams';
 import type { AppNotification } from '@esmart/core/types';
 
 
@@ -34,7 +35,9 @@ export default function Notifications() {
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const clearAll = useAppStore((s) => s.clearNotifications);
 
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [params, setParams] = useQueryParams();
+  const filter: 'all' | 'unread' = params.filter === 'unread' ? 'unread' : 'all';
+  const setFilter = (f: 'all' | 'unread') => setParams({ filter: f === 'all' ? undefined : f });
   const [confirmClear, setConfirmClear] = useState(false);
 
   const rows = useMemo(

@@ -86,6 +86,8 @@
     "delete": "Delete",
     "cancelMessage": "The number stays reserved and the document is kept for your audit trail, but it no longer counts towards your books.",
     "cancelDocument": "Cancel document",
+    "cancelEwayFirst": "Cancel e-way bill {{number}} before cancelling this document",
+    "cancelIrnFirst": "Cancel the e-invoice (IRN) before cancelling this document",
     "pdfFailed": "Could not generate the PDF on this device",
     "draftDeleted": "Draft deleted",
     "against": "Against {{kind}} {{number}}",

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -13,8 +13,6 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
-import { Sheet } from '@esmart/ui/components/Sheet';
-import { useToast } from '@esmart/ui/components/Toast';
 
 import { AgingBucketKey } from '@esmart/core/domain/receivables';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -24,6 +22,7 @@ import { StatGrid, SplitPane } from '@esmart/ui/components/Layout';
 import { useBaseCurrency, useParties, usePayables, useReceivables } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { PaymentReminderSheet } from './PaymentReminderSheet';
 
 type Mode = 'all' | 'overdue' | 'dueSoon';
 
@@ -31,7 +30,6 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common']);
   const router = useRouter();
-  const toast = useToast();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const bp = useBreakpoint();
   const desktop = bp !== 'phone';
@@ -88,17 +86,6 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const reminderParty = reminderFor ? partyOf(reminderFor) : undefined;
   const reminderRows = reminderFor ? rows.filter((o) => o.document.partyId === reminderFor) : [];
 
-  const reminderText = reminderParty
-    ? `Hi ${reminderParty.displayName ?? reminderParty.name}, a gentle reminder that ${reminderRows.length === 1 ? 'invoice' : 'invoices'} ${reminderRows
-        .map((o) => o.document.number)
-        .join(', ')} totalling ${formatMoney(
-        money(
-          reminderRows.reduce((a, o) => a + Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), 0),
-          baseCurrency,
-        ),
-      )} ${reminderRows.length === 1 ? 'is' : 'are'} still open. Could you let us know when payment is planned? Thank you.`
-    : '';
-
   const agingCard = (
     <Card style={desktop ? { gap: t.spacing.md } : { marginTop: t.spacing.lg, gap: t.spacing.md }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -141,51 +128,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const recordPayment = (partyId: string) =>
     router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${partyId}`);
 
-  const reminderSheet = (
-    <Sheet
-      visible={!!reminderFor}
-      onClose={() => setReminderFor(null)}
-      title={tr('sales:aging.sendReminder')}
-      subtitle={reminderParty?.name}
-      footer={
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Button
-            title={tr('sales:aging.whatsapp')}
-            icon="whatsapp"
-            style={{ flex: 1 }}
-            onPress={() => {
-              const phone = (reminderParty?.phone ?? '').replace(/[^0-9]/g, '');
-              Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(reminderText)}`).catch(() => {});
-              setReminderFor(null);
-              toast.show(tr('sales:aging.openedWhatsapp'), 'success');
-            }}
-          />
-          <Button
-            title={tr('sales:aging.email')}
-            variant="secondary"
-            icon="email-outline"
-            style={{ flex: 1 }}
-            onPress={() => {
-              Linking.openURL(
-                `mailto:${reminderParty?.email ?? ''}?subject=${encodeURIComponent('Payment reminder')}&body=${encodeURIComponent(reminderText)}`,
-              ).catch(() => {});
-              setReminderFor(null);
-              toast.show(tr('sales:aging.openedEmail'), 'success');
-            }}
-          />
-        </View>
-      }
-    >
-      <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
-        <Card variant="flat">
-          <Text variant="small" style={{ lineHeight: 21 }}>
-            {reminderText}
-          </Text>
-        </Card>
-        <Text variant="caption" tone="muted">{tr('sales:aging.reminderNote')}</Text>
-      </View>
-    </Sheet>
-  );
+  const reminderSheet = <PaymentReminderSheet party={reminderParty} rows={reminderRows} onClose={() => setReminderFor(null)} />;
 
   if (desktop) {
     const overdueCount = data.outstanding.filter((o) => o.daysOverdue > 0).length;

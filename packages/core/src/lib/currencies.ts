@@ -20,6 +20,9 @@ export const CURRENCIES: CurrencyMeta[] = [
   { code: 'SAR', name: 'Saudi Riyal', symbol: 'SAR', precision: 2, grouping: 'western' },
 ];
 
+/** Only rupees can be picked for now; the other currencies stay listed, greyed out. */
+export const currencyLocked = (code: string) => code !== 'INR';
+
 const byCode = new Map(CURRENCIES.map((c) => [c.code, c]));
 
 export function currencyMeta(code: string): CurrencyMeta {

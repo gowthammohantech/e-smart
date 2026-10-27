@@ -1,6 +1,6 @@
 import type { Schema } from '@esmart/api-contract';
 import type { schema } from '@esmart/db';
-import { compact, money } from '../../lib/wire';
+import { compact, money, versioned } from '../../lib/wire';
 
 type TaxRow = typeof schema.taxCategories.$inferSelect;
 type ExpenseCategoryRow = typeof schema.expenseCategories.$inferSelect;
@@ -69,5 +69,7 @@ export function seriesToWire(row: SeriesRow): Schema<'NumberingSeries'> {
     includeFiscalYear: row.includeFiscalYear,
     includeBranchCode: row.includeBranchCode,
     resetPolicy: row.resetPolicy,
+    // The app only sends edits for a series it has a version for.
+    ...versioned(row),
   };
 }

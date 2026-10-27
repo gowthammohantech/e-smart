@@ -20,8 +20,10 @@ import { summarizeStock } from '@esmart/core/domain/reports';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useQueryParams } from '../../../navigation/queryParams';
 
 type Filter = 'all' | 'low' | 'out' | 'services';
+const FILTERS: Filter[] = ['all', 'low', 'out', 'services'];
 
 export default function InventoryTab() {
   const t = useTheme();
@@ -34,7 +36,10 @@ export default function InventoryTab() {
   const stock = useStockLevels();
 
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  // The stock filter lives in the URL (`?filter=low`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const filter: Filter = FILTERS.includes(params.filter as Filter) ? (params.filter as Filter) : 'all';
+  const setFilter = (f: Filter) => setParams({ filter: f === 'all' ? undefined : f });
   const [actionsOpen, setActionsOpen] = useState(false);
 
   const report = useMemo(() => summarizeStock(items, movements, baseCurrency), [items, movements, baseCurrency]);
