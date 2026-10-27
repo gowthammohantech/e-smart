@@ -168,7 +168,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {contactAction(
           isCustomer ? 'file-document-edit-outline' : 'cart-outline',
           isCustomer ? 'Invoice' : 'Bill',
-          () => router.push(isCustomer ? '/(app)/sales/invoices/new' : '/(app)/purchases/bills/new'),
+          () => router.push(`${isCustomer ? '/(app)/sales/invoices/new' : '/(app)/purchases/bills/new'}?partyId=${party.id}`),
         )}
       </View>
     </Card>
@@ -421,11 +421,11 @@ export function PartyDetail({ party }: { party: Party }) {
           { label: 'Edit contact', icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
           ...(isCustomer
             ? [
-                { label: 'New invoice', icon: 'file-document-edit-outline' as const, onPress: () => router.push('/(app)/sales/invoices/new') },
-                { label: 'New quotation', icon: 'file-percent-outline' as const, onPress: () => router.push('/(app)/sales/quotes/new') },
+                { label: 'New invoice', icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
+                { label: 'New quotation', icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
                 { label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => toast.show(tr('contacts:detail.reminderQueued'), 'success') },
               ]
-            : [{ label: 'New purchase bill', icon: 'cart-outline' as const, onPress: () => router.push('/(app)/purchases/bills/new') }]),
+            : [{ label: 'New purchase bill', icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
           { label: 'Delete contact', icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
         ].map((a) => (
           <Pressable

@@ -60,6 +60,7 @@ import {
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useQueryParams } from '../../navigation/queryParams';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -280,10 +281,14 @@ export function DocumentEditor({
 
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
+  const [, setParams] = useQueryParams();
   const pickParty = (id: string) => {
     const p = parties.find((x) => x.id === id);
     if (!p) return;
     patch(partyFields(p, draft.date, draft.dueDate));
+    // A new document keeps its party in the URL (replaced, not pushed), so a
+    // refresh or a shared link reopens it with the same party.
+    if (!documentId) setParams({ partyId: id });
   };
 
   useEffect(() => {
