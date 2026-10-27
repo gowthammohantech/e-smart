@@ -42,7 +42,8 @@ export const exportFormat = pgEnum("export_format", ['json-backup', 'csv-zip', '
 export const gstRegistrationType = pgEnum("gst_registration_type", ['regular', 'composition', 'unregistered', 'sez', 'overseas'])
 export const httpMethod = pgEnum("http_method", ['POST', 'PUT', 'PATCH', 'DELETE'])
 export const integrationCategory = pgEnum("integration_category", ['payments', 'compliance', 'messaging', 'accounting', 'storage'])
-export const irpEnvironment = pgEnum("irp_environment", ['sandbox', 'production'])
+/** Which portal a stored login is for. The two logins can differ, so each has its own row. */
+export const compliancePortal = pgEnum("compliance_portal", ['einvoice', 'ewaybill'])
 export const itemType = pgEnum("item_type", ['goods', 'service'])
 export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed', 'failed'])
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
@@ -420,8 +421,8 @@ export const complianceSettings = pgTable("compliance_settings", {
 	reportingWindowDays: smallint("reporting_window_days").default(30).notNull(),
 	autoGenerateEinvoiceOnFinalise: boolean("auto_generate_einvoice_on_finalise").default(false).notNull(),
 	irpUsername: varchar("irp_username", { length: 100 }),
+	ewbUsername: varchar("ewb_username", { length: 100 }),
 	irpClientIdMasked: varchar("irp_client_id_masked", { length: 40 }),
-	irpEnvironment: irpEnvironment("irp_environment").default('sandbox').notNull(),
 	ewayBillEnabled: boolean("eway_bill_enabled").default(false).notNull(),
 	ewayBillThresholdMinor: bigint("eway_bill_threshold_minor", { mode: "number" }).default(5000000).notNull(),
 	autoGenerateEwayBillOnFinalise: boolean("auto_generate_eway_bill_on_finalise").default(false).notNull(),
@@ -445,8 +446,8 @@ export const complianceSettings = pgTable("compliance_settings", {
 ]);
 
 export const complianceCredentials = pgTable("compliance_credentials", {
-	companyId: varchar("company_id", { length: 40 }).primaryKey().notNull(),
-	environment: irpEnvironment().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	portal: compliancePortal().default('einvoice').notNull(),
 	gspProvider: varchar("gsp_provider", { length: 40 }),
 	// TODO: failed to parse database type 'bytea'
 	clientIdEncrypted: bytea("client_id_encrypted").notNull(),
@@ -467,6 +468,7 @@ export const complianceCredentials = pgTable("compliance_credentials", {
 			foreignColumns: [companies.id],
 			name: "compliance_credentials_company_id_fkey"
 		}),
+	primaryKey({ columns: [table.companyId, table.portal], name: "compliance_credentials_pkey" }),
 ]);
 
 export const items = pgTable("items", {

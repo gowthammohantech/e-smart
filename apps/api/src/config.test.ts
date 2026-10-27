@@ -21,7 +21,9 @@ const ready = {
   STORAGE_PROVIDER: 's3',
   PDF_PROVIDER: 'chromium',
   COMPLIANCE_PROVIDER: 'gsp',
-  GSP_BASE_URL: 'https://gsp.example.in',
+  TAXATION_ADAEQUARE_BASE_URL: 'https://gsp.example.in',
+  TAXATION_ADAEQUARE_APP_ID: 'app-id',
+  TAXATION_ADAEQUARE_APP_SECRET: 'app-secret',
   GSTIN_PROVIDER: 'disabled',
   OCR_PROVIDER: 'disabled',
   FX_PROVIDER: 'openexchangerates',
@@ -83,7 +85,9 @@ describe('production config guards', () => {
     ['ACS_CONNECTION_STRING', /ACS_CONNECTION_STRING/],
     ['WHATSAPP_TOKEN', /WHATSAPP_TOKEN/],
     ['WHATSAPP_PHONE_NUMBER_ID', /WHATSAPP_PHONE_NUMBER_ID/],
-    ['GSP_BASE_URL', /GSP_BASE_URL/],
+    ['TAXATION_ADAEQUARE_BASE_URL', /TAXATION_ADAEQUARE_BASE_URL/],
+    ['TAXATION_ADAEQUARE_APP_ID', /TAXATION_ADAEQUARE_APP_ID/],
+    ['TAXATION_ADAEQUARE_APP_SECRET', /TAXATION_ADAEQUARE_APP_SECRET/],
     ['RAZORPAY_KEY_ID', /RAZORPAY_KEY_ID/],
     ['RAZORPAY_KEY_SECRET', /RAZORPAY_KEY_SECRET/],
     ['OPENEXCHANGERATES_APP_ID', /OPENEXCHANGERATES_APP_ID/],
@@ -113,5 +117,40 @@ describe('production config guards', () => {
     expect(() => loadConfig({ ...ready, DEMO_OTP: 'true' })).toThrow(/DEMO_OTP/);
     expect(() => loadConfig({ ...ready, JWT_SECRET: undefined })).toThrow(/JWT_SECRET/);
     expect(() => loadConfig({ ...ready, CREDENTIALS_KEY: undefined })).toThrow(/CREDENTIALS_KEY/);
+  });
+
+  describe('GSP gateway', () => {
+    it('falls back to the older GSP_BASE_URL', () => {
+      expect(() => loadConfig({ ...ready, TAXATION_ADAEQUARE_BASE_URL: undefined })).toThrow(/TAXATION_ADAEQUARE_BASE_URL/);
+      expect(loadConfig({ ...ready, TAXATION_ADAEQUARE_BASE_URL: undefined, GSP_BASE_URL: 'https://gsp.example.in' }).COMPLIANCE_PROVIDER).toBe('gsp');
+    });
+
+    it('refuses Whitebooks in production, however it is selected', () => {
+      expect(() => loadConfig({ ...ready, TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP' })).toThrow(/sandbox only/);
+      expect(() => loadConfig({ ...ready, TAXATION_TAXPAYER_PROVIDER: 'whitebooks' })).toThrow(/sandbox only/);
+    });
+
+    it.each([
+      ['TAXATION_GSP_AUTH_REQUIRED', 'false'],
+      ['TAXATION_GSTIN_ALLOW_SANDBOX', 'true'],
+      ['TAXATION_SANDBOX_BUYER_GSTIN', '29AWGPV7107B1Z1'],
+    ])('refuses the sandbox setting %s=%s in production', (key, value) => {
+      expect(() => loadConfig({ ...ready, [key]: value })).toThrow(new RegExp(key));
+    });
+
+    it('refuses a half-set application pair, outside production too', () => {
+      expect(() => loadConfig({ TAXATION_GSP_EINVOICE_APP_ID: 'EINS1' })).toThrow(/TAXATION_GSP_EINVOICE_APP_SECRET/);
+      expect(() => loadConfig({ TAXATION_GSP_APP_SECRET: 's' })).toThrow(/TAXATION_GSP_APP_ID/);
+    });
+
+    it('refuses an unknown TAXATION_TAXPAYER_PROVIDER', () => {
+      expect(() => loadConfig({ TAXATION_TAXPAYER_PROVIDER: 'cleartax' })).toThrow(/TAXATION_TAXPAYER_PROVIDER/);
+    });
+
+    it('is happy with nothing at all in development', () => {
+      const config = loadConfig({});
+      expect(config.TAXATION_GSP_PROVIDER_CODE).toBe('ADAEQUARE_GSP');
+      expect(config.TAXATION_GSP_AUTH_REQUIRED).toBe(true);
+    });
   });
 });

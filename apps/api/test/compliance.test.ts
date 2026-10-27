@@ -29,13 +29,13 @@ async function ready(tc: TestContext, over: Record<string, unknown> = {}) {
 }
 
 /** A B2B invoice (to the Bengaluru GSTIN), with HSN codes unless told otherwise. */
-const b2b = (m: Money, over: Record<string, unknown> = {}) => issueInvoice(t, m, { partyId: m.bengaluru.id, lines: [line(m.gst(18), { hsnCode: '7214' })], ...over });
+const b2b = (m: Money, over: Record<string, unknown> = {}) => issueInvoice(t, m, { partyId: m.bengaluru.id, lines: [line(m.gst(18), { hsnCode: '721420' })], ...over });
 
 /** An invoice for goods worth more than the ₹50,000 e-way bill threshold. */
 async function goodsInvoice(m: Money) {
   await m.allowNegativeStock();
   const rod = await m.item();
-  return b2b(m, { lines: [line(m.gst(18), { itemId: rod, hsnCode: '7214', unitPrice: { minor: 50_000_00, currency: 'INR' } })] });
+  return b2b(m, { lines: [line(m.gst(18), { itemId: rod, hsnCode: '721420', unitPrice: { minor: 50_000_00, currency: 'INR' } })] });
 }
 
 const ewayInput = (documentId: string, over: Record<string, unknown> = {}) => ({
@@ -57,7 +57,7 @@ describe('compliance: settings and credentials', () => {
   it('saves settings, stores credentials encrypted, and never echoes a secret', async () => {
     const m = await moneySetup(t);
     const initial = await t.get(`${m.c}/compliance-settings`, { token: m.token });
-    expect(initial.body).toMatchObject({ companyId: m.companyId, eInvoiceEnabled: true, ewayBillThreshold: { minor: 50_000_00, currency: 'INR' }, irpEnvironment: 'sandbox' });
+    expect(initial.body).toMatchObject({ companyId: m.companyId, eInvoiceEnabled: true, ewayBillThreshold: { minor: 50_000_00, currency: 'INR' } });
 
     const saved = await t.put(
       `${m.c}/compliance-settings`,
@@ -70,26 +70,44 @@ describe('compliance: settings and credentials', () => {
     const badMoney = await t.put(`${m.c}/compliance-settings`, { annualTurnover: { minor: 1, currency: 'USD' } }, { token: m.token });
     expect(badMoney.status).toBe(422);
 
+    // The business gives its portal login only. A client id and secret an old client still sends is ignored:
+    // the GSP application pair is the server's, from the environment.
     const secrets = { username: 'vertex_api', password: 's3cret-pass-word', clientId: 'ELXCLIENT12349F21', clientSecret: 'top-secret-value-77' };
     const put = await t.put(`${m.c}/compliance-settings/credentials`, { environment: 'sandbox', gspProvider: 'cleartax', ...secrets }, { token: m.token });
     expect(put.status).toBe(204);
     expect(put.raw).toBe('');
 
     const after = await t.get(`${m.c}/compliance-settings`, { token: m.token });
-    expect(after.body).toMatchObject({ irpUsername: 'vertex_api', irpClientIdMasked: 'ELXC•••••••••9F21' });
+    expect(after.body).toMatchObject({ irpUsername: 'vertex_api' });
+    expect(after.body.irpClientIdMasked).toBeUndefined();
     for (const secret of [secrets.password, secrets.clientId, secrets.clientSecret]) expect(after.raw).not.toContain(secret);
 
-    const [stored] = await t.deps.db.select().from(schema.complianceCredentials).where(eq(schema.complianceCredentials.companyId, m.companyId));
+    // No `portal` means both: one login stored for each, which can then be changed on its own.
+    const CR = schema.complianceCredentials;
+    const rows = await t.deps.db.select().from(CR).where(eq(CR.companyId, m.companyId));
+    expect(rows.map((r) => r.portal).sort()).toEqual(['einvoice', 'ewaybill']);
+    expect(after.body).toMatchObject({ irpUsername: 'vertex_api', ewbUsername: 'vertex_api' });
+    const stored = rows[0];
     const key = t.deps.config.CREDENTIALS_KEY;
     expect(stored.passwordEncrypted.toString('latin1')).not.toContain(secrets.password);
     expect(decrypt(stored.passwordEncrypted, key)).toBe(secrets.password);
-    expect(decrypt(stored.clientSecretEncrypted, key)).toBe(secrets.clientSecret);
+    expect(decrypt(stored.clientSecretEncrypted, key)).toBe('');
+    expect(stored.gspProvider).toBe(t.deps.config.TAXATION_GSP_PROVIDER_CODE);
     const audit = JSON.stringify(await t.deps.db.select().from(schema.auditEvents).where(eq(schema.auditEvents.companyId, m.companyId)));
     for (const secret of [secrets.password, secrets.clientId, secrets.clientSecret]) expect(audit).not.toContain(secret);
 
     const test = await t.post(`${m.c}/compliance-settings/test-connection`, {}, { token: m.token });
     expect(test.body).toMatchObject({ irp: { ok: true }, ewb: { ok: true } });
     expect(test.raw).not.toContain(secrets.password);
+
+    // The e-way bill portal gets a login of its own; the e-invoice one is left alone.
+    const own = await t.put(`${m.c}/compliance-settings/credentials`, { environment: 'sandbox', portal: 'ewaybill', username: 'vertex_ewb', password: 'another-pass-1' }, { token: m.token });
+    expect(own.status).toBe(204);
+    const split = await t.get(`${m.c}/compliance-settings`, { token: m.token });
+    expect(split.body).toMatchObject({ irpUsername: 'vertex_api', ewbUsername: 'vertex_ewb' });
+    const both = await t.deps.db.select().from(CR).where(eq(CR.companyId, m.companyId));
+    const by = Object.fromEntries(both.map((r) => [r.portal, decrypt(r.passwordEncrypted, key)]));
+    expect(by).toEqual({ einvoice: secrets.password, ewaybill: 'another-pass-1' });
 
     await t.deps.db.update(schema.users).set({ role: 'sales' }).where(eq(schema.users.id, m.user.id!));
     const denied = await t.put(`${m.c}/compliance-settings/credentials`, { environment: 'sandbox', ...secrets }, { token: m.token });
@@ -142,7 +160,7 @@ describe('compliance: e-invoice', () => {
     expect(info.body.eInvoiceIssues[0].code).toBe('2176');
 
     // A sale to a consumer is outside e-invoicing altogether.
-    const b2c = await issueInvoice(t, m, { lines: [line(m.gst(18), { hsnCode: '7214' })] });
+    const b2c = await issueInvoice(t, m, { lines: [line(m.gst(18), { hsnCode: '721420' })] });
     const na = await t.post(`${m.c}/documents/${b2c.id}/e-invoice`, {}, { token: m.token });
     expect(na.status).toBe(422);
     expect(na.body).toMatchObject({ code: 'EINVOICE_NOT_APPLICABLE', issues: [{ code: 'NA', message: 'A sale to an unregistered buyer is outside e-invoicing' }] });
@@ -204,7 +222,7 @@ describe('compliance: e-invoice', () => {
 
   it('generates the IRN on finalise when the company asks for it, without ever undoing the finalise', async () => {
     const m = await ready(t, { autoGenerateEInvoiceOnFinalise: true });
-    const draft = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, lines: [line(m.gst(18), { hsnCode: '7214' })] }), { token: m.token });
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, lines: [line(m.gst(18), { hsnCode: '721420' })] }), { token: m.token });
     const fin = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, {}, { token: m.token });
     expect(fin.status).toBe(200);
     expect(fin.body.document).toMatchObject({ number: 'INV/26-27/0001', status: 'issued', compliance: { eInvoiceStatus: 'generated', irn: computeIrn(SELLER, 'INV', 'INV/26-27/0001', '2026-27') } });
@@ -216,13 +234,13 @@ describe('compliance: e-invoice', () => {
 
     // A portal failure leaves the invoice issued and numbered, with the failure on record.
     portal().failNext('submitInvoice', 'SIM001');
-    const draft2 = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, lines: [line(m.gst(18), { hsnCode: '7214' })] }), { token: m.token });
+    const draft2 = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, lines: [line(m.gst(18), { hsnCode: '721420' })] }), { token: m.token });
     const fin2 = await t.post(`${m.c}/documents/${draft2.body.id}/finalize`, {}, { token: m.token });
     expect(fin2.status).toBe(200);
     expect(fin2.body.document).toMatchObject({ number: 'INV/26-27/0003', status: 'issued', compliance: { eInvoiceStatus: 'failed' } });
 
     // B2C invoices are left alone.
-    const b2c = await issueInvoice(t, m, { lines: [line(m.gst(18), { hsnCode: '7214' })] });
+    const b2c = await issueInvoice(t, m, { lines: [line(m.gst(18), { hsnCode: '721420' })] });
     expect((await t.get(`${m.c}/documents/${b2c.id}`, { token: m.token })).body.compliance).toBeUndefined();
   });
 
@@ -253,7 +271,7 @@ describe('compliance: e-way bills', () => {
       transporterId: '27AABCT5512M1Z6',
       consignmentValue: { minor: 118_000_00 },
       igst: { minor: 18_000_00 },
-      mainHsnCode: '7214',
+      mainHsnCode: '721420',
     });
     expect(bill.ewayBillNumber).toMatch(/^[0-9]{12}$/);
     expect(bill.partBUpdates).toHaveLength(1);

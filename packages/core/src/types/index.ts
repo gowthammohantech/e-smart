@@ -565,10 +565,12 @@ export type ComplianceSettings = {
   /** Days from the document date within which the portal still accepts it. */
   reportingWindowDays: number;
   autoGenerateEInvoiceOnFinalise: boolean;
+  /** The e-invoice (IRP) portal username. */
   irpUsername?: string;
+  /** The e-way bill portal username; it can differ from the IRP one. */
+  ewbUsername?: string;
   /** Held masked, e.g. `ELX-****-9F21`. Never a real credential. */
   irpClientIdMasked?: string;
-  irpEnvironment: 'sandbox' | 'production';
 
   /* e-way bill */
   ewayBillEnabled: boolean;

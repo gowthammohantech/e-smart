@@ -90,7 +90,6 @@ export async function seedCompanyDefaults(
     currency,
     reportingWindowDays: c.reportingWindowDays,
     autoGenerateEinvoiceOnFinalise: c.autoGenerateEInvoiceOnFinalise,
-    irpEnvironment: c.irpEnvironment,
     ewayBillEnabled: gst && c.ewayBillEnabled,
     ewayBillThresholdMinor: c.ewayBillThreshold.minor,
     autoGenerateEwayBillOnFinalise: c.autoGenerateEwayBillOnFinalise,

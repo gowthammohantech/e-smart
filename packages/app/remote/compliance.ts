@@ -74,18 +74,15 @@ export async function cancelEwayBill(id: string, reasonCode: CancelReasonCode, r
 }
 
 export type PortalCredentials = {
-  environment: 'sandbox' | 'production';
-  gspProvider?: string;
+  /** Which portal the login is for; `both` stores the same login for each. */
+  portal?: 'einvoice' | 'ewaybill' | 'both';
   username: string;
   password: string;
-  clientId?: string;
-  clientSecret?: string;
 };
 
 /** Stores the IRP / EWB credentials on the server, which encrypts them and never returns them. */
 export async function saveCredentials(companyId: string, input: PortalCredentials): Promise<void> {
   await api.PUT('/companies/{companyId}/compliance-settings/credentials', { params: { path: p(companyId) }, body: input });
-  // The settings now carry the masked client id.
   void syncNow();
 }
 

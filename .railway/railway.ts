@@ -43,6 +43,12 @@ export default defineRailway(() => {
       PDF_PROVIDER: preserve(),
       COMPLIANCE_PROVIDER: preserve(),
       GSTIN_PROVIDER: preserve(),
+      // The GSP gateway for COMPLIANCE_PROVIDER / GSTIN_PROVIDER = gsp. Production
+      // is Adaequare; the sandbox-only switches are refused there, so none is listed.
+      TAXATION_GSP_PROVIDER_CODE: preserve(),
+      TAXATION_ADAEQUARE_BASE_URL: preserve(),
+      TAXATION_ADAEQUARE_APP_ID: preserve(),
+      TAXATION_ADAEQUARE_APP_SECRET: preserve(),
       OCR_PROVIDER: preserve(),
       FX_PROVIDER: preserve(),
       PAYMENTS_PROVIDER: preserve(),

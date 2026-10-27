@@ -58,6 +58,9 @@ export const E_INVOICE_SUPPLY_TYPES: Record<EInvoiceSupplyType, string> = {
 export const E_INVOICE_CANCEL_WINDOW_HOURS = 24;
 
 /** Document kinds this app can report. Debit notes have no kind here. */
+/** Turnover from which the portal requires 6-digit HSN codes: 5 crore, in paise. */
+const HSN_SIX_DIGIT_TURNOVER_MINOR = 5_00_00_000 * 100;
+
 export const E_INVOICE_KINDS: DocumentKind[] = ['invoice', 'salesReturn'];
 
 /** The portal reconciles totals to the nearest rupee, so ±1 is tolerated. */
@@ -249,6 +252,17 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
     }
   }
 
+  /* --- addresses: the portal refuses a blank line 1, a blank location or a PIN that is not six digits --- */
+  const checkAddress = (who: string, field: string, a?: { line1?: string; city?: string; postalCode?: string }) => {
+    if (!a?.line1?.trim()) out.push(issue('5002', `${field}.line1`, `The ${who} address line 1 is missing`));
+    if (!a?.city?.trim()) out.push(issue('5002', `${field}.city`, `The ${who} city is missing`));
+    if (!/^[1-9]\d{5}$/.test(a?.postalCode?.trim() ?? '')) {
+      out.push(issue('5002', `${field}.postalCode`, `The ${who} PIN code must be six digits`));
+    }
+  };
+  checkAddress('seller', 'company.address', company.address);
+  if (needsBuyerGstin) checkAddress('buyer', 'party.billingAddress', buyer?.billingAddress);
+
   /* --- place of supply --- */
   const pos = doc.placeOfSupplyStateCode;
   if (!pos) {
@@ -268,6 +282,10 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
     } else if (!/^\d{4}(\d{2})?(\d{2})?$/.test(line.hsnCode)) {
       out.push(
         issue('2176', `lines[${i}].hsnCode`, `"${line.name}" has an HSN that is not 4, 6 or 8 digits`),
+      );
+    } else if (line.hsnCode.length < 6 && settings.annualTurnover.minor >= HSN_SIX_DIGIT_TURNOVER_MINOR) {
+      out.push(
+        issue('2311', `lines[${i}].hsnCode`, `"${line.name}" needs a 6-digit HSN: it is mandatory for businesses with turnover of 5 crore or more`),
       );
     }
     if (!(line.quantity > 0)) {

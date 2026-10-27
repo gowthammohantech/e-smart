@@ -132,7 +132,6 @@ function settings(over: Partial<ComplianceSettings> = {}): ComplianceSettings {
     eInvoiceTurnoverThreshold: fromMajor('50000000', 'INR'),
     reportingWindowDays: 30,
     autoGenerateEInvoiceOnFinalise: false,
-    irpEnvironment: 'sandbox',
     ewayBillEnabled: true,
     ewayBillThreshold: fromMajor('50000', 'INR'),
     autoGenerateEwayBillOnFinalise: false,
