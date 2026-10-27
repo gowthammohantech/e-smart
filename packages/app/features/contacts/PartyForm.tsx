@@ -127,7 +127,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       displayName: contact.trim() || undefined,
       taxId: gstin || undefined,
       gstRegistrationType: registration,
-      email: email.trim() || undefined,
+      email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
       billingAddress: {

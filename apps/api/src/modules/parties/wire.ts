@@ -48,7 +48,8 @@ export function partyColumns(body: Schema<'Party'>) {
     displayName: body.displayName ?? null,
     taxId: body.taxId?.trim().toUpperCase() || null,
     gstRegistrationType: body.gstRegistrationType ?? (body.taxId ? 'regular' : null),
-    email: body.email ?? null,
+    // Addresses aren't case-sensitive; one spelling keeps search and duplicates simple.
+    email: body.email?.trim().toLowerCase() || null,
     phone: body.phone ?? null,
     currency: body.currency,
     ...addressTo('billing', body.billingAddress),
