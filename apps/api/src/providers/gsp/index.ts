@@ -16,7 +16,7 @@ const built = new WeakMap<Config, GspGateway>();
  * share the instance, so Whitebooks mints one taxpayer token per GSTIN rather
  * than one per feature.
  *
- * Sandbox-only gateways are refused here as well as in `productionProblems`:
+ * Sandbox-only gateways are refused here as well as in `loadConfig`, unless TAXATION_GSTIN_ALLOW_SANDBOX=true:
  * a filing against a sandbox produces an IRN nobody can present, and the
  * operator finds out from the customer.
  */
@@ -25,8 +25,8 @@ export function createGspGateway(config: Config, opts: { transport?: GspTranspor
   if (cached && !opts.transport) return cached;
 
   const name = resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE);
-  if (config.NODE_ENV === 'production' && SANDBOX_ONLY_GATEWAYS.includes(name)) {
-    throw new Error(`The "${name}" gateway is sandbox only and must not run in production. Point TAXATION_GSP_PROVIDER_CODE at a production gateway.`);
+  if (!config.TAXATION_GSTIN_ALLOW_SANDBOX && SANDBOX_ONLY_GATEWAYS.includes(name)) {
+    throw new Error(`The "${name}" gateway is sandbox only: set TAXATION_GSTIN_ALLOW_SANDBOX=true to use it, or point TAXATION_GSP_PROVIDER_CODE at a production gateway.`);
   }
   if (!gspBaseUrl(config)) throw new Error('A GSP provider needs TAXATION_GSP_BASE_URL.');
   if (config.TAXATION_SANDBOX_BUYER_GSTIN && name !== 'whitebooks') {

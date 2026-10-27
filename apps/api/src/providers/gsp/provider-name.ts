@@ -15,7 +15,7 @@ export type GspGatewayName = (typeof GSP_GATEWAYS)[number];
 /** Adaequare, and deliberately so: the one gateway with a production entitlement. */
 export const DEFAULT_GSP_GATEWAY: GspGatewayName = 'adaequare';
 
-/** Whitebooks is sandbox only and is refused at boot when `NODE_ENV=production`. */
+/** Whitebooks is sandbox only: refused at boot unless `TAXATION_GSTIN_ALLOW_SANDBOX=true`. */
 export const SANDBOX_ONLY_GATEWAYS: readonly GspGatewayName[] = ['whitebooks'];
 
 const CODE_ALIASES: Readonly<Record<string, GspGatewayName>> = {

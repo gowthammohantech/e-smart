@@ -124,7 +124,7 @@ type DuplicateAware = GspRequestError & { duplicate?: IrnRecord | null };
 
 /**
  * E-invoice, e-way bill and taxpayer lookup through Whitebooks. **Sandbox only**
- * — refused at boot when `NODE_ENV=production`.
+ * — refused at boot unless `TAXATION_GSTIN_ALLOW_SANDBOX=true`.
  *
  * Unlike Adaequare, the token belongs to the *taxpayer*: `authenticate` takes the
  * NIC portal username/password/gstin beside the application's `client_id` /
