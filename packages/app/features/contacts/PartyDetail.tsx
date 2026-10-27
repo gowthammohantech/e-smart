@@ -31,6 +31,7 @@ import { detailRouteFor } from '../documents/DocumentEditor';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { useGoBack } from '../../navigation/useGoBack';
+import { PaymentReminderSheet } from '../ledger/PaymentReminderSheet';
 
 type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
@@ -53,6 +54,7 @@ export function PartyDetail({ party }: { party: Party }) {
   const shownTab: Tab = desktop && tab === 'details' ? 'activity' : tab;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
   const isCustomer = party.kind === 'customer';
 
@@ -423,7 +425,8 @@ export function PartyDetail({ party }: { party: Party }) {
             ? [
                 { label: 'New invoice', icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
                 { label: 'New quotation', icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
-                { label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => toast.show(tr('contacts:detail.reminderQueued'), 'success') },
+                // Only when something is owed; it opens the same reminder as the aging screen.
+                ...(outstanding.length ? [{ label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
               ]
             : [{ label: 'New purchase bill', icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
           { label: 'Delete contact', icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
@@ -469,6 +472,8 @@ export function PartyDetail({ party }: { party: Party }) {
           goBack('/(app)/(tabs)/contacts');
         }}
       />
+
+      <PaymentReminderSheet party={reminderOpen ? party : undefined} rows={outstanding} onClose={() => setReminderOpen(false)} />
     </View>
   );
 }
