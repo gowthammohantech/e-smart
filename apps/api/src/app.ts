@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import rawBody from 'fastify-raw-body';
 import type { Ajv } from 'ajv';
+import { setSandboxGstinsAllowed } from '@esmart/core/domain/gstin';
 import { initI18n } from '@esmart/i18n';
 import { registerGuards } from './auth/guards';
 import type { Deps, Handlers, WebhookHandlers } from './context';
@@ -33,6 +34,8 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   // English labels for server-rendered text (PDFs, messages). The domain
   // formatters read the shared i18next instance.
   initI18n('en');
+  // NIC's sandbox GSTIN shape (`29AAGCB1286Q000`), admitted only when TAXATION_GSTIN_ALLOW_SANDBOX says so.
+  setSandboxGstinsAllowed(deps.config.TAXATION_GSTIN_ALLOW_SANDBOX);
 
   const app = Fastify({
     logger: opts.logger ?? { level: deps.config.LOG_LEVEL },

@@ -359,8 +359,10 @@ export const ewayHandlers = defineHandlers({
       const payload = buildEwbPayload(draft);
       if (ctx.query.dryRun) return { issues, row: null };
 
-      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company);
-      const response = await ctx.deps.providers.compliance.submitEwayBill(creds, { payload, vehicleType: input.vehicleType, now });
+      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
+      // A document with a live IRN gets its bill raised against it (Part B alone) where the portal supports that.
+      const [einvoice] = await tx.select({ irn: schema.eInvoices.irn }).from(schema.eInvoices).where(and(eq(schema.eInvoices.documentId, doc.id), eq(schema.eInvoices.status, 'generated')));
+      const response = await ctx.deps.providers.compliance.submitEwayBill(creds, { payload, vehicleType: input.vehicleType, now, irn: einvoice?.irn?.trim() || undefined });
       if (!response.ok) throw portalRejected(response.errors, 'EWB_REJECTED');
       const [taken] = await tx.select({ id: W.id }).from(W).where(eq(W.ewayBillNumber, response.ewayBillNumber));
       if (taken) throw portalRejected([{ code: 'EWB_DUPLICATE', field: 'document', message: 'The portal returned an e-way bill number already on record', severity: 'blocking' }], 'EWB_REJECTED');
@@ -473,7 +475,7 @@ export const ewayHandlers = defineHandlers({
       });
       if (blockingIssues(issues).length) throw unprocessable(issues as Issue[], 'EWAY_BILL_VALIDATION_FAILED', blockingIssues(issues)[0].message);
 
-      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company);
+      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
       const response = await ctx.deps.providers.compliance.updatePartB(creds, { ewayBillNumber: bill.ewayBillNumber.trim(), ...u, now });
       if (!response.ok) throw portalRejected(response.errors, 'EWB_REJECTED');
 
@@ -523,7 +525,7 @@ export const ewayHandlers = defineHandlers({
       const window = canExtendEwayBill(core, now);
       if (!window.allowed) throw conflict('EWAY_EXTENSION_WINDOW', `${window.reason} (${window.opensAt} to ${window.closesAt})`);
 
-      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company);
+      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
       const response = await ctx.deps.providers.compliance.extend(creds, { bill: core, ...x, now });
       if (!response.ok) throw portalRejected(response.errors, 'EWB_REJECTED');
 
@@ -564,7 +566,7 @@ export const ewayHandlers = defineHandlers({
       const allowed = canCancelEwayBill(coreBill(bill), now);
       if (!allowed.allowed) throw conflict(bill.status === 'cancelled' ? 'EWAY_BILL_CANCELLED' : 'EWAY_CANCEL_WINDOW_CLOSED', allowed.reason);
 
-      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company);
+      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
       const response = await ctx.deps.providers.compliance.cancelEwayBill(creds, { ewayBillNumber: bill.ewayBillNumber.trim(), reasonCode, remark, now });
       if (!response.ok) throw portalRejected(response.errors, 'EWB_REJECTED');
 

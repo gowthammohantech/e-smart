@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -39,43 +39,73 @@ export default function EInvoicingSettings() {
 
   const patch = (over: Partial<ComplianceSettings>) => setDraft((d) => ({ ...d, ...over }));
 
-  // Portal credentials are write-only: the server encrypts them and only ever shows the masked client id.
+  // The portal logins are write-only: the server encrypts them and never returns them. The GSP's own client id
+  // and secret are the server's (environment), not the business's, so they are never asked for here.
+  //
+  // The e-invoice (IRP) and e-way bill portals take separate logins, which need not match, so each is entered,
+  // stored and tested on its own.
   const company = useActiveCompany();
-  const [cred, setCred] = useState({ gspProvider: '', username: stored.irpUsername ?? '', password: '', clientId: '', clientSecret: '' });
+  type Portal = 'einvoice' | 'ewaybill';
+  // The integrations screen opens this on the tab of the portal being configured.
+  const params = useLocalSearchParams<{ portal?: string }>();
+  const routePortal: Portal = params.portal === 'ewaybill' ? 'ewaybill' : 'einvoice';
+  // A tab picked by hand wins only while the route still asks for the portal it was picked under; opening the
+  // screen again for the other portal starts on that one.
+  const [picked, setPicked] = useState<{ from: Portal; portal: Portal } | null>(null);
+  const portal: Portal = picked && picked.from === routePortal ? picked.portal : routePortal;
+
+  // Only what has been typed lives here. Anything left alone follows what is saved, which arrives by sync and may
+  // land after this screen opens. The password is never sent back, so a saved one is only ever shown as saved.
+  const [edits, setEdits] = useState<Record<Portal, { username?: string; password: string }>>({
+    einvoice: { password: '' },
+    ewaybill: { password: '' },
+  });
+  const savedUsername = (portal === 'einvoice' ? stored.irpUsername : stored.ewbUsername) ?? '';
+  const isSaved = savedUsername !== '';
+  const login = { username: edits[portal].username ?? savedUsername, password: edits[portal].password };
+  const setLogin = (over: Partial<{ username: string; password: string }>) =>
+    setEdits((e) => ({ ...e, [portal]: { ...e[portal], ...over } }));
+
   const [credBusy, setCredBusy] = useState<'save' | 'test' | null>(null);
   const [credMessage, setCredMessage] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
 
-  const saveCredentials = () => {
-    if (!company || !cred.username.trim() || !cred.password) {
+  const saveCredentials = async (): Promise<boolean> => {
+    if (!company || !login.username.trim() || !login.password) {
       setCredMessage({ tone: 'bad', text: tr('compliance:settings.credentialsMissing') });
-      return;
+      return false;
     }
     setCredBusy('save');
-    compliance
-      .saveCredentials(company.id, {
-        environment: draft.irpEnvironment,
-        username: cred.username.trim(),
-        password: cred.password,
-        gspProvider: cred.gspProvider.trim() || undefined,
-        clientId: cred.clientId.trim() || undefined,
-        clientSecret: cred.clientSecret || undefined,
-      })
-      .then(() => {
-        setCred((c) => ({ ...c, password: '', clientId: '', clientSecret: '' }));
-        setCredMessage({ tone: 'good', text: tr('compliance:settings.credentialsSaved') });
-      })
-      .catch((err: unknown) => setCredMessage({ tone: 'bad', text: describeError(err, tr) }))
-      .finally(() => setCredBusy(null));
+    try {
+      await compliance.saveCredentials(company.id, {
+        portal,
+        username: login.username.trim(),
+        password: login.password,
+      });
+      setEdits((e) => ({ ...e, [portal]: { ...e[portal], password: '' } }));
+      setCredMessage({ tone: 'good', text: tr('compliance:settings.credentialsSaved') });
+      return true;
+    } catch (err: unknown) {
+      setCredMessage({ tone: 'bad', text: describeError(err, tr) });
+      return false;
+    } finally {
+      setCredBusy(null);
+    }
   };
 
-  const testConnection = () => {
+  const testConnection = async () => {
     if (!company) return;
+    // A password typed but not yet saved is saved first: the server tests what it has stored, so testing
+    // without saving would check nothing and report "store the portal credentials first".
+    if (login.password && !(await saveCredentials())) return;
     setCredBusy('test');
     compliance
       .testConnection(company.id)
       .then((r) => {
-        const ok = !!r.irp?.ok && !!r.ewb?.ok;
-        const parts = [`IRP: ${r.irp?.message ?? (r.irp?.ok ? 'OK' : '—')}`, `EWB: ${r.ewb?.message ?? (r.ewb?.ok ? 'OK' : '—')}`];
+        // Both portals are checked, but the message leads with the one being edited.
+        const mine = portal === 'einvoice' ? r.irp : r.ewb;
+        const ok = !!mine?.ok;
+        const line = (label: string, x?: { ok?: boolean; message?: string }) => `${label}: ${x?.message ?? (x?.ok ? 'OK' : '—')}`;
+        const parts = [line('IRP', r.irp), line('EWB', r.ewb)];
         setCredMessage({ tone: ok ? 'good' : 'bad', text: `${ok ? tr('compliance:settings.connectionOk') : tr('compliance:settings.connectionFailed')} ${parts.join(' · ')}` });
       })
       .catch((err: unknown) => setCredMessage({ tone: 'bad', text: describeError(err, tr) }))
@@ -156,60 +186,43 @@ export default function EInvoicingSettings() {
 
         <SectionLabel>{tr('compliance:settings.portalCredentials')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
+          <Segmented
+            options={[
+              { value: 'einvoice', label: tr('compliance:settings.eInvoice') },
+              { value: 'ewaybill', label: tr('compliance:settings.ewayBill') },
+            ]}
+            value={portal}
+            onChange={(v) => {
+              setPicked({ from: routePortal, portal: v });
+              setCredMessage(null);
+            }}
+          />
+          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+            {tr(portal === 'einvoice' ? 'compliance:settings.loginForEinvoice' : 'compliance:settings.loginForEway')}
+          </Text>
+          <Text variant="caption" tone={isSaved ? 'good' : 'muted'} weight="600">
+            {isSaved ? tr('compliance:settings.loginSaved', { username: savedUsername }) : tr('compliance:settings.loginNotSaved')}
+          </Text>
           <TextField
-            label={tr('compliance:settings.gspProvider')}
-            value={cred.gspProvider}
-            onChangeText={(v) => setCred((c) => ({ ...c, gspProvider: v }))}
-            placeholder="cleartax, masters-india, nic-direct"
+            label={tr(portal === 'einvoice' ? 'compliance:settings.einvoiceUsername' : 'compliance:settings.ewayUsername')}
+            value={login.username}
+            onChangeText={(v) => setLogin({ username: v })}
             autoCapitalize="none"
             autoCorrect={false}
           />
           <TextField
-            label={tr('compliance:settings.portalUsername')}
-            value={cred.username}
-            onChangeText={(v) => setCred((c) => ({ ...c, username: v }))}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TextField
-            label={tr('compliance:settings.portalPassword')}
-            value={cred.password}
-            onChangeText={(v) => setCred((c) => ({ ...c, password: v }))}
+            label={tr(portal === 'einvoice' ? 'compliance:settings.einvoicePassword' : 'compliance:settings.ewayPassword')}
+            value={login.password}
+            onChangeText={(v) => setLogin({ password: v })}
+            placeholder={isSaved ? '••••••••' : undefined}
+            hint={isSaved ? tr('compliance:settings.passwordSaved') : tr('compliance:settings.credentialHint')}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <TextField
-            label={tr('compliance:settings.gspClientId')}
-            value={cred.clientId}
-            onChangeText={(v) => setCred((c) => ({ ...c, clientId: v }))}
-            placeholder={stored.irpClientIdMasked ?? undefined}
-            autoCapitalize="none"
-            autoCorrect={false}
-            hint={stored.irpClientIdMasked ? tr('compliance:settings.storedClientId', { masked: stored.irpClientIdMasked }) : tr('compliance:settings.credentialHint')}
-          />
-          <TextField
-            label={tr('compliance:settings.gspClientSecret')}
-            value={cred.clientSecret}
-            onChangeText={(v) => setCred((c) => ({ ...c, clientSecret: v }))}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <View style={{ gap: t.spacing.sm, marginTop: t.spacing.xs }}>
-            <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.environment')}</Text>
-            <Segmented
-              options={[
-                { value: 'sandbox', label: 'Sandbox' },
-                { value: 'production', label: 'Production' },
-              ]}
-              value={draft.irpEnvironment}
-              onChange={(v) => patch({ irpEnvironment: v })}
-            />
-          </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.xs }}>
-            <Button title={tr('compliance:settings.saveCredentials')} icon="lock-outline" loading={credBusy === 'save'} onPress={saveCredentials} />
-            <Button title={tr('compliance:settings.testConnection')} variant="secondary" icon="lan-connect" loading={credBusy === 'test'} onPress={testConnection} />
+            <Button title={tr('compliance:settings.saveCredentials')} icon="lock-outline" loading={credBusy === 'save'} onPress={() => void saveCredentials()} />
+            <Button title={tr('compliance:settings.testConnection')} variant="secondary" icon="lan-connect" loading={credBusy === 'test'} onPress={() => void testConnection()} />
           </View>
           {credMessage ? (
             <Text variant="caption" tone={credMessage.tone} style={{ lineHeight: 18 }}>

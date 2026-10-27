@@ -121,7 +121,7 @@ export async function generateEInvoiceFor(
     }
     if (dryRun) return { kind: 'ok' as const, issues, payload };
 
-    const creds = await portalCredentials(tx, deps.config, company);
+    const creds = await portalCredentials(tx, deps.config, company, 'einvoice');
     const response = await deps.providers.compliance.submitInvoice(creds, { payload, existingIrns: ctx.existingIrns ?? [], now: ctx.now });
     // The IRN is unique across the whole portal; another tenant holding it is a duplicate.
     const clash = response.ok ? (await tx.select({ id: E.documentId }).from(E).where(and(eq(E.irn, response.irn), ne(E.documentId, row.id))))[0] : undefined;
@@ -234,7 +234,7 @@ export const eInvoiceHandlers = defineHandlers({
         }
       }
 
-      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company);
+      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'einvoice');
       const response = await ctx.deps.providers.compliance.cancelIrn(creds, { irn: e!.irn!.trim(), irnGeneratedAt: e!.generatedAt!.toISOString(), reasonCode, remark, now });
       if (!response.ok) throw portalRejected(response.errors, 'IRP_REJECTED');
 

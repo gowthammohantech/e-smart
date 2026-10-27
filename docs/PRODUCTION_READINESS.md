@@ -26,9 +26,9 @@ fall back to manual entry) until a real adapter exists.
 
 | Item | Where | Owner | Status |
 |---|---|---|---|
-| GSP GSTIN lookup: GSTIN search, PIN codes the India Post directory lacks, EWB portal road distance. `GSTIN_PROVIDER=gsp` currently throws at boot | `apps/api/src/providers/gstin.ts` (`createGstinProvider`) | Backend | ⬜ Todo |
+| GSP GSTIN search is built (`GSTIN_PROVIDER=gsp`, Adaequare or Whitebooks). Still open: PIN codes the India Post directory lacks and the EWB portal road distance, which answer 503 so the apps fall back to manual entry | `apps/api/src/providers/gstin.ts`, `providers/gsp/` | Backend | 🟨 Partly |
 | Document AI OCR: read an uploaded bill image server-side, so OCR works on the web and without ML Kit. `OCR_PROVIDER=document-ai` currently throws at boot | `apps/api/src/providers/ocr.ts` (`createOcrProvider`) | Backend | ⬜ Todo |
-| GSP e-invoice / e-way bill adapter: the `gsp` compliance provider is a skeleton; finish it against the chosen GSP's API and its IRP/EWB sandbox | `apps/api/src/providers/compliance.ts` | Backend | ⬜ Todo |
+| GSP e-invoice / e-way bill adapters (Adaequare, Whitebooks) are built; run them against each GSP's sandbox and settle the routes flagged unconfirmed in the GSP README before production | `apps/api/src/providers/gsp/` | Backend | 🟨 Built, unverified |
 
 ## 2. Vendor accounts and secrets to provision
 
@@ -41,7 +41,7 @@ Railway (never committed). `apps/api/.env.example` names every variable.
 | Azure Communication Services or Amazon SES (email): verified sender domain, SPF/DKIM | `EMAIL_PROVIDER=acs` + `ACS_CONNECTION_STRING`, or `ses` + AWS keys; `EMAIL_FROM` | Ops | ⬜ Todo |
 | WhatsApp (Meta app): business verification, phone number, approved templates, webhook | `WHATSAPP_PROVIDER=meta`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_WEBHOOK_SECRET` | Product, Ops | ⬜ Todo |
 | Expo push: project credentials (APNs key, FCM) | `PUSH_PROVIDER=expo` | Mobile/Web, Ops | ⬜ Todo |
-| GSP with IRP and EWB sandbox certification, then production access | `COMPLIANCE_PROVIDER=gsp`, `GSP_BASE_URL`, per-company credentials through the app | Product, Backend | ⬜ Todo |
+| GSP with IRP and EWB sandbox certification, then production access | `COMPLIANCE_PROVIDER=gsp`, `TAXATION_GSP_PROVIDER_CODE`, `TAXATION_ADAEQUARE_BASE_URL`, `TAXATION_ADAEQUARE_APP_ID`/`_SECRET`; the portal username and password are entered per company in the app | Product, Backend | ⬜ Todo |
 | Razorpay: live keys, webhook secret, plan IDs for subscriptions | `PAYMENTS_PROVIDER=razorpay`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Product, Ops | ⬜ Todo |
 | Open Exchange Rates | `FX_PROVIDER=openexchangerates`, `OPENEXCHANGERATES_APP_ID` | Ops | ⬜ Todo |
 | Anthropic (Lixi) | `ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, `LIXI_MODEL` | Ops | ⬜ Todo |
@@ -118,8 +118,8 @@ API will not start until the provider rows are real.
 - [ ] `SMS_PROVIDER`, `EMAIL_PROVIDER` + `EMAIL_FROM`, `WHATSAPP_PROVIDER`, `PUSH_PROVIDER`, with their credentials
 - [ ] `STORAGE_PROVIDER` (`azure` or `s3`) and its connection settings
 - [ ] `PDF_PROVIDER=chromium`
-- [ ] `COMPLIANCE_PROVIDER=gsp`, `GSP_BASE_URL`
-- [ ] `GSTIN_PROVIDER=disabled`, `OCR_PROVIDER=disabled` (until section 1 is done)
+- [ ] `COMPLIANCE_PROVIDER=gsp`, `TAXATION_GSP_PROVIDER_CODE=ADAEQUARE_GSP`, `TAXATION_ADAEQUARE_BASE_URL`, `TAXATION_ADAEQUARE_APP_ID`, `TAXATION_ADAEQUARE_APP_SECRET`
+- [ ] `GSTIN_PROVIDER=gsp` (or `disabled`), `OCR_PROVIDER=disabled` (until section 1 is done)
 - [ ] `FX_PROVIDER=openexchangerates`, `PAYMENTS_PROVIDER=razorpay`, `ASSISTANT_PROVIDER=anthropic`, with their keys
 - [ ] `RAZORPAY_WEBHOOK_SECRET`, `WHATSAPP_WEBHOOK_SECRET` from the vendors' dashboards
 - [ ] `DEMO_OTP` unset
