@@ -16,6 +16,7 @@ import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { useBranches, useItems, useStockMovements } from '@esmart/app/store/selectors';
+import { useQueryParams } from '@esmart/app/navigation/queryParams';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
 
@@ -34,7 +35,10 @@ export function StockMovementsDesktop() {
   const branches = useBranches();
 
   const [query, setQuery] = useState('');
-  const [type, setType] = useState<StockMovementType | 'all'>('all');
+  // The type filter lives in the URL (`?type=sale`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const type = (params.type ?? 'all') as StockMovementType | 'all';
+  const setType = (ty: StockMovementType | 'all') => setParams({ type: ty === 'all' ? undefined : ty });
 
   const itemOf = useCallback((id: string) => items.find((i) => i.id === id), [items]);
 

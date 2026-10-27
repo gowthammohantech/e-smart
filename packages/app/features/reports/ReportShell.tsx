@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { useActiveCompany, useBranches, useParties } from '../../store/selectors
 import { ReportFilters } from '@esmart/core/domain/reports';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { deliverFile, deliverPdf } from './exportFiles';
+import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { ReportTable, XLSX_MIME, exportName, tableHtml, toCsv, xlsxBytes } from './reportTable';
 
 export type ReportScope = {
@@ -275,11 +276,26 @@ export function ReportShell({
   );
 }
 
+/** The report's filters, kept in the URL (`?range=lastMonth&branch=…&party=…&currency=…`). */
 export function useReportScope(initial: DateRangePreset = 'thisFY') {
-  const [scope, setScope] = useState<ReportScope>({
-    preset: initial,
-    filters: { range: resolveRange(initial), branchId: null, partyId: null, currency: null },
-  });
+  const [params, setParams] = useQueryParams();
+  const scope = useMemo<ReportScope>(() => {
+    const preset = presetParam(params.range, initial);
+    return {
+      preset,
+      filters: { range: resolveRange(preset), branchId: params.branch ?? null, partyId: params.party ?? null, currency: params.currency ?? null },
+    };
+  }, [params, initial]);
+  const setScope = useCallback(
+    (s: ReportScope) =>
+      setParams({
+        range: s.preset === initial ? undefined : s.preset,
+        branch: s.filters.branchId ?? undefined,
+        party: s.filters.partyId ?? undefined,
+        currency: s.filters.currency ?? undefined,
+      }),
+    [setParams, initial],
+  );
   return { scope, setScope };
 }
 

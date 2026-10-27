@@ -24,6 +24,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money, sum, zero } from '@esmart/core/lib/money';
 import { useBaseCurrency, useParties, usePayments } from '../store/selectors';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { listParam, presetParam, useQueryParams } from '../navigation/queryParams';
 
 export type DocumentListFilters = {
   query: string;
@@ -64,7 +65,29 @@ export function DocumentListView({
   const baseCurrency = useBaseCurrency();
   const parties = useParties();
 
-  const [filters, setFilters] = useState<DocumentListFilters>(DEFAULT_FILTERS);
+  // Status, date range and party live in the URL (`?status=draft&range=thisMonth&party=…`);
+  // the search box stays local so typing doesn't rewrite the URL on every key.
+  const [params, setParams] = useQueryParams();
+  const [query, setQuery] = useState('');
+  const filters = useMemo<DocumentListFilters>(
+    () => ({
+      query,
+      statuses: listParam.parse<DocStatus>(params.status),
+      range: presetParam(params.range, DEFAULT_FILTERS.range),
+      partyId: params.party ?? null,
+    }),
+    [query, params],
+  );
+  const setFilters = (next: DocumentListFilters | ((f: DocumentListFilters) => DocumentListFilters)) => {
+    const f = typeof next === 'function' ? next(filters) : next;
+    setQuery(f.query);
+    const url = {
+      status: listParam.format(f.statuses),
+      range: f.range === DEFAULT_FILTERS.range ? undefined : f.range,
+      party: f.partyId ?? undefined,
+    };
+    if (url.status !== params.status || url.range !== params.range || url.party !== params.party) setParams(url);
+  };
   const [filterOpen, setFilterOpen] = useState(false);
   const desktop = useIsDesktop();
   const payments = usePayments();

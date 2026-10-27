@@ -134,7 +134,7 @@ export default function Home() {
 
   const attention: AttentionItem[] = ([
     { icon: 'alert-circle-outline', label: tr('reports:home.attn.overdueInvoices'), count: receivables.outstanding.filter((o) => o.daysOverdue > 0).length, route: '/(app)/receivables', tone: 'danger' },
-    { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: draftInvoices.length, route: '/(app)/sales/invoices', tone: 'warning' },
+    { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: draftInvoices.length, route: '/(app)/sales/invoices?status=draft', tone: 'warning' },
     { icon: 'file-percent-outline', label: tr('reports:home.attn.openQuotes'), count: openQuotes.length, route: '/(app)/sales/quotes', tone: 'info' },
     { icon: 'package-variant', label: tr('reports:home.attn.lowStock'), count: lowStockItems.length, route: '/(app)/inventory/low-stock', tone: 'warning' },
     { icon: 'shield-alert-outline', label: tr('reports:home.attn.eInvoiceRejected'), count: compliance.eInvoice.failed, route: '/(app)/compliance', tone: 'danger' },

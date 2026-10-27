@@ -10,6 +10,7 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useBranches, useItems, useStockMovements } from '../../../store/selectors';
+import { useQueryParams } from '../../../navigation/queryParams';
 import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger';
 import { StockMovementType } from '@esmart/core/types';
 import { formatQty } from '@esmart/core/lib/format';
@@ -28,7 +29,10 @@ export default function StockMovements() {
   const branches = useBranches();
 
   const [query, setQuery] = useState('');
-  const [type, setType] = useState<StockMovementType | 'all'>('all');
+  // The type filter lives in the URL (`?type=sale`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const type = (params.type ?? 'all') as StockMovementType | 'all';
+  const setType = (ty: StockMovementType | 'all') => setParams({ type: ty === 'all' ? undefined : ty });
 
   const nameOf = useCallback((id: string) => items.find((i) => i.id === id), [items]);
 
