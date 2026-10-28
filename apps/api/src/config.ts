@@ -31,6 +31,13 @@ const Env = z.object({
   CREDENTIALS_KEY: z.string().default(Buffer.alloc(32, 7).toString('base64')),
   /** Accept `123456` as the OTP, as the prototype does. Never in production. */
   DEMO_OTP: bool.default(false),
+  /**
+   * Start in production even while providers are still simulators, log-only or
+   * unconfigured: those problems are logged as warnings instead. The secrets
+   * and DEMO_OTP checks still refuse to start. A stopgap until every provider
+   * is set up; remove it from the environment once they are.
+   */
+  ALLOW_UNCONFIGURED_PROVIDERS: bool.default(false),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(300),
 
   SMS_PROVIDER: z.enum(['log', 'msg91', 'pay4sms']).default('log'),
@@ -284,10 +291,18 @@ export function whitebooksSettings(
   };
 }
 
+/** Problems ALLOW_UNCONFIGURED_PROVIDERS never waives: forged tokens, readable credentials, a guessable OTP. */
+const ALWAYS_FATAL = /^(JWT_SECRET|CREDENTIALS_KEY|DEMO_OTP)\b/;
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const config = Env.parse(env);
   if (config.NODE_ENV === 'production') {
-    const problems = productionProblems(config, env);
+    let problems = productionProblems(config, env);
+    if (config.ALLOW_UNCONFIGURED_PROVIDERS) {
+      const waived = problems.filter((p) => !ALWAYS_FATAL.test(p));
+      if (waived.length) console.warn(`ALLOW_UNCONFIGURED_PROVIDERS: starting in production with:\n- ${waived.join('\n- ')}`);
+      problems = problems.filter((p) => ALWAYS_FATAL.test(p));
+    }
     if (problems.length) throw new Error(`Refusing to start in production:\n- ${problems.join('\n- ')}`);
   }
   return config;
