@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from './config';
 
 /** Every provider real and credentialed: the baseline each case breaks one thing in. */
@@ -169,5 +169,16 @@ describe('production config guards', () => {
       expect(config.TAXATION_GSP_PROVIDER_CODE).toBe('ADAEQUARE_GSP');
       expect(config.TAXATION_GSP_AUTH_REQUIRED).toBe(true);
     });
+  });
+
+  it('ALLOW_UNCONFIGURED_PROVIDERS starts with providers unset, but not with dev secrets', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const base = { NODE_ENV: 'production', ALLOW_UNCONFIGURED_PROVIDERS: 'true', JWT_SECRET: 'x'.repeat(32), CREDENTIALS_KEY: ready.CREDENTIALS_KEY };
+    expect(loadConfig(base).SMS_PROVIDER).toBe('log');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('STORAGE_PROVIDER=memory'));
+    expect(() => loadConfig({ ...base, JWT_SECRET: undefined })).toThrow(/JWT_SECRET/);
+    expect(() => loadConfig({ ...base, CREDENTIALS_KEY: undefined })).toThrow(/CREDENTIALS_KEY/);
+    expect(() => loadConfig({ ...base, DEMO_OTP: 'true' })).toThrow(/DEMO_OTP/);
+    warn.mockRestore();
   });
 });
