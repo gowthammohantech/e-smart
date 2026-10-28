@@ -91,8 +91,8 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
       <Card style={{ gap: t.spacing.lg }}>
         {/* ---------------- e-invoice ---------------- */}
         <View style={{ gap: t.spacing.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="small" weight="600">{tr('compliance:einv.eInvoice')}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
+            <Text variant="small" weight="600" style={{ flex: 1 }}>{tr('compliance:einv.eInvoice')}</Text>
             <Badge label={keyLabel(tr, eInvoiceMeta.labelKey)} tone={eInvoiceMeta.tone} icon={eInvoiceMeta.icon} />
           </View>
 
@@ -210,8 +210,8 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
 
         {/* ---------------- e-way bill ---------------- */}
         <View style={{ gap: t.spacing.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="small" weight="600">{tr('compliance:einv.ewayBill')}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
+            <Text variant="small" weight="600" style={{ flex: 1 }}>{tr('compliance:einv.ewayBill')}</Text>
             {billMeta ? (
               <Badge label={keyLabel(tr, billMeta.labelKey)} tone={expiringSoon ? 'warning' : billMeta.tone} icon={billMeta.icon} />
             ) : (

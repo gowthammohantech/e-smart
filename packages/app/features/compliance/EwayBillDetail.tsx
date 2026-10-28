@@ -115,7 +115,8 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xl }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <Card style={{ gap: t.spacing.md }}>
@@ -258,12 +259,9 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
         ) : null}
       </ScrollView>
 
+      {/* Below the scroll rather than over it, so the last of the history never hides behind it, however tall it grows. */}
       <View
         style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
           padding: t.spacing.lg,
           paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
@@ -428,6 +426,32 @@ function Leg({ title, place }: { title: string; place: EwayBill['from'] }) {
   );
 }
 
+/** One choice in a sheet's list of reasons. */
+function ReasonOption({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: t.spacing.md,
+        paddingVertical: t.spacing.sm,
+        paddingHorizontal: t.spacing.md,
+        borderRadius: t.radius.md,
+        backgroundColor: selected ? t.c.chip : 'transparent',
+      }}
+    >
+      <MaterialCommunityIcons name={selected ? 'radiobox-marked' : 'radiobox-blank'} size={18} color={selected ? t.c.primary : t.c.muted} />
+      <Text variant="small" style={{ flex: 1 }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function PartBSheet({
   visible,
   onClose,
@@ -487,7 +511,7 @@ function PartBSheet({
         />
       }
     >
-      <View style={{ gap: t.spacing.md }}>
+      <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           Part-B records each leg of the journey. Add an entry whenever the vehicle changes — a
           breakdown, a transhipment, or a fresh carrier.
@@ -527,15 +551,10 @@ function PartBSheet({
 
         <View style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.reason')}</Text>
-          <Segmented
-            options={(Object.keys(EWAY_PART_B_REASONS) as EwayPartBReasonCode[]).map((code) => ({
-              value: code,
-              label: EWAY_PART_B_REASONS[code],
-            }))}
-            value={reasonCode}
-            onChange={setReasonCode}
-            size="sm"
-          />
+          {/* A list, like the other reasons here: four labels don't fit side by side on a phone. */}
+          {(Object.keys(EWAY_PART_B_REASONS) as EwayPartBReasonCode[]).map((code) => (
+            <ReasonOption key={code} label={EWAY_PART_B_REASONS[code]} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
+          ))}
         </View>
 
         <TextField label={tr('compliance:ewb.remark')} value={remark} onChangeText={setRemark} multiline />
@@ -600,7 +619,7 @@ function ExtendSheet({
         />
       }
     >
-      <View style={{ gap: t.spacing.md }}>
+      <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           The new validity is worked out from the distance still to cover, not the original journey,
           and counted from now.
@@ -636,28 +655,7 @@ function ExtendSheet({
         <View style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.reason')}</Text>
           {(Object.keys(EWAY_EXTEND_REASONS) as EwayExtendReasonCode[]).map((code) => (
-            <Pressable
-              key={code}
-              onPress={() => setReasonCode(code)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: reasonCode === code }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: t.spacing.md,
-                paddingVertical: t.spacing.sm,
-                paddingHorizontal: t.spacing.md,
-                borderRadius: t.radius.md,
-                backgroundColor: reasonCode === code ? t.c.chip : 'transparent',
-              }}
-            >
-              <MaterialCommunityIcons
-                name={reasonCode === code ? 'radiobox-marked' : 'radiobox-blank'}
-                size={18}
-                color={reasonCode === code ? t.c.primary : t.c.muted}
-              />
-              <Text variant="small">{EWAY_EXTEND_REASONS[code]}</Text>
-            </Pressable>
+            <ReasonOption key={code} label={EWAY_EXTEND_REASONS[code]} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
           ))}
         </View>
 
@@ -697,35 +695,14 @@ function CancelSheet({
         />
       }
     >
-      <View style={{ gap: t.spacing.md }}>
+      <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           A bill can be cancelled within 24 hours of being raised, and only if it has not already been
           verified in transit. This one can be cancelled until {formatDateTime(deadline)}.
         </Text>
 
         {(Object.keys(EWAY_CANCEL_REASONS) as CancelReasonCode[]).map((code) => (
-          <Pressable
-            key={code}
-            onPress={() => setReasonCode(code)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: reasonCode === code }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: t.spacing.md,
-              paddingVertical: t.spacing.sm,
-              paddingHorizontal: t.spacing.md,
-              borderRadius: t.radius.md,
-              backgroundColor: reasonCode === code ? t.c.chip : 'transparent',
-            }}
-          >
-            <MaterialCommunityIcons
-              name={reasonCode === code ? 'radiobox-marked' : 'radiobox-blank'}
-              size={18}
-              color={reasonCode === code ? t.c.primary : t.c.muted}
-            />
-            <Text variant="small">{EWAY_CANCEL_REASONS[code]}</Text>
-          </Pressable>
+          <ReasonOption key={code} label={EWAY_CANCEL_REASONS[code]} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
         ))}
 
         <TextField label={tr('compliance:ewb.remark')} value={remark} onChangeText={setRemark} multiline />
