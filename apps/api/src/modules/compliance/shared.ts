@@ -108,8 +108,8 @@ export function settingsCore(row: SettingsRow, transporter?: TransporterRow): Co
     reportingWindowDays: row.reportingWindowDays,
     autoGenerateEInvoiceOnFinalise: row.autoGenerateEinvoiceOnFinalise,
     irpUsername: row.irpUsername ?? undefined,
+    ewbUsername: row.ewbUsername ?? undefined,
     irpClientIdMasked: row.irpClientIdMasked ?? undefined,
-    irpEnvironment: row.irpEnvironment,
     ewayBillEnabled: row.ewayBillEnabled,
     ewayBillThreshold: money(row.ewayBillThresholdMinor, currency),
     autoGenerateEwayBillOnFinalise: row.autoGenerateEwayBillOnFinalise,
@@ -138,20 +138,22 @@ export async function companyItems(db: DbOrTx, companyId: string): Promise<Item[
   return rows.map((i) => ({ id: i.id, name: i.name, type: i.type, hsnCode: i.hsnCode ?? undefined, unit: i.unit }) as Item);
 }
 
-/** The stored portal credentials, decrypted for one call, or null when none are stored. */
-export async function portalCredentials(db: DbOrTx, config: Config, company: CompanyRow): Promise<PortalCredentials | null> {
-  const [row] = await db.select().from(schema.complianceCredentials).where(eq(schema.complianceCredentials.companyId, company.id));
-  const [settings] = await db.select({ username: S.irpUsername }).from(S).where(eq(S.companyId, company.id));
+export type Portal = 'einvoice' | 'ewaybill';
+
+/**
+ * The stored login for one portal, decrypted for one call, or null when none is stored. The e-invoice and
+ * e-way bill portals take separate logins, so each has its own row and its own username.
+ */
+export async function portalCredentials(db: DbOrTx, config: Config, company: CompanyRow, portal: Portal): Promise<PortalCredentials | null> {
+  const CR = schema.complianceCredentials;
+  const [row] = await db.select().from(CR).where(and(eq(CR.companyId, company.id), eq(CR.portal, portal)));
+  const [settings] = await db.select({ irp: S.irpUsername, ewb: S.ewbUsername }).from(S).where(eq(S.companyId, company.id));
   if (!row) return null;
-  const open = (b: Buffer) => decrypt(b, config.CREDENTIALS_KEY);
   return {
-    environment: row.environment,
     gspProvider: row.gspProvider ?? undefined,
     gstin: company.taxIdentifier ?? '',
-    username: settings?.username ?? '',
-    password: open(row.passwordEncrypted),
-    clientId: open(row.clientIdEncrypted) || undefined,
-    clientSecret: open(row.clientSecretEncrypted) || undefined,
+    username: (portal === 'einvoice' ? settings?.irp : settings?.ewb) ?? '',
+    password: decrypt(row.passwordEncrypted, config.CREDENTIALS_KEY),
   };
 }
 

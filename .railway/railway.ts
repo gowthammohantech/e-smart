@@ -43,6 +43,25 @@ export default defineRailway(() => {
       PDF_PROVIDER: preserve(),
       COMPLIANCE_PROVIDER: preserve(),
       GSTIN_PROVIDER: preserve(),
+      // The GSP gateway for COMPLIANCE_PROVIDER / GSTIN_PROVIDER = gsp. Production
+      // is Adaequare; the sandbox-only switches are refused there, so none is listed.
+      TAXATION_GSP_PROVIDER_CODE: preserve(),
+      TAXATION_ADAEQUARE_BASE_URL: preserve(),
+      TAXATION_ADAEQUARE_APP_ID: preserve(),
+      TAXATION_ADAEQUARE_APP_SECRET: preserve(),
+      // A staging deployment that files against NIC's sandbox through Whitebooks opts in with
+      // TAXATION_GSTIN_ALLOW_SANDBOX; the live deployment leaves all of these unset.
+      TAXATION_GSTIN_ALLOW_SANDBOX: preserve(),
+      TAXATION_SANDBOX_BUYER_GSTIN: preserve(),
+      TAXATION_WHITEBOOKS_BASE_URL: preserve(),
+      TAXATION_WHITEBOOKS_ACCOUNT_EMAIL: preserve(),
+      TAXATION_WHITEBOOKS_IP_ADDRESS: preserve(),
+      TAXATION_WHITEBOOKS_APP_ID: preserve(),
+      TAXATION_WHITEBOOKS_APP_SECRET: preserve(),
+      TAXATION_WHITEBOOKS_EINVOICE_APP_ID: preserve(),
+      TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: preserve(),
+      TAXATION_WHITEBOOKS_EWAYBILL_APP_ID: preserve(),
+      TAXATION_WHITEBOOKS_EWAYBILL_APP_SECRET: preserve(),
       OCR_PROVIDER: preserve(),
       FX_PROVIDER: preserve(),
       PAYMENTS_PROVIDER: preserve(),

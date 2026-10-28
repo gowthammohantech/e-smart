@@ -1077,7 +1077,10 @@ paths:
       tags: [Compliance]
       operationId: saveComplianceCredentials
       summary: Store IRP / EWB API credentials
-      description: Write-only. The server encrypts them (KMS) and never returns them. Settings expose only `irpClientIdMasked`.
+      description: |
+        Write-only. The portal username and password for the e-invoice (IRP) portal, the e-way bill portal, or both. The two
+        logins can differ, so each is stored on its own. The server encrypts the password and never returns it; settings
+        expose only the usernames. The GSP's own client id and secret are the server's (environment) and are never supplied.
       x-roles: [owner, admin]
       requestBody:
         required: true
@@ -1085,14 +1088,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [environment, username, password]
+              required: [username, password]
               properties:
-                environment: { type: string, enum: [sandbox, production] }
-                gspProvider: { type: string, description: 'The GSP/ASP used to reach NIC, e.g. `cleartax`, `masters-india`, `nic-direct`' }
+                portal: { type: string, enum: [einvoice, ewaybill, both], default: both, description: 'Which portal this login is for. `both` stores the same login for each.' }
                 username: { type: string }
                 password: { type: string, writeOnly: true }
-                clientId: { type: string, writeOnly: true }
-                clientSecret: { type: string, writeOnly: true }
       responses:
         '204': { description: Stored }
   /companies/{companyId}/compliance-settings/test-connection:
@@ -3615,9 +3615,9 @@ components:
         eInvoiceTurnoverThreshold: { $ref: '#/components/schemas/Money' }
         reportingWindowDays: { type: integer, example: 30 }
         autoGenerateEInvoiceOnFinalise: { type: boolean }
-        irpUsername: { type: string }
+        irpUsername: { type: string, description: 'The e-invoice (IRP) portal username' }
+        ewbUsername: { type: string, description: 'The e-way bill portal username' }
         irpClientIdMasked: { type: string, readOnly: true, example: 'ELX-****-9F21' }
-        irpEnvironment: { type: string, enum: [sandbox, production] }
         ewayBillEnabled: { type: boolean }
         ewayBillThreshold: { $ref: '#/components/schemas/Money' }
         autoGenerateEwayBillOnFinalise: { type: boolean }

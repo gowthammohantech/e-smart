@@ -800,7 +800,9 @@ export interface paths {
         get?: never;
         /**
          * Store IRP / EWB API credentials
-         * @description Write-only. The server encrypts them (KMS) and never returns them. Settings expose only `irpClientIdMasked`.
+         * @description Write-only. The portal username and password for the e-invoice (IRP) portal, the e-way bill portal, or both. The two
+         *     logins can differ, so each is stored on its own. The server encrypts the password and never returns it; settings
+         *     expose only the usernames. The GSP's own client id and secret are the server's (environment) and are never supplied.
          */
         put: operations["saveComplianceCredentials"];
         post?: never;
@@ -2741,11 +2743,12 @@ export interface components {
             /** @example 30 */
             reportingWindowDays?: number;
             autoGenerateEInvoiceOnFinalise?: boolean;
+            /** @description The e-invoice (IRP) portal username */
             irpUsername?: string;
+            /** @description The e-way bill portal username */
+            ewbUsername?: string;
             /** @example ELX-****-9F21 */
             readonly irpClientIdMasked?: string;
-            /** @enum {string} */
-            irpEnvironment?: "sandbox" | "production";
             ewayBillEnabled?: boolean;
             ewayBillThreshold?: components["schemas"]["Money"];
             autoGenerateEwayBillOnFinalise?: boolean;
@@ -5488,14 +5491,14 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @enum {string} */
-                    environment: "sandbox" | "production";
-                    /** @description The GSP/ASP used to reach NIC, e.g. `cleartax`, `masters-india`, `nic-direct` */
-                    gspProvider?: string;
+                    /**
+                     * @description Which portal this login is for. `both` stores the same login for each.
+                     * @default both
+                     * @enum {string}
+                     */
+                    portal?: "einvoice" | "ewaybill" | "both";
                     username: string;
                     password: string;
-                    clientId?: string;
-                    clientSecret?: string;
                 };
             };
         };

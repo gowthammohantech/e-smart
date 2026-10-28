@@ -9,6 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
+import { useComplianceSettings } from '../../../store/selectors';
 import { Integration } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
@@ -20,6 +21,9 @@ const GROUPS: { key: Integration['category']; title: string; blurb: string }[] =
   { key: 'storage', title: 'Storage & backup', blurb: 'Where copies of your documents are kept.' },
 ];
 
+/** The government portals open their own login screen on the tab for that portal. */
+const PORTAL_OF: Record<string, 'einvoice' | 'ewaybill'> = { int_einvoice: 'einvoice', int_eway: 'ewaybill' };
+
 export default function Integrations() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
@@ -28,6 +32,14 @@ export default function Integrations() {
 
   const integrations = useAppStore((s) => s.integrations);
   const toggleIntegration = useAppStore((s) => s.toggleIntegration);
+  const compliance = useComplianceSettings();
+  // A portal has a login once its username is saved (the password is never sent back).
+  const hasLogin = (id: string) => (id === 'int_einvoice' ? !!compliance.irpUsername : id === 'int_eway' ? !!compliance.ewbUsername : true);
+
+  const openConfig = (i: Integration) => {
+    const portal = PORTAL_OF[i.id];
+    router.push((portal ? { pathname: i.configRoute, params: { portal } } : i.configRoute) as never);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -93,7 +105,7 @@ export default function Integrations() {
                       </Text>
                       {i.configRoute ? (
                         <Pressable
-                          onPress={() => router.push(i.configRoute as never)}
+                          onPress={() => openConfig(i)}
                           accessibilityRole="button"
                           accessibilityLabel={`Configure ${i.name}`}
                           hitSlop={6}
@@ -107,6 +119,12 @@ export default function Integrations() {
                     <Switch
                       value={i.connected}
                       onValueChange={() => {
+                        // A portal with no login yet cannot be switched on: ask for the login instead. With one saved,
+                        // the switch simply turns it on or off.
+                        if (!i.connected && !hasLogin(i.id)) {
+                          openConfig(i);
+                          return;
+                        }
                         toggleIntegration(i.id);
                         toast.show(i.connected ? `${i.name} disconnected` : `${i.name} connected`, 'success');
                       }}
