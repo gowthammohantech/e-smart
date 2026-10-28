@@ -16,7 +16,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { remoteSession, retryFailed, retrySync, syncNow, useRemoteMeta } from '@esmart/app/remote';
+import { remoteSession, retryFailed, retrySync, syncAll, syncNow, useRemoteMeta } from '@esmart/app/remote';
 import { drop } from '@esmart/app/remote/outbox';
 
 function SectionTitle({ children }: { children: string }) {
@@ -132,7 +132,7 @@ export function SyncStatusDesktop() {
                   : 'Finalised financial records are validated on the server before they count, so your books stay authoritative.'}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
-                <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncNow()} />
+                <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncAll()} />
                 <Button
                   title={tr('settings:sync.reload')}
                   variant="ghost"

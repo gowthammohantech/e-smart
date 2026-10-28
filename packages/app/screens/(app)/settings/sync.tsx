@@ -16,7 +16,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { formatRelative } from '@esmart/core/lib/date';
-import { remoteSession, retryFailed, retrySync, syncNow, useRemoteMeta } from '../../../remote';
+import { remoteSession, retryFailed, retrySync, syncAll, syncNow, useRemoteMeta } from '../../../remote';
 import { drop } from '../../../remote/outbox';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
@@ -80,7 +80,7 @@ export default function SyncStatus() {
                   ? tr('settings:sync.lastSynced', { when: formatRelative(lastSyncAt.slice(0, 10)) })
                   : tr('settings:sync.neverSynced')}
             </Text>
-            <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncNow()} fullWidth />
+            <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncAll()} fullWidth />
             <Button title={tr('settings:sync.reload')} variant="ghost" icon="cloud-download-outline" onPress={() => void syncNow().then(remoteSession.resync)} fullWidth />
           </View>
 

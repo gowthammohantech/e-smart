@@ -140,7 +140,7 @@ export function EInvoiceSheet({
           />
         }
       >
-        <View style={{ gap: t.spacing.lg }}>
+        <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.lg }}>
           {cancellation.allowed ? (
             <Card variant="flat">
               <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
@@ -179,7 +179,7 @@ export function EInvoiceSheet({
                   size={20}
                   color={reasonCode === code ? t.c.primary : t.c.muted}
                 />
-                <Text variant="small">{E_INVOICE_CANCEL_REASONS[code]}</Text>
+                <Text variant="small" style={{ flex: 1 }}>{E_INVOICE_CANCEL_REASONS[code]}</Text>
               </Pressable>
             ))}
           </View>
@@ -229,9 +229,9 @@ export function EInvoiceSheet({
         )
       }
     >
-      <View style={{ gap: t.spacing.lg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text variant="small" weight="600">
+      <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
+          <Text variant="small" weight="600" style={{ flex: 1 }}>
             {applicability.applicable ? E_INVOICE_SUPPLY_TYPES[applicability.supplyType!] : 'Not reportable'}
           </Text>
           <Badge label={keyLabel(tr, meta.labelKey)} tone={meta.tone} icon={meta.icon} />
@@ -342,12 +342,13 @@ export function EInvoiceSheet({
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  const t = useTheme();
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
       <Text variant="caption" tone="muted">
         {label}
       </Text>
-      <Text variant="small">{value}</Text>
+      <Text variant="small" style={{ flexShrink: 1, textAlign: 'right' }}>{value}</Text>
     </View>
   );
 }

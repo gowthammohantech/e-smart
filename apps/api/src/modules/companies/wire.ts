@@ -48,7 +48,7 @@ export function companyColumns(body: Schema<'Company'>) {
     country: body.country,
     baseCurrency: body.baseCurrency,
     ...addressTo('address', body.address),
-    email: body.email ?? null,
+    email: body.email?.trim().toLowerCase() || null,
     phone: body.phone ?? null,
     website: body.website ?? null,
     taxRegime: tax?.regime ?? 'NONE',

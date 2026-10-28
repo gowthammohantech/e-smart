@@ -1,10 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { Schema } from '@esmart/api-client';
+import type { SyncQueueEntry } from '@esmart/core/types';
 import { emptyData, useAppStore } from '../store/appStore';
 import { api } from './api';
 import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
-import { loadSnapshot } from './sync';
+import { isOpen } from './outbox';
+import { loadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
 
 type AuthSession = Schema<'AuthSession'>;
@@ -38,6 +41,7 @@ async function begin(auth: AuthSession, preferCompanyId?: string) {
     activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '',
     session: { userId: auth.user.id, authenticated: true, onboardingComplete: !!(me?.onboardingComplete ?? auth.onboardingComplete), signedInAt: new Date().toISOString() },
   });
+  await restoreUnsynced(auth.user.id);
 }
 
 export async function signIn(email: string, password: string) {
@@ -65,8 +69,36 @@ export async function forgotPassword(email: string) {
   await api.POST('/auth/password/forgot', { body: { email: email.trim() } });
 }
 
-/** Forgets the session and everything loaded for it on this device. */
-function clearLocal() {
+/** Unsynced changes a user left behind on sign-out, kept per user (localStorage on the web). */
+const unsyncedKey = (userId: string) => `ebs.unsynced.${userId}`;
+
+/** Keeps the leaving user's unsynced changes on the device for their next sign-in. */
+function stashUnsynced(): Promise<void> {
+  const { session, syncQueue } = useAppStore.getState();
+  const open = syncQueue.filter(isOpen);
+  if (!session.userId || !open.length) return Promise.resolve();
+  return AsyncStorage.setItem(unsyncedKey(session.userId), JSON.stringify(open)).catch(() => {});
+}
+
+/** Puts a returning user's unsynced changes back in the queue, pending and failed alike, and sends them. */
+async function restoreUnsynced(userId: string) {
+  try {
+    const saved = await AsyncStorage.getItem(unsyncedKey(userId));
+    if (!saved) return;
+    const queue = useAppStore.getState().syncQueue;
+    const back = (JSON.parse(saved) as SyncQueueEntry[]).filter((e) => !queue.some((q) => q.id === e.id));
+    useAppStore.setState({ syncQueue: [...queue, ...back] });
+    await AsyncStorage.removeItem(unsyncedKey(userId));
+    syncSoon(0);
+  } catch {
+    // Unreadable storage: nothing to bring back.
+  }
+}
+
+/** Forgets the session and everything loaded for it on this device, except unsynced changes. */
+function clearLocal(): Promise<void> {
+  // Read before the store empties; written after.
+  const stashed = stashUnsynced();
   useRemoteMeta.getState().reset();
   // A logo waiting to upload belongs to the account that left.
   useLogoQueue.getState().reset();
@@ -76,6 +108,7 @@ function clearLocal() {
     activeBranchId: '',
     session: { userId: null, authenticated: false, onboardingComplete: false },
   });
+  return stashed;
 }
 
 export async function signOut() {
@@ -85,13 +118,13 @@ export async function signOut() {
     // Signing out works offline too; the server session expires on its own.
   }
   await setTokens(null);
-  clearLocal();
+  await clearLocal();
 }
 
 /** A refresh the server refused (revoked device, reset password) signs out here too. */
 export function watchSessionEnd(): () => void {
   return onTokensChange((t) => {
-    if (!t && useAppStore.getState().session.authenticated) clearLocal();
+    if (!t && useAppStore.getState().session.authenticated) void clearLocal();
   });
 }
 

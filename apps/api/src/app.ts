@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import rawBody from 'fastify-raw-body';
 import type { Ajv } from 'ajv';
+import { EMAIL_RE } from '@esmart/core/lib/validators';
 import { setSandboxGstinsAllowed } from '@esmart/core/domain/gstin';
 import { initI18n } from '@esmart/i18n';
 import { registerGuards } from './auth/guards';
@@ -48,6 +49,8 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
         (ajv: Ajv) => {
           // OpenAPI formats that describe rather than constrain.
           for (const f of ['int32', 'int64', 'float', 'double', 'binary', 'byte', 'password']) ajv.addFormat(f, true);
+          // The app's email rule. Capitals pass here; handlers store the address lowercased.
+          ajv.addFormat('email', (s: string) => EMAIL_RE.test(s.trim().toLowerCase()));
           return ajv;
         },
       ],

@@ -8,7 +8,7 @@ export { installRemote } from './install';
 export { useRemoteSync } from './useRemoteSync';
 export { useRemoteMeta } from './meta';
 export { syncNow } from './sync';
-export { retrySync, retryFailed } from './retry';
+export { retrySync, retryFailed, syncAll } from './retry';
 export * as remoteSession from './session';
 export * as compliance from './compliance';
 export * as remoteUsers from './users';
