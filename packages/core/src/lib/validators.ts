@@ -10,8 +10,12 @@ import i18n from '@esmart/i18n';
  */
 
 export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-export const EMAIL_RE =
-  /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])$/i;
+/**
+ * What Gmail, Outlook, Yahoo and Google Workspace hand out between them:
+ * lowercase letters, digits and . _ - + before the @, starting and ending
+ * with a letter or digit, never two dots in a row.
+ */
+export const EMAIL_RE = /^(?!.*\.\.)[a-z0-9](?:[a-z0-9._+-]*[a-z0-9])?@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 export const PHONE_RE = /^[+]?[0-9\s-]{7,16}$/;
 
 export function required(value: string | undefined | null, label: string): string | undefined {

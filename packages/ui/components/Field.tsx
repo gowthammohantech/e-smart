@@ -163,6 +163,8 @@ export function TextField({
           accessibilityLabel={label}
           secureTextEntry={secureTextEntry && !revealed}
           {...rest}
+          // Emails are lowercase only, so capitals turn lowercase as they're typed.
+          onChangeText={rest.keyboardType === 'email-address' && rest.onChangeText ? (v) => rest.onChangeText?.(v.toLowerCase()) : rest.onChangeText}
         />
         {secureTextEntry ? (
           <Pressable
