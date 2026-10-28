@@ -119,7 +119,8 @@ export const authHandlers = defineHandlers({
       }
     }
 
-    const code = ctx.deps.config.DEMO_OTP ? '123456' : String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const isTestPhone = ctx.deps.config.TEST_OTP_PHONES.includes(phone.replace(/\D/g, '').slice(-10));
+    const code = ctx.deps.config.DEMO_OTP || isTestPhone ? '123456' : String(randomInt(0, 1_000_000)).padStart(6, '0');
     const requestId = newId('otp');
     const channel = ctx.body.channel ?? 'sms';
     await ctx.db.insert(schema.otpRequests).values({
@@ -129,6 +130,8 @@ export const authHandlers = defineHandlers({
       codeHash: sha256(`${requestId}:${code}`),
       expiresAt: new Date(ctx.now.getTime() + OTP_TTL_SECONDS * 1000),
     });
+    // Test numbers use the fixed code and are never messaged.
+    if (isTestPhone) return { requestId, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_AFTER_SECONDS };
     const text = `${code} is your Elixir Books sign-in code. It expires in 5 minutes.`;
     if (channel === 'whatsapp') await ctx.deps.providers.whatsapp.send({ to: phone, text });
     else {
