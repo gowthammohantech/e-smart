@@ -136,9 +136,10 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     const sideAging = bp === 'wide';
     const list = (
       <View style={{ gap: t.spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
-          <View style={{ width: 340 }}>{modeFilter}</View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        {/* The counts drop under the filter when the list is narrow (Lixi open) rather than running off the edge. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
+          <View style={{ width: 340, maxWidth: '100%' }}>{modeFilter}</View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, marginLeft: 'auto' }}>
             <Text variant="small" tone="muted">
               {rows.length} documents · {byParty.length} contacts
             </Text>
@@ -349,21 +350,25 @@ function DesktopPartyGroup({
 
   return (
     <Card padded={false} style={{ overflow: 'hidden' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, padding: t.spacing.lg }}>
-        <Avatar name={name} size={40} />
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text variant="body" weight="700" numberOfLines={1}>
-            {name}
-          </Text>
-          <Text variant="caption" tone="muted">
-            {group.count} document{group.count === 1 ? '' : 's'}
-            {group.oldest > 0 ? ` · oldest ${group.oldest}d late` : ''}
+      {/* When the card is narrow (Lixi open beside it), the actions wrap under the
+          name and amount instead of squeezing the name into a sliver. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md, padding: t.spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, flexGrow: 1, flexShrink: 1, flexBasis: 360, minWidth: 0 }}>
+          <Avatar name={name} size={40} />
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <Text variant="body" weight="700" numberOfLines={1}>
+              {name}
+            </Text>
+            <Text variant="caption" tone="muted">
+              {group.count} document{group.count === 1 ? '' : 's'}
+              {group.oldest > 0 ? ` · oldest ${group.oldest}d late` : ''}
+            </Text>
+          </View>
+          <Text variant="title" weight="700" tone={group.oldest > 0 ? 'bad' : 'warn'} style={{ fontVariant: ['tabular-nums'] }}>
+            {formatMoney(total)}
           </Text>
         </View>
-        <Text variant="title" weight="700" tone={group.oldest > 0 ? 'bad' : 'warn'} style={{ fontVariant: ['tabular-nums'] }}>
-          {formatMoney(total)}
-        </Text>
-        <View style={{ flexDirection: 'row', gap: t.spacing.sm, marginLeft: t.spacing.sm }}>
+        <View style={{ flexDirection: 'row', gap: t.spacing.sm, marginLeft: 'auto' }}>
           {isReceivable ? (
             <Button title={tr('sales:aging.remind')} variant="secondary" icon="bell-ring-outline" size="sm" onPress={onRemind} />
           ) : null}
