@@ -38,6 +38,14 @@ const Env = z.object({
    * is set up; remove it from the environment once they are.
    */
   ALLOW_UNCONFIGURED_PROVIDERS: bool.default(false),
+  /**
+   * Comma-separated phone numbers that always get the code `123456` and are never sent an SMS or
+   * WhatsApp, whatever DEMO_OTP says. For test accounts on a live deployment. Compared by last 10 digits.
+   */
+  TEST_OTP_PHONES: z
+    .string()
+    .default('')
+    .transform((v) => v.split(',').map((p) => p.replace(/\D/g, '').slice(-10)).filter(Boolean)),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(300),
 
   SMS_PROVIDER: z.enum(['log', 'msg91', 'pay4sms']).default('log'),
