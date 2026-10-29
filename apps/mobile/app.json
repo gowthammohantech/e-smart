@@ -3,7 +3,7 @@
     "name": "Elixir Books Smart",
     "slug": "elixir-books-smart",
     "version": "1.0.1",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "elixirsmart",
     "userInterfaceStyle": "automatic",
@@ -27,8 +27,7 @@
     },
     "android": {
       "package": "com.elixir.bookssmart",
-      "versionCode": 4,
-      "edgeToEdgeEnabled": true,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -41,7 +40,9 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
     "web": {
@@ -59,7 +60,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Scan receipts, bills and barcodes."
+          "cameraPermission": "Scan receipts, bills and barcodes.",
+          "recordAudioAndroid": false
         }
       ],
       "expo-splash-screen",
@@ -67,6 +69,8 @@
       "expo-localization",
       "./plugins/withSceneLifecycle",
       "./plugins/withAndroidSigning",
+      "./plugins/withR8Optimize",
+      "./plugins/withUnlockedScannerOrientation",
       [
         "expo-build-properties",
         {
