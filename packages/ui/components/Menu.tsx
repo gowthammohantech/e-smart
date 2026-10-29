@@ -79,6 +79,7 @@ export function Menu({
 
 export function MenuItem({
   icon,
+  leading,
   label,
   description,
   selected,
@@ -87,6 +88,8 @@ export function MenuItem({
   onPress,
 }: {
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  /** Drawn where the icon goes, in its place: e.g. a business's logo. */
+  leading?: React.ReactNode;
   label: string;
   description?: string;
   selected?: boolean;
@@ -118,7 +121,7 @@ export function MenuItem({
         ];
       }}
     >
-      {icon ? <MaterialCommunityIcons name={icon} size={18} color={destructive ? t.c.bad : t.c.muted} /> : null}
+      {leading ?? (icon ? <MaterialCommunityIcons name={icon} size={18} color={destructive ? t.c.bad : t.c.muted} /> : null)}
       <View style={{ flex: 1, gap: 1 }}>
         <Text variant="small" weight={selected ? '700' : '500'} numberOfLines={1} style={{ color }}>
           {label}

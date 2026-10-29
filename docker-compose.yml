@@ -30,7 +30,8 @@ services:
   # container: az storage container create -n esmart --connection-string UseDevelopmentStorage=true
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
-    command: azurite-blob --blobHost 0.0.0.0 --loose
+    # The Azure SDK the API uses can be newer than the emulator; --skipApiVersionCheck lets it through.
+    command: azurite-blob --blobHost 0.0.0.0 --loose --skipApiVersionCheck
     ports: ['10000:10000']
     volumes: ['azuritedata:/data']
 

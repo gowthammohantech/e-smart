@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
-import { Avatar } from '@esmart/ui/components/Avatar';
+import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useBranches } from '@esmart/app/store/selectors';
@@ -59,7 +59,7 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
           ];
         }}
       >
-        <Avatar name={company?.name ?? '?'} size={compact ? 36 : 34} />
+        <CompanyLogo uri={company?.logoUri} name={company?.name ?? '?'} size={compact ? 36 : 34} />
         {compact ? null : (
           <>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -85,7 +85,7 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
         {companies.map((c) => (
           <MenuItem
             key={c.id}
-            icon="domain"
+            leading={<CompanyLogo uri={c.logoUri} name={c.name} size={28} />}
             label={c.name}
             description={`${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`}
             selected={c.id === company?.id}

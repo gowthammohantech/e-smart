@@ -16,6 +16,8 @@ export type SelectOption = {
   label: string;
   description?: string;
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  /** Drawn where the icon goes, in its place: e.g. a business's logo. */
+  leading?: React.ReactNode;
   trailing?: string;
   disabled?: boolean;
   /** A coloured line under the description, e.g. an item's stock. */
@@ -212,7 +214,7 @@ export function SelectSheet({
                   color={checked ? t.c.primary : t.c.muted}
                 />
               ) : null}
-              {o.icon ? <MaterialCommunityIcons name={o.icon} size={20} color={t.c.muted} /> : null}
+              {o.leading ?? (o.icon ? <MaterialCommunityIcons name={o.icon} size={20} color={t.c.muted} /> : null)}
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight={selected ? '600' : '400'} numberOfLines={1}>
                   {o.label}

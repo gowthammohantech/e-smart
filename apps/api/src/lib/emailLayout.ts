@@ -19,6 +19,55 @@ export type EmailLayout = {
 
 const withBold = (s: string) => escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
+export type DocumentEmail = {
+  businessName: string;
+  /** A link to the business logo. Remote, so the client may ask before showing it; the name stands in until then. */
+  logoUrl?: string;
+  /** The message as typed: one paragraph per line. */
+  message: string;
+  /** The first is the main button; the rest are plain links under it. */
+  links: { label: string; url: string }[];
+};
+
+/**
+ * A document a business sends its customer. It speaks for the business, so it
+ * carries the business's logo and name rather than Elixir Books' brand line.
+ */
+export function renderDocumentEmailHtml(e: DocumentEmail): string {
+  const [main, ...rest] = e.links;
+  const name = escapeHtml(e.businessName);
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1f23;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:12px;padding:32px;">
+            <tr>
+              <td>
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                  <tr>
+                    ${e.logoUrl ? `<td style="padding-right:12px;vertical-align:middle;"><img src="${escapeHtml(e.logoUrl)}" alt="${name}" height="48" style="display:block;border:0;outline:none;width:auto;height:auto;max-height:48px;max-width:160px;"></td>` : ''}
+                    <td style="vertical-align:middle;font-size:17px;font-weight:700;color:#1c1f23;">${name}</td>
+                  </tr>
+                </table>
+                ${e.message
+                  .split('\n')
+                  .filter((p) => p.trim())
+                  .map((p) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;">${escapeHtml(p)}</p>`)
+                  .join('\n                ')}
+                ${main ? `<p style="margin:8px 0 20px;"><a href="${escapeHtml(main.url)}" style="display:inline-block;background:#007aff;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px;">${escapeHtml(main.label)}</a></p>` : ''}
+                ${rest.map((l) => `<p style="margin:0 0 8px;font-size:14px;line-height:1.5;"><a href="${escapeHtml(l.url)}" style="color:#007aff;">${escapeHtml(l.label)}</a></p>`).join('\n                ')}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 export function renderEmailHtml(e: EmailLayout): string {
   const link = escapeHtml(e.link);
   // Inline styles and a table layout: email clients ignore most of the rest.

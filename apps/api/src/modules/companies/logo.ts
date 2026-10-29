@@ -30,6 +30,36 @@ async function deleteObject(deps: Deps, key: string | null) {
   if (key) await deps.providers.storage.delete(key).catch(() => undefined);
 }
 
+/** The company's logo file, when it has one. */
+async function logoAttachmentOf(db: DbOrTx, company: { id: string; logoAttachmentId: string | null }) {
+  if (!company.logoAttachmentId) return null;
+  const A = schema.attachments;
+  const [a] = await db
+    .select({ key: A.storageKey, mime: A.mimeType })
+    .from(A)
+    .where(and(eq(A.id, company.logoAttachmentId), eq(A.companyId, company.id)));
+  return a ?? null;
+}
+
+/**
+ * The logo inline, as a data URI, for documents the server renders: a PDF then
+ * never depends on a link that has to load in time. Undefined when there is
+ * none or storage can't return it; the document simply goes without.
+ */
+export async function companyLogoDataUri(db: DbOrTx, deps: Deps, company: { id: string; logoAttachmentId: string | null }): Promise<string | undefined> {
+  const logo = await logoAttachmentOf(db, company);
+  if (!logo) return undefined;
+  const bytes = await deps.providers.storage.get(logo.key).catch(() => null);
+  return bytes ? `data:${logo.mime};base64,${bytes.toString('base64')}` : undefined;
+}
+
+/** A signed link to the logo, for messages that can't carry it inline. */
+export async function companyLogoLink(db: DbOrTx, deps: Deps, company: { id: string; logoAttachmentId: string | null }, ttlSeconds: number): Promise<string | undefined> {
+  const logo = await logoAttachmentOf(db, company);
+  if (!logo) return undefined;
+  return (await deps.providers.storage.downloadUrl(logo.key, { ttlSeconds }).catch(() => undefined))?.url;
+}
+
 /** Company logo: uploadCompanyLogo, removeCompanyLogo. */
 export const logoHandlers = defineHandlers({
   async uploadCompanyLogo(ctx) {

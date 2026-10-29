@@ -9,6 +9,7 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Avatar } from '@esmart/ui/components/Avatar';
+import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -76,7 +77,7 @@ export default function Profile() {
               key={c.id}
               title={c.name}
               subtitle={`${c.businessType} · ${c.baseCurrency}`}
-              icon="domain"
+              left={<CompanyLogo uri={c.logoUri} name={c.name} size={36} />}
               divider={i < companies.length - 1}
               right={c.id === activeCompanyId ? <Badge label={tr('settings:profile.active')} tone="success" size="sm" /> : undefined}
               onPress={() => {
