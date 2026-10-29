@@ -1,0 +1,178 @@
+@import 'tailwindcss';
+
+/*
+ * Palette values live in lib/palette.ts and are written into <head> as
+ * [data-palette="…"] blocks. Tailwind only maps names onto them here.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-footer: var(--surface-footer);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-tint: var(--primary-tint);
+  --color-deep: var(--deep);
+  --color-deep-2: var(--deep-2);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
+  --color-star: var(--star);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+
+  --font-display: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-btn: 8px;
+  --radius-card: 16px;
+  --radius-media: 20px;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+    transition: background-color 300ms ease;
+  }
+  /* Transparent, so the fixed -z-10 backdrop shows; <html> carries the colour. */
+  body {
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+  ::selection {
+    background: var(--primary);
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+@utility container-site {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 16px;
+  @media (width >= 640px) {
+    padding-inline: 24px;
+  }
+}
+
+@utility section-y {
+  padding-block: 72px;
+  @media (width >= 1024px) {
+    padding-block: 120px;
+  }
+}
+
+@utility h-section {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  @media (width >= 1024px) {
+    font-size: 46px;
+    line-height: 1.1;
+  }
+}
+
+/* Outline lettering for the marquee. */
+@utility text-stroke {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--primary);
+}
+
+/* Gradient-filled numerals for the three steps. */
+@utility text-numeral {
+  background: linear-gradient(180deg, var(--primary) 0%, transparent 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility mask-fade-x {
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(-8px);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+.animate-spin-slow {
+  animation: spin-slow 12s linear infinite;
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* The glow wash shown when WebGL is unavailable. */
+.css-glow {
+  background:
+    radial-gradient(60% 50% at 0% 0%, var(--glow-a), transparent 70%),
+    radial-gradient(40% 35% at 100% 8%, var(--primary-tint), transparent 70%),
+    radial-gradient(35% 30% at 0% 55%, var(--glow-b), transparent 70%),
+    radial-gradient(35% 30% at 100% 78%, var(--glow-b), transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-spin-slow,
+  .animate-float {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Lenis */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: clip;
+}

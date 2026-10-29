@@ -14,7 +14,8 @@
     "mobile": "npm run start -w @esmart/mobile",
     "web": "npm run start -w @esmart/web",
     "admin": "npm run dev -w @esmart/admin",
-    "api": "npm run dev -w @esmart/api"
+    "api": "npm run dev -w @esmart/api",
+    "site": "npm run dev -w @esmart/site"
   },
   "devDependencies": {
     "@esmart/eslint-config": "*",

@@ -1,0 +1,6 @@
+.next/
+out/
+next-env.d.ts
+# Copied from packages/ui by scripts/copy-brand.mjs
+public/brand/
+tsconfig.tsbuildinfo

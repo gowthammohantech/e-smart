@@ -111,5 +111,18 @@ export default defineRailway(() => {
     },
   });
 
-  return project('e-smart', { resources: [api, web, admin] });
+  /**
+   * The marketing site: a static Next.js export in apps/site/out, served
+   * by sirv. It reads no API and has no secrets.
+   */
+  const site = service('site', {
+    build: 'npm run build -w @esmart/site',
+    start: 'npm run start -w @esmart/site',
+    healthcheck: '/',
+    env: {
+      NODE_ENV: 'production',
+    },
+  });
+
+  return project('e-smart', { resources: [api, web, admin, site] });
 });
