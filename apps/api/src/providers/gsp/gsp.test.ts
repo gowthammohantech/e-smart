@@ -10,7 +10,7 @@ import { describeGspError, hasErrorCode, parsePortalDateAny, parsePortalDateTime
 import { resolveGspGateway } from './provider-name';
 import { toGstinRecord } from './taxpayer';
 import { GspRequestError, type GspRequest, type GspTransport } from './transport';
-import { WhitebooksGateway } from './whitebooks';
+import { sandboxDocNo, WhitebooksGateway } from './whitebooks';
 
 const NOW = '2026-09-02T10:00:00.000Z';
 
@@ -554,5 +554,16 @@ describe('NIC sandbox GSTINs', () => {
     } finally {
       setSandboxGstinsAllowed(false);
     }
+  });
+});
+
+describe('sandbox document numbers', () => {
+  it('shows the portal a stable number of our own, within NIC\'s 16 characters', () => {
+    const config = whitebooksConfig();
+    const a = sandboxDocNo(config, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29');
+    expect(a).toMatch(/^S[0-9A-Z]{11}$/);
+    expect(sandboxDocNo(config, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29')).toBe(a);
+    expect(sandboxDocNo(config, '29AAGCB1286Q000', 'INV/26-27/0004', '2026-10-29')).not.toBe(a);
+    expect(sandboxDocNo({ ...config, PUBLIC_BASE_URL: 'https://other.example.test' }, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29')).not.toBe(a);
   });
 });
