@@ -120,7 +120,17 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
         {showBack ? iconButton('arrow-left', tr('common:action.back'), goBack) : null}
         {/* The business's logo beside its name; a page with its own title shows just that. */}
-        {!title && company ? <CompanyLogo uri={company.logoUri} name={company.name} size={36} /> : null}
+        {!title && company ? (
+          <Pressable
+            onPress={() => router.push('/(app)/settings/company' as never)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={tr('nav:title.businessProfile')}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <CompanyLogo uri={company.logoUri} name={company.name} size={36} />
+          </Pressable>
+        ) : null}
         {/* Siblings, not nested: on web each Pressable is a <button>, and a
             button inside a button is invalid HTML and steals the inner press. */}
         <View style={{ flex: 1, alignItems: 'flex-start' }}>
