@@ -10,11 +10,12 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { requiredAddressFrom } from '../../lib/wire';
+import { companyLogoDataUri } from '../companies/logo';
 import { companyCore, partyCore, type DocRow } from './engine';
 import { effectiveStatus, today } from './lifecycle';
 import { documentsToWire, toCoreDocument } from './wire';
 
-const SHARE_LINK_DAYS = 30;
+export const SHARE_LINK_DAYS = 30;
 const PAYMENT_LINK_DAYS = 30;
 
 const COPY_LABEL = { original: '', duplicate: 'DUPLICATE FOR TRANSPORTER', triplicate: 'TRIPLICATE FOR SUPPLIER' } as const;
@@ -50,6 +51,7 @@ export async function renderDocumentPdf(
     party: party ? partyCore(party) : undefined,
     branch: coreBranch,
     ewayBill,
+    logoSrc: await companyLogoDataUri(db, deps, company),
     t: i18n.getFixedT(language),
     language,
   });

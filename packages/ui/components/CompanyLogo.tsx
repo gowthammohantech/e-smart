@@ -21,7 +21,8 @@ export function CompanyLogo({ uri, name, size = 84 }: { uri?: string; name: stri
       <Image
         source={{ uri }}
         style={{ width: size, height: size, borderRadius: radius, backgroundColor: t.c.card2 }}
-        contentFit="cover"
+        // Whole logo inside the square, whatever its shape or size: a wide wordmark isn't cropped, and nothing spills out.
+        contentFit="contain"
         onError={() => setFailedUri(uri)}
         accessibilityIgnoresInvertColors
       />

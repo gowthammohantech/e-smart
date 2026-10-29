@@ -49,6 +49,12 @@ function addressBlock(a?: { line1?: string; line2?: string; city?: string; state
  * for sharing and shown in the in-app preview by the app, and rendered to PDF
  * by the API (`getDocumentPdf`), so both print the same page.
  */
+/** The business logo above its name, from a link, a data URI or a file just picked on the device. */
+function logoTag(src: string | undefined, name: string | undefined): string {
+  if (!src || !/^(https?:|data:image\/|file:|blob:)/i.test(src)) return '';
+  return `<img class="logo" src="${esc(src)}" alt="${esc(name)}">`;
+}
+
 export function buildDocumentHtml({
   document: doc,
   company,
@@ -56,6 +62,7 @@ export function buildDocumentHtml({
   branchName,
   branch,
   ewayBill,
+  logoSrc,
   t,
   language,
 }: {
@@ -66,6 +73,8 @@ export function buildDocumentHtml({
   /** The issuing branch: its own address and GSTIN win over the company's. */
   branch?: Branch;
   ewayBill?: EwayBill;
+  /** The business logo, when not `company.logoUri`: the server passes it inline, as a data URI, so a PDF never waits on a link. */
+  logoSrc?: string;
   /** Translator for the descriptive labels. Statutory field names stay English. */
   t: Translate;
   language: LanguageCode;
@@ -146,6 +155,7 @@ export function buildDocumentHtml({
   }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
   .brand { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo { display: block; max-width: 160px; max-height: 56px; object-fit: contain; margin-bottom: 8px; }
   .muted { color: #5A6478; }
   .doc-title { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #007AFF; text-align: right; }
   .meta { text-align: right; margin-top: 6px; }
@@ -192,6 +202,7 @@ export function buildDocumentHtml({
   ${cancelledStrip(doc)}
   <div class="head">
     <div>
+      ${logoTag(logoSrc ?? company?.logoUri, company?.name)}
       <div class="brand">${esc(company?.name)}</div>
       <div class="muted">${addressBlock(branch?.address?.line1 ? branch.address : company?.address)}</div>
       ${company?.phone ? `<div class="muted">${esc(company.phone)}</div>` : ''}

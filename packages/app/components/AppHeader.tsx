@@ -8,6 +8,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
+import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -118,6 +119,8 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
         {showBack ? iconButton('arrow-left', tr('common:action.back'), goBack) : null}
+        {/* The business's logo beside its name; a page with its own title shows just that. */}
+        {!title && company ? <CompanyLogo uri={company.logoUri} name={company.name} size={36} /> : null}
         {/* Siblings, not nested: on web each Pressable is a <button>, and a
             button inside a button is invalid HTML and steals the inner press. */}
         <View style={{ flex: 1, alignItems: 'flex-start' }}>
@@ -177,7 +180,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           value: c.id,
           label: c.name,
           description: `${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`,
-          icon: 'domain',
+          leading: <CompanyLogo uri={c.logoUri} name={c.name} size={32} />,
         }))}
         value={company?.id}
         onSelect={setActiveCompany}

@@ -33,7 +33,9 @@ import {
   type LineInput,
 } from './engine';
 import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, finalizeInTx, reverseStock, today } from './lifecycle';
-import { createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
+import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
+import { companyLogoLink } from '../companies/logo';
+import { renderDocumentEmailHtml } from '../../lib/emailLayout';
 import { documentsToWire, summariesToWire, type DocumentWire, type SummaryRow } from './wire';
 
 const D = schema.documents;
@@ -475,13 +477,23 @@ export const documentsHandlers = defineHandlers({
         pdfUrl = (await storePdfLinkFor(tx, ctx.deps, ctx.company, row, ctx.now)).url;
       }
       const total = `${row.currency.trim()} ${(row.grandTotalMinor / 100).toFixed(2)}`;
-      const text = [
-        body.message ?? `Dear ${party.name}, please find ${row.number} for ${total} from ${ctx.company.name}.`,
-        `View: ${share.url}`,
-        pay ? `Pay: ${pay.url}` : '',
-      ]
-        .filter(Boolean)
-        .join('\n');
+      const message = body.message ?? `Dear ${party.name}, please find ${row.number} for ${total} from ${ctx.company.name}.`;
+      const text = [message, `View: ${share.url}`, pay ? `Pay: ${pay.url}` : ''].filter(Boolean).join('\n');
+      // The same email with the business's own logo and name on top; the text above stays for clients without HTML.
+      const html =
+        body.channel === 'email'
+          ? renderDocumentEmailHtml({
+              businessName: ctx.company.name,
+              // Lives as long as the share link, so the email still shows it when the customer comes back to it.
+              logoUrl: await companyLogoLink(tx, ctx.deps, ctx.company, SHARE_LINK_DAYS * 86_400),
+              message,
+              links: [
+                { label: `View ${row.number}`, url: share.url },
+                ...(pay ? [{ label: 'Pay now', url: pay.url }] : []),
+                ...(pdfUrl ? [{ label: 'Download the PDF', url: pdfUrl }] : []),
+              ],
+            })
+          : undefined;
 
       let first: string | undefined;
       for (const to of [...recipients, ...(body.channel === 'email' ? (body.cc ?? []) : [])]) {
@@ -493,7 +505,7 @@ export const documentsHandlers = defineHandlers({
         try {
           const sent =
             body.channel === 'email'
-              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text })
+              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text, html })
               : body.channel === 'whatsapp'
                 ? await ctx.deps.providers.whatsapp.send({ to, text, documentUrl: pdfUrl, filename: pdfFilename(row.number) })
                 : await ctx.deps.providers.sms.send(to, text);
