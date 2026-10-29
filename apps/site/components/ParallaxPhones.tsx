@@ -31,7 +31,7 @@ export function ParallaxPhones({ back, front, layout = 'tilted' }: Props) {
       </motion.div>
       <motion.div
         style={{ y: frontY }}
-        className={`absolute ${tilted ? 'top-14 right-[4%] rotate-[6deg]' : 'top-16 right-[6%]'}`}
+        className={`absolute ${tilted ? 'top-14 right-[7%] rotate-[6deg] sm:right-[4%]' : 'top-16 right-[6%]'}`}
       >
         <PhoneFrame screen={front} width={226} />
       </motion.div>

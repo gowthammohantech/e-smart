@@ -10,7 +10,7 @@ export function About() {
   return (
     <section id="about" className="section-y">
       <div className="container-site grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-        <ParallaxPhones back="dashboard" front="aging" />
+        <ParallaxPhones back="dashboard" front="receivables" />
         <div>
           <SectionHeading eyebrow={about.eyebrow} title={about.title} align="left" />
           <Reveal index={1}>

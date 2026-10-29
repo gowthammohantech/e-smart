@@ -4,13 +4,16 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
-import { usePrefersReducedMotion, useThreeColors } from '@/lib/hooks';
+import { propSideFor } from '@/content/tour';
+import { usePrefersReducedMotion, useThreeColors, useThreeTheme } from '@/lib/hooks';
 import { motionState, progressOf } from '@/lib/scroll';
+
+import { Bars, Bubble, Coin, Sheet, Shield, Star, StockBox } from './props';
 
 /**
  * The fixed layer behind the page: soft colour glows that drift as you
- * scroll, a sparse field of particles with depth parallax, and coins
- * either side of the pricing section.
+ * scroll, a sparse field of particles with depth parallax, and a
+ * motif in the free margin of each section (coins by pricing, shields by GST…).
  */
 
 const glowVertex = /* glsl */ `
@@ -49,7 +52,7 @@ const GLOWS: GlowSpec[] = [
 const SCREEN_UNITS = 2 * Math.tan(THREE.MathUtils.degToRad(25)) * 10;
 
 function Glows({ reduced }: { reduced: boolean }) {
-  const colors = useThreeColors();
+  const { three: colors, additiveGlow } = useThreeTheme();
   const group = useRef<THREE.Group>(null);
   const materials = useMemo(
     () =>
@@ -67,8 +70,14 @@ function Glows({ reduced }: { reduced: boolean }) {
     [],
   );
 
-  // Recolour in place when the palette changes, so nothing is rebuilt.
-  GLOWS.forEach((g, i) => materials[i].uniforms.uColor.value.set(colors[g.color]));
+  // Recolour in place when the theme changes, so nothing is rebuilt. Light
+  // glows would vanish on a light page, so there they blend normally, fainter.
+  GLOWS.forEach((g, i) => {
+    const m = materials[i];
+    m.uniforms.uColor.value.set(colors[g.color]);
+    m.uniforms.uOpacity.value = additiveGlow ? g.opacity : g.opacity * 0.55;
+    m.blending = additiveGlow ? THREE.AdditiveBlending : THREE.NormalBlending;
+  });
 
   useFrame(({ clock }) => {
     if (!group.current) return;
@@ -127,65 +136,99 @@ function Particles({ reduced, count = 420 }: { reduced: boolean; count?: number 
     <group ref={field}>
       {[0, -FIELD_H].map((y) => (
         <points key={y} geometry={geometry} position={[0, y, 0]}>
-          <pointsMaterial color={colors.soft} size={0.035} sizeAttenuation transparent opacity={0.55} depthWrite={false} />
+          <pointsMaterial color={colors.particles} size={0.035} sizeAttenuation transparent opacity={0.55} depthWrite={false} />
         </points>
       ))}
     </group>
   );
 }
 
-/** Where each coin sits: two loose columns either side of the cards, never behind the copy. */
-const COINS: [x: number, y: number, z: number][] = [
-  [-8.6, 2.6, -1],
-  [-10.2, 0.4, -3],
-  [-8.2, -1.8, 0],
-  [-9.6, -3.9, -2],
-  [8.8, 3.1, -2],
-  [10.0, 0.9, -1],
-  [8.4, -1.4, -3],
-  [9.4, -3.6, 0],
+/**
+ * Two props in one page margin, the one Lixi isn't standing in: how far out (a
+ * fraction of the visible half-width at that depth, so 1 is the screen edge),
+ * y, z and size. One near and larger, one farther and smaller, for depth.
+ * Placing by fraction keeps the props in the margin at any viewport width.
+ */
+const SLOTS: [out: number, y: number, z: number, scale: number][] = [
+  [0.88, 0.9, 0, 1.25],
+  [0.94, -2.4, -3, 0.8],
 ];
 
-/** Coins either side of the pricing cards, rising and fading with that section. */
-function Coins({ reduced }: { reduced: boolean }) {
-  const colors = useThreeColors();
+/** The site's content column (container-site at max width, less its padding). */
+const CONTENT_W = 1152;
+/** Props need this much margin either side of the content, in CSS px, or they'd sit behind copy. */
+const MIN_MARGIN = 96;
+/** The section layer's depth; slot z is added to it. */
+const LAYER_Z = -3;
+const CAMERA_Z = 10;
+const HALF_FOV = THREE.MathUtils.degToRad(25);
+
+/**
+ * How a section's props move: `turn` swings each one a half-turn and back,
+ * `tumble` rolls it slowly over, `sway` rocks it gently.
+ */
+type Motion = 'turn' | 'tumble' | 'sway';
+
+type SectionSpec = { id: string; Prop: () => React.ReactNode; motion: Motion; size: number; seed: number };
+
+/** One motif per section, about what that section covers. */
+const SECTIONS: SectionSpec[] = [
+  { id: 'about', Prop: Bars, motion: 'sway', size: 0.85, seed: 3 },
+  { id: 'how-it-works', Prop: Sheet, motion: 'sway', size: 1, seed: 7 },
+  { id: 'features', Prop: Shield, motion: 'turn', size: 0.95, seed: 11 },
+  { id: 'all-in-one', Prop: StockBox, motion: 'tumble', size: 0.9, seed: 5 },
+  { id: 'pricing', Prop: Coin, motion: 'turn', size: 1, seed: 0 },
+  { id: 'faq', Prop: Bubble, motion: 'sway', size: 0.85, seed: 13 },
+  { id: 'testimonials', Prop: Star, motion: 'turn', size: 0.95, seed: 17 },
+];
+
+/** The slots on this section's side, nudged up or down by its seed so sections don't line up. */
+function slotsFor(id: string, seed: number) {
+  const side = propSideFor(id);
+  let s = seed * 9301 + 49297;
+  const rand = () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280 - 0.5;
+  };
+  return SLOTS.map(([out, y, z, scale]) => ({ side, out, y: y + rand() * 1.2, z, scale }));
+}
+
+/** A section's props in its free margin, rising and fading as it scrolls through. */
+function SectionProps({ spec, reduced }: { spec: SectionSpec; reduced: boolean }) {
   const group = useRef<THREE.Group>(null);
   const section = useRef<Element | null>(null);
+  const slots = useMemo(() => slotsFor(spec.id, spec.seed), [spec.id, spec.seed]);
+  const { Prop, motion, size } = spec;
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, size: view }) => {
     const g = group.current;
     if (!g) return;
-    section.current ??= document.getElementById('pricing');
+    section.current ??= document.getElementById(spec.id);
     const p = progressOf(section.current);
-    // Present while the cards fill the screen, gone by the sections either side.
+    // Present while the section fills the screen, gone by the sections either side.
     const presence = THREE.MathUtils.smoothstep(p, 0.12, 0.35) * (1 - THREE.MathUtils.smoothstep(p, 0.65, 0.85));
-    g.visible = presence > 0.01;
+    const roomy = (view.width - CONTENT_W) / 2 >= MIN_MARGIN;
+    g.visible = roomy && presence > 0.01;
+    if (!g.visible) return;
     g.position.y = (0.5 - p) * 6;
+    const aspect = view.width / view.height;
     const t = reduced ? 0 : clock.elapsedTime;
-    g.children.forEach((coin, i) => {
-      coin.scale.setScalar(presence);
-      // A slow half-turn either way shows off the rim, then back to face front.
-      coin.rotation.set(0.15, Math.sin(t * 0.6 + i * 1.3) * 1.1, 0);
-      coin.position.y = COINS[i][1] + Math.sin(t * 0.7 + i) * 0.25;
+    g.children.forEach((prop, i) => {
+      const slot = slots[i];
+      const halfW = (CAMERA_Z - (LAYER_Z + slot.z)) * Math.tan(HALF_FOV) * aspect;
+      prop.position.set(slot.side * slot.out * halfW, slot.y + Math.sin(t * 0.7 + i) * 0.25, slot.z);
+      prop.scale.setScalar(presence * size * slot.scale);
+      if (motion === 'turn') prop.rotation.set(0.15, Math.sin(t * 0.6 + i * 1.3) * 1.1, 0);
+      else if (motion === 'tumble') prop.rotation.set(0.5 + t * 0.25 + i, 0.6 + t * 0.35 + i * 0.7, 0);
+      else prop.rotation.set(0.1, Math.sin(t * 0.5 + i * 1.1) * 0.5, Math.sin(t * 0.4 + i) * 0.15);
     });
   });
 
   return (
-    <group ref={group} position={[0, 0, -3]}>
-      {COINS.map(([x, y, z], i) => (
-        <group key={i} position={[x, y, z]}>
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.42, 0.42, 0.08, 48]} />
-            <meshStandardMaterial color={colors.deep} metalness={0.85} roughness={0.3} emissive={colors.primary} emissiveIntensity={0.15} />
-          </mesh>
-          <mesh>
-            <torusGeometry args={[0.42, 0.035, 12, 48]} />
-            <meshStandardMaterial color={colors.primary} emissive={colors.primary} emissiveIntensity={0.5} />
-          </mesh>
-          <mesh position={[0, 0, 0.045]}>
-            <ringGeometry args={[0.24, 0.27, 40]} />
-            <meshBasicMaterial color={colors.soft} transparent opacity={0.45} toneMapped={false} />
-          </mesh>
+    <group ref={group} position={[0, 0, LAYER_Z]} visible={false}>
+      {slots.map((_, i) => (
+        <group key={i}>
+          <Prop />
         </group>
       ))}
     </group>
@@ -206,7 +249,9 @@ export default function BackgroundScene() {
         <directionalLight position={[4, 6, 6]} intensity={1.6} />
         <Glows reduced={reduced} />
         <Particles reduced={reduced} />
-        <Coins reduced={reduced} />
+        {SECTIONS.map((spec) => (
+          <SectionProps key={spec.id} spec={spec} reduced={reduced} />
+        ))}
       </Canvas>
     </div>
   );

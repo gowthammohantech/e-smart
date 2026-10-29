@@ -2,7 +2,7 @@ import { Bot, ShieldCheck } from 'lucide-react';
 
 import { bento } from '@/content/site';
 
-import { FakeQr } from './mockups/Screens';
+import { FakeQr, ScreenImage } from './mockups/Screens';
 import { Card } from './ui/Card';
 import { Icon } from './ui/Icon';
 import { Reveal } from './ui/Reveal';
@@ -114,12 +114,16 @@ export function Bento() {
         <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {bento.small.map((card, i) => (
             <Reveal key={card.title} index={i} className="h-full">
-              <Card as="article" className="h-full">
+              <Card as="article" className="flex h-full flex-col overflow-hidden !pb-0">
                 <span className="grid size-9 place-items-center rounded-btn bg-deep-2 text-white">
                   <Icon name={card.icon} />
                 </span>
                 <h3 className="mt-4 text-lg tracking-[-0.01em] text-fg">{card.title}</h3>
                 <p className="mt-2 text-sm text-muted">{card.body}</p>
+                {/* The top of the real screen, rising out of the card's bottom edge. */}
+                <div className="mx-auto mt-6 h-44 w-[86%] overflow-hidden rounded-t-[22px] border-x-[6px] border-t-[6px] border-bezel">
+                  <ScreenImage name={card.shot} className="w-full" />
+                </div>
               </Card>
             </Reveal>
           ))}

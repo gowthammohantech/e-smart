@@ -23,7 +23,7 @@ export function Faq() {
             const panel = `${base}-panel-${i}`;
             return (
               <Reveal as="li" key={item.q} index={i}>
-                <div className={`rounded-xl border bg-surface transition-colors ${isOpen ? 'border-line-strong' : 'border-line'}`}>
+                <div className={`card-glass relative rounded-xl ${isOpen ? 'card-glass-strong' : ''}`}>
                   <button
                     type="button"
                     aria-expanded={isOpen}

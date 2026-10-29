@@ -23,7 +23,7 @@ export const nav = {
     { label: 'Pricing', href: '#pricing' },
     { label: 'FAQ', href: '#faq' },
   ],
-  cta: { label: 'Get started', href: '#early-access' },
+  cta: { label: 'Get started', href: '#pricing' },
 };
 
 export const hero = {
@@ -112,21 +112,25 @@ export const bento = {
   small: [
     {
       icon: 'file',
+      shot: 'invoice',
       title: 'Sales documents',
       body: 'Quotations, sales orders, delivery notes, tax invoices and returns — each converts into the next. Discounts, charges, round-off and foreign currency.',
     },
     {
       icon: 'boxes',
+      shot: 'inventory',
       title: 'Purchases and stock',
       body: 'Purchase orders, goods receipts, bills and returns. Stock by branch, transfers, reorder levels, low-stock alerts and barcode lookup.',
     },
     {
       icon: 'wallet',
+      shot: 'receivables',
       title: 'Money in, money out',
       body: 'Split one payment across invoices, keep advances, see FX gain or loss, and track receivables and payables in five aging buckets.',
     },
     {
       icon: 'chart',
+      shot: 'report',
       title: 'Nine live reports',
       body: 'Sales, purchases, expenses, receivables, payables, stock, tax, payments and profit — filter by date, branch, party or currency, export to CSV.',
     },
@@ -236,33 +240,25 @@ export const testimonials = {
     {
       quote: 'We raise forty invoices a day. The IRN and e-way bill come out with the invoice, so the truck leaves on time.',
       name: 'Ramesh K.',
+      avatar: 5,
       role: 'Wholesale distributor, Coimbatore',
       placeholder: true,
     },
     {
       quote: 'My counter staff bill in Tamil and the customer gets a clean bilingual invoice. Nobody needed training.',
       name: 'Lakshmi S.',
+      avatar: 6,
       role: 'Retail store owner, Madurai',
       placeholder: true,
     },
     {
       quote: 'Clients send me Tally XML at month end instead of a bag of bills. GSTR-1 takes an afternoon, not a week.',
       name: 'Arjun P.',
+      avatar: 7,
       role: 'Chartered accountant, Pune',
       placeholder: true,
     },
   ],
-};
-
-export const earlyAccess = {
-  eyebrow: 'News and updates',
-  title: 'Get early access',
-  body: 'Be first in line when we open the doors in your state, and hear about new features as they ship.',
-  placeholder: 'Enter your work email',
-  button: 'Join the list',
-  thanks: "Thanks — you're on the list.",
-  note: 'We email about launches only. Read our',
-  terms: { label: 'Terms', href: '#' },
 };
 
 export const footer = {

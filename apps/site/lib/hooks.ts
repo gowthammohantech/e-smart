@@ -2,15 +2,20 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { DEFAULT_PALETTE, PALETTES, readPalette, subscribePalette, type PaletteKey } from './palette';
+import { DEFAULT_THEME, readTheme, subscribeTheme, THEMES, type ThemeKey } from './theme';
 
-export function usePaletteKey(): PaletteKey {
-  return useSyncExternalStore(subscribePalette, readPalette, () => DEFAULT_PALETTE);
+export function useThemeKey(): ThemeKey {
+  return useSyncExternalStore(subscribeTheme, readTheme, () => DEFAULT_THEME);
 }
 
-/** The active palette's solid colours, for three.js materials. */
+/** The active theme's settings for three.js materials. */
+export function useThreeTheme() {
+  return THEMES[useThemeKey()];
+}
+
+/** The active theme's solid colours, for three.js materials. */
 export function useThreeColors() {
-  return PALETTES[usePaletteKey()].three;
+  return useThreeTheme().three;
 }
 
 const reducedQuery = '(prefers-reduced-motion: reduce)';

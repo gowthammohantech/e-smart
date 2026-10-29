@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { nav } from '@/content/site';
 
+import { ThemeToggle } from './ThemeToggle';
 import { BrandMark } from './ui/BrandMark';
 import { Button } from './ui/Button';
 
@@ -39,21 +40,25 @@ export function Navbar() {
             </li>
           ))}
         </ul>
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-3 md:flex">
+          <ThemeToggle />
           <Button href={nav.cta.href} variant="outline">
             {nav.cta.label}
           </Button>
         </div>
-        <button
-          type="button"
-          className="grid size-10 place-items-center rounded-btn bg-white text-bg md:hidden"
-          aria-expanded={open}
-          aria-controls="mobile-menu"
-          aria-label={open ? 'Close menu' : 'Open menu'}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            className="grid size-10 place-items-center rounded-btn bg-fg text-bg"
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
       </nav>
       <AnimatePresence>
         {open ? (
@@ -67,7 +72,11 @@ export function Navbar() {
             <ul className="container-site flex flex-col gap-1 pb-6">
               {nav.links.map((link) => (
                 <li key={link.href}>
-                  <a href={link.href} onClick={() => setOpen(false)} className="block rounded-btn px-2 py-3 text-fg/90 hover:bg-primary-tint">
+                  <a
+                    href={link.href}
+                    onClick={() => setOpen(false)}
+                    className="block rounded-btn px-2 py-3 text-fg/90 hover:bg-primary-tint"
+                  >
                     {link.label}
                   </a>
                 </li>

@@ -19,7 +19,8 @@ export function Footer() {
               </li>
             ))}
           </ul>
-          <img src="/brand/elixir-books-dark.png" alt="Elixir Books" width={784} height={378} className="h-14 w-auto" />
+          <img src="/brand/elixir-books.png" alt="Elixir Books" width={784} height={378} className="h-14 w-auto dark:hidden" />
+          <img src="/brand/elixir-books-dark.png" alt="Elixir Books" width={784} height={378} className="hidden h-14 w-auto dark:block" />
           <ul className="flex flex-wrap justify-center gap-2 lg:w-1/3 lg:justify-end" aria-label="Payment methods">
             {footer.payments.map((p) => (
               <li key={p} className="rounded-md border border-line bg-bg px-2.5 py-1 text-[11px] font-semibold text-muted">

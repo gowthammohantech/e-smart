@@ -2,11 +2,11 @@
 
 import { Play, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { howItWorks } from '@/content/site';
 
-import { DesktopScreen } from './mockups/Desktop';
+import { ScreenImage } from './mockups/Screens';
 import { Card } from './ui/Card';
 import { Reveal } from './ui/Reveal';
 import { SectionHeading } from './ui/SectionHeading';
@@ -57,39 +57,23 @@ function VideoModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Scales the 1120px desktop mockup to whatever width its frame has. */
-function ScaledDesktop() {
-  const box = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / 1120));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return (
-    <div ref={box} className="pointer-events-none absolute inset-0" aria-hidden>
-      <div className="origin-top-left" style={{ width: 1120, transform: `scale(${scale})` }}>
-        <DesktopScreen />
-      </div>
-    </div>
-  );
-}
-
 export function HowItWorks() {
   const [open, setOpen] = useState(false);
   return (
     <section id="how-it-works" className="section-y">
       <div className="container-site">
         <SectionHeading eyebrow={howItWorks.eyebrow} title={howItWorks.title} />
-        <Reveal className="relative mt-12 aspect-[16/9] overflow-hidden rounded-media border border-line bg-surface">
-          <ScaledDesktop />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bg/70 via-transparent to-transparent" />
+        <Reveal className="card-glass relative mt-12 aspect-[16/9] overflow-hidden rounded-media">
+          {/* The web app at 1440px, from the same captures as the phone screens. */}
+          <ScreenImage
+            name="desktop-invoices"
+            alt="The web app's invoice list, with the sidebar, status filters and balances due"
+            className="pointer-events-none absolute inset-0 size-full object-cover object-top"
+          />
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="group absolute bottom-4 left-4 flex items-center gap-3 text-sm font-medium text-white sm:bottom-6 sm:left-6"
+            className="group absolute bottom-4 left-4 flex items-center gap-3 rounded-card bg-black/70 p-1.5 pr-4 text-sm font-medium text-white backdrop-blur-md sm:bottom-6 sm:left-6"
           >
             <span className="grid size-12 place-items-center rounded-btn bg-white text-primary transition-transform group-hover:scale-105">
               <Play className="size-5 fill-current" />

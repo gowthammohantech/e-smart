@@ -1,10 +1,10 @@
 type Props = React.HTMLAttributes<HTMLDivElement> & { as?: 'div' | 'article' };
 
-/** The bordered surface every card sits on; the border brightens on hover. */
+/** The glass surface every card sits on (see the card-glass utility). */
 export function Card({ as: Tag = 'div', className = '', ...rest }: Props) {
   return (
     <Tag
-      className={`rounded-card border border-line bg-surface p-6 transition-colors duration-300 hover:border-line-strong lg:p-7 ${className}`}
+      className={`card-glass relative rounded-card p-6 lg:p-7 ${className}`}
       {...rest}
     />
   );

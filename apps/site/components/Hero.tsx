@@ -8,11 +8,11 @@ import { useWebGL } from '@/lib/hooks';
 
 import { PhoneFrame } from './mockups/Screens';
 import { Reveal } from './ui/Reveal';
+import { Avatar } from './ui/Avatar';
 import { StoreBadge } from './ui/StoreBadge';
 
 const HeroPhone = dynamic(() => import('./three/HeroPhone'), { ssr: false });
 
-const avatarTints = ['#F0B429', '#34C88A', '#FF6B6B'];
 const chipTone = { good: 'bg-good', warn: 'bg-warn', primary: 'bg-primary' } as const;
 
 function Chips() {
@@ -22,7 +22,7 @@ function Chips() {
       {hero.chips.map((chip, i) => (
         <div
           key={chip.title}
-          className={`animate-float absolute z-30 hidden rounded-xl border border-line bg-surface/85 px-3 py-2 backdrop-blur-md sm:block ${spots[i]}`}
+          className={`animate-float card-glass absolute z-30 hidden rounded-xl px-3 py-2 sm:block ${spots[i]}`}
           style={{ animationDelay: `${i * -2}s` }}
         >
           <div className="flex items-center gap-2 text-xs font-medium text-fg">
@@ -45,9 +45,9 @@ export function Hero() {
       <div className="container-site grid items-start gap-10 lg:grid-cols-[1.15fr_1fr_1.15fr] lg:gap-6">
         <Reveal className="text-center lg:pt-10 lg:text-left">
           <span className="inline-flex items-center gap-2.5 rounded-full border border-line bg-primary-tint py-1 pr-3 pl-1 text-xs text-fg">
-            <span className="flex -space-x-1.5">
-              {avatarTints.map((c) => (
-                <span key={c} className="size-5 rounded-full border-2 border-bg" style={{ background: c }} />
+            <span className="flex -space-x-2">
+              {[1, 2, 3, 4].map((seed) => (
+                <Avatar key={seed} seed={seed} size={22} className="ring-2 ring-bg" />
               ))}
             </span>
             {hero.reviews.label}

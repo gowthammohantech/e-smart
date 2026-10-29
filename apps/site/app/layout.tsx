@@ -3,7 +3,7 @@ import { Inter, Instrument_Sans } from 'next/font/google';
 import { MotionConfig } from 'motion/react';
 
 import { brand } from '@/content/site';
-import { DEFAULT_PALETTE, paletteBootScript, paletteCss } from '@/lib/palette';
+import { DEFAULT_THEME, themeBootScript, themeCss } from '@/lib/theme';
 
 import './globals.css';
 
@@ -19,20 +19,24 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#05070B',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#05070B' },
+    { media: '(prefers-color-scheme: light)', color: '#F4F6FA' },
+  ],
   width: 'device-width',
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // The boot script may change data-palette before hydration.
-    <html lang="en" data-palette={DEFAULT_PALETTE} className={`${inter.variable} ${instrument.variable}`} suppressHydrationWarning>
+    // The boot script may change data-theme before hydration.
+    <html lang="en" data-theme={DEFAULT_THEME} className={`${inter.variable} ${instrument.variable}`} suppressHydrationWarning>
       <head>
-        <style dangerouslySetInnerHTML={{ __html: paletteCss() }} />
-        <script dangerouslySetInnerHTML={{ __html: paletteBootScript }} />
+        <style dangerouslySetInnerHTML={{ __html: themeCss() }} />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body>
+      {/* Browser extensions (e.g. Testim) add attributes to <body> before React loads. */}
+      <body suppressHydrationWarning>
         <MotionConfig reducedMotion="user">{children}</MotionConfig>
       </body>
     </html>

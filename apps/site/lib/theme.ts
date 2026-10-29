@@ -1,127 +1,151 @@
 import { palettes } from '@esmart/ui/theme/tokens';
 
 /**
- * The two looks the site can wear. "app" is the product's own dark palette
- * (packages/ui tokens), so the page matches what people install; "indigo" is
- * the reference design's palette. Both feed the CSS variables and the
- * three.js scenes from this one table, so a switch recolours everything.
+ * The site's two themes, both in the product's App-blue palette (packages/ui
+ * tokens), so the page matches the app people install. Both feed the CSS
+ * variables and the three.js scenes from this one table, so a switch
+ * recolours everything.
  */
-export type PaletteKey = 'app' | 'indigo';
+export type ThemeKey = 'dark' | 'light';
 
-export const PALETTE_KEYS: PaletteKey[] = ['app', 'indigo'];
-export const DEFAULT_PALETTE: PaletteKey = 'app';
-export const PALETTE_STORAGE_KEY = 'esmart-site-palette';
+export const THEME_KEYS: ThemeKey[] = ['dark', 'light'];
+export const DEFAULT_THEME: ThemeKey = 'dark';
+export const THEME_STORAGE_KEY = 'esmart-site-theme';
 
-type Palette = {
-  label: string;
+type Theme = {
   /** CSS custom properties, without the leading `--`. */
   css: Record<string, string>;
   /** Solid hex colours for three.js materials, which ignore alpha in CSS strings. */
-  three: { primary: string; soft: string; glowA: string; glowB: string; deep: string; body: string };
+  three: { primary: string; soft: string; glowA: string; glowB: string; deep: string; frame: string; particles: string; propBody: string; paper: string };
+  /** Light backgrounds swallow additive light, so glows switch to normal blending there. */
+  additiveGlow: boolean;
 };
 
-const app = palettes.dark;
+const dark = palettes.dark;
+const light = palettes.light;
 
-export const PALETTES: Record<PaletteKey, Palette> = {
-  app: {
-    label: 'App blue',
+export const THEMES: Record<ThemeKey, Theme> = {
+  dark: {
     css: {
-      bg: app.canvas,
-      surface: app.card2,
-      'surface-2': app.paper,
+      bg: dark.canvas,
+      surface: dark.card2,
+      'surface-2': dark.paper,
       'surface-footer': '#0A0D13',
       line: 'rgba(0,122,255,0.18)',
       'line-strong': 'rgba(0,122,255,0.45)',
-      primary: app.primary,
-      'primary-pressed': app.primaryPressed,
+      primary: dark.primary,
+      'primary-pressed': dark.primaryPressed,
       'primary-soft': '#9CCBFF',
       'primary-tint': 'rgba(0,122,255,0.10)',
       deep: '#06265A',
       'deep-2': '#0A3D8F',
       'glow-a': 'rgba(10,61,143,0.55)',
       'glow-b': 'rgba(12,120,150,0.28)',
-      text: app.text,
-      'text-muted': app.muted,
+      text: dark.text,
+      'text-muted': dark.muted,
       'text-dim': '#566074',
-      star: app.good,
-      good: app.good,
-      warn: app.warn,
-      bad: app.bad,
+      star: dark.good,
+      good: dark.good,
+      warn: dark.warn,
+      bad: dark.bad,
       'card-art-from': '#4DA3FF',
       'card-art-to': '#0A3D8F',
+      bezel: '#101216',
+      glass: 'rgba(21,26,36,0.72)',
+      'edge-a': 'rgba(77,163,255,0.55)',
+      'edge-b': 'rgba(77,163,255,0.08)',
+      'edge-c': 'rgba(0,122,255,0.30)',
+      'edge-hover': 'rgba(120,186,255,0.95)',
+      spot: 'rgba(0,122,255,0.16)',
+      'card-glow': 'rgba(0,122,255,0.22)',
+      'frame-a': '#5B6068',
+      'frame-b': '#202328',
+      'frame-c': '#3A3E45',
     },
-    three: { primary: app.primary, soft: '#9CCBFF', glowA: '#0A3D8F', glowB: '#0C7896', deep: '#06265A', body: '#0B0F16' },
+    three: { primary: dark.primary, soft: '#9CCBFF', glowA: '#0A3D8F', glowB: '#0C7896', deep: '#06265A', frame: '#7A7F88', particles: '#9CCBFF', propBody: '#06265A', paper: '#1D2331' },
+    additiveGlow: true,
   },
-  indigo: {
-    label: 'Indigo',
+  light: {
     css: {
-      bg: '#090909',
-      surface: '#111015',
-      'surface-2': '#161419',
-      'surface-footer': '#131313',
-      line: 'rgba(120,123,255,0.18)',
-      'line-strong': 'rgba(119,123,255,0.45)',
-      primary: '#777BFF',
-      'primary-pressed': '#5A5FD9',
-      'primary-soft': '#AAB1FF',
-      'primary-tint': 'rgba(119,123,255,0.08)',
-      deep: '#0C2174',
-      'deep-2': '#1A2FA0',
-      'glow-a': 'rgba(59,31,107,0.6)',
-      'glow-b': 'rgba(90,30,62,0.32)',
-      text: '#FFFFFF',
-      'text-muted': '#A3A3AD',
-      'text-dim': '#6B6B75',
-      star: '#00B67A',
-      good: '#34C88A',
-      warn: '#F0B429',
-      bad: '#FF6B6B',
-      'card-art-from': '#7A7DFF',
-      'card-art-to': '#2B3BB8',
+      bg: light.bg,
+      surface: light.card,
+      'surface-2': light.card,
+      'surface-footer': light.card2,
+      line: light.line,
+      'line-strong': 'rgba(0,122,255,0.40)',
+      primary: light.primary,
+      'primary-pressed': light.primaryPressed,
+      'primary-soft': '#CFE5FF',
+      'primary-tint': light.chip,
+      deep: '#0A3D8F',
+      'deep-2': '#1B5BC4',
+      'glow-a': 'rgba(0,122,255,0.14)',
+      'glow-b': 'rgba(77,163,255,0.12)',
+      text: light.text,
+      'text-muted': light.muted,
+      'text-dim': '#8A93A6',
+      star: '#12A06B',
+      good: light.good,
+      warn: light.warn,
+      bad: light.bad,
+      'card-art-from': '#4DA3FF',
+      'card-art-to': '#0A3D8F',
+      bezel: '#1A1D23',
+      glass: 'rgba(255,255,255,0.72)',
+      'edge-a': 'rgba(0,122,255,0.35)',
+      'edge-b': 'rgba(14,18,26,0.06)',
+      'edge-c': 'rgba(0,122,255,0.18)',
+      'edge-hover': 'rgba(0,122,255,0.75)',
+      spot: 'rgba(0,122,255,0.08)',
+      'card-glow': 'rgba(0,122,255,0.14)',
+      'frame-a': '#D9D4CC',
+      'frame-b': '#8E8A84',
+      'frame-c': '#BDB8B0',
     },
-    three: { primary: '#777BFF', soft: '#AAB1FF', glowA: '#3B1F6B', glowB: '#5A1E3E', deep: '#0C2174', body: '#0E0D12' },
+    three: { primary: light.primary, soft: '#4DA3FF', glowA: '#9CCBFF', glowB: '#BFDDFF', deep: '#0A3D8F', frame: '#CFC8BC', particles: '#4D7FD1', propBody: '#7DB8FF', paper: '#FFFFFF' },
+    additiveGlow: false,
   },
 };
 
-export function isPaletteKey(value: unknown): value is PaletteKey {
-  return typeof value === 'string' && (PALETTE_KEYS as string[]).includes(value);
+export function isThemeKey(value: unknown): value is ThemeKey {
+  return typeof value === 'string' && (THEME_KEYS as string[]).includes(value);
 }
 
-/** The stylesheet for every palette, keyed by `data-palette` on <html>. */
-export function paletteCss(): string {
-  return PALETTE_KEYS.map((key) => {
-    const vars = Object.entries(PALETTES[key].css)
+/** The stylesheet for both themes, keyed by `data-theme` on <html>. */
+export function themeCss(): string {
+  return THEME_KEYS.map((key) => {
+    const vars = Object.entries(THEMES[key].css)
       .map(([name, value]) => `--${name}:${value};`)
       .join('');
-    return `[data-palette="${key}"]{${vars}}`;
+    return `[data-theme="${key}"]{${vars}color-scheme:${key};}`;
   }).join('\n');
 }
 
 /**
- * Runs in <head> before first paint: a `?palette=` link wins, then the
- * visitor's last choice, then the default. Storage can throw (private mode),
- * so every access is guarded.
+ * Runs in <head> before first paint: a `?theme=` link wins, then the
+ * visitor's last choice, then their system setting. Storage can throw
+ * (private mode), so every access is guarded.
  */
-export const paletteBootScript = `(function(){try{var k=${JSON.stringify(PALETTE_KEYS)};var q=new URLSearchParams(location.search).get('palette');var s=null;try{s=localStorage.getItem('${PALETTE_STORAGE_KEY}')}catch(e){}var p=k.indexOf(q)>-1?q:k.indexOf(s)>-1?s:'${DEFAULT_PALETTE}';document.documentElement.dataset.palette=p}catch(e){}})();`;
+export const themeBootScript = `(function(){try{var k=${JSON.stringify(THEME_KEYS)};var q=new URLSearchParams(location.search).get('theme');var s=null;try{s=localStorage.getItem('${THEME_STORAGE_KEY}')}catch(e){}var sys=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';var t=k.indexOf(q)>-1?q:k.indexOf(s)>-1?s:sys;document.documentElement.dataset.theme=t}catch(e){}})();`;
 
-export function readPalette(): PaletteKey {
-  if (typeof document === 'undefined') return DEFAULT_PALETTE;
-  const value = document.documentElement.dataset.palette;
-  return isPaletteKey(value) ? value : DEFAULT_PALETTE;
+export function readTheme(): ThemeKey {
+  if (typeof document === 'undefined') return DEFAULT_THEME;
+  const value = document.documentElement.dataset.theme;
+  return isThemeKey(value) ? value : DEFAULT_THEME;
 }
 
-export function setPalette(key: PaletteKey) {
-  document.documentElement.dataset.palette = key;
+export function setTheme(key: ThemeKey) {
+  document.documentElement.dataset.theme = key;
   try {
-    localStorage.setItem(PALETTE_STORAGE_KEY, key);
+    localStorage.setItem(THEME_STORAGE_KEY, key);
   } catch {
     // Storage blocked: the choice still holds for this visit.
   }
 }
 
-/** Subscribes to changes of `data-palette`, for useSyncExternalStore. */
-export function subscribePalette(onChange: () => void) {
+/** Subscribes to changes of `data-theme`, for useSyncExternalStore. */
+export function subscribeTheme(onChange: () => void) {
   const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-palette'] });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   return () => observer.disconnect();
 }

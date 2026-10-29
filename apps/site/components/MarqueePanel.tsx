@@ -18,7 +18,7 @@ function Row() {
 export function MarqueePanel() {
   return (
     <section className="container-site relative z-10 mt-4 lg:mt-0" aria-label="What Elixir Books Smart covers">
-      <div className="overflow-hidden rounded-media border border-line bg-surface/70 pt-10 pb-10 backdrop-blur-sm lg:pt-[230px]">
+      <div className="card-glass relative overflow-hidden rounded-media pt-10 pb-10 lg:pt-[230px]">
         <div className="mask-fade-x overflow-hidden" aria-hidden>
           <div className="animate-marquee flex w-max">
             <Row />

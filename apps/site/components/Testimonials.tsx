@@ -1,5 +1,6 @@
 import { testimonials } from '@/content/site';
 
+import { Avatar } from './ui/Avatar';
 import { Card } from './ui/Card';
 import { Reveal } from './ui/Reveal';
 import { SectionHeading } from './ui/SectionHeading';
@@ -26,13 +27,6 @@ function Stars() {
   );
 }
 
-const initials = (name: string) =>
-  name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2);
-
 export function Testimonials() {
   return (
     <section id="testimonials" className="section-y">
@@ -46,7 +40,7 @@ export function Testimonials() {
                 <Quote />
                 <blockquote className="mt-5 flex-1 text-fg">{t.quote}</blockquote>
                 <div className="mt-6 flex items-center gap-3">
-                  <span className="grid size-10 place-items-center rounded-full bg-deep-2 text-sm font-semibold text-white">{initials(t.name)}</span>
+                  <Avatar seed={t.avatar} size={40} />
                   <div>
                     <Stars />
                     <p className="mt-1 text-sm font-medium text-fg">{t.name}</p>

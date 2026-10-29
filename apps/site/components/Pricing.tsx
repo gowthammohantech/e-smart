@@ -66,7 +66,7 @@ export function Pricing({ copy }: { copy: Copy }) {
             <span className={`absolute top-1 left-1 size-5 rounded-full bg-white transition-transform ${yearly ? 'translate-x-5' : ''}`} />
           </button>
           <span className={yearly ? 'text-fg' : 'text-muted'}>{copy.yearlyLabel}</span>
-          <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-bg">{copy.badge}</span>
+          <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-deep">{copy.badge}</span>
         </Reveal>
 
         <div className="mt-14 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
@@ -75,9 +75,7 @@ export function Pricing({ copy }: { copy: Copy }) {
             return (
               <Reveal key={plan.key} index={i} className="h-full">
                 <article
-                  className={`relative flex h-full flex-col rounded-card border p-6 transition-colors duration-300 lg:p-7 ${
-                    plan.popular ? 'border-primary bg-surface-2' : 'border-line bg-surface hover:border-line-strong'
-                  }`}
+                  className={`card-glass relative flex h-full flex-col rounded-card p-6 lg:p-7 ${plan.popular ? 'card-glass-strong' : ''}`}
                 >
                   {plan.popular ? (
                     <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold tracking-wider text-white uppercase">
@@ -106,7 +104,7 @@ export function Pricing({ copy }: { copy: Copy }) {
                     )}
                   </p>
                   <hr className="my-6 border-line" />
-                  <Button href="#early-access" variant={plan.popular ? 'filled' : 'outline'} className="w-full">
+                  <Button href="#top" variant={plan.popular ? 'filled' : 'outline'} className="w-full">
                     {price === 0 ? 'Start free' : 'Choose plan'}
                   </Button>
                   <p className="mt-7 text-sm font-medium text-fg">Plan details:</p>

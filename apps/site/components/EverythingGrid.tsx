@@ -9,14 +9,13 @@ export function EverythingGrid() {
     <section className="pb-[72px] lg:pb-[120px]">
       <div className="container-site">
         <SectionHeading eyebrow={everything.eyebrow} title={everything.title} />
-        {/* A 1px gap over the line colour draws the hairlines between cells. */}
-        <ul className="mt-12 grid gap-px overflow-hidden rounded-card border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {everything.items.map((item, i) => (
             <Reveal
               as="li"
               key={item.title}
               index={i % 4}
-              className="flex gap-3 bg-surface p-5 transition-colors hover:bg-surface-2"
+              className="card-glass relative flex h-full gap-3 rounded-card p-5"
             >
               <span className="text-primary">
                 <Icon name={item.icon} className="size-5" />

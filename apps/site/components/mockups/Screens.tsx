@@ -1,47 +1,68 @@
-import { Pill } from './Pill';
-
 /**
- * App screens drawn in HTML, standing in for screenshots. Each one is a
- * 280×594 canvas (the phone's screen) and reads the site's palette, so the
- * mockups recolour with the palette switch. The figures are illustrative.
+ * Real app screens, captured from apps/web against the seeded demo account by
+ * scripts/capture-screens.mjs, in both themes. Each image is a 390×844 phone
+ * screen at 2×; both theme variants are in the page and CSS shows the one
+ * that matches, so a theme switch never waits on JS.
  */
 
-export const SCREEN_W = 280;
-export const SCREEN_H = 594;
+export const SCREENS = ['dashboard', 'invoice', 'compliance', 'eway', 'receivables', 'inventory', 'report', 'lixi'] as const;
+export type ScreenName = (typeof SCREENS)[number];
 
+export const SCREEN_W = 390;
+export const SCREEN_H = 844;
+
+const ALT: Record<ScreenName, string> = {
+  dashboard: 'Home dashboard: sales, collections, expenses and the six-month sales trend',
+  invoice: 'Tax invoice with CGST and SGST totals and its signed e-invoice QR and IRN',
+  compliance: 'GST compliance: e-invoices reported, needing attention and their IRNs',
+  eway: 'E-way bill with its validity countdown and Part-B update',
+  receivables: 'Receivables with five aging buckets and payment reminders',
+  inventory: 'Stock value, low-stock count and item levels',
+  report: 'Sales summary report by month',
+  lixi: 'Lixi, the AI assistant, with suggested questions about the books',
+};
+
+/** Both theme captures of one screen, as a pair of <img>; `className` sizes them. */
+export function ScreenImage({ name, file = name, alt = ALT[name as ScreenName] ?? '', className = '' }: { name: string; file?: string; alt?: string; className?: string }) {
+  return (
+    <>
+      <img src={`/screens/light/${file}.webp`} alt={alt} className={`dark:hidden ${className}`} loading="lazy" decoding="async" />
+      <img src={`/screens/dark/${file}.webp`} alt={alt} className={`hidden dark:block ${className}`} loading="lazy" decoding="async" />
+    </>
+  );
+}
+
+/** Signal, Wi-Fi and battery, as a phone draws them. Sized in em by the frame. */
+export function StatusGlyphs() {
+  return (
+    <span className="flex items-center gap-[0.9em]" aria-hidden>
+      <svg viewBox="0 0 18 12" className="h-[3.3em] w-auto" fill="currentColor">
+        <rect x="0" y="8" width="3" height="4" rx="0.8" />
+        <rect x="5" y="5.5" width="3" height="6.5" rx="0.8" />
+        <rect x="10" y="3" width="3" height="9" rx="0.8" />
+        <rect x="15" y="0" width="3" height="12" rx="0.8" />
+      </svg>
+      <svg viewBox="0 0 16 12" className="h-[3.3em] w-auto" fill="currentColor">
+        <path d="M8 2.2c2.4 0 4.6.9 6.3 2.5l1.2-1.3A10.6 10.6 0 0 0 8 .4C5.2.4 2.5 1.5.5 3.4l1.2 1.3A9 9 0 0 1 8 2.2Zm0 3.6c1.4 0 2.7.5 3.7 1.4l1.2-1.3A7.2 7.2 0 0 0 8 4c-1.8 0-3.6.7-4.9 1.9l1.2 1.3c1-.9 2.3-1.4 3.7-1.4Zm0 3.5c.6 0 1.1.2 1.5.6L8 11.6 6.5 9.9c.4-.4.9-.6 1.5-.6Z" />
+      </svg>
+      <svg viewBox="0 0 27 13" className="h-[3.5em] w-auto">
+        <rect x="0.5" y="0.5" width="23" height="12" rx="3.6" fill="none" stroke="currentColor" opacity="0.4" />
+        <rect x="2.2" y="2.2" width="19.6" height="8.6" rx="2.2" fill="currentColor" />
+        <path d="M25 4.3v4.4c.9-.3 1.5-1.2 1.5-2.2s-.6-1.9-1.5-2.2Z" fill="currentColor" opacity="0.45" />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * The status bar above the capture, in the app's own background colour. Sized
+ * in the frame's em (1% of its width), centred on the Dynamic Island.
+ */
 function StatusBar() {
   return (
-    <div className="flex items-center justify-between px-5 pt-3 pb-2 text-[10px] font-semibold text-fg">
-      <span>9:41</span>
-      <span className="h-4 w-16 rounded-full bg-black" />
-      <span className="flex items-center gap-1">
-        <span className="h-2 w-3 rounded-[2px] bg-fg/80" />
-        <span className="h-2 w-4 rounded-[2px] border border-fg/80" />
-      </span>
-    </div>
-  );
-}
-
-function Screen({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div
-      className={`flex flex-col overflow-hidden bg-bg font-sans text-fg ${className}`}
-      style={{ width: SCREEN_W, height: SCREEN_H }}
-    >
-      <StatusBar />
-      {children}
-    </div>
-  );
-}
-
-function TopBar({ title, sub }: { title: string; sub?: string }) {
-  return (
-    <div className="flex items-center justify-between px-4 pt-1 pb-3">
-      <div>
-        {sub ? <div className="text-[10px] text-muted">{sub}</div> : null}
-        <div className="font-display text-[17px] font-medium">{title}</div>
-      </div>
-      <span className="grid size-7 place-items-center rounded-full bg-primary text-[11px] font-semibold text-white">SR</span>
+    <div className="flex h-[13.6em] items-center justify-between bg-[#F4F6FA] px-[6.5em] text-[#0E121A] dark:bg-[#0E121A] dark:text-white">
+      <span className="text-[4.6em] leading-none font-semibold tracking-tight">9:41</span>
+      <StatusGlyphs />
     </div>
   );
 }
@@ -77,275 +98,63 @@ export function FakeQr({ size = 72, seed = 7 }: { size?: number; seed?: number }
   );
 }
 
-export function InvoiceScreen() {
-  const lines = [
-    { item: 'Cotton yarn 40s', hsn: '5205', qty: '120 kg', amt: '28,800.00' },
-    { item: 'Polyester blend', hsn: '5509', qty: '45 kg', amt: '11,250.00' },
-    { item: 'Freight charges', hsn: '9965', qty: '1', amt: '1,850.00' },
-  ];
-  return (
-    <Screen>
-      <TopBar title="INV/25-26/0148" sub="Tax invoice" />
-      <div className="mx-4 rounded-xl border border-line bg-surface p-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-[10px] text-muted">Billed to</div>
-            <div className="text-[12px] font-medium">Sri Murugan Textiles</div>
-            <div className="text-[9px] text-dim">33AAKCS4821M1Z5 · Tamil Nadu</div>
-          </div>
-          <Pill tone="good">E-invoiced</Pill>
-        </div>
-      </div>
-      <div className="mx-4 mt-3 space-y-2">
-        {lines.map((l) => (
-          <div key={l.item} className="flex items-center justify-between border-b border-line pb-2 text-[11px]">
-            <div>
-              <div className="font-medium">{l.item}</div>
-              <div className="text-[9px] text-dim">
-                HSN {l.hsn} · {l.qty}
-              </div>
-            </div>
-            <div className="tabular-nums">₹{l.amt}</div>
-          </div>
-        ))}
-      </div>
-      <div className="mx-4 mt-3 space-y-1 text-[10px] text-muted">
-        <div className="flex justify-between">
-          <span>Taxable value</span>
-          <span className="tabular-nums">₹41,900.00</span>
-        </div>
-        <div className="flex justify-between">
-          <span>CGST 6%</span>
-          <span className="tabular-nums">₹2,514.00</span>
-        </div>
-        <div className="flex justify-between">
-          <span>SGST 6%</span>
-          <span className="tabular-nums">₹2,514.00</span>
-        </div>
-        <div className="flex justify-between border-t border-line pt-1.5 text-[13px] font-semibold text-fg">
-          <span>Total</span>
-          <span className="tabular-nums">₹46,928.00</span>
-        </div>
-      </div>
-      <div className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-line bg-surface p-3">
-        <FakeQr size={64} />
-        <div className="min-w-0 text-[9px] leading-snug">
-          <div className="text-[10px] font-semibold text-good">IRN generated</div>
-          <div className="truncate text-dim">a5c91f07e2…4be8d2</div>
-          <div className="text-muted">Ack 1325 0047 8821 · 14 Oct</div>
-          <div className="text-muted">Cancel window: 22h 41m</div>
-        </div>
-      </div>
-      <div className="mx-4 mt-auto mb-5 grid grid-cols-2 gap-2 text-[11px] font-medium">
-        <span className="rounded-lg border border-line py-2 text-center">Share PDF</span>
-        <span className="rounded-lg bg-primary py-2 text-center text-white">E-way bill</span>
-      </div>
-    </Screen>
-  );
-}
+/** Side buttons, as fractions of the frame's height: [side, top, length]. */
+const BUTTONS: [side: 'left' | 'right', top: number, length: number][] = [
+  ['left', 0.17, 0.045],
+  ['left', 0.25, 0.075],
+  ['left', 0.345, 0.075],
+  ['right', 0.27, 0.11],
+];
 
-export function DashboardScreen() {
-  const tiles = [
-    { label: 'Sales', value: '₹8.42L', delta: '+12%' },
-    { label: 'Collected', value: '₹6.10L', delta: '+8%' },
-    { label: 'Expenses', value: '₹1.36L', delta: '-3%' },
-    { label: 'Net', value: '₹4.74L', delta: '+15%' },
-    { label: 'E-invoices', value: '182', delta: '' },
-    { label: 'E-way bills', value: '64', delta: '' },
-  ];
-  const bars = [46, 58, 52, 70, 64, 88];
-  return (
-    <Screen>
-      <TopBar title="Good morning" sub="Sri Ranga Traders" />
-      <div className="mx-4 grid grid-cols-3 gap-1.5">
-        {tiles.map((t) => (
-          <div key={t.label} className="rounded-lg border border-line bg-surface p-2">
-            <div className="text-[8px] text-muted">{t.label}</div>
-            <div className="text-[12px] font-semibold tabular-nums">{t.value}</div>
-            {t.delta ? <div className="text-[8px] text-good">{t.delta}</div> : null}
-          </div>
-        ))}
-      </div>
-      <div className="mx-4 mt-3 rounded-xl border border-line bg-surface p-3">
-        <div className="flex justify-between text-[10px]">
-          <span className="font-medium">Sales · 6 months</span>
-          <span className="text-muted">May–Oct</span>
-        </div>
-        <div className="mt-3 flex h-24 items-end gap-2">
-          {bars.map((h, i) => (
-            <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-              <div
-                className="w-full rounded-t-[4px]"
-                style={{
-                  height: `${h}%`,
-                  background:
-                    i === bars.length - 1
-                      ? 'var(--primary)'
-                      : 'linear-gradient(180deg, color-mix(in srgb, var(--primary) 55%, transparent), transparent)',
-                }}
-              />
-              <span className="text-[8px] text-dim">{['M', 'J', 'J', 'A', 'S', 'O'][i]}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="mx-4 mt-3 grid grid-cols-2 gap-1.5">
-        <div className="rounded-lg border border-line bg-surface p-2.5">
-          <div className="text-[9px] text-muted">Owed to you</div>
-          <div className="text-[13px] font-semibold text-good">₹3,28,400</div>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-2.5">
-          <div className="text-[9px] text-muted">You owe</div>
-          <div className="text-[13px] font-semibold text-warn">₹1,12,900</div>
-        </div>
-      </div>
-      <div className="mx-4 mt-3 text-[10px] font-medium">Needs attention</div>
-      <div className="mx-4 mt-1.5 space-y-1.5">
-        {[
-          { t: '4 invoices overdue', p: 'bad' as const, l: '₹62,300' },
-          { t: 'E-way bill expires in 6h', p: 'warn' as const, l: 'EWB 4512' },
-          { t: '3 items low on stock', p: 'primary' as const, l: 'Reorder' },
-        ].map((r) => (
-          <div key={r.t} className="flex items-center justify-between rounded-lg border border-line bg-surface px-2.5 py-2 text-[10px]">
-            <span>{r.t}</span>
-            <Pill tone={r.p}>{r.l}</Pill>
-          </div>
-        ))}
-      </div>
-    </Screen>
-  );
-}
-
-export function AgingScreen() {
-  const buckets = [
-    { label: 'Current', pct: 46, amt: '₹1,51,200' },
-    { label: '1–30 days', pct: 24, amt: '₹78,900' },
-    { label: '31–60 days', pct: 15, amt: '₹49,300' },
-    { label: '61–90 days', pct: 9, amt: '₹29,600' },
-    { label: '90+ days', pct: 6, amt: '₹19,400' },
-  ];
-  return (
-    <Screen>
-      <TopBar title="Receivables" sub="Aging · all branches" />
-      <div className="mx-4 rounded-xl border border-line bg-surface p-3">
-        <div className="text-[10px] text-muted">Total outstanding</div>
-        <div className="font-display text-[24px] font-medium tabular-nums">₹3,28,400</div>
-        <div className="mt-2 flex h-2 overflow-hidden rounded-full">
-          {buckets.map((b, i) => (
-            <span
-              key={b.label}
-              style={{ width: `${b.pct}%`, background: 'var(--primary)', opacity: 1 - i * 0.18 }}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="mx-4 mt-3 space-y-1.5">
-        {buckets.map((b, i) => (
-          <div key={b.label} className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2 text-[11px]">
-            <span className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-primary" style={{ opacity: 1 - i * 0.18 }} />
-              {b.label}
-            </span>
-            <span className="tabular-nums">{b.amt}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mx-4 mt-3 rounded-xl border border-line bg-surface p-3 text-[10px]">
-        <div className="font-medium">Remind 6 customers</div>
-        <div className="mt-1 text-muted">WhatsApp · with payment link</div>
-        <div className="mt-2 rounded-lg bg-primary py-2 text-center text-[11px] font-medium text-white">Send reminders</div>
-      </div>
-    </Screen>
-  );
-}
-
-export function EwayBillScreen() {
-  return (
-    <Screen>
-      <TopBar title="EWB 4512 8837 2201" sub="E-way bill" />
-      <div className="mx-4 rounded-xl border border-line bg-surface p-3">
-        <div className="flex justify-between text-[10px] text-muted">
-          <span>Valid until</span>
-          <Pill tone="warn">1d 18h left</Pill>
-        </div>
-        <div className="mt-1 text-[13px] font-semibold">16 Oct, 11:59 pm</div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
-          <span className="block h-full w-[62%] rounded-full bg-warn" />
-        </div>
-        <div className="mt-1 text-[9px] text-dim">412 km · Coimbatore → Bengaluru</div>
-      </div>
-      <div className="mx-4 mt-3 rounded-xl border border-line bg-surface p-3 text-[10px]">
-        <div className="font-medium">Part-B · vehicle</div>
-        {[
-          ['TN 38 BX 4471', '14 Oct · 6:10 pm'],
-          ['KA 01 AM 9023', '15 Oct · 9:45 am'],
-        ].map(([v, t]) => (
-          <div key={v} className="mt-2 flex justify-between border-t border-line pt-2">
-            <span className="font-medium">{v}</span>
-            <span className="text-muted">{t}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mx-4 mt-3 grid grid-cols-2 gap-2 text-[11px] font-medium">
-        <span className="rounded-lg border border-line py-2 text-center">Update Part-B</span>
-        <span className="rounded-lg bg-primary py-2 text-center text-white">Extend</span>
-      </div>
-    </Screen>
-  );
-}
-
-export function LixiChatScreen() {
-  return (
-    <Screen>
-      <div className="flex items-center gap-2 px-4 pt-1 pb-3">
-        <img src="/brand/lixi-orb.png" alt="" className="size-7" />
-        <div>
-          <div className="text-[13px] font-medium">Lixi</div>
-          <div className="text-[9px] text-muted">Your books assistant</div>
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col gap-2 px-4 text-[11px]">
-        <div className="self-end rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-white">Who owes me for more than 60 days?</div>
-        <div className="max-w-[88%] rounded-2xl rounded-bl-sm border border-line bg-surface px-3 py-2">
-          Three customers, <b>₹49,000</b> in all. Kaveri Agencies is the largest at ₹28,400 (74 days).
-        </div>
-        <div className="max-w-[88%] rounded-2xl rounded-bl-sm border border-line bg-surface p-3">
-          <div className="text-[9px] text-muted">Draft · not sent</div>
-          <div className="mt-1 font-medium">WhatsApp reminder to 3 customers</div>
-          <div className="mt-2 flex gap-2 text-[10px]">
-            <span className="rounded-md bg-primary px-2 py-1 text-white">Review & send</span>
-            <span className="rounded-md border border-line px-2 py-1">Edit</span>
-          </div>
-        </div>
-      </div>
-      <div className="mx-4 mb-5 rounded-full border border-line bg-surface px-4 py-2.5 text-[11px] text-dim">Ask about your books…</div>
-    </Screen>
-  );
-}
-
-const SCREENS = {
-  invoice: InvoiceScreen,
-  dashboard: DashboardScreen,
-  aging: AgingScreen,
-  eway: EwayBillScreen,
-  lixi: LixiChatScreen,
-};
-
-export type ScreenName = keyof typeof SCREENS;
-
-/** A phone bezel around one screen, scaled to `width` px. */
+/**
+ * A real-looking phone around one screen, `width` px wide: a titanium rim
+ * with side buttons, a black glass bezel, the Dynamic Island, and a glare
+ * across the glass. Everything is sized in em off the width, so it scales.
+ */
 export function PhoneFrame({ screen, width = 240, className = '' }: { screen: ScreenName; width?: number; className?: string }) {
-  const Body = SCREENS[screen];
-  const pad = 8;
-  const scale = (width - pad * 2) / SCREEN_W;
   return (
-    <div
-      className={`relative rounded-[38px] border border-white/10 bg-[#101216] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)] ${className}`}
-      style={{ width, height: SCREEN_H * scale + pad * 2, padding: pad }}
-    >
-      <div className="overflow-hidden rounded-[30px]" style={{ width: SCREEN_W * scale, height: SCREEN_H * scale }}>
-        <div style={{ transform: `scale(${scale})`, transformOrigin: '0 0' }}>
-          <Body />
+    <div className={`relative ${className}`} style={{ width, fontSize: width / 100 }}>
+      {BUTTONS.map(([side, top, length]) => (
+        <span
+          key={`${side}-${top}`}
+          aria-hidden
+          className="absolute w-[1.1em] rounded-[0.6em]"
+          style={{
+            [side]: '-0.8em',
+            top: `${top * 100}%`,
+            height: `${length * 100}%`,
+            background: 'linear-gradient(90deg, var(--frame-b), var(--frame-a) 50%, var(--frame-b))',
+          }}
+        />
+      ))}
+      <div
+        className="rounded-[17em] p-[1.4em]"
+        style={{
+          background: 'linear-gradient(135deg, var(--frame-a), var(--frame-b) 28%, var(--frame-c) 52%, var(--frame-b) 78%, var(--frame-a))',
+          boxShadow:
+            'inset 0 0 0 0.25em rgba(255,255,255,0.18), 0 0.5em 1em -0.3em rgba(0,0,0,0.35), 0 3em 6em -2.5em rgba(0,0,0,0.55)',
+        }}
+      >
+        <div className="rounded-[15.6em] bg-[#050506] p-[2.6em]">
+          <div className="relative overflow-hidden rounded-[13em]">
+            <StatusBar />
+            <div style={{ aspectRatio: `${SCREEN_W} / ${SCREEN_H}` }}>
+              <ScreenImage name={screen} className="size-full object-cover object-top" />
+            </div>
+            {/* Dynamic Island, with the front camera lens. */}
+            <span className="absolute top-[2.6em] left-1/2 flex h-[8em] w-[25em] -translate-x-1/2 items-center justify-end rounded-full bg-black pr-[2.4em]">
+              <span className="size-[3em] rounded-full bg-[radial-gradient(circle_at_35%_35%,#3B4A6B,#0B0D14_60%)]" />
+            </span>
+            {/* Glass: a diagonal glare and a faint inner edge. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 rounded-[13em]"
+              style={{
+                background: 'linear-gradient(115deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 22%, transparent 40%)',
+                boxShadow: 'inset 0 0 0 0.2em rgba(255,255,255,0.05)',
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
