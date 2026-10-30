@@ -58,7 +58,7 @@ export default function SignIn() {
   };
 
   return (
-    <AuthShell title={tr('auth:signIn.title')} subtitle={tr('auth:signIn.subtitle')}>
+    <AuthShell title={tr('auth:signIn.title')} subtitle={tr('auth:signIn.subtitle')} locked={busy}>
       <Segmented
         options={[
           { value: 'email', label: tr('auth:signIn.tabEmail') },
