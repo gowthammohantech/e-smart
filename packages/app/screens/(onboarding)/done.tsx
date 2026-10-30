@@ -49,7 +49,8 @@ export default function Done() {
       legalName: draft.legalName || undefined,
       logoUri: draft.logoUri,
       businessType: draft.businessType,
-      plan: draft.plan,
+      // Free only for now, whatever an older saved draft says.
+      plan: 'free',
       country: draft.country,
       baseCurrency: draft.baseCurrency,
       address: draft.address,

@@ -59,7 +59,8 @@ const initial: OnboardingDraft = {
   legalName: '',
   // A slug from BUSINESS_TYPES; labels live in `onboarding:businessType.*`.
   businessType: 'retail',
-  plan: 'basic',
+  // Sign-up is free only for now; the paid plans can't be bought yet.
+  plan: 'free',
   address: emptyAddress,
   email: '',
   phoneDialCode: DEFAULT_DIAL_CODE,

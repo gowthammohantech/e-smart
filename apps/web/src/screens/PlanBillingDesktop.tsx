@@ -4,7 +4,6 @@ import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -15,7 +14,6 @@ import { useActiveCompany, useDocuments } from '@esmart/app/store/selectors';
 import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '@esmart/app/features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
-import type { PlanTier } from '@esmart/core/types';
 
 type Cycle = 'monthly' | 'yearly';
 
@@ -32,22 +30,9 @@ export function PlanBillingDesktop() {
   const companies = useAppStore((s) => s.companies);
   const invoices = useDocuments('invoice');
   const company = useActiveCompany();
-  const setPlan = useAppStore((s) => s.setPlan);
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
   const seatLimit = userLimit(currentPlan);
-
-  // No toast: plans can't be bought yet (no payment gateway), so nothing is confirmed here.
-  const toast = useToast();
-  const choose = (tier: PlanTier) => {
-    setPlan(company.id, tier);
-    const next = planInfo(tier);
-    const up = next.yearly > current.yearly;
-    toast.show(tr(up ? 'plan:billing.upgraded' : 'plan:billing.switched', { plan: next.name }), up ? 'success' : 'info', {
-      icon: up ? 'rocket-launch-outline' : 'swap-vertical',
-      detail: next.yearly === 0 ? tr('plan:billing.freeForever') : tr('plan:billing.renews', { price: `₹${formatNumber(next.yearly, 0, 'indian')}` }),
-    });
-  };
 
   // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md), so no meters.
   // Only people who have accepted count; a pending invitation is not a user yet.
@@ -188,19 +173,7 @@ export function PlanBillingDesktop() {
                   ))}
                 </View>
 
-                <Button
-                  title={
-                    isCurrent
-                      ? tr('plan:billing.currentPlan')
-                      : price === 0
-                        ? tr('plan:billing.downgrade')
-                        : tr('plan:billing.choose')
-                  }
-                  variant={isCurrent ? 'ghost' : p.popular ? 'primary' : 'secondary'}
-                  disabled={isCurrent}
-                  onPress={() => choose(p.key)}
-                  fullWidth
-                />
+                {isCurrent ? <Button title={tr('plan:billing.currentPlan')} variant="ghost" disabled fullWidth /> : null}
               </Card>
             );
           })}
