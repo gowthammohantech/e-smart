@@ -53,6 +53,11 @@ export async function moneySetup(t: TestContext, plan: 'free' | 'basic' | 'pro' 
   /** For tests about something other than stock levels: sales may then take an item below zero. */
   const allowNegativeStock = () => db.update(schema.companies).set({ allowNegativeStock: true }).where(eq(schema.companies.id, companyId));
 
+  // The fixtures' documents are dated 2026-09-29 on 30-day terms, so the server's
+  // clock starts that day; on the real clock they fall overdue from 2026-10-30.
+  // A test about a later day moves it on with t.setNow.
+  t.setNow('2026-09-29T10:00:00Z');
+
   return { ...o, companyId, gst, mumbai, bengaluru, supplier, branch, cash, item, allowNegativeStock };
 }
 
