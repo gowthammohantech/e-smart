@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Button } from '@esmart/ui/components/Button';
@@ -38,17 +38,20 @@ export function ItemForm({ item }: { item?: Item }) {
   // Without the stock module a new item starts untracked; an existing item keeps its setting.
   const hasInventory = useHasModule('inventory');
 
-  const [type, setType] = useState<ItemType>(item?.type ?? 'goods');
+  // A new one starts as goods or a service from ?type= (Items & services passes its open tab).
+  const params = useLocalSearchParams<{ type?: string }>();
+  const startType: ItemType = item?.type ?? (params.type === 'service' ? 'service' : 'goods');
+  const [type, setType] = useState<ItemType>(startType);
   const [name, setName] = useState(item?.name ?? '');
   const [sku, setSku] = useState(item?.sku ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [unit, setUnit] = useState(item?.unit ?? (item?.type === 'service' ? 'NOS' : 'PCS'));
+  const [unit, setUnit] = useState(item?.unit ?? (startType === 'service' ? 'NOS' : 'PCS'));
   const [salePrice, setSalePrice] = useState(item && item.salePrice.minor !== 0 ? String(toMajor(item.salePrice)) : '');
   const [purchasePrice, setPurchasePrice] = useState(item && item.purchasePrice.minor !== 0 ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
-  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? hasInventory);
+  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
