@@ -215,3 +215,19 @@ export function monthNames(): string[] {
   const locale = activeLocale();
   return Array.from({ length: 12 }, (_, i) => format(new Date(2000, i, 1), 'LLLL', { locale }));
 }
+
+/**
+ * The calendar date for the business, in India Standard Time. The server's clock
+ * is UTC, where it is still yesterday until 05:30.
+ */
+export function businessDate(at: Date = new Date()): string {
+  return new Date(at.getTime() + 330 * 60_000).toISOString().slice(0, 10);
+}
+
+/**
+ * The last day a credit note can be issued against an invoice under GST: 30
+ * November after the end of the financial year the invoice falls in.
+ */
+export function creditNoteDeadline(invoiceDate: string): string {
+  return `${financialYearOf(invoiceDate).end.slice(0, 4)}-11-30`;
+}

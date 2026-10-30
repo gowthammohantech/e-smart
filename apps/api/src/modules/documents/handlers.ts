@@ -32,7 +32,7 @@ import {
   type DocRow,
   type LineInput,
 } from './engine';
-import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, finalizeInTx, reverseStock, today } from './lifecycle';
+import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, assertNoLiveReturns, assertPeriodOpen, finalizeInTx, isReturn, reverseStock, syncPaymentState, today } from './lifecycle';
 import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
 import { companyLogoLink } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
@@ -131,8 +131,11 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
     const locked = await findDocument(ctx, tx, id, { lock: true });
     checkIfMatch(ctx.req, locked.version);
     const from = effectiveStatus(locked, today(ctx.now));
+    // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
+    if (target === 'cancelled') await assertNoLiveReturns(tx, locked);
     if (!canTransition(locked.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${locked.kind} cannot go from ${from} to ${target}`);
     if (target === 'cancelled') {
+      assertPeriodOpen(ctx.company, locked.date);
       if (locked.amountPaidMinor > 0) throw conflict('DOCUMENT_HAS_PAYMENTS', 'Remove the payments allocated to this document before cancelling it');
       if (locked.currentEwayBillId) {
         const [bill] = await tx.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, locked.currentEwayBillId));
@@ -150,6 +153,10 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
       .where(and(eq(D.id, locked.id), eq(D.version, locked.version)))
       .returning();
     if (!updated) throw preconditionFailed();
+    if (isReturn(updated) && updated.sourceDocumentId) {
+      await tx.select({ id: D.id }).from(D).where(eq(D.id, updated.sourceDocumentId)).for('update');
+      await syncPaymentState(tx, ctx.user, ctx.company.id, [updated.sourceDocumentId], ctx.now);
+    }
     await recordChange(tx, ctx.user, {
       companyId: ctx.company.id,
       action: `marked ${target}`,
@@ -397,6 +404,8 @@ export const documentsHandlers = defineHandlers({
     }
     const current = await findDocument(ctx, ctx.db, ctx.params.id);
     const from = effectiveStatus(current, today(ctx.now));
+    // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
+    if (target === 'cancelled') await assertNoLiveReturns(ctx.db, current);
     if (!canTransition(current.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${current.kind} cannot go from ${from} to ${target}`);
 
     const row = !isFinalized(current.status) && isFinalized(target) && target !== 'cancelled' ? await finalizeDraft(ctx, current.id, target, { overrideCreditLimit: ctx.body.overrideCreditLimit }) : await changeStatus(ctx, current.id, target, ctx.body.reason);

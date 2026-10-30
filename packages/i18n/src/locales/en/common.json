@@ -106,6 +106,7 @@
     "offline": "Offline",
     "failedSync": "{{count}} failed",
     "provisional": "Provisional number",
+    "pastCreditNoteDeadline": "Past the GST credit note deadline",
     "notifications": "Notifications",
     "business": "Business",
     "allBranches": "All branches",

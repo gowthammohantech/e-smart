@@ -1,15 +1,18 @@
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, inArray, ne, notInArray, sql, type SQL } from 'drizzle-orm';
+import { businessDate } from '@esmart/core/lib/date';
+import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
 import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
 import type { BusinessDocument, DocStatus, DocumentKind, StockMovement, StockMovementType } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow } from '../../context';
-import { preconditionFailed, unprocessable } from '../../http/errors';
+import { conflict, invoiceLimitReached, preconditionFailed, unprocessable } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
+import { replayQueuedAt } from '../../lib/replay';
 import type { DocRow } from './engine';
 
 const D = schema.documents;
@@ -45,7 +48,7 @@ export const CONVERSIONS: Record<DocumentKind, DocumentKind[]> = {
   purchaseReturn: [],
 };
 
-export const today = (d: Date) => d.toISOString().slice(0, 10);
+export const today = (d: Date) => businessDate(d);
 
 /**
  * The status a document is in right now. Invoices and bills past issue take
@@ -220,6 +223,20 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
 export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow, actorId: string, why: string): Promise<number> {
   const open = (await netPosted(tx, [row.id])).filter((r) => Number(r.net) !== 0);
   if (!open.length) return 0;
+  // Taking back stock this document brought in: it may have been sold since.
+  const incoming = open.filter((r) => Number(r.net) > 0);
+  if (incoming.length && !company.allowNegativeStock) {
+    const ids = [...new Set(incoming.map((r) => r.itemId))].sort();
+    const items = await tx.select().from(schema.items).where(and(eq(schema.items.companyId, row.companyId), inArray(schema.items.id, ids))).orderBy(schema.items.id).for('update');
+    const ledger = await tx.select({ itemId: M.itemId, branchId: M.branchId, type: M.type, quantity: M.quantity, date: M.date }).from(M).where(and(eq(M.companyId, row.companyId), inArray(M.itemId, ids)));
+    const issues = incoming.flatMap((r) => {
+      const available = stockMapOn(ledger.map((m) => ({ ...m, quantity: Number(m.quantity) }) as StockMovement), row.date, r.branchId)[r.itemId] ?? 0;
+      if (available >= Number(r.net)) return [];
+      const item = items.find((i) => i.id === r.itemId);
+      return [{ field: 'status', message: `${item?.name ?? r.itemId}: ${available} in stock, and reversing ${row.number} takes back ${Number(r.net)}`, severity: 'blocking' as const }];
+    });
+    if (issues.length) throw unprocessable(issues, 'INSUFFICIENT_STOCK');
+  }
   await tx.insert(M).values(
     open.map((r) => ({
       id: newId('stk'),
@@ -279,6 +296,12 @@ export async function finalizeInTx(
   now: Date,
   opts: { overrideCreditLimit?: boolean } = {},
 ): Promise<DocRow> {
+  assertPeriodOpen(company, row.date);
+  if (TAX_DOCUMENTS.includes(row.kind) && row.date > addDays(today(now), 1)) {
+    throw unprocessable([{ field: 'date', message: `A ${row.kind} cannot be dated ${row.date}, in the future`, severity: 'blocking' }], 'DOCUMENT_DATED_IN_FUTURE');
+  }
+  if (row.kind === 'invoice') await checkInvoiceLimit(tx, company, now);
+  if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
   const number = await assignNumber(tx, { companyId: row.companyId, kind: row.kind, branchId: row.branchId, date: row.date });
   const status = effectiveStatus({ ...row, status: target }, today(now));
@@ -289,11 +312,86 @@ export async function finalizeInTx(
     .returning();
   if (!updated) throw preconditionFailed();
   await postStock(tx, company, updated, actor.id);
+  if (isReturn(updated) && updated.sourceDocumentId) await syncPaymentState(tx, actor, updated.companyId, [updated.sourceDocumentId], now);
   return updated;
 }
 
+const addDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** Dated by the business itself, and what the tax return is built from. */
+const TAX_DOCUMENTS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'];
+const RETURN_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn'];
+export const isReturn = (row: Pick<DocRow, 'kind'>) => RETURN_KINDS.includes(row.kind);
+/** A return that counts: approved or issued, and not since withdrawn. */
+const LIVE_RETURN = notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected']);
+
+/** Books closed up to a date stay as they were filed. */
+export function assertPeriodOpen(company: CompanyRow, date: string) {
+  if (company.lockedThroughDate && date <= company.lockedThroughDate) {
+    throw conflict('PERIOD_LOCKED', `The books are closed through ${company.lockedThroughDate}; an owner must reopen them to change a document dated ${date}`);
+  }
+}
+
+/** How long a queued invoice may have waited for it to count as already issued on the device. */
+const OFFLINE_GRACE_MS = 10 * 60_000;
+
 /**
- * Re-derives `amount_paid_minor` (the sum of the document's allocations, the
+ * The free plan's monthly invoices. An invoice issued offline was given to a
+ * customer before the server could say no, so one that has been waiting in a
+ * queue goes through; it's only the next one made online that is refused.
+ */
+async function checkInvoiceLimit(tx: DbOrTx, company: CompanyRow, now: Date) {
+  const limit = INVOICE_LIMITS[company.plan];
+  if (limit === null) return;
+  const queuedAt = replayQueuedAt.getStore();
+  if (queuedAt && now.getTime() - queuedAt.getTime() > OFFLINE_GRACE_MS) return;
+  const monthStart = new Date(`${today(now).slice(0, 7)}-01T00:00:00+05:30`);
+  const [{ used }] = await tx
+    .select({ used: sql<number>`count(*)::int` })
+    .from(D)
+    .where(and(eq(D.companyId, company.id), eq(D.kind, 'invoice'), gte(D.finalizedAt, monthStart)));
+  if (used >= limit) throw invoiceLimitReached(company.plan, limit, nextInvoicePlan(company.plan));
+}
+
+/** What's returned against a document can't add up to more than it had, per item, across all its returns. */
+async function checkReturnWithinSource(tx: DbOrTx, row: DocRow) {
+  const L = schema.documentLines;
+  const [source] = await tx.select({ id: D.id, number: D.number }).from(D).where(eq(D.id, row.sourceDocumentId!)).for('update');
+  if (!source) return;
+  const keyOf = (l: { itemId: string | null; name: string }) => l.itemId ?? l.name;
+  const total = (lines: { itemId: string | null; name: string; quantity: string }[]) => {
+    const out = new Map<string, number>();
+    for (const l of lines) out.set(keyOf(l), (out.get(keyOf(l)) ?? 0) + Number(l.quantity));
+    return out;
+  };
+  const sold = total(await tx.select().from(L).where(eq(L.documentId, source.id)));
+  const earlier = total(
+    await tx
+      .select({ itemId: L.itemId, name: L.name, quantity: L.quantity })
+      .from(L)
+      .innerJoin(D, eq(D.id, L.documentId))
+      .where(and(eq(D.sourceDocumentId, source.id), inArray(D.kind, RETURN_KINDS), LIVE_RETURN, ne(D.id, row.id))),
+  );
+  const lines = await tx.select().from(L).where(eq(L.documentId, row.id));
+  const issues = [...total(lines)]
+    .filter(([key, qty]) => qty + (earlier.get(key) ?? 0) > (sold.get(key) ?? 0))
+    .map(([key, qty]) => {
+      const line = lines.find((l) => keyOf(l) === key)!;
+      const left = (sold.get(key) ?? 0) - (earlier.get(key) ?? 0);
+      return { field: `lines[${line.position - 1}].quantity`, message: `${line.name}: ${Math.max(left, 0)} left to return on ${source.number}, ${qty} on this return`, severity: 'blocking' as const };
+    });
+  if (issues.length) throw unprocessable(issues, 'RETURN_EXCEEDS_SOURCE');
+}
+
+/** A document can't be cancelled while a return stands against it. */
+export async function assertNoLiveReturns(tx: DbOrTx, row: DocRow) {
+  const [live] = await tx.select({ number: D.number }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, RETURN_KINDS), LIVE_RETURN)).limit(1);
+  if (live) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel return ${live.number} before cancelling ${row.number}`);
+}
+
+/**
+ * Re-derives `amount_paid_minor` (the sum of the document's allocations and
+ * of what its returns credit, the
  * invariant the ledger and balances rely on) and the settlement status of
  * each document, and records a change for each one that moved. Callers lock
  * the documents first.
@@ -308,9 +406,17 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
     .where(inArray(A.documentId, ids))
     .groupBy(A.documentId);
   const paidOf = new Map(sums.map((s) => [s.documentId, Number(s.paid)]));
+  // A return settles what it credits, as far as there's anything left to settle.
+  const credits = await tx
+    .select({ documentId: D.sourceDocumentId, credited: sql<number>`coalesce(sum(${D.grandTotalMinor}), 0)::bigint` })
+    .from(D)
+    .where(and(inArray(D.sourceDocumentId, ids), inArray(D.kind, RETURN_KINDS), LIVE_RETURN))
+    .groupBy(D.sourceDocumentId);
+  const creditOf = new Map(credits.map((c) => [c.documentId, Number(c.credited)]));
   const rows = await tx.select().from(D).where(and(eq(D.companyId, companyId), inArray(D.id, ids)));
   for (const row of rows) {
-    const amountPaidMinor = paidOf.get(row.id) ?? 0;
+    const allocated = paidOf.get(row.id) ?? 0;
+    const amountPaidMinor = Math.max(allocated, Math.min(allocated + (creditOf.get(row.id) ?? 0), row.grandTotalMinor));
     const status = isFinalized(row.status) ? effectiveStatus({ ...row, amountPaidMinor }, today(now)) : row.status;
     if (amountPaidMinor === row.amountPaidMinor && status === row.status) continue;
     const [updated] = await tx

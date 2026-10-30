@@ -107,13 +107,15 @@ export async function writePayment(
   const [cur] = await tx.select().from(schema.currencies).where(eq(schema.currencies.code, input.currency));
   if (!cur) blocking('currency', `Unknown currency ${input.currency}`);
 
+  if (input.branchId && actor.branchIds.length && !actor.branchIds.includes(input.branchId)) blocking('branchId', 'You cannot record payments in this branch');
   let branchId = input.branchId ?? existing?.branchId ?? null;
   if (branchId) {
     const [b] = await tx.select({ id: schema.branches.id }).from(schema.branches).where(and(eq(schema.branches.companyId, company.id), eq(schema.branches.id, branchId)));
     if (!b) blocking('branchId', 'No such branch in this company');
   } else {
     const branches = await tx.select().from(schema.branches).where(eq(schema.branches.companyId, company.id));
-    branchId = (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? null;
+    const mine = actor.branchIds.length ? branches.filter((b) => actor.branchIds.includes(b.id)) : branches;
+    branchId = (mine.find((b) => b.isPrimary) ?? mine[0])?.id ?? null;
   }
 
   const exchangeRate =

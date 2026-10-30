@@ -6,6 +6,7 @@ import { ApiError, badRequest, forbidden } from '../../http/errors';
 import { sha256 } from '../../lib/crypto';
 import { compact } from '../../lib/wire';
 import { injectAs } from '../../lib/internal';
+import { replayQueuedAt } from '../../lib/replay';
 import { fetchEntities } from './entities';
 
 const CL = schema.changeLog;
@@ -145,7 +146,7 @@ export const syncHandlers = defineHandlers({
         if (m.method === 'POST') headers['idempotency-key'] = idempotencyKeyFor(m.id);
         if (m.baseVersion !== undefined) headers['if-match'] = `"v${m.baseVersion}"`;
         const payload = m.body === undefined ? (m.method === 'POST' ? {} : undefined) : rewriteIds(m.body, ids);
-        const res = await injectAs(server, auth, { method: m.method, url: `/v1${path}`, payload, headers });
+        const res = await replayQueuedAt.run(new Date(m.queuedAt), () => injectAs(server, auth, { method: m.method, url: `/v1${path}`, payload, headers }));
         const body = asObject(res.body);
         if (res.status < 300) {
           result = compact({ status: 'applied' as const, entity: body });

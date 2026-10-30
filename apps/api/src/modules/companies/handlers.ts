@@ -7,7 +7,7 @@ import type { Schema } from '@esmart/api-contract';
 import type { DbOrTx } from '../../lib/audit';
 import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { forbidden, invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { addressTo } from '../../lib/wire';
@@ -113,10 +113,13 @@ export const companiesHandlers = defineHandlers({
     const next = applyProfileLocks(prev as CoreCompany, { ...ctx.body, id: current.id, accountId: current.accountId, plan: current.plan } as CoreCompany, posted);
     const body = next as unknown as Schema<'Company'>;
     await validateCompany(ctx.db, body);
+    // Left out by an app that doesn't know about it: that isn't reopening the books.
+    const lockedThroughDate = ctx.body.lockedThroughDate === undefined ? current.lockedThroughDate : ctx.body.lockedThroughDate;
+    if (lockedThroughDate !== current.lockedThroughDate && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can close or reopen the books');
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(schema.companies)
-        .set({ ...companyColumns(body), version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...companyColumns(body), lockedThroughDate, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(schema.companies.id, current.id), eq(schema.companies.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();

@@ -1,10 +1,12 @@
 import { eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { ownerWithCompany, setupApi } from './helpers';
 import { documentRow, expectMoneyInvariants, pdfText, invoiceBody, issueInvoice, moneySetup, type Money } from './money-fixtures';
 
 const t = setupApi();
+// Fixtures are dated around this day; on a later clock their invoices read as overdue.
+beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
 
 /** Paid and part-paid documents fall outside the contract's create-status enum (see documents.test.ts). */
 

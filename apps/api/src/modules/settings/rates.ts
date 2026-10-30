@@ -1,3 +1,4 @@
+import { businessDate } from '@esmart/core/lib/date';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
@@ -13,7 +14,7 @@ const R = schema.exchangeRates;
 type RateRow = typeof R.$inferSelect;
 
 const label = (r: RateRow) => `${r.fromCurrency.trim()}/${r.toCurrency.trim()} ${r.effectiveFrom}`;
-const today = (d: Date) => d.toISOString().slice(0, 10);
+const today = (d: Date) => businessDate(d);
 
 async function findRate(db: DbOrTx, companyId: string, id: string) {
   const [row] = await db.select().from(R).where(and(eq(R.companyId, companyId), eq(R.id, id)));

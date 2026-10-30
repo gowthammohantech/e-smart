@@ -89,6 +89,10 @@ export const categoryHandlers = defineHandlers({
     checkIfMatch(ctx.req, current.version);
     validateTax(ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
+      // Documents dated before the new rate still charge the old one.
+      if (Number(ctx.body.rate) !== Number(current.rate)) {
+        await tx.insert(schema.taxCategoryRates).values({ taxCategoryId: current.id, effectiveFrom: current.effectiveFrom, rate: current.rate }).onConflictDoUpdate({ target: [schema.taxCategoryRates.taxCategoryId, schema.taxCategoryRates.effectiveFrom], set: { rate: current.rate } });
+      }
       const [updated] = await tx
         .update(T)
         .set({ ...(await taxColumns(tx, ctx.body)), version: current.version + 1, updatedAt: ctx.now })

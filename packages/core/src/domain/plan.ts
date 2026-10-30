@@ -75,6 +75,15 @@ export const USER_LIMITS: Record<PlanTier, number | null> = {
   business: null,
 };
 
+/** Invoices one business can issue in a calendar month; null is unlimited. Matches `invoiceCap` in `plan:tier.*`. */
+export const INVOICE_LIMITS: Record<PlanTier, number | null> = { free: 20, basic: null, pro: null, business: null };
+
+/** The next tier up with no invoice limit. */
+export function nextInvoicePlan(tier: PlanTier): PlanTier | null {
+  const at = PLANS.findIndex((p) => p.key === tier);
+  return PLANS.slice(at + 1).find((p) => INVOICE_LIMITS[p.key] === null)?.key ?? null;
+}
+
 export function userLimit(tier: PlanTier): number | null {
   return USER_LIMITS[tier];
 }

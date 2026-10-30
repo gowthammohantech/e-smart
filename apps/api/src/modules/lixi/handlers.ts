@@ -1,3 +1,4 @@
+import { businessDate } from '@esmart/core/lib/date';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Schema } from '@esmart/api-contract';
 import { canOpen, hasModule, MODULES, planInfo } from '@esmart/core/domain/plan';
@@ -77,7 +78,7 @@ function contextFor(ctx: Ctx<'lixiChat'>, locale: string): string {
   const { company, user } = ctx;
   const modules = MODULES.filter((m) => hasModule(company.plan, m));
   return [
-    `Today is ${ctx.now.toISOString().slice(0, 10)}.`,
+    `Today is ${businessDate(ctx.now)}.`,
     `Company: ${company.name}. Currency: ${company.baseCurrency.trim()}. Country: ${company.country}.`,
     `Plan: ${planInfo(company.plan).name}; ${modules.length ? `includes ${modules.join(', ')}` : 'sales only (no purchases, inventory, expenses or payables)'}.`,
     `User: ${user.name}, role ${user.role}.`,

@@ -1,5 +1,7 @@
+import { businessDate } from '@esmart/core/lib/date';
+import { MAX_TAX_INVOICE_NUMBER, TAX_INVOICE_KINDS } from '../../lib/numbering';
 import { and, desc, eq, lte } from 'drizzle-orm';
-import { SERIES_KINDS, formatNumber } from '@esmart/core/domain/numbering';
+import { SERIES_KINDS, formatNumber, type SeriesKind } from '@esmart/core/domain/numbering';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
@@ -37,6 +39,13 @@ export const numberingHandlers = defineHandlers({
     if (!prefix || prefix.length > 20) throw invalid('prefix', 'The prefix needs 1 to 20 characters');
     if (body.nextNumber < current.nextNumber) {
       throw invalid('nextNumber', `Numbers up to ${current.nextNumber - 1} may already be used; the next number can't go below ${current.nextNumber}`, 'NUMBER_REUSE');
+    }
+    const longest = formatNumber(
+      { ...current, prefix, nextNumber: body.nextNumber, padding: body.padding, includeFiscalYear: body.includeFiscalYear ?? current.includeFiscalYear, includeBranchCode: false } as never,
+      { date: businessDate(ctx.now) },
+    );
+    if (TAX_INVOICE_KINDS.includes(current.kind as SeriesKind) && longest.length > MAX_TAX_INVOICE_NUMBER) {
+      throw invalid('prefix', `Numbers like ${longest} are longer than the ${MAX_TAX_INVOICE_NUMBER} characters a tax invoice number can have`);
     }
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
@@ -78,7 +87,7 @@ export const numberingHandlers = defineHandlers({
       const [primary] = await ctx.db.select({ code: B.code }).from(B).where(eq(B.companyId, ctx.company.id)).orderBy(desc(B.isPrimary), B.createdAt).limit(1);
       branchCode = primary?.code;
     }
-    const date = ctx.query.date ?? ctx.now.toISOString().slice(0, 10);
+    const date = ctx.query.date ?? businessDate(ctx.now);
     const { lastResetAt: _reset, version: _v, updatedAt: _u, ...core } = series;
     return { number: formatNumber(core, { date, branchCode }) };
   },

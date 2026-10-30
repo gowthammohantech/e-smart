@@ -1,11 +1,13 @@
 import { and, eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { sha256 } from '../src/lib/crypto';
 import { ownerWithCompany, setupApi } from './helpers';
 import { documentRow, invoiceBody, issueInvoice, line, moneySetup, onHand, pdfText } from './money-fixtures';
 
 const t = setupApi();
+// Fixtures are dated around this day; on a later clock their invoices read as overdue.
+beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
 
 describe('documents: totals', () => {
   it('charges IGST to a customer in another state and CGST+SGST in the same state', async () => {

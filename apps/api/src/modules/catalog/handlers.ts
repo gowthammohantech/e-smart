@@ -1,3 +1,4 @@
+import { businessDate } from '@esmart/core/lib/date';
 import { and, asc, desc, eq, getTableColumns, gt, ilike, ne, not, or, sql, lte, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
@@ -153,7 +154,7 @@ export const catalogHandlers = defineHandlers({
           quantity: String(openingStock),
           currency: base,
           unitCostMinor: created.purchasePriceMinor,
-          date: ctx.now.toISOString().slice(0, 10),
+          date: businessDate(ctx.now),
           notes: 'Opening stock',
           createdBy: ctx.user.id,
         });

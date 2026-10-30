@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte } from 'drizzle-orm';
 import { PURCHASE_KINDS, initialStatus } from '@esmart/core/domain/documentStates';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
@@ -293,6 +293,20 @@ export async function prepareDocument(
     ? await db.select().from(schema.items).where(and(eq(schema.items.companyId, company.id), inArray(schema.items.id, itemIds)))
     : [];
 
+  // A return reverses exactly what was charged, whatever the category says now.
+  const returned = new Map<string, number>();
+  if (f.sourceDocumentId && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn')) {
+    const stored = await db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, f.sourceDocumentId));
+    for (const s of stored) returned.set(s.itemId ?? s.name, Number(s.taxRate));
+  }
+  // A category changed since the document's date charged its earlier rate then.
+  const history = await db
+    .select()
+    .from(schema.taxCategoryRates)
+    .where(and(inArray(schema.taxCategoryRates.taxCategoryId, categories.map((c) => c.id)), lte(schema.taxCategoryRates.effectiveFrom, f.date)))
+    .orderBy(desc(schema.taxCategoryRates.effectiveFrom));
+  const rateOn = (c: (typeof categories)[number]) => (c.effectiveFrom > f.date ? (history.find((h) => h.taxCategoryId === c.id)?.rate ?? c.rate) : c.rate);
+
   const coreLines: DocumentLine[] = lines.map((l, i) => {
     const category = categories.find((c) => c.id === l.taxCategoryId);
     if (!category) blocking(`lines[${i}].taxCategoryId`, 'No such tax category in this company');
@@ -313,7 +327,7 @@ export async function prepareDocument(
       discountMode: l.discountMode,
       discountValue: l.discountValue,
       taxCategoryId: l.taxCategoryId,
-      taxRate: opts.snapshotRates || l.taxRate === undefined ? (category?.rate ?? 0) : l.taxRate,
+      taxRate: returned.get(l.itemId ?? l.name) ?? (opts.snapshotRates || l.taxRate === undefined ? Number(category ? rateOn(category) : 0) : l.taxRate),
       taxInclusive: l.taxInclusive,
     };
   });

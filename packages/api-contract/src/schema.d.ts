@@ -2595,6 +2595,11 @@ export interface components {
             taxRegistration?: components["schemas"]["TaxRegistration"];
             fiscalYearStartMonth: number;
             /**
+             * Format: date
+             * @description Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.
+             */
+            lockedThroughDate?: string | null;
+            /**
              * @description When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.
              * @default false
              */

@@ -1,3 +1,4 @@
+import { businessDate } from '@esmart/core/lib/date';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { isPayableDocument } from '@esmart/core/domain/documentStates';
@@ -78,7 +79,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
   const components = taxLines.length
     ? await db.select().from(schema.documentTaxComponents).where(inArray(schema.documentTaxComponents.taxLineId, taxLines.map((t) => t.id))).orderBy(schema.documentTaxComponents.label)
     : [];
-  const asOf = now.toISOString().slice(0, 10);
+  const asOf = businessDate(now);
 
   return rows.map((row) => {
     const currency = row.currency.trim();
@@ -161,7 +162,7 @@ export type SummaryRow = DocRow & { partyName: string };
 /** The light row lists return. */
 export async function summariesToWire(db: DbOrTx, rows: SummaryRow[], now: Date): Promise<Schema<'DocumentSummary'>[]> {
   const compliance = await complianceRows(db, rows);
-  const asOf = now.toISOString().slice(0, 10);
+  const asOf = businessDate(now);
   return rows.map((row) => {
     const currency = row.currency.trim();
     const status = effectiveStatus(row, asOf);

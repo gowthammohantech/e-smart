@@ -24,14 +24,14 @@ export const SERIES_KINDS: SeriesKind[] = [
  */
 export function formatNumber(
   series: NumberingSeries,
-  opts: { date: string; branchCode?: string; sequence?: number } = { date: new Date().toISOString().slice(0, 10) },
+  opts: { date: string; branchCode?: string; sequence?: number; fiscalYearStartMonth?: number } = { date: new Date().toISOString().slice(0, 10) },
 ): string {
   const seq = opts.sequence ?? series.nextNumber;
   // A trailing "/" in the prefix would double up with the separator below.
   const parts: string[] = [series.prefix.replace(/\/+$/, '')];
   if (series.includeBranchCode && opts.branchCode) parts.push(opts.branchCode);
   if (series.includeFiscalYear) {
-    const fy = financialYearOf(opts.date);
+    const fy = financialYearOf(opts.date, opts.fiscalYearStartMonth);
     parts.push(fy.label.replace('FY ', ''));
   }
   parts.push(String(seq).padStart(series.padding, '0'));

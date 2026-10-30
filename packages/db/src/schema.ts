@@ -320,6 +320,20 @@ export const paymentAccounts = pgTable("payment_accounts", {
 		}),
 ]);
 
+/** What a tax category charged before its current rate, for documents dated back then. */
+export const taxCategoryRates = pgTable("tax_category_rates", {
+	taxCategoryId: varchar("tax_category_id", { length: 40 }).notNull(),
+	effectiveFrom: date("effective_from").notNull(),
+	rate: numeric({ precision: 6, scale:  3 }).notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	primaryKey({ columns: [table.taxCategoryId, table.effectiveFrom], name: "tax_category_rates_pkey" }),
+	foreignKey({
+			columns: [table.taxCategoryId],
+			foreignColumns: [taxCategories.id],
+			name: "tax_category_rates_tax_category_id_fkey"
+		}).onDelete("cascade"),
+]);
+
 export const taxCategories = pgTable("tax_categories", {
 	id: varchar({ length: 40 }).primaryKey().notNull(),
 	companyId: varchar("company_id", { length: 40 }).notNull(),
@@ -1619,6 +1633,7 @@ export const companies = pgTable("companies", {
 	lutNumber: varchar("lut_number", { length: 40 }),
 	lutValidTill: date("lut_valid_till", { mode: 'string' }),
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
+	lockedThroughDate: date("locked_through_date"),
 	// Off by default: a sale cannot take a tracked item below zero at its branch.
 	allowNegativeStock: boolean("allow_negative_stock").default(false).notNull(),
 	plan: planTier().default('free').notNull(),

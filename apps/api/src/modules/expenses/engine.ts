@@ -1,3 +1,4 @@
+import { businessDate } from '@esmart/core/lib/date';
 import { and, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
 import { addDaysISO } from '@esmart/core/lib/date';
 import { inclusiveTax, money, percent, zero, type Money } from '@esmart/core/lib/money';
@@ -98,7 +99,7 @@ async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
  * template that was missed for several periods catches up on all of them.
  */
 export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'>, today: string | Date): Promise<{ created: string[] }> {
-  const asOf = typeof today === 'string' ? today : today.toISOString().slice(0, 10);
+  const asOf = typeof today === 'string' ? today : businessDate(today);
   const due = await deps.db
     .select({ id: E.id })
     .from(E)

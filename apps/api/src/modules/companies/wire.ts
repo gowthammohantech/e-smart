@@ -32,6 +32,7 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
       lutValidTill: row.lutValidTill,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
+    lockedThroughDate: row.lockedThroughDate,
     allowNegativeStock: row.allowNegativeStock,
     plan: row.plan,
     ...versioned(row),

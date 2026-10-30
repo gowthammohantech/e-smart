@@ -54,7 +54,7 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
   },
   salesReturn: {
     requested: ['approved', 'cancelled'],
-    approved: ['processed'],
+    approved: ['processed', 'cancelled'],
     processed: [],
   },
   purchaseOrder: {
@@ -75,7 +75,7 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
   },
   purchaseReturn: {
     requested: ['approved', 'cancelled'],
-    approved: ['processed'],
+    approved: ['processed', 'cancelled'],
     processed: [],
   },
 };

@@ -2,10 +2,14 @@ import { and, eq } from 'drizzle-orm';
 import { financialYearOf } from '@esmart/core/lib/date';
 import { formatNumber, type SeriesKind } from '@esmart/core/domain/numbering';
 import { schema } from '@esmart/db';
-import { conflict } from '../http/errors';
+import { conflict, unprocessable } from '../http/errors';
 import type { DbOrTx } from './audit';
 
 const S = schema.numberingSeries;
+
+/** GST rule 46: a tax invoice or credit note number has at most 16 characters. */
+export const MAX_TAX_INVOICE_NUMBER = 16;
+export const TAX_INVOICE_KINDS: SeriesKind[] = ['invoice', 'salesReturn'];
 
 /** The start of the numbering period `date` falls in, or null when the series never resets. */
 function periodStart(policy: 'never' | 'yearly' | 'monthly', date: string, fiscalYearStartMonth: number): string | null {
@@ -56,6 +60,7 @@ export async function assignNumber(
 
   let next = series.nextNumber;
   let lastResetAt = series.lastResetAt;
+  let past = false;
   const fyStart = company?.fy ?? 4;
   const period = periodStart(series.resetPolicy, opts.date, fyStart);
   if (period) {
@@ -64,6 +69,11 @@ export async function assignNumber(
     else if (period > lastPeriod) {
       next = 1;
       lastResetAt = period;
+    } else if (period < lastPeriod) {
+      // A document replayed into an earlier period takes that period's next free
+      // number, and the current period's counter stays where it is.
+      past = true;
+      next = 1;
     }
   }
 
@@ -80,7 +90,7 @@ export async function assignNumber(
         includeBranchCode: series.includeBranchCode,
         resetPolicy: series.resetPolicy,
       },
-      { date: opts.date, branchCode, sequence },
+      { date: opts.date, branchCode, sequence, fiscalYearStartMonth: fyStart },
     );
 
   let number = format(next);
@@ -89,6 +99,11 @@ export async function assignNumber(
     next += 1;
     number = format(next);
   }
+
+  if (TAX_INVOICE_KINDS.includes(opts.kind) && number.length > MAX_TAX_INVOICE_NUMBER) {
+    throw unprocessable([{ field: 'number', message: `${number} is longer than the ${MAX_TAX_INVOICE_NUMBER} characters a tax invoice number can have; shorten the series prefix`, severity: 'blocking' }], 'NUMBER_TOO_LONG');
+  }
+  if (past) return number;
 
   const version = series.version + 1;
   await tx

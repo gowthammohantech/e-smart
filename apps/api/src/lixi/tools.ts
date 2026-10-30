@@ -1,3 +1,4 @@
+import { businessDate } from '@esmart/core/lib/date';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { fromMajor, precisionOf, toMajor, type Money } from '@esmart/core/lib/money';
@@ -110,7 +111,7 @@ export function trim(value: unknown, depth = 0): unknown {
   return value;
 }
 
-const today = (ctx: ToolCtx) => ctx.now.toISOString().slice(0, 10);
+const today = (ctx: ToolCtx) => businessDate(ctx.now);
 const money = (ctx: ToolCtx, major: number) => fromMajor(major, ctx.company.baseCurrency.trim());
 const fmt = (m: Money) => {
   const p = precisionOf(m.currency);
