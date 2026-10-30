@@ -7,6 +7,7 @@ import { Text } from './Text';
 import { settledContent, settledText, type ToastApi, type ToastOptions, type ToastTone } from './toastTypes';
 
 export type { ToastApi, ToastContent, ToastIcon, ToastOptions, ToastTone } from './toastTypes';
+export { TOAST_ANCHOR_ID } from './toastTypes';
 
 /** The phone apps' toast: a card above the tab bar. A browser gets Toast.web.tsx (Sileo) instead. */
 

@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Toaster, sileo, type SileoOptions } from 'sileo';
 import { useTheme } from '../theme/ThemeProvider';
-import { settledContent, settledText, type ToastApi, type ToastIcon, type ToastOptions, type ToastTone } from './toastTypes';
+import { useIsDesktop } from '../theme/breakpoints';
+import { TOAST_ANCHOR_ID, settledContent, settledText, type ToastApi, type ToastIcon, type ToastOptions, type ToastTone } from './toastTypes';
 
 export type { ToastApi, ToastContent, ToastIcon, ToastOptions, ToastTone } from './toastTypes';
+export { TOAST_ANCHOR_ID } from './toastTypes';
 
 /**
  * The browser's toast, built on Sileo: a pill that names the outcome, then
@@ -51,6 +53,32 @@ if (typeof document !== 'undefined' && !document.getElementById('esmart-sileo'))
 // taken off above.
 const TOAST_TOP = 10;
 const TOAST_RIGHT = 12;
+// In a phone's browser the pill drops in at the top centre, like a phone's own
+// status island, level with the page's header row: the tab pages' header
+// (AppHeader, marked with TOAST_ANCHOR_ID) is measured as the toast appears;
+// any other page has the 64px stack header, whose middle is 32px down. The
+// 40px pill starts 20px above the middle it centres on.
+const PILL_HALF = 20;
+const PHONE_TOP = 'var(--esmart-toast-top, calc(env(safe-area-inset-top, 0px) + 12px))';
+
+/** Lines the phone-browser pill up with the header row on screen, if it is one we can see. */
+function levelWithHeader() {
+  const rows = Array.from(document.querySelectorAll<HTMLElement>(`[id="${TOAST_ANCHOR_ID}"]`));
+  // Earlier screens stay in the page, hidden or covered; only the one on top counts.
+  const shown = rows.find((el) => {
+    const r = el.getBoundingClientRect();
+    if (!r.height) return false;
+    const hit = document.elementFromPoint(r.left + Math.min(8, r.width / 2), r.top + r.height / 2);
+    return !!hit && el.contains(hit);
+  });
+  const root = document.documentElement.style;
+  if (!shown) {
+    root.removeProperty('--esmart-toast-top');
+    return;
+  }
+  const r = shown.getBoundingClientRect();
+  root.setProperty('--esmart-toast-top', `${Math.max(0, r.top + r.height / 2 - PILL_HALF)}px`);
+}
 
 const ToastContext = createContext<ToastApi | null>(null);
 
@@ -78,6 +106,7 @@ function Description({ text, detail }: { text?: string; detail?: string }) {
 function PageToaster({ children }: { children: React.ReactNode }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
+  const desktop = useIsDesktop();
   // Sileo's state colours become the app's own, so a success toast is the
   // same green as a paid badge.
   useEffect(() => {
@@ -138,10 +167,12 @@ function PageToaster({ children }: { children: React.ReactNode }) {
     };
     return {
       show: (text, tone = 'info', options) => {
+        if (!desktop) levelWithHeader();
         if (options?.action) withAction(body(text, tone, options), options.action);
         else sileo[tone](body(text, tone, options));
       },
       promise: (task, messages) => {
+        if (!desktop) levelWithHeader();
         // The returned promise is the task itself; Sileo handles its own copy of the rejection.
         void sileo.promise(task, {
           loading: { title: messages.loading },
@@ -162,14 +193,19 @@ function PageToaster({ children }: { children: React.ReactNode }) {
         return task;
       },
     };
-  }, [tr, t]);
+  }, [tr, t, desktop]);
 
   return (
     <ToastContext.Provider value={api}>
       {children}
       {typeof document !== 'undefined'
         ? createPortal(
-            <Toaster position="top-right" offset={{ top: TOAST_TOP, right: TOAST_RIGHT }} theme={sileoTheme} options={options} />,
+            <Toaster
+              position={desktop ? 'top-right' : 'top-center'}
+              offset={desktop ? { top: TOAST_TOP, right: TOAST_RIGHT } : { top: PHONE_TOP }}
+              theme={sileoTheme}
+              options={options}
+            />,
             document.body,
           )
         : null}

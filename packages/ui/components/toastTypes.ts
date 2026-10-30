@@ -42,6 +42,13 @@ export type ToastApi = {
   promise: <T>(task: Promise<T>, messages: ToastPromiseMessages<T>) => Promise<T>;
 };
 
+/**
+ * Marks a header row a phone-browser toast centres on (the tab pages' own
+ * header, AppHeader). Pages without one use the stack header, whose middle is
+ * a fixed height down.
+ */
+export const TOAST_ANCHOR_ID = 'esmart-toast-anchor';
+
 export const settledText = <T>(message: string | ((value: T) => string), value: T) =>
   typeof message === 'function' ? message(value) : message;
 

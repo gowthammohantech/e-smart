@@ -9,7 +9,7 @@ import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
-import { useToast } from '@esmart/ui/components/Toast';
+import { TOAST_ANCHOR_ID, useToast } from '@esmart/ui/components/Toast';
 import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -119,7 +119,8 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         gap: t.spacing.sm,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+      {/* A phone browser's toast centres on this row (Toast.web.tsx). */}
+      <View nativeID={TOAST_ANCHOR_ID} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
         {showBack ? iconButton('arrow-left', tr('common:action.back'), goBack) : null}
         {/* The business's logo beside its name; a page with its own title shows just that. */}
         {!title && company ? (
