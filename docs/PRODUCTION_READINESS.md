@@ -130,6 +130,13 @@ API will not start until the provider rows are real.
 - [ ] `EXPO_PUBLIC_API_URL` / `VITE_API_URL`
 - [ ] `EXPO_PUBLIC_DEMO_LOGIN_*` / `VITE_DEMO_LOGIN_*` unset (they are compiled into the bundle)
 
+### Before deploying the offline sync work
+
+- [ ] Check production for duplicate issued document numbers: migration `0008` fails if any exist
+- [ ] Postgres 13 or newer (`change_log.tx_id` is `xid8`)
+- [ ] Have a CA confirm the tax rules: credit note deadline (warning only), return and backdated rates, 16-character numbers, future-date rule
+- [ ] Add a screen for closing the books: `lockedThroughDate` is API-only today
+
 ## 8. QA and release
 
 | Item | Owner | Status |

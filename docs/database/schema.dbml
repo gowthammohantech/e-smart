@@ -446,6 +446,7 @@ Table companies {
   composition_scheme boolean [not null, default: false]
   place_of_supply_state_code varchar(2)
   fiscal_year_start_month smallint [not null, default: 4, note: '1-12']
+  locked_through_date date [note: 'books closed through this date; owner only']
   plan plan_tier [not null, default: 'free', note: 'changed only through billing']
   onboarding_completed_at timestamptz
   version int [not null, default: 1]
@@ -644,6 +645,16 @@ Table subscription_events {
 // ---------------------------------------------------------------------
 // Settings masters
 // ---------------------------------------------------------------------
+
+Table tax_category_rates {
+  tax_category_id varchar(40) [not null, ref: > tax_categories.id]
+  effective_from date [not null]
+  rate numeric(6,3) [not null, note: 'what the category charged before its current rate']
+
+  indexes {
+    (tax_category_id, effective_from) [pk]
+  }
+}
 
 Table tax_categories {
   id varchar(40) [pk]
@@ -926,7 +937,7 @@ Table documents {
   updated_at timestamptz [not null, default: `now()`]
 
   indexes {
-    (company_id, kind, number) [note: 'unique where status <> draft (partial index)']
+    (company_id, kind, number) [note: "unique where number NOT LIKE '%-DRAFT' (partial index); cancelled drafts keep the placeholder"]
     (company_id, kind, status, date)
     (company_id, party_id, date)
     (company_id, branch_id, date)
@@ -1552,7 +1563,8 @@ Table client_id_mappings {
 }
 
 Table change_log {
-  seq bigserial [pk, note: 'monotonic cursor for /sync/pull']
+  seq bigserial [pk, note: 'order within a transaction']
+  tx_id xid8 [not null, default: `pg_current_xact_id()`, note: '/sync/pull cursor is (tx_id, seq), serving only transactions older than every running one']
   company_id varchar(40) [not null, ref: > companies.id]
   entity_type varchar(30) [not null]
   entity_id varchar(40) [not null]

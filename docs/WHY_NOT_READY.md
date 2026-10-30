@@ -2,6 +2,8 @@
 
 _Audit date: 13 Oct 2026, branch `claude/monorepo` @ `31ffef3`. Read-only review, one agent per app. Items marked *(inferred)* were not reproduced._
 
+_Updated 31 Oct 2026: the offline sync and data-loss items from this audit are fixed and removed below (commits `ac0a843` to `f971288`). Fixes were verified by automated tests only; no device run has been done. The GSP adapters are built but unverified: see `PRODUCTION_READINESS.md` §1. The rest of this audit still stands as of its date._
+
 ## Summary
 
 | App | Verdict | Typecheck | Lint | Tests |
@@ -33,8 +35,6 @@ All four apps build and pass their static checks. They are blocked by missing in
 ## 1. `apps/api`
 
 ### Blockers
-- **The GSP compliance adapter is only a skeleton** (`providers/compliance.ts:182-205`). Its paths aren't mapped to a vendor, it doesn't cache tokens, and it doesn't handle duplicate-IRN (2150) or fetch-before-resubmit. Production forbids the simulator, so e-invoice and e-way bill can't work.
-- **Sync can miss changes.** `/sync/pull` pages by `change_log.seq > since`, but `seq` is a bigserial assigned inside concurrent transactions (`modules/sync/handlers.ts:196-203`, `lib/audit.ts:43`). A change that commits after a higher `seq` is skipped forever by any device whose cursor is already past it. *(Found by reading the code; not reproduced.)*
 - **Shared links are dead.** `${PUBLIC_BASE_URL}/share/:token` has no route (`modules/documents/outbound.ts:68`).
 - The provider and boot problems listed under "Shared" items 1–2.
 
@@ -57,7 +57,6 @@ All four apps build and pass their static checks. They are blocked by missing in
 - **No real GSTIN or OCR adapters exist.** Both features will return 503 in production.
 - **PDF rendering will likely fail on deploy.** Production requires `PDF_PROVIDER=chromium`, but nothing installs Chromium in the Railpack image. *(inferred)*
 - **Config validation is weak.** `CREDENTIALS_KEY` length isn't checked, localhost values for `APP_URL`/`PUBLIC_BASE_URL`/`DATABASE_URL` aren't rejected, and S3 credentials aren't validated.
-- **`syncPush` dedup has a race.** It checks then inserts outside a transaction, so two concurrent pushes can both replay the same entry (`sync/handlers.ts:86-150`).
 - **No coverage reporting**, no e2e tests and no load tests.
 
 ### Low
@@ -81,10 +80,14 @@ All four apps build and pass their static checks. They are blocked by missing in
 - The placeholder legal links and the backend not starting (no providers, so OTP can't be sent). See "Shared".
 
 ### High: data loss risks
-- **Sign-out deletes unsynced changes.** `clearLocal()` resets `syncQueue` (`remote/session.ts:68-76`), yet the confirm dialog promises those changes stay on the device.
-- **Any failed token refresh wipes the outbox.** A 5xx or 429 from `/auth/refresh` signs the user out and runs `clearLocal` (`api-client/src/index.ts:72-75`).
-- **"Send yours again" can never resolve a conflict.** The retry reuses the old `baseVersion` and so conflicts again every time (`remote/retry.ts:5-8`). There is no diff or merge UI.
-- **Pull overwrites local rows that still have pending edits** (`remote/apply.ts:84-110`).
+
+### High: offline gaps still open
+- **No device test of offline sync.** Airplane mode, kill mid-push and two-device conflicts are untested on iOS and Android.
+- **Conflicts have no merge view.** The user can only send theirs or discard it, without seeing both versions.
+- **Queued payment, then an edit of its invoice, can still conflict with itself.** Only writes to the same record update the queued version.
+- **A finalise carries no version.** It can run on another device's newer edit if this device has no failed edit queued.
+- **A lost e-way bill response has no recovery.** The retry is refused by the portal and no lookup path exists yet. A timed-out IRN cancel is also not reconciled.
+- **A partial online refund is left for a person to record.** The owner is notified; a full refund deletes the payment.
 
 ### High: other
 - **No crash reporting and no error boundary.**
