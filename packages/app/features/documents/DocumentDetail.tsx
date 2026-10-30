@@ -818,7 +818,7 @@ ${url}`;
                 }
                 setDocumentStatus(doc.id, s);
                 setStatusOpen(false);
-                toast.show(tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), 'success', { icon: 'flag-checkered', detail: doc.number });
+                toast.show(tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), 'success', { icon: 'flag-checkered', detail: doc.number, varies: true });
               }}
               accessibilityRole="button"
               accessibilityLabel={tr('common:documentDetail.markAs', { status: statusLabel(tr, s) })}

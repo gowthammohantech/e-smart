@@ -46,6 +46,7 @@ export function PlanBillingDesktop() {
     toast.show(tr(up ? 'plan:billing.upgraded' : 'plan:billing.switched', { plan: next.name }), up ? 'success' : 'info', {
       icon: up ? 'rocket-launch-outline' : 'swap-vertical',
       detail: next.yearly === 0 ? tr('plan:billing.freeForever') : tr('plan:billing.renews', { price: `₹${formatNumber(next.yearly, 0, 'indian')}` }),
+      varies: true,
     });
   };
 

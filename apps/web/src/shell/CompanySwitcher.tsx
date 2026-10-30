@@ -96,7 +96,7 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
               // Already the active business: nothing switched, so no message.
               if (c.id === company?.id) return;
               setActiveCompany(c.id);
-              toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'success', { icon: 'swap-horizontal', detail: c.baseCurrency });
+              toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'info', { icon: 'swap-horizontal', detail: c.baseCurrency, varies: true });
             }}
           />
         ))}
@@ -115,7 +115,7 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
                   close();
                   if (b.id === activeBranchId) return;
                   setActiveBranch(b.id);
-                  toast.show(tr('common:toast.switchedBranch', { name: b.name }), 'info', { icon: b.isPrimary ? 'office-building-outline' : 'warehouse', detail: b.code });
+                  toast.show(tr('common:toast.switchedBranch', { name: b.name }), 'info', { icon: b.isPrimary ? 'office-building-outline' : 'warehouse', detail: b.code, varies: true });
                 }}
               />
             ))}
