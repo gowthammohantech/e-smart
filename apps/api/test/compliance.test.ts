@@ -1,6 +1,7 @@
+import { reconcileEInvoices } from '../src/modules/compliance/einvoice';
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { computeIrn, parseSignedQrPayload } from '@esmart/core/domain/eInvoice';
 import { validUptoFor } from '@esmart/core/domain/ewayBill';
 import { schema } from '@esmart/db';
@@ -402,5 +403,35 @@ describe('compliance: e-way bills', () => {
     expect(res.status).toBe(502);
     expect(res.body).toMatchObject({ code: 'EWB_REJECTED', issues: [{ code: 'SIM001' }] });
     expect(await t.deps.db.select().from(schema.ewayBills)).toHaveLength(0);
+  });
+});
+
+describe('e-invoice portal calls', () => {
+  it('holds no lock on the document during the call, and settles a lost answer later', async () => {
+    const m = await ready(t);
+    const inv = await b2b(m);
+    const provider = t.deps.providers.compliance;
+    const real = provider.submitInvoice.bind(provider);
+    let lockFree = false;
+    const spy = vi.spyOn(provider, 'submitInvoice').mockImplementationOnce(async () => {
+      const [row] = await t.deps.db.select().from(schema.documents).where(eq(schema.documents.id, inv.id)).for('update', { noWait: true });
+      lockFree = !!row;
+      return { ok: false, errors: [{ code: 'GSP_UNAVAILABLE', field: 'document', message: 'No answer', severity: 'blocking' }] } as never;
+    });
+    await t.post(`${m.c}/documents/${inv.id}/e-invoice`, {}, { token: m.token });
+    expect(lockFree).toBe(true);
+
+    const stored = async () => (await t.deps.db.select().from(schema.eInvoices).where(eq(schema.eInvoices.documentId, inv.id)))[0];
+    expect((await stored()).status).toBe('pending');
+
+    // Too soon: the attempt may still be running.
+    expect(await reconcileEInvoices(t.deps)).toBe(0);
+
+    t.setNow(new Date(t.deps.now().getTime() + 6 * 60_000));
+    spy.mockImplementation(real);
+    expect(await reconcileEInvoices(t.deps)).toBe(1);
+    expect(await stored()).toMatchObject({ status: 'generated' });
+    expect((await stored()).irn).toBeTruthy();
+    spy.mockRestore();
   });
 });

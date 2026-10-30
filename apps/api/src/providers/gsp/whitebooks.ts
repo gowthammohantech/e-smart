@@ -301,7 +301,7 @@ export class WhitebooksGateway implements GspGateway {
     return this.guard(async () => {
       const login = requireLogin(creds);
       const buyered = await this.withSandboxBuyer(login, req.payload);
-      const payload = prepareIrnPayload({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt) } });
+      const payload = prepareIrnPayload({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt, req.companyId) } });
       try {
         const { body } = await this.filing(login, PATHS.generateIrn, 'post', { body: payload });
         const record = readRecord<IrnRecord>(body);
@@ -355,7 +355,7 @@ export class WhitebooksGateway implements GspGateway {
         }
       } else {
         const { payload } = req;
-        reply = await this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody({ ...payload, docNo: sandboxDocNo(this.config, login.gstin, payload.docNo, payload.docDate) }));
+        reply = await this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody({ ...payload, docNo: sandboxDocNo(this.config, login.gstin, payload.docNo, payload.docDate, req.companyId) }));
       }
       return ewayBillResult(readRecord<EwbRecord>(reply), req) ?? incomplete('e-way bill number');
     });
@@ -466,8 +466,8 @@ export class WhitebooksGateway implements GspGateway {
  * registration), different from every other deployment's, and within NIC's 16 characters. The app's invoice,
  * PDF and numbering keep the real number.
  */
-export function sandboxDocNo(config: Config, gstin: string, docNo: string, docDate: string): string {
-  const digest = createHash('sha256').update(`${config.PUBLIC_BASE_URL}|${gstin}|${docNo}|${docDate}`).digest();
+export function sandboxDocNo(config: Config, gstin: string, docNo: string, docDate: string, companyId = ''): string {
+  const digest = createHash('sha256').update(`${config.PUBLIC_BASE_URL}|${gstin}|${companyId}|${docNo}|${docDate}`).digest();
   let n = 0n;
   for (const byte of digest.subarray(0, 8)) n = (n << 8n) | BigInt(byte);
   return `S${n.toString(36).toUpperCase().padStart(11, '0').slice(0, 11)}`;

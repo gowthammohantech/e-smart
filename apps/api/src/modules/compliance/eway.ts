@@ -280,7 +280,7 @@ export const ewayHandlers = defineHandlers({
       }
     }
 
-    const result = await ctx.db.transaction(async (tx) => {
+    const prepared = await ctx.db.transaction(async (tx) => {
       const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
       const settings = await loadSettings(tx, ctx.company);
       const core = await coreDocument(tx, ctx.company, doc, ctx.now);
@@ -357,13 +357,24 @@ export const ewayHandlers = defineHandlers({
         generatedBy: ctx.user.id,
       };
       const payload = buildEwbPayload(draft);
-      if (ctx.query.dryRun) return { issues, row: null };
+      if (ctx.query.dryRun) return { issues, submit: null };
 
       const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
       // A document with a live IRN gets its bill raised against it (Part B alone) where the portal supports that.
       const [einvoice] = await tx.select({ irn: schema.eInvoices.irn }).from(schema.eInvoices).where(and(eq(schema.eInvoices.documentId, doc.id), eq(schema.eInvoices.status, 'generated')));
-      const response = await ctx.deps.providers.compliance.submitEwayBill(creds, { payload, vehicleType: input.vehicleType, now, irn: einvoice?.irn?.trim() || undefined });
-      if (!response.ok) throw portalRejected(response.errors, 'EWB_REJECTED');
+      return { issues, submit: { draft, payload, creds, einvoice, transporter, distanceKm, currency } };
+    });
+    const { issues } = prepared;
+    if (!prepared.submit) return { ok: true, issues: issues as Issue[] };
+    const { draft, payload, creds, einvoice, transporter, currency } = prepared.submit;
+    distanceKm = prepared.submit.distanceKm;
+
+    // Outside the transaction: a bill the portal has raised can't be rolled back with it.
+    const response = await ctx.deps.providers.compliance.submitEwayBill(creds, { companyId: ctx.company.id, payload, vehicleType: input.vehicleType, now, irn: einvoice?.irn?.trim() || undefined });
+    if (!response.ok) throw portalRejected(response.errors, 'EWB_REJECTED');
+
+    const result = await ctx.db.transaction(async (tx) => {
+      const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
       const [taken] = await tx.select({ id: W.id }).from(W).where(eq(W.ewayBillNumber, response.ewayBillNumber));
       if (taken) throw portalRejected([{ code: 'EWB_DUPLICATE', field: 'document', message: 'The portal returned an e-way bill number already on record', severity: 'blocking' }], 'EWB_REJECTED');
 

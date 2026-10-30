@@ -564,6 +564,8 @@ describe('sandbox document numbers', () => {
     expect(a).toMatch(/^S[0-9A-Z]{11}$/);
     expect(sandboxDocNo(config, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29')).toBe(a);
     expect(sandboxDocNo(config, '29AAGCB1286Q000', 'INV/26-27/0004', '2026-10-29')).not.toBe(a);
+    // Two test companies sharing the sandbox GSTIN don't adopt each other's IRN.
+    expect(sandboxDocNo(config, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29', 'cmp_a')).not.toBe(sandboxDocNo(config, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29', 'cmp_b'));
     expect(sandboxDocNo({ ...config, PUBLIC_BASE_URL: 'https://other.example.test' }, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29')).not.toBe(a);
   });
 });

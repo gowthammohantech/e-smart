@@ -38,6 +38,9 @@ import { companyLogoLink } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
 import { documentsToWire, summariesToWire, type DocumentWire, type SummaryRow } from './wire';
 
+/** Sending a document to the same person again this soon is a retry, not a decision. */
+const RESEND_WINDOW_MS = 2 * 60_000;
+
 const D = schema.documents;
 const P = schema.parties;
 /** What the helpers need from any document operation's context. */
@@ -478,7 +481,7 @@ export const documentsHandlers = defineHandlers({
     // A payment link only makes sense for an invoice that still has money owing.
     const payable = row.kind === 'invoice' && !['draft', 'cancelled', 'paid'].includes(effectiveStatus(row, today(ctx.now)));
 
-    const { messageId } = await ctx.db.transaction(async (tx) => {
+    const { messageId, queued, text, html, pdfUrl } = await ctx.db.transaction(async (tx) => {
       const share = await createShareLinkFor(tx, ctx.deps, ctx.user, row, ctx.now);
       const pay = body.includePaymentLink && payable ? await paymentLinkFor(tx, ctx.deps, ctx.company, ctx.user, row, ctx.now) : null;
       let pdfUrl: string | undefined;
@@ -504,26 +507,24 @@ export const documentsHandlers = defineHandlers({
             })
           : undefined;
 
+      // What a retry under a new key would repeat: this document, just sent to this person.
+      const MD = schema.messageDeliveries;
+      const recent = await tx
+        .select({ id: MD.id, recipient: MD.recipient })
+        .from(MD)
+        .where(and(eq(MD.documentId, row.id), eq(MD.channel, body.channel), inArray(MD.status, ['sent', 'delivered', 'read']), gte(MD.createdAt, new Date(ctx.now.getTime() - RESEND_WINDOW_MS))));
       let first: string | undefined;
+      const queued: { id: string; to: string }[] = [];
       for (const to of [...recipients, ...(body.channel === 'email' ? (body.cc ?? []) : [])]) {
+        const already = recent.find((r) => r.recipient === to.slice(0, 254));
+        if (already) {
+          first ??= already.id;
+          continue;
+        }
         const id = newId('msg');
         first ??= id;
-        let status: 'sent' | 'failed' = 'sent';
-        let providerMessageId: string | null = null;
-        let error: string | null = null;
-        try {
-          const sent =
-            body.channel === 'email'
-              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text, html })
-              : body.channel === 'whatsapp'
-                ? await ctx.deps.providers.whatsapp.send({ to, text, documentUrl: pdfUrl, filename: pdfFilename(row.number) })
-                : await ctx.deps.providers.sms.send(to, text);
-          providerMessageId = sent.providerMessageId;
-        } catch (err) {
-          status = 'failed';
-          error = (err as Error).message;
-        }
-        await tx.insert(schema.messageDeliveries).values({
+        queued.push({ id, to });
+        await tx.insert(MD).values({
           id,
           companyId: row.companyId,
           channel: body.channel,
@@ -534,14 +535,30 @@ export const documentsHandlers = defineHandlers({
           message: text,
           includePaymentLink: !!pay,
           provider: body.channel,
-          providerMessageId,
-          status,
-          error,
+          status: 'queued',
           sentBy: ctx.user.id,
           createdAt: ctx.now,
         });
       }
-      await notify(tx, ctx.deps, {
+      return { messageId: first!, queued, text, html, pdfUrl };
+    });
+
+    // After the commit: the links they carry exist by now, and a message can't be unsent by a rollback.
+    for (const { id, to } of queued) {
+      try {
+        const sent =
+            body.channel === 'email'
+              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text, html })
+              : body.channel === 'whatsapp'
+                ? await ctx.deps.providers.whatsapp.send({ to, text, documentUrl: pdfUrl, filename: pdfFilename(row.number) })
+                : await ctx.deps.providers.sms.send(to, text);
+        await ctx.db.update(schema.messageDeliveries).set({ status: 'sent', providerMessageId: sent.providerMessageId }).where(eq(schema.messageDeliveries.id, id));
+      } catch (err) {
+        await ctx.db.update(schema.messageDeliveries).set({ status: 'failed', error: (err as Error).message }).where(eq(schema.messageDeliveries.id, id));
+      }
+    }
+    if (queued.length) {
+      await notify(ctx.db, ctx.deps, {
         companyId: row.companyId,
         kind: 'invoiceSent',
         title: `${row.number} sent`,
@@ -549,8 +566,7 @@ export const documentsHandlers = defineHandlers({
         entityType: 'document',
         entityId: row.id,
       });
-      return { messageId: first! };
-    });
+    }
     return { messageId, status: 'queued' as const };
   },
 

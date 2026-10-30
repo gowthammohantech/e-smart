@@ -9,7 +9,8 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { safeEqual, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { today } from '../documents/lifecycle';
-import { writePayment } from '../payments/engine';
+import { notify } from '../../lib/notify';
+import { deletePayment, writePayment } from '../payments/engine';
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === 'object' ? (v as Json) : {});
@@ -24,7 +25,7 @@ const PLANS: PlanTier[] = ['free', 'basic', 'pro', 'business'];
  * and `created_by` reference users): the person who created the link, or the
  * account owner, named after the source so the audit trail reads true.
  */
-async function actorFor(db: DbOrTx, userId: string | null | undefined, source: string): Promise<AuthUser | null> {
+export async function actorFor(db: DbOrTx, userId: string | null | undefined, source: string): Promise<AuthUser | null> {
   if (!userId) return null;
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
   if (!u) return null;
@@ -165,6 +166,8 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
   const [company] = await tx.select().from(schema.companies).where(eq(schema.companies.id, companyId)).for('update');
   if (!company) return `unknown company ${companyId}`;
   const [current] = known?.companyId === companyId ? [known] : await tx.select().from(S).where(eq(S.companyId, companyId));
+  // Events can arrive out of order. Cancelling ends a subscription for good (signing up again is a new id).
+  if (known?.status === 'cancelled') return `subscription ${subId} is already cancelled`;
   const plan = PLANS.find((p) => p === notes.plan) ?? current?.plan;
   if (!plan) return 'the subscription does not say which plan it is for';
   const cycle = notes.cycle === 'yearly' || notes.cycle === 'monthly' ? notes.cycle : (current?.cycle ?? 'monthly');
@@ -193,6 +196,28 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
     if (actor) await recordChange(tx, actor, { companyId, action: `plan changed to ${plan}`, entityType: 'company', entityId: companyId, entityLabel: company.name, version: updated.version, before: { plan: company.plan }, after: { plan } });
   }
   if (actor) await recordChange(tx, actor, { companyId, action: eventType, entityType: 'subscription', entityId: companyId, entityLabel: plan, version: row.version });
+}
+
+/**
+ * `refund.processed`: a full refund undoes the payment it refunds, reopening
+ * what it settled. A partial one is left for a person to record.
+ */
+async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Promise<string | void> {
+  const refund = obj(obj(payload.refund).entity);
+  const paymentId = str(refund.payment_id);
+  if (!paymentId) return 'payload has no refund.entity.payment_id';
+  const P = schema.payments;
+  const [payment] = await tx.select().from(P).where(and(eq(P.reference, paymentId), eq(P.direction, 'received'))).for('update');
+  if (!payment) return `no payment for ${paymentId}`;
+  const [company] = await tx.select().from(schema.companies).where(eq(schema.companies.id, payment.companyId));
+  const actor = await ownerOf(tx, payment.companyId, 'Razorpay');
+  if (!company || !actor) return 'the payment no longer resolves to a company';
+  const amount = num(refund.amount) ?? 0;
+  if (amount < payment.amountMinor) {
+    await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Partial refund to record', body: `${payment.number}: ${payment.currency.trim()} ${(amount / 100).toFixed(2)} was refunded online. Update the payment to match.`, entityType: 'payment', entityId: payment.id });
+    return 'partial refund left for the user to record';
+  }
+  await deletePayment(tx, company, actor, payment, ctx.now);
 }
 
 /** `subscription.cancelled` (and `.completed`, `.halted`): back to Free; no records are lost. */
@@ -280,6 +305,8 @@ export const webhookHandlers: WebhookHandlers = {
       switch (eventType) {
         case 'payment_link.paid':
           return paymentLinkPaid(ctx, tx, payload);
+        case 'refund.processed':
+          return refundProcessed(ctx, tx, payload);
         case 'subscription.activated':
         case 'subscription.charged':
           return subscriptionCharged(ctx, tx, eventId, eventType, payload);

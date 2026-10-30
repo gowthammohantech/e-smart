@@ -1,4 +1,5 @@
-import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { actorFor } from '../webhooks/handlers';
+import { and, eq, gt, isNotNull, lt, ne, sql } from 'drizzle-orm';
 import {
   E_INVOICE_KINDS,
   blockingIssues,
@@ -86,7 +87,13 @@ export async function generateEInvoiceFor(
   opts: { now: Date; dryRun?: boolean; onlyIfApplicable?: boolean },
 ): Promise<GenerateOutcome> {
   const { now, dryRun } = opts;
-  return db.transaction(async (tx) => {
+  const failed = async (tx: DbOrTx, row: DocRow, found: ComplianceIssue[], request?: IrpInvoicePayload, newAttempt = true) => {
+    const message = found[0]?.message ?? 'The portal refused the invoice';
+    await writeEInvoice(tx, row, { status: 'failed', issues: found, lastAttemptAt: now, requestPayload: request ?? null }, newAttempt, now);
+    await touchDocument(tx, actor, row, now, { complianceLastMessage: message, complianceLastAttemptAt: now }, { action: 'e-invoice rejected', after: found[0]?.code });
+    await notify(tx, deps, { companyId: row.companyId, kind: 'compliance', title: 'E-invoice rejected', body: `${row.number}: ${message}`, entityType: 'document', entityId: row.id });
+  };
+  const prepared = await db.transaction(async (tx) => {
     const [row] = await tx.select().from(D).where(and(eq(D.companyId, company.id), eq(D.id, documentId))).for('update');
     const [existing] = await tx.select().from(E).where(eq(E.documentId, documentId));
     if (existing?.status === 'generated') {
@@ -108,28 +115,37 @@ export async function generateEInvoiceFor(
     const issues = validateEInvoice(ctx);
     const blocking = blockingIssues(issues);
     const payload = buildIrpPayload(ctx);
-    const failed = async (found: ComplianceIssue[], request?: IrpInvoicePayload) => {
-      const message = found[0]?.message ?? 'The portal refused the invoice';
-      await writeEInvoice(tx, row, { status: 'failed', issues: found, lastAttemptAt: now, requestPayload: request ?? null }, true, now);
-      await touchDocument(tx, actor, row, now, { complianceLastMessage: message, complianceLastAttemptAt: now }, { action: 'e-invoice rejected', after: found[0]?.code });
-      await notify(tx, deps, { companyId: row.companyId, kind: 'compliance', title: 'E-invoice rejected', body: `${row.number}: ${message}`, entityType: 'document', entityId: row.id });
-    };
-
     if (blocking.length) {
-      if (!dryRun) await failed(issues);
+      if (!dryRun) await failed(tx, row, issues);
       return { kind: 'invalid' as const, issues };
     }
     if (dryRun) return { kind: 'ok' as const, issues, payload };
 
     const creds = await portalCredentials(tx, deps.config, company, 'einvoice');
-    const response = await deps.providers.compliance.submitInvoice(creds, { payload, existingIrns: ctx.existingIrns ?? [], now: ctx.now });
+    // Noted and committed before the call. The portal can't be rolled back, so no transaction is
+    // held open across it, and if the answer is lost the reconcile job picks this up.
+    await writeEInvoice(tx, row, { status: 'pending', requestPayload: payload, lastAttemptAt: now }, true, now);
+    return { kind: 'submit' as const, creds, payload, issues, applicability, existingIrns: ctx.existingIrns ?? [], at: ctx.now };
+  });
+  if (prepared.kind !== 'submit') return prepared;
+  const { creds, payload, issues, applicability } = prepared;
+
+  const response = await deps.providers.compliance.submitInvoice(creds, { payload, existingIrns: prepared.existingIrns, now: prepared.at, companyId: company.id });
+
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(D).where(and(eq(D.companyId, company.id), eq(D.id, documentId))).for('update');
+    // No answer isn't a refusal: the portal may have it. It stays pending for the reconcile job.
+    if (!response.ok && response.errors.some((x) => x.code === 'GSP_UNAVAILABLE')) {
+      await touchDocument(tx, actor, row, now, { complianceLastMessage: response.errors[0].message, complianceLastAttemptAt: now }, { action: 'e-invoice unanswered', after: response.errors });
+      return { kind: 'rejected' as const, issues: response.errors, payload };
+    }
     // The IRN is unique across the whole portal; another tenant holding it is a duplicate.
     const clash = response.ok ? (await tx.select({ id: E.documentId }).from(E).where(and(eq(E.irn, response.irn), ne(E.documentId, row.id))))[0] : undefined;
     if (!response.ok || clash) {
       const errors: ComplianceIssue[] = response.ok
         ? [{ code: '2150', field: 'document', message: 'Duplicate IRN: this document has already been reported for the financial year', severity: 'blocking' }]
         : response.errors;
-      await failed(errors, payload);
+      await failed(tx, row, errors, payload, false);
       return { kind: 'rejected' as const, issues: errors, payload };
     }
 
@@ -153,13 +169,44 @@ export async function generateEInvoiceFor(
         responsePayload: response,
         lastAttemptAt: now,
       },
-      true,
+      false,
       now,
     );
     await touchDocument(tx, actor, row, now, { complianceLastMessage: null, complianceLastAttemptAt: now }, { action: 'generated e-invoice', after: response.irn });
     await notify(tx, deps, { companyId: row.companyId, kind: 'compliance', title: 'IRN generated', body: `${row.number} · Ack ${response.ackNo}`, entityType: 'document', entityId: row.id });
     return { kind: 'ok' as const, issues, payload };
   });
+}
+
+/** How old an unanswered attempt must be before the job takes it up, and how long it keeps trying. */
+const RECONCILE_AFTER_MS = 5 * 60_000;
+const RECONCILE_UNTIL_MS = 24 * 3_600_000;
+
+/**
+ * Settles e-invoices whose portal call never got an answer, by asking again:
+ * the portal recognises a document it already has and hands back its IRN. Called
+ * on an interval by the server.
+ */
+export async function reconcileEInvoices(deps: Deps): Promise<number> {
+  const now = deps.now();
+  const stuck = await deps.db
+    .select({ documentId: E.documentId, companyId: E.companyId })
+    .from(E)
+    .where(and(eq(E.status, 'pending'), lt(E.lastAttemptAt, new Date(now.getTime() - RECONCILE_AFTER_MS)), gt(E.lastAttemptAt, new Date(now.getTime() - RECONCILE_UNTIL_MS))));
+  let settled = 0;
+  for (const { documentId, companyId } of stuck) {
+    try {
+      const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+      const [doc] = await deps.db.select({ createdBy: D.createdBy }).from(D).where(eq(D.id, documentId));
+      const actor = await actorFor(deps.db, doc?.createdBy, 'Reconcile');
+      if (!company || !actor) continue;
+      const outcome = await generateEInvoiceFor(deps.db, deps, company, actor, documentId, { now });
+      if (outcome.kind === 'ok') settled += 1;
+    } catch {
+      // Still no answer: the next run asks again.
+    }
+  }
+  return settled;
 }
 
 /**
@@ -218,10 +265,10 @@ export const eInvoiceHandlers = defineHandlers({
   async cancelEInvoice(ctx) {
     const { reasonCode, remark } = ctx.body;
     if (requiresCancelRemark(reasonCode) && !remark?.trim()) throw invalid('remark', 'Say why the IRN is being cancelled');
-    await ctx.db.transaction(async (tx) => {
+    const now = ctx.now.toISOString();
+    const checked = await ctx.db.transaction(async (tx) => {
       const row = await findDocument(tx, ctx.company, ctx.user, ctx.params.id, { lock: true });
       const [e] = await tx.select().from(E).where(eq(E.documentId, row.id));
-      const now = ctx.now.toISOString();
       const allowed = canCancelEInvoice(
         e ? { eInvoiceStatus: e.status, irn: e.irn?.trim(), irnGeneratedAt: e.generatedAt?.toISOString() } : undefined,
         now,
@@ -235,11 +282,17 @@ export const eInvoiceHandlers = defineHandlers({
       }
 
       const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'einvoice');
-      const response = await ctx.deps.providers.compliance.cancelIrn(creds, { irn: e!.irn!.trim(), irnGeneratedAt: e!.generatedAt!.toISOString(), reasonCode, remark, now });
-      if (!response.ok) throw portalRejected(response.errors, 'IRP_REJECTED');
+      return { creds, irn: e!.irn!.trim(), generatedAt: e!.generatedAt!.toISOString() };
+    });
+    // Outside the transaction: a cancel the portal has made can't be rolled back with it.
+    const response = await ctx.deps.providers.compliance.cancelIrn(checked.creds, { irn: checked.irn, irnGeneratedAt: checked.generatedAt, reasonCode, remark, now });
+    if (!response.ok) throw portalRejected(response.errors, 'IRP_REJECTED');
+
+    await ctx.db.transaction(async (tx) => {
+      const row = await findDocument(tx, ctx.company, ctx.user, ctx.params.id, { lock: true });
 
       await writeEInvoice(tx, row, { status: 'cancelled', cancelledAt: ctx.now, cancelReasonCode: reasonCode, cancelRemark: remark?.slice(0, 100) ?? null }, false, ctx.now);
-      await touchDocument(tx, ctx.user, row, ctx.now, { complianceLastMessage: `IRN cancelled on the portal: ${response.reason.toLowerCase()}` }, { action: 'cancelled e-invoice', before: e!.irn?.trim(), after: response.reason });
+      await touchDocument(tx, ctx.user, row, ctx.now, { complianceLastMessage: `IRN cancelled on the portal: ${response.reason.toLowerCase()}` }, { action: 'cancelled e-invoice', before: checked.irn, after: response.reason });
       await notify(tx, ctx.deps, { companyId: row.companyId, kind: 'compliance', title: 'IRN cancelled', body: `${row.number} · ${response.reason}`, entityType: 'document', entityId: row.id });
     });
     return { ok: true, issues: [] };

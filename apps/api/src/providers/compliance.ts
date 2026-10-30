@@ -67,13 +67,13 @@ export interface ComplianceProvider {
   readonly name: 'simulator' | 'gsp';
   /** `irp` is checked with the e-invoice login, `ewb` with the e-way bill login. */
   testConnection(logins: PortalLogins): Promise<ConnectionResult>;
-  submitInvoice(creds: PortalCredentials | null, req: { payload: IrpInvoicePayload; existingIrns: string[]; now: string }): Promise<SubmitInvoiceResult>;
+  submitInvoice(creds: PortalCredentials | null, req: { companyId?: string; payload: IrpInvoicePayload; existingIrns: string[]; now: string }): Promise<SubmitInvoiceResult>;
   cancelIrn(creds: PortalCredentials | null, req: { irn: string; irnGeneratedAt: string; reasonCode: CancelReasonCode; remark?: string; now: string }): Promise<CancelIrnResult>;
   /**
    * `irn` is the document's live IRN, when it has one: a GSP then raises the bill
    * against it with Part B alone, since NIC already holds the document.
    */
-  submitEwayBill(creds: PortalCredentials | null, req: { payload: EwbPayload; vehicleType: VehicleType; now: string; irn?: string }): Promise<SubmitEwayBillResult>;
+  submitEwayBill(creds: PortalCredentials | null, req: { companyId?: string; payload: EwbPayload; vehicleType: VehicleType; now: string; irn?: string }): Promise<SubmitEwayBillResult>;
   updatePartB(creds: PortalCredentials | null, req: PartBUpdateRequest): Promise<UpdatePartBResult>;
   extend(
     creds: PortalCredentials | null,
