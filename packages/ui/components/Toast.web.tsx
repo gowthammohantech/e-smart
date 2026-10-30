@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -27,6 +27,12 @@ export { TOAST_ANCHOR_ID } from './toastTypes';
 // and its action is an <a>. Above react-native-web's Modal (z-index 9999), so
 // a toast about an open sheet is not hidden behind it. A white pill on a light
 // page needs a shadow to lift it off; --esmart-toast-shadow follows the theme.
+// Sileo opens every toast to its full 350px, however short the message; here
+// the opened body is only as wide as its message, or the pill if that is wider,
+// and lines up under the pill's end (or middle, on a phone). The message sizes
+// itself in CSS; the body is drawn in SVG, so its width comes from the message's
+// (useBodyFitsMessage).
+const SILEO_WIDTH = 350;
 if (typeof document !== 'undefined' && !document.getElementById('esmart-sileo')) {
   const style = document.createElement('style');
   style.id = 'esmart-sileo';
@@ -42,6 +48,12 @@ if (typeof document !== 'undefined' && !document.getElementById('esmart-sileo'))
     [data-sileo-viewport][data-theme="light"] [data-sileo-description] { color: rgba(255, 255, 255, 0.82); }
     [data-sileo-viewport][data-theme="dark"] [data-sileo-description] { color: rgba(20, 26, 36, 0.78); }
     [data-sileo-button] { width: 100%; height: 2.25rem; margin-top: 12px; padding: 0 12px; font-size: 0.8125rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+    [data-sileo-content] { width: fit-content; min-width: var(--_pw); max-width: 100%; }
+    [data-sileo-toast][data-position='right'] [data-sileo-content] { left: auto; right: 0; }
+    [data-sileo-toast][data-position='center'] [data-sileo-content] { left: 50%; transform: translateX(-50%); }
+    [data-sileo-body] { width: var(--esmart-body-w, ${SILEO_WIDTH}px); }
+    [data-sileo-toast][data-position='right'] [data-sileo-body] { x: calc(${SILEO_WIDTH}px - var(--esmart-body-w, ${SILEO_WIDTH}px)); }
+    [data-sileo-toast][data-position='center'] [data-sileo-body] { x: calc((${SILEO_WIDTH}px - var(--esmart-body-w, ${SILEO_WIDTH}px)) / 2); }
   `;
   document.head.appendChild(style);
 }
@@ -91,10 +103,33 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 // About as much as the 350px pill shows on one line beside its icon.
 const PILL_CHARS = 34;
 
+/** Gives the opened body (an SVG rect) the width the message takes, once it is shown; while hidden it has no width to measure. */
+function useBodyFitsMessage(ref: React.RefObject<HTMLSpanElement | null>) {
+  useLayoutEffect(() => {
+    const content = ref.current?.closest<HTMLElement>('[data-sileo-content]');
+    const canvas = content?.parentElement?.querySelector<HTMLElement>('[data-sileo-canvas]');
+    if (!content || !canvas) return;
+    const fit = () => {
+      if (content.dataset.visible === 'true' && content.offsetWidth) canvas.style.setProperty('--esmart-body-w', `${content.offsetWidth}px`);
+    };
+    fit();
+    const resized = new ResizeObserver(fit);
+    resized.observe(content);
+    const shown = new MutationObserver(fit);
+    shown.observe(content, { attributes: true, attributeFilter: ['data-visible'] });
+    return () => {
+      resized.disconnect();
+      shown.disconnect();
+    };
+  }, [ref]);
+}
+
 /** The message when the pill couldn't hold it, then its detail: quieter, and in even-width figures so amounts line up. */
 function Description({ text, detail }: { text?: string; detail?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useBodyFitsMessage(ref);
   return (
-    <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <span ref={ref} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {text ? <span>{text}</span> : null}
       {detail ? (
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>{detail}</span>
@@ -144,9 +179,11 @@ function PageToaster({ children }: { children: React.ReactNode }) {
       icon ? <MaterialCommunityIcons name={icon} size={15} color={color} /> : undefined;
     // The message itself is the pill ("Welcome back", "PDF downloaded"), opening
     // out only for its detail or button. One too long for the pill gets a heading
-    // for its kind instead, with the whole message beneath.
+    // for its kind instead, with the whole message beneath; so does one whose
+    // length varies (a name in it, or an error's reason), every time, so the same
+    // action doesn't flip between the two.
     const body = (text: string, tone: ToastTone, options?: ToastOptions): SileoOptions => {
-      const fits = text.length <= PILL_CHARS;
+      const fits = text.length <= PILL_CHARS && !options?.varies && tone !== 'error';
       return {
         title: fits ? text : titles[tone],
         description: fits && !options?.detail ? undefined : <Description text={fits ? undefined : text} detail={options?.detail} />,

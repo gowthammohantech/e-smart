@@ -487,6 +487,7 @@ export const items = pgTable("items", {
 	barcode: varchar({ length: 40 }),
 	trackInventory: boolean("track_inventory").default(false).notNull(),
 	openingStock: numeric("opening_stock", { precision: 18, scale:  3 }).default('0').notNull(),
+	openingStockDate: date("opening_stock_date"),
 	reorderLevel: numeric("reorder_level", { precision: 18, scale:  3 }).default('0').notNull(),
 	imageAttachmentId: varchar("image_attachment_id", { length: 40 }),
 	status: activeStatus().default('active').notNull(),

@@ -124,7 +124,7 @@ export default function ItemList() {
             title={emptyTitle}
             message={emptyMessage}
             actionLabel={inTab.length ? undefined : 'Add item'}
-            onAction={inTab.length ? undefined : () => router.push('/(app)/catalog/items/new')}
+            onAction={inTab.length ? undefined : () => router.push(`/(app)/catalog/items/new?type=${tab}`)}
           />
         ) : (
           <Card padded={false}>
@@ -143,7 +143,8 @@ export default function ItemList() {
         )}
       </ScrollView>
       )}
-      <Fab icon="plus" onPress={() => router.push('/(app)/catalog/items/new')} />
+      {/* A new one starts on the tab it was added from. */}
+      <Fab icon="plus" onPress={() => router.push(`/(app)/catalog/items/new?type=${tab}`)} />
     </View>
   );
 }

@@ -76,7 +76,7 @@ export default function AcceptInvite() {
     setBusy(true);
     remoteSession
       .acceptInvite(inviteToken, undefined, invite.companyIds[0])
-      .then(() => toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline' }))
+      .then(() => toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline', varies: true }))
       .catch((err: unknown) => {
       setBusy(false);
       setErrors({ password: err instanceof ApiError && err.status === 400 ? tr('auth:invite.invalid') : describeError(err, tr) });
@@ -94,7 +94,7 @@ export default function AcceptInvite() {
     remoteSession
       .acceptInvite(inviteToken, password)
       .then(() => {
-        if (invite) toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline' });
+        if (invite) toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline', varies: true });
       })
       .catch((err: unknown) => {
       setBusy(false);

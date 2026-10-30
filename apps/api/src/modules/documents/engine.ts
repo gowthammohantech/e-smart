@@ -282,6 +282,10 @@ export async function prepareDocument(
   if (!cur) blocking('currency', `Unknown currency ${f.currency}`);
   if (f.chargesCurrency && f.chargesCurrency !== f.currency) blocking('charges.currency', `Must be in the document's currency (${f.currency})`);
 
+  // A document falls due, or a quote lapses, on or after the day it is dated.
+  if (f.dueDate && f.dueDate < f.date) blocking('dueDate', `The due date cannot be before the document date (${f.date})`);
+  if (f.validUntil && f.validUntil < f.date) blocking('validUntil', `Valid until cannot be before the document date (${f.date})`);
+
   if (f.sourceDocumentId) {
     const [src] = await db.select({ id: D.id }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
@@ -298,6 +302,10 @@ export async function prepareDocument(
     if (!category) blocking(`lines[${i}].taxCategoryId`, 'No such tax category in this company');
     const item = l.itemId ? items.find((it) => it.id === l.itemId) : undefined;
     if (l.itemId && !item) blocking(`lines[${i}].itemId`, 'No such item in this company');
+    // An item has stock from the day its opening stock was counted, not before.
+    if (item?.trackInventory && item.openingStockDate && f.date < item.openingStockDate) {
+      blocking('date', `${item.name}'s opening stock is dated ${item.openingStockDate}; the document cannot be dated before it`);
+    }
     if (l.unitPriceCurrency && l.unitPriceCurrency !== f.currency) blocking(`lines[${i}].unitPrice.currency`, `Must be in the document's currency (${f.currency})`);
     if (!(l.quantity > 0)) blocking(`lines[${i}].quantity`, 'Must be more than zero');
     if (l.unitPriceMinor < 0) blocking(`lines[${i}].unitPrice`, 'Cannot be negative');

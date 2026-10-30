@@ -24,6 +24,7 @@ export function itemToWire(row: ItemRow, imageUri?: string): Schema<'Item'> {
     barcode: row.barcode,
     trackInventory: row.trackInventory,
     openingStock: Number(row.openingStock),
+    openingStockDate: row.openingStockDate,
     reorderLevel: Number(row.reorderLevel),
     imageUri,
     status: row.status,
@@ -37,7 +38,7 @@ export function itemWithStock(row: ItemRow, onHand: number, imageUri?: string): 
   return { ...itemToWire(row, imageUri), stockOnHand: onHand, low };
 }
 
-/** Columns from an Item body. Opening stock is written on create only. */
+/** Columns from an Item body. Opening stock and its date are written on create only. */
 export function itemColumns(body: Schema<'Item'>, currency: string) {
   return {
     sku: body.sku.trim(),

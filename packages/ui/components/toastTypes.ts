@@ -19,6 +19,13 @@ export type ToastOptions = {
   detail?: string;
   /** A follow-up the person is likely to want next, e.g. "Record payment" after issuing. */
   action?: ToastAction;
+  /**
+   * The message carries a name, so its length changes from one time to the
+   * next ("Now showing {{name}}"): it always opens under its kind's heading
+   * ("Good to know") instead of being the pill, so the same action looks the
+   * same however long the name is.
+   */
+  varies?: boolean;
 };
 
 /** A settled message: the text alone, or the text with its detail and follow-up. */
