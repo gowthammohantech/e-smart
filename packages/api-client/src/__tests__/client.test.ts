@@ -92,6 +92,17 @@ describe('createApiClient', () => {
     expect(getTokens()).toEqual({ accessToken: 'old', refreshToken: 'r1' });
   });
 
+  it('gives up on a request that never settles, as on a lost connection', async () => {
+    const api = createApiClient({
+      baseUrl: BASE,
+      getTokens: () => null,
+      setTokens: () => {},
+      timeoutMs: 10,
+      fetch: (() => new Promise(() => {})) as unknown as typeof fetch,
+    });
+    await expect(api.GET('/me')).rejects.toBeInstanceOf(TypeError);
+  });
+
   it('throws ApiError carrying the problem code and issues', async () => {
     const { api } = setup(() =>
       json(422, { status: 422, code: 'VALIDATION_FAILED', issues: [{ field: 'name', message: 'Required' }] }, 'application/problem+json'),

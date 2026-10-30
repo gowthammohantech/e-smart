@@ -16,6 +16,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { formatRelative } from '@esmart/core/lib/date';
+import { blockerOf, type Entry } from '../../../remote/outbox';
 import { remoteSession, retryFailed, retrySync, syncAll, syncNow, useRemoteMeta } from '../../../remote';
 import { drop } from '../../../remote/outbox';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -31,8 +32,13 @@ export default function SyncStatus() {
   const online = useRemoteMeta((m) => m.online);
   const syncing = useRemoteMeta((m) => m.syncing);
   const lastSyncAt = useRemoteMeta((m) => m.lastSyncAt);
+  const lastError = useRemoteMeta((m) => m.lastError);
   const [open, setOpen] = useState<SyncQueueEntry | null>(null);
   const offline = !online;
+  const waitingOn = (q: SyncQueueEntry) => {
+    const blocker = q.method && q.path ? blockerOf(q as Entry) : undefined;
+    return blocker ? tr('settings:sync.waitingOn', { label: blocker.label }) : undefined;
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -60,7 +66,7 @@ export default function SyncStatus() {
               <ListRow
                 key={q.id}
                 title={q.label}
-                subtitle={`${q.action} · ${q.entityType}`}
+                subtitle={waitingOn(q) ?? `${q.action} · ${q.entityType}`}
                 meta={`Queued ${formatRelative(q.queuedAt.slice(0, 10))} · ${q.attempts} attempt${q.attempts === 1 ? '' : 's'}`}
                 icon={q.status === 'failed' ? 'cloud-alert' : 'cloud-upload-outline'}
                 iconColor={q.status === 'failed' ? t.c.bad : t.c.primary}
@@ -80,6 +86,11 @@ export default function SyncStatus() {
                   ? tr('settings:sync.lastSynced', { when: formatRelative(lastSyncAt.slice(0, 10)) })
                   : tr('settings:sync.neverSynced')}
             </Text>
+            {lastError ? (
+              <Text variant="caption" tone="bad" center>
+                {tr('settings:sync.lastError', { message: lastError })}
+              </Text>
+            ) : null}
             <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncAll()} fullWidth />
             <Button title={tr('settings:sync.reload')} variant="ghost" icon="cloud-download-outline" disabled={offline} onPress={() => void syncNow().then(remoteSession.resync)} fullWidth />
           </View>

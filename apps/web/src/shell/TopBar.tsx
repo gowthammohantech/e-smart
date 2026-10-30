@@ -128,7 +128,8 @@ export function TopBar() {
   const signOut = useSignOut();
 
   const offline = !useRemoteMeta((m) => m.online);
-  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status !== 'synced').length);
+  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
+  const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
 
   const { setAnchor: bellAnchor, rect: bellRect, open: openBellMenu, close: closeBellMenu } = useMenuAnchor();
   const { setAnchor: accountAnchor, rect: accountRect, open: openAccountMenu, close: closeAccountMenu } = useMenuAnchor();
@@ -206,7 +207,8 @@ export function TopBar() {
       <View style={{ flex: 1 }} />
 
       {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ alignSelf: 'center' }} /> : null}
-      {!offline && pendingSync > 0 ? <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ alignSelf: 'center' }} /> : null}
+      {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ alignSelf: 'center' }} /> : null}
+      {pendingSync > 0 ? <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ alignSelf: 'center' }} /> : null}
 
       <LixiButton label={tr('nav:more.entry.askLixi')} />
       <IconButton ref={bellAnchor} icon="bell-outline" label={tr('nav:shell.notifications')} onPress={openBellMenu} badge={unread} />

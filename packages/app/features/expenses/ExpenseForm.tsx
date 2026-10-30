@@ -23,7 +23,9 @@ import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
+import { isNetworkError } from '../../remote/api';
 import { uploadAttachment } from '../../remote/attachments';
+import { useReceiptQueue } from '../../remote/receiptQueue';
 import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
 import {
@@ -165,6 +167,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     }
 
     const attachmentIds = [...(expense?.attachmentIds ?? [])];
+    let receiptLater: string | undefined;
     if (receiptUri) {
       // The scan already uploaded its image; a photo picked here goes up now. Uploads need a connection.
       if (receiptUri === initial?.receiptUri && initial.receiptAttachmentId) {
@@ -175,8 +178,12 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           const uploaded = await uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id });
           attachmentIds.push(uploaded.id);
         } catch (err) {
-          toast.show(tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }), 'error');
-          return;
+          // No connection: the expense is saved now and its receipt follows when one returns.
+          if (isNetworkError(err)) receiptLater = receiptUri;
+          else {
+            toast.show(tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }), 'error');
+            return;
+          }
         } finally {
           setUploading(false);
         }
@@ -214,7 +221,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       setAccountError(tr('purchases:form.accountRequired'));
       return;
     }
-    toast.show(expense ? 'Expense updated' : 'Expense recorded', 'success');
+    if (receiptLater) useReceiptQueue.getState().add(id, record.companyId, receiptLater);
+    toast.show(receiptLater ? tr('purchases:form.receiptQueued') : expense ? 'Expense updated' : 'Expense recorded', 'success');
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };

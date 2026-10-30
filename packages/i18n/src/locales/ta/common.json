@@ -104,6 +104,8 @@
     "close": "மூடு",
     "create": "உருவாக்கு",
     "offline": "இணையம் இல்லை",
+    "failedSync": "{{count}} தோல்வி",
+    "provisional": "தற்காலிக எண்",
     "notifications": "அறிவிப்புகள்",
     "business": "வணிகம்",
     "allBranches": "அனைத்துக் கிளைகள்",

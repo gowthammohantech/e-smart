@@ -115,6 +115,24 @@ export function update(id: string, patch: Partial<Entry>) {
   replace(id, patch);
 }
 
+/** Stock movements and notification marks don't build on one another. */
+export const standsAlone = (e: Entry) => /\/(stock|notifications)(\/|$)/.test(e.path);
+
+/**
+ * The failed entry this one is waiting on: an earlier change to the same
+ * entity, or the create of an offline id it mentions. It was made on top of
+ * something the server doesn't have.
+ */
+export function blockerOf(e: Entry, all: Entry[] = entries()): Entry | undefined {
+  if (e.status === 'failed' || standsAlone(e)) return undefined;
+  const failed = all.filter((f) => f.status === 'failed' && !standsAlone(f));
+  if (!failed.length) return undefined;
+  const same = failed.find((f) => f.entityId === e.entityId);
+  if (same) return same;
+  const text = `${e.path} ${JSON.stringify(e.body ?? null)}`;
+  return failed.find((f) => f.clientEntityId && text.includes(f.clientEntityId));
+}
+
 /** Noted before the request goes out, so nothing folds into it from here on. */
 export function markSent(ids: string[]) {
   const at = new Date().toISOString();

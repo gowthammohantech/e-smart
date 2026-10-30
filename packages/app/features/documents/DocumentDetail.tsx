@@ -10,6 +10,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
+import { knownToServer } from '../../remote/meta';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
@@ -269,6 +270,7 @@ ${url}`;
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             <StatusBadge status={doc.status} />
+            {doc.status !== 'draft' && !knownToServer(doc.id) ? <Badge label={tr('common:component.provisional')} tone="warning" size="sm" /> : null}
             {doc.status === 'overdue' && overdueDays > 0 ? (
               <Text variant="micro" tone="bad" weight="600">
                 {overdueDays} days late

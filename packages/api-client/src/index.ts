@@ -30,6 +30,8 @@ export type ApiClientOptions = {
   /** Mints the Idempotency-Key sent with every POST. Defaults to crypto.randomUUID. */
   idempotencyKey?: () => string;
   fetch?: typeof fetch;
+  /** Gives up on a request after this long, as if the connection had dropped. Defaults to two minutes. */
+  timeoutMs?: number;
 };
 
 const PUBLIC_PREFIXES = ['/auth/', '/plans', '/reference/', '/invites/'];
@@ -55,7 +57,23 @@ async function asStandardResponse(res: Pick<Response, 'status' | 'statusText' | 
  * token once on a 401 and retries, and turns problem+json into ApiError.
  */
 export function createApiClient(options: ApiClientOptions) {
-  const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const rawFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  /** A request that never settles would otherwise hold up every sync after it. */
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const signal = (input instanceof Request ? input.signal : init?.signal) ?? undefined;
+    signal?.addEventListener('abort', () => controller.abort());
+    try {
+      return await Promise.race([
+        rawFetch(input, { ...init, signal: controller.signal }),
+        new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new TypeError('The request timed out')))),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }) as typeof fetch;
   const newKey = options.idempotencyKey ?? (() => crypto.randomUUID());
   let refreshing: Promise<Tokens | null> | null = null;
   // A sent request's body is spent, so keep an unsent copy for the one retry.

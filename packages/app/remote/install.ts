@@ -1,7 +1,8 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import type { PlanTier } from '@esmart/core/types';
 import { useAppStore, type AppState } from '../store/appStore';
 import { api } from './api';
+import { useRemoteMeta } from './meta';
 import { MUTATIONS } from './mutations';
 import * as outbox from './outbox';
 import { signOut, watchSessionEnd } from './session';
@@ -58,4 +59,14 @@ export function installRemote() {
   Object.assign(store.getState(), patch);
   outbox.onEnqueue.add(() => syncSoon());
   watchSessionEnd();
+  followOtherTabs();
+}
+
+/** On the web another tab may have changed the saved book: take its copy, or the next save here undoes its work. */
+function followOtherTabs() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  window.addEventListener('storage', (e) => {
+    if (e.key === useAppStore.persist.getOptions().name) void useAppStore.persist.rehydrate();
+    if (e.key === useRemoteMeta.persist.getOptions().name) void useRemoteMeta.persist.rehydrate();
+  });
 }

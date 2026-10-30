@@ -104,6 +104,8 @@
     "close": "Close",
     "create": "Create",
     "offline": "Offline",
+    "failedSync": "{{count}} failed",
+    "provisional": "Provisional number",
     "notifications": "Notifications",
     "business": "Business",
     "allBranches": "All branches",

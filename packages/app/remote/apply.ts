@@ -3,6 +3,7 @@ import { useAppStore } from '../store/appStore';
 import { COLLECTIONS, COMPANY_DEFAULTS, type CollectionKey } from './collections';
 import { useLogoQueue } from './logoQueue';
 import { knownToServer, useRemoteMeta } from './meta';
+import { useReceiptQueue } from './receiptQueue';
 
 type Row = Record<string, unknown>;
 
@@ -51,6 +52,7 @@ export function remapIds(map: Record<string, string>) {
     session: { ...s.session, userId: s.session.userId ? (ids.get(s.session.userId) ?? s.session.userId) : null },
   } as never);
   useLogoQueue.getState().remap(ids);
+  useReceiptQueue.getState().remap(ids);
   const meta = useRemoteMeta.getState();
   // A screen may still hold the old id (its route param), so remember where it went.
   meta.addAliases(Object.fromEntries(ids));

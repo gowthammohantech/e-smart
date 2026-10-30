@@ -89,6 +89,7 @@ export function SyncStatusDesktop() {
   const online = useRemoteMeta((m) => m.online);
   const syncing = useRemoteMeta((m) => m.syncing);
   const lastSyncAt = useRemoteMeta((m) => m.lastSyncAt);
+  const lastError = useRemoteMeta((m) => m.lastError);
   const [open, setOpen] = useState<SyncQueueEntry | null>(null);
   const offline = !online;
 
@@ -132,6 +133,11 @@ export function SyncStatusDesktop() {
                   : 'Finalised financial records are validated on the server before they count, so your books stay authoritative.'}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
+                {lastError ? (
+                  <Text variant="caption" tone="bad">
+                    {tr('settings:sync.lastError', { message: lastError })}
+                  </Text>
+                ) : null}
                 <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncAll()} />
                 <Button
                   title={tr('settings:sync.reload')}

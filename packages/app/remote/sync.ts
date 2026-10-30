@@ -3,10 +3,14 @@ import { useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
 import { applyChanges, applyEntity, purgeLocalDefaults, remapIds, replaceForCompany, unwrap, type Change } from './apply';
 import { flushPendingLogos, refreshLogoLinks } from './logo';
-import { useRemoteMeta } from './meta';
+import { uploadAttachment } from './attachments';
+import { knownToServer, useRemoteMeta } from './meta';
 import * as outbox from './outbox';
+import { useReceiptQueue } from './receiptQueue';
 
 const BATCH = 200;
+/** After this many failed attempts with the server reachable, a picked receipt is given up on. */
+const MAX_RECEIPT_TRIES = 5;
 
 /**
  * The sync engine. One run: push the outbox in order, pull what changed on
@@ -16,6 +20,16 @@ const BATCH = 200;
  */
 let running: Promise<void> | null = null;
 let again = false;
+/** Moves on at sign-out. An answer to a request from an earlier session is dropped, not applied. */
+let session = 0;
+class SessionEnded extends Error {}
+function assertSession(started: number) {
+  if (started !== session) throw new SessionEnded();
+}
+
+export function endSyncSession() {
+  session += 1;
+}
 /** Set while a new session loads its first snapshot, before `session` flips. */
 let bootstrapping = false;
 
@@ -42,6 +56,7 @@ export async function reloadSnapshot(replace: () => void) {
 
 /** Loads everything for a fresh session: a full pull and the owned lists. */
 export async function loadSnapshot() {
+  await running?.catch(() => undefined);
   bootstrapping = true;
   try {
     useRemoteMeta.getState().patch({ cursor: null });
@@ -104,23 +119,70 @@ export function syncSoon(delayMs = 400) {
   }, delayMs);
 }
 
+/** One tab syncs at a time; another that wants to just skips this run. */
+async function oneTabAtATime(run: () => Promise<void>) {
+  const locks = (globalThis.navigator as { locks?: { request: (name: string, options: { ifAvailable: boolean }, fn: (lock: unknown) => Promise<void>) => Promise<void> } } | undefined)?.locks;
+  if (!locks) return run();
+  await locks.request('ebs.sync', { ifAvailable: true }, (lock) => (lock ? run() : Promise.resolve()));
+}
+
 async function runOnce() {
+  await oneTabAtATime(runLocked);
+}
+
+/** Uploads receipts picked offline, once their expense has reached the server. */
+async function flushPendingReceipts(started: number) {
+  const queue = useReceiptQueue.getState();
+  for (const [expenseId, p] of Object.entries(queue.pending)) {
+    if (!knownToServer(expenseId)) continue;
+    let attachmentId: string;
+    try {
+      attachmentId = (await uploadAttachment({ companyId: p.companyId, uri: p.uri, name: 'Receipt', entityType: 'expense', entityId: expenseId })).id;
+    } catch (err) {
+      if (isNetworkError(err) && !useRemoteMeta.getState().online) throw err;
+      if (p.tries + 1 >= MAX_RECEIPT_TRIES) {
+        queue.clear(expenseId);
+        useRemoteMeta.getState().patch({ lastError: err instanceof Error ? err.message : String(err) });
+      } else queue.tried(expenseId);
+      continue;
+    }
+    assertSession(started);
+    queue.clear(expenseId);
+    const s = useAppStore.getState();
+    const expense = s.expenses.find((e) => e.id === expenseId);
+    if (expense) s.saveExpense({ ...expense, attachmentIds: [...(expense.attachmentIds ?? []), attachmentId] });
+  }
+}
+
+async function runLocked() {
   const meta = useRemoteMeta.getState();
+  const started = session;
   if (!useAppStore.getState().session.authenticated && !bootstrapping) return;
   meta.patch({ syncing: true });
   try {
-    const resend = await pushAll();
+    // A failed push still lets this device see what changed; only a lost connection ends the run.
+    let resend = false;
+    let pushError: unknown;
+    try {
+      resend = await pushAll(started);
+    } catch (err) {
+      if (isNetworkError(err) || err instanceof SessionEnded) throw err;
+      pushError = err;
+    }
     // A logo picked during setup goes up once its business exists on the server.
     await flushPendingLogos();
-    await pullNewCompanies();
-    await pullAll();
-    await refreshLists();
+    await flushPendingReceipts(started);
+    await pullNewCompanies(started);
+    await pullAll(started);
+    await refreshLists(started);
+    if (pushError) throw pushError;
     // Best effort: a logo link that can't refresh now is retried on the next run.
     await refreshLogoLinks().catch(() => undefined);
     meta.patch({ online: true, lastSyncAt: new Date().toISOString(), lastError: undefined });
     if (resend) scheduleRetry();
     else clearRetry();
   } catch (err) {
+    if (err instanceof SessionEnded) return;
     if (isNetworkError(err)) {
       meta.patch({ online: false });
       scheduleRetry();
@@ -131,32 +193,26 @@ async function runOnce() {
   }
 }
 
-/** Stock movements and notification marks don't build on one another. */
-const standsAlone = (e: outbox.Entry) => /\/(stock|notifications)(\/|$)/.test(e.path);
-
 /**
- * The next entries to send, in order. A change waits while an earlier change to
- * the same entity has failed, or if it mentions an offline id whose create
- * failed: it was made on top of something the server doesn't have. Only one
- * entry per entity goes at a time, so each is sent against the version the last
- * one produced.
+ * The next entries to send, in order. A change waits while something it builds
+ * on has failed. Only one entry per entity goes at a time, so each is sent
+ * against the version the last one produced. A new company goes alone: what
+ * follows it refers to its local defaults until the server's are adopted.
  */
-function nextBatch(tried: Set<string>): outbox.Entry[] {
+function nextBatch(tried: Set<string>, size: number): outbox.Entry[] {
   const all = outbox.entries();
-  const failed = all.filter((e) => e.status === 'failed');
-  const blocked = new Set(failed.filter((e) => !standsAlone(e)).map((e) => e.entityId));
-  const missing = failed.flatMap((e) => (e.clientEntityId ? [e.clientEntityId] : []));
   const going = new Set<string>();
   const batch: outbox.Entry[] = [];
   for (const e of all) {
-    if (batch.length === BATCH) break;
+    if (batch.length === size) break;
     if (e.status !== 'pending' || tried.has(e.id)) continue;
-    if (!standsAlone(e)) {
-      if (blocked.has(e.entityId) || going.has(e.entityId)) continue;
-      if (missing.length) {
-        const text = `${e.path} ${JSON.stringify(e.body ?? null)}`;
-        if (missing.some((id) => text.includes(id))) continue;
-      }
+    if (outbox.blockerOf(e, all)) continue;
+    if (e.path === '/companies' && e.clientEntityId) {
+      if (batch.length) break;
+      return [e];
+    }
+    if (!outbox.standsAlone(e)) {
+      if (going.has(e.entityId)) continue;
       going.add(e.entityId);
     }
     batch.push(e);
@@ -164,28 +220,80 @@ function nextBatch(tried: Set<string>): outbox.Entry[] {
   return batch;
 }
 
+/**
+ * A company created offline got local copies of its defaults, and queued
+ * changes may refer to them. The server made its own when the create went
+ * through: match them up, so those changes point at the server's.
+ */
+async function adoptCompanyDefaults(companyId: string) {
+  const path = { companyId };
+  const [branches, series, taxes, categories, accounts] = await Promise.all([
+    api.GET('/companies/{companyId}/branches', { params: { path } }),
+    api.GET('/companies/{companyId}/numbering-series', { params: { path } }),
+    api.GET('/companies/{companyId}/tax-categories', { params: { path } }),
+    api.GET('/companies/{companyId}/expense-categories', { params: { path } }),
+    api.GET('/companies/{companyId}/payment-accounts', { params: { path } }),
+  ]);
+  type Row = { id?: string; companyId?: string; [k: string]: unknown };
+  const s = useAppStore.getState();
+  const rowsOf = (r: { data?: unknown }) => ((r.data as { data?: Row[] } | undefined)?.data ?? []) as Row[];
+  const sets: { type: string; server: Row[]; local: Row[]; key: (r: Row) => string }[] = [
+    { type: 'branch', server: rowsOf(branches), local: s.branches as never, key: (r) => (r.isPrimary ? 'primary' : String(r.code)) },
+    { type: 'numbering_series', server: rowsOf(series), local: s.numberingSeries as never, key: (r) => String(r.kind) },
+    { type: 'tax_category', server: rowsOf(taxes), local: s.taxCategories as never, key: (r) => String(Number(r.rate)) },
+    { type: 'expense_category', server: rowsOf(categories), local: s.expenseCategories as never, key: (r) => String(r.name).toLowerCase() },
+    { type: 'payment_account', server: rowsOf(accounts), local: s.paymentAccounts as never, key: (r) => (r.isDefault ? 'default' : String(r.name)) },
+  ];
+  const map: Record<string, string> = {};
+  for (const { server, local, key } of sets) {
+    const byKey = new Map(server.map((r) => [key(r), r.id]));
+    for (const row of local) {
+      const to = row.companyId === companyId && row.id ? byKey.get(key(row)) : undefined;
+      if (to && row.id) map[row.id] = to;
+    }
+  }
+  remapIds(map);
+  for (const { type, server } of sets) for (const row of server) applyEntity(type, row);
+}
+
 /** Sends what's queued. True if the server asked for something to be sent again later. */
-async function pushAll(): Promise<boolean> {
+async function pushAll(session: number): Promise<boolean> {
   const tried = new Set<string>();
   let again = false;
+  let size = BATCH;
   for (;;) {
-    const batch = nextBatch(tried);
+    const batch = nextBatch(tried, size);
     if (!batch.length) return again;
-    batch.forEach((e) => tried.add(e.id));
     outbox.markSent(batch.map((e) => e.id));
-    const { data } = await api.POST('/sync/push', {
-      body: {
-        mutations: batch.map((e) => ({
-          id: e.id,
-          method: e.method,
-          path: e.path,
-          body: (e.body ?? undefined) as Record<string, never> | undefined,
-          baseVersion: e.baseVersion,
-          clientEntityId: e.clientEntityId,
-          queuedAt: e.queuedAt,
-        })),
-      },
-    });
+    let data;
+    try {
+      ({ data } = await api.POST('/sync/push', {
+        body: {
+          mutations: batch.map((e) => ({
+            id: e.id,
+            method: e.method,
+            path: e.path,
+            body: (e.body ?? undefined) as Record<string, never> | undefined,
+            baseVersion: e.baseVersion,
+            clientEntityId: e.clientEntityId,
+            queuedAt: e.queuedAt,
+          })),
+        },
+      }));
+    } catch (err) {
+      // The server refused the whole request: narrow it down, so one bad entry can't hold up the rest.
+      if (!(err instanceof ApiError) || ![400, 413, 422].includes(err.status)) throw err;
+      if (batch.length > 1) {
+        size = Math.ceil(batch.length / 2);
+        continue;
+      }
+      assertSession(session);
+      tried.add(batch[0].id);
+      outbox.update(batch[0].id, { status: 'failed', attempts: batch[0].attempts + 1, lastError: err.message });
+      continue;
+    }
+    assertSession(session);
+    batch.forEach((e) => tried.add(e.id));
     for (const r of data?.results ?? []) {
       const entry = batch.find((e) => e.id === r.id);
       if (!entry) continue;
@@ -194,7 +302,12 @@ async function pushAll(): Promise<boolean> {
         const serverId = typeof entity?.id === 'string' ? entity.id : undefined;
         if (entry.clientEntityId && serverId && serverId !== entry.clientEntityId) {
           remapIds({ [entry.clientEntityId]: serverId });
-          if (entry.path === '/companies') purgeLocalDefaults(serverId);
+          if (entry.path === '/companies') {
+            // Before the entry goes: if this fails, the resend gets the same answer and comes back here.
+            await adoptCompanyDefaults(serverId);
+            assertSession(session);
+            purgeLocalDefaults(serverId);
+          }
         }
         outbox.drop(entry.id);
         const entityId = entry.clientEntityId && serverId ? serverId : entry.entityId;
@@ -228,14 +341,16 @@ async function pushAll(): Promise<boolean> {
  * The cursor only moves forward, so a business joined on another device has its
  * history behind it. Anything new in the account's list gets its own snapshot.
  */
-async function pullNewCompanies() {
+async function pullNewCompanies(started: number) {
   const { data: me } = await api.GET('/me');
+  assertSession(started);
   const known = new Set(useAppStore.getState().companies.map((c) => c.id));
   for (const { id } of (me?.companies ?? []) as { id?: string }[]) {
     if (!id || known.has(id)) continue;
     let since: string | undefined;
     for (;;) {
       const { data } = await api.GET('/sync/pull', { params: { query: { companyId: id, ...(since ? { since } : {}), limit: 500 } } });
+      assertSession(started);
       applyChanges(data?.changes ?? []);
       since = data?.cursor ?? since;
       if (!data?.hasMore) break;
@@ -243,11 +358,12 @@ async function pullNewCompanies() {
   }
 }
 
-async function pullAll() {
+async function pullAll(started = session) {
   const meta = useRemoteMeta.getState();
   let cursor = meta.cursor;
   for (;;) {
     const { data } = await api.GET('/sync/pull', { params: { query: { ...(cursor ? { since: cursor } : {}), limit: 500 } } });
+    assertSession(started);
     applyChanges(data?.changes ?? []);
     cursor = data?.cursor ?? cursor;
     useRemoteMeta.getState().patch({ cursor });
@@ -278,7 +394,7 @@ async function allowed<T>(p: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-async function refreshLists() {
+async function refreshLists(started = session) {
   const companyId = useAppStore.getState().activeCompanyId;
   if (!companyId) return;
   const path = { companyId };
@@ -290,6 +406,7 @@ async function refreshLists() {
     // Team members aren't in the change log until someone edits them.
     api.GET('/users').then((r) => r.data?.data ?? []),
   ]);
+  assertSession(started);
   replaceForCompany('notifications', companyId, notifications as never);
   replaceForCompany('auditEvents', companyId, audit as never);
   replaceForCompany('stockMovements', companyId, movements as never);

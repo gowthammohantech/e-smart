@@ -37,7 +37,8 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const unread = useUnreadCount();
   const offline = !useRemoteMeta((m) => m.online);
-  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status !== 'synced').length);
+  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
+  const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -169,7 +170,8 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         {offline ? (
           <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
         ) : null}
-        {!offline && pendingSync > 0 ? (
+        {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} /> : null}
+        {pendingSync > 0 ? (
           <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
         ) : null}
 

@@ -6,8 +6,9 @@ import { emptyData, useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
 import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
+import { useReceiptQueue } from './receiptQueue';
 import { isOpen } from './outbox';
-import { loadSnapshot, reloadSnapshot, syncSoon } from './sync';
+import { endSyncSession, loadSnapshot, reloadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
 
 type AuthSession = Schema<'AuthSession'>;
@@ -99,9 +100,11 @@ async function restoreUnsynced(userId: string) {
 function clearLocal(): Promise<void> {
   // Read before the store empties; written after.
   const stashed = stashUnsynced();
+  endSyncSession();
   useRemoteMeta.getState().reset();
   // A logo waiting to upload belongs to the account that left.
   useLogoQueue.getState().reset();
+  useReceiptQueue.getState().reset();
   useAppStore.setState({
     ...emptyData(),
     activeCompanyId: '',

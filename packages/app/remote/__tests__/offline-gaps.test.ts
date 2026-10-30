@@ -1,4 +1,4 @@
-import type { Party } from '@esmart/core/types';
+import type { Expense, Party } from '@esmart/core/types';
 import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
@@ -7,7 +7,9 @@ import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
 import { retrySync, syncAll } from '../retry';
 import { resync } from '../session';
-import { syncNow } from '../sync';
+import { uploadAttachment } from '../attachments';
+import { useReceiptQueue } from '../receiptQueue';
+import { endSyncSession, syncNow } from '../sync';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -15,6 +17,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 jest.mock('expo-secure-store', () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
 jest.mock('../config', () => ({ API_BASE_URL: 'http://api.test/v1', DEMO_LOGIN: { email: '', password: '' } }));
+jest.mock('../attachments', () => ({ uploadAttachment: jest.fn() }));
 jest.mock('../api', () => ({
   api: { GET: jest.fn(), POST: jest.fn() },
   isNetworkError: (e: unknown) => e instanceof TypeError,
@@ -204,6 +207,85 @@ describe('answers that are not outcomes', () => {
     expect(POST).toHaveBeenCalledTimes(2);
     expect(sentIn(1)[0].id).toBe(entry.id);
     expect(queue()).toHaveLength(0);
+  });
+});
+
+describe('resilience', () => {
+  it('B4: points queued changes at the server\'s defaults when an offline company syncs', async () => {
+    const companyId = actions().createCompany({ ...actions().companies[0], name: 'New Co' } as never);
+    const localTax = actions().taxCategories.find((x) => x.companyId === companyId && x.rate === 18)!;
+    actions().saveItem({ ...actions().items[0], id: 'itm_new', companyId, taxCategoryId: localTax.id } as never);
+
+    const lists: Record<string, unknown[]> = {
+      '/companies/{companyId}/tax-categories': [{ id: 'tax_SERVER', companyId: 'cmp_SERVER', rate: 18, version: 1 }],
+    };
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/sync/pull') return { data: { changes: [], cursor: '1', hasMore: false } };
+      return { data: { data: lists[path] ?? [], nextCursor: null } };
+    });
+    POST.mockImplementationOnce(async (_p: string, { body }: { body: { mutations: Sent[] } }) => {
+      expect(body.mutations).toHaveLength(1);
+      return { data: { results: [{ id: body.mutations[0].id, status: 'applied', entity: { id: 'cmp_SERVER', version: 1 } }] } };
+    });
+    acceptingServer();
+    await syncNow();
+
+    const item = POST.mock.calls[1][1].body.mutations[0] as Sent;
+    expect(item.path).toContain('cmp_SERVER');
+    expect(item.body).toMatchObject({ taxCategoryId: 'tax_SERVER' });
+    expect(actions().taxCategories.some((x) => x.id === localTax.id)).toBe(false);
+  });
+
+  it('B7: narrows down a refused batch, so one bad entry fails alone', async () => {
+    actions().saveParty(party({ id: 'pty_good', name: 'Good' }));
+    actions().saveParty(party({ id: 'pty_bad', name: 'Bad' }));
+    const { ApiError } = jest.requireActual('@esmart/api-client');
+    POST.mockImplementation(async (_p: string, { body }: { body: { mutations: Sent[] } }) => {
+      if (body.mutations.some((m) => m.clientEntityId === 'pty_bad')) throw new ApiError(413, { detail: 'Too large' });
+      return { data: { results: body.mutations.map((m) => ({ id: m.id, status: 'applied', entity: { id: `srv_${m.clientEntityId}`, version: 1 } })) } };
+    });
+    await syncNow();
+
+    expect(queue()).toHaveLength(1);
+    expect(queue()[0]).toMatchObject({ clientEntityId: 'pty_bad', status: 'failed', lastError: 'Too large' });
+    expect(useRemoteMeta.getState().cursor).toBe('1');
+  });
+
+  it('B7: still pulls when the push fails', async () => {
+    actions().saveParty(party());
+    const { ApiError } = jest.requireActual('@esmart/api-client');
+    POST.mockRejectedValue(new ApiError(500, { detail: 'Boom' }));
+    await syncNow();
+    expect(useRemoteMeta.getState().cursor).toBe('1');
+    expect(useRemoteMeta.getState().lastError).toBe('Boom');
+  });
+
+  it('B9: drops a late answer from a session that has ended', async () => {
+    let answer!: (v: unknown) => void;
+    GET.mockImplementation((path: string) =>
+      path === '/sync/pull' ? new Promise((resolve) => (answer = resolve)) : Promise.resolve({ data: { data: [], nextCursor: null } }),
+    );
+    const doc = actions().documents[0];
+    const run = syncNow();
+    while (!answer) await Promise.resolve();
+    endSyncSession();
+    answer({ data: { changes: [{ entityType: 'document', entityId: doc.id, op: 'upsert', version: 9, data: { ...doc, number: 'LATE', version: 9 } }], cursor: '99', hasMore: false } });
+    await run;
+    expect(actions().documents.find((d) => d.id === doc.id)?.number).not.toBe('LATE');
+    expect(useRemoteMeta.getState().cursor).not.toBe('99');
+  });
+
+  it('B11: uploads a queued receipt once its expense is on the server', async () => {
+    const account = actions().paymentAccounts[0];
+    const expense = { id: 'exp_1', companyId: BOOK.companyId, branchId: BOOK.branchId, number: 'EXP/1', categoryId: 'cat', date: '2026-09-01', amount: { minor: 100, currency: 'INR' }, currency: 'INR', exchangeRate: 1, accountId: account.id, method: account.type === 'cash' ? 'cash' : 'upi', attachmentIds: [], createdBy: '', createdAt: '2026-09-01T00:00:00Z' } as never as Expense;
+    useAppStore.setState({ expenses: [expense] });
+    useRemoteMeta.getState().setVersion(expense.id, 1);
+    useReceiptQueue.getState().add(expense.id, expense.companyId, 'file:///r.jpg');
+    (uploadAttachment as jest.Mock).mockResolvedValueOnce({ id: 'att_1' });
+    acceptingServer();
+    await syncNow();
+    expect(useReceiptQueue.getState().pending).toEqual({});
+    expect(actions().expenses.find((e) => e.id === expense.id)?.attachmentIds).toContain('att_1');
   });
 });
 

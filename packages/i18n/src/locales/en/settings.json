@@ -161,6 +161,8 @@
     "none": "Nothing queued",
     "noneBody": "Every change has reached the server.",
     "retryAll": "Retry all",
+    "waitingOn": "Waiting on “{{label}}”",
+    "lastError": "Last sync problem: {{message}}",
     "queue": "Queue",
     "conflictNote": "Conflicts are surfaced for you to resolve rather than being overwritten silently.",
     "syncNow": "Sync now",
