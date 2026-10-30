@@ -70,7 +70,7 @@ export default function Devices() {
         onConfirm={() => {
           if (confirmRevoke) revokeDevice(confirmRevoke.id);
           setConfirmRevoke(null);
-          toast.show(tr('settings:devices.signedOut'), 'success');
+          toast.show(tr('settings:devices.signedOut'), 'success', { icon: 'cellphone-remove', detail: confirmRevoke?.label });
         }}
       />
     </View>

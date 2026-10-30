@@ -45,7 +45,8 @@
     "inventory": "Inventory",
     "allowNegativeStock": "Allow negative stock",
     "allowNegativeStockHint": "Let invoices and deliveries sell more than the branch has in stock. When off, they cannot be finalised until the stock is added.",
-    "lutValidTill": "LUT valid till"
+    "lutValidTill": "LUT valid till",
+    "logoRemoving": "Removing the logo…"
   },
   "accounts": {
     "default": "Default",
@@ -140,7 +141,8 @@
     "weekly": "Weekly",
     "automaticSwitch": "Back up automatically",
     "lastBackup": "Last backup {{when}}.",
-    "noBackupYet": "No backup has run yet."
+    "noBackupYet": "No backup has run yet.",
+    "preparing": "Preparing your export…"
   },
   "currencies": {
     "none": "No rates yet",
@@ -175,7 +177,13 @@
     "conflictBody": "Someone saved this after you started editing. You now see their version. Send yours again to replace it, or discard it.",
     "rejectedTitle": "The server refused this change",
     "retrying": "Sending again",
-    "discarded": "Change discarded"
+    "discarded": "Change discarded",
+    "syncing": "Syncing your changes…",
+    "allSynced": "Everything is synced",
+    "stillWaiting_one": "{{count}} change is still waiting to sync",
+    "stillWaiting_other": "{{count}} changes are still waiting to sync",
+    "reloading": "Reloading from the server…",
+    "reloaded": "Up to date with the server"
   },
   "transporters": {
     "none": "No transporters yet",

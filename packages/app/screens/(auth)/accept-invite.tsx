@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import type { Schema } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -34,6 +35,7 @@ type Invite = Schema<'InviteDetails'>;
 export default function AcceptInvite() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth', 'errors']);
+  const toast = useToast();
   const { token } = useLocalSearchParams<{ token?: string }>();
   const inviteToken = token ? String(token) : undefined;
 
@@ -72,7 +74,10 @@ export default function AcceptInvite() {
   const joinExisting = () => {
     if (!inviteToken || !invite) return;
     setBusy(true);
-    remoteSession.acceptInvite(inviteToken, undefined, invite.companyIds[0]).catch((err: unknown) => {
+    remoteSession
+      .acceptInvite(inviteToken, undefined, invite.companyIds[0])
+      .then(() => toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline' }))
+      .catch((err: unknown) => {
       setBusy(false);
       setErrors({ password: err instanceof ApiError && err.status === 400 ? tr('auth:invite.invalid') : describeError(err, tr) });
     });
@@ -86,7 +91,12 @@ export default function AcceptInvite() {
     setErrors(next);
     if (hasErrors(next) || !inviteToken) return;
     setBusy(true);
-    remoteSession.acceptInvite(inviteToken, password).catch((err: unknown) => {
+    remoteSession
+      .acceptInvite(inviteToken, password)
+      .then(() => {
+        if (invite) toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline' });
+      })
+      .catch((err: unknown) => {
       setBusy(false);
       setErrors({ password: err instanceof ApiError && (err.status === 404 || err.status === 410 || err.status === 400) ? tr('auth:invite.invalid') : describeError(err, tr) });
     });

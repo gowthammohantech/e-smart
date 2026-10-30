@@ -357,7 +357,7 @@ export default function ItemDetail() {
         onConfirm={() => {
           removeItem(item.id);
           setConfirmDelete(false);
-          toast.show(tr('inventory:detail.deleted'), 'success');
+          toast.show(tr('inventory:detail.deleted'), 'success', { icon: 'tag-remove-outline' });
           goBack('/(app)/catalog/items');
         }}
       />

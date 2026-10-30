@@ -38,6 +38,7 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { portalToast } from './portalToast';
 
 /**
  * Raising an e-way bill (FRD 16).
@@ -111,7 +112,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
   const submit = async () => {
     setBusy(true);
-    const outcome = await compliance.generateEwayBill({
+    const outcome = await portalToast(toast, compliance.generateEwayBill({
       documentId: doc.id,
       subSupplyType,
       subSupplyDescription: subSupplyDescription.trim() || undefined,
@@ -126,11 +127,15 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
       transportDocNumber: byRoad ? undefined : transportDocNumber.trim() || undefined,
       transportDocDate: byRoad ? undefined : transportDocDate,
       distanceKm: distance,
+    }), {
+      loading: tr('compliance:ewb.generating'),
+      success: { text: tr('compliance:ewb.generated'), detail: [doc.number, byRoad ? vehicleNumber.trim().toUpperCase() : ''].filter(Boolean).join(' · ') },
+      failed: 'The bill could not be raised',
+      icon: 'truck-check-outline',
     });
     setBusy(false);
 
     if (outcome.ok && outcome.ewayBillId) {
-      toast.show(tr('compliance:ewb.generated'), 'success');
       router.replace(`/(app)/compliance/eway/${outcome.ewayBillId}`);
       return;
     }
@@ -142,7 +147,6 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         next[i.field] = i.message;
       });
     setErrors(next);
-    toast.show(outcome.issues[0]?.message ?? 'The bill could not be raised', 'error');
   };
 
   return (

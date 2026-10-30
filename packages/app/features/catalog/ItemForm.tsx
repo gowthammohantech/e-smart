@@ -93,7 +93,7 @@ export function ItemForm({ item }: { item?: Item }) {
     };
 
     saveItem(record);
-    toast.show(item ? 'Item updated' : 'Item added', 'success');
+    toast.show(item ? 'Item updated' : 'Item added', 'success', { icon: 'tag-check-outline', detail: record.name });
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${record.id}`);
   };

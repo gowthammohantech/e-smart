@@ -9,6 +9,7 @@ import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
+import { useToast } from '@esmart/ui/components/Toast';
 import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -24,6 +25,7 @@ import { countLabel } from '@esmart/core/lib/format';
 export function AppHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'nav', 'onboarding']);
+  const toast = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   // The desktop sidebar already has search and notifications.
@@ -193,7 +195,12 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           leading: <CompanyLogo uri={c.logoUri} name={c.name} size={32} />,
         }))}
         value={company?.id}
-        onSelect={setActiveCompany}
+        onSelect={(id) => {
+          const next = companies.find((c) => c.id === id);
+          if (!next || id === company?.id) return;
+          setActiveCompany(id);
+          toast.show(tr('common:toast.switchedBusiness', { name: next.name }), 'success', { icon: 'swap-horizontal', detail: next.baseCurrency });
+        }}
         searchable={false}
       />
 
@@ -208,7 +215,12 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           icon: b.isPrimary ? 'office-building-outline' : 'warehouse',
         }))}
         value={activeBranchId}
-        onSelect={setActiveBranch}
+        onSelect={(id) => {
+          const next = branches.find((b) => b.id === id);
+          if (!next || id === activeBranchId) return;
+          setActiveBranch(id);
+          toast.show(tr('common:toast.switchedBranch', { name: next.name }), 'info', { icon: next.isPrimary ? 'office-building-outline' : 'warehouse', detail: next.code });
+        }}
         searchable={false}
       />
     </View>

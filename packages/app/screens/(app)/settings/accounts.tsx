@@ -72,7 +72,7 @@ export default function AccountSettings() {
       openingBalance: fromMajor(openingBalance || '0', baseCurrency),
       isDefault,
     });
-    toast.show(editing.id ? 'Account updated' : 'Account added', 'success');
+    toast.show(editing.id ? 'Account updated' : 'Account added', 'success', { icon: 'bank-check' });
     setEditing(null);
   };
 
@@ -167,7 +167,7 @@ export default function AccountSettings() {
         onConfirm={() => {
           if (confirmDelete) removePaymentAccount(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show(tr('settings:accounts.deleted'), 'success');
+          toast.show(tr('settings:accounts.deleted'), 'success', { icon: 'bank-remove' });
         }}
       />
     </View>

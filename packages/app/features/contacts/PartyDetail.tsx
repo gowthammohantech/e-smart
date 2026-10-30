@@ -468,7 +468,7 @@ export function PartyDetail({ party }: { party: Party }) {
         onConfirm={() => {
           removeParty(party.id);
           setConfirmDelete(false);
-          toast.show(tr('contacts:detail.deleted'), 'success');
+          toast.show(tr('contacts:detail.deleted'), 'success', { icon: 'account-remove-outline' });
           goBack('/(app)/(tabs)/contacts');
         }}
       />

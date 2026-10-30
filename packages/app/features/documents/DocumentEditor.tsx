@@ -292,7 +292,7 @@ export function DocumentEditor({
   };
 
   useEffect(() => {
-    if (seed?.missingParty) toast.show(tr('common:documentEditor.prefillMissingParty'), 'error');
+    if (seed?.missingParty) toast.show(tr('common:documentEditor.prefillMissingParty'), 'warning', { icon: 'account-question-outline' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -448,11 +448,24 @@ export function DocumentEditor({
       setDocumentStatus(id, target, creditOverride ? { overrideCreditLimit: true } : undefined);
     }
 
+    // An issued invoice or bill is usually paid next, so the toast offers it.
+    const payable = finalize && (kind === 'invoice' || kind === 'purchaseBill');
     toast.show(
       finalize
         ? tr('common:documentEditor.finalised', { kind: kindName })
         : tr('common:documentEditor.savedDraft'),
       'success',
+      {
+        icon: finalize ? 'file-check-outline' : 'content-save-outline',
+        detail: [party?.name, formatMoney(totals.grandTotal)].filter(Boolean).join(' · '),
+        action: payable
+          ? {
+              label: tr(kind === 'invoice' ? 'common:toast.recordPayment' : 'common:toast.paySupplier'),
+              onPress: () =>
+                router.push(`/(app)/payments/new?direction=${kind === 'invoice' ? 'received' : 'paid'}&partyId=${draft.partyId}&documentId=${id}` as never),
+            }
+          : undefined,
+      },
     );
     if (onSaved) onSaved(id);
     else router.replace(detailRouteFor(kind, id) as never);

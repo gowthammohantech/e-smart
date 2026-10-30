@@ -39,31 +39,39 @@ export function LogoSection() {
     const picked = await pickLogo();
     if (!picked) return;
     if ('error' in picked) {
-      toast.show(tr(picked.error === 'tooLarge' ? 'settings:company.logoTooLarge' : 'settings:company.logoBadType'), 'error');
+      toast.show(tr(picked.error === 'tooLarge' ? 'settings:company.logoTooLarge' : 'settings:company.logoBadType'), 'warning', { icon: 'image-off-outline' });
       return;
     }
     const before = company.logoUri;
-    const saved = () => toast.show(tr('settings:company.logoQueued'), 'success');
     // Not on the server yet: keep it, and it goes up after the business does.
     if (!knownToServer(company.id)) {
       queueLogo(company.id, picked.uri);
-      saved();
+      toast.show(tr('settings:company.logoQueued'), 'info', { icon: 'cloud-upload-outline', detail: company.name });
       return;
     }
     setLocalLogo(company.id, picked.uri);
     setBusy('upload');
     try {
-      await uploadLogo(company.id, picked.uri);
-      useLogoQueue.getState().clear(company.id);
-      toast.show(tr('settings:company.logoUpdated'), 'success');
-    } catch (err) {
-      if (isNetworkError(err)) {
-        queueLogo(company.id, picked.uri);
-        saved();
-      } else {
-        setLocalLogo(company.id, before);
-        toast.show(err instanceof LogoError ? err.message : tr('settings:company.logoBadType'), 'error');
-      }
+      // No connection is not a failure: the logo waits and goes up later.
+      const sent = await toast.promise(
+        uploadLogo(company.id, picked.uri).then(
+          () => 'uploaded' as const,
+          (err: unknown) => {
+            if (isNetworkError(err)) return 'queued' as const;
+            throw err;
+          },
+        ),
+        {
+          loading: tr('settings:company.logoUploading'),
+          success: (r) => ({ text: tr(r === 'uploaded' ? 'settings:company.logoUpdated' : 'settings:company.logoQueued'), detail: company.name }),
+          error: (err) => (err instanceof LogoError ? err.message : tr('settings:company.logoBadType')),
+          icon: 'image-check-outline',
+        },
+      );
+      if (sent === 'uploaded') useLogoQueue.getState().clear(company.id);
+      else queueLogo(company.id, picked.uri);
+    } catch {
+      setLocalLogo(company.id, before);
     } finally {
       setBusy(null);
     }
@@ -72,16 +80,25 @@ export function LogoSection() {
   const remove = async () => {
     setBusy('remove');
     try {
-      if (waiting && !knownToServer(company.id)) {
-        // Never reached the server: just forget it.
-        useLogoQueue.getState().clear(company.id);
-        setLocalLogo(company.id, undefined);
-      } else {
-        await removeLogo(company.id);
-      }
-      toast.show(tr('settings:company.logoRemoved'), 'success');
-    } catch (err) {
-      toast.show(isNetworkError(err) ? tr('settings:company.logoOffline') : err instanceof LogoError ? err.message : String(err), 'error');
+      await toast.promise(
+        (async () => {
+          if (waiting && !knownToServer(company.id)) {
+            // Never reached the server: just forget it.
+            useLogoQueue.getState().clear(company.id);
+            setLocalLogo(company.id, undefined);
+          } else {
+            await removeLogo(company.id);
+          }
+        })(),
+        {
+          loading: tr('settings:company.logoRemoving'),
+          success: { text: tr('settings:company.logoRemoved'), detail: company.name },
+          error: (err) => (isNetworkError(err) ? tr('settings:company.logoOffline') : err instanceof LogoError ? err.message : String(err)),
+          icon: 'image-remove',
+        },
+      );
+    } catch {
+      // The toast has said what went wrong.
     } finally {
       setBusy(null);
     }

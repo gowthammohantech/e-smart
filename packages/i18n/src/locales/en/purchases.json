@@ -41,7 +41,10 @@
     "cashShort": "Cash in hand has only {{balance}}",
     "summary": "Summary",
     "receipt": "Receipt",
-    "receiptUploadFailed": "The receipt couldn't be uploaded: {{reason}} Remove it to save without it, or try again when you're online."
+    "receiptUploadFailed": "The receipt couldn't be uploaded: {{reason}} Remove it to save without it, or try again when you're online.",
+    "receiptUploading": "Uploading the receipt…",
+    "receiptAttached": "Receipt attached",
+    "withReceipt": "Receipt attached"
   },
   "expense": {
     "billable": "Billable",

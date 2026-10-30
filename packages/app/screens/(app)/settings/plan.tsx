@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -36,7 +37,16 @@ export default function PlanBilling() {
   const seatLimit = userLimit(currentPlan);
 
   // No toast: plans can't be bought yet (no payment gateway), so nothing is confirmed here.
-  const choose = (tier: PlanTier) => setPlan(company.id, tier);
+  const toast = useToast();
+  const choose = (tier: PlanTier) => {
+    setPlan(company.id, tier);
+    const next = planInfo(tier);
+    const up = next.yearly > current.yearly;
+    toast.show(tr(up ? 'plan:billing.upgraded' : 'plan:billing.switched', { plan: next.name }), up ? 'success' : 'info', {
+      icon: up ? 'rocket-launch-outline' : 'swap-vertical',
+      detail: next.yearly === 0 ? tr('plan:billing.freeForever') : tr('plan:billing.renews', { price: `₹${formatNumber(next.yearly, 0, 'indian')}` }),
+    });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

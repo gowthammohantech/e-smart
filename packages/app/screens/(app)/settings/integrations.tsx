@@ -126,7 +126,7 @@ export default function Integrations() {
                           return;
                         }
                         toggleIntegration(i.id);
-                        toast.show(i.connected ? `${i.name} disconnected` : `${i.name} connected`, 'success');
+                        toast.show(i.connected ? `${i.name} disconnected` : `${i.name} connected`, 'success', { icon: i.connected ? 'link-variant-off' : 'link-variant' });
                       }}
                       trackColor={{ true: t.c.primary, false: t.c.line }}
                       thumbColor="#FFFFFF"

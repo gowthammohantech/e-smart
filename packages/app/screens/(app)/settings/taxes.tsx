@@ -69,7 +69,7 @@ export default function TaxSettings() {
       effectiveFrom,
       description: description.trim() || undefined,
     });
-    toast.show(editing.id ? 'Tax rate updated' : 'Tax rate added', 'success');
+    toast.show(editing.id ? 'Tax rate updated' : 'Tax rate added', 'success', { icon: 'percent-outline' });
     setEditing(null);
   };
 
@@ -183,7 +183,7 @@ export default function TaxSettings() {
         onConfirm={() => {
           if (confirmDelete) removeTaxCategory(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show(tr('settings:taxes.deleted'), 'success');
+          toast.show(tr('settings:taxes.deleted'), 'success', { icon: 'percent-outline' });
         }}
       />
     </View>

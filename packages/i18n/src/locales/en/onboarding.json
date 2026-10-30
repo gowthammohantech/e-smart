@@ -114,7 +114,8 @@
       "invoiceLabel": "Raise your first invoice",
       "invoiceBody": "Share it on WhatsApp in seconds."
     },
-    "allSet": "Tax slabs, numbering and your first location are all set up."
+    "allSet": "Tax slabs, numbering and your first location are all set up.",
+    "created": "Your business is ready"
   },
   "stepProgress": "Step {{current}} of {{total}} · {{step}}",
   "stepHint": {

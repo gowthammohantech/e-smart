@@ -10,6 +10,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { DEMO_LOGIN, remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
+import { useWelcomeToast } from '../../features/session/useWelcomeToast';
 import { Errors, required, validEmail, hasErrors } from '@esmart/core/lib/validators';
 
 type Mode = 'email' | 'phone';
@@ -17,6 +18,7 @@ type Mode = 'email' | 'phone';
 export default function SignIn() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth', 'errors']);
+  const welcome = useWelcomeToast();
   const router = useRouter();
   const desktop = useIsDesktop();
 
@@ -42,7 +44,7 @@ export default function SignIn() {
     if (hasErrors(next)) return;
     setBusy(true);
     // The root layout routes on once the session and its data are in.
-    remoteSession.signIn(email, password).catch((err: unknown) => {
+    remoteSession.signIn(email, password).then(welcome, (err: unknown) => {
       setBusy(false);
       setErrors({ password: describeError(err, tr) });
     });

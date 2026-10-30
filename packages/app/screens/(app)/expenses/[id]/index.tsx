@@ -69,7 +69,7 @@ export default function ExpenseDetail() {
       onConfirm={() => {
         removeExpense(expense.id);
         setConfirmDelete(false);
-        toast.show(tr('purchases:expense.deleted'), 'success');
+        toast.show(tr('purchases:expense.deleted'), 'success', { icon: 'receipt-text-remove-outline' });
         goBack('/(app)/expenses');
       }}
     />

@@ -50,7 +50,7 @@ export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | 
               const phone = (party?.phone ?? '').replace(/[^0-9]/g, '');
               Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`).catch(() => {});
               onClose();
-              toast.show(tr('sales:aging.openedWhatsapp'), 'success');
+              toast.show(tr('sales:aging.openedWhatsapp'), 'success', { icon: 'whatsapp', detail: party?.name });
             }}
           />
           <Button
@@ -61,7 +61,7 @@ export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | 
             onPress={() => {
               Linking.openURL(`mailto:${party?.email ?? ''}?subject=${encodeURIComponent('Payment reminder')}&body=${encodeURIComponent(text)}`).catch(() => {});
               onClose();
-              toast.show(tr('sales:aging.openedEmail'), 'success');
+              toast.show(tr('sales:aging.openedEmail'), 'success', { icon: 'email-edit-outline', detail: party?.name });
             }}
           />
         </View>

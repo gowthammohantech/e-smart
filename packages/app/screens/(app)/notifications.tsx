@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -26,6 +27,7 @@ export default function Notifications() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common']);
+  const toast = useToast();
   const router = useRouter();
   // Always false in the native apps, so the desktop layout only ever reaches a browser.
   const desktop = useIsDesktop();
@@ -34,6 +36,10 @@ export default function Notifications() {
   const markRead = useAppStore((s) => s.markNotificationRead);
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const clearAll = useAppStore((s) => s.clearNotifications);
+  const readAll = () => {
+    markAllRead();
+    toast.show(tr('common:notifications.allRead'), 'success', { icon: 'check-all' });
+  };
 
   const [params, setParams] = useQueryParams();
   const filter: 'all' | 'unread' = params.filter === 'unread' ? 'unread' : 'all';
@@ -57,7 +63,7 @@ export default function Notifications() {
                 // A desktop keeps the page actions together, top right, instead of a bar at the bottom.
                 <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
                   {unread > 0 ? (
-                    <Button title={tr('common:notifications.markAllRead')} variant="ghost" icon="check-all" onPress={markAllRead} />
+                    <Button title={tr('common:notifications.markAllRead')} variant="ghost" icon="check-all" onPress={readAll} />
                   ) : null}
                   {notifications.length > 0 ? (
                     <Button title={tr('common:notifications.clearAll')} variant="ghost" icon="notification-clear-all" onPress={() => setConfirmClear(true)} />
@@ -66,7 +72,7 @@ export default function Notifications() {
               )
             : () =>
                 unread > 0 ? (
-                  <Pressable onPress={markAllRead} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:notifications.markAllRead')}>
+                  <Pressable onPress={readAll} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:notifications.markAllRead')}>
                     <Text variant="small" tone="primary" weight="600">{tr('common:notifications.markAllRead')}</Text>
                   </Pressable>
                 ) : null,
@@ -222,6 +228,7 @@ export default function Notifications() {
         onConfirm={() => {
           clearAll();
           setConfirmClear(false);
+          toast.show(tr('common:notifications.cleared'), 'success', { icon: 'notification-clear-all' });
         }}
       />
     </View>

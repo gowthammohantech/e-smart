@@ -123,7 +123,7 @@ export default function BranchSettings() {
         stateCode: stateCode || undefined,
       },
     });
-    toast.show(editing.id ? tr('settings:branches.updated') : tr('settings:branches.added'), 'success');
+    toast.show(editing.id ? tr('settings:branches.updated') : tr('settings:branches.added'), 'success', { icon: 'office-building-marker-outline' });
     setEditing(null);
   };
 
@@ -253,7 +253,7 @@ export default function BranchSettings() {
         onConfirm={() => {
           if (confirmDelete) removeBranch(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show(tr('settings:branches.deleted'), 'success');
+          toast.show(tr('settings:branches.deleted'), 'success', { icon: 'office-building-remove-outline' });
         }}
       />
     </View>

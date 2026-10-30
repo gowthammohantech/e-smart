@@ -180,7 +180,7 @@ export default function Appearance() {
             <Pressable
               onPress={() => {
                 resetLixiHints();
-                toast.show(tr('settings:appearance.tipsReset'), 'success');
+                toast.show(tr('settings:appearance.tipsReset'), 'success', { icon: 'lightbulb-on-outline' });
               }}
               accessibilityRole="button"
               hitSlop={8}

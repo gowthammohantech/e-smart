@@ -67,6 +67,7 @@
     "choose": "Choose this plan",
     "switched": "Switched to {{plan}}",
     "downgraded": "{{plan}} — purchases, stock and expenses are hidden, not deleted",
-    "footnote": "Elixir Books Smart is priced separately from Elixir Books ERP. A plan change takes effect once the payment is confirmed."
+    "footnote": "Elixir Books Smart is priced separately from Elixir Books ERP. A plan change takes effect once the payment is confirmed.",
+    "upgraded": "Upgraded to {{plan}}"
   }
 }

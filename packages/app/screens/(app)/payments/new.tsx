@@ -149,6 +149,7 @@ export default function NewPayment() {
         ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
         : tr('sales:payment.advanceNothingToAdjust'),
       applied.length ? 'success' : 'info',
+      { icon: 'cash-refund', detail: `${party?.name ?? ''}` },
     );
   };
 
@@ -214,7 +215,7 @@ export default function NewPayment() {
       // Apply only what is left of the typed amount.
       const take = Math.min(full.minor, amount.minor - sumOf(allocations));
       if (take <= 0) {
-        toast.show(tr('sales:payment.nothingLeftToApply'), 'info');
+        toast.show(tr('sales:payment.nothingLeftToApply'), 'warning', { icon: 'cash-remove' });
         return;
       }
       next[docId] = toAmountInput(money(take, currency));
@@ -297,10 +298,14 @@ export default function NewPayment() {
 
     const id = savePayment(payment);
     if (!id) {
-      toast.show(tr('sales:payment.noAccountForMethod'), 'error');
+      toast.show(tr('sales:payment.noAccountForMethod'), 'error', { icon: 'bank-off-outline' });
       return;
     }
-    toast.show(direction === 'received' ? 'Payment recorded' : 'Payment made', 'success');
+    toast.show(direction === 'received' ? 'Payment recorded' : 'Payment made', 'success', {
+      icon: direction === 'received' ? 'cash-check' : 'cash-fast',
+      // A template literal, so the compiler knows it is a plain string and not a handle on the party.
+      detail: `${formatMoney(amount)}${party ? ` · ${party.name}` : ''}`,
+    });
     router.replace(`/(app)/payments/${id}`);
   };
 

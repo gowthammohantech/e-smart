@@ -111,7 +111,7 @@ export default function CompanySettings() {
         lutValidTill: taxRegistered && lutNumber.trim() && lutValidTill ? lutValidTill : undefined,
       },
     });
-    toast.show(tr('settings:company.saved'), 'success');
+    toast.show(tr('settings:company.saved'), 'success', { icon: 'store-check-outline' });
     goBack('/(app)/(tabs)/more');
   };
 
