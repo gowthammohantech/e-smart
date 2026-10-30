@@ -33,6 +33,14 @@ export function DateField({
   const t = useTheme();
   const desktop = useIsDesktop();
   const [focused, setFocused] = useState(false);
+  // The calendar greys out days past min and max, but a typed date isn't held
+  // to them. One outside them shows while it is being typed (a year goes in a
+  // digit at a time) and is never passed on; leaving the field puts the last
+  // allowed date back.
+  const [stray, setStray] = useState<string | null>(null);
+  const min = minimumDate ? toISODate(minimumDate) : undefined;
+  const max = maximumDate ? toISODate(maximumDate) : undefined;
+  const allowed = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
 
   return (
     <FieldShell label={label} required={required} hint={hint} error={error}>
@@ -45,10 +53,10 @@ export function DateField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
+          borderColor: error || stray ? t.c.bad : focused ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
           height: desktop ? 42 : 48,
-          ...webFocusHalo(t, focused && !error),
+          ...webFocusHalo(t, focused && !error && !stray),
         }}
       >
         <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
@@ -56,14 +64,22 @@ export function DateField({
           type="date"
           aria-label={label ?? 'Date'}
           required={required}
-          value={value ? value.slice(0, 10) : ''}
-          min={minimumDate ? toISODate(minimumDate) : undefined}
-          max={maximumDate ? toISODate(maximumDate) : undefined}
+          value={stray ?? (value ? value.slice(0, 10) : '')}
+          min={min}
+          max={max}
           onChange={(e) => {
-            if (e.target.value) onChange(e.target.value);
+            const next = e.target.value;
+            if (!next) return;
+            if (allowed(next)) {
+              setStray(null);
+              onChange(next);
+            } else setStray(next);
           }}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            setStray(null);
+          }}
           style={{
             flex: 1,
             border: 'none',

@@ -901,7 +901,7 @@ export interface paths {
         };
         get: operations["listItems"];
         put?: never;
-        /** @description When `trackInventory` is set and `openingStock > 0`, the server also writes an `opening` stock movement. */
+        /** @description When `trackInventory` is set and `openingStock > 0`, the server also writes an `opening` stock movement, dated `openingStockDate` (today when it is left out). */
         post: operations["createItem"];
         delete?: never;
         options?: never;
@@ -2837,6 +2837,11 @@ export interface components {
             trackInventory?: boolean;
             /** @description Used only on create */
             openingStock?: number;
+            /**
+             * Format: date
+             * @description The day the opening stock was counted; not after today, and no document with this item can be dated before it. Used only on create, and only when trackInventory is set.
+             */
+            openingStockDate?: string;
             reorderLevel?: number;
             /** Format: uri */
             readonly imageUri?: string;

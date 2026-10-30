@@ -55,6 +55,23 @@ describe('catalog', () => {
     expect(got.body).toMatchObject({ stockOnHand: 10, low: false });
   });
 
+  it('dates the opening stock on the day it was counted, never after today', async () => {
+    const { token, c, item, company } = await setup();
+    t.setNow('2026-09-29T10:00:00Z');
+    const future = await t.post(`${c}/items`, item({ openingStockDate: '2026-09-30' }), { token });
+    expect(future.status).toBe(422);
+    expect(future.body.issues[0].field).toBe('openingStockDate');
+
+    const created = await t.post(`${c}/items`, item({ openingStockDate: '2026-09-01' }), { token });
+    expect(created.body).toMatchObject({ openingStockDate: '2026-09-01' });
+    const moves = await t.deps.db.select().from(schema.stockMovements).where(eq(schema.stockMovements.companyId, company.id!));
+    expect(moves.map((m) => [m.type, m.date])).toEqual([['opening', '2026-09-01']]);
+
+    // Left out, it is the day the item was added.
+    const today = await t.post(`${c}/items`, item({ sku: 'BRG-2' }), { token });
+    expect(today.body.openingStockDate).toBe('2026-09-29');
+  });
+
   it('derives stock from the movement ledger, per branch, and flags low stock', async () => {
     const { token, c, item, company, user } = await setup();
     const created = await t.post(`${c}/items`, item(), { token });

@@ -1,0 +1,1 @@
+ALTER TABLE "items" ADD COLUMN "opening_stock_date" date;

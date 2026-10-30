@@ -14,7 +14,8 @@ import { UNITS, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { formatPercent } from '@esmart/core/lib/format';
 import { uid } from '@esmart/core/lib/id';
-import { nowISO } from '@esmart/core/lib/date';
+import { formatDate, nowISO, today } from '@esmart/core/lib/date';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
@@ -53,19 +54,23 @@ export function ItemForm({ item }: { item?: Item }) {
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
   const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
+  const [openingStockDate, setOpeningStockDate] = useState(item?.openingStockDate ?? today());
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
+  // Only a new tracked item takes an opening stock, and so its date.
+  const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
 
   const save = () => {
-    const next: Errors<'name' | 'sku' | 'hsn'> = {
+    const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
       name: required(name, 'Item name'),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
+      openingStockDate: takesOpeningStock && openingStockDate > today() ? tr('inventory:form.openingStockDateFuture') : undefined,
     };
     const skuValue = sku.trim().toUpperCase() || `SKU-${String(existing.length + 1).padStart(4, '0')}`;
     if (existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
@@ -89,6 +94,7 @@ export function ItemForm({ item }: { item?: Item }) {
       barcode: barcode.trim() || undefined,
       trackInventory: type === 'goods' ? trackInventory : false,
       openingStock: Number(openingStock) || 0,
+      openingStockDate: takesOpeningStock ? openingStockDate : item?.openingStockDate,
       reorderLevel: Number(reorderLevel) || 0,
       imageUri: item?.imageUri,
       status: active ? 'active' : 'inactive',
@@ -193,6 +199,18 @@ export function ItemForm({ item }: { item?: Item }) {
                     hint={tr('inventory:form.reorderHint')}
                   />
                 </View>
+              ) : null}
+              {takesOpeningStock ? (
+                <DateField
+                  label={tr('inventory:form.openingStockDate')}
+                  value={openingStockDate}
+                  onChange={setOpeningStockDate}
+                  maximumDate={new Date()}
+                  error={errors.openingStockDate}
+                  hint={tr('inventory:form.openingStockDateHint')}
+                />
+              ) : item?.openingStockDate && trackInventory ? (
+                <TextField label={tr('inventory:form.openingStockDate')} value={formatDate(item.openingStockDate)} editable={false} icon="calendar" />
               ) : null}
             </>
           ) : null}

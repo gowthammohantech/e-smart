@@ -73,7 +73,10 @@
     "zeroRated": "Zero-rated",
     "exportIgstHint": "Export or SEZ supply — IGST applies. Add an LUT in the business profile to zero-rate it.",
     "exportLutHint": "Export or SEZ supply under LUT — zero-rated, no IGST charged.",
-    "importHint": "Import from abroad — no GST on the supplier's bill (IGST is paid at customs)."
+    "importHint": "Import from abroad — no GST on the supplier's bill (IGST is paid at customs).",
+    "itemBeforeOpeningStock": "{{name}}'s opening stock is dated {{date}}. Date this document {{date}} or later to add it.",
+    "dateBeforeOpeningStock": "Can't be before {{date}}, the opening stock date of {{name}}",
+    "beforeDocDate": "Can't be before the document date, {{date}}"
   },
   "detail": {
     "finalise": "Finalise",
