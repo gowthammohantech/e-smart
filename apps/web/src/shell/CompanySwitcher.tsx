@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
@@ -19,6 +20,7 @@ import { useActiveCompany, useBranches } from '@esmart/app/store/selectors';
 export function CompanySwitcher({ compact }: { compact: boolean }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'common', 'onboarding']);
+  const toast = useToast();
   const router = useRouter();
 
   const company = useActiveCompany();
@@ -90,8 +92,11 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
             description={`${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`}
             selected={c.id === company?.id}
             onPress={() => {
-              setActiveCompany(c.id);
               close();
+              // Already the active business: nothing switched, so no message.
+              if (c.id === company?.id) return;
+              setActiveCompany(c.id);
+              toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'success', { icon: 'swap-horizontal', detail: c.baseCurrency });
             }}
           />
         ))}
@@ -107,8 +112,10 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
                 description={b.code}
                 selected={b.id === activeBranchId}
                 onPress={() => {
-                  setActiveBranch(b.id);
                   close();
+                  if (b.id === activeBranchId) return;
+                  setActiveBranch(b.id);
+                  toast.show(tr('common:toast.switchedBranch', { name: b.name }), 'info', { icon: b.isPrimary ? 'office-building-outline' : 'warehouse', detail: b.code });
                 }}
               />
             ))}

@@ -172,10 +172,17 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       } else {
         setUploading(true);
         try {
-          const uploaded = await uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id });
+          const uploaded = await toast.promise(
+            uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id }),
+            {
+              loading: tr('purchases:form.receiptUploading'),
+              success: tr('purchases:form.receiptAttached'),
+              error: (err) => tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }),
+              icon: 'paperclip-check',
+            },
+          );
           attachmentIds.push(uploaded.id);
-        } catch (err) {
-          toast.show(tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }), 'error');
+        } catch {
           return;
         } finally {
           setUploading(false);
@@ -214,7 +221,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       setAccountError(tr('purchases:form.accountRequired'));
       return;
     }
-    toast.show(expense ? 'Expense updated' : 'Expense recorded', 'success');
+    toast.show(expense ? 'Expense updated' : 'Expense recorded', 'success', {
+      icon: 'receipt-text-check-outline',
+      detail: [formatMoney(totalPaid), attachmentIds.length ? tr('purchases:form.withReceipt') : ''].filter(Boolean).join(' · '),
+    });
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };

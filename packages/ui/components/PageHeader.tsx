@@ -9,7 +9,15 @@ import { Button } from './Button';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
-export type PageAction = { label: string; icon?: IconName; onPress: () => void };
+export type PageAction = {
+  label: string;
+  icon?: IconName;
+  onPress: () => void;
+  /** Working: the button spins and can't be pressed again. */
+  loading?: boolean;
+  /** "N" runs it. Off for an action that commits something, like raising an e-way bill. */
+  shortcut?: boolean;
+};
 
 type Slot = { action: PageAction | null; owner: object | null };
 type PageActionsValue = { slot: Slot; setSlot: (slot: Slot) => void };
@@ -27,7 +35,7 @@ export function PageActionsProvider({ children }: { children: React.ReactNode })
 
   // "N" anywhere outside a text field runs the page's primary action.
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined' || !action) return undefined;
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || !action || action.shortcut === false) return undefined;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
@@ -55,14 +63,16 @@ export function usePageAction(action: PageAction | null): boolean {
   });
   const label = action?.label;
   const icon = action?.icon;
+  const loading = action?.loading;
+  const shortcut = action?.shortcut;
   const setSlot = ctx?.setSlot;
 
   useFocusEffect(
     useCallback(() => {
       if (!setSlot || !label) return undefined;
-      setSlot({ action: { label, icon, onPress: () => onPress.current?.() }, owner });
+      setSlot({ action: { label, icon, loading, shortcut, onPress: () => onPress.current?.() }, owner });
       return () => setSlot({ action: null, owner: null });
-    }, [setSlot, label, icon, owner]),
+    }, [setSlot, label, icon, loading, shortcut, owner]),
   );
 
   return !!ctx && !!action;
@@ -142,7 +152,7 @@ export function PageHeader({
           ) : null}
         </View>
         {right}
-        {action ? <Button title={action.label} icon={action.icon ?? 'plus'} onPress={action.onPress} /> : null}
+        {action ? <Button title={action.label} icon={action.icon ?? 'plus'} onPress={action.onPress} loading={action.loading} /> : null}
       </View>
     </View>
   );

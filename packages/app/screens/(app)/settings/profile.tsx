@@ -21,7 +21,7 @@ import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function Profile() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'common']);
   const goBack = useGoBack();
   const toast = useToast();
 
@@ -45,7 +45,7 @@ export default function Profile() {
     setErrors(next);
     if (hasErrors(next) || !user) return;
     saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.value || undefined });
-    toast.show(tr('settings:profile.saved'), 'success');
+    toast.show(tr('settings:profile.saved'), 'success', { icon: 'account-check-outline' });
     goBack('/(app)/(tabs)/more');
   };
 
@@ -84,7 +84,7 @@ export default function Profile() {
                 // Already the active business: nothing switched, so no message.
                 if (c.id === activeCompanyId) return;
                 setActiveCompany(c.id);
-                toast.show(`Switched to ${c.name}`, 'success');
+                toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'success', { icon: 'swap-horizontal', detail: c.baseCurrency });
               }}
             />
           ))}

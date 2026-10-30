@@ -75,7 +75,7 @@ export default function CurrencySettings() {
       effectiveFrom,
       source: 'manual',
     });
-    toast.show(tr('settings:currencies.saved'), 'success');
+    toast.show(tr('settings:currencies.saved'), 'success', { icon: 'currency-inr' });
     setEditing(null);
   };
 
@@ -154,7 +154,7 @@ export default function CurrencySettings() {
                 onPress={() => {
                   if (editing.id) removeExchangeRate(editing.id);
                   setEditing(null);
-                  toast.show(tr('settings:currencies.deleted'), 'success');
+                  toast.show(tr('settings:currencies.deleted'), 'success', { icon: 'currency-usd-off' });
                 }}
               />
             ) : null}

@@ -105,7 +105,17 @@
     "rate": "Rate",
     "discount": "Discount",
     "taxRate": "Tax",
-    "lineAmount": "Amount"
+    "lineAmount": "Amount",
+    "pdfPreparing": "Preparing the PDF…",
+    "pdfDownloaded": "PDF downloaded",
+    "pdfReady": "PDF ready",
+    "sending": "Sending…",
+    "preparingMessage": "Preparing the message…",
+    "openedWhatsapp": "Opened in WhatsApp",
+    "openedEmail": "Opened in your email app",
+    "creatingLink": "Creating a share link…",
+    "linkReady": "Link ready",
+    "fromDocument": "From {{number}}"
   },
   "line": {
     "editLine": "Edit line",

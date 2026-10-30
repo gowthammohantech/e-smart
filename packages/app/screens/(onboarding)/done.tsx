@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -26,6 +27,7 @@ const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey
 export default function Done() {
   const t = useTheme();
   const { t: tr } = useTranslation(['onboarding']);
+  const toast = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
@@ -104,6 +106,7 @@ export default function Done() {
 
     completeOnboarding();
     reset();
+    toast.show(tr('onboarding:done.created'), 'success', { icon: 'store-check-outline', detail: draft.name || tr('onboarding:done.defaultName') });
     router.replace(goToInvoice ? '/(app)/sales/invoices/new' : '/(app)/(tabs)');
   };
 

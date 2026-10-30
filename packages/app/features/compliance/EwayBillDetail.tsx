@@ -44,6 +44,7 @@ import { detailRouteFor } from '../documents/DocumentEditor';
 import { formatDate, formatDateTime, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, expiryPhrase } from './complianceMeta';
+import { portalToast } from './portalToast';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Entry =
@@ -331,14 +332,14 @@ export function EwayBillActionSheets({ bill, open, onClose }: { bill: EwayBill; 
         busy={busy}
         onSubmit={async (update) => {
           setBusy(true);
-          const outcome = await compliance.updateEwayBillPartB(bill.id, update);
+          const outcome = await portalToast(toast, compliance.updateEwayBillPartB(bill.id, update), {
+            loading: tr('compliance:ewb.updatingPartB'),
+            success: { text: tr('compliance:ewb.partBUpdated'), detail: [bill.ewayBillNumber, update.vehicleNumber].filter(Boolean).join(' · ') },
+            failed: 'Part-B could not be updated',
+            icon: 'truck-fast-outline',
+          });
           setBusy(false);
-          if (outcome.ok) {
-            toast.show(tr('compliance:ewb.partBUpdated'), 'success');
-            onClose();
-          } else {
-            toast.show(outcome.issues[0]?.message ?? 'Part-B could not be updated', 'error');
-          }
+          if (outcome.ok) onClose();
         }}
       />
 
@@ -349,14 +350,14 @@ export function EwayBillActionSheets({ bill, open, onClose }: { bill: EwayBill; 
         busy={busy}
         onSubmit={async (args) => {
           setBusy(true);
-          const outcome = await compliance.extendEwayBill(bill.id, args);
+          const outcome = await portalToast(toast, compliance.extendEwayBill(bill.id, args), {
+            loading: tr('compliance:ewb.extending'),
+            success: { text: tr('compliance:ewb.validityExtended'), detail: bill.ewayBillNumber },
+            failed: 'The bill could not be extended',
+            icon: 'calendar-clock',
+          });
           setBusy(false);
-          if (outcome.ok) {
-            toast.show(tr('compliance:ewb.validityExtended'), 'success');
-            onClose();
-          } else {
-            toast.show(outcome.issues[0]?.message ?? 'The bill could not be extended', 'error');
-          }
+          if (outcome.ok) onClose();
         }}
       />
 
@@ -381,9 +382,12 @@ export function EwayBillActionSheets({ bill, open, onClose }: { bill: EwayBill; 
           const args = pendingCancel;
           setPendingCancel(null);
           if (!args) return;
-          const outcome = await compliance.cancelEwayBill(bill.id, args.code, args.remark);
-          if (outcome.ok) toast.show(tr('compliance:ewb.cancelled'), 'success');
-          else toast.show(outcome.issues[0]?.message ?? 'The bill could not be cancelled', 'error');
+          await portalToast(toast, compliance.cancelEwayBill(bill.id, args.code, args.remark), {
+            loading: tr('compliance:ewb.cancelling'),
+            success: { text: tr('compliance:ewb.cancelled'), detail: bill.ewayBillNumber },
+            failed: 'The bill could not be cancelled',
+            icon: 'truck-remove-outline',
+          });
         }}
       />
     </>

@@ -68,7 +68,7 @@ export default function StockAdjust() {
       date,
       notes: reason || undefined,
     });
-    toast.show(tr('inventory:adjust.done'), 'success');
+    toast.show(tr('inventory:adjust.done'), 'success', { icon: 'package-variant', detail: item.name });
     goBack(`/(app)/catalog/items/${item.id}`);
   };
 

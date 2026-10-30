@@ -157,7 +157,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     };
 
     saveParty(record);
-    toast.show(party ? `${label} updated` : `${label} added`, 'success');
+    toast.show(party ? `${label} updated` : `${label} added`, 'success', { icon: 'account-check-outline', detail: record.name });
     if (party) goBack(backTo);
     else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${record.id}` : `/(app)/contacts/suppliers/${record.id}`);
   };

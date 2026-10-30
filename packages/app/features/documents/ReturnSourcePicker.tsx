@@ -40,7 +40,7 @@ export function ReturnSourcePicker({ kind }: { kind: 'salesReturn' | 'purchaseRe
   const pick = (id: string) => {
     const newId = convertDocument(id, kind);
     if (!newId) return;
-    toast.show(tr('sales:returnPicker.created'), 'success');
+    toast.show(tr('sales:returnPicker.created'), 'success', { icon: 'keyboard-return' });
     router.replace(`${detailRouteFor(kind, newId)}/edit` as never);
   };
 

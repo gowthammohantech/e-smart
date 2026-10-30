@@ -67,7 +67,7 @@ export default function TransportersSettings() {
       phone: phone.value || undefined,
       status: 'active',
     });
-    toast.show(editing ? 'Transporter updated' : 'Transporter added', 'success');
+    toast.show(editing ? 'Transporter updated' : 'Transporter added', 'success', { icon: 'truck-outline' });
     setSheetOpen(false);
   };
 
@@ -139,7 +139,7 @@ export default function TransportersSettings() {
                 onPress={() => {
                   removeTransporter(editing.id);
                   setSheetOpen(false);
-                  toast.show(tr('settings:transporters.removed'), 'success');
+                  toast.show(tr('settings:transporters.removed'), 'success', { icon: 'truck-remove-outline' });
                 }}
               />
             ) : null}

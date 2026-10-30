@@ -105,7 +105,17 @@
     "rate": "விலை",
     "discount": "தள்ளுபடி",
     "taxRate": "வரி",
-    "lineAmount": "தொகை"
+    "lineAmount": "தொகை",
+    "pdfPreparing": "PDF தயாராகிறது…",
+    "pdfDownloaded": "PDF பதிவிறக்கப்பட்டது",
+    "pdfReady": "PDF தயார்",
+    "sending": "அனுப்பப்படுகிறது…",
+    "preparingMessage": "செய்தி தயாராகிறது…",
+    "openedWhatsapp": "WhatsApp-இல் திறக்கப்பட்டது",
+    "openedEmail": "உங்கள் மின்னஞ்சல் செயலியில் திறக்கப்பட்டது",
+    "creatingLink": "பகிர்வு இணைப்பு உருவாக்கப்படுகிறது…",
+    "linkReady": "இணைப்பு தயார்",
+    "fromDocument": "{{number}}-இலிருந்து"
   },
   "line": {
     "editLine": "வரிசையைத் திருத்து",

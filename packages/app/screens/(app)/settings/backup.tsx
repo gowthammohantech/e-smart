@@ -67,7 +67,7 @@ export default function BackupExport() {
       .then(setBackup)
       .catch((err: unknown) => {
         setBackup(backup);
-        toast.show(describeError(err, tr), 'error');
+        toast.show(describeError(err, tr), 'error', { icon: 'cloud-off-outline' });
       });
   };
 
@@ -89,11 +89,15 @@ export default function BackupExport() {
     setConfirmExport(null);
     setBusy(true);
     try {
-      const url = await exportCompany(company.id, format);
+      const url = await toast.promise(exportCompany(company.id, format), {
+        loading: tr('settings:backup.preparing'),
+        success: { text: tr('settings:backup.prepared'), detail: `${company.name} · ${format.toUpperCase()}` },
+        error: (err) => describeError(err, tr),
+        icon: 'database-export-outline',
+      });
       await Linking.openURL(url);
-      toast.show(tr('settings:backup.prepared'), 'success');
-    } catch (err) {
-      toast.show(describeError(err, tr), 'error');
+    } catch {
+      // The toast has said what went wrong.
     } finally {
       setBusy(false);
     }

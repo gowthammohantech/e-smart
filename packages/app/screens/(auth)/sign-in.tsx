@@ -10,6 +10,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { DEMO_LOGIN, remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
+import { useWelcomeToast } from '../../features/session/useWelcomeToast';
 import { Errors, required, validEmail, hasErrors } from '@esmart/core/lib/validators';
 
 type Mode = 'email' | 'phone';
@@ -17,6 +18,7 @@ type Mode = 'email' | 'phone';
 export default function SignIn() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth', 'errors']);
+  const welcome = useWelcomeToast();
   const router = useRouter();
   const desktop = useIsDesktop();
 
@@ -27,8 +29,13 @@ export default function SignIn() {
   const phone = usePhoneInput();
   const [errors, setErrors] = useState<Errors<'email' | 'password' | 'phone'>>({});
   const [busy, setBusy] = useState(false);
+  // While signing in, the links and tabs do nothing, so the attempt isn't left behind.
+  const unlessBusy = (fn: () => void) => () => {
+    if (!busy) fn();
+  };
 
   const submitEmail = () => {
+    if (busy) return;
     const next: Errors<'email' | 'password'> = {
       email: required(email, tr('errors:field.email')) ?? validEmail(email),
       password: required(password, tr('errors:field.password')),
@@ -37,7 +44,7 @@ export default function SignIn() {
     if (hasErrors(next)) return;
     setBusy(true);
     // The root layout routes on once the session and its data are in.
-    remoteSession.signIn(email, password).catch((err: unknown) => {
+    remoteSession.signIn(email, password).then(welcome, (err: unknown) => {
       setBusy(false);
       setErrors({ password: describeError(err, tr) });
     });
@@ -59,6 +66,7 @@ export default function SignIn() {
         ]}
         value={mode}
         onChange={(v) => {
+          if (busy) return;
           setMode(v as Mode);
           setErrors({});
         }}
@@ -93,14 +101,14 @@ export default function SignIn() {
               weight="600"
               accessibilityRole="link"
               style={{ alignSelf: 'flex-end', marginTop: -t.spacing.sm }}
-              onPress={() => router.push('/(auth)/forgot-password')}
+              onPress={unlessBusy(() => router.push('/(auth)/forgot-password'))}
             >
               {tr('auth:signIn.forgot')}
             </Text>
           ) : null}
           <Button title={tr('auth:signIn.submit')} onPress={submitEmail} loading={busy} fullWidth size="lg" />
           {desktop ? null : (
-            <Button title={tr('auth:signIn.forgot')} variant="ghost" onPress={() => router.push('/(auth)/forgot-password')} />
+            <Button title={tr('auth:signIn.forgot')} variant="ghost" onPress={unlessBusy(() => router.push('/(auth)/forgot-password'))} />
           )}
         </View>
       ) : (
@@ -120,7 +128,7 @@ export default function SignIn() {
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.lg }}>
         <Text variant="small" tone="muted">{tr('auth:signIn.newHere')}</Text>
-        <Text variant="small" tone="primary" weight="600" onPress={() => router.replace('/(auth)/sign-up')}>{tr('auth:signIn.createAccount')}</Text>
+        <Text variant="small" tone="primary" weight="600" onPress={unlessBusy(() => router.push('/(auth)/sign-up'))}>{tr('auth:signIn.createAccount')}</Text>
       </View>
     </AuthShell>
   );

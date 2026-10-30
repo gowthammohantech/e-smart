@@ -69,7 +69,7 @@ export function OpeningStockDesktop() {
         notes: 'Opening stock entry',
       });
     });
-    toast.show(`Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`, 'success');
+    toast.show(`Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`, 'success', { icon: 'package-variant-closed-check' });
     goBack('/(app)/(tabs)/inventory');
   };
 

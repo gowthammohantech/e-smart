@@ -16,7 +16,8 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { formatRelative } from '@esmart/core/lib/date';
-import { remoteSession, retryFailed, retrySync, syncAll, syncNow, useRemoteMeta } from '../../../remote';
+import { remoteSession, useRemoteMeta } from '../../../remote';
+import { useSyncToasts } from '../../../features/session/useSyncToasts';
 import { drop } from '../../../remote/outbox';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
@@ -24,6 +25,7 @@ export default function SyncStatus() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
+  const sync = useSyncToasts();
 
   const allEntries = useAppStore((s) => s.syncQueue);
   // What is still to send.
@@ -80,8 +82,8 @@ export default function SyncStatus() {
                   ? tr('settings:sync.lastSynced', { when: formatRelative(lastSyncAt.slice(0, 10)) })
                   : tr('settings:sync.neverSynced')}
             </Text>
-            <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncAll()} fullWidth />
-            <Button title={tr('settings:sync.reload')} variant="ghost" icon="cloud-download-outline" onPress={() => void syncNow().then(remoteSession.resync)} fullWidth />
+            <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void sync.syncEverything()} fullWidth />
+            <Button title={tr('settings:sync.reload')} variant="ghost" icon="cloud-download-outline" onPress={() => void sync.reload()} fullWidth />
           </View>
 
         {queue.some((q) => q.status === 'failed') ? (
@@ -90,10 +92,7 @@ export default function SyncStatus() {
             variant="secondary"
             icon="sync"
             style={{ marginTop: t.spacing.md }}
-            onPress={() => {
-              retryFailed();
-              toast.show(tr('settings:sync.retrying'), 'success');
-            }}
+            onPress={() => void sync.syncEverything()}
             fullWidth
           />
         ) : null}
@@ -116,9 +115,8 @@ export default function SyncStatus() {
               fullWidth
               onPress={() => {
                 if (!open) return;
-                retrySync(open.id);
                 setOpen(null);
-                toast.show(tr('settings:sync.retrying'), 'success');
+                void sync.retryOne(open.id);
               }}
             />
             <Button
@@ -132,7 +130,7 @@ export default function SyncStatus() {
                 setOpen(null);
                 // Put back the server's version of whatever the change touched.
                 void remoteSession.resync();
-                toast.show(tr('settings:sync.discarded'), 'success');
+                toast.show(tr('settings:sync.discarded'), 'success', { icon: 'delete-sweep-outline', detail: open.label });
               }}
             />
           </View>

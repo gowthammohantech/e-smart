@@ -72,7 +72,11 @@
     "place": "Place",
     "state": "State",
     "chooseState": "Choose a state",
-    "generated": "E-way bill generated"
+    "generated": "E-way bill generated",
+    "generating": "Raising the e-way bill…",
+    "updatingPartB": "Updating Part-B…",
+    "extending": "Extending validity…",
+    "cancelling": "Cancelling the e-way bill…"
   },
   "einv": {
     "cancelIrn": "Cancel the IRN",
@@ -98,7 +102,9 @@
     "cancelIrnShort": "Cancel IRN",
     "compliance": "Compliance",
     "eInvoice": "E-invoice",
-    "ewayBill": "E-way bill"
+    "ewayBill": "E-way bill",
+    "generating": "Generating the IRN…",
+    "cancelling": "Cancelling the IRN…"
   },
   "gstr1": {
     "outwardSupplies": "Outward supplies",

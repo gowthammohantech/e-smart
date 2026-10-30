@@ -171,7 +171,7 @@ export function StockTransferDesktop() {
             onPress={() => {
               if (!canSave || !itemId) return;
               transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
-              toast.show(tr('inventory:transfer.done'), 'success');
+              toast.show(tr('inventory:transfer.done'), 'success', { icon: 'truck-delivery-outline' });
               goBack(`/(app)/catalog/items/${itemId}`);
             }}
           />

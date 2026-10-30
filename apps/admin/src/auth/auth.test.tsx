@@ -38,7 +38,10 @@ const session = { data: { accessToken: 'a', refreshToken: 'r' } };
 const me = (platformRole: string | null) => ({ data: { user: { id: 'usr_1', name: 'Sam', email: 'sam@example.com' }, platformRole } });
 
 async function signIn() {
+  // A local .env can prefill the form (VITE_DEMO_LOGIN_*), and Vitest loads it too.
+  await userEvent.clear(screen.getByLabelText('Email'));
   await userEvent.type(screen.getByLabelText('Email'), 'sam@example.com');
+  await userEvent.clear(screen.getByLabelText('Password'));
   await userEvent.type(screen.getByLabelText('Password'), 'secret');
   await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 }

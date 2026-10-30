@@ -37,7 +37,7 @@ export default function ResetPassword() {
     remoteSession
       .resetPassword(String(token), password)
       .then(() => {
-        toast.show(tr('auth:reset.done'), 'success');
+        toast.show(tr('auth:reset.done'), 'success', { icon: 'lock-check-outline' });
         router.replace('/(auth)/sign-in');
         if (onMobileBrowser()) openInApp('sign-in');
       })

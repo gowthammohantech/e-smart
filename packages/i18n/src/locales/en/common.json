@@ -165,7 +165,9 @@
     "clearTitle": "Clear all notifications?",
     "clearMessage": "They will be removed from this business",
     "clear": "Clear",
-    "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched."
+    "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched.",
+    "allRead": "All caught up",
+    "cleared": "Notifications cleared"
   },
   "search": {
     "placeholder": "Invoices, contacts, items, payments…",
@@ -219,5 +221,16 @@
     "total": "Total",
     "allDates": "All dates",
     "clear": "Clear filters"
+  },
+  "toast": {
+    "success": "Done",
+    "error": "Couldn't complete that",
+    "warning": "Action needed",
+    "info": "Good to know",
+    "recordPayment": "Record payment",
+    "paySupplier": "Pay supplier",
+    "switchedBusiness": "Switched to {{name}}",
+    "switchedBranch": "Now showing {{name}}",
+    "signedOut": "Signed out"
   }
 }

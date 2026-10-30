@@ -84,7 +84,7 @@ export function ReportShell({
       else if (format === 'xlsx') await deliverFile(`${name}.xlsx`, xlsxBytes(title, table), XLSX_MIME);
       else await Share.share({ message: toCsv(table), title: `${title} export` });
     } catch {
-      toast.show(tr('reports:shell.exportCancelled'), 'error');
+      toast.show(tr('reports:shell.exportCancelled'), 'info', { icon: 'file-cancel-outline' });
     }
   };
 

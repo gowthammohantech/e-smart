@@ -20,6 +20,9 @@ import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
 
+/** The photo had no readable text: worth a retake, not the server's fault. */
+class NoTextFound extends Error {}
+
 const STEPS = [
   { icon: 'camera-outline' as const, label: 'Capture', body: 'Photograph the bill or pick one from your gallery.' },
   { icon: 'cellphone-text' as const, label: 'Read', body: 'Text is read on your phone, and the bill is kept with your books.' },
@@ -44,17 +47,29 @@ export default function OcrCapture() {
   const run = async (uri: string) => {
     setBusy(true);
     try {
-      // Read on the device with ML Kit where it can (null on web); the server parses that text,
-      // or reads the image itself when it has an OCR provider.
-      const text = await recognizeText(uri);
-      if (text !== null && !text.trim()) {
-        toast.show(tr('inventory:ocr.noTextFound'), 'error');
-        return;
-      }
-      setResult(await extractBill({ companyId, uri, kind, text }));
+      const read = (async () => {
+        // Read on the device with ML Kit where it can (null on web); the server parses that text,
+        // or reads the image itself when it has an OCR provider.
+        const text = await recognizeText(uri);
+        if (text !== null && !text.trim()) throw new NoTextFound();
+        return extractBill({ companyId, uri, kind, text });
+      })();
+      setResult(
+        await toast.promise(read, {
+          loading: tr('inventory:ocr.reading'),
+          success: tr('inventory:ocr.read'),
+          error: (err) =>
+            err instanceof NoTextFound
+              ? tr('inventory:ocr.noTextFound')
+              : err instanceof OcrUnavailableError
+                ? tr('inventory:ocr.ocrUnavailable')
+                : describeError(err, tr),
+          icon: 'text-recognition',
+        }),
+      );
       router.push('/(app)/ocr/review');
-    } catch (err) {
-      toast.show(err instanceof OcrUnavailableError ? tr('inventory:ocr.ocrUnavailable') : describeError(err, tr), 'error');
+    } catch {
+      // The toast has said what went wrong.
     } finally {
       setBusy(false);
     }
@@ -64,7 +79,7 @@ export default function OcrCapture() {
     try {
       // The gallery goes through the system photo picker, which needs no permission.
       if (fromCamera && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
-        toast.show(tr('inventory:ocr.cameraDenied'), 'error');
+        toast.show(tr('inventory:ocr.cameraDenied'), 'warning', { icon: 'camera-off-outline' });
         return;
       }
       const result = fromCamera
@@ -74,7 +89,7 @@ export default function OcrCapture() {
       await run(result.assets[0].uri);
     } catch {
       // No camera in the simulator or on web.
-      toast.show(tr('inventory:ocr.cameraUnavailable'), 'info');
+      toast.show(tr('inventory:ocr.cameraUnavailable'), 'warning', { icon: 'camera-off-outline' });
     }
   };
 

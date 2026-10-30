@@ -334,7 +334,7 @@ export function PaymentDetailDesktop() {
         onConfirm={() => {
           removePayment(payment.id);
           setConfirmDelete(false);
-          toast.show(tr('sales:payment.deleted'), 'success');
+          toast.show(tr('sales:payment.deleted'), 'success', { icon: 'cash-remove' });
           goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
         }}
       />
