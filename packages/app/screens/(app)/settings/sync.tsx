@@ -81,7 +81,7 @@ export default function SyncStatus() {
                   : tr('settings:sync.neverSynced')}
             </Text>
             <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncAll()} fullWidth />
-            <Button title={tr('settings:sync.reload')} variant="ghost" icon="cloud-download-outline" onPress={() => void syncNow().then(remoteSession.resync)} fullWidth />
+            <Button title={tr('settings:sync.reload')} variant="ghost" icon="cloud-download-outline" disabled={offline} onPress={() => void syncNow().then(remoteSession.resync)} fullWidth />
           </View>
 
         {queue.some((q) => q.status === 'failed') ? (
@@ -123,6 +123,7 @@ export default function SyncStatus() {
             />
             <Button
               title={tr('settings:sync.discard')}
+              disabled={offline}
               variant="ghost"
               icon="delete-outline"
               fullWidth

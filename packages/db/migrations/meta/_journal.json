@@ -57,6 +57,20 @@
       "when": 1793016996978,
       "tag": "0007_drop_portal_environment",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793385286729,
+      "tag": "0008_documents_number_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793386770340,
+      "tag": "0009_change_log_tx_id",
+      "breakpoints": true
     }
   ]
 }

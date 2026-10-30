@@ -70,10 +70,16 @@ export function createApiClient(options: ApiClientOptions) {
       body: JSON.stringify({ refreshToken: current.refreshToken }),
     });
     if (!res.ok) {
+      // Only the API refusing the session ends it. A 5xx, a 429 or a captive
+      // portal says nothing about the session, and signing out clears the book.
+      const refused = [400, 401, 403].includes(res.status) && (res.headers.get('content-type') ?? '').includes('problem+json');
+      if (!refused) throw new TypeError(`Could not refresh the session (HTTP ${res.status})`);
       await options.setTokens(null);
       return null;
     }
-    const body = (await res.json()) as Tokens;
+    const body = (await res.json().catch(() => {
+      throw new TypeError('Could not refresh the session');
+    })) as Tokens;
     const next = { accessToken: body.accessToken, refreshToken: body.refreshToken };
     await options.setTokens(next);
     return next;

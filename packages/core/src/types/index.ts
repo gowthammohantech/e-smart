@@ -788,6 +788,8 @@ export type SyncQueueEntry = {
   method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path?: string;
   body?: unknown;
+  /** Set when first sent. The server may have applied it since, so its body no longer changes. */
+  sentAt?: string;
   /** The server version the change was made against; a stale one is a conflict. */
   baseVersion?: number;
   /** An id minted offline, which the server maps to its own on create. */

@@ -61,10 +61,13 @@ async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>) {
 /**
  * Fetches the current representation of each wanted entity. Anything the
  * caller can't read (deleted since, gated by plan or role) or whose type is
- * unknown is simply absent from the result.
+ * unknown is simply absent from the result. One the server failed to read is
+ * in `failed`: it says nothing about the entity, so it must be sent again.
  */
-export async function fetchEntities(server: FastifyInstance, authorization: string | undefined, wants: Want[]): Promise<Map<string, unknown>> {
+export async function fetchEntities(server: FastifyInstance, authorization: string | undefined, wants: Want[]): Promise<{ data: Map<string, unknown>; failed: Set<string> }> {
   const out = new Map<string, unknown>();
+  const failed = new Set<string>();
+  const failedLists = new Set<string>();
   const keyOf = (w: { companyId: string; entityType: string; entityId: string }) => `${w.companyId}:${w.entityType}:${w.entityId}`;
   const lists = new Map<string, Promise<Map<string, unknown>>>();
 
@@ -76,6 +79,7 @@ export async function fetchEntities(server: FastifyInstance, authorization: stri
         let cursor: string | null = null;
         for (let page = 0; page < 50; page++) {
           const res = await injectAs(server, authorization, { method: 'GET', url: cursor ? `${url}?cursor=${encodeURIComponent(cursor)}` : url });
+          if (res.status >= 500) failedLists.add(url);
           if (res.status !== 200) break;
           const body = res.body as { data?: { id?: string }[]; nextCursor?: string | null };
           for (const e of body.data ?? []) if (e?.id) byId.set(e.id, e);
@@ -93,13 +97,16 @@ export async function fetchEntities(server: FastifyInstance, authorization: stri
     const source = ENTITY_SOURCES[w.entityType];
     if (!source) return;
     if (source.kind === 'list') {
-      const found = (await loadList(source.path(w.companyId))).get(w.entityId);
+      const url = source.path(w.companyId);
+      const found = (await loadList(url)).get(w.entityId);
       if (found !== undefined) out.set(keyOf(w), found);
+      else if (failedLists.has(url)) failed.add(keyOf(w));
       return;
     }
     const url = source.kind === 'one' ? source.path(w.companyId, w.entityId) : source.path(w.companyId);
     const res = await injectAs(server, authorization, { method: 'GET', url });
     if (res.status === 200 && res.body && typeof res.body === 'object') out.set(keyOf(w), res.body);
+    else if (res.status >= 500) failed.add(keyOf(w));
   });
-  return out;
+  return { data: out, failed };
 }

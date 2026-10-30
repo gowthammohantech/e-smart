@@ -7969,8 +7969,11 @@ export interface operations {
                     "application/json": {
                         results?: {
                             id?: string;
-                            /** @enum {string} */
-                            status?: "applied" | "conflict" | "rejected";
+                            /**
+                             * @description retry: not an outcome (a passing server error, rate limit or expired token), send the same entry again
+                             * @enum {string}
+                             */
+                            status?: "applied" | "conflict" | "rejected" | "retry";
                             /** @description Server copy after the mutation, or at conflict */
                             entity?: Record<string, never>;
                             error?: components["schemas"]["Problem"];

@@ -53,7 +53,9 @@ export function installRemote() {
     },
   } satisfies Partial<AppState>);
 
-  store.setState(patch);
+  // Not setState: that also saves, and the saved book hasn't been read back yet,
+  // so it would overwrite it with this empty store. Hydration merges over these.
+  Object.assign(store.getState(), patch);
   outbox.onEnqueue.add(() => syncSoon());
   watchSessionEnd();
 }

@@ -11,6 +11,11 @@ import { pgTable, uniqueIndex, foreignKey, varchar, char, boolean, integer, time
 import { sql } from "drizzle-orm"
 
 /** Encrypted secrets. drizzle-kit has no built-in for bytea. */
+/** A transaction id: unlike a serial, its order is settled once no older transaction is running. */
+const xid8 = customType<{ data: string; driverData: string }>({
+	dataType() { return "xid8"; },
+});
+
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 	dataType() {
 		return "bytea"
@@ -569,6 +574,8 @@ export const documents = pgTable("documents", {
 }, (table): PgTableExtraConfigValue[] => [
 	index("documents_company_id_branch_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.branchId.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_company_id_kind_number_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()),
+	// Drafts, and drafts cancelled before numbering, all carry `KIND-DRAFT`.
+	uniqueIndex("documents_company_id_kind_number_issued_key").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()).where(sql`${table.number} NOT LIKE '%-DRAFT'`),
 	index("documents_company_id_kind_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_company_id_party_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.partyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_source_document_id_idx").using("btree", table.sourceDocumentId.asc().nullsLast()),
@@ -1484,7 +1491,9 @@ export const changeLog = pgTable("change_log", {
 	op: varchar({ length: 10 }).notNull(),
 	version: integer().notNull(),
 	changedAt: timestamp("changed_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	txId: xid8("tx_id").default(sql`pg_current_xact_id()`).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
+	index("change_log_tx_id_seq_idx").using("btree", table.txId.asc().nullsLast(), table.seq.asc().nullsLast()),
 	index("change_log_company_id_seq_idx").using("btree", table.companyId.asc().nullsLast(), table.seq.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],

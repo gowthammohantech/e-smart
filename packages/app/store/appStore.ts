@@ -317,6 +317,8 @@ const PERSIST_KEY = 'ebs.remote.v1';
 const LEGACY_DEMO_KEY = 'ebs.data.v1';
 void AsyncStorage.removeItem(LEGACY_DEMO_KEY).catch(() => {});
 
+let readAttempts = 0;
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => {
@@ -1078,8 +1080,12 @@ export const useAppStore = create<AppState>()(
         return rest as AppState;
       },
       migrate: (persisted, version) => migratePersisted(persisted, version),
-      onRehydrateStorage: () => (state) => {
-        state?.setHydrated(true);
+      onRehydrateStorage: () => (state, error) => {
+        if (!error) return state?.setHydrated(true);
+        if (readAttempts++ === 0) return void useAppStore.persist.rehydrate();
+        // The book may still be on disk: carry on, but never save over it this run.
+        useAppStore.persist.setOptions({ storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
+        useAppStore.setState({ hydrated: true });
       },
     },
   ),

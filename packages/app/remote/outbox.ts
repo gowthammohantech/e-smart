@@ -48,7 +48,16 @@ export function push(n: New) {
 
 /** The not-yet-sent create for an entity minted offline. */
 export function pendingCreate(entityId: string): Entry | undefined {
+  return entries().find((e) => e.clientEntityId === entityId && e.method === 'POST' && e.status === 'pending' && !e.sentAt);
+}
+
+/** The create for an entity minted offline, sent or not, while it can still go through. */
+export function openCreate(entityId: string): Entry | undefined {
   return entries().find((e) => e.clientEntityId === entityId && e.method === 'POST' && e.status === 'pending');
+}
+
+function failedCreate(entityId: string): Entry | undefined {
+  return entries().find((e) => e.clientEntityId === entityId && e.method === 'POST' && e.status === 'failed');
 }
 
 function replace(id: string, patch: Partial<Entry>) {
@@ -60,16 +69,25 @@ function replace(id: string, patch: Partial<Entry>) {
  * Create-or-update. Something the server hasn't seen yet is a POST carrying
  * its offline id; a second edit before that POST is sent just rewrites it.
  * Something the server knows is a PUT (or PATCH) against the version we have,
- * and consecutive unsent edits collapse into one.
+ * and consecutive unsent edits collapse into one. An entry already sent keeps
+ * its body, since the server answers a resend from what it first received: the
+ * edit goes behind it as an update. So does an edit of a convert or duplicate,
+ * whose body is the action's and not the document.
  */
 export function upsert(o: { entityType: string; id: string; collectionPath: string; itemPath: string; body: unknown; label: string; updateMethod?: 'PUT' | 'PATCH' }) {
+  const method = o.updateMethod ?? 'PUT';
   const create = pendingCreate(o.id);
-  if (create) return replace(create.id, { body: o.body, label: o.label });
+  if (create?.path === o.collectionPath) return replace(create.id, { body: o.body, label: o.label });
+  const failed = failedCreate(o.id);
+  // A new id: the server keeps its refusal of the old one and would only repeat it.
+  if (failed?.path === o.collectionPath) return replace(failed.id, { id: uuid(), status: 'pending', sentAt: undefined, lastError: undefined, body: o.body, label: o.label });
+  if (create || failed || openCreate(o.id)) {
+    return push({ method, path: o.itemPath, body: o.body, entityType: o.entityType, entityId: o.id, label: o.label });
+  }
   if (!knownToServer(o.id)) {
     return push({ method: 'POST', path: o.collectionPath, body: o.body, entityType: o.entityType, entityId: o.id, label: o.label, clientEntityId: o.id });
   }
-  const method = o.updateMethod ?? 'PUT';
-  const queued = entries().find((e) => e.entityId === o.id && e.method === method && e.path === o.itemPath && e.status === 'pending');
+  const queued = entries().find((e) => e.entityId === o.id && e.method === method && e.path === o.itemPath && e.status === 'pending' && !e.sentAt);
   if (queued) return replace(queued.id, { body: o.body, label: o.label });
   push({ method, path: o.itemPath, body: o.body, entityType: o.entityType, entityId: o.id, label: o.label, baseVersion: useRemoteMeta.getState().versions[o.id] });
 }
@@ -79,12 +97,12 @@ export function upsert(o: { entityType: string; id: string; collectionPath: stri
  * create and every queued change to it are dropped instead.
  */
 export function remove(o: { entityType: string; id: string; itemPath: string; label: string }) {
-  if (pendingCreate(o.id)) {
-    write(useAppStore.getState().syncQueue.filter((e) => !(e.entityId === o.id && e.status === 'pending')));
+  if (pendingCreate(o.id) || failedCreate(o.id)) {
+    write(useAppStore.getState().syncQueue.filter((e) => e.entityId !== o.id));
     listeners();
     return;
   }
-  write(useAppStore.getState().syncQueue.filter((e) => !(e.entityId === o.id && e.status === 'pending' && (e.method === 'PUT' || e.method === 'PATCH'))));
+  write(useAppStore.getState().syncQueue.filter((e) => !(e.entityId === o.id && e.status === 'pending' && !e.sentAt && (e.method === 'PUT' || e.method === 'PATCH'))));
   push({ method: 'DELETE', path: o.itemPath, entityType: o.entityType, entityId: o.id, label: o.label, baseVersion: useRemoteMeta.getState().versions[o.id] });
 }
 
@@ -95,6 +113,22 @@ export function action(o: New) {
 
 export function update(id: string, patch: Partial<Entry>) {
   replace(id, patch);
+}
+
+/** Noted before the request goes out, so nothing folds into it from here on. */
+export function markSent(ids: string[]) {
+  const at = new Date().toISOString();
+  write(useAppStore.getState().syncQueue.map((e) => (ids.includes(e.id) ? { ...e, sentAt: e.sentAt ?? at } : e)));
+}
+
+/** Whether a change to this entity is still waiting behind one the server just answered. */
+export function hasQueuedAfter(entityId: string): boolean {
+  return entries().some((e) => e.entityId === entityId && e.status === 'pending');
+}
+
+/** The server applied this device's own write: what's queued behind it builds on the new version. */
+export function rebase(entityId: string, version: number) {
+  write(useAppStore.getState().syncQueue.map((e) => (e.entityId === entityId && e.status === 'pending' && e.baseVersion !== undefined ? { ...e, baseVersion: version } : e)));
 }
 
 export function drop(id: string) {

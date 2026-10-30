@@ -2803,7 +2803,7 @@ paths:
                       type: object
                       properties:
                         id: { type: string }
-                        status: { type: string, enum: [applied, conflict, rejected] }
+                        status: { type: string, enum: [applied, conflict, rejected, retry], description: 'retry: not an outcome (a passing server error, rate limit or expired token), send the same entry again' }
                         entity: { type: object, description: 'Server copy after the mutation, or at conflict' }
                         error: { $ref: '#/components/schemas/Problem' }
   /sync/pull:

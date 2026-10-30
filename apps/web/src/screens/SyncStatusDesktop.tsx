@@ -137,7 +137,7 @@ export function SyncStatusDesktop() {
                   title={tr('settings:sync.reload')}
                   variant="ghost"
                   icon="cloud-download-outline"
-                  onPress={() => void syncNow().then(remoteSession.resync)}
+                  disabled={offline} onPress={() => void syncNow().then(remoteSession.resync)}
                 />
               </View>
             </View>
@@ -275,6 +275,7 @@ export function SyncStatusDesktop() {
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: t.spacing.sm, padding: t.spacing.lg }}>
             <Button
               title={tr('settings:sync.discard')}
+              disabled={offline}
               variant="ghost"
               icon="delete-outline"
               onPress={() => {

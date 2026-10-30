@@ -74,6 +74,24 @@ describe('createApiClient', () => {
     expect(getTokens()).toBeNull();
   });
 
+  it.each([500, 503, 429, 403, 511])('keeps the session when the refresh answers %i', async (status) => {
+    const { api, getTokens } = setup((req) =>
+      req.url.endsWith('/auth/refresh') ? json(status, { status }) : json(401, { code: 'TOKEN_EXPIRED' }, 'application/problem+json'),
+    );
+    await expect(api.GET('/me')).rejects.toBeDefined();
+    expect(getTokens()).toEqual({ accessToken: 'old', refreshToken: 'r1' });
+  });
+
+  it('keeps the session when something other than the API answers the refresh with 401', async () => {
+    const { api, getTokens } = setup((req) =>
+      req.url.endsWith('/auth/refresh')
+        ? new Response('<html>Sign in to Wi-Fi</html>', { status: 401, headers: { 'content-type': 'text/html' } })
+        : json(401, { code: 'TOKEN_EXPIRED' }, 'application/problem+json'),
+    );
+    await expect(api.GET('/me')).rejects.toBeDefined();
+    expect(getTokens()).toEqual({ accessToken: 'old', refreshToken: 'r1' });
+  });
+
   it('throws ApiError carrying the problem code and issues', async () => {
     const { api } = setup(() =>
       json(422, { status: 422, code: 'VALIDATION_FAILED', issues: [{ field: 'name', message: 'Required' }] }, 'application/problem+json'),

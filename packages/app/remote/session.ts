@@ -3,11 +3,11 @@ import { Platform } from 'react-native';
 import type { Schema } from '@esmart/api-client';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { emptyData, useAppStore } from '../store/appStore';
-import { api } from './api';
+import { api, isNetworkError } from './api';
 import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
 import { isOpen } from './outbox';
-import { loadSnapshot, syncSoon } from './sync';
+import { loadSnapshot, reloadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
 
 type AuthSession = Schema<'AuthSession'>;
@@ -130,9 +130,14 @@ export function watchSessionEnd(): () => void {
 
 /** Reloads everything from the server, keeping the session (Settings → Sync). */
 export async function resync() {
-  const { session, activeCompanyId, activeBranchId, syncQueue } = useAppStore.getState();
-  useAppStore.setState({ ...emptyData(), syncQueue, session, activeCompanyId, activeBranchId });
-  await loadSnapshot();
+  try {
+    await reloadSnapshot(() => {
+      const { session, activeCompanyId, activeBranchId, syncQueue } = useAppStore.getState();
+      useAppStore.setState({ ...emptyData(), syncQueue, session, activeCompanyId, activeBranchId });
+    });
+  } catch (err) {
+    useRemoteMeta.getState().patch(isNetworkError(err) ? { online: false } : { lastError: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 /** Sets a new password from an emailed reset link. Every session is signed out. */

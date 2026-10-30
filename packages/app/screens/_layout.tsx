@@ -74,10 +74,9 @@ function RootNavigator() {
 
 export default function RootLayout() {
   useEffect(() => {
-    // The persisted store rehydrates asynchronously; when nothing was stored
-    // yet the callback never fires, so flip the flag once on mount.
+    // Preferences only. The book reports its own hydration: flagging it early
+    // would save the still-empty store over what's on disk.
     const timer = setTimeout(() => {
-      if (!useAppStore.getState().hydrated) useAppStore.getState().setHydrated(true);
       if (!useUiStore.getState().hydrated) useUiStore.getState().setHydrated(true);
     }, 400);
     return () => clearTimeout(timer);

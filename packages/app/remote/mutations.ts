@@ -132,7 +132,10 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     // logoUri is the server's read-only link (or a local path); the logo has its own upload.
     const { logoUri, ...body } = company;
     void logoUri;
-    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body, label: company.name });
+    // Still to be created: keep what the create carries besides the company itself.
+    const create = outbox.pendingCreate(company.id)?.body as { seedDefaults?: boolean; numberingSeries?: unknown[] } | undefined;
+    const saved = create ? { ...body, seedDefaults: create.seedDefaults, numberingSeries: create.numberingSeries } : body;
+    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body: saved, label: company.name });
   },
   saveBranch: ({ args, after }) => {
     const b = byId(after.branches, (args[0] as Branch).id);
@@ -174,7 +177,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
       return;
     }
     // A series of a company the server hasn't created yet rides along with its create.
-    const create = outbox.pendingCreate(s.companyId);
+    // Can't follow the create as an update: the server's series has its own id.
+    const create = outbox.openCreate(s.companyId);
     if (create) {
       const body = create.body as { numberingSeries?: NumberingSeries[] };
       const series = [...(body.numberingSeries ?? []).filter((x) => x.kind !== s.kind), { kind: s.kind, prefix: s.prefix, nextNumber: s.nextNumber, padding: s.padding, includeFiscalYear: s.includeFiscalYear, includeBranchCode: s.includeBranchCode, resetPolicy: s.resetPolicy }];
@@ -203,7 +207,7 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     const override = (call.args[2] as { overrideCreditLimit?: boolean } | undefined)?.overrideCreditLimit ? { overrideCreditLimit: true } : {};
     // Not on the server yet: create it in its final state in one go.
     const create = outbox.pendingCreate(doc.id);
-    if (create && status !== 'cancelled') return outbox.update(create.id, { body: { ...documentBody(doc), ...override } });
+    if (create?.path === `${c(doc.companyId)}/documents` && status !== 'cancelled') return outbox.update(create.id, { body: { ...documentBody(doc), ...override } });
     outbox.action({ method: 'POST', path: `${c(doc.companyId)}/documents/${doc.id}/status`, body: { status, ...override }, entityType: 'document', entityId: doc.id, label: doc.number });
   },
   finalizeDocument: documentAction(() => '/finalize'),
