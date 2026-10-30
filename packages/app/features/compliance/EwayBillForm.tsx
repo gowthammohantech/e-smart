@@ -41,16 +41,10 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { portalToast } from './portalToast';
 
 /**
- * Raising an e-way bill (FRD 16).
- *
- * Part-A comes off the document and is shown read-only; Part-B is what the
- * user actually has to supply. The validity preview recomputes on every
- * keystroke, which is the clearest way to show the one-day-per-200-km rule
- * doing its work.
+ * Everything the e-way bill form holds and does, apart from how it is laid
+ * out: the phone form below and the desktop one (apps/web) both use it.
  */
-export function EwayBillForm({ document: doc }: { document: BusinessDocument }) {
-  const t = useTheme();
-  const insets = useSafeAreaInsets();
+export function useEwayBillForm(doc: BusinessDocument) {
   const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
   const toast = useToast();
@@ -148,6 +142,96 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
       });
     setErrors(next);
   };
+
+  return {
+    doc,
+    subSupplyType,
+    setSubSupplyType,
+    subSupplyDescription,
+    setSubSupplyDescription,
+    subSupplyOpen,
+    setSubSupplyOpen,
+    from,
+    setFrom,
+    to,
+    setTo,
+    stateSheet,
+    setStateSheet,
+    transporterId,
+    setTransporterId,
+    transporterName,
+    setTransporterName,
+    transporters,
+    transporterOpen,
+    setTransporterOpen,
+    transportMode,
+    setTransportMode,
+    vehicleType,
+    setVehicleType,
+    vehicleNumber,
+    setVehicleNumber,
+    transportDocNumber,
+    setTransportDocNumber,
+    transportDocDate,
+    setTransportDocDate,
+    distanceKm,
+    setDistanceKm,
+    preview,
+    byRoad,
+    busy,
+    errors,
+    submit,
+  };
+}
+
+export type EwayBillFormState = ReturnType<typeof useEwayBillForm>;
+
+/**
+ * Raising an e-way bill (FRD 16).
+ *
+ * Part-A comes off the document and is shown read-only; Part-B is what the
+ * user actually has to supply. The validity preview recomputes on every
+ * keystroke, which is the clearest way to show the one-day-per-200-km rule
+ * doing its work.
+ */
+export function EwayBillForm({ document: doc }: { document: BusinessDocument }) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const { t: tr } = useTranslation(['compliance']);
+  const form = useEwayBillForm(doc);
+  const {
+    subSupplyType,
+    subSupplyDescription,
+    setSubSupplyDescription,
+    setSubSupplyOpen,
+    from,
+    setFrom,
+    to,
+    setTo,
+    setStateSheet,
+    transporterId,
+    setTransporterId,
+    transporterName,
+    setTransporterName,
+    transporters,
+    setTransporterOpen,
+    transportMode,
+    setTransportMode,
+    vehicleType,
+    setVehicleType,
+    vehicleNumber,
+    setVehicleNumber,
+    transportDocNumber,
+    setTransportDocNumber,
+    transportDocDate,
+    setTransportDocDate,
+    distanceKm,
+    setDistanceKm,
+    byRoad,
+    busy,
+    errors,
+    submit,
+  } = form;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -294,21 +378,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           />
 
           {/* The rule, made visible. */}
-          <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
-            <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="small" weight="600">
-                {preview.days} {preview.days === 1 ? 'day' : 'days'} · valid to{' '}
-                {formatDate(preview.validUpto.slice(0, 10))}
-              </Text>
-              <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                {vehicleType === 'overDimensional'
-                  ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
-                  : 'One day per 200 km, or part thereof.'}{' '}
-                Validity always runs to midnight.
-              </Text>
-            </View>
-          </Card>
+          <ValidityNote form={form} />
         </ScrollView>
 
         <View
@@ -333,57 +403,108 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           />
         </View>
 
-        <SelectSheet
-          visible={subSupplyOpen}
-          onClose={() => setSubSupplyOpen(false)}
-          title={tr('compliance:ewb.subSupplyType')}
-          options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
-            value: key,
-            label: EWAY_SUB_SUPPLY_TYPES[key].label,
-          }))}
-          value={subSupplyType}
-          onSelect={(v) => {
-            setSubSupplyType(v as EwaySubSupplyType);
-            setSubSupplyOpen(false);
-          }}
-          searchable={false}
-        />
-
-        <SelectSheet
-          visible={transporterOpen}
-          onClose={() => setTransporterOpen(false)}
-          title={tr('compliance:ewb.transporter')}
-          options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
-          value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
-          onSelect={(id) => {
-            const picked = transporters.find((x) => x.id === id);
-            if (picked) {
-              setTransporterId(picked.transporterId);
-              setTransporterName(picked.name);
-            }
-            setTransporterOpen(false);
-          }}
-        />
-        <SelectSheet
-          visible={stateSheet !== null}
-          onClose={() => setStateSheet(null)}
-          title={stateSheet === 'from' ? 'Despatch state' : 'Delivery state'}
-          options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
-          value={stateSheet === 'from' ? from.stateCode : to.stateCode}
-          onSelect={(code) => {
-            // A place picked for the previous state no longer belongs.
-            const moved = (p: EwayPlace): EwayPlace => ({
-              ...p,
-              stateCode: code,
-              place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
-            });
-            if (stateSheet === 'from') setFrom(moved(from));
-            else setTo(moved(to));
-            setStateSheet(null);
-          }}
-        />
+        <EwayBillFormSheets form={form} />
       </FormContainer>
     </View>
+  );
+}
+
+/** How long the bill will last, and the rule behind it. */
+export function ValidityNote({ form }: { form: EwayBillFormState }) {
+  const t = useTheme();
+  const { preview, vehicleType } = form;
+  return (
+    <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
+      <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="small" weight="600">
+          {preview.days} {preview.days === 1 ? 'day' : 'days'} · valid to{' '}
+          {formatDate(preview.validUpto.slice(0, 10))}
+        </Text>
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+          {vehicleType === 'overDimensional'
+            ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
+            : 'One day per 200 km, or part thereof.'}{' '}
+          Validity always runs to midnight.
+        </Text>
+      </View>
+    </Card>
+  );
+}
+
+/** The sub-supply, transporter and state pickers, shared by the phone and desktop forms. */
+export function EwayBillFormSheets({ form }: { form: EwayBillFormState }) {
+  const { t: tr } = useTranslation(['compliance']);
+  const {
+    subSupplyOpen,
+    setSubSupplyOpen,
+    subSupplyType,
+    setSubSupplyType,
+    transporterOpen,
+    setTransporterOpen,
+    transporters,
+    transporterId,
+    setTransporterId,
+    setTransporterName,
+    stateSheet,
+    setStateSheet,
+    from,
+    setFrom,
+    to,
+    setTo,
+  } = form;
+  return (
+    <>
+      <SelectSheet
+        visible={subSupplyOpen}
+        onClose={() => setSubSupplyOpen(false)}
+        title={tr('compliance:ewb.subSupplyType')}
+        options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
+          value: key,
+          label: EWAY_SUB_SUPPLY_TYPES[key].label,
+        }))}
+        value={subSupplyType}
+        onSelect={(v) => {
+          setSubSupplyType(v as EwaySubSupplyType);
+          setSubSupplyOpen(false);
+        }}
+        searchable={false}
+      />
+
+      <SelectSheet
+        visible={transporterOpen}
+        onClose={() => setTransporterOpen(false)}
+        title={tr('compliance:ewb.transporter')}
+        options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
+        value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
+        onSelect={(id) => {
+          const picked = transporters.find((x) => x.id === id);
+          if (picked) {
+            setTransporterId(picked.transporterId);
+            setTransporterName(picked.name);
+          }
+          setTransporterOpen(false);
+        }}
+      />
+      <SelectSheet
+        visible={stateSheet !== null}
+        onClose={() => setStateSheet(null)}
+        title={stateSheet === 'from' ? 'Despatch state' : 'Delivery state'}
+        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        value={stateSheet === 'from' ? from.stateCode : to.stateCode}
+        onSelect={(code) => {
+          // A place picked for the previous state no longer belongs.
+          const moved = (p: EwayPlace): EwayPlace => ({
+            ...p,
+            stateCode: code,
+            place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
+          });
+          if (stateSheet === 'from') setFrom(moved(from));
+          else setTo(moved(to));
+          setStateSheet(null);
+        }}
+      />
+    </>
   );
 }
 
