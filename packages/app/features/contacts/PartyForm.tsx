@@ -25,6 +25,7 @@ import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 
@@ -90,6 +91,22 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (city && !cities.includes(city)) setCity('');
     if (shipCity && !cities.includes(shipCity)) setShipCity('');
   };
+
+  // A GSTIN brings the party's registered name, GST type and address from the GST portal.
+  const fillFromPortal = (d: GstinDetails) => {
+    const registeredName = d.legalName ?? d.tradeName;
+    if (registeredName) setName(registeredName);
+    if (d.registrationType && gstinRequiredFor(d.registrationType)) setRegistration(d.registrationType);
+    const a = d.address;
+    if (!a) return;
+    const street = [a.line1, a.line2].filter(Boolean).join(', ');
+    if (street) setLine1(street);
+    const code = a.stateCode ?? taxId.slice(0, 2);
+    if (INDIAN_STATES.some((s) => s.code === code)) changeState(code);
+    if (a.city) setCity(a.city);
+    if (a.postalCode) setPostalCode(a.postalCode);
+  };
+  const gstinLookup = useGstinLookup({ gstin: taxId, opened: party?.taxId, enabled: needsGstin, fill: fillFromPortal });
 
   const label = kind === 'customer' ? 'Customer' : 'Supplier';
 
@@ -192,7 +209,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       autoCapitalize="characters"
       icon="card-account-details-outline"
       error={errors.taxId}
-      hint={tr('contacts:form.gstinHint')}
+      hint={gstinLookup.hint ?? tr('contacts:form.gstinHint')}
+      suffix={gstinLookup.suffix}
       required
     />
   ) : null;

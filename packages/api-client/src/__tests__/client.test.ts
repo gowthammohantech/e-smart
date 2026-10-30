@@ -51,6 +51,12 @@ describe('createApiClient', () => {
     expect(seen[0].headers.get('Authorization')).toBeNull();
   });
 
+  it('signs a GSTIN lookup, which the server only answers for a user', async () => {
+    const { api, seen } = setup(() => json(200, {}));
+    await api.GET('/reference/gstin/{gstin}', { params: { path: { gstin: '29AABCG4321K1ZM' } } });
+    expect(seen[0].headers.get('Authorization')).toBe('Bearer old');
+  });
+
   it('refreshes once on 401 and replays the request with its body', async () => {
     let calls = 0;
     const { api, seen, getTokens } = setup(async (req) => {
