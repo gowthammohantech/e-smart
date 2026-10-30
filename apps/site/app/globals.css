@@ -1,0 +1,243 @@
+@import 'tailwindcss';
+
+/* `dark:` follows the site's own theme switch, not only the system setting. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Theme values live in lib/theme.ts and are written into <head> as
+ * [data-theme="…"] blocks. Tailwind only maps names onto them here.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-footer: var(--surface-footer);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-tint: var(--primary-tint);
+  --color-deep: var(--deep);
+  --color-deep-2: var(--deep-2);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
+  --color-star: var(--star);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-bezel: var(--bezel);
+
+  --font-display: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-btn: 8px;
+  --radius-card: 16px;
+  --radius-media: 20px;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    -webkit-text-size-adjust: 100%;
+    transition: background-color 300ms ease;
+  }
+  /* Transparent, so the fixed -z-10 backdrop shows; <html> carries the colour. */
+  body {
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+  ::selection {
+    background: var(--primary);
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+@utility container-site {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 16px;
+  @media (width >= 640px) {
+    padding-inline: 24px;
+  }
+}
+
+@utility section-y {
+  padding-block: 72px;
+  @media (width >= 1024px) {
+    padding-block: 120px;
+  }
+}
+
+@utility h-section {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  @media (width >= 1024px) {
+    font-size: 46px;
+    line-height: 1.1;
+  }
+}
+
+/*
+ * The site's one card style: frosted glass with a blue gradient edge. The
+ * edge is a second background clipped to the border box; hovering lights it
+ * and shows a spotlight that follows the cursor (--mx/--my, set by Spotlight).
+ */
+/* Callers position it (relative or absolute), so the ::before/::after layers have a box. */
+@utility card-glass {
+  isolation: isolate;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(145deg, var(--edge-a), var(--edge-b) 45%, var(--edge-c)) border-box;
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  transition:
+    box-shadow 300ms ease,
+    transform 300ms ease;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 0%), var(--spot), transparent 70%);
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%), var(--edge-hover), transparent 70%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+  }
+  &:hover {
+    box-shadow: 0 18px 50px -24px var(--card-glow);
+  }
+  &:hover::before,
+  &:hover::after {
+    opacity: 1;
+  }
+}
+
+/* The featured card: edge lit all the time. */
+@utility card-glass-strong {
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(145deg, var(--edge-hover), var(--edge-c) 50%, var(--edge-hover)) border-box;
+  box-shadow: 0 24px 60px -28px var(--card-glow);
+}
+
+/* Outline lettering for the marquee. */
+@utility text-stroke {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--primary);
+}
+
+/* Gradient-filled numerals for the three steps. */
+@utility text-numeral {
+  background: linear-gradient(180deg, var(--primary) 0%, transparent 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility mask-fade-x {
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(-8px);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+.animate-spin-slow {
+  animation: spin-slow 12s linear infinite;
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* The glow wash shown when WebGL is unavailable. */
+.css-glow {
+  background:
+    radial-gradient(60% 50% at 0% 0%, var(--glow-a), transparent 70%),
+    radial-gradient(40% 35% at 100% 8%, var(--primary-tint), transparent 70%),
+    radial-gradient(35% 30% at 0% 55%, var(--glow-b), transparent 70%),
+    radial-gradient(35% 30% at 100% 78%, var(--glow-b), transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-spin-slow,
+  .animate-float {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Lenis */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: clip;
+}

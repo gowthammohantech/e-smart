@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { E_INVOICE_CANCEL_REASONS } from '@esmart/core/domain/eInvoice';
 import { EWAY_CANCEL_REASONS } from '@esmart/core/domain/ewayBill';
 import type { Config } from '../../config';
@@ -299,7 +300,8 @@ export class WhitebooksGateway implements GspGateway {
   submitInvoice(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['submitInvoice']>[1]): Promise<SubmitInvoiceResult> {
     return this.guard(async () => {
       const login = requireLogin(creds);
-      const payload = prepareIrnPayload(await this.withSandboxBuyer(login, req.payload));
+      const buyered = await this.withSandboxBuyer(login, req.payload);
+      const payload = prepareIrnPayload({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt) } });
       try {
         const { body } = await this.filing(login, PATHS.generateIrn, 'post', { body: payload });
         const record = readRecord<IrnRecord>(body);
@@ -352,7 +354,8 @@ export class WhitebooksGateway implements GspGateway {
           reply = await send({ ...req.payload, transDistance: 0 });
         }
       } else {
-        reply = await this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody(req.payload));
+        const { payload } = req;
+        reply = await this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody({ ...payload, docNo: sandboxDocNo(this.config, login.gstin, payload.docNo, payload.docDate) }));
       }
       return ewayBillResult(readRecord<EwbRecord>(reply), req) ?? incomplete('e-way bill number');
     });
@@ -449,6 +452,25 @@ export class WhitebooksGateway implements GspGateway {
     const record = (body as { data?: unknown }).data;
     return isRecord(record) && Object.keys(record).length > 0 ? record : null;
   }
+}
+
+/**
+ * **Sandbox only.** Every tester shares the sandbox GSTIN `29AAGCB1286Q000`, and NIC keys an IRN (and an
+ * e-way bill) on GSTIN + document number + year. A document called `INV/26-27/0003` has therefore usually
+ * been registered already by someone else, months ago: the portal answers 2150 "duplicate", the registration
+ * it carries is adopted, and the invoice ends up holding a stranger's IRN. Raising an e-way bill on it is then
+ * refused for facts about *their* document — dated more than 180 days back (4043), with a service HSN (4009),
+ * and already carrying a bill (4026).
+ *
+ * So the portal is shown a number of our own: stable for a given document (a retry finds our own
+ * registration), different from every other deployment's, and within NIC's 16 characters. The app's invoice,
+ * PDF and numbering keep the real number.
+ */
+export function sandboxDocNo(config: Config, gstin: string, docNo: string, docDate: string): string {
+  const digest = createHash('sha256').update(`${config.PUBLIC_BASE_URL}|${gstin}|${docNo}|${docDate}`).digest();
+  let n = 0n;
+  for (const byte of digest.subarray(0, 8)) n = (n << 8n) | BigInt(byte);
+  return `S${n.toString(36).toUpperCase().padStart(11, '0').slice(0, 11)}`;
 }
 
 // ---------------------------------------------------------------------------
