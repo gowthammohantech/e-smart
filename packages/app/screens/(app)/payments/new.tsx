@@ -17,6 +17,7 @@ import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
 import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivables';
@@ -51,6 +52,7 @@ export default function NewPayment() {
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   const insets = useSafeAreaInsets();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
@@ -261,7 +263,7 @@ export default function NewPayment() {
 
   const canSave = !!partyId && amount.minor > 0 && !overAllocated && !!accountId && !balanceBlocks;
 
-  const save = () => {
+  const save = async () => {
     if (!canSave || !partyId) return;
 
     const allocationRows: PaymentAllocation[] = outstanding
@@ -295,13 +297,13 @@ export default function NewPayment() {
       createdAt: new Date().toISOString(),
     };
 
-    const id = savePayment(payment);
-    if (!id) {
+    const res = await serverSave(() => savePayment(payment), direction === 'received' ? 'Payment recorded' : 'Payment made');
+    if (!res) return;
+    if (!res.result) {
       toast.show(tr('sales:payment.noAccountForMethod'), 'error');
       return;
     }
-    toast.show(direction === 'received' ? 'Payment recorded' : 'Payment made', 'success');
-    router.replace(`/(app)/payments/${id}`);
+    router.replace(`/(app)/payments/${res.id ?? res.result}`);
   };
 
   // Every block is built once and placed twice: stacked in one column on a
@@ -702,7 +704,7 @@ export default function NewPayment() {
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made')} />
-            <Button title={submitTitle} onPress={save} disabled={!canSave} />
+            <Button title={submitTitle} onPress={() => void save()} loading={saving} disabled={!canSave} />
           </FormActions>
         ) : (
           <View
@@ -716,7 +718,7 @@ export default function NewPayment() {
           >
             <Button
               title={submitTitle}
-              onPress={save}
+              onPress={() => void save()} loading={saving}
               disabled={!canSave}
               fullWidth
               size="lg"

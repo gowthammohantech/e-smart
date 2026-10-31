@@ -13,6 +13,7 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
 import { paymentMethodLabel } from '@esmart/core/labels';
@@ -28,6 +29,7 @@ export default function PaymentDetail() {
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const payment = usePayment(id);
@@ -237,10 +239,10 @@ export default function PaymentDetail() {
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removePayment(payment.id);
           setConfirmDelete(false);
-          toast.show(tr('sales:payment.deleted'), 'success');
-          goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
+          void serverSave(() => removePayment(payment.id), tr('sales:payment.deleted')).then((res) => {
+            if (res) goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
+          });
         }}
       />
     </View>

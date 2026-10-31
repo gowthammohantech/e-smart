@@ -10,7 +10,7 @@ import { FormActions } from '@esmart/ui/components/ActionBar';
 import { AmountField, PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 import { GstRegistrationType, Party, PartyKind } from '@esmart/core/types';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
@@ -35,7 +35,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const goBack = useGoBack();
   // Where Cancel and Save land when there is no screen to go back to.
   const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
@@ -93,7 +93,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
   const label = kind === 'customer' ? 'Customer' : 'Supplier';
 
-  const save = () => {
+  const save = async () => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'> = {
       name: required(name, `${label} name`),
@@ -156,10 +156,11 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       createdAt: party?.createdAt ?? nowISO(),
     };
 
-    saveParty(record);
-    toast.show(party ? `${label} updated` : `${label} added`, 'success');
+    const res = await serverSave(() => saveParty(record), party ? `${label} updated` : `${label} added`);
+    if (!res) return;
+    const id = res.id ?? record.id;
     if (party) goBack(backTo);
-    else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${record.id}` : `/(app)/contacts/suppliers/${record.id}`);
+    else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`);
   };
 
   // Every field is built once and placed twice: stacked in one column on a
@@ -420,10 +421,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           {desktop ? (
             <>
               <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(backTo)} />
-              <Button title={submitTitle} onPress={save} />
+              <Button title={submitTitle} onPress={() => void save()} loading={saving} />
             </>
           ) : (
-            <Button title={submitTitle} onPress={save} fullWidth size="lg" />
+            <Button title={submitTitle} onPress={() => void save()} loading={saving} fullWidth size="lg" />
           )}
         </FormActions>
 

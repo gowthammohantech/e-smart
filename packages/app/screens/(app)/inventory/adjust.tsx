@@ -10,7 +10,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
 import { formatQty } from '@esmart/core/lib/format';
@@ -22,7 +22,7 @@ export default function StockAdjust() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
@@ -58,18 +58,20 @@ export default function StockAdjust() {
 
   const save = () => {
     if (!canSave || !item) return;
-    addStockMovement({
-      companyId: activeCompanyId,
-      branchId,
-      itemId: item.id,
-      type: 'adjustment',
-      quantity: delta,
-      unitCost: item.purchasePrice,
-      date,
-      notes: reason || undefined,
+    void serverSave(() => {
+      addStockMovement({
+        companyId: activeCompanyId,
+        branchId,
+        itemId: item.id,
+        type: 'adjustment',
+        quantity: delta,
+        unitCost: item.purchasePrice,
+        date,
+        notes: reason || undefined,
+      });
+    }, tr('inventory:adjust.done')).then((res) => {
+      if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });
-    toast.show(tr('inventory:adjust.done'), 'success');
-    goBack(`/(app)/catalog/items/${item.id}`);
   };
 
   return (
@@ -164,7 +166,7 @@ export default function StockAdjust() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title={tr('inventory:adjust.submit')} onPress={save} disabled={!canSave} fullWidth size="lg" />
+        <Button title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} fullWidth size="lg" />
       </View>
 
       <SelectSheet

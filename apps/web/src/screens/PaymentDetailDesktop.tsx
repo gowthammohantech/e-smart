@@ -14,6 +14,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '@esmart/app/store/selectors';
 import { paymentMethodLabel } from '@esmart/core/labels';
@@ -58,6 +59,7 @@ export function PaymentDetailDesktop() {
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const payment = usePayment(id);
@@ -332,10 +334,10 @@ export function PaymentDetailDesktop() {
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removePayment(payment.id);
           setConfirmDelete(false);
-          toast.show(tr('sales:payment.deleted'), 'success');
-          goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
+          void serverSave(() => removePayment(payment.id), tr('sales:payment.deleted')).then((res) => {
+            if (res) goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
+          });
         }}
       />
     </View>

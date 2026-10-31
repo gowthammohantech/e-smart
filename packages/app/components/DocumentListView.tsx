@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useRefreshOnFocus } from '../remote/useRefreshOnFocus';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -59,6 +60,7 @@ export function DocumentListView({
   onEmptyAction?: () => void;
   headerExtra?: React.ReactNode;
 }) {
+  useRefreshOnFocus();
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'domain']);
   const router = useRouter();

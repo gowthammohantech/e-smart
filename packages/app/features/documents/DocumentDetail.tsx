@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
 import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -10,7 +11,6 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
-import { creditNoteDeadline } from '@esmart/core/lib/date';
 import { knownToServer } from '../../remote/meta';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
@@ -19,6 +19,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
@@ -26,7 +27,7 @@ import { documentKindLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
+import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
@@ -58,6 +59,7 @@ import { describeError } from '../../remote/errors';
 import { useGoBack } from '../../navigation/useGoBack';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
+  useRefreshOnFocus();
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'domain', 'sales']);
@@ -65,6 +67,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -197,16 +200,10 @@ ${url}`;
     else send(channel);
   };
 
-  const convert = (target: DocumentKind) => {
-    const id = convertDocument(doc.id, target);
+  const convert = async (target: DocumentKind) => {
     setActionsOpen(false);
-    if (id) {
-      toast.show(
-        tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }),
-        'success',
-      );
-      router.push(detailRouteFor(target, id) as never);
-    }
+    const res = await serverSave(() => convertDocument(doc.id, target), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }));
+    if (res?.result) router.push(detailRouteFor(target, res.id ?? res.result) as never);
   };
 
   const conversions: { target: DocumentKind; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] =
@@ -709,11 +706,12 @@ ${url}`;
             : ewayRequired
               ? [{ label: 'Generate e-way bill', icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
               : []),
-          ...conversions.map((c) => ({ label: c.label, icon: c.icon, onPress: () => convert(c.target) })),
+          ...conversions.map((c) => ({ label: c.label, icon: c.icon, onPress: () => void convert(c.target) })),
           { label: 'Duplicate', icon: 'content-duplicate' as const, onPress: () => {
-            const id = duplicateDocument(doc.id);
             setActionsOpen(false);
-            if (id) router.push(detailRouteFor(doc.kind, id) as never);
+            void serverSave(() => duplicateDocument(doc.id)).then((res) => {
+              if (res?.result) router.push(detailRouteFor(doc.kind, res.id ?? res.result) as never);
+            });
           } },
           ...(transitions.length ? [{ label: 'Change status', icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
           ...(doc.status !== 'cancelled' && isFinalized(doc.status)
@@ -791,9 +789,8 @@ ${url}`;
                   );
                   return;
                 }
-                setDocumentStatus(doc.id, s);
                 setStatusOpen(false);
-                toast.show(tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), 'success');
+                void serverSave(() => setDocumentStatus(doc.id, s), tr('common:documentDetail.marked', { status: statusLabel(tr, s) }));
               }}
               accessibilityRole="button"
               accessibilityLabel={tr('common:documentDetail.markAs', { status: statusLabel(tr, s) })}
@@ -822,10 +819,10 @@ ${url}`;
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removeDocument(doc.id);
           setConfirmDelete(false);
-          toast.show(tr('sales:detail.draftDeleted'), 'success');
-          goBack(listRouteFor(doc.kind));
+          void serverSave(() => removeDocument(doc.id), tr('sales:detail.draftDeleted')).then((res) => {
+            if (res) goBack(listRouteFor(doc.kind));
+          });
         }}
       />
 
@@ -837,9 +834,8 @@ ${url}`;
         destructive
         onCancel={() => setConfirmCancel(false)}
         onConfirm={() => {
-          setDocumentStatus(doc.id, 'cancelled');
           setConfirmCancel(false);
-          toast.show(tr('sales:detail.documentCancelled'), 'success');
+          void serverSave(() => setDocumentStatus(doc.id, 'cancelled'), tr('sales:detail.documentCancelled'));
         }}
       />
 

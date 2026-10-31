@@ -10,7 +10,7 @@ import { PickerField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBranches, useDefaultBranchId, useItems, useStockMovements } from '@esmart/app/store/selectors';
 import { stockMapOn, stockOnHand } from '@esmart/core/domain/stockLedger';
@@ -29,7 +29,7 @@ export function StockTransferDesktop() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
   const items = useItems().filter((i) => i.trackInventory);
@@ -170,9 +170,11 @@ export function StockTransferDesktop() {
             disabled={!canSave}
             onPress={() => {
               if (!canSave || !itemId) return;
-              transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
-              toast.show(tr('inventory:transfer.done'), 'success');
-              goBack(`/(app)/catalog/items/${itemId}`);
+              void serverSave(() => {
+                transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
+              }, tr('inventory:transfer.done')).then((res) => {
+                if (res) goBack(`/(app)/catalog/items/${itemId}`);
+              });
             }}
           />
         </FormFooter>

@@ -96,6 +96,10 @@
     "issueFirst": "Issue it first; payment is recorded against an issued document.",
     "nothingDue": "Nothing is due on this document."
   },
+  "save": {
+    "queued": "Saved on this device. It will sync when you are back online.",
+    "refused": "The server refused this: {{reason}}"
+  },
   "component": {
     "confirm": "Confirm",
     "cancel": "Cancel",

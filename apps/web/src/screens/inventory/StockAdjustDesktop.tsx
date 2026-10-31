@@ -8,7 +8,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
 import { formatQty } from '@esmart/core/lib/format';
@@ -25,7 +25,7 @@ export function StockAdjustDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
   const items = useItems().filter((i) => i.trackInventory);
@@ -60,18 +60,20 @@ export function StockAdjustDesktop() {
 
   const save = () => {
     if (!canSave || !item) return;
-    addStockMovement({
-      companyId: activeCompanyId,
-      branchId,
-      itemId: item.id,
-      type: 'adjustment',
-      quantity: delta,
-      unitCost: item.purchasePrice,
-      date,
-      notes: reason || undefined,
+    void serverSave(() => {
+      addStockMovement({
+        companyId: activeCompanyId,
+        branchId,
+        itemId: item.id,
+        type: 'adjustment',
+        quantity: delta,
+        unitCost: item.purchasePrice,
+        date,
+        notes: reason || undefined,
+      });
+    }, tr('inventory:adjust.done')).then((res) => {
+      if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });
-    toast.show(tr('inventory:adjust.done'), 'success');
-    goBack(`/(app)/catalog/items/${item.id}`);
   };
 
   return (
@@ -173,7 +175,7 @@ export function StockAdjustDesktop() {
 
         <FormFooter>
           <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/(tabs)/inventory')} />
-          <Button title={tr('inventory:adjust.submit')} onPress={save} disabled={!canSave} />
+          <Button title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} />
         </FormFooter>
       </ScrollView>
 

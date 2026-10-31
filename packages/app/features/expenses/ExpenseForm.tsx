@@ -15,6 +15,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
@@ -68,6 +69,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
@@ -216,13 +218,17 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       createdAt: expense?.createdAt ?? new Date().toISOString(),
     };
 
-    const id = saveExpense(record);
-    if (!id) {
+    const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? 'Expense updated' : 'Expense recorded');
+    if (!res) return;
+    if (!res.result) {
       setAccountError(tr('purchases:form.accountRequired'));
       return;
     }
-    if (receiptLater) useReceiptQueue.getState().add(id, record.companyId, receiptLater);
-    toast.show(receiptLater ? tr('purchases:form.receiptQueued') : expense ? 'Expense updated' : 'Expense recorded', 'success');
+    const id = res.id ?? res.result;
+    if (receiptLater) {
+      useReceiptQueue.getState().add(id, record.companyId, receiptLater);
+      toast.show(tr('purchases:form.receiptQueued'), 'success');
+    }
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };
@@ -484,11 +490,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
-            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} />
+            <Button title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} />
           </FormActions>
         ) : (
           <FormActions>
-            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
+            <Button title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
           </FormActions>
         )}
 

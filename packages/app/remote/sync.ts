@@ -27,6 +27,46 @@ function assertSession(started: number) {
   if (started !== session) throw new SessionEnded();
 }
 
+/** What became of a queue entry the user is waiting on. */
+export type Outcome = { kind: 'applied'; serverId?: string } | { kind: 'rejected' | 'conflict'; error: string } | { kind: 'queued' };
+const waiting = new Map<string, (o: Outcome) => void>();
+function report(id: string, o: Outcome) {
+  waiting.get(id)?.(o);
+  waiting.delete(id);
+}
+
+/**
+ * Resolves once the server has answered each entry, or with `queued` for those it
+ * couldn't: no connection, still waiting behind a failed change, or no answer in time.
+ */
+export function waitForOutcome(ids: string[], timeoutMs: number): Promise<Map<string, Outcome>> {
+  const out = new Map<string, Outcome>();
+  if (!ids.length) return Promise.resolve(out);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      for (const id of ids) if (!out.has(id)) report(id, { kind: 'queued' });
+    }, timeoutMs);
+    for (const id of ids) {
+      waiting.set(id, (o) => {
+        out.set(id, o);
+        if (out.size === ids.length) {
+          clearTimeout(timer);
+          resolve(out);
+        }
+      });
+    }
+  });
+}
+
+/** At the end of a run: anything not sent in it won't be until the next. */
+function settleWaiting(all: boolean) {
+  const queue = outbox.entries();
+  for (const id of [...waiting.keys()]) {
+    const e = queue.find((q) => q.id === id);
+    if (all || !e || (e.status === 'pending' && outbox.blockerOf(e, queue))) report(id, { kind: 'queued' });
+  }
+}
+
 export function endSyncSession() {
   session += 1;
 }
@@ -109,6 +149,17 @@ function clearRetry() {
   retryIn = RETRY_MIN_MS;
 }
 
+/** Seen at most this often when screens are opened, so moving around the app stays light. */
+const FOCUS_REFRESH_MS = 15_000;
+let lastFocusRefresh = 0;
+
+/** A screen opened while online shows what the server has now, not what the last 60-second sync saw. */
+export function refreshOnFocus() {
+  if (!useRemoteMeta.getState().online || Date.now() - lastFocusRefresh < FOCUS_REFRESH_MS) return;
+  lastFocusRefresh = Date.now();
+  syncSoon(0);
+}
+
 let soon: ReturnType<typeof setTimeout> | null = null;
 /** Coalesces a burst of edits into one run shortly after the last. */
 export function syncSoon(delayMs = 400) {
@@ -181,7 +232,9 @@ async function runLocked() {
     meta.patch({ online: true, lastSyncAt: new Date().toISOString(), lastError: undefined });
     if (resend) scheduleRetry();
     else clearRetry();
+    settleWaiting(false);
   } catch (err) {
+    settleWaiting(true);
     if (err instanceof SessionEnded) return;
     if (isNetworkError(err)) {
       meta.patch({ online: false });
@@ -290,6 +343,7 @@ async function pushAll(session: number): Promise<boolean> {
       assertSession(session);
       tried.add(batch[0].id);
       outbox.update(batch[0].id, { status: 'failed', attempts: batch[0].attempts + 1, lastError: err.message });
+      report(batch[0].id, { kind: 'rejected', error: err.message });
       continue;
     }
     assertSession(session);
@@ -310,6 +364,7 @@ async function pushAll(session: number): Promise<boolean> {
           }
         }
         outbox.drop(entry.id);
+        report(entry.id, { kind: 'applied', serverId });
         const entityId = entry.clientEntityId && serverId ? serverId : entry.entityId;
         const version = typeof entity?.version === 'number' ? entity.version : undefined;
         if (version !== undefined) {
@@ -330,8 +385,11 @@ async function pushAll(session: number): Promise<boolean> {
           conflict: entity,
           lastError: r.error?.detail ?? 'Changed on another device since you edited it',
         });
+        report(entry.id, { kind: 'conflict', error: r.error?.detail ?? 'Changed on another device since you edited it' });
       } else {
-        outbox.update(entry.id, { status: 'failed', attempts: entry.attempts + 1, lastError: r.error?.detail ?? r.error?.title ?? 'The server refused this change' });
+        const error = r.error?.detail ?? r.error?.title ?? 'The server refused this change';
+        outbox.update(entry.id, { status: 'failed', attempts: entry.attempts + 1, lastError: error });
+        report(entry.id, { kind: 'rejected', error });
       }
     }
   }

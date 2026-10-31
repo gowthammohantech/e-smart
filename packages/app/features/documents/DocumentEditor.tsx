@@ -61,6 +61,7 @@ import {
 import { LineEditorSheet } from './LineEditorSheet';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
+import { useSaveOnline } from '../../remote/save';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -97,6 +98,7 @@ export function DocumentEditor({
   const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const router = useRouter();
   const toast = useToast();
+  const { save: saveOnline, saving } = useSaveOnline();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
 
@@ -388,7 +390,7 @@ export function DocumentEditor({
     }, []),
   );
 
-  const save = (finalize: boolean) => {
+  const save = async (finalize: boolean) => {
     if (!draft.partyId) return;
     if (roundOffError) {
       toast.show(roundOffError, 'error');
@@ -424,15 +426,34 @@ export function DocumentEditor({
       sourceDocumentId: draft.sourceDocumentId,
     };
 
-    let id = documentId;
-    if (documentId) {
-      updateDocument(documentId, payload);
-    } else {
-      id = createDocument({ ...payload, status: 'draft' });
+    // One save: online it waits for the server, which numbers and checks it; offline it stays here.
+    const res = await saveOnline(() => {
+      let saved = documentId;
+      if (documentId) updateDocument(documentId, payload);
+      else saved = createDocument({ ...payload, status: 'draft' });
+      if (saved && finalize) finalizeLocal(saved);
+      return saved;
+    });
+    if (!res.result) return;
+    if (res.outcome === 'refused') {
+      toast.show(tr('common:save.refused', { reason: res.error }), 'error');
+      return;
     }
-    if (!id) return;
+    const id = res.id ?? res.result;
+    toast.show(
+      res.outcome === 'queued'
+        ? tr('common:save.queued')
+        : finalize
+          ? tr('common:documentEditor.finalised', { kind: kindName })
+          : tr('common:documentEditor.savedDraft'),
+      'success',
+    );
+    if (onSaved) onSaved(id);
+    else router.replace(detailRouteFor(kind, id) as never);
+  };
 
-    if (finalize) {
+  const finalizeLocal = (id: string) => {
+    {
       const target =
         kind === 'quote'
           ? 'sent'
@@ -447,15 +468,6 @@ export function DocumentEditor({
                   : 'issued';
       setDocumentStatus(id, target, creditOverride ? { overrideCreditLimit: true } : undefined);
     }
-
-    toast.show(
-      finalize
-        ? tr('common:documentEditor.finalised', { kind: kindName })
-        : tr('common:documentEditor.savedDraft'),
-      'success',
-    );
-    if (onSaved) onSaved(id);
-    else router.replace(detailRouteFor(kind, id) as never);
   };
 
   /* ---------------------------------------------------------------- */
@@ -911,8 +923,8 @@ export function DocumentEditor({
                     <Text variant="caption" tone="muted" style={{ marginRight: t.spacing.xs }}>
                       {tr('sales:editor.finaliseShortcut', { keys: SHORTCUT_KEYS })}
                     </Text>
-                    <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} disabled={!draft.partyId} />
-                    <Button title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} disabled={!draft.partyId || draft.lines.length === 0} />
+                    <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={!draft.partyId} />
+                    <Button title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={!draft.partyId || draft.lines.length === 0} />
                   </View>
                 ),
               }}
@@ -993,8 +1005,8 @@ export function DocumentEditor({
                 />
               ) : (
                 <>
-                  <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => save(false)} style={{ flex: 1 }} />
-                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} style={{ flex: 1 }} />
+                  <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} style={{ flex: 1 }} />
+                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} style={{ flex: 1 }} />
                 </>
               )}
             </View>
@@ -1171,7 +1183,7 @@ export function DocumentEditor({
           onCancel={() => setConfirmFinalize(false)}
           onConfirm={() => {
             setConfirmFinalize(false);
-            save(true);
+            void save(true);
           }}
         />
       </FormContainer>

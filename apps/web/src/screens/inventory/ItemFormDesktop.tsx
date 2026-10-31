@@ -7,7 +7,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '@esmart/app/components/useServerSave';
 import { Item, ItemType } from '@esmart/core/types';
 import { UNITS, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, money, toMajor, zero } from '@esmart/core/lib/money';
@@ -31,7 +31,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
@@ -65,7 +65,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const cost = Number(purchasePrice) || 0;
   const margin = sale > 0 && cost > 0 ? ((sale - cost) / sale) * 100 : null;
 
-  const save = () => {
+  const save = async () => {
     const next: Errors<'name' | 'sku' | 'hsn'> = {
       name: required(name, 'Item name'),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
@@ -98,10 +98,10 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
       createdAt: item?.createdAt ?? nowISO(),
     };
 
-    saveItem(record);
-    toast.show(item ? 'Item updated' : 'Item added', 'success');
+    const res = await serverSave(() => saveItem(record), item ? 'Item updated' : 'Item added');
+    if (!res) return;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
-    else router.replace(`/(app)/catalog/items/${record.id}`);
+    else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
   };
 
   return (
@@ -113,7 +113,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
               <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/catalog/items')} />
-              <Button title={item ? 'Save changes' : 'Add item'} onPress={save} />
+              <Button title={item ? 'Save changes' : 'Add item'} onPress={() => void save()} loading={saving} />
             </View>
           ),
         }}

@@ -13,7 +13,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../../../components/useServerSave';
 import { useAppStore } from '../../../../../store/appStore';
 import {
   useBaseCurrency,
@@ -38,7 +38,7 @@ export default function ItemDetail() {
   const { t: tr } = useTranslation(['common', 'inventory', 'nav']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = useItem(id);
@@ -355,10 +355,10 @@ export default function ItemDetail() {
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removeItem(item.id);
           setConfirmDelete(false);
-          toast.show(tr('inventory:detail.deleted'), 'success');
-          goBack('/(app)/catalog/items');
+          void serverSave(() => removeItem(item.id), tr('inventory:detail.deleted')).then((res) => {
+            if (res) goBack('/(app)/catalog/items');
+          });
         }}
       />
     </View>

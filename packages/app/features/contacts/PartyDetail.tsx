@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -15,7 +16,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 
 import { Party } from '@esmart/core/types';
@@ -36,12 +37,13 @@ import { PaymentReminderSheet } from '../ledger/PaymentReminderSheet';
 type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
 export function PartyDetail({ party }: { party: Party }) {
+  useRefreshOnFocus();
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['contacts', 'domain']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
   const history = usePartyHistory(party.id);
@@ -466,10 +468,10 @@ export function PartyDetail({ party }: { party: Party }) {
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removeParty(party.id);
           setConfirmDelete(false);
-          toast.show(tr('contacts:detail.deleted'), 'success');
-          goBack('/(app)/(tabs)/contacts');
+          void serverSave(() => removeParty(party.id), tr('contacts:detail.deleted')).then((res) => {
+            if (res) goBack('/(app)/(tabs)/contacts');
+          });
         }}
       />
 

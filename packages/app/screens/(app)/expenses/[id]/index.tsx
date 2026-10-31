@@ -11,7 +11,7 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
 import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
 import { paymentMethodLabel } from '@esmart/core/labels';
@@ -30,7 +30,7 @@ export default function ExpenseDetail() {
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const bp = useBreakpoint();
   const desktop = bp !== 'phone';
@@ -67,10 +67,10 @@ export default function ExpenseDetail() {
       destructive
       onCancel={() => setConfirmDelete(false)}
       onConfirm={() => {
-        removeExpense(expense.id);
         setConfirmDelete(false);
-        toast.show(tr('purchases:expense.deleted'), 'success');
-        goBack('/(app)/expenses');
+        void serverSave(() => removeExpense(expense.id), tr('purchases:expense.deleted')).then((res) => {
+          if (res) goBack('/(app)/expenses');
+        });
       }}
     />
   );

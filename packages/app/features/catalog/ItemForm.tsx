@@ -8,7 +8,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 import { Item, ItemType } from '@esmart/core/types';
 import { UNITS, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
@@ -26,7 +26,7 @@ export function ItemForm({ item }: { item?: Item }) {
   const { t: tr } = useTranslation(['inventory']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
@@ -59,7 +59,7 @@ export function ItemForm({ item }: { item?: Item }) {
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
 
-  const save = () => {
+  const save = async () => {
     const next: Errors<'name' | 'sku' | 'hsn'> = {
       name: required(name, 'Item name'),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
@@ -92,10 +92,10 @@ export function ItemForm({ item }: { item?: Item }) {
       createdAt: item?.createdAt ?? nowISO(),
     };
 
-    saveItem(record);
-    toast.show(item ? 'Item updated' : 'Item added', 'success');
+    const res = await serverSave(() => saveItem(record), item ? 'Item updated' : 'Item added');
+    if (!res) return;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
-    else router.replace(`/(app)/catalog/items/${record.id}`);
+    else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
   };
 
   return (
@@ -198,7 +198,7 @@ export function ItemForm({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button title={item ? 'Save changes' : 'Add item'} onPress={save} fullWidth size="lg" />
+          <Button title={item ? 'Save changes' : 'Add item'} onPress={() => void save()} loading={saving} fullWidth size="lg" />
         </FormActions>
 
         <SelectSheet

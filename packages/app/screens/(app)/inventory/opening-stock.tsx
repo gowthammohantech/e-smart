@@ -11,7 +11,7 @@ import { TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
@@ -24,7 +24,7 @@ export default function OpeningStock() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   const insets = useSafeAreaInsets();
 
   const items = useItems().filter((i) => i.trackInventory);
@@ -51,22 +51,24 @@ export default function OpeningStock() {
   }, 0);
 
   const save = () => {
-    entered.forEach(([itemId, v]) => {
-      const item = items.find((i) => i.id === itemId);
-      if (!item) return;
-      addStockMovement({
-        companyId: activeCompanyId,
-        branchId: defaultBranchId ?? '',
-        itemId,
-        type: 'opening',
-        quantity: Number(v),
-        unitCost: item.purchasePrice,
-        date,
-        notes: 'Opening stock entry',
+    void serverSave(() => {
+      entered.forEach(([itemId, v]) => {
+        const item = items.find((i) => i.id === itemId);
+        if (!item) return;
+        addStockMovement({
+          companyId: activeCompanyId,
+          branchId: defaultBranchId ?? '',
+          itemId,
+          type: 'opening',
+          quantity: Number(v),
+          unitCost: item.purchasePrice,
+          date,
+          notes: 'Opening stock entry',
+        });
       });
+    }, `Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`).then((res) => {
+      if (res) goBack('/(app)/(tabs)/inventory');
     });
-    toast.show(`Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`, 'success');
-    goBack('/(app)/(tabs)/inventory');
   };
 
   return (
@@ -144,7 +146,7 @@ export default function OpeningStock() {
             {formatMoney(money(totalValue, baseCurrency))}
           </Text>
         </View>
-        <Button title={tr('inventory:opening.submit')} onPress={save} disabled={entered.length === 0} fullWidth size="lg" />
+        <Button title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={entered.length === 0} fullWidth size="lg" />
       </View>
     </View>
   );

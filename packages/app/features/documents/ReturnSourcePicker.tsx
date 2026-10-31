@@ -8,7 +8,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { useDocuments, useParties } from '../../store/selectors';
 import { detailRouteFor } from './DocumentEditor';
@@ -21,7 +21,7 @@ export function ReturnSourcePicker({ kind }: { kind: 'salesReturn' | 'purchaseRe
   const t = useTheme();
   const { t: tr } = useTranslation(['sales']);
   const router = useRouter();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
   const [query, setQuery] = useState('');
   const convertDocument = useAppStore((s) => s.convertDocument);
   const sourceKind = kind === 'salesReturn' ? 'invoice' : 'purchaseBill';
@@ -37,11 +37,10 @@ export function ReturnSourcePicker({ kind }: { kind: 'salesReturn' | 'purchaseRe
       .sort((a, b) => b.doc.date.localeCompare(a.doc.date));
   }, [sources, parties, query]);
 
-  const pick = (id: string) => {
-    const newId = convertDocument(id, kind);
-    if (!newId) return;
-    toast.show(tr('sales:returnPicker.created'), 'success');
-    router.replace(`${detailRouteFor(kind, newId)}/edit` as never);
+  const pick = async (id: string) => {
+    const res = await serverSave(() => convertDocument(id, kind), tr('sales:returnPicker.created'));
+    if (!res?.result) return;
+    router.replace(`${detailRouteFor(kind, res.id ?? res.result)}/edit` as never);
   };
 
   return (

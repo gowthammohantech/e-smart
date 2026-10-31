@@ -9,7 +9,7 @@ import { FormActions } from '@esmart/ui/components/ActionBar';
 import { PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useDocuments } from '../../../store/selectors';
 import { profileLocks } from '@esmart/core/domain/companyLock';
@@ -31,7 +31,7 @@ export default function CompanySettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding']);
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
@@ -70,7 +70,7 @@ export default function CompanySettings() {
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
-  const save = () => {
+  const save = async () => {
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'> = {
       name: required(name, 'Business name'),
       email: validEmail(email),
@@ -81,37 +81,40 @@ export default function CompanySettings() {
     setErrors(next);
     if (hasErrors(next) || !company) return;
 
-    saveCompany({
-      ...company,
-      name: name.trim(),
-      legalName: legalName.trim() || undefined,
-      businessType,
-      email: email.trim() || undefined,
-      phone: phone.value || undefined,
-      website: website.trim() || undefined,
-      fiscalYearStartMonth: fyMonth,
-      allowNegativeStock,
-      address: {
-        ...company.address,
-        line1: line1.trim(),
-        city: city.trim(),
-        state: INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? company.address?.state ?? '',
-        stateCode: stateCode || undefined,
-        postalCode: postalCode.trim(),
-        country: company.address?.country || company.country,
-      },
-      taxRegistration: {
-        regime: country?.regime ?? 'NONE',
-        identifier: taxId.trim().toUpperCase() || undefined,
-        identifierLabel: country?.taxIdLabel ?? 'Tax number',
-        registered: taxRegistered,
-        compositionScheme: composition,
-        placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
-        lutNumber: taxRegistered && lutNumber.trim() ? lutNumber.trim().toUpperCase() : undefined,
-        lutValidTill: taxRegistered && lutNumber.trim() && lutValidTill ? lutValidTill : undefined,
-      },
-    });
-    toast.show(tr('settings:company.saved'), 'success');
+    const res = await serverSave(() =>
+      saveCompany({
+        ...company,
+        name: name.trim(),
+        legalName: legalName.trim() || undefined,
+        businessType,
+        email: email.trim() || undefined,
+        phone: phone.value || undefined,
+        website: website.trim() || undefined,
+        fiscalYearStartMonth: fyMonth,
+        allowNegativeStock,
+        address: {
+          ...company.address,
+          line1: line1.trim(),
+          city: city.trim(),
+          state: INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? company.address?.state ?? '',
+          stateCode: stateCode || undefined,
+          postalCode: postalCode.trim(),
+          country: company.address?.country || company.country,
+        },
+        taxRegistration: {
+          regime: country?.regime ?? 'NONE',
+          identifier: taxId.trim().toUpperCase() || undefined,
+          identifierLabel: country?.taxIdLabel ?? 'Tax number',
+          registered: taxRegistered,
+          compositionScheme: composition,
+          placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
+          lutNumber: taxRegistered && lutNumber.trim() ? lutNumber.trim().toUpperCase() : undefined,
+          lutValidTill: taxRegistered && lutNumber.trim() && lutValidTill ? lutValidTill : undefined,
+        },
+      }),
+      tr('settings:company.saved'),
+    );
+    if (!res) return;
     goBack('/(app)/(tabs)/more');
   };
 
@@ -207,7 +210,7 @@ export default function CompanySettings() {
       </ScrollView>
 
       <FormActions>
-        <Button title={tr('settings:company.save')} onPress={save} fullWidth size="lg" />
+        <Button title={tr('settings:company.save')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
       </FormActions>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />
