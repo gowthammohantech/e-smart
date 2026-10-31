@@ -61,7 +61,9 @@ function RootNavigator() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: t.c.bg },
-          animation: 'slide_from_right',
+          // Only the route guard moves between these groups, including at launch;
+          // sliding would show the redirect. Each group animates its own screens.
+          animation: 'none',
         }}
       >
         <Stack.Screen name="(auth)" />
