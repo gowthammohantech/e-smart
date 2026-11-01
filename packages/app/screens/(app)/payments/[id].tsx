@@ -240,7 +240,7 @@ export default function PaymentDetail() {
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);
-          void serverSave(() => removePayment(payment.id), tr('sales:payment.deleted')).then((res) => {
+          void serverSave(() => removePayment(payment.id), tr('sales:payment.deleted'), { icon: 'cash-remove' }).then((res) => {
             if (res) goBack(payment.direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made');
           });
         }}

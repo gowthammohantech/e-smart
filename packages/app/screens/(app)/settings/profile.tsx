@@ -54,7 +54,7 @@ export default function Profile() {
     setErrors(next);
     if (hasErrors(next) || !user) return;
     saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.value || undefined });
-    toast.show(tr('settings:profile.saved'), 'success');
+    toast.show(tr('settings:profile.saved'), 'success', { icon: 'account-check-outline' });
     goBack('/(app)/(tabs)/more');
   };
 
@@ -93,7 +93,7 @@ export default function Profile() {
                 // Already the active business: nothing switched, so no message.
                 if (c.id === activeCompanyId) return;
                 setActiveCompany(c.id);
-                toast.show(tr('settings:profile.switched', { name: c.name }), 'success');
+                toast.show(tr('settings:profile.switched', { name: c.name }), 'info', { icon: 'swap-horizontal', detail: c.baseCurrency, varies: true });
               }}
             />
           ))}

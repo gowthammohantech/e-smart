@@ -18,11 +18,14 @@ export function AuthShell({
   subtitle,
   children,
   hideBack,
+  locked,
 }: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
   hideBack?: boolean;
+  /** Nothing on the screen responds, the back link included; for the moment a sign-in is in flight. */
+  locked?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -36,6 +39,7 @@ export function AuthShell({
   if (breakpoint !== 'phone') {
     return (
       <ScrollView
+        pointerEvents={locked ? 'none' : 'auto'}
         style={{ flex: 1, backgroundColor: t.c.paper }}
         contentContainerStyle={{
           flexGrow: 1,
@@ -83,6 +87,7 @@ export function AuthShell({
 
   return (
     <KeyboardAvoidingView
+      pointerEvents={locked ? 'none' : 'auto'}
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >

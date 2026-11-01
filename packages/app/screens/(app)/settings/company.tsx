@@ -113,6 +113,7 @@ export default function CompanySettings() {
         },
       }),
       tr('settings:company.saved'),
+      { icon: 'store-check-outline' },
     );
     if (!res) return;
     goBack('/(app)/(tabs)/more');

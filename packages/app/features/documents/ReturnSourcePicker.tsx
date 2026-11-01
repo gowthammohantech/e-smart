@@ -38,7 +38,7 @@ export function ReturnSourcePicker({ kind }: { kind: 'salesReturn' | 'purchaseRe
   }, [sources, parties, query]);
 
   const pick = async (id: string) => {
-    const res = await serverSave(() => convertDocument(id, kind), tr('sales:returnPicker.created'));
+    const res = await serverSave(() => convertDocument(id, kind), tr('sales:returnPicker.created'), { icon: 'keyboard-return' });
     if (!res?.result) return;
     router.replace(`${detailRouteFor(kind, res.id ?? res.result)}/edit` as never);
   };

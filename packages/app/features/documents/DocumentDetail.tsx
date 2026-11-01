@@ -18,7 +18,7 @@ import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
@@ -141,11 +141,21 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const shareDocument = async () => {
     setBusy(true);
     try {
-      const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
-      await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
+      await toast.promise(
+        (async () => {
+          const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
+          await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
+        })(),
+        {
+          loading: tr('sales:detail.pdfPreparing'),
+          success: { text: tr(Platform.OS === 'web' ? 'sales:detail.pdfDownloaded' : 'sales:detail.pdfReady'), detail: pdfFileName(doc.kind, doc.number) },
+          error: (err) => `${tr('sales:detail.pdfFailed')} ${describeError(err, tr)}`,
+          icon: 'file-pdf-box',
+        },
+      );
       if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
-    } catch (err) {
-      toast.show(`${tr('sales:detail.pdfFailed')} ${describeError(err, tr)}`, 'error');
+    } catch {
+      // The toast has said what went wrong.
     } finally {
       setBusy(false);
       setActionsOpen(false);
@@ -156,7 +166,6 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const handOverLink = async (url: string) => {
     if (Platform.OS === 'web') {
       await Clipboard.setStringAsync(url);
-      toast.show(tr('common:documentDetail.linkCopied'), 'success');
       return;
     }
     await Share.share({
@@ -164,18 +173,23 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     });
   };
 
-  const runRemote = (job: () => Promise<void>) => {
+  // What a toast is about: the document and who it went to.
+  const about = [doc.number, party?.name].filter(Boolean).join(' · ');
+
+  /** A server round trip under a promise toast: working while it is out, then done or why not. */
+  const runRemote = (job: () => Promise<void>, messages: { loading: string; success: string; icon: ToastIcon }) => {
     setBusy(true);
-    job()
-      .catch((err: unknown) => toast.show(describeError(err, tr), 'error'))
+    toast
+      .promise(job(), { ...messages, success: { text: messages.success, detail: about }, error: (err) => describeError(err, tr) })
+      .catch(() => {})
       .finally(() => setBusy(false));
   };
 
   const send = (channel: SendChannel) =>
-    runRemote(async () => {
-      await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
-      toast.show(tr('common:documentDetail.sent'), 'success');
-    });
+    runRemote(
+      () => sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 }),
+      { loading: tr('sales:detail.sending'), success: tr('common:documentDetail.sent'), icon: channel === 'whatsapp' ? 'whatsapp' : 'email-fast-outline' },
+    );
 
   /**
    * Email / WhatsApp. A browser (or a party with no address on file) can't use
@@ -192,6 +206,10 @@ ${url}`;
           ? `https://wa.me/${(party?.phone ?? '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`
           : `mailto:${party?.email ?? ''}?subject=${encodeURIComponent(`${kindName} ${doc.number}`)}&body=${encodeURIComponent(text)}`;
       await Linking.openURL(target);
+    }, {
+      loading: tr('sales:detail.preparingMessage'),
+      success: tr(channel === 'whatsapp' ? 'sales:detail.openedWhatsapp' : 'sales:detail.openedEmail'),
+      icon: channel === 'whatsapp' ? 'whatsapp' : 'email-edit-outline',
     });
 
   const sendVia = (channel: 'email' | 'whatsapp') => {
@@ -202,7 +220,10 @@ ${url}`;
 
   const convert = async (target: DocumentKind) => {
     setActionsOpen(false);
-    const res = await serverSave(() => convertDocument(doc.id, target), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }));
+    const res = await serverSave(() => convertDocument(doc.id, target), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }), {
+      icon: 'file-replace-outline',
+      detail: tr('sales:detail.fromDocument', { number: doc.number }),
+    });
     if (res?.result) router.push(detailRouteFor(target, res.id ?? res.result) as never);
   };
 
@@ -676,9 +697,19 @@ ${url}`;
                 { label: tr('sales:print.sharePdf'), icon: 'file-pdf-box' as const, onPress: shareDocument },
                 { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
                 { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
-                { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id))) },
+                { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () =>
+                    runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id)), {
+                      loading: tr('sales:detail.creatingLink'),
+                      success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
+                      icon: 'link-variant',
+                    }) },
                 ...(doc.kind === 'invoice' && outstanding.minor > 0
-                  ? [{ label: tr('sales:detail.paymentLink'), icon: 'credit-card-outline' as const, onPress: () => runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url)) }]
+                  ? [{ label: tr('sales:detail.paymentLink'), icon: 'credit-card-outline' as const, onPress: () =>
+                          runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url), {
+                            loading: tr('sales:detail.creatingLink'),
+                            success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
+                            icon: 'credit-card-outline',
+                          }) }]
                   : []),
               ]
             : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
@@ -686,9 +717,9 @@ ${url}`;
             label: doc.kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
             icon: 'cash-plus' as const,
             onPress: () => {
-              if (!isPayable) return toast.show(tr('common:documentDetail.noPayment', { kind: kindName }), 'info');
-              if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'info');
-              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info');
+              if (!isPayable) return toast.show(tr('common:documentDetail.noPayment', { kind: kindName }), 'warning');
+              if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
+              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
               router.push(
                 `/(app)/payments/new?direction=${doc.kind === 'invoice' ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}` as never,
               );
@@ -720,11 +751,11 @@ ${url}`;
                 // The server refuses while the e-way bill or the IRN is live (in that
                 // order), so say so before the user confirms.
                 if (ewayBill && ewayBillStatusAt(ewayBill, new Date().toISOString()) === 'active') {
-                  toast.show(tr('sales:detail.cancelEwayFirst', { number: ewayBill.ewayBillNumber }), 'error');
+                  toast.show(tr('sales:detail.cancelEwayFirst', { number: ewayBill.ewayBillNumber }), 'warning', { icon: 'truck-alert-outline' });
                   return;
                 }
                 if (doc.compliance?.eInvoiceStatus === 'generated') {
-                  toast.show(tr('sales:detail.cancelIrnFirst'), 'error');
+                  toast.show(tr('sales:detail.cancelIrnFirst'), 'warning', { icon: 'file-alert-outline' });
                   return;
                 }
                 setConfirmCancel(true);
@@ -785,12 +816,13 @@ ${url}`;
                       date: formatDate(doc.date),
                       names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
                     }),
-                    'error',
+                    'warning',
+                    { icon: 'package-variant-closed-remove' },
                   );
                   return;
                 }
                 setStatusOpen(false);
-                void serverSave(() => setDocumentStatus(doc.id, s), tr('common:documentDetail.marked', { status: statusLabel(tr, s) }));
+                void serverSave(() => setDocumentStatus(doc.id, s), tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), { icon: 'flag-checkered', detail: doc.number, varies: true });
               }}
               accessibilityRole="button"
               accessibilityLabel={tr('common:documentDetail.markAs', { status: statusLabel(tr, s) })}
@@ -820,7 +852,7 @@ ${url}`;
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);
-          void serverSave(() => removeDocument(doc.id), tr('sales:detail.draftDeleted')).then((res) => {
+          void serverSave(() => removeDocument(doc.id), tr('sales:detail.draftDeleted'), { icon: 'delete-outline', detail: doc.number }).then((res) => {
             if (res) goBack(listRouteFor(doc.kind));
           });
         }}
@@ -835,7 +867,7 @@ ${url}`;
         onCancel={() => setConfirmCancel(false)}
         onConfirm={() => {
           setConfirmCancel(false);
-          void serverSave(() => setDocumentStatus(doc.id, 'cancelled'), tr('sales:detail.documentCancelled'));
+          void serverSave(() => setDocumentStatus(doc.id, 'cancelled'), tr('sales:detail.documentCancelled'), { icon: 'close-octagon-outline', detail: doc.number });
         }}
       />
 

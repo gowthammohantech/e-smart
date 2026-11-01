@@ -110,7 +110,7 @@ export default function SignUp() {
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.sm }}>
         <Text variant="small" tone="muted">{tr('auth:signUp.haveAccount')}</Text>
-        <Text variant="small" tone="primary" weight="600" onPress={() => router.replace('/(auth)/sign-in')}>{tr('auth:signUp.signIn')}</Text>
+        <Text variant="small" tone="primary" weight="600" onPress={() => router.dismissTo('/(auth)/sign-in')}>{tr('auth:signUp.signIn')}</Text>
       </View>
     </AuthShell>
   );

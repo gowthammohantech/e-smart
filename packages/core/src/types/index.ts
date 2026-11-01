@@ -154,6 +154,8 @@ export type Item = {
   barcode?: string;
   trackInventory: boolean;
   openingStock: number;
+  /** The day the opening stock was counted (ISO date, not after today). No document with the item is dated before it. */
+  openingStockDate?: string;
   reorderLevel: number;
   imageUri?: string;
   status: 'active' | 'inactive';

@@ -119,7 +119,7 @@ export default function EInvoicingSettings() {
       eInvoiceTurnoverThreshold: fromMajor(threshold || '0', currency),
       ewayBillThreshold: fromMajor(ewayThreshold || '0', currency),
     });
-    toast.show(tr('compliance:settings.saved'), 'success');
+    toast.show(tr('compliance:settings.saved'), 'success', { icon: 'shield-check-outline' });
   };
 
   return (

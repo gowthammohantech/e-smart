@@ -78,6 +78,13 @@
       "when": 1793388237728,
       "tag": "0010_period_lock_and_rate_history",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793562435556,
+      "tag": "0011_item_opening_stock_date",
+      "breakpoints": true
     }
   ]
 }

@@ -46,6 +46,7 @@
     "allowNegativeStock": "Allow negative stock",
     "allowNegativeStockHint": "Let invoices and deliveries sell more than the branch has in stock. When off, they cannot be finalised until the stock is added.",
     "lutValidTill": "LUT valid till",
+    "logoRemoving": "Removing the logo…",
     "registeredFor": "Registered for {{regime}}"
   },
   "accounts": {
@@ -169,6 +170,7 @@
     "automaticSwitch": "Back up automatically",
     "lastBackup": "Last backup {{when}}.",
     "noBackupYet": "No backup has run yet.",
+    "preparing": "Preparing your export…",
     "count": {
       "parties": "Customers & suppliers",
       "items": "Items",
@@ -225,10 +227,15 @@
     "rejectedTitle": "The server refused this change",
     "retrying": "Sending again",
     "discarded": "Change discarded",
+    "syncing": "Syncing your changes…",
     "workingOffline": "Working offline",
     "waiting_one": "{{count}} waiting to sync",
     "waiting_other": "{{count}} waiting to sync",
     "allSynced": "Everything is synced",
+    "stillWaiting_one": "{{count}} change is still waiting to sync",
+    "stillWaiting_other": "{{count}} changes are still waiting to sync",
+    "reloading": "Reloading from the server…",
+    "reloaded": "Up to date with the server",
     "offlineBody": "You can keep drafting. Anything you create is queued and sent as soon as you are back online.",
     "onlineBody": "Finalised financial records are validated on the server before they count, so your books stay authoritative.",
     "queuedMeta_one": "Queued {{when}} · {{count}} attempt",

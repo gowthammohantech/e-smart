@@ -478,7 +478,7 @@ export function PartyDetail({ party }: { party: Party }) {
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);
-          void serverSave(() => removeParty(party.id), tr('contacts:detail.deleted')).then((res) => {
+          void serverSave(() => removeParty(party.id), tr('contacts:detail.deleted'), { icon: 'account-remove-outline' }).then((res) => {
             if (res) goBack('/(app)/(tabs)/contacts');
           });
         }}

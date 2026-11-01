@@ -171,15 +171,21 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       } else {
         setUploading(true);
         try {
-          const uploaded = await uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id });
+          const uploaded = await toast.promise(
+            uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id }),
+            {
+              loading: tr('purchases:form.receiptUploading'),
+              success: tr('purchases:form.receiptAttached'),
+              error: (err) => tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }),
+              icon: 'paperclip-check',
+            },
+          );
           attachmentIds.push(uploaded.id);
         } catch (err) {
           // No connection: the expense is saved now and its receipt follows when one returns.
+          // Any other failure was already reported by the upload's toast.
           if (isNetworkError(err)) receiptLater = receiptUri;
-          else {
-            toast.show(tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }), 'error');
-            return;
-          }
+          else return;
         } finally {
           setUploading(false);
         }
@@ -212,7 +218,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       createdAt: expense?.createdAt ?? new Date().toISOString(),
     };
 
-    const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? tr('purchases:form.expenseUpdated') : tr('purchases:form.expenseRecorded'));
+    const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? tr('purchases:form.expenseUpdated') : tr('purchases:form.expenseRecorded'), {
+      icon: 'receipt-text-check-outline',
+      detail: [formatMoney(totalPaid), attachmentIds.length ? tr('purchases:form.withReceipt') : ''].filter(Boolean).join(' · '),
+    });
     if (!res) return;
     if (!res.result) {
       setAccountError(tr('purchases:form.accountRequired'));

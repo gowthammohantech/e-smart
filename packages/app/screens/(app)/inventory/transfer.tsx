@@ -147,7 +147,7 @@ export default function StockTransfer() {
             if (!canSave || !itemId) return;
             void serverSave(() => {
               transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
-            }, tr('inventory:transfer.done')).then((res) => {
+            }, tr('inventory:transfer.done'), { icon: 'truck-delivery-outline' }).then((res) => {
               if (res) goBack(`/(app)/catalog/items/${itemId}`);
             });
           }}

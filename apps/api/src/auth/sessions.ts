@@ -23,8 +23,10 @@ export async function openSession(
   user: { id: string; accountId: string },
   device: DeviceInfo | undefined,
   ip: string | undefined,
+  /** The caller already checked the account is not suspended, so this skips that round trip. */
+  accountChecked = false,
 ) {
-  await assertAccountActive(db, user.accountId);
+  if (!accountChecked) await assertAccountActive(db, user.accountId);
   const refreshToken = randomToken();
   const sessionId = newId('ses');
   await db.insert(schema.deviceSessions).values({
@@ -43,7 +45,7 @@ export async function openSession(
 const accountSuspended = () => unauthorized('ACCOUNT_SUSPENDED', 'This account has been suspended. Contact support.');
 
 /** No new tokens for a suspended account, whichever way the user signs in. */
-async function assertAccountActive(db: DbOrTx, accountId: string) {
+export async function assertAccountActive(db: DbOrTx, accountId: string) {
   const [account] = await db.select({ suspendedAt: schema.accounts.suspendedAt }).from(schema.accounts).where(eq(schema.accounts.id, accountId));
   if (account?.suspendedAt) throw accountSuspended();
 }

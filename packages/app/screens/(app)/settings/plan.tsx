@@ -14,7 +14,6 @@ import { useActiveCompany, useDocuments } from '../../../store/selectors';
 import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '../../../features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
-import type { PlanTier } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Cycle = 'monthly' | 'yearly';
@@ -30,13 +29,10 @@ export default function PlanBilling() {
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
   const invoices = useDocuments('invoice');
   const company = useActiveCompany();
-  const setPlan = useAppStore((s) => s.setPlan);
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
   const seatLimit = userLimit(currentPlan);
 
-  // No toast: plans can't be bought yet (no payment gateway), so nothing is confirmed here.
-  const choose = (tier: PlanTier) => setPlan(company.id, tier);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -131,19 +127,7 @@ export default function PlanBilling() {
                 ))}
               </View>
 
-              <Button
-                title={
-                  isCurrent
-                    ? tr('plan:billing.currentPlan')
-                    : price === 0
-                      ? tr('plan:billing.downgrade')
-                      : tr('plan:billing.choose')
-                }
-                variant={isCurrent ? 'ghost' : 'primary'}
-                disabled={isCurrent}
-                onPress={() => choose(p.key)}
-                fullWidth
-              />
+              {isCurrent ? <Button title={tr('plan:billing.currentPlan')} variant="ghost" disabled fullWidth /> : null}
             </Card>
           );
         })}

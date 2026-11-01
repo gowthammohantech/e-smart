@@ -16,7 +16,8 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { remoteSession, retryFailed, retrySync, syncAll, syncNow, useRemoteMeta } from '@esmart/app/remote';
+import { remoteSession, useRemoteMeta } from '@esmart/app/remote';
+import { useSyncToasts } from '@esmart/app/features/session/useSyncToasts';
 import { drop } from '@esmart/app/remote/outbox';
 
 function SectionTitle({ children }: { children: string }) {
@@ -82,6 +83,7 @@ export function SyncStatusDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const toast = useToast();
+  const sync = useSyncToasts();
 
   const allEntries = useAppStore((s) => s.syncQueue);
   // What is still to send.
@@ -138,12 +140,12 @@ export function SyncStatusDesktop() {
                     {tr('settings:sync.lastError', { message: lastError })}
                   </Text>
                 ) : null}
-                <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncAll()} />
+                <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void sync.syncEverything()} />
                 <Button
                   title={tr('settings:sync.reload')}
                   variant="ghost"
                   icon="cloud-download-outline"
-                  disabled={offline} onPress={() => void syncNow().then(remoteSession.resync)}
+                  disabled={offline} onPress={() => void sync.reload()}
                 />
               </View>
             </View>
@@ -186,10 +188,7 @@ export function SyncStatusDesktop() {
                   variant="secondary"
                   size="sm"
                   icon="sync"
-                  onPress={() => {
-                    retryFailed();
-                    toast.show(tr('settings:sync.retrying'), 'success');
-                  }}
+                  onPress={() => void sync.syncEverything()}
                 />
               ) : null}
             </View>
@@ -290,7 +289,7 @@ export function SyncStatusDesktop() {
                 setOpen(null);
                 // Put back the server's version of whatever the change touched.
                 void remoteSession.resync();
-                toast.show(tr('settings:sync.discarded'), 'success');
+                toast.show(tr('settings:sync.discarded'), 'success', { icon: 'delete-sweep-outline', detail: open.label });
               }}
             />
             <Button
@@ -298,9 +297,8 @@ export function SyncStatusDesktop() {
               icon="send"
               onPress={() => {
                 if (!open) return;
-                retrySync(open.id);
                 setOpen(null);
-                toast.show(tr('settings:sync.retrying'), 'success');
+                void sync.retryOne(open.id);
               }}
             />
           </View>

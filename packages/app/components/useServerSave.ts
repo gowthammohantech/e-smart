@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useToast, type ToastOptions } from '@esmart/ui/components/Toast';
 import { useSaveOnline, type SaveResult } from '../remote/save';
 
 /**
@@ -13,14 +13,14 @@ export function useServerSave() {
   const toast = useToast();
   const { save, saving } = useSaveOnline();
   const run = useCallback(
-    async <T>(action: () => T, success?: string): Promise<SaveResult<T> | undefined> => {
+    async <T>(action: () => T, success?: string, options?: ToastOptions): Promise<SaveResult<T> | undefined> => {
       const res = await save(action);
       if (res.outcome === 'refused') {
         toast.show(tr('common:save.refused', { reason: res.error }), 'error');
         return undefined;
       }
       if (res.outcome === 'queued') toast.show(tr('common:save.queued'), 'success');
-      else if (success) toast.show(success, 'success');
+      else if (success) toast.show(success, 'success', options);
       return res;
     },
     [save, toast, tr],

@@ -151,6 +151,7 @@ export default function NewPayment() {
         ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
         : tr('sales:payment.advanceNothingToAdjust'),
       applied.length ? 'success' : 'info',
+      { icon: 'cash-refund', detail: `${party?.name ?? ''}` },
     );
   };
 
@@ -216,7 +217,7 @@ export default function NewPayment() {
       // Apply only what is left of the typed amount.
       const take = Math.min(full.minor, amount.minor - sumOf(allocations));
       if (take <= 0) {
-        toast.show(tr('sales:payment.nothingLeftToApply'), 'info');
+        toast.show(tr('sales:payment.nothingLeftToApply'), 'warning', { icon: 'cash-remove' });
         return;
       }
       next[docId] = toAmountInput(money(take, currency));
@@ -297,10 +298,14 @@ export default function NewPayment() {
       createdAt: new Date().toISOString(),
     };
 
-    const res = await serverSave(() => savePayment(payment), direction === 'received' ? tr('sales:payment.recorded') : tr('sales:payment.made'));
+    const res = await serverSave(() => savePayment(payment), direction === 'received' ? tr('sales:payment.recorded') : tr('sales:payment.made'), {
+      icon: direction === 'received' ? 'cash-check' : 'cash-fast',
+      // A template literal, so the compiler knows it is a plain string and not a handle on the party.
+      detail: `${formatMoney(amount)}${party ? ` · ${party.name}` : ''}`,
+    });
     if (!res) return;
     if (!res.result) {
-      toast.show(tr('sales:payment.noAccountForMethod'), 'error');
+      toast.show(tr('sales:payment.noAccountForMethod'), 'error', { icon: 'bank-off-outline' });
       return;
     }
     router.replace(`/(app)/payments/${res.id ?? res.result}`);

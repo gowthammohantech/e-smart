@@ -66,7 +66,7 @@ export default function OcrReview() {
   const isExpense = result.kind === 'expense';
   const rescan = () => router.replace('/(app)/ocr/capture');
   const create = () => {
-    toast.show(tr('inventory:ocr.carriedFields'), 'success');
+    toast.show(tr('inventory:ocr.carriedFields'), 'success', { icon: 'text-box-check-outline' });
     router.replace(isExpense ? '/(app)/expenses/new?fromScan=1' : '/(app)/purchases/bills/new?fromScan=1');
   };
 
@@ -332,7 +332,7 @@ export default function OcrReview() {
           <Button
             title={isExpense ? tr('purchases:ocr.createExpense') : tr('purchases:ocr.createBill')}
             onPress={() => {
-              toast.show(tr('inventory:ocr.carriedFields'), 'success');
+              toast.show(tr('inventory:ocr.carriedFields'), 'success', { icon: 'text-box-check-outline' });
               router.replace(isExpense ? '/(app)/expenses/new?fromScan=1' : '/(app)/purchases/bills/new?fromScan=1');
             }}
             style={{ flex: 2 }}

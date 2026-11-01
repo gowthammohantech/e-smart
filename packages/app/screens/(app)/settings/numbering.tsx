@@ -73,7 +73,7 @@ export default function NumberingSettings() {
   const save = () => {
     if (!draft) return;
     saveNumberingSeries(draft);
-    toast.show(tr('settings:numbering.updated', { series: seriesLabel(tr, draft.kind) }), 'success');
+    toast.show(tr('settings:numbering.updated', { series: seriesLabel(tr, draft.kind) }), 'success', { icon: 'pound', detail: `${draft.prefix}${draft.nextNumber}` });
     setEditing(null);
   };
 

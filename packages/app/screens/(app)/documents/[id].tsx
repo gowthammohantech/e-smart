@@ -70,10 +70,20 @@ export default function DocumentPreview() {
   const share = async () => {
     setBusy(true);
     try {
-      const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
-      await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
-    } catch (err) {
-      toast.show(`${tr('sales:print.pdfFailed')} ${describeError(err, tr)}`, 'error');
+      await toast.promise(
+        (async () => {
+          const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
+          await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
+        })(),
+        {
+          loading: tr('sales:detail.pdfPreparing'),
+          success: { text: tr(Platform.OS === 'web' ? 'sales:detail.pdfDownloaded' : 'sales:detail.pdfReady'), detail: pdfFileName(doc.kind, doc.number) },
+          error: (err) => `${tr('sales:print.pdfFailed')} ${describeError(err, tr)}`,
+          icon: 'file-pdf-box',
+        },
+      );
+    } catch {
+      // The toast has said what went wrong.
     } finally {
       setBusy(false);
     }
@@ -109,7 +119,7 @@ export default function DocumentPreview() {
           title={tr('sales:print.print')}
           variant="ghost"
           icon="printer-outline"
-          onPress={() => printHtml(html).catch(() => toast.show(tr('sales:print.printUnavailable'), 'error'))}
+          onPress={() => printHtml(html).catch(() => toast.show(tr('sales:print.printUnavailable'), 'warning', { icon: 'printer-off-outline' }))}
           style={{ flex: 1 }}
         />
         <Button

@@ -70,7 +70,7 @@ export function OpeningStockDesktop() {
           notes: 'Opening stock entry',
         });
       });
-    }, `Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`).then((res) => {
+    }, `Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`, { icon: 'package-variant-closed-check' }).then((res) => {
       if (res) goBack('/(app)/(tabs)/inventory');
     });
   };

@@ -66,7 +66,7 @@ export default function OpeningStock() {
           notes: tr('inventory:opening.entryNote'),
         });
       });
-    }, tr('inventory:opening.done', { count: entered.length })).then((res) => {
+    }, tr('inventory:opening.done', { count: entered.length }), { icon: 'package-variant-closed-check' }).then((res) => {
       if (res) goBack('/(app)/(tabs)/inventory');
     });
   };

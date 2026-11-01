@@ -94,7 +94,7 @@ export default function UserSettings() {
 
     if (editing.id) {
       saveUser({ ...editing, name: name.trim(), role });
-      toast.show(tr('settings:users.updated'), 'success');
+      toast.show(tr('settings:users.updated'), 'success', { icon: 'account-check-outline', detail: name.trim() });
       setEditing(null);
       return;
     }
@@ -106,7 +106,7 @@ export default function UserSettings() {
     remoteUsers
       .inviteUser({ name, email, role, companyIds: [company.id] })
       .then(() => {
-        toast.show(tr('settings:users.inviteSent'), 'success');
+        toast.show(tr('settings:users.inviteSent'), 'success', { icon: 'email-fast-outline', detail: email.trim().toLowerCase() });
         setEditing(null);
       })
       .catch((err: unknown) => setServerError(describeError(err, tr)))
@@ -120,7 +120,7 @@ export default function UserSettings() {
     remoteUsers
       .resendInvite(editing.id)
       .then(() => {
-        toast.show(tr('settings:users.inviteResent'), 'success');
+        toast.show(tr('settings:users.inviteResent'), 'success', { icon: 'email-sync-outline', detail: editing.email });
         setEditing(null);
       })
       .catch((err: unknown) => setServerError(describeError(err, tr)))
@@ -260,7 +260,7 @@ export default function UserSettings() {
         onConfirm={() => {
           if (confirmRemove) removeUser(confirmRemove.id);
           setConfirmRemove(null);
-          toast.show(tr('settings:users.removed'), 'success');
+          toast.show(tr('settings:users.removed'), 'success', { icon: 'account-remove-outline', detail: confirmRemove?.name });
         }}
       />
     </View>

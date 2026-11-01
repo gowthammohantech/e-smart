@@ -125,7 +125,7 @@ export default function Integrations() {
                           return;
                         }
                         toggleIntegration(i.id);
-                        toast.show(i.connected ? tr('settings:integrations.disconnectedNamed', { name: i.name }) : tr('settings:integrations.connectedNamed', { name: i.name }), 'success');
+                        toast.show(i.connected ? tr('settings:integrations.disconnectedNamed', { name: i.name }) : tr('settings:integrations.connectedNamed', { name: i.name }), 'success', { icon: i.connected ? 'link-variant-off' : 'link-variant' });
                       }}
                       trackColor={{ true: t.c.primary, false: t.c.line }}
                       thumbColor="#FFFFFF"

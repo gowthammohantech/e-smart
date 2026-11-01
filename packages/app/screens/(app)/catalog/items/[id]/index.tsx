@@ -356,7 +356,7 @@ export default function ItemDetail() {
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);
-          void serverSave(() => removeItem(item.id), tr('inventory:detail.deleted')).then((res) => {
+          void serverSave(() => removeItem(item.id), tr('inventory:detail.deleted'), { icon: 'tag-remove-outline' }).then((res) => {
             if (res) goBack('/(app)/catalog/items');
           });
         }}

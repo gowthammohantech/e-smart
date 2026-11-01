@@ -236,6 +236,8 @@ export default function BusinessStep() {
         options={PLANS.map((p) => ({
           value: p.key,
           label: p.name,
+          // Only the free plan can be chosen at sign-up; the rest are shown, greyed out.
+          disabled: p.key !== 'free',
           trailing: moduleSetFor(p.key) === 'full' ? tr('onboarding:business.planTrailingFull') : tr('onboarding:business.planTrailingSales'),
         }))}
         value={draft.plan}

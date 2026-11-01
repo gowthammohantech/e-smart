@@ -31,6 +31,7 @@ import {
 import { nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { E_INVOICE_STATUS_META } from './complianceMeta';
+import { portalToast } from './portalToast';
 
 /**
  * Reporting an invoice to the portal, and cancelling one (FRD 16).
@@ -94,27 +95,27 @@ export function EInvoiceSheet({
 
   const generate = async () => {
     setBusy(true);
-    const outcome = await compliance.generateEInvoice(doc.id);
+    const outcome = await portalToast(toast, compliance.generateEInvoice(doc.id), {
+      loading: tr('compliance:einv.generating'),
+      success: { text: tr('compliance:einv.generated'), detail: doc.number },
+      failed: tr('compliance:einv.refused'),
+      icon: 'file-certificate-outline',
+    });
     setBusy(false);
     setResult(outcome.issues);
-    if (outcome.ok) {
-      toast.show(tr('compliance:einv.generated'), 'success');
-      onClose();
-    } else {
-      toast.show(outcome.issues[0]?.message ?? tr('compliance:einv.refused'), 'error');
-    }
+    if (outcome.ok) onClose();
   };
 
   const cancel = async () => {
     setBusy(true);
-    const outcome = await compliance.cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined);
+    const outcome = await portalToast(toast, compliance.cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined), {
+      loading: tr('compliance:einv.cancelling'),
+      success: { text: tr('compliance:einv.cancelled'), detail: doc.number },
+      failed: tr('compliance:einv.cancelFailed'),
+      icon: 'file-cancel-outline',
+    });
     setBusy(false);
-    if (outcome.ok) {
-      toast.show(tr('compliance:einv.cancelled'), 'success');
-      onClose();
-    } else {
-      toast.show(outcome.issues[0]?.message ?? tr('compliance:einv.cancelFailed'), 'error');
-    }
+    if (outcome.ok) onClose();
   };
 
   /* ---------------- cancel ---------------- */
@@ -273,7 +274,7 @@ export function EInvoiceSheet({
               icon="content-copy"
               onPress={async () => {
                 await Clipboard.setStringAsync(doc.compliance?.irn ?? '');
-                toast.show(tr('compliance:einv.copied'), 'success');
+                toast.show(tr('compliance:einv.copied'), 'success', { icon: 'content-copy', detail: doc.compliance?.irn });
               }}
               fullWidth
             />

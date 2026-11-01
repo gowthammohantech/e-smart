@@ -108,7 +108,7 @@ export default function ExpenseCategorySettings() {
               onPress={() => {
                 if (!editing || !name.trim()) return;
                 saveExpenseCategory({ ...editing, id: editing.id || uid('cat'), companyId: company.id, name: name.trim() });
-                toast.show(tr('settings:categories.saved'), 'success');
+                toast.show(tr('settings:categories.saved'), 'success', { icon: 'shape-outline' });
                 setEditing(null);
               }}
               disabled={!name.trim()}
@@ -132,7 +132,7 @@ export default function ExpenseCategorySettings() {
         onConfirm={() => {
           if (confirmDelete) removeExpenseCategory(confirmDelete.id);
           setConfirmDelete(null);
-          toast.show(tr('settings:categories.deleted'), 'success');
+          toast.show(tr('settings:categories.deleted'), 'success', { icon: 'shape-outline' });
         }}
       />
     </View>

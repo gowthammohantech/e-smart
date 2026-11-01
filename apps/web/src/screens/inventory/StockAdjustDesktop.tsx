@@ -71,7 +71,7 @@ export function StockAdjustDesktop() {
         date,
         notes: reason || undefined,
       });
-    }, tr('inventory:adjust.done')).then((res) => {
+    }, tr('inventory:adjust.done'), { icon: 'package-variant', detail: item.name }).then((res) => {
       if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });
   };

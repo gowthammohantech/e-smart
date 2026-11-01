@@ -68,7 +68,7 @@ export default function ExpenseDetail() {
       onCancel={() => setConfirmDelete(false)}
       onConfirm={() => {
         setConfirmDelete(false);
-        void serverSave(() => removeExpense(expense.id), tr('purchases:expense.deleted')).then((res) => {
+        void serverSave(() => removeExpense(expense.id), tr('purchases:expense.deleted'), { icon: 'receipt-text-remove-outline' }).then((res) => {
           if (res) goBack('/(app)/expenses');
         });
       }}

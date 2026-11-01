@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { and, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import { hashPassword, verifyPassword } from '../../auth/passwords';
-import { openSession, rotateSession } from '../../auth/sessions';
+import { assertAccountActive, openSession, rotateSession } from '../../auth/sessions';
 import { defineHandlers, type Ctx } from '../../context';
 import { badRequest, conflict, tooManyRequests, unauthorized } from '../../http/errors';
 import { randomToken, sha256 } from '../../lib/crypto';
@@ -20,15 +20,25 @@ const PHONE_VERIFICATION_TTL_MS = 900_000;
 
 type AnyCtx = Ctx<'signIn'>;
 
-async function sessionResponse(ctx: AnyCtx, user: typeof schema.users.$inferSelect, device?: { label?: string; platform?: string; appVersion?: string }) {
-  const tokens = await openSession(ctx.req.server, ctx.db, ctx.deps, user, device, ctx.req.ip);
-  await ctx.db.update(schema.users).set({ lastActiveAt: ctx.now }).where(eq(schema.users.id, user.id));
+async function sessionResponse(
+  ctx: AnyCtx,
+  user: typeof schema.users.$inferSelect,
+  device?: { label?: string; platform?: string; appVersion?: string },
+  accountChecked = false,
+) {
+  // Each query is a round trip to the database, so they run together rather than one after another.
+  const [tokens, wire, onboarded] = await Promise.all([
+    openSession(ctx.req.server, ctx.db, ctx.deps, user, device, ctx.req.ip, accountChecked),
+    userToWire(ctx.db, { ...user, lastActiveAt: ctx.now }),
+    onboardingComplete(ctx.db, user.id),
+    ctx.db.update(schema.users).set({ lastActiveAt: ctx.now }).where(eq(schema.users.id, user.id)),
+  ]);
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresIn: ctx.deps.config.ACCESS_TOKEN_TTL_SECONDS,
-    user: await userToWire(ctx.db, { ...user, lastActiveAt: ctx.now }),
-    onboardingComplete: await onboardingComplete(ctx.db, user.id),
+    user: wire,
+    onboardingComplete: onboarded,
   };
 }
 
@@ -90,12 +100,17 @@ export const authHandlers = defineHandlers({
   async signIn(ctx) {
     const [user] = await ctx.db.select().from(schema.users).where(eq(schema.users.email, normalizeEmail(ctx.body.email)));
     // Same answer for an unknown email and a wrong password.
-    if (!user || !(await verifyPassword(user.passwordHash, ctx.body.password))) {
+    if (!user) throw unauthorized('INVALID_CREDENTIALS', 'Email or password is incorrect');
+    // The suspension lookup overlaps the password check instead of waiting for it.
+    const accountCheck = assertAccountActive(ctx.db, user.accountId);
+    accountCheck.catch(() => {});
+    if (!(await verifyPassword(user.passwordHash, ctx.body.password))) {
       throw unauthorized('INVALID_CREDENTIALS', 'Email or password is incorrect');
     }
     if (user.status === 'disabled') throw unauthorized('USER_DISABLED', 'This user has been disabled');
     if (user.status === 'invited') throw unauthorized('INVITE_PENDING', 'Accept your invitation first');
-    return sessionResponse(ctx, user, ctx.body.device);
+    await accountCheck;
+    return sessionResponse(ctx, user, ctx.body.device, true);
   },
 
   async requestOtp(ctx) {

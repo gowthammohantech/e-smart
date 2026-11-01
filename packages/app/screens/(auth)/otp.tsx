@@ -4,12 +4,14 @@ import { Platform, Pressable, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ApiError } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
+import { useWelcomeToast } from '../../features/session/useWelcomeToast';
 import { toE164 } from '../../remote/phone';
 
 const LENGTH = 6;
@@ -17,6 +19,8 @@ const LENGTH = 6;
 export default function Otp() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth']);
+  const toast = useToast();
+  const welcome = useWelcomeToast();
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone?: string }>();
 
@@ -30,16 +34,21 @@ export default function Otp() {
   const [busy, setBusy] = useState(false);
 
   // The server sends a code on arrival and on every resend.
-  const request = React.useCallback(() => {
-    remoteSession
-      .requestOtp(toE164(String(phone ?? '')))
-      .then((r) => {
-        setRequestId(r.requestId);
-        setSeconds(r.resendAfterSeconds);
-      })
-      .catch((err: unknown) => setError(describeError(err, tr)));
-  }, [phone, tr]);
-  useEffect(request, [request]);
+  const request = React.useCallback(
+    (resend?: boolean) => {
+      remoteSession
+        .requestOtp(toE164(String(phone ?? '')))
+        .then((r) => {
+          setRequestId(r.requestId);
+          setSeconds(r.resendAfterSeconds);
+          // Only a resend is news; the first code is what the screen is already waiting for.
+          if (resend) toast.show(tr('auth:otp.resent'), 'success', { icon: 'message-processing-outline', detail: String(phone ?? '') });
+        })
+        .catch((err: unknown) => setError(describeError(err, tr)));
+    },
+    [phone, tr, toast],
+  );
+  useEffect(() => request(), [request]);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -80,7 +89,7 @@ export default function Otp() {
     if (!requestId) return;
     setBusy(true);
     // The root layout routes on once the session and its data are in.
-    remoteSession.verifyOtp(requestId, code).catch((err: unknown) => {
+    remoteSession.verifyOtp(requestId, code).then(welcome, (err: unknown) => {
       setBusy(false);
       // A correct code for a number with no account: the number is now proven, so carry on to sign-up.
       if (err instanceof ApiError && err.code === 'PHONE_NOT_REGISTERED') {
@@ -149,7 +158,7 @@ export default function Otp() {
           <Pressable
             onPress={() => {
               setSeconds(30);
-              request();
+              request(true);
             }}
             accessibilityRole="button"
           >
