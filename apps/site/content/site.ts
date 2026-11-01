@@ -22,6 +22,7 @@ export const nav = {
     { label: 'How it works', href: '#how-it-works' },
     { label: 'Pricing', href: '#pricing' },
     { label: 'FAQ', href: '#faq' },
+    { label: 'Cookbook', href: '/docs' },
   ],
   cta: { label: 'Get started', href: '#pricing' },
 };
@@ -276,6 +277,7 @@ export const footer = {
   ],
   copyright: '© 2026 Elixir Books. All rights reserved.',
   legal: [
+    { label: 'Cookbook', href: '/docs' },
     { label: 'Privacy Policy', href: '#' },
     { label: 'Terms of Use', href: '#' },
   ],
