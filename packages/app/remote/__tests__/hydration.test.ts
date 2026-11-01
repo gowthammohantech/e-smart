@@ -76,4 +76,14 @@ describe('launching', () => {
     expect(writesOfTheBook()).toHaveLength(0);
     expect(reads).toBe(2);
   });
+
+  it('a re-read for another tab\'s change does not save this tab\'s copy back', async () => {
+    await AsyncStorage.setItem(KEY, saved);
+    const store = loadApp();
+    await flush();
+    AsyncStorage.setItem.mockClear();
+    await store.persist.rehydrate();
+    await flush();
+    expect(writesOfTheBook()).toHaveLength(0);
+  });
 });

@@ -7,6 +7,7 @@
     "start": "expo start --web",
     "dev": "expo start --web",
     "build": "expo export -p web",
+    "e2e:offline": "cd e2e && node offline.mjs",
     "serve": "node serve.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."

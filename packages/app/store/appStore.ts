@@ -1081,7 +1081,8 @@ export const useAppStore = create<AppState>()(
       },
       migrate: (persisted, version) => migratePersisted(persisted, version),
       onRehydrateStorage: () => (state, error) => {
-        if (!error) return state?.setHydrated(true);
+        // Only the first read: a re-read for another tab's change must not save this tab's copy back.
+        if (!error) return state?.hydrated ? undefined : state?.setHydrated(true);
         if (readAttempts++ === 0) return void useAppStore.persist.rehydrate();
         // The book may still be on disk: carry on, but never save over it this run.
         useAppStore.persist.setOptions({ storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
