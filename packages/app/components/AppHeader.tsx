@@ -200,7 +200,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           const next = companies.find((c) => c.id === id);
           if (!next || id === company?.id) return;
           setActiveCompany(id);
-          toast.show(tr('common:toast.switchedBusiness', { name: next.name }), 'success', { icon: 'swap-horizontal', detail: next.baseCurrency });
+          toast.show(tr('common:toast.switchedBusiness', { name: next.name }), 'info', { icon: 'swap-horizontal', detail: next.baseCurrency, varies: true });
         }}
         searchable={false}
       />
@@ -220,7 +220,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           const next = branches.find((b) => b.id === id);
           if (!next || id === activeBranchId) return;
           setActiveBranch(id);
-          toast.show(tr('common:toast.switchedBranch', { name: next.name }), 'info', { icon: next.isPrimary ? 'office-building-outline' : 'warehouse', detail: next.code });
+          toast.show(tr('common:toast.switchedBranch', { name: next.name }), 'info', { icon: next.isPrimary ? 'office-building-outline' : 'warehouse', detail: next.code, varies: true });
         }}
         searchable={false}
       />

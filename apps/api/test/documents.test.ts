@@ -304,6 +304,18 @@ describe('documents: stock and plans', () => {
     expect(await onHand(t, rod)).toBe(-2);
   });
 
+  it("refuses a document dated before an item's opening stock date", async () => {
+    const m = await moneySetup(t);
+    await m.allowNegativeStock();
+    t.setNow('2026-10-01T10:00:00Z');
+    const rod = await m.item({ openingStockDate: '2026-09-30' });
+    const early = await t.post(`${m.c}/documents`, invoiceBody(m, { lines: [line(m.gst(18), { itemId: rod })] }), { token: m.token });
+    expect(early.status).toBe(422);
+    expect(early.body.issues).toEqual([expect.objectContaining({ field: 'date', message: "Steel rod's opening stock is dated 2026-09-30; the document cannot be dated before it" })]);
+    const onTheDay = await t.post(`${m.c}/documents`, invoiceBody(m, { date: '2026-09-30', lines: [line(m.gst(18), { itemId: rod })] }), { token: m.token });
+    expect(onTheDay.status).toBe(201);
+  });
+
   it('needs the purchases module for purchase-side kinds, and receives stock on a bill', async () => {
     const free = await moneySetup(t, 'basic');
     const refused = await t.post(`${free.c}/documents`, invoiceBody(free, { kind: 'purchaseBill' }), { token: free.token });

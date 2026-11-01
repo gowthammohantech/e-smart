@@ -643,7 +643,7 @@ export const useAppStore = create<AppState>()(
               type: 'opening',
               quantity: item.openingStock,
               unitCost: item.purchasePrice,
-              date: today(),
+              date: item.openingStockDate ?? today(),
               notes: 'Opening stock',
               createdBy: get().session.userId ?? '',
               createdAt: nowISO(),

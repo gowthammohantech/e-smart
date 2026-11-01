@@ -27,7 +27,7 @@ import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES, currencyLocked } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { addDaysISO, formatDate } from '@esmart/core/lib/date';
+import { addDaysISO, formatDate, parseDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
@@ -232,6 +232,24 @@ export function DocumentEditor({
           number: madeFrom.number,
         })
       : undefined;
+  // An item has stock from the day its opening stock was counted: nothing with
+  // it can be dated before that (the server refuses it too).
+  const startsAfter = (item: (typeof allItems)[number] | undefined) =>
+    item?.trackInventory && item.openingStockDate && draft.date < item.openingStockDate ? item.openingStockDate : undefined;
+  const openingStockBlock = (item: (typeof items)[number]) => {
+    const from = startsAfter(item);
+    return from ? tr('sales:editor.itemBeforeOpeningStock', { name: item.name, date: formatDate(from) }) : undefined;
+  };
+  const lateStarter = draft.lines.map((l) => allItems.find((i) => i.id === l.itemId)).find((i) => startsAfter(i));
+  const dateBeforeOpeningStock = lateStarter?.openingStockDate
+    ? tr('sales:editor.dateBeforeOpeningStock', { date: formatDate(lateStarter.openingStockDate), name: lateStarter.name })
+    : undefined;
+  // An invoice or bill falls due, and a quote lapses, on or after the day it is dated.
+  const beforeDocDate = tr('sales:editor.beforeDocDate', { date: formatDate(draft.date) });
+  const dueBeforeDate = (kind === 'invoice' || kind === 'purchaseBill') && draft.dueDate && draft.dueDate < draft.date ? beforeDocDate : undefined;
+  const validBeforeDate = kind === 'quote' && draft.validUntil && draft.validUntil < draft.date ? beforeDocDate : undefined;
+  // What the server refuses on any save, a draft too.
+  const dateProblem = dateBeforeOpeningStock ?? dueBeforeDate ?? validBeforeDate;
   const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
 
   // The item list shows stock at this branch when finalising this document moves
@@ -299,6 +317,7 @@ export function DocumentEditor({
   /** Lines that cannot go on a finalised tax document yet. */
   const lineProblem = (): string | undefined => {
     if (dateBeforeSource) return dateBeforeSource;
+    if (dateProblem) return dateProblem;
     const unnamed = draft.lines.find((l) => !l.name.trim());
     if (unnamed) return tr('sales:line.nameRequired');
     // Every line, and the document, must be worth something: rate, gross and
@@ -394,7 +413,7 @@ export function DocumentEditor({
       toast.show(roundOffError, 'error');
       return;
     }
-    const problem = finalize ? lineProblem() : undefined;
+    const problem = finalize ? lineProblem() : dateProblem;
     if (problem) {
       toast.show(problem, 'error');
       return;
@@ -529,7 +548,7 @@ export function DocumentEditor({
         value={draft.date}
         onChange={(date) => patch({ date })}
         required
-        error={dateBeforeSource}
+        error={dateBeforeSource ?? dateBeforeOpeningStock}
       />
 
       {kind === 'invoice' || kind === 'purchaseBill' ? (
@@ -537,6 +556,8 @@ export function DocumentEditor({
           label={tr('sales:editor.dueDate')}
           value={draft.dueDate ?? addDaysISO(draft.date, 30)}
           onChange={(dueDate) => patch({ dueDate })}
+          minimumDate={parseDate(draft.date)}
+          error={dueBeforeDate}
           hint={party ? `${party.name} is on ${party.paymentTermsDays}-day terms.` : undefined}
         />
       ) : null}
@@ -546,6 +567,8 @@ export function DocumentEditor({
           label={tr('sales:editor.validUntil')}
           value={draft.validUntil ?? addDaysISO(draft.date, 15)}
           onChange={(validUntil) => patch({ validUntil })}
+          minimumDate={parseDate(draft.date)}
+          error={validBeforeDate}
         />
       ) : null}
       </FieldRow>
@@ -1063,7 +1086,7 @@ export function DocumentEditor({
                   description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
                   trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
                   note: stockNote(i),
-                  blocked: outOfStockBlock(i),
+                  blocked: openingStockBlock(i) ?? outOfStockBlock(i),
                 }))
           }
           multiple

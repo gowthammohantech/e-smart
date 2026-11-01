@@ -84,7 +84,7 @@ export default function Profile() {
                 // Already the active business: nothing switched, so no message.
                 if (c.id === activeCompanyId) return;
                 setActiveCompany(c.id);
-                toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'success', { icon: 'swap-horizontal', detail: c.baseCurrency });
+                toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'info', { icon: 'swap-horizontal', detail: c.baseCurrency, varies: true });
               }}
             />
           ))}

@@ -32,7 +32,7 @@ async function imageUri(deps: Deps, db: DbOrTx, attachmentId: string | null): Pr
 }
 
 /** Reference data the foreign keys need, and prices in the company's currency. */
-async function validate(db: DbOrTx, companyId: string, baseCurrency: string, body: Schema<'Item'>) {
+async function validate(db: DbOrTx, companyId: string, baseCurrency: string, body: Schema<'Item'>, today: string) {
   const issues: Issue[] = [];
   const blocking = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
   if (!body.sku.trim()) blocking('sku', 'SKU is required');
@@ -48,6 +48,7 @@ async function validate(db: DbOrTx, companyId: string, baseCurrency: string, bod
     if (body[f].minor < 0) blocking(`${f}.minor`, 'Prices cannot be negative');
   }
   if ((body.openingStock ?? 0) < 0) blocking('openingStock', 'Opening stock cannot be negative');
+  if (body.openingStockDate && body.openingStockDate > today) blocking('openingStockDate', 'Opening stock date cannot be in the future');
   if ((body.reorderLevel ?? 0) < 0) blocking('reorderLevel', 'Reorder level cannot be negative');
   if (issues.length) throw unprocessable(issues);
 }
@@ -133,15 +134,18 @@ export const catalogHandlers = defineHandlers({
   /** A tracked item with opening stock also gets its `opening` movement, at the primary branch. */
   async createItem(ctx) {
     const base = ctx.company.baseCurrency.trim();
-    await validate(ctx.db, ctx.company.id, base, ctx.body);
+    const today = ctx.now.toISOString().slice(0, 10);
+    await validate(ctx.db, ctx.company.id, base, ctx.body, today);
     const cols = itemColumns(ctx.body, base);
     const openingStock = ctx.body.openingStock ?? 0;
+    // The day the stock was counted; only a tracked item has stock to date.
+    const openingStockDate = cols.trackInventory ? (ctx.body.openingStockDate ?? today) : null;
     const row = await ctx.db.transaction(async (tx) => {
       await assertUnique(tx, ctx.company.id, cols.sku, cols.barcode);
       const hsnCode = ctx.body.hsnCode ? await ensureHsn(tx, ctx.body.hsnCode) : null;
       const [created] = await tx
         .insert(I)
-        .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, hsnCode, openingStock: String(openingStock) })
+        .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, hsnCode, openingStock: String(openingStock), openingStockDate })
         .returning();
       if (created.trackInventory && openingStock > 0) {
         await tx.insert(schema.stockMovements).values({
@@ -153,7 +157,7 @@ export const catalogHandlers = defineHandlers({
           quantity: String(openingStock),
           currency: base,
           unitCostMinor: created.purchasePriceMinor,
-          date: ctx.now.toISOString().slice(0, 10),
+          date: openingStockDate ?? today,
           notes: 'Opening stock',
           createdBy: ctx.user.id,
         });
@@ -176,7 +180,7 @@ export const catalogHandlers = defineHandlers({
     const current = await findItem(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     const base = current.currency.trim();
-    await validate(ctx.db, ctx.company.id, base, ctx.body);
+    await validate(ctx.db, ctx.company.id, base, ctx.body, ctx.now.toISOString().slice(0, 10));
     const cols = itemColumns(ctx.body, base);
     const row = await ctx.db.transaction(async (tx) => {
       await assertUnique(tx, ctx.company.id, cols.sku, cols.barcode, current.id);

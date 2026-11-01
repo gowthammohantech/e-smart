@@ -57,6 +57,13 @@
       "when": 1793016996978,
       "tag": "0007_drop_portal_environment",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793362027784,
+      "tag": "0008_item_opening_stock_date",
+      "breakpoints": true
     }
   ]
 }

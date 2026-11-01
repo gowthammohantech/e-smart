@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -13,7 +13,8 @@ import { UNITS, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, money, toMajor, zero } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { uid } from '@esmart/core/lib/id';
-import { nowISO } from '@esmart/core/lib/date';
+import { formatDate, nowISO, today } from '@esmart/core/lib/date';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '@esmart/app/store/selectors';
@@ -41,24 +42,30 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const hasInventory = useHasModule('inventory');
 
-  const [type, setType] = useState<ItemType>(item?.type ?? 'goods');
+  // A new one starts as goods or a service from ?type= (Items & services passes its open tab).
+  const params = useLocalSearchParams<{ type?: string }>();
+  const startType: ItemType = item?.type ?? (params.type === 'service' ? 'service' : 'goods');
+  const [type, setType] = useState<ItemType>(startType);
   const [name, setName] = useState(item?.name ?? '');
   const [sku, setSku] = useState(item?.sku ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [unit, setUnit] = useState(item?.unit ?? (item?.type === 'service' ? 'NOS' : 'PCS'));
+  const [unit, setUnit] = useState(item?.unit ?? (startType === 'service' ? 'NOS' : 'PCS'));
   const [salePrice, setSalePrice] = useState(item ? String(toMajor(item.salePrice)) : '');
   const [purchasePrice, setPurchasePrice] = useState(item ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
-  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? hasInventory);
+  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
+  const [openingStockDate, setOpeningStockDate] = useState(item?.openingStockDate ?? today());
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
+  // Only a new tracked item takes an opening stock, and so its date.
+  const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
   const sale = Number(salePrice) || 0;
@@ -66,9 +73,10 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const margin = sale > 0 && cost > 0 ? ((sale - cost) / sale) * 100 : null;
 
   const save = () => {
-    const next: Errors<'name' | 'sku' | 'hsn'> = {
+    const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
       name: required(name, 'Item name'),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
+      openingStockDate: takesOpeningStock && openingStockDate > today() ? tr('inventory:form.openingStockDateFuture') : undefined,
     };
     const skuValue = sku.trim().toUpperCase() || `SKU-${String(existing.length + 1).padStart(4, '0')}`;
     if (existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
@@ -92,6 +100,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
       barcode: barcode.trim() || undefined,
       trackInventory: type === 'goods' ? trackInventory : false,
       openingStock: Number(openingStock) || 0,
+      openingStockDate: takesOpeningStock ? openingStockDate : item?.openingStockDate,
       reorderLevel: Number(reorderLevel) || 0,
       imageUri: item?.imageUri,
       status: active ? 'active' : 'inactive',
@@ -240,6 +249,18 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                           hint={tr('inventory:form.reorderHint')}
                         />
                       </Row>
+                    ) : null}
+                    {takesOpeningStock ? (
+                      <DateField
+                        label={tr('inventory:form.openingStockDate')}
+                        value={openingStockDate}
+                        onChange={setOpeningStockDate}
+                        maximumDate={new Date()}
+                        error={errors.openingStockDate}
+                        hint={tr('inventory:form.openingStockDateHint')}
+                      />
+                    ) : item?.openingStockDate && trackInventory ? (
+                      <TextField label={tr('inventory:form.openingStockDate')} value={formatDate(item.openingStockDate)} editable={false} icon="calendar" />
                     ) : null}
                   </>
                 ) : null}

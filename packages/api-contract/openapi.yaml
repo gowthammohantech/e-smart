@@ -1242,7 +1242,7 @@ paths:
     post:
       tags: [Catalog]
       operationId: createItem
-      description: When `trackInventory` is set and `openingStock > 0`, the server also writes an `opening` stock movement.
+      description: When `trackInventory` is set and `openingStock > 0`, the server also writes an `opening` stock movement, dated `openingStockDate` (today when it is left out).
       x-roles: [owner, admin, accountant]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -3708,6 +3708,7 @@ components:
             barcode: { type: string }
             trackInventory: { type: boolean }
             openingStock: { type: number, description: Used only on create }
+            openingStockDate: { type: string, format: date, description: "The day the opening stock was counted; not after today, and no document with this item can be dated before it. Used only on create, and only when trackInventory is set." }
             reorderLevel: { type: number }
             imageUri: { type: string, format: uri, readOnly: true }
             status: { type: string, enum: [active, inactive] }

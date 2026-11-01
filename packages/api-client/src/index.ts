@@ -32,7 +32,19 @@ export type ApiClientOptions = {
   fetch?: typeof fetch;
 };
 
-const PUBLIC_PREFIXES = ['/auth/', '/plans', '/reference/', '/invites/'];
+// The contract's routes with `security: []`. Reference data is public, but a
+// GSTIN lookup, HSN search or road distance reaches a provider and needs a
+// signed-in user.
+const PUBLIC_PREFIXES = [
+  '/auth/',
+  '/plans',
+  '/reference/countries',
+  '/reference/states',
+  '/reference/cities',
+  '/reference/pincodes/',
+  '/reference/currencies',
+  '/invites/',
+];
 
 function isPublic(url: string, baseUrl: string): boolean {
   const path = url.startsWith(baseUrl) ? url.slice(baseUrl.length) : new URL(url).pathname;

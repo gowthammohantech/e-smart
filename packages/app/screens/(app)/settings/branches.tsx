@@ -26,6 +26,7 @@ import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useGstinLookup, type GstinDetails } from '../../../features/gstin/useGstinLookup';
 
 export default function BranchSettings() {
   const t = useTheme();
@@ -87,6 +88,20 @@ export default function BranchSettings() {
       setStateCode(next.slice(0, 2));
     }
   };
+
+  // A GSTIN brings the branch's registered address from the GST portal. Its name
+  // stays: the portal's is the company's, and a branch is named for its place.
+  const fillFromPortal = (d: GstinDetails) => {
+    const a = d.address;
+    if (!a) return;
+    const street = [a.line1, a.line2].filter(Boolean).join(', ');
+    if (street) setLine1(street);
+    const code = a.stateCode ?? gstin.slice(0, 2);
+    if (INDIAN_STATES.some((st) => st.code === code)) setStateCode(code);
+    if (a.city) setCity(a.city);
+    if (a.postalCode) setPostalCode(a.postalCode);
+  };
+  const gstinLookup = useGstinLookup({ gstin, opened: editing?.gstin, enabled: !!editing, fill: fillFromPortal });
 
   const save = () => {
     if (!editing || !name.trim()) return;
@@ -197,7 +212,8 @@ export default function BranchSettings() {
             autoCapitalize="characters"
             icon="card-account-details-outline"
             error={errors.gstin}
-            hint={tr('settings:branches.gstinHint')}
+            hint={gstinLookup.hint ?? tr('settings:branches.gstinHint')}
+            suffix={gstinLookup.suffix}
           />
           <TextField
             label={tr('settings:branches.address')}
