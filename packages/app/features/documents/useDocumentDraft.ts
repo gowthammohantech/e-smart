@@ -38,7 +38,8 @@ export type DraftState = {
   sourceDocumentId?: string;
 };
 
-export function emptyDraft(baseCurrency: string, kind: DocumentKind): DraftState {
+/** `invoiceTerms` is the default terms text for an invoice, in the user's language (`sales:editor.defaultTerms`). */
+export function emptyDraft(baseCurrency: string, kind: DocumentKind, invoiceTerms = ''): DraftState {
   return {
     partyId: null,
     date: today(),
@@ -54,10 +55,7 @@ export function emptyDraft(baseCurrency: string, kind: DocumentKind): DraftState
     charges: zero(baseCurrency),
     applyRoundOff: baseCurrency === 'INR',
     notes: '',
-    terms:
-      kind === 'invoice'
-        ? 'Goods once sold will not be taken back. Interest @18% p.a. on overdue amounts.'
-        : '',
+    terms: kind === 'invoice' ? invoiceTerms : '',
     attachmentIds: [],
   };
 }

@@ -17,11 +17,20 @@ import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
+
+const ROLE_LABELS = {
+  owner: 'auth:invite.roles.owner',
+  admin: 'auth:invite.roles.admin',
+  accountant: 'auth:invite.roles.accountant',
+  sales: 'auth:invite.roles.sales',
+  viewer: 'auth:invite.roles.viewer',
+} as const satisfies Record<UserRole, string>;
 
 export default function Profile() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'onboarding']);
   const goBack = useGoBack();
   const toast = useToast();
 
@@ -38,8 +47,8 @@ export default function Profile() {
 
   const save = () => {
     const next: Errors<'name' | 'email' | 'phone'> = {
-      name: required(name, 'Name'),
-      email: required(email, 'Email') ?? validEmail(email),
+      name: required(name, tr('settings:profile.name')),
+      email: required(email, tr('settings:profile.email')) ?? validEmail(email),
       phone: phone.error(),
     };
     setErrors(next);
@@ -59,11 +68,11 @@ export default function Profile() {
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xl }}>
-          <Avatar name={user?.name ?? 'You'} size={72} color={user?.avatarColor} />
+          <Avatar name={user?.name ?? tr('settings:profile.you')} size={72} color={user?.avatarColor} />
           <Text variant="title" weight="700">
             {user?.name}
           </Text>
-          <Badge label={user?.role ?? 'owner'} tone="info" />
+          <Badge label={tr(ROLE_LABELS[user?.role ?? 'owner'])} tone="info" />
         </Card>
 
         <TextField label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
@@ -76,7 +85,7 @@ export default function Profile() {
             <ListRow
               key={c.id}
               title={c.name}
-              subtitle={`${c.businessType} · ${c.baseCurrency}`}
+              subtitle={`${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`}
               left={<CompanyLogo uri={c.logoUri} name={c.name} size={36} />}
               divider={i < companies.length - 1}
               right={c.id === activeCompanyId ? <Badge label={tr('settings:profile.active')} tone="success" size="sm" /> : undefined}
@@ -84,7 +93,7 @@ export default function Profile() {
                 // Already the active business: nothing switched, so no message.
                 if (c.id === activeCompanyId) return;
                 setActiveCompany(c.id);
-                toast.show(`Switched to ${c.name}`, 'success');
+                toast.show(tr('settings:profile.switched', { name: c.name }), 'success');
               }}
             />
           ))}

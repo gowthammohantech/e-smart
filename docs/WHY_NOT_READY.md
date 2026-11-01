@@ -114,7 +114,7 @@ All four apps build and pass their static checks. They are blocked by missing in
 - **CI never builds iOS or Android.**
 
 ### Low
-- About 14 hardcoded English strings. Apart from these, the Tamil catalogue is complete.
+- Tamil: on-screen text now comes from the catalogues (`react/jsx-no-literals` fails lint on new JSX text). Still English: data stored in English (seeded notifications and audit entries in `appStore.ts`, outbox labels shown on the Sync screen), messages the server returns (compliance issues, cancel/extend reasons), and the server-rendered report, receipt and e-way bill PDFs, whose labels are hardcoded in `apps/api`. The API image now installs `fonts-noto-core` so Tamil names print, but this has not been checked on a deployed build.
 - `.catch(() => {})` swallows errors silently.
 - Dev-client `Info.plist` entries are still present, and `ITSAppUsesNonExemptEncryption` is unset.
 - iPad support adds review work: iPad screenshots and layout QA.

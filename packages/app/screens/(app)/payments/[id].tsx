@@ -25,7 +25,7 @@ import { useGoBack } from '../../../navigation/useGoBack';
 export default function PaymentDetail() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
@@ -75,21 +75,21 @@ export default function PaymentDetail() {
             {formatMoney(payment.amount)}
           </Text>
           <Text variant="small" tone="muted">
-            {isIn ? 'Received from' : 'Paid to'} {party?.name ?? 'Unknown'}
+            {tr(isIn ? 'sales:payment.receivedFrom' : 'sales:payment.paidTo', { name: party?.name ?? tr('common:placeholder.unknown') })}
           </Text>
           <Badge label={payment.number} tone="neutral" />
         </Card>
 
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           {[
-            { label: 'Date', value: formatDate(payment.date) },
-            { label: 'Method', value: paymentMethodLabel(tr, payment.method) },
-            { label: isIn ? 'Deposited into' : 'Paid from', value: account?.name ?? '—' },
-            ...(payment.reference ? [{ label: 'Reference', value: payment.reference }] : []),
+            { label: tr('common:table.date'), value: formatDate(payment.date) },
+            { label: tr('common:table.method'), value: paymentMethodLabel(tr, payment.method) },
+            { label: isIn ? tr('sales:payment.depositedInto') : tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
+            ...(payment.reference ? [{ label: tr('common:table.reference'), value: payment.reference }] : []),
             ...(payment.currency !== baseCurrency
-              ? [{ label: 'Exchange rate', value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
+              ? [{ label: tr('common:totals.exchangeRate'), value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
               : []),
-            { label: 'Recorded', value: formatDateTime(payment.createdAt) },
+            { label: tr('sales:payment.recordedAt'), value: formatDateTime(payment.createdAt) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
               <Text variant="small" tone="muted">
@@ -141,7 +141,7 @@ export default function PaymentDetail() {
                   )
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`Open ${a.documentNumber}`}
+                accessibilityLabel={tr('sales:payment.openDocument', { number: a.documentNumber })}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -169,7 +169,7 @@ export default function PaymentDetail() {
           <Card variant="flat" style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             <MaterialCommunityIcons name="wallet-outline" size={20} color={t.c.warn} />
             <Text variant="small" style={{ flex: 1 }}>
-              {formatMoney(payment.unallocated)} is unallocated and available as an advance.
+              {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
             </Text>
             <Button
               title={tr('sales:payment.adjustAdvance')}
@@ -191,7 +191,7 @@ export default function PaymentDetail() {
         {payment.fxGainLoss && payment.fxGainLoss.minor !== 0 ? (
           <Card style={{ marginTop: t.spacing.md, flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text variant="small" tone="muted">
-              FX {payment.fxGainLoss.minor >= 0 ? 'gain' : 'loss'} on settlement
+              {payment.fxGainLoss.minor >= 0 ? tr('sales:payment.fxGainSettlement') : tr('sales:payment.fxLossSettlement')}
             </Text>
             <Text variant="small" weight="700" tone={payment.fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
               {formatMoney(payment.fxGainLoss, { signed: true })}

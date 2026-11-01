@@ -48,8 +48,8 @@ export function SelectSheet({
   value,
   onSelect,
   searchable = true,
-  searchPlaceholder = 'Search',
-  emptyMessage = 'Nothing matches that search.',
+  searchPlaceholder,
+  emptyMessage,
   footer,
   onCreate,
   createLabel,
@@ -163,7 +163,7 @@ export function SelectSheet({
       header={
         showSearch ? (
           <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder={searchPlaceholder} />
+            <SearchBar value={query} onChangeText={setQuery} placeholder={searchPlaceholder ?? tr('common:component.search')} />
           </View>
         ) : null
       }
@@ -171,7 +171,7 @@ export function SelectSheet({
       {hasBlocked ? <ToastCapture intoRef={sheetToastRef} /> : null}
 
       {filtered.length === 0 ? (
-        (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage} compact />)
+        (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage ?? tr('common:component.noSearchMatch')} compact />)
       ) : (
         filtered.map((o) => {
           const checked = multiple && picked.includes(o.value);

@@ -15,7 +15,7 @@ export function printablePage(title: string, company: CompanyRow, body: string):
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/><title>${esc(title)}</title>
 <style>
-  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #0E121A; padding: 28px; font-size: 12px; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans Tamil", "Tamil Sangam MN", sans-serif; color: #0E121A; padding: 28px; font-size: 12px; }
   h1 { font-size: 20px; color: #007AFF; margin: 0 0 4px; letter-spacing: 1px; }
   .muted { color: #5A6478; }
   .rule { height: 2px; background: #007AFF; margin: 16px 0; }

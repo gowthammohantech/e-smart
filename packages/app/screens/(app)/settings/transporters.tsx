@@ -23,7 +23,7 @@ import { uid } from '@esmart/core/lib/id';
 /** The transporter master, used for Part-B of an e-way bill. */
 export default function TransportersSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const toast = useToast();
 
   const transporters = useTransporters();
@@ -51,9 +51,9 @@ export default function TransportersSettings() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const save = () => {
-    if (!name.trim()) return setError('Name is required');
+    if (!name.trim()) return setError(tr('errors:validation.required', { field: tr('settings:transporters.name') }));
     if (!isValidTransporterId(transporterId)) {
-      return setError('Transporter ID must be a valid 15-character GSTIN or TRANSIN');
+      return setError(tr('settings:transporters.idInvalid'));
     }
     setError(undefined);
     const badPhone = phone.error();
@@ -67,7 +67,7 @@ export default function TransportersSettings() {
       phone: phone.value || undefined,
       status: 'active',
     });
-    toast.show(editing ? 'Transporter updated' : 'Transporter added', 'success');
+    toast.show(editing ? tr('settings:transporters.updated') : tr('settings:transporters.added'), 'success');
     setSheetOpen(false);
   };
 
@@ -127,7 +127,7 @@ export default function TransportersSettings() {
       <Sheet
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        title={editing ? 'Edit transporter' : 'Add a transporter'}
+        title={editing ? tr('settings:transporters.editTitle') : tr('settings:transporters.add')}
         footer={
           <View style={{ gap: t.spacing.sm }}>
             <Button title={tr('settings:transporters.save')} fullWidth onPress={save} />

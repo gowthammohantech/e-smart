@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -42,6 +43,7 @@ export function Menu({
   children: React.ReactNode;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const window = useWindowDimensions();
   if (!anchor) return null;
 
@@ -53,7 +55,7 @@ export function Menu({
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close menu" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={tr('common:component.closeMenu')} />
       <View
         style={[
           {

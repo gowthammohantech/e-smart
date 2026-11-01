@@ -47,12 +47,12 @@ export default function ItemList() {
     />
   );
   // Nothing in this tab at all (rather than nothing matching the search).
-  const emptyTitle = inTab.length ? 'No match' : tab === 'service' ? tr('inventory:catalog.noServices') : 'No items yet';
+  const emptyTitle = inTab.length ? tr('inventory:catalog.noMatch') : tab === 'service' ? tr('inventory:catalog.noServices') : tr('inventory:catalog.noItems');
   const emptyMessage = inTab.length
-    ? 'No item matches that search.'
+    ? tr('inventory:catalog.noMatchBody')
     : tab === 'service'
       ? tr('inventory:catalog.noServicesBody')
-      : 'Add what you sell to put it on invoices in a tap.';
+      : tr('inventory:catalog.noItemsBody');
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -123,7 +123,7 @@ export default function ItemList() {
             illustration="no-items"
             title={emptyTitle}
             message={emptyMessage}
-            actionLabel={inTab.length ? undefined : 'Add item'}
+            actionLabel={inTab.length ? undefined : tr('common:quickAction.addItem')}
             onAction={inTab.length ? undefined : () => router.push('/(app)/catalog/items/new')}
           />
         ) : (

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Text } from '../Text';
 import { Money } from '@esmart/core/lib/money';
@@ -23,6 +24,7 @@ export function AgingBars({
   selectedKey?: string | null;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['reports']);
   const ramp = sequentialRamp(t.scheme);
   const max = Math.max(...buckets.map((b) => b.amount.minor), 1);
   const total = buckets.reduce((a, b) => a + b.amount.minor, 0);
@@ -49,18 +51,20 @@ export function AgingBars({
       <View style={{ gap: t.spacing.sm }}>
         {buckets.map((b, i) => {
           const pct = Math.max(1.5, (b.amount.minor / max) * 100);
+          // The day ranges read the same in every language; "Current" does not.
+          const label = b.key === 'current' ? tr('reports:cell.current') : b.label;
           const dim = !!selectedKey && selectedKey !== b.key;
           return (
             <Pressable
               key={b.key}
               onPress={onSelect ? () => onSelect(b.key) : undefined}
               accessibilityRole={onSelect ? 'button' : undefined}
-              accessibilityLabel={`${b.label} days: ${formatMoney(b.amount)} across ${b.count} invoices`}
+              accessibilityLabel={tr('reports:cell.agingA11y', { label, amount: formatMoney(b.amount), count: b.count })}
               style={{ gap: 5, opacity: dim ? 0.5 : 1 }}
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="muted">
-                  {b.label}
+                  {label}
                   {b.count > 0 ? `  ·  ${b.count}` : ''}
                 </Text>
                 <Text variant="caption" weight="600">

@@ -63,10 +63,10 @@ export default function OpeningStock() {
           quantity: Number(v),
           unitCost: item.purchasePrice,
           date,
-          notes: 'Opening stock entry',
+          notes: tr('inventory:opening.entryNote'),
         });
       });
-    }, `Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`).then((res) => {
+    }, tr('inventory:opening.done', { count: entered.length })).then((res) => {
       if (res) goBack('/(app)/(tabs)/inventory');
     });
   };
@@ -78,8 +78,7 @@ export default function OpeningStock() {
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
         <Card variant="flat">
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Enter what you already had on hand when you started using the app. This posts an opening movement and does not
-            affect your sales or purchase figures.
+            {tr('inventory:opening.intro')}
           </Text>
         </Card>
         <DateField label={tr('inventory:opening.asOn')} value={date} onChange={setDate} />
@@ -108,7 +107,7 @@ export default function OpeningStock() {
                     {item.name}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    {item.sku} · currently {formatQty(stock[item.id] ?? 0)} {item.unit}
+                    {item.sku} · {tr('inventory:opening.currently', { qty: formatQty(stock[item.id] ?? 0), unit: item.unit })}
                   </Text>
                 </View>
                 <TextField
@@ -140,7 +139,7 @@ export default function OpeningStock() {
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
-            {entered.length} items entered
+            {tr('inventory:opening.entered', { count: entered.length })}
           </Text>
           <Text variant="small" weight="700">
             {formatMoney(money(totalValue, baseCurrency))}

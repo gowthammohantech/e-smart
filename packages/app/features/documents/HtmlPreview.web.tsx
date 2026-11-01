@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleProp, View, ViewStyle } from 'react-native';
 
 /**
@@ -6,10 +7,11 @@ import { StyleProp, View, ViewStyle } from 'react-native';
  * the way it will look on paper. (react-native-webview has no web build.)
  */
 export function HtmlPreview({ html, style }: { html: string; style?: StyleProp<ViewStyle> }) {
+  const { t: tr } = useTranslation(['sales']);
   return (
     <View style={[{ flex: 1, backgroundColor: '#FFFFFF' }, style]}>
       <iframe
-        title="Document preview"
+        title={tr('sales:detail.documentPreview')}
         srcDoc={html}
         sandbox="allow-same-origin allow-modals"
         style={{ border: 'none', width: '100%', height: '100%', flex: 1 }}

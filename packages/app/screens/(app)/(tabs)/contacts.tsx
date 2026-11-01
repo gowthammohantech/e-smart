@@ -75,9 +75,20 @@ export default function ContactsTab() {
     [outstandingByParty, baseCurrency],
   );
 
+  const emptyTitle =
+    parties.length > 0
+      ? tr('common:component.noMatches')
+      : tab === 'customer'
+        ? tr('contacts:hub.noCustomers')
+        : tr('contacts:hub.noSuppliers');
+  const emptyMessage = parties.length === 0 ? tr('contacts:hub.emptyBody') : tr('contacts:hub.noMatchesBody');
+
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title={hasSuppliers ? 'Contacts' : 'Customers'} subtitle={hasSuppliers ? 'Customers and suppliers' : 'Who you sell to'} />
+      <AppHeader
+        title={hasSuppliers ? tr('contacts:hub.title') : tr('contacts:hub.titleCustomersOnly')}
+        subtitle={hasSuppliers ? tr('contacts:hub.subtitle') : tr('contacts:hub.subtitleCustomersOnly')}
+      />
 
       <View
         style={
@@ -90,8 +101,8 @@ export default function ContactsTab() {
           <View style={desktop ? { width: 260 } : undefined}>
           <Segmented
             options={[
-              { value: 'customer', label: 'Customers' },
-              { value: 'supplier', label: 'Suppliers' },
+              { value: 'customer', label: tr('contacts:hub.customers') },
+              { value: 'supplier', label: tr('contacts:hub.suppliers') },
             ]}
             value={tab}
             onChange={(v) => setTab(v as Tab)}
@@ -99,14 +110,16 @@ export default function ContactsTab() {
           </View>
         ) : null}
         <View style={desktop ? { width: 300 } : undefined}>
-          <SearchBar value={query} onChangeText={setQuery} placeholder={`Search ${tab === 'customer' ? 'customers' : 'suppliers'}`} />
+          <SearchBar value={query} onChangeText={setQuery} placeholder={tab === 'customer' ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
           <Text variant="caption" tone="muted">
-            {filtered.length} {tab === 'customer' ? 'customers' : 'suppliers'}
+            {tab === 'customer' ? tr('contacts:hub.customerCount', { count: filtered.length }) : tr('contacts:hub.supplierCount', { count: filtered.length })}
           </Text>
           <Text variant="caption" weight="600" tone={tab === 'customer' ? 'warn' : 'bad'}>
-            {formatMoney(totalOutstanding)} {tab === 'customer' ? 'receivable' : 'payable'}
+            {tab === 'customer'
+              ? tr('contacts:hub.receivable', { amount: formatMoney(totalOutstanding) })
+              : tr('contacts:hub.payable', { amount: formatMoney(totalOutstanding) })}
           </Text>
         </View>
       </View>
@@ -163,8 +176,8 @@ export default function ContactsTab() {
               <EmptyState
                 illustration="no-contacts"
                 icon="account-group-outline"
-                title={parties.length === 0 ? `No ${tab === 'customer' ? 'customers' : 'suppliers'} yet` : 'No matches'}
-                message={parties.length === 0 ? 'Add one now, or they get created as you invoice.' : 'Try a different search term.'}
+                title={emptyTitle}
+                message={emptyMessage}
                 compact
               />
             }
@@ -175,13 +188,9 @@ export default function ContactsTab() {
           <Card padded={false}>
             <EmptyState
               illustration="no-contacts" icon="account-group-outline"
-              title={parties.length === 0 ? `No ${tab === 'customer' ? 'customers' : 'suppliers'} yet` : 'No matches'}
-              message={
-                parties.length === 0
-                  ? 'Add one now, or they get created as you invoice.'
-                  : 'Try a different search term.'
-              }
-              actionLabel={parties.length === 0 ? 'Add contact' : undefined}
+              title={emptyTitle}
+              message={emptyMessage}
+              actionLabel={parties.length === 0 ? tr('contacts:hub.addContact') : undefined}
               onAction={
                 parties.length === 0
                   ? () => router.push(tab === 'customer' ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
@@ -248,7 +257,7 @@ export default function ContactsTab() {
                         {formatMoney(money(outstanding, baseCurrency))}
                       </Text>
                       <Text variant="micro" tone="muted">
-                        {tab === 'customer' ? 'owes you' : 'you owe'}
+                        {tab === 'customer' ? tr('contacts:hub.owesYou') : tr('contacts:hub.youOwe')}
                       </Text>
                     </>
                   ) : (

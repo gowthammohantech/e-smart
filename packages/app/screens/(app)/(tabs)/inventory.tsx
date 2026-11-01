@@ -27,7 +27,7 @@ const FILTERS: Filter[] = ['all', 'low', 'out', 'services'];
 
 export default function InventoryTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory']);
+  const { t: tr } = useTranslation(['inventory', 'common', 'nav']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -65,13 +65,13 @@ export default function InventoryTab() {
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <StatRow>
-          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={`${report.trackedCount} tracked items`} />
+          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={tr('inventory:hub.trackedItems', { count: report.trackedCount })} />
           <StatTile
             label={tr('inventory:hub.lowStock')}
             value={String(report.lowCount)}
             tone="warn"
             icon="alert-outline"
-            caption={`${report.outCount} out of stock`}
+            caption={tr('inventory:hub.outOfStock', { count: report.outCount })}
             onPress={() => router.push('/(app)/inventory/low-stock')}
           />
         </StatRow>
@@ -94,10 +94,10 @@ export default function InventoryTab() {
           />
           <Segmented
             options={[
-              { value: 'all', label: 'All' },
+              { value: 'all', label: tr('inventory:hub.all') },
               { value: 'low', label: tr('inventory:hub.low') },
               { value: 'out', label: tr('inventory:hub.out') },
-              { value: 'services', label: 'Services' },
+              { value: 'services', label: tr('inventory:catalog.services') },
             ]}
             value={filter}
             onChange={(v) => setFilter(v as Filter)}
@@ -105,7 +105,7 @@ export default function InventoryTab() {
           />
         </View>
 
-        <SectionHeader title={`${filtered.length} items`} action="Movements" onAction={() => router.push('/(app)/inventory/movements')} />
+        <SectionHeader title={tr('inventory:hub.itemCount', { count: filtered.length })} action={tr('inventory:hub.movements')} onAction={() => router.push('/(app)/inventory/movements')} />
 
         <Card padded={false}>
           {filtered.length === 0 ? (
@@ -113,8 +113,8 @@ export default function InventoryTab() {
               illustration="no-items"
               icon="package-variant"
               title={tr('inventory:hub.nothingHere')}
-              message={items.length === 0 ? 'Add your first item to start tracking stock.' : 'No items match this filter.'}
-              actionLabel={items.length === 0 ? 'Add item' : undefined}
+              message={items.length === 0 ? tr('inventory:hub.emptyFirst') : tr('inventory:hub.emptyFilter')}
+              actionLabel={items.length === 0 ? tr('common:quickAction.addItem') : undefined}
               onAction={items.length === 0 ? () => router.push('/(app)/catalog/items/new') : undefined}
               compact
             />
@@ -127,7 +127,11 @@ export default function InventoryTab() {
                   key={item.id}
                   onPress={() => router.push(`/(app)/catalog/items/${item.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.name}, ${item.trackInventory ? `${onHand} in stock` : 'service'}`}
+                  accessibilityLabel={
+                    item.trackInventory
+                      ? tr('inventory:hub.a11yStock', { name: item.name, qty: formatQty(onHand) })
+                      : tr('inventory:hub.a11yService', { name: item.name })
+                  }
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -200,12 +204,12 @@ export default function InventoryTab() {
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('inventory:hub.actions')}>
         {[
-          { label: 'Add item', icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
-          { label: 'Stock adjustment', icon: 'tune' as const, route: '/(app)/inventory/adjust' },
-          { label: 'Branch transfer', icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
-          { label: 'Set opening stock', icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
+          { label: tr('common:quickAction.addItem'), icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
+          { label: tr('nav:title.stockAdjustment'), icon: 'tune' as const, route: '/(app)/inventory/adjust' },
+          { label: tr('nav:title.branchTransfer'), icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
+          { label: tr('inventory:hub.setOpeningStock'), icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
           { label: tr('inventory:hub.scanBarcode'), icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
-          { label: 'Stock movements', icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
+          { label: tr('nav:title.stockMovements'), icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
         ].map((a) => (
           <Pressable
             key={a.label}

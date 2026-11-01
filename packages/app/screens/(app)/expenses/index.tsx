@@ -73,10 +73,10 @@ export default function ExpensesList() {
       map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + Math.round(e.amount.minor * (e.exchangeRate || 1)));
     });
     return Array.from(map.entries()).map(([id, minor]) => ({
-      label: categories.find((c) => c.id === id)?.name ?? 'Other',
+      label: categories.find((c) => c.id === id)?.name ?? tr('purchases:expense.otherCategory'),
       value: money(minor, baseCurrency),
     }));
-  }, [filtered, categories, baseCurrency]);
+  }, [filtered, categories, baseCurrency, tr]);
 
   const rangeChips = DATE_RANGE_PRESET_KEYS.map((p) => {
     const active = range === p;
@@ -173,7 +173,7 @@ export default function ExpensesList() {
           {/* How many match and what they add up to, at the right end of the filter row. */}
           <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
-              {`${filtered.length} entries · tax ${formatMoney(taxTotal)}`}
+              {tr('purchases:expense.entriesWithTax', { count: filtered.length, tax: formatMoney(taxTotal) })}
             </Text>
             <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(total)}
@@ -197,7 +197,7 @@ export default function ExpensesList() {
                     return (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
                         <MaterialCommunityIcons name={(cat?.icon ?? 'cash') as keyof typeof MaterialCommunityIcons.glyphMap} size={16} color={cat?.color ?? t.c.muted} />
-                        <Cell>{cat?.name ?? 'Uncategorised'}</Cell>
+                        <Cell>{cat?.name ?? tr('purchases:expense.uncategorised')}</Cell>
                       </View>
                     );
                   },
@@ -216,7 +216,7 @@ export default function ExpensesList() {
                   illustration="no-expenses"
                   icon="receipt-text-outline"
                   title={tr('purchases:expense.noExpenses')}
-                  message={expenses.length === 0 ? 'Record your first expense to track where the money goes.' : 'Nothing matches this filter.'}
+                  message={expenses.length === 0 ? tr('purchases:expense.emptyFirst') : tr('purchases:expense.emptyFiltered')}
                   compact
                 />
               }
@@ -225,11 +225,11 @@ export default function ExpensesList() {
           side={
             narrow ? null : (
             <>
-              <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={`${filtered.length} entries`} />
+              <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count: filtered.length })} />
               <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} />
               {slices.length > 0 ? (
                 <Card>
-                  <DonutChart slices={slices} centerLabel="Total" />
+                  <DonutChart slices={slices} centerLabel={tr('purchases:expense.total')} />
                 </Card>
               ) : null}
             </>
@@ -254,13 +254,13 @@ export default function ExpensesList() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
-          <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={`${filtered.length} entries`} />
+          <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count: filtered.length })} />
           <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} />
         </StatRow>
 
         {slices.length > 0 ? (
           <Card style={{ marginTop: t.spacing.md }}>
-            <DonutChart slices={slices} centerLabel="Total" />
+            <DonutChart slices={slices} centerLabel={tr('purchases:expense.total')} />
           </Card>
         ) : null}
 
@@ -274,8 +274,8 @@ export default function ExpensesList() {
               illustration="no-expenses"
               icon="receipt-text-outline"
               title={tr('purchases:expense.noExpenses')}
-              message={expenses.length === 0 ? 'Record your first expense to track where the money goes.' : 'Nothing matches this filter.'}
-              actionLabel={expenses.length === 0 ? 'Add expense' : undefined}
+              message={expenses.length === 0 ? tr('purchases:expense.emptyFirst') : tr('purchases:expense.emptyFiltered')}
+              actionLabel={expenses.length === 0 ? tr('common:quickAction.addExpense') : undefined}
               onAction={expenses.length === 0 ? () => router.push('/(app)/expenses/new') : undefined}
               compact
             />
@@ -287,7 +287,7 @@ export default function ExpensesList() {
                   key={e.id}
                   onPress={() => router.push(`/(app)/expenses/${e.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${cat?.name ?? 'Expense'}, ${formatMoney(e.amount)}`}
+                  accessibilityLabel={`${cat?.name ?? tr('nav:title.expense')}, ${formatMoney(e.amount)}`}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -316,7 +316,7 @@ export default function ExpensesList() {
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
                     <Text variant="body" weight="600" numberOfLines={1}>
-                      {cat?.name ?? 'Uncategorised'}
+                      {cat?.name ?? tr('purchases:expense.uncategorised')}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
                       {formatDate(e.date, 'dd MMM')} · {paymentMethodLabel(tr, e.method)}
@@ -327,7 +327,7 @@ export default function ExpensesList() {
                     <Text variant="body" weight="700">
                       {formatMoney(e.amount)}
                     </Text>
-                    {e.recurrence !== 'none' ? <Badge label={e.recurrence} tone="info" size="sm" /> : null}
+                    {e.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${e.recurrence}`)} tone="info" size="sm" /> : null}
                   </View>
                 </Pressable>
               );

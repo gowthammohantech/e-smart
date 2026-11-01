@@ -20,7 +20,6 @@ import { compliance } from '../../remote';
 import { useActiveCompany, useComplianceSettings } from '../../store/selectors';
 import {
   E_INVOICE_CANCEL_REASONS,
-  E_INVOICE_SUPPLY_TYPES,
   blockingIssues,
   buildIrpPayload,
   canCancelEInvoice,
@@ -102,7 +101,7 @@ export function EInvoiceSheet({
       toast.show(tr('compliance:einv.generated'), 'success');
       onClose();
     } else {
-      toast.show(outcome.issues[0]?.message ?? 'The portal refused the invoice', 'error');
+      toast.show(outcome.issues[0]?.message ?? tr('compliance:einv.refused'), 'error');
     }
   };
 
@@ -114,7 +113,7 @@ export function EInvoiceSheet({
       toast.show(tr('compliance:einv.cancelled'), 'success');
       onClose();
     } else {
-      toast.show(outcome.issues[0]?.message ?? 'The IRN could not be cancelled', 'error');
+      toast.show(outcome.issues[0]?.message ?? tr('compliance:einv.cancelFailed'), 'error');
     }
   };
 
@@ -144,8 +143,7 @@ export function EInvoiceSheet({
           {cancellation.allowed ? (
             <Card variant="flat">
               <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                Cancelling withdraws the reported invoice from the portal. It cannot be undone, and the
-                document number cannot be used again this financial year — raise a fresh invoice instead.
+                {tr('compliance:einv.cancelWarning')}
               </Text>
             </Card>
           ) : (
@@ -179,7 +177,7 @@ export function EInvoiceSheet({
                   size={20}
                   color={reasonCode === code ? t.c.primary : t.c.muted}
                 />
-                <Text variant="small" style={{ flex: 1 }}>{E_INVOICE_CANCEL_REASONS[code]}</Text>
+                <Text variant="small" style={{ flex: 1 }}>{tr(`compliance:cancelReason.einv.${code}`)}</Text>
               </Pressable>
             ))}
           </View>
@@ -189,7 +187,7 @@ export function EInvoiceSheet({
             required={needsRemark}
             value={remark}
             onChangeText={setRemark}
-            placeholder={needsRemark ? 'Say what happened' : 'Optional'}
+            placeholder={needsRemark ? tr('compliance:einv.remarkRequired') : tr('compliance:einv.optional')}
             multiline
           />
         </View>
@@ -207,14 +205,14 @@ export function EInvoiceSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={reported ? 'E-invoice' : 'Generate the e-invoice'}
+      title={reported ? tr('compliance:einv.eInvoice') : tr('compliance:einv.generateTitle')}
       subtitle={doc.number}
       footer={
         reported || !applicability.applicable ? undefined : (
           <View style={{ gap: t.spacing.sm }}>
             {blocking.length > 0 ? (
               <Text variant="caption" tone="bad" center>
-                Fix {blocking.length} {blocking.length === 1 ? 'problem' : 'problems'} before reporting.
+                {tr('compliance:einv.fixProblems', { count: blocking.length })}
               </Text>
             ) : null}
             <Button
@@ -232,7 +230,7 @@ export function EInvoiceSheet({
       <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.lg }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
           <Text variant="small" weight="600" style={{ flex: 1 }}>
-            {applicability.applicable ? E_INVOICE_SUPPLY_TYPES[applicability.supplyType!] : 'Not reportable'}
+            {applicability.applicable ? tr(`compliance:supplyType.${applicability.supplyType!}`) : tr('compliance:einv.notReportable')}
           </Text>
           <Badge label={keyLabel(tr, meta.labelKey)} tone={meta.tone} icon={meta.icon} />
         </View>
@@ -285,10 +283,10 @@ export function EInvoiceSheet({
         {!reported && applicability.applicable ? (
           <>
             <IssueList
-              title={blocking.length ? `${blocking.length} blocking` : 'Portal checks'}
+              title={blocking.length ? tr('compliance:einv.blocking', { count: blocking.length }) : tr('compliance:einv.portalChecks')}
               issues={blocking}
               tone="bad"
-              emptyMessage="Every portal check passes."
+              emptyMessage={tr('compliance:einv.allChecksPass')}
             />
             {warnings.length ? (
               <IssueList title={tr('compliance:einv.worthKnowing')} issues={warnings} tone="warn" />

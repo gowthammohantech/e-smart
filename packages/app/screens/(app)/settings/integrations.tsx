@@ -13,13 +13,13 @@ import { useComplianceSettings } from '../../../store/selectors';
 import { Integration } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const GROUPS: { key: Integration['category']; title: string; blurb: string }[] = [
-  { key: 'payments', title: 'Payments', blurb: 'Let customers pay an invoice without leaving it.' },
-  { key: 'compliance', title: 'Compliance', blurb: 'Government filings and document generation.' },
-  { key: 'messaging', title: 'Messaging', blurb: 'How invoices and reminders reach your customers.' },
-  { key: 'accounting', title: 'Accounting', blurb: 'Hand data to your accountant in their format.' },
-  { key: 'storage', title: 'Storage & backup', blurb: 'Where copies of your documents are kept.' },
-];
+const GROUPS = [
+  { key: 'payments', title: 'settings:integrations.group.payments', blurb: 'settings:integrations.group.paymentsHint' },
+  { key: 'compliance', title: 'settings:integrations.group.compliance', blurb: 'settings:integrations.group.complianceHint' },
+  { key: 'messaging', title: 'settings:integrations.group.messaging', blurb: 'settings:integrations.group.messagingHint' },
+  { key: 'accounting', title: 'settings:integrations.group.accounting', blurb: 'settings:integrations.group.accountingHint' },
+  { key: 'storage', title: 'settings:integrations.group.storage', blurb: 'settings:integrations.group.storageHint' },
+] as const satisfies readonly { key: Integration['category']; title: string; blurb: string }[];
 
 /** The government portals open their own login screen on the tab for that portal. */
 const PORTAL_OF: Record<string, 'einvoice' | 'ewaybill'> = { int_einvoice: 'einvoice', int_eway: 'ewaybill' };
@@ -48,8 +48,7 @@ export default function Integrations() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Each provider sits behind an adapter, so swapping one out never changes how your documents work. Turning
-            one on saves the choice for this business; providers that need an account ask you to connect it.
+            {tr('settings:integrations.intro')}
           </Text>
         </Card>
 
@@ -59,10 +58,10 @@ export default function Integrations() {
           return (
             <View key={g.key} style={{ marginBottom: t.spacing.xl }}>
               <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>
-                {g.title}
+                {tr(g.title)}
               </Text>
               <Text variant="caption" tone="muted" style={{ marginBottom: t.spacing.sm }}>
-                {g.blurb}
+                {tr(g.blurb)}
               </Text>
               <Card padded={false}>
                 {rows.map((i, idx) => (
@@ -107,7 +106,7 @@ export default function Integrations() {
                         <Pressable
                           onPress={() => openConfig(i)}
                           accessibilityRole="button"
-                          accessibilityLabel={`Configure ${i.name}`}
+                          accessibilityLabel={tr('settings:integrations.configureNamed', { name: i.name })}
                           hitSlop={6}
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
                         >
@@ -126,13 +125,13 @@ export default function Integrations() {
                           return;
                         }
                         toggleIntegration(i.id);
-                        toast.show(i.connected ? `${i.name} disconnected` : `${i.name} connected`, 'success');
+                        toast.show(i.connected ? tr('settings:integrations.disconnectedNamed', { name: i.name }) : tr('settings:integrations.connectedNamed', { name: i.name }), 'success');
                       }}
                       trackColor={{ true: t.c.primary, false: t.c.line }}
                       thumbColor="#FFFFFF"
                       // On the web the "on" thumb defaults to green; keep it white like the rest.
                       {...(Platform.OS === 'web' ? ({ activeThumbColor: '#FFFFFF' } as object) : null)}
-                      accessibilityLabel={`${i.connected ? 'Disconnect' : 'Connect'} ${i.name}`}
+                      accessibilityLabel={i.connected ? tr('settings:integrations.disconnectNamed', { name: i.name }) : tr('settings:integrations.connectNamed', { name: i.name })}
                     />
                   </View>
                 ))}

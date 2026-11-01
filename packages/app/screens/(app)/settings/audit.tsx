@@ -55,7 +55,7 @@ export default function AuditTrail() {
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('settings:audit.search')} />
         <Text variant="caption" tone="muted">
-          {filtered.length} events · append-only, newest first
+          {tr('settings:audit.count', { count: filtered.length })}
         </Text>
       </View>
 

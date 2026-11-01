@@ -38,8 +38,8 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const desktop = useIsDesktop();
 
   const nameOf = useCallback(
-    (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown',
-    [parties],
+    (id: string) => parties.find((p) => p.id === id)?.name ?? tr('common:placeholder.unknown'),
+    [parties, tr],
   );
 
   const filtered = useMemo(() => {
@@ -119,7 +119,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
           // How many match and what they add up to, at the right end of the filter row.
           <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
-              {filtered.length} payments
+              {tr('sales:list.count', { count: filtered.length })}
             </Text>
             <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(total)}
@@ -128,7 +128,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         ) : (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
-            {filtered.length} payments
+            {tr('sales:list.count', { count: filtered.length })}
           </Text>
           <Text variant="caption" weight="700" tone={direction === 'received' ? 'good' : 'bad'}>
             {formatMoney(total)}
@@ -166,7 +166,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                   p.unallocated.minor > 0 ? (
                     <Badge label={tr('sales:list.advance')} tone="warning" size="sm" />
                   ) : (
-                    <Badge label={`${p.allocations.length} applied`} tone="neutral" size="sm" />
+                    <Badge label={tr('sales:list.appliedCount', { count: p.allocations.length })} tone="neutral" size="sm" />
                   ),
               },
               {
@@ -191,7 +191,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                 illustration="no-payments"
                 icon="cash-remove"
                 title={tr('sales:list.none')}
-                message={payments.length === 0 ? 'Record one to see it here.' : 'Nothing matches this filter.'}
+                message={payments.length === 0 ? tr('sales:list.emptyBody') : tr('common:filters.noMatch')}
                 compact
               />
             }
@@ -205,8 +205,8 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
               illustration="no-payments"
               icon="cash-remove"
               title={tr('sales:list.none')}
-              message={payments.length === 0 ? 'Record one to see it here.' : 'Nothing matches this filter.'}
-              actionLabel={payments.length === 0 ? 'Record payment' : undefined}
+              message={payments.length === 0 ? tr('sales:list.emptyBody') : tr('common:filters.noMatch')}
+              actionLabel={payments.length === 0 ? tr('common:action.recordPayment') : undefined}
               onAction={payments.length === 0 ? () => router.push(`/(app)/payments/new?direction=${direction}`) : undefined}
               compact
             />
@@ -243,7 +243,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                   {p.unallocated.minor > 0 ? (
                     <Badge label={tr('sales:list.advance')} tone="warning" size="sm" />
                   ) : (
-                    <Badge label={`${p.allocations.length} applied`} tone="neutral" size="sm" />
+                    <Badge label={tr('sales:list.appliedCount', { count: p.allocations.length })} tone="neutral" size="sm" />
                   )}
                 </View>
               </Pressable>

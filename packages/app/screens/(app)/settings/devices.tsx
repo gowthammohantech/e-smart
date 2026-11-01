@@ -39,7 +39,7 @@ export default function Devices() {
               key={d.id}
               title={d.label}
               subtitle={`${d.platform}${d.location ? ` · ${d.location}` : ''}`}
-              meta={d.current ? 'Active now' : `Last active ${formatRelative(d.lastActiveAt.slice(0, 10))}`}
+              meta={d.current ? tr('settings:devices.activeNow') : tr('settings:devices.lastActive', { when: formatRelative(d.lastActiveAt.slice(0, 10)) })}
               icon={d.label.toLowerCase().includes('ipad') ? 'tablet' : 'cellphone'}
               divider={i < devices.length - 1}
               right={
@@ -62,7 +62,7 @@ export default function Devices() {
 
       <ConfirmDialog
         visible={!!confirmRevoke}
-        title={`Sign out ${confirmRevoke?.label}?`}
+        title={tr('settings:devices.signOutTitle', { name: confirmRevoke?.label })}
         message={tr('settings:devices.signOutMessage')}
         confirmLabel={tr('settings:devices.signOut')}
         destructive

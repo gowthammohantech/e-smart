@@ -96,9 +96,18 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={p.fg} size="small" />
       ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
           {icon ? <MaterialCommunityIcons name={icon} size={fonts[size] + 3} color={p.fg} /> : null}
-          <Text style={{ color: p.fg, fontSize: fonts[size], fontWeight: '600' }}>{title}</Text>
+          {/* The height is fixed, so a label that wrapped would spill out of
+              it; Tamil runs long, so shrink a little and then truncate. */}
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+            style={{ color: p.fg, fontSize: fonts[size], fontWeight: '600', flexShrink: 1 }}
+          >
+            {title}
+          </Text>
           {iconRight ? <MaterialCommunityIcons name={iconRight} size={fonts[size] + 3} color={p.fg} /> : null}
         </View>
       )}

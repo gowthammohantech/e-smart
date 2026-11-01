@@ -23,5 +23,15 @@
     "phoneNumber": "Phone number",
     "yourName": "Your name",
     "businessName": "Business name"
+  },
+  "remote": {
+    "noUploadUrl": "The server did not return an upload link. Try again.",
+    "uploadFailed": "The upload failed ({{status}}). Try again.",
+    "incompleteSession": "The server returned an incomplete session. Sign in again.",
+    "noPdf": "The server did not return the PDF. Try again.",
+    "noLink": "The server did not return a link. Try again.",
+    "exportSlow": "The export is taking longer than expected. Try again shortly.",
+    "exportFailed": "The export failed. Try again.",
+    "portalOffline": "Connect to the internet to reach the GST portal, then try again."
   }
 }

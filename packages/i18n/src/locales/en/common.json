@@ -14,7 +14,9 @@
     "clear": "Clear",
     "apply": "Apply",
     "reset": "Reset",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "recordPayment": "Record payment",
+    "seeAll": "See all"
   },
   "placeholder": {
     "none": "—",
@@ -131,7 +133,20 @@
     "selectCity": "Select city",
     "searchCity": "Search for a city",
     "noCityMatch": "This city isn’t in the list. Check the spelling, or pick the nearest city.",
-    "allStates": "All states"
+    "allStates": "All states",
+    "selectDate": "Select date",
+    "select": "Select",
+    "date": "Date",
+    "notSet": "not set",
+    "closeMenu": "Close menu",
+    "decreaseQuantity": "Decrease quantity",
+    "increaseQuantity": "Increase quantity",
+    "backTo": "Back to {{label}}",
+    "signedQr": "Signed QR code",
+    "other": "Other",
+    "chartSlice": "{{label}}: {{amount}}, {{percent}} percent",
+    "nothingToShow": "Nothing to show yet",
+    "noSearchMatch": "Nothing matches that search."
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -140,7 +155,12 @@
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
     "roundOff": "Round off",
-    "total": "Total"
+    "fxNote": "≈ {{amount}} at 1 {{currency}} = {{rate}} {{baseCurrency}}",
+    "total": "Total",
+    "noTax": "No tax",
+    "exchangeRate": "Exchange rate",
+    "inputTax": "Input tax ({{rate}})",
+    "netAmount": "Net amount"
   },
   "quickAction": {
     "newInvoice": "New invoice",
@@ -190,7 +210,8 @@
     "apply": "Apply",
     "clearParty": "Clear party filter",
     "dateRange": "Date range",
-    "status": "Status"
+    "status": "Status",
+    "noMatch": "Nothing matches this filter."
   },
   "business": {
     "switch": "Switch business",

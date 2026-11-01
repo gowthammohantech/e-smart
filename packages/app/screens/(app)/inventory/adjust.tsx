@@ -49,10 +49,12 @@ export default function StockAdjust() {
   const delta = direction === 'increase' ? qty : -qty;
   const resulting = current + delta;
 
-  const REASONS =
+  // The chosen reason is saved as the movement's note, in the words the user picked it in.
+  const REASON_KEYS =
     direction === 'decrease'
-      ? ['Damaged', 'Lost or stolen', 'Expired', 'Sample given', 'Stock count correction', 'Internal use']
-      : ['Found stock', 'Stock count correction', 'Returned from customer', 'Production output'];
+      ? (['damaged', 'lost', 'expired', 'sample', 'countCorrection', 'internalUse'] as const)
+      : (['found', 'countCorrection', 'customerReturn', 'production'] as const);
+  const REASONS = REASON_KEYS.map((k) => tr(`inventory:adjust.reasons.${k}`));
 
   const canSave = !!itemId && qty > 0 && !!branchId;
 
@@ -97,8 +99,8 @@ export default function StockAdjust() {
 
         <Segmented
           options={[
-            { value: 'decrease', label: 'Decrease' },
-            { value: 'increase', label: 'Increase' },
+            { value: 'decrease', label: tr('inventory:adjust.decrease') },
+            { value: 'increase', label: tr('inventory:adjust.increase') },
           ]}
           value={direction}
           onChange={(v) => {
@@ -131,8 +133,8 @@ export default function StockAdjust() {
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             {[
-              { label: 'Current stock', value: `${formatQty(current)} ${item.unit}` },
-              { label: 'Adjustment', value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}` },
+              { label: tr('inventory:adjust.currentStock'), value: `${formatQty(current)} ${item.unit}` },
+              { label: tr('inventory:adjust.adjustment'), value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}` },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="muted">

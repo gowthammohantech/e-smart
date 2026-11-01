@@ -23,7 +23,7 @@ import {
   useStockMovements,
   useTaxCategories,
 } from '../../../../../store/selectors';
-import { MOVEMENT_LABELS, isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
+import { isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { multiply } from '@esmart/core/lib/money';
@@ -111,7 +111,7 @@ export default function ItemDetail() {
             {item.barcode ? ` · ${item.barcode}` : ''}
           </Text>
           <View style={{ flexDirection: 'row', gap: 5, marginTop: 3, flexWrap: 'wrap' }}>
-            <Badge label={item.type === 'goods' ? 'Product' : 'Service'} tone="neutral" size="sm" />
+            <Badge label={tr(`inventory:type.${item.type}`)} tone="neutral" size="sm" />
             <Badge label={formatPercent(category?.rate ?? 0)} tone="info" size="sm" />
             {item.hsnCode ? <Badge label={`HSN ${item.hsnCode}`} tone="neutral" size="sm" /> : null}
             {item.status === 'inactive' ? <Badge label={tr('inventory:detail.inactive')} tone="warning" size="sm" /> : null}
@@ -131,14 +131,14 @@ export default function ItemDetail() {
     <View style={{ height: t.spacing.md }} />
 
     <StatRow>
-      <StatTile label={tr('inventory:detail.salePrice')} value={item.salePrice} icon="tag-outline" caption={`per ${item.unit}`} />
+      <StatTile label={tr('inventory:detail.salePrice')} value={item.salePrice} icon="tag-outline" caption={tr('inventory:detail.perUnit', { unit: item.unit })} />
       <StatTile
         label={tr('inventory:detail.margin')}
         // One decimal, like the item form.
         value={hasMargin ? formatPercent(Math.round(margin * 10) / 10) : '—'}
         tone={margin > 0 ? 'good' : 'default'}
         icon="trending-up"
-        caption={`cost ${formatMoney(item.purchasePrice)}`}
+        caption={tr('inventory:detail.cost', { amount: formatMoney(item.purchasePrice) })}
       />
     </StatRow>
 
@@ -151,9 +151,9 @@ export default function ItemDetail() {
             value={`${formatQty(onHand)} ${item.unit}`}
             tone={onHand <= 0 ? 'bad' : low ? 'warn' : 'good'}
             icon="warehouse"
-            caption={item.reorderLevel > 0 ? `reorder at ${formatQty(item.reorderLevel)}` : undefined}
+            caption={item.reorderLevel > 0 ? tr('inventory:detail.reorderAt', { qty: formatQty(item.reorderLevel) }) : undefined}
           />
-          <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={`${formatQty(soldQty)} sold all-time`} />
+          <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={tr('inventory:detail.soldAllTime', { qty: formatQty(soldQty) })} />
         </StatRow>
       </>
     ) : null}
@@ -165,10 +165,10 @@ export default function ItemDetail() {
     <Card style={{ gap: t.spacing.md }}>
       {[
         { label: tr('inventory:detail.salePrice'), value: `${formatMoney(item.salePrice)} / ${item.unit}` },
-        { label: 'Purchase price', value: `${formatMoney(item.purchasePrice)} / ${item.unit}` },
-        { label: 'Tax category', value: category?.name ?? '—' },
+        { label: tr('inventory:form.purchasePrice'), value: `${formatMoney(item.purchasePrice)} / ${item.unit}` },
+        { label: tr('inventory:detail.taxCategory'), value: category?.name ?? '—' },
         {
-          label: 'Sale price incl. tax',
+          label: tr('inventory:detail.salePriceInclTax'),
           value: formatMoney(multiply(item.salePrice, 1 + (category?.rate ?? 0) / 100)),
         },
       ].map((r) => (
@@ -214,7 +214,7 @@ export default function ItemDetail() {
                   />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="body" weight="600">
-                      {MOVEMENT_LABELS[row.movement.type]}
+                      {tr(`inventory:movementType.${row.movement.type}`)}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
                       {formatDate(row.movement.date)}
@@ -228,7 +228,7 @@ export default function ItemDetail() {
                       {formatQty(delta)}
                     </Text>
                     <Text variant="micro" tone="muted">
-                      bal {formatQty(row.balance)}
+                      {tr('inventory:detail.balance', { qty: formatQty(row.balance) })}
                     </Text>
                   </View>
                 </View>
@@ -310,15 +310,15 @@ export default function ItemDetail() {
         {[
           ...(item.trackInventory && hasInventory
             ? [
-                { label: 'Adjust stock', icon: 'tune' as const, onPress: () => router.push(`/(app)/inventory/adjust?itemId=${item.id}`) },
-                { label: 'Transfer between branches', icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
+                { label: tr('inventory:detail.adjustStock'), icon: 'tune' as const, onPress: () => router.push(`/(app)/inventory/adjust?itemId=${item.id}`) },
+                { label: tr('inventory:detail.transferBranches'), icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
               ]
             : []),
-          { label: 'Sell this item', icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?itemId=${item.id}`) },
+          { label: tr('inventory:detail.sellItem'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?itemId=${item.id}`) },
           ...(hasPurchases
-            ? [{ label: 'Buy this item', icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?itemId=${item.id}`) }]
+            ? [{ label: tr('inventory:detail.buyItem'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?itemId=${item.id}`) }]
             : []),
-          { label: 'Delete item', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
+          { label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
         ].map((a) => (
           <Pressable
             key={a.label}
@@ -349,7 +349,7 @@ export default function ItemDetail() {
 
       <ConfirmDialog
         visible={confirmDelete}
-        title={`Delete ${item.name}?`}
+        title={tr('inventory:detail.deleteTitle', { name: item.name })}
         message={tr('inventory:detail.deleteMessage')}
         confirmLabel={tr('inventory:detail.delete')}
         destructive

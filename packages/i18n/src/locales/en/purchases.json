@@ -11,7 +11,10 @@
     "recentBills": "Recent bills",
     "noBills": "No purchase bills yet",
     "recordBill": "Record a bill",
-    "bill": "Bill"
+    "bill": "Bill",
+    "openBills_one": "{{count}} open bill",
+    "openBills_other": "{{count}} open bills",
+    "paymentsOut": "Payments out"
   },
   "form": {
     "amount": "Amount",
@@ -42,7 +45,17 @@
     "summary": "Summary",
     "receipt": "Receipt",
     "receiptUploadFailed": "The receipt couldn't be uploaded: {{reason}} Remove it to save without it, or try again when you're online.",
-      "receiptQueued": "Receipt will upload when you are back online. Expense saved."
+    "receiptQueued": "Receipt will upload when you are back online. Expense saved.",
+    "noTax": "No tax",
+    "receiptAttached": "Receipt attached",
+    "attachAReceipt": "Attach a receipt",
+    "tapToReplace": "Tap to replace",
+    "receiptHint": "Photo or scan of the bill",
+    "recordExpense": "Record expense",
+    "inputTaxRate": "Input tax ({{rate}})",
+    "totalPaid": "Total paid",
+    "expenseUpdated": "Expense updated",
+    "expenseRecorded": "Expense recorded"
   },
   "expense": {
     "billable": "Billable",
@@ -62,6 +75,51 @@
     "amount": "Amount",
     "total": "Total",
     "supplier": "Supplier",
-    "attachments": "Attachments"
+    "attachments": "Attachments",
+    "uncategorised": "Uncategorised",
+    "otherCategory": "Other",
+    "entries_one": "{{count}} entry",
+    "entries_other": "{{count}} entries",
+    "entriesWithTax_one": "{{count}} entry · tax {{tax}}",
+    "entriesWithTax_other": "{{count}} entries · tax {{tax}}",
+    "emptyFirst": "Record your first expense to track where the money goes.",
+    "emptyFiltered": "Nothing matches this filter.",
+    "nextDue": "Next due",
+    "recorded": "Recorded",
+    "attachmentCount_one": "{{count}} attachment",
+    "attachmentCount_other": "{{count}} attachments"
+  },
+  "recurrence": {
+    "none": "Does not repeat",
+    "weekly": "Every week",
+    "monthly": "Every month",
+    "quarterly": "Every quarter",
+    "yearly": "Every year"
+  },
+  "ocr": {
+    "kindExpense": "Expense receipt",
+    "kindBill": "Supplier bill",
+    "stepCapture": "Capture",
+    "stepCaptureBody": "Photograph the bill or pick one from your gallery.",
+    "stepRead": "Read",
+    "stepReadBody": "Text is read on your phone, and the bill is kept with your books.",
+    "stepExtract": "Extract",
+    "stepExtractBody": "Read the vendor, date, totals, tax and line items.",
+    "stepReview": "Review",
+    "stepReviewBody": "You confirm every field before anything is saved.",
+    "reading": "Reading the bill…",
+    "readingBody": "Extracting vendor, date, totals and line items.",
+    "photoHint": "Lay the bill flat with good light for the best result.",
+    "needsCheck_one": "{{count}} field needs a quick check before saving.",
+    "needsCheck_other": "{{count}} fields need a quick check before saving.",
+    "allConfident": "Everything was read confidently. Review and save.",
+    "confirmed": "Confirmed",
+    "percentSure": "{{percent}}% sure",
+    "colItem": "Item",
+    "colQty": "Qty",
+    "colRate": "Rate",
+    "colSure": "Sure",
+    "createExpense": "Create expense",
+    "createBill": "Create bill"
   }
 }

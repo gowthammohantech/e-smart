@@ -49,8 +49,7 @@ export default function About() {
         <Card variant="flat" style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:about.noteHeading')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 19 }}>
-            Your books live on the server. This device keeps a working copy, so you can carry on offline; changes are
-            queued and sent when you are back online, and the server validates every finalised record before it counts.
+            {tr('settings:about.note')}
           </Text>
         </Card>
       </ScrollView>

@@ -36,16 +36,21 @@ type ReportLink = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
 };
 
-const REPORTS: ReportLink[] = [
-  { key: 'sales-summary', label: 'Sales summary', description: 'By month, customer, item and branch', icon: 'trending-up' },
-  { key: 'purchase-summary', label: 'Purchase summary', description: 'What you bought and from whom', icon: 'cart-outline' },
-  { key: 'expense-summary', label: 'Expense summary', description: 'Spend by category over time', icon: 'receipt-text-outline' },
-  { key: 'receivables', label: 'Receivables', description: 'Who owes you, and for how long', icon: 'clock-alert-outline' },
-  { key: 'payables', label: 'Payables', description: 'Supplier dues and aging', icon: 'file-clock-outline' },
-  { key: 'stock', label: 'Stock report', description: 'On-hand quantity and valuation', icon: 'warehouse' },
-  { key: 'tax-summary', label: 'Tax summary', description: 'Output vs input tax, ready to file', icon: 'percent-outline' },
-  { key: 'payments', label: 'Payments & cash', description: 'Money in and out by method', icon: 'cash-sync' },
-  { key: 'profit', label: 'Profit snapshot', description: 'Revenue less cost and expenses', icon: 'chart-line' },
+/** Each report's route key, its catalogue entry under `reports:report`, and its icon. */
+const REPORTS: {
+  key: string;
+  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'profit';
+  icon: ReportLink['icon'];
+}[] = [
+  { key: 'sales-summary', id: 'salesSummary', icon: 'trending-up' },
+  { key: 'purchase-summary', id: 'purchaseSummary', icon: 'cart-outline' },
+  { key: 'expense-summary', id: 'expenseSummary', icon: 'receipt-text-outline' },
+  { key: 'receivables', id: 'receivables', icon: 'clock-alert-outline' },
+  { key: 'payables', id: 'payables', icon: 'file-clock-outline' },
+  { key: 'stock', id: 'stock', icon: 'warehouse' },
+  { key: 'tax-summary', id: 'taxSummary', icon: 'percent-outline' },
+  { key: 'payments', id: 'payments', icon: 'cash-sync' },
+  { key: 'profit', id: 'profit', icon: 'chart-line' },
 ];
 
 export default function ReportsTab() {
@@ -63,7 +68,12 @@ export default function ReportsTab() {
 
   const canOpen = useCanOpen();
   const full = useModuleSet() === 'full';
-  const reports = REPORTS.filter((r) => canOpen(`/reports/${r.key}`));
+  const reports: ReportLink[] = REPORTS.filter((r) => canOpen(`/reports/${r.key}`)).map((r) => ({
+    key: r.key,
+    icon: r.icon,
+    label: tr(`reports:report.${r.id}.title`),
+    description: tr(`reports:report.${r.id}.description`),
+  }));
   const range = resolveRange('thisFY');
   // Always 'phone' in the native apps, so the desktop layouts below only ever reach a browser.
   const bp = useBreakpoint();
@@ -87,10 +97,10 @@ export default function ReportsTab() {
   }, [profit.byMonth, baseCurrency]);
 
   const snapshot = [
-    { label: 'Gross profit', value: formatMoney(profit.grossProfit) },
-    { label: 'Cost of goods sold', value: formatMoney(profit.costOfGoods) },
-    { label: 'Operating expenses', value: formatMoney(profit.expenses) },
-    { label: 'Stock on hand', value: formatMoney(stock.totalValue) },
+    { label: tr('reports:figure.grossProfit'), value: formatMoney(profit.grossProfit) },
+    { label: tr('reports:figure.costOfGoodsSold'), value: formatMoney(profit.costOfGoods) },
+    { label: tr('reports:figure.operatingExpenses'), value: formatMoney(profit.expenses) },
+    { label: tr('reports:figure.stockOnHand'), value: formatMoney(stock.totalValue) },
   ];
 
   // Three to a row on a desktop, two on a tablet, the last row padded so every card keeps the same width.
@@ -104,7 +114,7 @@ export default function ReportsTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <AppHeader title={tr('reports:hub.title')} subtitle={`Financial year to date · ${baseCurrency}`} />
+      <AppHeader title={tr('reports:hub.title')} subtitle={tr('reports:hub.subtitle', { currency: baseCurrency })} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 40 }}
@@ -121,7 +131,7 @@ export default function ReportsTab() {
               value={profit.netProfit}
               tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
               icon="chart-line"
-              caption={`${formatPercent(profit.margin)} margin`}
+              caption={tr('reports:hub.margin', { percent: formatPercent(profit.margin) })}
             />
           </StatRow>
           <StatRow>
@@ -134,7 +144,7 @@ export default function ReportsTab() {
           // A desktop puts the snapshot beside the chart, both the same height.
           <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: t.spacing.xl }}>
             <View style={{ flex: 2, minWidth: 0 }}>
-              <SectionHeader title={tr('reports:hub.monthlyProfit')} action="Open" onAction={() => router.push('/(app)/reports/profit')} />
+              <SectionHeader title={tr('reports:hub.monthlyProfit')} action={tr('reports:hub.open')} onAction={() => router.push('/(app)/reports/profit')} />
               <Card style={{ flex: 1 }}>
                 <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />
               </Card>
@@ -167,7 +177,7 @@ export default function ReportsTab() {
           </View>
         ) : (
           <>
-        <SectionHeader title={tr('reports:hub.monthlyProfit')} action="Open" onAction={() => router.push('/(app)/reports/profit')} />
+        <SectionHeader title={tr('reports:hub.monthlyProfit')} action={tr('reports:hub.open')} onAction={() => router.push('/(app)/reports/profit')} />
         <Card>
           <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />
         </Card>

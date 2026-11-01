@@ -24,7 +24,7 @@ import { validPhoneParts } from '@esmart/core/lib/phone';
 
 export default function BusinessStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['errors', 'onboarding']);
+  const { t: tr } = useTranslation(['errors', 'onboarding', 'common']);
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
   const desktop = useIsDesktop();
@@ -51,8 +51,8 @@ export default function BusinessStep() {
   const next = () => {
     const nextErrors: Errors<'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode'> = {
       name: required(draft.name, tr('errors:field.businessName')),
-      city: required(draft.address.city, 'City'),
-      state: required(draft.address.state, 'State'),
+      city: required(draft.address.city, tr('onboarding:business.city')),
+      state: required(draft.address.state, tr('onboarding:business.state')),
       email: validEmail(draft.email),
       phone: validPhoneParts(draft.phoneDialCode, draft.phone),
       postalCode: validPostalCode(draft.address.postalCode, draft.address.country, draft.address.stateCode),
@@ -90,7 +90,7 @@ export default function BusinessStep() {
           }}
         >
           {draft.logoUri ? (
-            <CompanyLogo uri={draft.logoUri} name={draft.name || 'Business'} size={84} />
+            <CompanyLogo uri={draft.logoUri} name={draft.name || tr('common:component.business')} size={84} />
           ) : (
             <MaterialCommunityIcons name="image-plus" size={26} color={t.c.muted} />
           )}

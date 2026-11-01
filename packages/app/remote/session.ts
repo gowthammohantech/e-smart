@@ -4,6 +4,7 @@ import type { Schema } from '@esmart/api-client';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { emptyData, useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
+import { RemoteError } from './errors';
 import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
 import { useReceiptQueue } from './receiptQueue';
@@ -21,7 +22,7 @@ const device = () => ({ label: Platform.OS === 'web' ? 'Web browser' : `${Platfo
  * the first screen the router shows already has data.
  */
 async function begin(auth: AuthSession, preferCompanyId?: string) {
-  if (!auth.accessToken || !auth.refreshToken || !auth.user?.id) throw new Error('The server returned an incomplete session');
+  if (!auth.accessToken || !auth.refreshToken || !auth.user?.id) throw new RemoteError('incompleteSession', 'The server returned an incomplete session');
   await setTokens({ accessToken: auth.accessToken, refreshToken: auth.refreshToken });
   useRemoteMeta.getState().reset();
   useAppStore.setState({ ...emptyData(), activeCompanyId: '', activeBranchId: '' });

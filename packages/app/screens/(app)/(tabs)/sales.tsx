@@ -23,12 +23,13 @@ import {
 } from '../../../store/selectors';
 import { money, sum } from '@esmart/core/lib/money';
 import { inRange, resolveRange } from '@esmart/core/lib/date';
+import { documentKindLabel } from '@esmart/core/labels';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function SalesTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales']);
+  const { t: tr } = useTranslation(['sales', 'common', 'domain', 'reports']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -75,15 +76,15 @@ export default function SalesTab() {
       });
     return Array.from(map.entries())
       .map(([id, minor]) => ({
-        label: customers.find((c) => c.id === id)?.name ?? 'Unknown',
+        label: customers.find((c) => c.id === id)?.name ?? tr('common:placeholder.unknown'),
         value: money(minor, baseCurrency),
       }))
       .sort((a, b) => b.value.minor - a.value.minor)
       .slice(0, 5);
-  }, [invoices, customers, baseCurrency]);
+  }, [invoices, customers, baseCurrency, tr]);
 
   const recent = invoices.filter((d) => d.status !== 'cancelled').slice(0, 6);
-  const nameOf = (id: string) => customers.find((c) => c.id === id)?.name ?? 'Unknown';
+  const nameOf = (id: string) => customers.find((c) => c.id === id)?.name ?? tr('common:placeholder.unknown');
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -115,7 +116,7 @@ export default function SalesTab() {
               value={receivables.summary.total}
               tone="warn"
               icon="clock-alert-outline"
-              caption={`${receivables.outstanding.length} open invoices`}
+              caption={tr('sales:hub.openInvoices', { count: receivables.outstanding.length })}
               onPress={() => router.push('/(app)/receivables')}
             />
             <StatTile
@@ -123,7 +124,7 @@ export default function SalesTab() {
               value={receivables.summary.overdue}
               tone="bad"
               icon="alert-circle-outline"
-              caption={`${receivables.outstanding.filter((o) => o.daysOverdue > 0).length} invoices`}
+              caption={tr('sales:hub.invoiceCount', { count: receivables.outstanding.filter((o) => o.daysOverdue > 0).length })}
               onPress={() => router.push('/(app)/receivables')}
             />
           </StatRow>
@@ -132,22 +133,22 @@ export default function SalesTab() {
         <SectionHeader title={tr('sales:hub.documents')} />
         <HubTiles
           tiles={[
-            { key: 'invoices', label: 'Invoices', icon: 'file-document-outline', route: '/(app)/sales/invoices', count: invoices.length },
-            { key: 'quotes', label: 'Quotations', icon: 'file-percent-outline', route: '/(app)/sales/quotes', count: quotes.length },
-            { key: 'orders', label: 'Sales orders', icon: 'clipboard-list-outline', route: '/(app)/sales/orders', count: orders.length },
-            { key: 'deliveries', label: 'Delivery notes', icon: 'truck-outline', route: '/(app)/sales/deliveries', count: deliveries.length },
-            { key: 'returns', label: 'Sales returns', icon: 'keyboard-return', route: '/(app)/sales/returns', count: returns.length },
-            { key: 'payments', label: 'Payments in', icon: 'cash-plus', route: '/(app)/payments/received', count: payments.length },
-            { key: 'compliance', label: 'E-invoices', icon: 'shield-check-outline', route: '/(app)/compliance', count: compliance.eInvoice.generated },
+            { key: 'invoices', label: documentKindLabel(tr, 'invoice', 2), icon: 'file-document-outline', route: '/(app)/sales/invoices', count: invoices.length },
+            { key: 'quotes', label: documentKindLabel(tr, 'quote', 2), icon: 'file-percent-outline', route: '/(app)/sales/quotes', count: quotes.length },
+            { key: 'orders', label: documentKindLabel(tr, 'salesOrder', 2), icon: 'clipboard-list-outline', route: '/(app)/sales/orders', count: orders.length },
+            { key: 'deliveries', label: documentKindLabel(tr, 'delivery', 2), icon: 'truck-outline', route: '/(app)/sales/deliveries', count: deliveries.length },
+            { key: 'returns', label: documentKindLabel(tr, 'salesReturn', 2), icon: 'keyboard-return', route: '/(app)/sales/returns', count: returns.length },
+            { key: 'payments', label: tr('sales:hub.paymentsIn'), icon: 'cash-plus', route: '/(app)/payments/received', count: payments.length },
+            { key: 'compliance', label: tr('reports:home.eInvoices'), icon: 'shield-check-outline', route: '/(app)/compliance', count: compliance.eInvoice.generated },
           ]}
         />
 
-        <SectionHeader title={tr('sales:hub.topCustomers')} action="Contacts" onAction={() => router.push('/(app)/(tabs)/contacts')} />
+        <SectionHeader title={tr('sales:hub.topCustomers')} action={tr('sales:hub.contacts')} onAction={() => router.push('/(app)/(tabs)/contacts')} />
         <Card>
-          <RankedBars rows={topCustomers} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel="No sales recorded yet" />
+          <RankedBars rows={topCustomers} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel={tr('sales:hub.noSales')} />
         </Card>
 
-        <SectionHeader title={tr('sales:hub.recentInvoices')} action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
+        <SectionHeader title={tr('sales:hub.recentInvoices')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/sales/invoices')} />
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState

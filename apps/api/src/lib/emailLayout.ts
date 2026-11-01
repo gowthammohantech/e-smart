@@ -38,7 +38,7 @@ export function renderDocumentEmailHtml(e: DocumentEmail): string {
   const name = escapeHtml(e.businessName);
   return `<!doctype html>
 <html>
-  <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1f23;">
+  <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,'Noto Sans Tamil','Tamil Sangam MN',sans-serif;color:#1c1f23;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
       <tr>
         <td align="center">
@@ -73,7 +73,7 @@ export function renderEmailHtml(e: EmailLayout): string {
   // Inline styles and a table layout: email clients ignore most of the rest.
   return `<!doctype html>
 <html>
-  <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1f23;">
+  <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,'Noto Sans Tamil','Tamil Sangam MN',sans-serif;color:#1c1f23;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
       <tr>
         <td align="center">

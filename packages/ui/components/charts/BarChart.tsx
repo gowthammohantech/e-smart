@@ -109,7 +109,7 @@ export function RankedBars({
   rows,
   max,
   colorFor,
-  emptyLabel = 'Nothing to show yet',
+  emptyLabel,
 }: {
   rows: { label: string; value: Money; sublabel?: string }[];
   max?: number;
@@ -117,10 +117,11 @@ export function RankedBars({
   emptyLabel?: string;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   if (rows.length === 0) {
     return (
       <Text variant="small" tone="muted">
-        {emptyLabel}
+        {emptyLabel ?? tr('common:component.nothingToShow')}
       </Text>
     );
   }

@@ -27,19 +27,20 @@ import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const ROLES: { value: UserRole; label: string; description: string }[] = [
-  { value: 'owner', label: 'Owner', description: 'Full access, including billing and deleting the business.' },
-  { value: 'admin', label: 'Admin', description: 'Everything except billing and deleting the business.' },
-  { value: 'accountant', label: 'Accountant', description: 'Invoices, bills, payments, expenses and reports.' },
-  { value: 'sales', label: 'Sales', description: 'Quotes, invoices, customers and payments received.' },
-  { value: 'viewer', label: 'Viewer', description: 'Read-only access to documents and reports.' },
-];
+const ROLE_KEYS = [
+  { value: 'owner', label: 'auth:invite.roles.owner', description: 'settings:users.roleHint.owner' },
+  { value: 'admin', label: 'auth:invite.roles.admin', description: 'settings:users.roleHint.admin' },
+  { value: 'accountant', label: 'auth:invite.roles.accountant', description: 'settings:users.roleHint.accountant' },
+  { value: 'sales', label: 'auth:invite.roles.sales', description: 'settings:users.roleHint.sales' },
+  { value: 'viewer', label: 'auth:invite.roles.viewer', description: 'settings:users.roleHint.viewer' },
+] as const satisfies readonly { value: UserRole; label: string; description: string }[];
 
 export default function UserSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'common']);
   const toast = useToast();
+  const ROLES = ROLE_KEYS.map((r) => ({ value: r.value as UserRole, label: tr(r.label), description: tr(r.description) }));
   const router = useRouter();
 
   const company = useActiveCompany();
@@ -87,13 +88,13 @@ export default function UserSettings() {
   const isGuest = !!editing?.id && !!editing.accountId && editing.accountId !== currentUser.accountId;
 
   const save = () => {
-    const next: Errors<'name' | 'email'> = { name: required(name, 'Name'), email: required(email, 'Email') ?? validEmail(email) };
+    const next: Errors<'name' | 'email'> = { name: required(name, tr('settings:users.name')), email: required(email, tr('settings:users.email')) ?? validEmail(email) };
     setErrors(next);
     if (hasErrors(next) || !editing) return;
 
     if (editing.id) {
       saveUser({ ...editing, name: name.trim(), role });
-      toast.show('User updated', 'success');
+      toast.show(tr('settings:users.updated'), 'success');
       setEditing(null);
       return;
     }
@@ -105,7 +106,7 @@ export default function UserSettings() {
     remoteUsers
       .inviteUser({ name, email, role, companyIds: [company.id] })
       .then(() => {
-        toast.show('Invitation sent', 'success');
+        toast.show(tr('settings:users.inviteSent'), 'success');
         setEditing(null);
       })
       .catch((err: unknown) => setServerError(describeError(err, tr)))
@@ -119,7 +120,7 @@ export default function UserSettings() {
     remoteUsers
       .resendInvite(editing.id)
       .then(() => {
-        toast.show('Invitation sent again', 'success');
+        toast.show(tr('settings:users.inviteResent'), 'success');
         setEditing(null);
       })
       .catch((err: unknown) => setServerError(describeError(err, tr)))
@@ -137,7 +138,7 @@ export default function UserSettings() {
               key={u.id}
               title={u.name}
               subtitle={u.email}
-              meta={u.lastActiveAt ? `Last active ${formatRelative(u.lastActiveAt.slice(0, 10))}` : u.status === 'invited' ? 'Invitation pending' : undefined}
+              meta={u.lastActiveAt ? tr('settings:users.lastActive', { when: formatRelative(u.lastActiveAt.slice(0, 10)) }) : u.status === 'invited' ? tr('settings:users.invitePending') : undefined}
               left={<Avatar name={u.name} size={40} color={u.avatarColor} />}
               divider={i < users.length - 1}
               right={
@@ -172,7 +173,7 @@ export default function UserSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit user' : 'Invite someone'}
+        title={editing?.id ? tr('settings:users.editTitle') : tr('settings:users.invite')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id && editing.role !== 'owner' ? (
@@ -188,9 +189,9 @@ export default function UserSettings() {
               />
             ) : null}
             {editing?.id && editing.status === 'invited' ? (
-              <Button title="Resend invite" variant="secondary" loading={busy} onPress={resend} style={{ flex: 2 }} />
+              <Button title={tr('settings:users.resend')} variant="secondary" loading={busy} onPress={resend} style={{ flex: 2 }} />
             ) : null}
-            {isGuest ? null : <Button title={editing?.id ? 'Save' : 'Send invitation'} onPress={save} loading={busy} style={{ flex: 2 }} />}
+            {isGuest ? null : <Button title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={{ flex: 2 }} />}
           </View>
         }
       >
@@ -216,7 +217,7 @@ export default function UserSettings() {
           />
           {isGuest ? (
             <Text variant="small" tone="muted">
-              This person has their own Elixir Books account. To change their access, remove them and invite them again.
+              {tr('settings:users.guestNote')}
             </Text>
           ) : null}
           {serverError ? (
@@ -251,7 +252,7 @@ export default function UserSettings() {
 
       <ConfirmDialog
         visible={!!confirmRemove}
-        title={`Remove ${confirmRemove?.name}?`}
+        title={tr('settings:users.removeTitle', { name: confirmRemove?.name })}
         message={tr('settings:users.removeMessage')}
         confirmLabel={tr('settings:users.remove')}
         destructive

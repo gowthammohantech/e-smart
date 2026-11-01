@@ -73,15 +73,15 @@ export default function BackupExport() {
 
   const counts = useMemo(
     () => [
-      { label: 'Customers & suppliers', value: parties.length, icon: 'account-group-outline' as const },
-      { label: 'Items', value: items.length, icon: 'tag-outline' as const },
-      { label: 'Documents', value: documents.length, icon: 'file-document-outline' as const },
-      { label: 'Payments', value: payments.length, icon: 'cash' as const },
-      { label: 'Expenses', value: expenses.length, icon: 'receipt-text-outline' as const },
-      { label: 'Stock movements', value: movements.length, icon: 'swap-vertical' as const },
-      { label: 'Audit events', value: audit.length, icon: 'history' as const },
+      { label: tr('settings:backup.count.parties'), value: parties.length, icon: 'account-group-outline' as const },
+      { label: tr('settings:backup.count.items'), value: items.length, icon: 'tag-outline' as const },
+      { label: tr('settings:backup.count.documents'), value: documents.length, icon: 'file-document-outline' as const },
+      { label: tr('settings:backup.count.payments'), value: payments.length, icon: 'cash' as const },
+      { label: tr('nav:title.expenses'), value: expenses.length, icon: 'receipt-text-outline' as const },
+      { label: tr('nav:title.stockMovements'), value: movements.length, icon: 'swap-vertical' as const },
+      { label: tr('settings:backup.count.auditEvents'), value: audit.length, icon: 'history' as const },
     ],
-    [parties, items, documents, payments, expenses, movements, audit],
+    [parties, items, documents, payments, expenses, movements, audit, tr],
   );
 
   /** The server builds the package (every record of this business) and hands back a signed download link. */
@@ -112,13 +112,12 @@ export default function BackupExport() {
             </Text>
           </View>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            The export covers this business only. Your other {companies.length - 1 === 1 ? 'business' : 'businesses'} stay
-            out of the package, so you can hand an auditor exactly one set of books.
+            {tr('settings:backup.scopeNote', { count: companies.length - 1 })}
           </Text>
         </Card>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
-          What&apos;s included
+          {tr('settings:backup.included')}
         </Text>
         <Card padded={false}>
           {counts.map((c, i) => (
@@ -152,7 +151,7 @@ export default function BackupExport() {
           {backup ? <SwitchField label={tr('settings:backup.automaticSwitch')} value={!!backup.automatic} onValueChange={toggleAutomatic} /> : null}
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {backup?.lastBackupAt ? tr('settings:backup.lastBackup', { when: formatDateTime(backup.lastBackupAt) }) : tr('settings:backup.noBackupYet')}{' '}
-            Financial records subject to statutory retention are kept even if you remove them from this device.
+            {tr('settings:backup.retentionNote')}
           </Text>
         </Card>
       </ScrollView>

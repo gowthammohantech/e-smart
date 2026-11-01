@@ -91,10 +91,13 @@ export function toCsv(table: ReportTable): string {
 }
 
 /** The report as a printable page: title, the basis line, and the table. */
-export function tableHtml(title: string, basis: string, table: ReportTable): string {
+export function tableHtml(title: string, basis: string, table: ReportTable, language = 'en'): string {
   const num = (v: string | number) => typeof v === 'number';
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; margin: 24px; font-size: 11px; }
+  // The Tamil faces follow the Latin ones, as on the invoice, and Tamil gets
+  // the extra leading its vowel signs need.
+  return `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><style>
+    body { font-family: -apple-system, 'Segoe UI', Roboto, "Noto Sans Tamil", "Tamil Sangam MN", Latha, sans-serif; color: #1a1a1a; margin: 24px; font-size: 11px; }
+    html[lang="ta"] body { line-height: 1.62; }
     h1 { font-size: 18px; margin: 0 0 4px; }
     p { color: #666; margin: 0 0 16px; }
     table { width: 100%; border-collapse: collapse; }
@@ -108,5 +111,10 @@ export function tableHtml(title: string, basis: string, table: ReportTable): str
   </body></html>`;
 }
 
-/** `GSTR-1` → `GSTR-1_2026-09-01_2026-09-30`, safe as a file name. */
-export const exportName = (title: string, from: string, to: string) => `${title.replace(/[^\w-]+/g, '_')}_${from}_${to}`;
+/**
+ * `GSTR-1` → `GSTR-1_2026-09-01_2026-09-30`, safe as a file name. Letters in
+ * any script (with their vowel signs) are kept, so a Tamil title still names
+ * the file instead of collapsing to underscores.
+ */
+export const exportName = (title: string, from: string, to: string) =>
+  `${title.replace(/[^\p{L}\p{M}\p{N}_-]+/gu, '_')}_${from}_${to}`;

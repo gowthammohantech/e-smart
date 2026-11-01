@@ -47,7 +47,7 @@ export function ReportShell({
   exportRows?: () => ReportTable;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'reports']);
+  const { t: tr, i18n } = useTranslation(['common', 'reports']);
   const toast = useToast();
   const insets = useSafeAreaInsets();
   // Always false in the native apps, so the desktop header action only ever reaches a browser.
@@ -71,8 +71,14 @@ export function ReportShell({
   const setPreset = (preset: DateRangePreset) =>
     onScopeChange({ preset, filters: { ...scope.filters, range: resolveRange(preset) } });
 
-  const basisLine = () =>
-    `${company?.name ?? ''} · ${formatDate(scope.filters.range.from)} to ${formatDate(scope.filters.range.to)} · ${branch?.name ?? 'all branches'} · ${company?.baseCurrency ?? ''}`;
+  const basisParams = {
+    company: company?.name ?? '',
+    from: formatDate(scope.filters.range.from),
+    to: formatDate(scope.filters.range.to),
+    branch: branch?.name ?? tr('reports:shell.allBranches'),
+    currency: company?.baseCurrency ?? '',
+  };
+  const basisLine = () => tr('reports:shell.basisLine', basisParams);
 
   const doExport = async (format: 'pdf' | 'xlsx' | 'csv') => {
     if (!exportRows) return;
@@ -80,9 +86,9 @@ export function ReportShell({
     const table = exportRows();
     const name = exportName(title, scope.filters.range.from, scope.filters.range.to);
     try {
-      if (format === 'pdf') await deliverPdf(`${name}.pdf`, tableHtml(title, basisLine(), table));
+      if (format === 'pdf') await deliverPdf(`${name}.pdf`, tableHtml(title, basisLine(), table, i18n.language));
       else if (format === 'xlsx') await deliverFile(`${name}.xlsx`, xlsxBytes(title, table), XLSX_MIME);
-      else await Share.share({ message: toCsv(table), title: `${title} export` });
+      else await Share.share({ message: toCsv(table), title: tr('reports:shell.exportTitle', { title }) });
     } catch {
       toast.show(tr('reports:shell.exportCancelled'), 'error');
     }
@@ -115,7 +121,7 @@ export function ReportShell({
         {label}
       </Text>
       {active && onClear ? (
-        <Pressable onPress={onClear} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Clear ${label}`}>
+        <Pressable onPress={onClear} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('reports:shell.clearFilter', { label })}>
           <MaterialCommunityIcons name="close-circle" size={13} color={t.c.primary} />
         </Pressable>
       ) : (
@@ -147,12 +153,12 @@ export function ReportShell({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
           {chip(rangeLabel, true, () => setFilterOpen(true))}
           {branches.length > 1
-            ? chip(branch?.name ?? 'All branches', !!branch, () => setBranchOpen(true), () =>
+            ? chip(branch?.name ?? tr('common:component.allBranches'), !!branch, () => setBranchOpen(true), () =>
                 onScopeChange({ ...scope, filters: { ...scope.filters, branchId: null } }),
               )
             : null}
           {showPartyFilter
-            ? chip(party?.name ?? 'All contacts', !!party, () => setPartyOpen(true), () =>
+            ? chip(party?.name ?? tr('reports:shell.allContacts'), !!party, () => setPartyOpen(true), () =>
                 onScopeChange({ ...scope, filters: { ...scope.filters, partyId: null } }),
               )
             : null}
@@ -167,9 +173,7 @@ export function ReportShell({
         <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: 4 }}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            {company?.name} · {formatDate(scope.filters.range.from)} to {formatDate(scope.filters.range.to)} ·{' '}
-            {branch?.name ?? 'all branches'} · presented in {company?.baseCurrency}, foreign-currency documents converted at
-            the rate stored on each document.
+            {tr('reports:shell.basisFull', basisParams)}
           </Text>
           {subtitle ? (
             <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
@@ -253,7 +257,7 @@ export function ReportShell({
         onClose={() => setBranchOpen(false)}
         title={tr('reports:shell.branch')}
         options={[
-          { value: '', label: 'All branches' },
+          { value: '', label: tr('common:component.allBranches') },
           ...branches.map((b) => ({ value: b.id, label: b.name, description: b.code })),
         ]}
         value={scope.filters.branchId ?? ''}
@@ -266,8 +270,8 @@ export function ReportShell({
         onClose={() => setPartyOpen(false)}
         title={tr('reports:shell.contact')}
         options={[
-          { value: '', label: 'All contacts' },
-          ...parties.map((p) => ({ value: p.id, label: p.name, description: p.kind })),
+          { value: '', label: tr('reports:shell.allContacts') },
+          ...parties.map((p) => ({ value: p.id, label: p.name, description: tr(`common:table.${p.kind}`) })),
         ]}
         value={scope.filters.partyId ?? ''}
         onSelect={(v) => onScopeChange({ ...scope, filters: { ...scope.filters, partyId: v || null } })}

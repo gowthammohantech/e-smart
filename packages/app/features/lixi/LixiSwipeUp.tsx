@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, PanResponder, Platform, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -19,6 +20,7 @@ const ORB = 52;
  */
 export function LixiSwipeUp({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['lixi']);
   const [lift] = useState(() => new Animated.Value(0));
   const [armed, setArmed] = useState(false);
 
@@ -79,7 +81,7 @@ export function LixiSwipeUp({ enabled, children }: { enabled: boolean; children:
         <LixiOrb size={ORB} thinking={armed} />
         <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: t.c.card }}>
           <Text variant="caption" weight="700" style={{ color: armed ? t.c.primary : t.c.muted }}>
-            {armed ? 'Let go to ask Lixi' : 'Keep pulling'}
+            {armed ? tr('lixi:ui.letGo') : tr('lixi:ui.keepPulling')}
           </Text>
         </View>
       </Animated.View>

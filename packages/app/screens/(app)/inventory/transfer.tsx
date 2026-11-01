@@ -115,8 +115,8 @@ export default function StockTransfer() {
           placeholder="0"
           keyboardType="decimal-pad"
           icon="counter"
-          error={exceeds ? `Only ${formatQty(available)} ${item?.unit ?? ''} available at the source branch` : undefined}
-          hint={item ? `${formatQty(available)} ${item.unit} available` : undefined}
+          error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit: item?.unit ?? '' }) : undefined}
+          hint={item ? tr('inventory:transfer.available', { qty: formatQty(available), unit: item.unit }) : undefined}
           required
         />
 
@@ -126,8 +126,7 @@ export default function StockTransfer() {
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             <Text variant="caption" tone="muted">
-              Transfers post two movements — one out of the source branch and one into the destination — so total stock stays
-              unchanged.
+              {tr('inventory:transfer.twoMovesNote')}
             </Text>
           </Card>
         ) : null}

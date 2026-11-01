@@ -63,7 +63,7 @@ export function DateField({
       <Pressable
         onPress={openPicker}
         accessibilityRole="button"
-        accessibilityLabel={`${label ?? 'Date'}: ${value ? formatDate(value) : 'not set'}`}
+        accessibilityLabel={`${label ?? tr('common:component.date')}: ${value ? formatDate(value) : tr('common:component.notSet')}`}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -79,7 +79,7 @@ export function DateField({
       >
         <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
         <Text style={{ flex: 1 }} tone={value ? 'default' : 'muted'}>
-          {value ? formatDate(value) : 'Select date'}
+          {value ? formatDate(value) : tr('common:component.selectDate')}
         </Text>
         <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} />
       </Pressable>
@@ -90,7 +90,7 @@ export function DateField({
         <Sheet
           visible={open}
           onClose={() => setOpen(false)}
-          title={label ?? 'Select date'}
+          title={label ?? tr('common:component.selectDate')}
           scroll={false}
           footer={
             <Button

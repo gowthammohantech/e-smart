@@ -21,7 +21,7 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 export default function EInvoicingSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['compliance', 'nav', 'auth']);
+  const { t: tr } = useTranslation(['compliance', 'nav', 'auth', 'settings']);
   const router = useRouter();
   const toast = useToast();
   // Always false in the native apps, so the desktop header action only ever reaches a browser.
@@ -180,7 +180,7 @@ export default function EInvoicingSettings() {
           value={String(draft.reportingWindowDays)}
           onChangeText={(v) => patch({ reportingWindowDays: Number(v) || 0 })}
           keyboardType="number-pad"
-          suffix="days"
+          suffix={tr('settings:eInvoicing.daysSuffix')}
           hint={tr('compliance:settings.windowHint')}
         />
 
@@ -275,17 +275,17 @@ export default function EInvoicingSettings() {
           value={String(draft.defaultDistanceKm)}
           onChangeText={(v) => patch({ defaultDistanceKm: Number(v) || 0 })}
           keyboardType="number-pad"
-          suffix="km"
+          suffix={tr('compliance:ewb.km')}
         />
 
         <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.defaultMode')}</Text>
           <Segmented
             options={[
-              { value: 'road', label: 'Road' },
-              { value: 'rail', label: 'Rail' },
-              { value: 'air', label: 'Air' },
-              { value: 'ship', label: 'Ship' },
+              { value: 'road', label: tr('compliance:mode.road') },
+              { value: 'rail', label: tr('compliance:mode.rail') },
+              { value: 'air', label: tr('compliance:mode.air') },
+              { value: 'ship', label: tr('compliance:mode.ship') },
             ]}
             value={draft.defaultTransportMode}
             onChange={(v: TransportMode) => patch({ defaultTransportMode: v })}
@@ -296,8 +296,8 @@ export default function EInvoicingSettings() {
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.defaultCargo')}</Text>
           <Segmented
             options={[
-              { value: 'regular', label: 'Regular' },
-              { value: 'overDimensional', label: 'Over-dimensional' },
+              { value: 'regular', label: tr('compliance:cargo.regular') },
+              { value: 'overDimensional', label: tr('compliance:cargo.overDimensional') },
             ]}
             value={draft.defaultVehicleType}
             onChange={(v: VehicleType) => patch({ defaultVehicleType: v })}

@@ -193,7 +193,14 @@
     "actionFailed": "That didn't go through: {{reason}}",
     "actionExpired": "That expired. Ask me again and I'll prepare it afresh.",
     "unavailable": "I can't reach the server right now, so I can't read your books. Check your connection and try again.",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "letGo": "Let go to ask Lixi",
+    "mute": "Mute Lixi",
+    "unmute": "Unmute Lixi",
+    "keepPulling": "Keep pulling",
+    "askWithNudge_one": "Ask Lixi, {{count}} thing to look at",
+    "askWithNudge_other": "Ask Lixi, {{count}} things to look at",
+    "dragHint": "Drag to move it"
   },
   "hint": {
     "swipeTabs": "Swipe left or right to switch tabs",

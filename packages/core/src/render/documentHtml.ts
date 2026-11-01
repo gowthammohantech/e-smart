@@ -132,7 +132,7 @@ export function buildDocumentHtml({
     .join('');
 
   return `<!DOCTYPE html>
-<html>
+<html lang="${language}">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -194,6 +194,9 @@ export function buildDocumentHtml({
   .alt { display: block; font-size: 8px; font-weight: 400; letter-spacing: 0.3px; opacity: 0.66; text-transform: none; }
   /* Tamil marks sit above and below the line and clip at the Latin leading. */
   body.ta { line-height: 1.62; }
+  /* Tracking pulls Tamil vowel signs away from their letters; the Latin
+     .alt line under each label keeps its own. */
+  body.ta .brand, body.ta .doc-title, body.ta .cap, body.ta thead th, body.ta .cancelled-strip { letter-spacing: 0; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; line-height: 1.5; word-break: break-all; letter-spacing: 0.2px; }
   .cancelled-strip { margin-bottom: 14px; padding: 8px 12px; border-radius: 5px; background: rgba(255,59,48,0.10); color: #C62F26; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; }
 </style>

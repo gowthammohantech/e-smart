@@ -1,4 +1,5 @@
 import { ApiError } from '@esmart/api-client';
+import i18n from '@esmart/i18n';
 import type { CancelReasonCode, ComplianceIssue, EwayBillPartBUpdate } from '@esmart/core/types';
 import { useAppStore, type ComplianceResult, type ExtendEwayBillInput, type NewEwayBillInput } from '../store/appStore';
 import { api, isNetworkError } from './api';
@@ -11,10 +12,10 @@ import { syncNow } from './sync';
  * the outbox, and report "needs a connection" when there is none. The screen
  * gets a ComplianceResult either way.
  */
-const OFFLINE: ComplianceResult = {
+const offline = (): ComplianceResult => ({
   ok: false,
-  issues: [{ code: 'OFFLINE', message: 'Connect to the internet to reach the GST portal, then try again.', severity: 'blocking' } as ComplianceIssue],
-};
+  issues: [{ code: 'OFFLINE', message: i18n.t('errors:remote.portalOffline'), severity: 'blocking' } as ComplianceIssue],
+});
 
 async function call<T>(run: () => Promise<{ data?: T }>, after?: (data: T) => void): Promise<ComplianceResult & { data?: T }> {
   try {
@@ -25,7 +26,7 @@ async function call<T>(run: () => Promise<{ data?: T }>, after?: (data: T) => vo
     const r = (data ?? {}) as { ok?: boolean; issues?: ComplianceIssue[] };
     return { ok: r.ok ?? true, issues: r.issues ?? [], data };
   } catch (err) {
-    if (isNetworkError(err)) return OFFLINE;
+    if (isNetworkError(err)) return offline();
     if (err instanceof ApiError) {
       return { ok: false, issues: (err.problem.issues as ComplianceIssue[] | undefined) ?? [{ code: err.code, message: err.message, severity: 'blocking' } as ComplianceIssue] };
     }

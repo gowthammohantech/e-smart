@@ -8,7 +8,24 @@
     "nothingHere": "Nothing here",
     "noEwayBills": "No e-way bills",
     "switchedOff": "E-invoicing is switched off for this business. Turn it on under Settings to report invoices.",
-    "settings": "Settings"
+    "settings": "Settings",
+    "eInvoices": "E-invoices",
+    "ewayBills": "E-way bills",
+    "cancelledCount_one": "{{count}} cancelled",
+    "cancelledCount_other": "{{count}} cancelled",
+    "rejectedCount_one": "{{count}} rejected",
+    "rejectedCount_other": "{{count}} rejected",
+    "unbilled_one": "{{count}} consignment unbilled",
+    "unbilled_other": "{{count}} consignments unbilled",
+    "expiringBanner_one": "{{count}} e-way bill expires within 24 hours.",
+    "expiringBanner_other": "{{count}} e-way bills expire within 24 hours.",
+    "searchEInvoice": "Invoice, party or IRN",
+    "searchEway": "Bill number, document or party",
+    "noInvoiceMatch": "No invoice matches that search.",
+    "eInvoiceEmpty": "Invoices become reportable once they are finalised for a registered buyer.",
+    "noBillMatch": "No bill matches that search.",
+    "ewayEmptyHasDocs": "Raise one from an invoice or delivery note that moves goods above the threshold.",
+    "ewayEmpty": "Bills appear here once goods start moving."
   },
   "ewb": {
     "supply": "Supply",
@@ -72,7 +89,36 @@
     "place": "Place",
     "state": "State",
     "chooseState": "Choose a state",
-    "generated": "E-way bill generated"
+    "generated": "E-way bill generated",
+    "a11yBill": "E-way bill {{number}}",
+    "cancelledOn": "Cancelled {{date}}",
+    "validUntilDate": "Valid until {{date}}",
+    "raiseNew": "Raise a new e-way bill",
+    "raiseFailed": "The bill could not be raised",
+    "transporterIdHint": "15-character GSTIN or TRANSIN",
+    "km": "km",
+    "distanceValue": "{{distance}} km",
+    "validityPreview_one": "{{count}} day · valid to {{date}}",
+    "validityPreview_other": "{{count}} days · valid to {{date}}",
+    "ruleOdc": "Over-dimensional cargo gets one day per 20 km, or part thereof.",
+    "ruleRegular": "One day per 200 km, or part thereof.",
+    "midnight": "Validity always runs to midnight.",
+    "despatchState": "Despatch state",
+    "deliveryState": "Delivery state",
+    "midnightRule": "{{phrase}} · midnight expiry, per rule 138(10)",
+    "cancelledAt": "Cancelled on {{date}}",
+    "extensionWindow": "{{reason}} — the window runs from {{from}} to {{to}}.",
+    "historyExtended": "Extended · {{reason}}",
+    "historyLeft": "{{distance}} km left from {{place}}",
+    "historyValidTo": "now valid to {{date}}",
+    "partBFailed": "Part-B could not be updated",
+    "extendFailed": "The bill could not be extended",
+    "cancelFailed": "The bill could not be cancelled",
+    "partBIntro": "Part-B records each leg of the journey. Add an entry whenever the vehicle changes — a breakdown, a transhipment, or a fresh carrier.",
+    "extendIntro": "The new validity is worked out from the distance still to cover, not the original journey, and counted from now.",
+    "inMovement": "In movement",
+    "inTransit": "In transit",
+    "cancelIntro": "A bill can be cancelled within 24 hours of being raised, and only if it has not already been verified in transit. This one can be cancelled until {{deadline}}."
   },
   "einv": {
     "cancelIrn": "Cancel the IRN",
@@ -98,12 +144,65 @@
     "cancelIrnShort": "Cancel IRN",
     "compliance": "Compliance",
     "eInvoice": "E-invoice",
-    "ewayBill": "E-way bill"
+    "ewayBill": "E-way bill",
+    "cancelledOnPortal": "This IRN was cancelled on the portal.",
+    "onDate": "on {{date}}",
+    "cancellableUntil": "Cancellable until {{date}}, {{time}}",
+    "refused": "The portal refused the invoice",
+    "cancelFailed": "The IRN could not be cancelled",
+    "cancelWarning": "Cancelling withdraws the reported invoice from the portal. It cannot be undone, and the document number cannot be used again this financial year — raise a fresh invoice instead.",
+    "remarkRequired": "Say what happened",
+    "optional": "Optional",
+    "generateTitle": "Generate the e-invoice",
+    "fixProblems_one": "Fix {{count}} problem before reporting.",
+    "fixProblems_other": "Fix {{count}} problems before reporting.",
+    "notReportable": "Not reportable",
+    "blocking_one": "{{count}} blocking",
+    "blocking_other": "{{count}} blocking",
+    "portalChecks": "Portal checks",
+    "allChecksPass": "Every portal check passes."
   },
   "gstr1": {
     "outwardSupplies": "Outward supplies",
     "emptyTable": "Nothing in this table",
-    "emptyTableBody": "No document in the selected period falls into it."
+    "emptyTableBody": "No document in the selected period falls into it.",
+    "documents": "Documents",
+    "invoices": "Invoices",
+    "creditNotes": "Credit notes",
+    "rows_one": "{{count}} row",
+    "rows_other": "{{count}} rows",
+    "hsnNote": "Quantities and values rolled up by HSN, as table 12 of the return wants them.",
+    "nilNote": "Table 8 — nil-rated, exempted and non-GST supplies.",
+    "docsNote": "Table 13 — documents issued in the period, by numbering series.",
+    "table": {
+      "b2b": "registered buyers",
+      "b2cl": "large inter-state B2C",
+      "b2cs": "small B2C, consolidated",
+      "exp": "exports",
+      "cdnr": "credit notes to registered buyers",
+      "cdnur": "credit notes to unregistered buyers"
+    },
+    "nil": {
+      "INTRB2B": "Inter-state, registered",
+      "INTRAB2B": "Intra-state, registered",
+      "INTRB2C": "Inter-state, unregistered",
+      "INTRAB2C": "Intra-state, unregistered"
+    },
+    "col": {
+      "document": "Document",
+      "pos": "PoS",
+      "rate": "Rate",
+      "taxable": "Taxable",
+      "qty": "Qty",
+      "supply": "Supply",
+      "nilRated": "Nil rated",
+      "exempt": "Exempt",
+      "nonGst": "Non-GST",
+      "nature": "Nature",
+      "series": "Series",
+      "cancelled": "Cancelled",
+      "net": "Net"
+    }
   },
   "status": {
     "eInvoice": {
@@ -207,5 +306,63 @@
     "ewbBody": "It may have been removed, or it belongs to another business.",
     "docTitle": "Document not found",
     "docBody": "The document this bill was to be raised against is no longer here."
+  },
+  "mode": {
+    "road": "Road",
+    "rail": "Rail",
+    "air": "Air",
+    "ship": "Ship"
+  },
+  "cargo": {
+    "regular": "Regular",
+    "overDimensional": "Over-dimensional",
+    "overDimensionalCargo": "Over-dimensional cargo"
+  },
+  "subSupply": {
+    "supply": "Supply",
+    "export": "Export",
+    "jobWork": "Job work",
+    "ownUse": "For own use",
+    "jobWorkReturn": "Job work returns",
+    "salesReturn": "Sales return",
+    "exhibition": "Exhibition or fairs",
+    "lineSales": "Line sales",
+    "recipientNotKnown": "Recipient not known",
+    "others": "Others"
+  },
+  "supplyType": {
+    "B2B": "Business to business",
+    "SEZWP": "SEZ with payment of tax",
+    "SEZWOP": "SEZ without payment of tax",
+    "EXPWP": "Export with payment of tax",
+    "EXPWOP": "Export without payment of tax",
+    "DEXP": "Deemed export"
+  },
+  "cancelReason": {
+    "einv": {
+      "1": "Duplicate",
+      "2": "Data entry mistake",
+      "3": "Order cancelled",
+      "4": "Other"
+    },
+    "eway": {
+      "1": "Duplicate",
+      "2": "Order cancelled",
+      "3": "Data entry mistake",
+      "4": "Other"
+    }
+  },
+  "extendReason": {
+    "1": "Natural calamity",
+    "2": "Law and order situation",
+    "3": "Transhipment",
+    "4": "Accident",
+    "5": "Other"
+  },
+  "partBReason": {
+    "1": "First time",
+    "2": "Vehicle breakdown",
+    "3": "Transhipment",
+    "4": "Others"
   }
 }

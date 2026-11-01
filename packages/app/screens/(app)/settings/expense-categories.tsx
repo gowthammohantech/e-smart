@@ -64,7 +64,7 @@ export default function ExpenseCategorySettings() {
               <ListRow
                 key={c.id}
                 title={c.name}
-                subtitle={stat ? `${stat.count} entries` : 'Not used yet'}
+                subtitle={stat ? tr('settings:categories.entries', { count: stat.count }) : tr('settings:categories.unused')}
                 icon={c.icon as never}
                 iconColor={c.color}
                 divider={i < categories.length - 1}
@@ -88,7 +88,7 @@ export default function ExpenseCategorySettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit category' : 'Add category'}
+        title={editing?.id ? tr('settings:categories.editTitle') : tr('settings:categories.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
@@ -124,7 +124,7 @@ export default function ExpenseCategorySettings() {
 
       <ConfirmDialog
         visible={!!confirmDelete}
-        title={`Delete ${confirmDelete?.name}?`}
+        title={tr('settings:categories.deleteTitle', { name: confirmDelete?.name })}
         message={tr('settings:categories.deleteMessage')}
         confirmLabel={tr('settings:categories.delete')}
         destructive

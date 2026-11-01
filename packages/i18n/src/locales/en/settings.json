@@ -45,7 +45,8 @@
     "inventory": "Inventory",
     "allowNegativeStock": "Allow negative stock",
     "allowNegativeStockHint": "Let invoices and deliveries sell more than the branch has in stock. When off, they cannot be finalised until the stock is added.",
-    "lutValidTill": "LUT valid till"
+    "lutValidTill": "LUT valid till",
+    "registeredFor": "Registered for {{regime}}"
   },
   "accounts": {
     "default": "Default",
@@ -61,7 +62,14 @@
     "deleteMessage": "Payments already recorded against it keep their reference. This cannot be undone.",
     "deleted": "Account deleted",
     "cashAndBank": "Cash and bank balance",
-    "cashCaption": "Opening balances plus everything recorded since"
+    "cashCaption": "Opening balances plus everything recorded since",
+    "typeBank": "Bank",
+    "typeCash": "Cash",
+    "typeWallet": "Wallet",
+    "updated": "Account updated",
+    "added": "Account added",
+    "editTitle": "Edit account",
+    "deleteTitle": "Delete {{name}}?"
   },
   "branches": {
     "none": "No branches yet",
@@ -88,7 +96,9 @@
     "editTitle": "Edit branch",
     "addTitle": "Add branch",
     "updated": "Branch updated",
-    "added": "Branch added"
+    "added": "Branch added",
+    "intro": "Branches let you keep stock and documents separate by location. Every document records which branch it belongs to, and reports can be filtered by it.",
+    "deleteTitle": "Delete {{name}}?"
   },
   "taxes": {
     "none": "No tax rates",
@@ -104,7 +114,24 @@
     "descriptionPlaceholder": "What this slab covers",
     "deleteMessage": "Existing documents keep the rate they were issued with. Items using it will need a new rate.",
     "deleted": "Tax rate deleted",
-    "howApplied": "How a rate is applied"
+    "howApplied": "How a rate is applied",
+    "updated": "Tax rate updated",
+    "added": "Tax rate added",
+    "notRegistered": "Not registered",
+    "introGst": "Each rate splits into CGST + SGST within your state, or a single IGST line for inter-state supplies. Rates carry an effective date so past documents keep the treatment they were issued under.",
+    "intro": "Rates carry an effective date so past documents keep the treatment they were issued under.",
+    "rowMeta_one": "Effective from {{date}} · used by {{count}} record",
+    "rowMeta_other": "Effective from {{date}} · used by {{count}} records",
+    "applied": {
+      "intraState": "Within your state",
+      "intraStateValue": "CGST + SGST, split evenly",
+      "interState": "Other states",
+      "interStateValue": "IGST at the full rate",
+      "rounding": "Rounding",
+      "roundingValue": "Half-up to the paisa, then the document total to the rupee"
+    },
+    "editTitle": "Edit tax rate",
+    "deleteTitle": "Delete {{name}}?"
   },
   "about": {
     "build": "Version {{version}}",
@@ -119,7 +146,8 @@
     "pitch": "Everyday business management from a phone — invoices, payments, purchases and stock, without ERP complexity.",
     "sdk": "Expo SDK 57",
     "syncedData": "Synced with the server",
-    "noteHeading": "About your data"
+    "noteHeading": "About your data",
+    "note": "Your books live on the server. This device keeps a working copy, so you can carry on offline; changes are queued and sent when you are back online, and the server validates every finalised record before it counts."
   },
   "backup": {
     "json": "Machine-readable JSON",
@@ -140,7 +168,18 @@
     "weekly": "Weekly",
     "automaticSwitch": "Back up automatically",
     "lastBackup": "Last backup {{when}}.",
-    "noBackupYet": "No backup has run yet."
+    "noBackupYet": "No backup has run yet.",
+    "count": {
+      "parties": "Customers & suppliers",
+      "items": "Items",
+      "documents": "Documents",
+      "payments": "Payments",
+      "auditEvents": "Audit events"
+    },
+    "scopeNote_one": "The export covers this business only. Your other business stays out of the package, so you can hand an auditor exactly one set of books.",
+    "scopeNote_other": "The export covers this business only. Your other businesses stay out of the package, so you can hand an auditor exactly one set of books.",
+    "included": "What's included",
+    "retentionNote": "Financial records subject to statutory retention are kept even if you remove them from this device."
   },
   "currencies": {
     "none": "No rates yet",
@@ -155,7 +194,15 @@
     "deleted": "Rate deleted",
     "baseCurrency": "Base currency",
     "rates": "Exchange rates",
-    "history": "Rate history"
+    "history": "Rate history",
+    "baseNote": "Every report is presented in this currency. Documents raised in another currency store the rate that applied on their date, so historical totals never shift.",
+    "pairMeta_one": "From {{date}} · {{count}} rate on record",
+    "pairMeta_other": "From {{date}} · {{count}} rates on record",
+    "historyRow": "{{rate}} · from {{date}}",
+    "editTitle": "Edit rate",
+    "rateLabel": "Rate (1 {{from}} → {{to}})",
+    "sourceProvider": "Provider",
+    "sourceManual": "Manual"
   },
   "sync": {
     "none": "Nothing queued",
@@ -177,7 +224,21 @@
     "conflictBody": "Someone saved this after you started editing. You now see their version. Send yours again to replace it, or discard it.",
     "rejectedTitle": "The server refused this change",
     "retrying": "Sending again",
-    "discarded": "Change discarded"
+    "discarded": "Change discarded",
+    "workingOffline": "Working offline",
+    "waiting_one": "{{count}} waiting to sync",
+    "waiting_other": "{{count}} waiting to sync",
+    "allSynced": "Everything is synced",
+    "offlineBody": "You can keep drafting. Anything you create is queued and sent as soon as you are back online.",
+    "onlineBody": "Finalised financial records are validated on the server before they count, so your books stay authoritative.",
+    "queuedMeta_one": "Queued {{when}} · {{count}} attempt",
+    "queuedMeta_other": "Queued {{when}} · {{count}} attempts",
+    "status": {
+      "synced": "Synced",
+      "pending": "Pending",
+      "failed": "Failed",
+      "offline": "Offline"
+    }
   },
   "transporters": {
     "none": "No transporters yet",
@@ -191,7 +252,11 @@
     "id": "Transporter ID",
     "idHint": "A GSTIN, or a TRANSIN if the carrier is not registered.",
     "phone": "Phone",
-    "removed": "Transporter removed"
+    "removed": "Transporter removed",
+    "idInvalid": "Transporter ID must be a valid 15-character GSTIN or TRANSIN",
+    "updated": "Transporter updated",
+    "added": "Transporter added",
+    "editTitle": "Edit transporter"
   },
   "numbering": {
     "save": "Save",
@@ -204,7 +269,16 @@
     "branchHint": "Useful when several locations issue documents.",
     "resetPolicy": "Reset policy",
     "nextWillBe": "Next number will be",
-    "tooLongForEInvoice": "Longer than {{count}} characters — the e-invoice portal will reject this number."
+    "tooLongForEInvoice": "Longer than {{count}} characters — the e-invoice portal will reject this number.",
+    "reset": {
+      "never": "Never reset",
+      "yearly": "Reset each financial year",
+      "monthly": "Reset each month"
+    },
+    "updated": "{{series}} numbering updated",
+    "intro": "Each document type has its own series. A number is assigned only when a document is finalised, and a finalised number is never reused — drafts stay unnumbered so you can delete them freely.",
+    "nextBadge": "Next {{number}}",
+    "digitsHint": "0001 uses four digits."
   },
   "users": {
     "invited": "Invited",
@@ -219,7 +293,24 @@
     "limitMessage_one": "Your {{plan}} plan includes {{count}} user, and that seat is taken (a pending invitation counts). Upgrade to invite more people.",
     "limitMessage_other": "Your {{plan}} plan includes {{count}} users, and every seat is taken (pending invitations count). Upgrade to invite more people.",
     "seePlans": "See plans",
-    "rolesHeading": "What each role can do"
+    "rolesHeading": "What each role can do",
+    "roleHint": {
+      "owner": "Full access, including billing and deleting the business.",
+      "admin": "Everything except billing and deleting the business.",
+      "accountant": "Invoices, bills, payments, expenses and reports.",
+      "sales": "Quotes, invoices, customers and payments received.",
+      "viewer": "Read-only access to documents and reports."
+    },
+    "updated": "User updated",
+    "inviteSent": "Invitation sent",
+    "inviteResent": "Invitation sent again",
+    "lastActive": "Last active {{when}}",
+    "invitePending": "Invitation pending",
+    "editTitle": "Edit user",
+    "resend": "Resend invite",
+    "sendInvite": "Send invitation",
+    "guestNote": "This person has their own Elixir Books account. To change their access, remove them and invite them again.",
+    "removeTitle": "Remove {{name}}?"
   },
   "profile": {
     "name": "Name",
@@ -228,7 +319,9 @@
     "active": "Active",
     "save": "Save changes",
     "saved": "Profile updated",
-    "yourBusinesses": "Your businesses"
+    "yourBusinesses": "Your businesses",
+    "you": "You",
+    "switched": "Switched to {{name}}"
   },
   "devices": {
     "thisDevice": "This device",
@@ -236,7 +329,10 @@
     "signOut": "Sign out",
     "signedOut": "Device signed out",
     "revokeNote": "Signing a device out revokes its session immediately — it cannot keep using the app with a cached token.",
-    "keychainNote": "Session tokens are held in the platform keychain, never in plain storage."
+    "keychainNote": "Session tokens are held in the platform keychain, never in plain storage.",
+    "activeNow": "Active now",
+    "lastActive": "Last active {{when}}",
+    "signOutTitle": "Sign out {{name}}?"
   },
   "audit": {
     "search": "Search the trail",
@@ -246,7 +342,9 @@
     "fieldsChanged_one": "{{count}} field changed",
     "fieldsChanged_other": "{{count}} fields changed",
     "value": "Value",
-    "empty": "(empty)"
+    "empty": "(empty)",
+    "count_one": "{{count}} event · append-only, newest first",
+    "count_other": "{{count}} events · append-only, newest first"
   },
   "categories": {
     "add": "Add category",
@@ -256,7 +354,12 @@
     "namePlaceholder": "e.g. Fuel",
     "deleteMessage": "Expenses already in this category keep their reference but will show as uncategorised.",
     "saved": "Category saved",
-    "deleted": "Category deleted"
+    "deleted": "Category deleted",
+    "entries_one": "{{count}} entry",
+    "entries_other": "{{count}} entries",
+    "unused": "Not used yet",
+    "editTitle": "Edit category",
+    "deleteTitle": "Delete {{name}}?"
   },
   "appearance": {
     "lixiWays": "Ways to open Lixi",
@@ -266,10 +369,49 @@
     "statusColourNote": "Status colours stay reserved for state, so they never double as chart series colours.",
     "sampleSales": "Sales",
     "sampleOverdue": "Overdue",
-    "sampleInvoices": "{{count}} invoices"
+    "sampleInvoices": "{{count}} invoices",
+    "way": {
+      "holdTab": "Hold a tab",
+      "holdTabHint": "Press and hold any tab; Lixi opens already answering about it.",
+      "swipeUp": "Swipe up on the tab bar",
+      "swipeUpHint": "Pull up from the bar and let go once the orb locks in.",
+      "floatingOrb": "Floating orb",
+      "floatingOrbHint": "A small orb on the screen edge. Drag it anywhere; tap to open.",
+      "pullDown": "Pull down on Home",
+      "pullDownHint": "Pull the Home screen down, like refreshing, to ask Lixi."
+    },
+    "allOffNote": "With every way off, Lixi is still under {{more}} → {{askLixi}}.",
+    "mode": {
+      "systemHint": "Follows your phone’s light or dark setting.",
+      "dark": "Dark",
+      "darkHint": "The default look, easy on the eyes indoors.",
+      "light": "Light",
+      "lightHint": "Higher contrast in bright sunlight."
+    }
   },
   "integrations": {
     "connected": "Connected",
-    "configure": "Configure"
+    "configure": "Configure",
+    "group": {
+      "payments": "Payments",
+      "paymentsHint": "Let customers pay an invoice without leaving it.",
+      "compliance": "Compliance",
+      "complianceHint": "Government filings and document generation.",
+      "messaging": "Messaging",
+      "messagingHint": "How invoices and reminders reach your customers.",
+      "accounting": "Accounting",
+      "accountingHint": "Hand data to your accountant in their format.",
+      "storage": "Storage & backup",
+      "storageHint": "Where copies of your documents are kept."
+    },
+    "intro": "Each provider sits behind an adapter, so swapping one out never changes how your documents work. Turning one on saves the choice for this business; providers that need an account ask you to connect it.",
+    "configureNamed": "Configure {{name}}",
+    "connectNamed": "Connect {{name}}",
+    "disconnectNamed": "Disconnect {{name}}",
+    "connectedNamed": "{{name}} connected",
+    "disconnectedNamed": "{{name}} disconnected"
+  },
+  "eInvoicing": {
+    "daysSuffix": "days"
   }
 }

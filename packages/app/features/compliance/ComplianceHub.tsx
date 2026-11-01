@@ -56,7 +56,7 @@ const EWAY_FILTERS: { key: EwayBillStatus | 'all'; labelKey: string }[] = [
  */
 export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.ReactNode; bottomInset?: number } = {}) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['compliance']);
+  const { t: tr } = useTranslation(['compliance', 'common']);
   const router = useRouter();
 
   // Tab and status filters live in the URL (`?tab=eway&eway=active`); search stays local.
@@ -77,7 +77,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const parties = useParties();
   const allDocuments = useAppStore((s) => s.documents);
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown';
+  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? tr('common:placeholder.unknown');
   const now = nowISO();
 
   const eInvoiceRows = useMemo(() => {
@@ -119,8 +119,8 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       {header}
       <Segmented
         options={[
-          { value: 'eInvoice', label: 'E-invoices' },
-          { value: 'eway', label: 'E-way bills' },
+          { value: 'eInvoice', label: tr('compliance:hub.eInvoices') },
+          { value: 'eway', label: tr('compliance:hub.ewayBills') },
         ]}
         value={tab}
         onChange={setTab}
@@ -134,14 +134,14 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             value={String(summary.eInvoice.generated)}
             icon="shield-check-outline"
             tone="good"
-            caption={`${summary.eInvoice.cancelled} cancelled`}
+            caption={tr('compliance:hub.cancelledCount', { count: summary.eInvoice.cancelled })}
           />
           <StatTile
             label={tr('compliance:hub.needsAttention')}
             value={String(summary.eInvoice.pending + summary.eInvoice.failed)}
             icon="alert-circle-outline"
             tone={summary.eInvoice.failed ? 'bad' : 'warn'}
-            caption={`${summary.eInvoice.failed} rejected`}
+            caption={tr('compliance:hub.rejectedCount', { count: summary.eInvoice.failed })}
           />
         </StatRow>
       ) : (
@@ -157,7 +157,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             value={String(summary.expiringSoon)}
             icon="clock-alert-outline"
             tone={summary.expiringSoon ? 'warn' : 'default'}
-            caption={`${summary.ewayOutstanding} consignments unbilled`}
+            caption={tr('compliance:hub.unbilled', { count: summary.ewayOutstanding })}
           />
         </StatRow>
       )}
@@ -179,8 +179,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           >
             <MaterialCommunityIcons name="clock-alert-outline" size={20} color={t.c.warn} />
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
-              {expiring.length} {expiring.length === 1 ? 'e-way bill expires' : 'e-way bills expire'} within
-              24 hours.
+              {tr('compliance:hub.expiringBanner', { count: expiring.length })}
             </Text>
           </Card>
         </Pressable>
@@ -196,7 +195,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       <SearchBar
         value={query}
         onChangeText={setQuery}
-        placeholder={tab === 'eInvoice' ? 'Invoice, party or IRN' : 'Bill number, document or party'}
+        placeholder={tab === 'eInvoice' ? tr('compliance:hub.searchEInvoice') : tr('compliance:hub.searchEway')}
       />
 
       <ScrollView
@@ -260,8 +259,8 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             title={tr('compliance:hub.nothingHere')}
             message={
               query
-                ? 'No invoice matches that search.'
-                : 'Invoices become reportable once they are finalised for a registered buyer.'
+                ? tr('compliance:hub.noInvoiceMatch')
+                : tr('compliance:hub.eInvoiceEmpty')
             }
           />
         )
@@ -279,7 +278,9 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
                 subtitle={`${b.documentNumber} · ${nameOf(b.partyId)}`}
                 meta={
                   status === 'cancelled'
-                    ? `Cancelled${b.cancelledAt ? ` ${formatDate(b.cancelledAt.slice(0, 10))}` : ''}`
+                    ? b.cancelledAt
+                      ? tr('compliance:ewb.cancelledOn', { date: formatDate(b.cancelledAt.slice(0, 10)) })
+                      : tr('compliance:status.eway.cancelled')
                     : `${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hours)}`
                 }
                 right={<Badge label={keyLabel(tr, meta.labelKey)} tone={soon ? 'warning' : meta.tone} size="sm" />}
@@ -295,10 +296,10 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           title={tr('compliance:hub.noEwayBills')}
           message={
             query
-              ? 'No bill matches that search.'
+              ? tr('compliance:hub.noBillMatch')
               : allDocuments.length
-                ? 'Raise one from an invoice or delivery note that moves goods above the threshold.'
-                : 'Bills appear here once goods start moving.'
+                ? tr('compliance:hub.ewayEmptyHasDocs')
+                : tr('compliance:hub.ewayEmpty')
           }
         />
       )}

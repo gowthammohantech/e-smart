@@ -8,14 +8,14 @@ import { ComplianceHub } from '../../../features/compliance/ComplianceHub';
 
 export default function Compliance() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['compliance']);
+  const { t: tr } = useTranslation(['compliance', 'nav']);
   const router = useRouter();
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen
         options={{
-          title: 'GST compliance',
+          title: tr('nav:more.entry.gstCompliance'),
           headerRight: () => (
             <Button
               title={tr('compliance:hub.settings')}

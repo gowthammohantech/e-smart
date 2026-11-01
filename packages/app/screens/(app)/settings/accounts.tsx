@@ -44,6 +44,11 @@ export default function AccountSettings() {
   const [accountNumber, setAccountNumber] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
   const [isDefault, setIsDefault] = useState(false);
+  const typeLabels: Record<PaymentAccount['type'], string> = {
+    bank: tr('settings:accounts.typeBank'),
+    cash: tr('settings:accounts.typeCash'),
+    wallet: tr('settings:accounts.typeWallet'),
+  };
 
   /** Running balance: opening + money in − money out − expenses paid from it. */
   const balances = useMemo(() => accountBalances(accounts, payments, expenses), [accounts, payments, expenses]);
@@ -72,7 +77,7 @@ export default function AccountSettings() {
       openingBalance: fromMajor(openingBalance || '0', baseCurrency),
       isDefault,
     });
-    toast.show(editing.id ? 'Account updated' : 'Account added', 'success');
+    toast.show(editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'), 'success');
     setEditing(null);
   };
 
@@ -96,7 +101,7 @@ export default function AccountSettings() {
             <ListRow
               key={a.id}
               title={a.name}
-              subtitle={a.accountNumber ?? a.type}
+              subtitle={a.accountNumber ?? typeLabels[a.type]}
               icon={a.type === 'cash' ? 'cash' : a.type === 'wallet' ? 'wallet-outline' : 'bank-outline'}
               divider={i < accounts.length - 1}
               right={
@@ -119,7 +124,7 @@ export default function AccountSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit account' : 'Add account'}
+        title={editing?.id ? tr('settings:accounts.editTitle') : tr('settings:accounts.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id && accounts.length > 1 ? (
@@ -141,9 +146,9 @@ export default function AccountSettings() {
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <Segmented
             options={[
-              { value: 'bank', label: 'Bank' },
-              { value: 'cash', label: 'Cash' },
-              { value: 'wallet', label: 'Wallet' },
+              { value: 'bank', label: typeLabels.bank },
+              { value: 'cash', label: typeLabels.cash },
+              { value: 'wallet', label: typeLabels.wallet },
             ]}
             value={type}
             onChange={(v) => setType(v as PaymentAccount['type'])}
@@ -159,7 +164,7 @@ export default function AccountSettings() {
 
       <ConfirmDialog
         visible={!!confirmDelete}
-        title={`Delete ${confirmDelete?.name}?`}
+        title={tr('settings:accounts.deleteTitle', { name: confirmDelete?.name })}
         message={tr('settings:accounts.deleteMessage')}
         confirmLabel={tr('settings:accounts.delete')}
         destructive

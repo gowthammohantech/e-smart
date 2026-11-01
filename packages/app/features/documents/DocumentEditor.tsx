@@ -149,7 +149,7 @@ export function DocumentEditor({
   // A prefill seeds the draft and the opening step, as if the person had
   // picked the party and item by hand. Read once, like `initialDraft`.
   const [seed] = useState(() => {
-    const empty: DraftState = { ...emptyDraft(baseCurrency, kind), branchId: defaultBranchId };
+    const empty: DraftState = { ...emptyDraft(baseCurrency, kind, tr('sales:editor.defaultTerms')), branchId: defaultBranchId };
     if (!prefill) return { missingParty: false, draft: empty, step: 0 };
     const base: DraftState = {
       ...empty,
@@ -279,7 +279,7 @@ export function DocumentEditor({
       ? 'IGST'
       : taxContext.regime === 'GST'
         ? 'CGST + SGST'
-        : 'No tax';
+        : tr('common:totals.noTax');
 
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
@@ -477,7 +477,11 @@ export function DocumentEditor({
       <Pressable
         onPress={() => setPartyOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={party ? `Change ${isPurchase ? 'supplier' : 'customer'}` : `Select ${isPurchase ? 'supplier' : 'customer'}`}
+        accessibilityLabel={
+          party
+            ? tr(isPurchase ? 'sales:editor.changeSupplier' : 'sales:editor.changeCustomer')
+            : tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')
+        }
       >
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
           {party ? (
@@ -491,7 +495,7 @@ export function DocumentEditor({
                   {party.taxId ?? party.phone ?? party.email ?? party.code}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
-                  <Badge label={`${party.paymentTermsDays}d terms`} tone="neutral" size="sm" />
+                  <Badge label={tr('sales:editor.termsBadge', { days: party.paymentTermsDays })} tone="neutral" size="sm" />
                   {party.currency !== baseCurrency ? <Badge label={party.currency} tone="info" size="sm" /> : null}
                 </View>
               </View>
@@ -512,7 +516,7 @@ export function DocumentEditor({
               </View>
               <View style={{ flex: 1 }}>
                 <Text variant="body" weight="600">
-                  Select {isPurchase ? 'supplier' : 'customer'}
+                  {tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')}
                 </Text>
                 <Text variant="caption" tone="muted">{tr('sales:editor.partySearch')}</Text>
               </View>
@@ -536,7 +540,7 @@ export function DocumentEditor({
           label={tr('sales:editor.dueDate')}
           value={draft.dueDate ?? addDaysISO(draft.date, 30)}
           onChange={(dueDate) => patch({ dueDate })}
-          hint={party ? `${party.name} is on ${party.paymentTermsDays}-day terms.` : undefined}
+          hint={party ? tr('sales:editor.termsHint', { name: party.name, days: party.paymentTermsDays }) : undefined}
         />
       ) : null}
 
@@ -594,8 +598,8 @@ export function DocumentEditor({
                     : 'sales:editor.exportIgstHint',
                 )
               : interState
-                ? 'Inter-state supply — IGST applies.'
-                : 'Intra-state supply — CGST + SGST apply.'
+                ? tr('sales:editor.interStateHint')
+                : tr('sales:editor.intraStateHint')
           }
         />
       ) : null}
@@ -613,7 +617,7 @@ export function DocumentEditor({
 
       {draft.currency !== baseCurrency ? (
         <TextField
-          label={`Exchange rate (1 ${draft.currency} → ${baseCurrency})`}
+          label={`${tr('common:totals.exchangeRate')} (1 ${draft.currency} → ${baseCurrency})`}
           value={String(draft.exchangeRate)}
           onChangeText={(v) => patch({ exchangeRate: Number(v.replace(/[^0-9.]/g, '')) || 0 })}
           keyboardType="decimal-pad"
@@ -654,7 +658,7 @@ export function DocumentEditor({
                 <Pressable
                   onPress={() => setEditingLine(line)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Edit ${line.name}`}
+                  accessibilityLabel={tr('sales:editor.editLineNamed', { name: line.name })}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     gap: t.spacing.md,
@@ -666,7 +670,7 @@ export function DocumentEditor({
                 >
                   <View style={{ flex: 1, gap: 5 }}>
                     <Text variant="body" weight="600" numberOfLines={1}>
-                      {line.name || 'Untitled line'}
+                      {line.name || tr('sales:editor.untitledLine')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 5 }}>
                       <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
@@ -859,12 +863,12 @@ export function DocumentEditor({
         <View style={{ height: 1, backgroundColor: t.c.line }} />
 
         {[
-          { label: isPurchase ? 'Supplier' : 'Customer', value: party?.name ?? '—' },
-          { label: 'Date', value: draft.date },
-          ...(draft.dueDate ? [{ label: 'Due', value: draft.dueDate }] : []),
+          { label: tr(isPurchase ? 'common:table.supplier' : 'common:table.customer'), value: party?.name ?? '—' },
+          { label: tr('common:table.date'), value: draft.date },
+          ...(draft.dueDate ? [{ label: tr('common:table.due'), value: draft.dueDate }] : []),
           ...(draft.validUntil ? [{ label: tr('sales:editor.validUntil'), value: draft.validUntil }] : []),
           { label: tr('sales:editor.branch'), value: branch?.name ?? '—' },
-          { label: 'Lines', value: String(draft.lines.length) },
+          { label: tr('sales:editor.lines'), value: String(draft.lines.length) },
         ].map((r) => (
           <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text variant="small" tone="muted">
@@ -899,9 +903,7 @@ export function DocumentEditor({
       <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
         <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
         <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-          Finalising assigns a permanent number that is never reused
-          {kind === 'invoice' || kind === 'delivery' ? ' and posts stock movements for tracked items' : ''}. Drafts can
-          still be edited freely.
+          {tr(kind === 'invoice' || kind === 'delivery' ? 'sales:editor.finaliseNoteStock' : 'sales:editor.finaliseNote')}
         </Text>
       </Card>
     </View>
@@ -1019,7 +1021,7 @@ export function DocumentEditor({
         <SelectSheet
           visible={partyOpen}
           onClose={() => setPartyOpen(false)}
-          title={isPurchase ? 'Select supplier' : 'Select customer'}
+          title={tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')}
           options={parties.map((p) => ({
             value: p.id,
             label: p.name,
@@ -1028,10 +1030,10 @@ export function DocumentEditor({
           }))}
           value={draft.partyId}
           onSelect={pickParty}
-          searchPlaceholder={isPurchase ? 'Search suppliers' : 'Search customers'}
+          searchPlaceholder={tr(isPurchase ? 'sales:editor.searchSuppliers' : 'sales:editor.searchCustomers')}
           footer={
             <Button
-              title={isPurchase ? 'Add new supplier' : 'Add new customer'}
+              title={tr(isPurchase ? 'sales:editor.addSupplier' : 'sales:editor.addCustomer')}
               variant="secondary"
               icon="plus"
               fullWidth
@@ -1079,7 +1081,7 @@ export function DocumentEditor({
               if (item) addLine(lineFromItem(item, isPurchase, taxCategories));
             })
           }
-          searchPlaceholder="Search by name or SKU"
+          searchPlaceholder={tr('sales:editor.searchItems')}
           footer={
             sourceDoc ? undefined : (
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>

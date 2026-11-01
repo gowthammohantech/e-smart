@@ -24,14 +24,17 @@ export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | 
   const baseCurrency = useBaseCurrency();
 
   const text = party
-    ? `Hi ${party.displayName ?? party.name}, a gentle reminder that ${rows.length === 1 ? 'invoice' : 'invoices'} ${rows
-        .map((o) => o.document.number)
-        .join(', ')} totalling ${formatMoney(
-        money(
-          rows.reduce((a, o) => a + Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), 0),
-          baseCurrency,
+    ? tr('sales:aging.reminderMessage', {
+        count: rows.length,
+        name: party.displayName ?? party.name,
+        numbers: rows.map((o) => o.document.number).join(', '),
+        amount: formatMoney(
+          money(
+            rows.reduce((a, o) => a + Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), 0),
+            baseCurrency,
+          ),
         ),
-      )} ${rows.length === 1 ? 'is' : 'are'} still open. Could you let us know when payment is planned? Thank you.`
+      })
     : '';
 
   return (
@@ -59,7 +62,7 @@ export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | 
             icon="email-outline"
             style={{ flex: 1 }}
             onPress={() => {
-              Linking.openURL(`mailto:${party?.email ?? ''}?subject=${encodeURIComponent('Payment reminder')}&body=${encodeURIComponent(text)}`).catch(() => {});
+              Linking.openURL(`mailto:${party?.email ?? ''}?subject=${encodeURIComponent(tr('sales:aging.reminderSubject'))}&body=${encodeURIComponent(text)}`).catch(() => {});
               onClose();
               toast.show(tr('sales:aging.openedEmail'), 'success');
             }}

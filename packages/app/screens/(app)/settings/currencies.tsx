@@ -29,6 +29,7 @@ export default function CurrencySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
+  const sourceLabel = (source: ExchangeRate['source']) => (source === 'provider' ? tr('settings:currencies.sourceProvider') : tr('settings:currencies.sourceManual'));
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -90,8 +91,7 @@ export default function CurrencySettings() {
             {currencyMeta(baseCurrency).name} ({baseCurrency})
           </Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Every report is presented in this currency. Documents raised in another currency store the rate that applied on
-            their date, so historical totals never shift.
+            {tr('settings:currencies.baseNote')}
           </Text>
         </Card>
 
@@ -106,13 +106,13 @@ export default function CurrencySettings() {
                 key={p.code}
                 title={`1 ${p.code} = ${p.latest.rate.toFixed(4)} ${baseCurrency}`}
                 subtitle={currencyMeta(p.code).name}
-                meta={`From ${formatDate(p.latest.effectiveFrom)} · ${p.history.length} rate${p.history.length === 1 ? '' : 's'} on record`}
+                meta={tr('settings:currencies.pairMeta', { date: formatDate(p.latest.effectiveFrom), count: p.history.length })}
                 icon="swap-horizontal"
                 divider={i < pairs.length - 1}
                 right={
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <Sparkline values={p.history.map((h) => h.rate)} width={54} height={20} />
-                    <Badge label={p.latest.source} tone={p.latest.source === 'provider' ? 'success' : 'neutral'} size="sm" />
+                    <Badge label={sourceLabel(p.latest.source)} tone={p.latest.source === 'provider' ? 'success' : 'neutral'} size="sm" />
                   </View>
                 }
                 onPress={() => open(p.latest)}
@@ -128,10 +128,10 @@ export default function CurrencySettings() {
             <ListRow
               key={r.id}
               title={`${r.from} → ${r.to}`}
-              subtitle={`${r.rate.toFixed(4)} · from ${formatDate(r.effectiveFrom)}`}
+              subtitle={tr('settings:currencies.historyRow', { rate: r.rate.toFixed(4), date: formatDate(r.effectiveFrom) })}
               icon="history"
               divider={i < Math.min(rates.length, 12) - 1}
-              right={<Badge label={r.source} tone="neutral" size="sm" />}
+              right={<Badge label={sourceLabel(r.source)} tone="neutral" size="sm" />}
               onPress={() => open(r)}
             />
           ))}
@@ -143,7 +143,7 @@ export default function CurrencySettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit rate' : 'Add exchange rate'}
+        title={editing?.id ? tr('settings:currencies.editTitle') : tr('settings:currencies.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
@@ -165,7 +165,7 @@ export default function CurrencySettings() {
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <PickerField label={tr('settings:currencies.currency')} value={`${currencyMeta(from).name} (${from})`} onPress={() => setFromOpen(true)} icon="cash-multiple" />
           <TextField
-            label={`Rate (1 ${from} → ${baseCurrency})`}
+            label={tr('settings:currencies.rateLabel', { from, to: baseCurrency })}
             value={rate}
             onChangeText={(v) => setRate(v.replace(/[^0-9.]/g, ''))}
             keyboardType="decimal-pad"

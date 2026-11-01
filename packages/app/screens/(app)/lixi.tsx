@@ -219,7 +219,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             onPress={() => setSoundOn((on) => !on)}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={soundOn ? 'Mute Lixi' : 'Unmute Lixi'}
+            accessibilityLabel={soundOn ? tr('lixi:ui.mute') : tr('lixi:ui.unmute')}
             accessibilityState={{ selected: soundOn }}
             style={{ padding: 6 }}
           >

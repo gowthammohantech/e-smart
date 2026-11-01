@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -31,6 +32,7 @@ export function DateField({
   maximumDate?: Date;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const desktop = useIsDesktop();
   const [focused, setFocused] = useState(false);
 
@@ -54,7 +56,7 @@ export function DateField({
         <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
         <input
           type="date"
-          aria-label={label ?? 'Date'}
+          aria-label={label ?? tr('common:component.date')}
           required={required}
           value={value ? value.slice(0, 10) : ''}
           min={minimumDate ? toISODate(minimumDate) : undefined}

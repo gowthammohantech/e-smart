@@ -136,8 +136,7 @@ export default function BranchSettings() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Branches let you keep stock and documents separate by location. Every document records which branch it belongs
-            to, and reports can be filtered by it.
+            {tr('settings:branches.intro')}
           </Text>
         </Card>
 
@@ -245,7 +244,7 @@ export default function BranchSettings() {
 
       <ConfirmDialog
         visible={!!confirmDelete}
-        title={`Delete ${confirmDelete?.name}?`}
+        title={tr('settings:branches.deleteTitle', { name: confirmDelete?.name })}
         message={tr('settings:branches.deleteMessage')}
         confirmLabel={tr('settings:branches.delete')}
         destructive

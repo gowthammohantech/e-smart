@@ -69,7 +69,7 @@ export default function TaxSettings() {
       effectiveFrom,
       description: description.trim() || undefined,
     });
-    toast.show(editing.id ? 'Tax rate updated' : 'Tax rate added', 'success');
+    toast.show(editing.id ? tr('settings:taxes.updated') : tr('settings:taxes.added'), 'success');
     setEditing(null);
   };
 
@@ -82,13 +82,13 @@ export default function TaxSettings() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <Badge label={regime} tone="info" />
             <Text variant="small" weight="600">
-              {company?.taxRegistration?.identifier ?? 'Not registered'}
+              {company?.taxRegistration?.identifier ?? tr('settings:taxes.notRegistered')}
             </Text>
           </View>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {regime === 'GST'
-              ? 'Each rate splits into CGST + SGST within your state, or a single IGST line for inter-state supplies. Rates carry an effective date so past documents keep the treatment they were issued under.'
-              : 'Rates carry an effective date so past documents keep the treatment they were issued under.'}
+              ? tr('settings:taxes.introGst')
+              : tr('settings:taxes.intro')}
           </Text>
         </Card>
 
@@ -101,7 +101,7 @@ export default function TaxSettings() {
                 key={c.id}
                 title={c.name}
                 subtitle={c.description}
-                meta={`Effective from ${formatDate(c.effectiveFrom)} · used by ${usageOf(c.id)} records`}
+                meta={tr('settings:taxes.rowMeta', { date: formatDate(c.effectiveFrom), count: usageOf(c.id) })}
                 icon="percent-outline"
                 divider={i < categories.length - 1}
                 right={<Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} />}
@@ -116,9 +116,9 @@ export default function TaxSettings() {
           <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md }}>
             <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:taxes.howApplied')}</Text>
             {[
-              { label: 'Within your state', value: 'CGST + SGST, split evenly' },
-              { label: 'Other states', value: 'IGST at the full rate' },
-              { label: 'Rounding', value: 'Half-up to the paisa, then the document total to the rupee' },
+              { label: tr('settings:taxes.applied.intraState'), value: tr('settings:taxes.applied.intraStateValue') },
+              { label: tr('settings:taxes.applied.interState'), value: tr('settings:taxes.applied.interStateValue') },
+              { label: tr('settings:taxes.applied.rounding'), value: tr('settings:taxes.applied.roundingValue') },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
                 <Text variant="small" tone="muted">
@@ -138,7 +138,7 @@ export default function TaxSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit tax rate' : 'Add tax rate'}
+        title={editing?.id ? tr('settings:taxes.editTitle') : tr('settings:taxes.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
@@ -175,7 +175,7 @@ export default function TaxSettings() {
 
       <ConfirmDialog
         visible={!!confirmDelete}
-        title={`Delete ${confirmDelete?.name}?`}
+        title={tr('settings:taxes.deleteTitle', { name: confirmDelete?.name })}
         message={tr('settings:taxes.deleteMessage')}
         confirmLabel={tr('settings:taxes.delete')}
         destructive

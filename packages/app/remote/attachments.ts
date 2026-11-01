@@ -1,6 +1,7 @@
 import type { Attachment } from '@esmart/core/types';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
+import { RemoteError } from './errors';
 import { applyEntity } from './apply';
 
 type Mime = 'image/jpeg' | 'image/png' | 'image/heic' | 'application/pdf';
@@ -27,9 +28,9 @@ export async function uploadAttachment(input: { companyId: string; uri: string; 
     params: { path: { companyId: input.companyId } },
     body: { name: input.name, mimeType, size: blob.size, entityType: input.entityType, entityId: input.entityId },
   });
-  if (!reserved?.attachment?.id || !reserved.uploadUrl) throw new Error('The server did not return an upload URL');
+  if (!reserved?.attachment?.id || !reserved.uploadUrl) throw new RemoteError('noUploadUrl', 'The server did not return an upload URL');
   const put = await fetch(reserved.uploadUrl, { method: 'PUT', headers: { 'content-type': mimeType, ...(reserved.uploadHeaders ?? {}) }, body: blob });
-  if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+  if (!put.ok) throw new RemoteError('uploadFailed', `Upload failed (${put.status})`, put.status);
   const { data: done } = await api.POST('/companies/{companyId}/attachments/{id}/complete', {
     params: { path: { companyId: input.companyId, id: reserved.attachment.id } },
   });

@@ -171,6 +171,29 @@
     "showPages": "Show {{label}} pages",
     "hidePages": "Hide {{label}} pages",
     "expandSidebar": "Expand sidebar",
-    "collapseSidebar": "Collapse sidebar"
+    "collapseSidebar": "Collapse sidebar",
+    "searchFor": "Search {{query}}",
+    "noMatchesInBusiness": "Nothing in this business matches “{{query}}”."
+  },
+  "home": {
+    "emptyTitle": "Let's get you started",
+    "emptyBody": "Raise your first invoice and this dashboard fills in — sales, collections, what you're owed and where the money goes.",
+    "greetMorning": "Good morning, {{name}}",
+    "greetAfternoon": "Good afternoon, {{name}}",
+    "greetEvening": "Good evening, {{name}}",
+    "there": "there",
+    "subtitle": "Here's how the business is doing this month.",
+    "eInvoiceRejected_one": "{{count}} rejected",
+    "eInvoiceRejected_other": "{{count}} rejected",
+    "eInvoiceReported": "Reported to IRP",
+    "ewbExpiring_one": "{{count}} expires in 24 h",
+    "ewbExpiring_other": "{{count}} expire in 24 h",
+    "ewbActive": "Active",
+    "amountOverdue": "{{amount}} overdue",
+    "amountDueSoon": "{{amount}} due soon",
+    "openBills_one": "{{count}} open bill",
+    "openBills_other": "{{count}} open bills",
+    "daysOverdue_one": "{{count}}d overdue",
+    "daysOverdue_other": "{{count}}d overdue"
   }
 }

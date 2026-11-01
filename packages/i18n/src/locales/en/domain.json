@@ -69,5 +69,12 @@
     "cheque": "Cheque",
     "wallet": "Wallet",
     "other": "Other"
+  },
+  "gstRegistration": {
+    "regular": "Regular",
+    "composition": "Composition scheme",
+    "unregistered": "Unregistered",
+    "sez": "SEZ unit or developer",
+    "overseas": "Overseas"
   }
 }

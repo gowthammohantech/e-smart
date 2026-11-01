@@ -13,13 +13,20 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import type { SyncQueueEntry } from '@esmart/core/types';
+import type { SyncQueueEntry, SyncStatus as SyncState } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { formatRelative } from '@esmart/core/lib/date';
 import { blockerOf, type Entry } from '../../../remote/outbox';
 import { remoteSession, retryFailed, retrySync, syncAll, syncNow, useRemoteMeta } from '../../../remote';
 import { drop } from '../../../remote/outbox';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+
+const STATUS_LABELS = {
+  synced: 'settings:sync.status.synced',
+  pending: 'settings:sync.status.pending',
+  failed: 'settings:sync.status.failed',
+  offline: 'settings:sync.status.offline',
+} as const satisfies Record<SyncState, string>;
 
 export default function SyncStatus() {
   const t = useTheme();
@@ -48,12 +55,12 @@ export default function SyncStatus() {
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
           <Illustration name={offline ? 'offline' : 'all-settled'} size="full" />
           <Text variant="title" weight="700">
-            {offline ? 'Working offline' : queue.length ? `${queue.length} waiting to sync` : 'Everything is synced'}
+            {offline ? tr('settings:sync.workingOffline') : queue.length ? tr('settings:sync.waiting', { count: queue.length }) : tr('settings:sync.allSynced')}
           </Text>
           <Text variant="caption" tone="muted" center style={{ maxWidth: 280, lineHeight: 18 }}>
             {offline
-              ? 'You can keep drafting. Anything you create is queued and sent as soon as you are back online.'
-              : 'Finalised financial records are validated on the server before they count, so your books stay authoritative.'}
+              ? tr('settings:sync.offlineBody')
+              : tr('settings:sync.onlineBody')}
           </Text>
         </Card>
 
@@ -67,11 +74,11 @@ export default function SyncStatus() {
                 key={q.id}
                 title={q.label}
                 subtitle={waitingOn(q) ?? `${q.action} · ${q.entityType}`}
-                meta={`Queued ${formatRelative(q.queuedAt.slice(0, 10))} · ${q.attempts} attempt${q.attempts === 1 ? '' : 's'}`}
+                meta={tr('settings:sync.queuedMeta', { when: formatRelative(q.queuedAt.slice(0, 10)), count: q.attempts })}
                 icon={q.status === 'failed' ? 'cloud-alert' : 'cloud-upload-outline'}
                 iconColor={q.status === 'failed' ? t.c.bad : t.c.primary}
                 divider={i < queue.length - 1}
-                right={<Badge label={q.status} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />}
+                right={<Badge label={tr(STATUS_LABELS[q.status])} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />}
                 onPress={() => setOpen(q)}
               />
             ))

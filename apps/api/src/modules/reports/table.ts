@@ -120,7 +120,7 @@ const esc = (v: Cell) =>
 /** A plain printable page: headline figures, then the detail table. */
 export function tableHtml(company: CompanyRow, t: Table, range: { from: string; to: string }): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(t.title)}</title>
-<style>body{font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#111;margin:24px}h1{font-size:16px;margin:0}p{margin:2px 0 12px;color:#555}
+<style>body{font-family:Helvetica,Arial,"Noto Sans Tamil","Tamil Sangam MN",sans-serif;font-size:11px;color:#111;margin:24px}h1{font-size:16px;margin:0}p{margin:2px 0 12px;color:#555}
 table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}th{background:#f4f4f4}</style></head>
 <body><h1>${esc(company.name)}: ${esc(t.title)}</h1><p>${esc(range.from)} to ${esc(range.to)} (${esc(company.baseCurrency.trim())})</p>
 <table><tbody>${t.totals.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</tbody></table>

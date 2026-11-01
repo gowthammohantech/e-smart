@@ -78,12 +78,12 @@ export default function ExpenseDetail() {
   if (desktop) {
     const tint = category?.color ?? t.c.muted;
     const details = [
-      { label: 'Date', value: formatDate(expense.date) },
-      { label: 'Paid by', value: paymentMethodLabel(tr, expense.method) },
-      { label: 'Paid from', value: account?.name ?? '—' },
-      ...(expense.reference ? [{ label: 'Reference', value: expense.reference }] : []),
-      ...(expense.nextRecurrenceDate ? [{ label: 'Next due', value: formatDate(expense.nextRecurrenceDate) }] : []),
-      { label: 'Recorded', value: formatDateTime(expense.createdAt) },
+      { label: tr('purchases:form.date'), value: formatDate(expense.date) },
+      { label: tr('purchases:form.paidBy'), value: paymentMethodLabel(tr, expense.method) },
+      { label: tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
+      ...(expense.reference ? [{ label: tr('purchases:form.reference'), value: expense.reference }] : []),
+      ...(expense.nextRecurrenceDate ? [{ label: tr('purchases:expense.nextDue'), value: formatDate(expense.nextRecurrenceDate) }] : []),
+      { label: tr('purchases:expense.recorded'), value: formatDateTime(expense.createdAt) },
     ];
 
     const main = (
@@ -94,14 +94,14 @@ export default function ExpenseDetail() {
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text variant="small" tone="muted" numberOfLines={1}>
-              {category?.name ?? 'Uncategorised'}
+              {category?.name ?? tr('purchases:expense.uncategorised')}
             </Text>
             <Text variant="h1" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(expense.amount)}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 }}>
-            {expense.recurrence !== 'none' ? <Badge label={expense.recurrence} tone="info" icon="repeat" /> : null}
+            {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" icon="repeat" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
           </View>
         </Card>
@@ -147,8 +147,8 @@ export default function ExpenseDetail() {
       <>
         <FormSection title={tr('purchases:expense.amount')}>
           <View style={{ gap: t.spacing.md }}>
-            {taxCategory ? amountRow('Net amount', formatMoney(subtract(expense.amount, expense.taxAmount))) : null}
-            {taxCategory ? amountRow(`Input tax (${formatPercent(taxCategory.rate)})`, formatMoney(expense.taxAmount)) : null}
+            {taxCategory ? amountRow(tr('common:totals.netAmount'), formatMoney(subtract(expense.amount, expense.taxAmount))) : null}
+            {taxCategory ? amountRow(tr('purchases:form.inputTaxRate', { rate: formatPercent(taxCategory.rate) }), formatMoney(expense.taxAmount)) : null}
             {taxCategory ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
             {amountRow(tr('purchases:expense.total'), formatMoney(expense.amount), true)}
           </View>
@@ -187,7 +187,7 @@ export default function ExpenseDetail() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
               <MaterialCommunityIcons name="paperclip" size={19} color={t.c.primary} />
               <Text variant="small">
-                {expense.attachmentIds.length} attachment{expense.attachmentIds.length === 1 ? '' : 's'}
+                {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
               </Text>
             </View>
           </FormSection>
@@ -202,7 +202,7 @@ export default function ExpenseDetail() {
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
         <Stack.Screen
           options={{
-            title: expense.number || 'Expense',
+            title: expense.number || tr('nav:title.expense'),
             // A desktop keeps the page actions together, top right, instead of a bar at the bottom.
             headerRight: () => (
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
@@ -229,7 +229,7 @@ export default function ExpenseDetail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: expense.number || 'Expense' }} />
+      <Stack.Screen options={{ title: expense.number || tr('nav:title.expense') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
@@ -253,30 +253,30 @@ export default function ExpenseDetail() {
             {formatMoney(expense.amount)}
           </Text>
           <Text variant="small" tone="muted">
-            {category?.name ?? 'Uncategorised'}
+            {category?.name ?? tr('purchases:expense.uncategorised')}
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <Badge label={expense.number} tone="neutral" />
-            {expense.recurrence !== 'none' ? <Badge label={expense.recurrence} tone="info" /> : null}
+            {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
           </View>
         </Card>
 
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           {[
-            { label: 'Date', value: formatDate(expense.date) },
-            { label: 'Paid by', value: paymentMethodLabel(tr, expense.method) },
-            { label: 'Paid from', value: account?.name ?? '—' },
-            ...(supplier ? [{ label: 'Supplier', value: supplier.name }] : []),
-            ...(expense.reference ? [{ label: 'Reference', value: expense.reference }] : []),
+            { label: tr('purchases:form.date'), value: formatDate(expense.date) },
+            { label: tr('purchases:form.paidBy'), value: paymentMethodLabel(tr, expense.method) },
+            { label: tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
+            ...(supplier ? [{ label: tr('purchases:form.supplier'), value: supplier.name }] : []),
+            ...(expense.reference ? [{ label: tr('purchases:form.reference'), value: expense.reference }] : []),
             ...(taxCategory
               ? [
-                  { label: 'Net amount', value: formatMoney(subtract(expense.amount, expense.taxAmount)) },
-                  { label: `Input tax (${formatPercent(taxCategory.rate)})`, value: formatMoney(expense.taxAmount) },
+                  { label: tr('common:totals.netAmount'), value: formatMoney(subtract(expense.amount, expense.taxAmount)) },
+                  { label: tr('purchases:form.inputTaxRate', { rate: formatPercent(taxCategory.rate) }), value: formatMoney(expense.taxAmount) },
                 ]
               : []),
-            ...(expense.nextRecurrenceDate ? [{ label: 'Next due', value: formatDate(expense.nextRecurrenceDate) }] : []),
-            { label: 'Recorded', value: formatDateTime(expense.createdAt) },
+            ...(expense.nextRecurrenceDate ? [{ label: tr('purchases:expense.nextDue'), value: formatDate(expense.nextRecurrenceDate) }] : []),
+            { label: tr('purchases:expense.recorded'), value: formatDateTime(expense.createdAt) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
               <Text variant="small" tone="muted">
@@ -302,7 +302,7 @@ export default function ExpenseDetail() {
           <Card variant="flat" style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             <MaterialCommunityIcons name="paperclip" size={19} color={t.c.primary} />
             <Text variant="small" style={{ flex: 1 }}>
-              {expense.attachmentIds.length} attachment{expense.attachmentIds.length === 1 ? '' : 's'}
+              {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
             </Text>
           </Card>
         ) : null}

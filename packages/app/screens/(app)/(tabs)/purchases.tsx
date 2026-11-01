@@ -28,7 +28,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 export default function PurchasesTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['purchases']);
+  const { t: tr } = useTranslation(['purchases', 'common', 'nav']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -74,13 +74,13 @@ export default function PurchasesTab() {
         map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + Math.round(e.amount.minor * (e.exchangeRate || 1)));
       });
     return Array.from(map.entries()).map(([id, minor]) => ({
-      label: categories.find((c) => c.id === id)?.name ?? 'Other',
+      label: categories.find((c) => c.id === id)?.name ?? tr('purchases:expense.otherCategory'),
       value: money(minor, baseCurrency),
     }));
-  }, [expenses, categories, baseCurrency]);
+  }, [expenses, categories, baseCurrency, tr]);
 
   const recent = bills.filter((d) => d.status !== 'cancelled').slice(0, 6);
-  const nameOf = (id: string) => suppliers.find((s) => s.id === id)?.name ?? 'Unknown';
+  const nameOf = (id: string) => suppliers.find((s) => s.id === id)?.name ?? tr('common:placeholder.unknown');
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -111,7 +111,7 @@ export default function PurchasesTab() {
               label={tr('purchases:hub.payable')}
               value={payables.summary.total}
               icon="file-clock-outline"
-              caption={`${payables.outstanding.length} open bills`}
+              caption={tr('purchases:hub.openBills', { count: payables.outstanding.length })}
               onPress={() => router.push('/(app)/payables')}
             />
             <StatTile
@@ -127,21 +127,21 @@ export default function PurchasesTab() {
         <SectionHeader title={tr('purchases:hub.documents')} />
         <HubTiles
           tiles={[
-            { key: 'bills', label: 'Purchase bills', icon: 'file-document-outline', route: '/(app)/purchases/bills', count: bills.length },
-            { key: 'orders', label: 'Purchase orders', icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: orders.length },
-            { key: 'receipts', label: 'Goods receipts', icon: 'package-down', route: '/(app)/purchases/receipts', count: receipts.length },
-            { key: 'returns', label: 'Purchase returns', icon: 'package-up', route: '/(app)/purchases/returns', count: returns.length },
+            { key: 'bills', label: tr('nav:title.purchaseBills'), icon: 'file-document-outline', route: '/(app)/purchases/bills', count: bills.length },
+            { key: 'orders', label: tr('nav:title.purchaseOrders'), icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: orders.length },
+            { key: 'receipts', label: tr('nav:title.goodsReceipts'), icon: 'package-down', route: '/(app)/purchases/receipts', count: receipts.length },
+            { key: 'returns', label: tr('nav:title.purchaseReturns'), icon: 'package-up', route: '/(app)/purchases/returns', count: returns.length },
             { key: 'expenses', label: tr('purchases:hub.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses', count: expenses.length },
-            { key: 'payments', label: 'Payments out', icon: 'cash-minus', route: '/(app)/payments/made', count: payments.length },
+            { key: 'payments', label: tr('purchases:hub.paymentsOut'), icon: 'cash-minus', route: '/(app)/payments/made', count: payments.length },
           ]}
         />
 
-        <SectionHeader title={tr('purchases:hub.whereMoneyGoes')} action="Report" onAction={() => router.push('/(app)/reports/expense-summary')} />
+        <SectionHeader title={tr('purchases:hub.whereMoneyGoes')} action={tr('nav:title.report')} onAction={() => router.push('/(app)/reports/expense-summary')} />
         <Card>
-          <DonutChart slices={expenseSlices} centerLabel="Last 90 days" />
+          <DonutChart slices={expenseSlices} centerLabel={tr('common:dateRange.last90')} />
         </Card>
 
-        <SectionHeader title={tr('purchases:hub.recentBills')} action="See all" onAction={() => router.push('/(app)/purchases/bills')} />
+        <SectionHeader title={tr('purchases:hub.recentBills')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/purchases/bills')} />
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState

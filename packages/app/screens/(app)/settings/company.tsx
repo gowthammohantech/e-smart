@@ -20,16 +20,16 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { monthNames } from '@esmart/core/lib/date';
 import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
 export default function CompanySettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings', 'onboarding']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
+  const months = monthNames();
   const goBack = useGoBack();
   const { run: serverSave, saving } = useServerSave();
 
@@ -72,7 +72,7 @@ export default function CompanySettings() {
 
   const save = async () => {
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'> = {
-      name: required(name, 'Business name'),
+      name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
@@ -104,7 +104,7 @@ export default function CompanySettings() {
         taxRegistration: {
           regime: country?.regime ?? 'NONE',
           identifier: taxId.trim().toUpperCase() || undefined,
-          identifierLabel: country?.taxIdLabel ?? 'Tax number',
+          identifierLabel: country?.taxIdLabel ?? tr('onboarding:done.defaultTaxLabel'),
           registered: taxRegistered,
           compositionScheme: composition,
           placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
@@ -155,10 +155,10 @@ export default function CompanySettings() {
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
         <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
         <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
-        <PickerField label={tr('settings:company.fyStarts')} value={MONTHS[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />
+        <PickerField label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />
 
         <SwitchField
-          label={`Registered for ${country?.regime === 'VAT' ? 'VAT' : 'GST'}`}
+          label={tr('settings:company.registeredFor', { regime: country?.regime === 'VAT' ? 'VAT' : 'GST' })}
           value={taxRegistered}
           onValueChange={setTaxRegistered}
           disabled={locks.registration}
@@ -166,7 +166,7 @@ export default function CompanySettings() {
         {taxRegistered ? (
           <>
             <TextField
-              label={country?.taxIdLabel ?? 'Tax number'}
+              label={country?.taxIdLabel ?? tr('onboarding:tax.numberLabel')}
               value={taxId}
               onChangeText={(v) => setTaxId(v.toUpperCase())}
               autoCapitalize="characters"
@@ -225,7 +225,7 @@ export default function CompanySettings() {
           if (city && !citiesForState(code).includes(city)) setCity('');
         }}
       />
-      <SelectSheet visible={fyOpen} onClose={() => setFyOpen(false)} title={tr('settings:company.fyStarts')} options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} value={String(fyMonth)} onSelect={(v) => setFyMonth(Number(v))} searchable={false} />
+      <SelectSheet visible={fyOpen} onClose={() => setFyOpen(false)} title={tr('settings:company.fyStarts')} options={months.map((m, i) => ({ value: String(i + 1), label: m }))} value={String(fyMonth)} onSelect={(v) => setFyMonth(Number(v))} searchable={false} />
     </KeyboardAvoidingView>
   );
 }

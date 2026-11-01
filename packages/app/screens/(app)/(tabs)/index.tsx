@@ -45,7 +45,7 @@ import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function Home() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'reports']);
+  const { t: tr } = useTranslation(['common', 'reports', 'nav', 'lixi']);
   const router = useRouter();
   const pullToLixi = useUiStore((s) => s.lixiAccess.pullDown);
 
@@ -122,7 +122,7 @@ export default function Home() {
 
   const openQuotes = quotes.filter((q) => q.status === 'sent');
   const draftInvoices = invoices.filter((d) => d.status === 'draft');
-  const nameOf = (id: string) => customers.find((c) => c.id === id)?.name ?? 'Unknown';
+  const nameOf = (id: string) => customers.find((c) => c.id === id)?.name ?? tr('common:placeholder.unknown');
 
   type AttentionItem = {
     icon: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -174,11 +174,10 @@ export default function Home() {
           <View style={{ alignItems: 'center', gap: t.spacing.md, paddingTop: t.spacing.xl }}>
             <Illustration name="empty-dashboard" size="hero" />
             <Text variant="h2" center>
-              Let&apos;s get you started
+              {tr('nav:home.emptyTitle')}
             </Text>
             <Text variant="small" tone="muted" center style={{ maxWidth: 300, lineHeight: 20 }}>
-              Raise your first invoice and this dashboard fills in — sales, collections, what you&apos;re owed and where
-              the money goes.
+              {tr('nav:home.emptyBody')}
             </Text>
           </View>
 
@@ -189,9 +188,9 @@ export default function Home() {
           <SectionHeader title={tr('reports:home.firstSteps')} />
           <Card padded={false}>
             {[
-              { label: 'Add a customer', icon: 'account-plus-outline' as const, route: '/(app)/contacts/customers/new' },
-              { label: 'Add a product or service', icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
-              { label: 'Create your first invoice', icon: 'file-document-edit-outline' as const, route: '/(app)/sales/invoices/new' },
+              { label: tr('reports:home.step.customer.title'), icon: 'account-plus-outline' as const, route: '/(app)/contacts/customers/new' },
+              { label: tr('reports:home.step.item.title'), icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
+              { label: tr('reports:home.step.invoice.title'), icon: 'file-document-edit-outline' as const, route: '/(app)/sales/invoices/new' },
             ].map((step, i, arr) => (
               <Pressable
                 key={step.label}
@@ -241,13 +240,13 @@ export default function Home() {
       <Screen
         bottomInset={80}
         onRefresh={pullToLixi ? () => openLixi() : undefined}
-        refreshTitle="Let go to ask Lixi"
+        refreshTitle={tr('lixi:ui.letGo')}
       >
         <Text variant="h2" style={{ marginBottom: 2 }}>
-          {greeting()}, {user?.name?.split(' ')[0] ?? 'there'}
+          {tr(greetingKey(), { name: user?.name?.split(' ')[0] ?? tr('nav:home.there') })}
         </Text>
         <Text variant="small" tone="muted">
-          Here&apos;s how the business is doing this month.
+          {tr('nav:home.subtitle')}
         </Text>
 
         <View style={{ marginTop: t.spacing.xl, marginHorizontal: -t.spacing.lg, paddingLeft: t.spacing.lg }}>
@@ -299,7 +298,7 @@ export default function Home() {
               value={String(compliance.eInvoice.generated)}
               tone="good"
               icon="shield-check-outline"
-              caption={compliance.eInvoice.failed ? `${compliance.eInvoice.failed} rejected` : 'Reported to IRP'}
+              caption={compliance.eInvoice.failed ? tr('nav:home.eInvoiceRejected', { count: compliance.eInvoice.failed }) : tr('nav:home.eInvoiceReported')}
               // Both cards name their tab: the GST tab stays mounted and would keep the last one.
               onPress={() => router.push('/(app)/(tabs)/gst?tab=eInvoice')}
             />
@@ -308,7 +307,7 @@ export default function Home() {
               value={String(compliance.eway.active)}
               tone={compliance.expiringSoon ? 'warn' : 'default'}
               icon="truck-fast-outline"
-              caption={compliance.expiringSoon ? `${compliance.expiringSoon} expire in 24 h` : 'Active'}
+              caption={compliance.expiringSoon ? tr('nav:home.ewbExpiring', { count: compliance.expiringSoon }) : tr('nav:home.ewbActive')}
               onPress={() => router.push('/(app)/(tabs)/gst?tab=eway')}
             />
           </StatRow>
@@ -318,12 +317,12 @@ export default function Home() {
         <Columns
           left={
             <>
-              <SectionHeader title={tr('reports:home.salesTrend')} action="Reports" onAction={() => router.push('/(app)/reports/sales-summary')} />
+              <SectionHeader title={tr('reports:home.salesTrend')} action={tr('nav:tab.reports')} onAction={() => router.push('/(app)/reports/sales-summary')} />
               <Card>
                 <BarChart data={salesTrend} caption={tr('reports:home.salesTrendCaption')} />
               </Card>
 
-              <SectionHeader title={tr('reports:home.owedToYou')} action="View all" onAction={() => router.push('/(app)/receivables')} />
+              <SectionHeader title={tr('reports:home.owedToYou')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/receivables')} />
               <Card style={{ gap: t.spacing.lg }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <View style={{ gap: 3 }}>
@@ -333,8 +332,8 @@ export default function Home() {
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 5 }}>
-                    <Badge label={`${formatMoney(receivables.summary.overdue)} overdue`} tone="danger" size="sm" />
-                    <Badge label={`${formatMoney(receivables.summary.dueSoon)} due soon`} tone="warning" size="sm" />
+                    <Badge label={tr('nav:home.amountOverdue', { amount: formatMoney(receivables.summary.overdue) })} tone="danger" size="sm" />
+                    <Badge label={tr('nav:home.amountDueSoon', { amount: formatMoney(receivables.summary.dueSoon) })} tone="warning" size="sm" />
                   </View>
                 </View>
                 <AgingBars
@@ -349,7 +348,7 @@ export default function Home() {
 
               {full ? (
                 <>
-              <SectionHeader title={tr('reports:home.youOwe')} action="View all" onAction={() => router.push('/(app)/payables')} />
+              <SectionHeader title={tr('reports:home.youOwe')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/payables')} />
               <Card
                 onPress={() => router.push('/(app)/payables')}
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
@@ -361,9 +360,9 @@ export default function Home() {
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Badge label={`${formatMoney(payables.summary.overdue)} overdue`} tone="danger" size="sm" />
+                  <Badge label={tr('nav:home.amountOverdue', { amount: formatMoney(payables.summary.overdue) })} tone="danger" size="sm" />
                   <Text variant="micro" tone="muted">
-                    {payables.outstanding.length} open bills
+                    {tr('nav:home.openBills', { count: payables.outstanding.length })}
                   </Text>
                 </View>
               </Card>
@@ -411,14 +410,14 @@ export default function Home() {
 
               {overdueInvoices.length > 0 ? (
                 <>
-                  <SectionHeader title={tr('reports:home.attentionCaption')} action="Receivables" onAction={() => router.push('/(app)/receivables')} />
+                  <SectionHeader title={tr('reports:home.attentionCaption')} action={tr('nav:title.receivables')} onAction={() => router.push('/(app)/receivables')} />
                   <Card padded={false}>
                     {overdueInvoices.map((o, i) => (
                       <DocumentRow
                         key={o.document.id}
                         document={o.document}
                         partyName={nameOf(o.document.partyId)}
-                        outstandingLabel={`${o.daysOverdue}d overdue`}
+                        outstandingLabel={tr('nav:home.daysOverdue', { count: o.daysOverdue })}
                         divider={i < overdueInvoices.length - 1}
                         onPress={() => router.push(`/(app)/sales/invoices/${o.document.id}`)}
                       />
@@ -427,7 +426,7 @@ export default function Home() {
                 </>
               ) : null}
 
-              <SectionHeader title={tr('reports:home.recentInvoices')} action="See all" onAction={() => router.push('/(app)/sales/invoices')} />
+              <SectionHeader title={tr('reports:home.recentInvoices')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/sales/invoices')} />
               <Card padded={false}>
                 {recent.length === 0 ? (
                   <EmptyState
@@ -500,9 +499,9 @@ export default function Home() {
   );
 }
 
-function greeting(): string {
+function greetingKey() {
   const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 12) return 'nav:home.greetMorning' as const;
+  if (h < 17) return 'nav:home.greetAfternoon' as const;
+  return 'nav:home.greetEvening' as const;
 }

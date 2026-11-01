@@ -41,7 +41,7 @@ function params(value: string): string[] {
  */
 const TA_LATIN_ALLOWLIST = new RegExp(
   `^(${[
-    'GST|GSTIN|GSTR|HSN|SAC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|LUT|B2B|B2C|FY|PDF|OTP|CSV|PNG|JPEG|MB|QR|UPI|OCR|SKU|HSN|PO|SEZ|UTR|LR|ID|URP|GSP|IRN|IRP|EWB|EWBs|HDFC|ERP|SDK|Expo|Storyset|Gati|Logistics|TRANSIN|JSON|Part-A|Part-B|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E',
+    'GST|GSTIN|GSTR|HSN|SAC|ITC|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|LUT|B2B|B2C|FY|PDF|OTP|CSV|PNG|JPEG|MB|QR|UPI|OCR|SKU|HSN|PO|SEZ|UTR|LR|ID|URP|GSP|IRN|IRP|EWB|EWBs|HDFC|ERP|SDK|Expo|Storyset|Gati|Logistics|TRANSIN|JSON|Part-A|Part-B|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E',
     // Platforms and products, named as their makers write them ("Expo Go").
     'Android|iPhone|Go|Excel|xlsx|Tally|XML',
     // Keyboard keys, as printed on the key.
@@ -111,6 +111,31 @@ describe('i18n catalogues', () => {
             keys.includes(sibling) ? `${locale}:${ns}:${sibling}` : `${locale}:${ns}:${sibling} (missing)`,
           );
         }
+      }
+    });
+
+    /**
+     * `{{kind}}` and friends end in any consonant or vowel, so a case suffix
+     * glued straight on ("{{kind}}க்கு") gives forms like ஆர்டர்க்கு. Either
+     * hyphenate it, as numbers do ("{{number}}-ஐ"), or put the suffix on a
+     * noun after the placeholder ("{{kind}} ஆவணத்துக்கு").
+     */
+    it('never glues a Tamil case suffix onto a placeholder', () => {
+      for (const [key, value] of entries(taNs)) {
+        expect({ key, glued: /\}\}[஀-௿]/.test(value) }).toEqual({ key, glued: false });
+      }
+    });
+
+    /**
+     * வரி is "tax"; a document line is வரிசை. With both in the same editor, a
+     * "line" rendered as வரி reads as "tax" ("HSN is required on every tax").
+     */
+    it('translates a document line as வரிசை, not வரி', () => {
+      for (const [key, enValue] of entries(enNs)) {
+        const taValue = leafAt(taNs, key);
+        if (typeof taValue !== 'string' || !/\blines?\b/i.test(enValue)) continue;
+        const taxOnly = /வரி(?!சை)/.test(taValue) && !taValue.includes('வரிசை');
+        expect({ key, taxOnly }).toEqual({ key, taxOnly: false });
       }
     });
 

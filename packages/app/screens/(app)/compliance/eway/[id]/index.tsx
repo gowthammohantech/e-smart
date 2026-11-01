@@ -9,13 +9,13 @@ import { useEwayBill } from '../../../../../store/selectors';
 
 export default function EwayBillScreen() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['compliance']);
+  const { t: tr } = useTranslation(['compliance', 'common']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const bill = useEwayBill(id);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: bill ? 'E-way bill' : 'Not found' }} />
+      <Stack.Screen options={{ title: bill ? tr('compliance:einv.ewayBill') : tr('common:notFound.title') }} />
       {bill ? (
         <EwayBillDetail bill={bill} />
       ) : (

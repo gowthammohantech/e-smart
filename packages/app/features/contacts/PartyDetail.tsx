@@ -40,7 +40,7 @@ export function PartyDetail({ party }: { party: Party }) {
   useRefreshOnFocus();
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['contacts', 'domain']);
+  const { t: tr } = useTranslation(['contacts', 'domain', 'common', 'nav', 'purchases', 'reports']);
   const router = useRouter();
   const goBack = useGoBack();
   const { run: serverSave } = useServerSave();
@@ -166,12 +166,12 @@ export function PartyDetail({ party }: { party: Party }) {
       </View>
 
       <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: t.c.line, paddingTop: t.spacing.sm }}>
-        {contactAction('phone', 'Call', () => Linking.openURL(`tel:${party.phone}`), !party.phone)}
+        {contactAction('phone', tr('contacts:detail.call'), () => Linking.openURL(`tel:${party.phone}`), !party.phone)}
         {contactAction('whatsapp', 'WhatsApp', () => Linking.openURL(`https://wa.me/${(party.phone ?? '').replace(/[^0-9]/g, '')}`), !party.phone)}
-        {contactAction('email-outline', 'Email', () => Linking.openURL(`mailto:${party.email}`), !party.email)}
+        {contactAction('email-outline', tr('contacts:form.email'), () => Linking.openURL(`mailto:${party.email}`), !party.email)}
         {contactAction(
           isCustomer ? 'file-document-edit-outline' : 'cart-outline',
-          isCustomer ? 'Invoice' : 'Bill',
+          isCustomer ? tr('nav:title.invoice') : tr('purchases:hub.bill'),
           () => router.push(`${isCustomer ? '/(app)/sales/invoices/new' : '/(app)/purchases/bills/new'}?partyId=${party.id}`),
         )}
       </View>
@@ -182,17 +182,21 @@ export function PartyDetail({ party }: { party: Party }) {
     <>
     <StatRow>
       <StatTile
-        label={isCustomer ? 'Owes you' : 'You owe'}
+        label={isCustomer ? tr('contacts:detail.owesYou') : tr('reports:home.youOwe')}
         value={totalOutstanding}
         tone={totalOutstanding.minor > 0 ? (overdueCount > 0 ? 'bad' : 'warn') : 'good'}
         icon="clock-alert-outline"
-        caption={`${outstanding.length} open${overdueCount ? ` · ${overdueCount} overdue` : ''}`}
+        caption={
+          overdueCount
+            ? `${tr('contacts:detail.openCount', { count: outstanding.length })} · ${tr('contacts:detail.overdueCount', { count: overdueCount })}`
+            : tr('contacts:detail.openCount', { count: outstanding.length })
+        }
       />
       <StatTile
-        label={isCustomer ? 'Total invoiced' : 'Total purchased'}
+        label={isCustomer ? tr('contacts:detail.totalInvoiced') : tr('contacts:detail.totalPurchased')}
         value={lifetimeValue}
         icon="chart-line"
-        caption={`${history.invoices.length} documents`}
+        caption={tr('contacts:detail.documentCount', { count: history.invoices.length })}
       />
     </StatRow>
     </>
@@ -210,7 +214,9 @@ export function PartyDetail({ party }: { party: Party }) {
               document={o.document}
               partyName={party.name}
               outstandingLabel={
-                o.daysOverdue > 0 ? `${o.daysOverdue}d overdue · ${formatMoney(o.outstanding)} left` : `${formatMoney(o.outstanding)} left`
+                o.daysOverdue > 0
+                  ? tr('contacts:detail.overdueLeft', { days: o.daysOverdue, amount: formatMoney(o.outstanding) })
+                  : tr('contacts:detail.amountLeft', { amount: formatMoney(o.outstanding) })
               }
               divider={i < outstanding.length - 1}
               onPress={() => router.push(detailRouteFor(o.document.kind, o.document.id) as never)}
@@ -223,10 +229,10 @@ export function PartyDetail({ party }: { party: Party }) {
     {shownTab === 'documents' ? (
       <View style={{ gap: t.spacing.lg }}>
         {[
-          { title: isCustomer ? 'Quotations' : 'Purchase orders', docs: isCustomer ? history.quotes : history.orders },
-          { title: isCustomer ? 'Sales orders' : 'Goods receipts', docs: isCustomer ? history.orders : history.deliveries },
-          { title: isCustomer ? 'Invoices' : 'Bills', docs: history.invoices },
-          { title: 'Returns', docs: history.returns },
+          { title: isCustomer ? tr('nav:title.quotations') : tr('nav:title.purchaseOrders'), docs: isCustomer ? history.quotes : history.orders },
+          { title: isCustomer ? tr('nav:title.salesOrders') : tr('nav:title.goodsReceipts'), docs: isCustomer ? history.orders : history.deliveries },
+          { title: isCustomer ? tr('nav:title.invoices') : tr('contacts:detail.bills'), docs: history.invoices },
+          { title: tr('contacts:detail.returns'), docs: history.returns },
         ]
           .filter((g) => g.docs.length > 0)
           .map((g) => (
@@ -234,7 +240,7 @@ export function PartyDetail({ party }: { party: Party }) {
               <Text variant="caption" tone="muted" weight="600" style={{ marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                 {g.title}
               </Text>
-              <Card padded={false}>{renderDocuments(g.docs, 'None yet')}</Card>
+              <Card padded={false}>{renderDocuments(g.docs, tr('contacts:detail.noneYet'))}</Card>
             </View>
           ))}
         {history.all.length === 0 ? (
@@ -293,21 +299,24 @@ export function PartyDetail({ party }: { party: Party }) {
     <>
     <Card style={{ gap: t.spacing.md }}>
       {[
-        { label: 'GSTIN', value: party.taxId ?? 'Not registered' },
-        { label: 'Phone', value: party.phone ?? '—' },
-        { label: 'Email', value: party.email ?? '—' },
-        { label: 'Currency', value: party.currency },
-        { label: 'Payment terms', value: party.paymentTermsDays === 0 ? 'Due on receipt' : `${party.paymentTermsDays} days` },
-        ...(party.creditLimit ? [{ label: 'Credit limit', value: formatMoney(party.creditLimit) }] : []),
-        { label: 'Opening balance', value: formatMoney(party.openingBalance) },
+        { label: 'GSTIN', value: party.taxId ?? tr('contacts:detail.notRegistered') },
+        { label: tr('contacts:form.phone'), value: party.phone ?? '—' },
+        { label: tr('contacts:form.email'), value: party.email ?? '—' },
+        { label: tr('contacts:form.currency'), value: party.currency },
         {
-          label: 'Billing address',
+          label: tr('contacts:form.paymentTerms'),
+          value: party.paymentTermsDays === 0 ? tr('contacts:form.dueOnReceipt') : tr('contacts:form.termsDays', { count: party.paymentTermsDays }),
+        },
+        ...(party.creditLimit ? [{ label: tr('contacts:form.creditLimit'), value: formatMoney(party.creditLimit) }] : []),
+        { label: tr('contacts:form.openingBalance'), value: formatMoney(party.openingBalance) },
+        {
+          label: tr('contacts:form.billingAddress'),
           value: [party.billingAddress?.line1, party.billingAddress?.city, party.billingAddress?.state, party.billingAddress?.postalCode]
             .filter(Boolean)
             .join(', ') || '—',
         },
-        { label: 'Added', value: formatDate(party.createdAt) },
-        ...(party.notes ? [{ label: 'Notes', value: party.notes }] : []),
+        { label: tr('contacts:detail.added'), value: formatDate(party.createdAt) },
+        ...(party.notes ? [{ label: tr('contacts:form.notes'), value: party.notes }] : []),
       ].map((r) => (
         <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg }}>
           <Text variant="small" tone="muted">
@@ -331,7 +340,7 @@ export function PartyDetail({ party }: { party: Party }) {
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
                 <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
                 <Button
-                  title={isCustomer ? 'Receive payment' : 'Pay'}
+                  title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
                   icon={isCustomer ? 'cash-plus' : 'cash-minus'}
                   onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
                 />
@@ -358,9 +367,9 @@ export function PartyDetail({ party }: { party: Party }) {
               <View style={{ gap: t.spacing.md }}>
                 <Segmented
                   options={[
-                    { value: 'activity', label: 'Open' },
-                    { value: 'documents', label: 'Documents' },
-                    { value: 'payments', label: 'Payments' },
+                    { value: 'activity', label: tr('contacts:detail.tabOpen') },
+                    { value: 'documents', label: tr('contacts:detail.tabDocuments') },
+                    { value: 'payments', label: tr('contacts:detail.tabPayments') },
                   ]}
                   value={tab}
                   onChange={(v) => setTab(v as Tab)}
@@ -378,10 +387,10 @@ export function PartyDetail({ party }: { party: Party }) {
             <View style={{ height: t.spacing.lg }} />
             <Segmented
               options={[
-                { value: 'activity', label: 'Open' },
-                { value: 'documents', label: 'Documents' },
-                { value: 'payments', label: 'Payments' },
-                { value: 'details', label: 'Details' },
+                { value: 'activity', label: tr('contacts:detail.tabOpen') },
+                { value: 'documents', label: tr('contacts:detail.tabDocuments') },
+                { value: 'payments', label: tr('contacts:detail.tabPayments') },
+                { value: 'details', label: tr('contacts:detail.tabDetails') },
               ]}
               value={tab}
               onChange={(v) => setTab(v as Tab)}
@@ -411,7 +420,7 @@ export function PartyDetail({ party }: { party: Party }) {
           }}
         >
           <Button
-            title={isCustomer ? 'Receive payment' : 'Pay'}
+            title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
             icon={isCustomer ? 'cash-plus' : 'cash-minus'}
             onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
             style={{ flex: 1 }}
@@ -422,16 +431,16 @@ export function PartyDetail({ party }: { party: Party }) {
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={party.name}>
         {[
-          { label: 'Edit contact', icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
+          { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
           ...(isCustomer
             ? [
-                { label: 'New invoice', icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
-                { label: 'New quotation', icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
+                { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
+                { label: tr('nav:title.newQuotation'), icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
                 // Only when something is owed; it opens the same reminder as the aging screen.
-                ...(outstanding.length ? [{ label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
+                ...(outstanding.length ? [{ label: tr('contacts:detail.sendReminder'), icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
               ]
-            : [{ label: 'New purchase bill', icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
-          { label: 'Delete contact', icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
+            : [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
+          { label: tr('contacts:detail.deleteContact'), icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
         ].map((a) => (
           <Pressable
             key={a.label}
@@ -462,7 +471,7 @@ export function PartyDetail({ party }: { party: Party }) {
 
       <ConfirmDialog
         visible={confirmDelete}
-        title={`Delete ${party.name}?`}
+        title={tr('contacts:detail.deleteTitle', { name: party.name })}
         message={tr('contacts:detail.deleteMessage')}
         confirmLabel={tr('contacts:detail.delete')}
         destructive

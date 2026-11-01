@@ -8,7 +8,10 @@
     "monthlyProfit": "Monthly profit",
     "profitCaption": "Revenue less cost of goods and expenses",
     "snapshot": "Snapshot",
-    "allReports": "All reports"
+    "allReports": "All reports",
+    "subtitle": "Financial year to date · {{currency}}",
+    "open": "Open",
+    "margin": "{{percent}} margin"
   },
   "home": {
     "firstSteps": "First steps",
@@ -74,7 +77,13 @@
     "branch": "Branch",
     "contact": "Contact",
     "exportCancelled": "Export was cancelled",
-    "basis": "Report basis"
+    "basis": "Report basis",
+    "allBranches": "all branches",
+    "allContacts": "All contacts",
+    "clearFilter": "Clear {{label}}",
+    "basisLine": "{{company}} · {{from}} to {{to}} · {{branch}} · {{currency}}",
+    "basisFull": "{{company}} · {{from}} to {{to}} · {{branch}} · presented in {{currency}}, foreign-currency documents converted at the rate stored on each document.",
+    "exportTitle": "{{title}} export"
   },
   "detail": {
     "unknown": "Unknown report",
@@ -103,6 +112,145 @@
     "howItAddsUp": "How it adds up",
     "monthlyDetail": "Monthly detail",
     "noTaxableSales": "No taxable sales in this period.",
-    "noTaxablePurchases": "No taxable purchases in this period."
+    "noTaxablePurchases": "No taxable purchases in this period.",
+    "topCustomers": "Top customers",
+    "topSuppliers": "Top suppliers",
+    "invoices": "Invoices",
+    "bills": "Bills",
+    "expenses": "Expenses",
+    "withCount": "{{title}} ({{count}})",
+    "empty": "Nothing in this period."
+  },
+  "report": {
+    "salesSummary": {
+      "title": "Sales summary",
+      "description": "By month, customer, item and branch"
+    },
+    "purchaseSummary": {
+      "title": "Purchase summary",
+      "description": "What you bought and from whom"
+    },
+    "expenseSummary": {
+      "title": "Expense summary",
+      "description": "Spend by category over time"
+    },
+    "receivables": {
+      "title": "Receivables",
+      "description": "Who owes you, and for how long",
+      "basis": "Outstanding = document total less allocated payments."
+    },
+    "payables": {
+      "title": "Payables",
+      "description": "Supplier dues and aging",
+      "basis": "Outstanding = bill total less payments made."
+    },
+    "stock": {
+      "title": "Stock report",
+      "description": "On-hand quantity and valuation",
+      "basis": "Quantity derived from every stock movement; value at weighted average cost."
+    },
+    "taxSummary": {
+      "title": "Tax summary",
+      "description": "Output vs input tax, ready to file",
+      "basis": "Output tax on sales less input tax on purchases."
+    },
+    "payments": {
+      "title": "Payments & cash",
+      "description": "Money in and out by method"
+    },
+    "profit": {
+      "title": "Profit snapshot",
+      "description": "Revenue less cost and expenses",
+      "basis": "Revenue is taxable value, so tax collected is not counted as income."
+    }
+  },
+  "figure": {
+    "totalInvoiced": "Total invoiced",
+    "totalPurchased": "Total purchased",
+    "discountsGiven": "Discounts given",
+    "discountsReceived": "Discounts received",
+    "invoicedValue": "Invoiced value",
+    "purchaseValue": "Purchase value",
+    "grandTotal": "Grand total",
+    "entries": "Entries",
+    "inputTax": "Input tax",
+    "largestCategory": "Largest category",
+    "overdue": "Overdue",
+    "openDocuments": "Open documents",
+    "trackedItems": "Tracked items",
+    "lowStock": "Low stock",
+    "outOfStock": "Out of stock",
+    "outputTaxOnSales": "Output tax on sales",
+    "inputTaxCredit": "Input tax credit",
+    "netPayable": "Net payable",
+    "moneyIn": "Money in",
+    "moneyOut": "Money out",
+    "payments": "Payments",
+    "allPayments": "All payments",
+    "revenue": "Revenue",
+    "revenueTaxable": "Revenue (taxable value)",
+    "costOfGoodsSold": "Cost of goods sold",
+    "grossProfit": "Gross profit",
+    "operatingExpenses": "Operating expenses",
+    "stockOnHand": "Stock on hand"
+  },
+  "caption": {
+    "documentsAvg_one": "{{count}} document · avg {{amount}}",
+    "documentsAvg_other": "{{count}} documents · avg {{amount}}",
+    "documents_one": "{{count}} document",
+    "documents_other": "{{count}} documents",
+    "units": "{{qty}} units",
+    "categories_one": "{{count}} category",
+    "categories_other": "{{count}} categories",
+    "documentsLate_one": "{{count}} document late",
+    "documentsLate_other": "{{count}} documents late",
+    "notYetDue": "{{count}} not yet due",
+    "atOrBelowReorder": "At or below reorder level",
+    "nothingOnHand": "Nothing on hand",
+    "onHand": "{{qty}} {{unit}} on hand",
+    "afterCostOfGoods": "After {{amount}} cost of goods",
+    "ofRevenue": "{{percent}} of revenue",
+    "accounts_one": "{{count}} account",
+    "accounts_other": "{{count}} accounts",
+    "entriesInputTax_one": "{{count}} entry · input tax {{amount}}",
+    "entriesInputTax_other": "{{count}} entries · input tax {{amount}}",
+    "openOverdue": "{{count}} open · {{amount}} overdue",
+    "stockCounts": "{{tracked}} tracked items · {{low}} low · {{out}} out",
+    "outputLessInput": "Output {{output}} less input {{input}}",
+    "inOut": "In {{received}} · out {{paid}}"
+  },
+  "column": {
+    "taxable": "Taxable",
+    "document": "Document",
+    "overdue": "Overdue",
+    "outstanding": "Outstanding",
+    "item": "Item",
+    "reorderAt": "Reorder at",
+    "reorderLevel": "Reorder level",
+    "value": "Value",
+    "rate": "Rate",
+    "totalTax": "Total tax",
+    "month": "Month",
+    "revenue": "Revenue",
+    "cost": "Cost",
+    "costOfGoods": "Cost of goods",
+    "expenses": "Expenses",
+    "profit": "Profit",
+    "days": "Days",
+    "direction": "Direction",
+    "paid": "Paid",
+    "daysOverdue": "Days overdue"
+  },
+  "cell": {
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "daysLate_one": "{{count}} day late",
+    "daysLate_other": "{{count}} days late",
+    "notDue": "Not due",
+    "current": "Current",
+    "agingA11y_one": "{{label}}: {{amount}} across {{count}} invoice",
+    "agingA11y_other": "{{label}}: {{amount}} across {{count}} invoices",
+    "outward": "Outward",
+    "inward": "Inward"
   }
 }

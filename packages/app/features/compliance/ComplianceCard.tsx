@@ -32,7 +32,7 @@ import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complia
  */
 export function ComplianceCard({ document: doc }: { document: BusinessDocument }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['compliance']);
+  const { t: tr } = useTranslation(['compliance', 'lixi']);
   const router = useRouter();
   const company = useActiveCompany();
   const settings = useComplianceSettings();
@@ -136,9 +136,9 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
 
           {eInvoiceStatus === 'cancelled' ? (
             <Text variant="caption" tone="bad" style={{ lineHeight: 18 }}>
-              {doc.compliance?.lastMessage ?? 'This IRN was cancelled on the portal.'}
+              {doc.compliance?.lastMessage ?? tr('compliance:einv.cancelledOnPortal')}
               {doc.compliance?.irnCancelledAt
-                ? ` on ${formatDate(doc.compliance.irnCancelledAt.slice(0, 10))}`
+                ? ` ${tr('compliance:einv.onDate', { date: formatDate(doc.compliance.irnCancelledAt.slice(0, 10)) })}`
                 : ''}
             </Text>
           ) : null}
@@ -166,7 +166,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
 
           {applicability.applicable && eInvoiceStatus !== 'generated' && eInvoiceStatus !== 'cancelled' ? (
             <Button
-              title={eInvoiceStatus === 'failed' ? 'Try again' : 'Generate IRN'}
+              title={eInvoiceStatus === 'failed' ? tr('lixi:ui.tryAgain') : tr('compliance:einv.generateIrn')}
               icon="shield-check-outline"
               size="sm"
               variant="secondary"
@@ -200,8 +200,10 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
 
           {eInvoiceStatus === 'generated' && cancellation.allowed && cancellation.deadline ? (
             <Text variant="micro" tone="muted">
-              Cancellable until {formatDate(cancellation.deadline.slice(0, 10))},{' '}
-              {cancellation.deadline.slice(11, 16)}
+              {tr('compliance:einv.cancellableUntil', {
+                date: formatDate(cancellation.deadline.slice(0, 10)),
+                time: cancellation.deadline.slice(11, 16),
+              })}
             </Text>
           ) : null}
         </View>
@@ -216,7 +218,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
               <Badge label={keyLabel(tr, billMeta.labelKey)} tone={expiringSoon ? 'warning' : billMeta.tone} icon={billMeta.icon} />
             ) : (
               <Badge
-                label={requirement.required ? 'Not raised' : 'Not required'}
+                label={requirement.required ? tr('compliance:status.docEway.pending') : tr('compliance:status.docEway.notRequired')}
                 tone={requirement.required ? 'warning' : 'neutral'}
               />
             )}
@@ -232,7 +234,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
             <Pressable
               onPress={() => router.push(`/(app)/compliance/eway/${bill.id}`)}
               accessibilityRole="button"
-              accessibilityLabel={`E-way bill ${bill.ewayBillNumber}`}
+              accessibilityLabel={tr('compliance:ewb.a11yBill', { number: bill.ewayBillNumber })}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -245,8 +247,10 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
                 <Text variant="mono">{bill.ewayBillNumber}</Text>
                 <Text variant="caption" tone={expiringSoon ? 'warn' : 'muted'}>
                   {billStatus === 'cancelled'
-                    ? `Cancelled ${bill.cancelledAt ? formatDate(bill.cancelledAt.slice(0, 10)) : ''}`
-                    : `Valid until ${formatDate(bill.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hours)}`}
+                    ? bill.cancelledAt
+                      ? tr('compliance:ewb.cancelledOn', { date: formatDate(bill.cancelledAt.slice(0, 10)) })
+                      : tr('compliance:status.eway.cancelled')
+                    : `${tr('compliance:ewb.validUntilDate', { date: formatDate(bill.validUpto.slice(0, 10)) })} · ${expiryPhrase(tr, hours)}`}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
@@ -255,7 +259,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
 
           {requirement.required && (!bill || billStatus !== 'active') ? (
             <Button
-              title={bill ? 'Raise a new e-way bill' : 'Generate e-way bill'}
+              title={bill ? tr('compliance:ewb.raiseNew') : tr('compliance:ewb.generate')}
               icon="truck-fast-outline"
               size="sm"
               variant="secondary"

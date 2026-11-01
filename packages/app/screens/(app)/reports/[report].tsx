@@ -46,24 +46,23 @@ import {
   useStockMovements,
 } from '../../../store/selectors';
 
-const TITLES: Record<string, { title: string; subtitle?: string }> = {
-  'sales-summary': { title: 'Sales summary' },
-  'purchase-summary': { title: 'Purchase summary' },
-  'expense-summary': { title: 'Expense summary' },
-  receivables: { title: 'Receivables', subtitle: 'Outstanding = document total less allocated payments.' },
-  payables: { title: 'Payables', subtitle: 'Outstanding = bill total less payments made.' },
-  stock: { title: 'Stock report', subtitle: 'Quantity derived from every stock movement; value at weighted average cost.' },
-  'tax-summary': { title: 'Tax summary', subtitle: 'Output tax on sales less input tax on purchases.' },
-  payments: { title: 'Payments & cash' },
-  profit: { title: 'Profit snapshot', subtitle: 'Revenue is taxable value, so tax collected is not counted as income.' },
-};
-
 export default function Report() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'nav', 'reports']);
+  const { t: tr } = useTranslation(['domain', 'nav', 'reports', 'common']);
   const { report } = useLocalSearchParams<{ report: string }>();
   const key = String(report);
-  const meta = TITLES[key];
+  const titles: Record<string, { title: string; subtitle?: string }> = {
+    'sales-summary': { title: tr('reports:report.salesSummary.title') },
+    'purchase-summary': { title: tr('reports:report.purchaseSummary.title') },
+    'expense-summary': { title: tr('reports:report.expenseSummary.title') },
+    receivables: { title: tr('reports:report.receivables.title'), subtitle: tr('reports:report.receivables.basis') },
+    payables: { title: tr('reports:report.payables.title'), subtitle: tr('reports:report.payables.basis') },
+    stock: { title: tr('reports:report.stock.title'), subtitle: tr('reports:report.stock.basis') },
+    'tax-summary': { title: tr('reports:report.taxSummary.title'), subtitle: tr('reports:report.taxSummary.basis') },
+    payments: { title: tr('reports:report.payments.title') },
+    profit: { title: tr('reports:report.profit.title'), subtitle: tr('reports:report.profit.basis') },
+  };
+  const meta = titles[key];
   // Always false in the native apps, so the desktop layout only ever reaches a browser.
   const desktop = useIsDesktop();
 
@@ -145,29 +144,32 @@ export default function Report() {
     body = (
       <>
         <HeroFigure
-          label={isSales ? 'Total invoiced' : 'Total purchased'}
+          label={isSales ? tr('reports:figure.totalInvoiced') : tr('reports:figure.totalPurchased')}
           value={data.total}
-          caption={`${data.count} documents · avg ${formatMoney({ minor: data.count ? Math.round(data.total.minor / data.count) : 0, currency: baseCurrency })}`}
+          caption={tr('reports:caption.documentsAvg', {
+            count: data.count,
+            amount: formatMoney({ minor: data.count ? Math.round(data.total.minor / data.count) : 0, currency: baseCurrency }),
+          })}
         />
         <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
-            <BarChart data={monthBars(data.byMonth)} caption={isSales ? 'Invoiced value' : 'Purchase value'} />
+            <BarChart data={monthBars(data.byMonth)} caption={isSales ? tr('reports:figure.invoicedValue') : tr('reports:figure.purchaseValue')} />
           </Card>
         </ReportSection>
         <ReportSection title={tr('reports:detail.breakdown')}>
           <KeyFigures
             rows={[
-              { label: 'Taxable value', value: formatMoney(data.taxable) },
-              { label: 'Tax', value: formatMoney(data.tax) },
-              { label: 'Discounts given', value: formatMoney(data.discount), tone: 'good' },
-              { label: 'Grand total', value: formatMoney(data.total) },
+              { label: tr('common:totals.taxableValue'), value: formatMoney(data.taxable) },
+              { label: tr('common:table.tax'), value: formatMoney(data.tax) },
+              { label: isSales ? tr('reports:figure.discountsGiven') : tr('reports:figure.discountsReceived'), value: formatMoney(data.discount), tone: 'good' },
+              { label: tr('reports:figure.grandTotal'), value: formatMoney(data.total) },
             ]}
           />
         </ReportSection>
-        <ReportSection title={isSales ? 'Top customers' : 'Top suppliers'}>
+        <ReportSection title={isSales ? tr('reports:detail.topCustomers') : tr('reports:detail.topSuppliers')}>
           <Card>
             <RankedBars
-              rows={data.byParty.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: `${r.count} documents` }))}
+              rows={data.byParty.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: tr('reports:caption.documents', { count: r.count }) }))}
               colorFor={(i) => seriesColor(t.scheme, i)}
             />
           </Card>
@@ -175,7 +177,7 @@ export default function Report() {
         <ReportSection title={tr('reports:detail.topItems')}>
           <Card>
             <RankedBars
-              rows={data.byItem.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: `${formatQty(r.count)} units` }))}
+              rows={data.byItem.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: tr('reports:caption.units', { qty: formatQty(r.count) }) }))}
               colorFor={(i) => seriesColor(t.scheme, i)}
             />
           </Card>
@@ -191,7 +193,7 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        ['Number', 'Date', 'Contact', 'Taxable', 'Tax', 'Total'],
+        [tr('common:table.number'), tr('common:table.date'), tr('reports:shell.contact'), tr('reports:column.taxable'), tr('common:table.tax'), tr('common:table.total')],
         data.documents.map((d) => [
           d.number,
           d.date,
@@ -206,10 +208,10 @@ export default function Report() {
   if (key === 'expense-summary') {
     body = (
       <>
-        <HeroFigure label={tr('reports:detail.totalSpent')} value={expenseSummary.total} tone="warn" caption={`${expenseSummary.count} entries · input tax ${formatMoney(expenseSummary.tax)}`} />
+        <HeroFigure label={tr('reports:detail.totalSpent')} value={expenseSummary.total} tone="warn" caption={tr('reports:caption.entriesInputTax', { count: expenseSummary.count, amount: formatMoney(expenseSummary.tax) })} />
         <ReportSection title={tr('reports:detail.byCategory')}>
           <Card>
-            <DonutChart slices={expenseSummary.byCategory.map((c) => ({ label: c.label, value: c.value }))} centerLabel="Total" />
+            <DonutChart slices={expenseSummary.byCategory.map((c) => ({ label: c.label, value: c.value }))} centerLabel={tr('common:table.total')} />
           </Card>
         </ReportSection>
         <ReportSection title={tr('reports:detail.byMonth')}>
@@ -219,7 +221,7 @@ export default function Report() {
         </ReportSection>
         <ReportSection title={tr('reports:detail.detail')}>
           <DataTable
-            headers={['Category', 'Entries', 'Amount']}
+            headers={[tr('common:table.category'), tr('reports:figure.entries'), tr('common:table.amount')]}
             rows={expenseSummary.byCategory.map((c) => [c.label, c.count, formatMoney(c.value)])}
             widths={[2, 1, 1.4]}
           />
@@ -228,7 +230,7 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        ['Number', 'Date', 'Category', 'Amount', 'Tax'],
+        [tr('common:table.number'), tr('common:table.date'), tr('common:table.category'), tr('common:table.amount'), tr('common:table.tax')],
         expenseSummary.expenses.map((e) => [
           e.number,
           e.date,
@@ -244,10 +246,10 @@ export default function Report() {
     body = (
       <>
         <HeroFigure
-          label={key === 'receivables' ? 'Total receivable' : 'Total payable'}
+          label={key === 'receivables' ? tr('reports:home.totalReceivable') : tr('reports:home.totalPayable')}
           value={data.summary.total}
           tone={data.summary.overdue.minor > 0 ? 'warn' : undefined}
-          caption={`${data.outstanding.length} open · ${formatMoney(data.summary.overdue)} overdue`}
+          caption={tr('reports:caption.openOverdue', { count: data.outstanding.length, amount: formatMoney(data.summary.overdue) })}
         />
         <ReportSection title={tr('reports:detail.aging')}>
           <Card>
@@ -256,11 +258,11 @@ export default function Report() {
         </ReportSection>
         <ReportSection title={tr('reports:detail.detail')}>
           <DataTable
-            headers={['Document', 'Days', 'Outstanding']}
+            headers={[tr('reports:column.document'), tr('reports:column.days'), tr('reports:column.outstanding')]}
             rows={data.outstanding
               .slice()
               .sort((a, b) => b.daysOverdue - a.daysOverdue)
-              .map((o) => [o.document.number, o.daysOverdue > 0 ? `${o.daysOverdue} late` : 'current', formatMoney(o.outstanding)])}
+              .map((o) => [o.document.number, o.daysOverdue > 0 ? tr('reports:cell.daysLate', { count: o.daysOverdue }) : tr('reports:cell.current'), formatMoney(o.outstanding)])}
             widths={[1.6, 1, 1.3]}
           />
         </ReportSection>
@@ -268,7 +270,16 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        ['Document', 'Contact', 'Date', 'Due', 'Total', 'Paid', 'Outstanding', 'Days overdue'],
+        [
+          tr('reports:column.document'),
+          tr('reports:shell.contact'),
+          tr('common:table.date'),
+          tr('common:table.due'),
+          tr('common:table.total'),
+          tr('reports:column.paid'),
+          tr('reports:column.outstanding'),
+          tr('reports:column.daysOverdue'),
+        ],
         data.outstanding.map((o) => [
           o.document.number,
           parties.find((p) => p.id === o.document.partyId)?.name ?? '',
@@ -285,14 +296,14 @@ export default function Report() {
   if (key === 'stock') {
     body = (
       <>
-        <HeroFigure label={tr('reports:detail.stockValue')} value={stock.totalValue} caption={`${stock.trackedCount} tracked items · ${stock.lowCount} low · ${stock.outCount} out`} />
+        <HeroFigure label={tr('reports:detail.stockValue')} value={stock.totalValue} caption={tr('reports:caption.stockCounts', { tracked: stock.trackedCount, low: stock.lowCount, out: stock.outCount })} />
         <ReportSection title={tr('reports:detail.mostValuable')}>
           <Card>
             <RankedBars
               rows={stock.rows.slice(0, 8).map((r) => ({
                 label: r.item.name,
                 value: r.value,
-                sublabel: `${formatQty(r.onHand)} ${r.item.unit} on hand`,
+                sublabel: tr('reports:caption.onHand', { qty: formatQty(r.onHand), unit: r.item.unit }),
               }))}
               colorFor={(i) => seriesColor(t.scheme, i)}
             />
@@ -300,7 +311,7 @@ export default function Report() {
         </ReportSection>
         <ReportSection title={tr('reports:detail.allTracked')}>
           <DataTable
-            headers={['Item', 'On hand', 'Value']}
+            headers={[tr('reports:column.item'), tr('common:table.onHand'), tr('reports:column.value')]}
             rows={stock.rows.map((r) => [r.item.name, `${formatQty(r.onHand)} ${r.item.unit}`, formatMoney(r.value)])}
             widths={[2, 1, 1.3]}
           />
@@ -309,7 +320,7 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        ['SKU', 'Item', 'Unit', 'On hand', 'Reorder level', 'Value'],
+        [tr('common:table.sku'), tr('reports:column.item'), tr('common:table.unit'), tr('common:table.onHand'), tr('reports:column.reorderLevel'), tr('reports:column.value')],
         stock.rows.map((r) => [r.item.sku, r.item.name, r.item.unit, r.onHand, r.item.reorderLevel, toMajor(r.value)]),
       );
   }
@@ -321,7 +332,7 @@ export default function Report() {
           label={tr('reports:detail.netTaxPayable')}
           value={tax.netPayable}
           tone={tax.netPayable.minor > 0 ? 'bad' : 'good'}
-          caption={`Output ${formatMoney(tax.outwardTotal)} less input ${formatMoney(tax.inwardTotal)}`}
+          caption={tr('reports:caption.outputLessInput', { output: formatMoney(tax.outwardTotal), input: formatMoney(tax.inwardTotal) })}
         />
         <ReportSection title={tr('reports:detail.outwardSupplies')}>
           {tax.outward.length === 0 ? (
@@ -330,7 +341,7 @@ export default function Report() {
             </Card>
           ) : (
             <DataTable
-              headers={['Rate', 'Taxable', 'CGST', 'SGST', 'IGST']}
+              headers={[tr('reports:column.rate'), tr('reports:column.taxable'), 'CGST', 'SGST', 'IGST']}
               rows={tax.outward.map((r) => [
                 formatPercent(r.rate),
                 formatMoney(r.taxable, { symbol: false, noDecimals: true }),
@@ -349,7 +360,7 @@ export default function Report() {
             </Card>
           ) : (
             <DataTable
-              headers={['Rate', 'Taxable', 'CGST', 'SGST', 'IGST']}
+              headers={[tr('reports:column.rate'), tr('reports:column.taxable'), 'CGST', 'SGST', 'IGST']}
               rows={tax.inward.map((r) => [
                 formatPercent(r.rate),
                 formatMoney(r.taxable, { symbol: false, noDecimals: true }),
@@ -364,9 +375,9 @@ export default function Report() {
         <ReportSection title={tr('reports:detail.summary')}>
           <KeyFigures
             rows={[
-              { label: 'Output tax on sales', value: formatMoney(tax.outwardTotal) },
-              { label: 'Input tax credit', value: formatMoney(tax.inwardTotal), tone: 'good' },
-              { label: 'Net payable', value: formatMoney(tax.netPayable), tone: tax.netPayable.minor > 0 ? 'bad' : 'good' },
+              { label: tr('reports:figure.outputTaxOnSales'), value: formatMoney(tax.outwardTotal) },
+              { label: tr('reports:figure.inputTaxCredit'), value: formatMoney(tax.inwardTotal), tone: 'good' },
+              { label: tr('reports:figure.netPayable'), value: formatMoney(tax.netPayable), tone: tax.netPayable.minor > 0 ? 'bad' : 'good' },
             ]}
           />
         </ReportSection>
@@ -374,10 +385,10 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        ['Direction', 'Rate', 'Taxable', 'CGST', 'SGST', 'IGST', 'Total'],
+        [tr('reports:column.direction'), tr('reports:column.rate'), tr('reports:column.taxable'), 'CGST', 'SGST', 'IGST', tr('common:table.total')],
         [
-          ...tax.outward.map((r) => ['Outward', r.rate, toMajor(r.taxable), toMajor(r.cgst), toMajor(r.sgst), toMajor(r.igst), toMajor(r.total)]),
-          ...tax.inward.map((r) => ['Inward', r.rate, toMajor(r.taxable), toMajor(r.cgst), toMajor(r.sgst), toMajor(r.igst), toMajor(r.total)]),
+          ...tax.outward.map((r) => [tr('reports:cell.outward'), r.rate, toMajor(r.taxable), toMajor(r.cgst), toMajor(r.sgst), toMajor(r.igst), toMajor(r.total)]),
+          ...tax.inward.map((r) => [tr('reports:cell.inward'), r.rate, toMajor(r.taxable), toMajor(r.cgst), toMajor(r.sgst), toMajor(r.igst), toMajor(r.total)]),
         ],
       );
   }
@@ -389,7 +400,7 @@ export default function Report() {
           label={tr('reports:detail.netCash')}
           value={paymentSummary.net}
           tone={paymentSummary.net.minor >= 0 ? 'good' : 'bad'}
-          caption={`In ${formatMoney(paymentSummary.received)} · out ${formatMoney(paymentSummary.paid)}`}
+          caption={tr('reports:caption.inOut', { received: formatMoney(paymentSummary.received), paid: formatMoney(paymentSummary.paid) })}
         />
         <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
@@ -402,7 +413,7 @@ export default function Report() {
         </ReportSection>
         <ReportSection title={tr('reports:detail.byMethod')}>
           <Card>
-            <DonutChart slices={paymentSummary.byMethod.map((m) => ({ label: m.label, value: m.value }))} centerLabel="All payments" />
+            <DonutChart slices={paymentSummary.byMethod.map((m) => ({ label: m.label, value: m.value }))} centerLabel={tr('reports:figure.allPayments')} />
           </Card>
         </ReportSection>
         <ReportSection title={tr('reports:detail.byAccount')}>
@@ -414,11 +425,11 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        ['Number', 'Date', 'Direction', 'Contact', 'Method', 'Amount'],
+        [tr('common:table.number'), tr('common:table.date'), tr('reports:column.direction'), tr('reports:shell.contact'), tr('common:table.method'), tr('common:table.amount')],
         paymentSummary.payments.map((p) => [
           p.number,
           p.date,
-          p.direction,
+          tr(`domain:status.${p.direction}`),
           parties.find((x) => x.id === p.partyId)?.name ?? '',
           paymentMethodLabel(tr, p.method),
           toMajor(p.amount),
@@ -433,7 +444,7 @@ export default function Report() {
           label={tr('reports:detail.netProfit')}
           value={profit.netProfit}
           tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
-          caption={`${formatPercent(profit.margin)} of revenue`}
+          caption={tr('reports:caption.ofRevenue', { percent: formatPercent(profit.margin) })}
         />
         <ReportSection title={tr('reports:detail.byMonth')}>
           <Card>
@@ -443,17 +454,17 @@ export default function Report() {
         <ReportSection title={tr('reports:detail.howItAddsUp')}>
           <KeyFigures
             rows={[
-              { label: 'Revenue (taxable value)', value: formatMoney(profit.revenue) },
-              { label: 'Cost of goods sold', value: `− ${formatMoney(profit.costOfGoods)}` },
-              { label: 'Gross profit', value: formatMoney(profit.grossProfit), tone: 'good' },
-              { label: 'Operating expenses', value: `− ${formatMoney(profit.expenses)}`, tone: 'warn' },
+              { label: tr('reports:figure.revenueTaxable'), value: formatMoney(profit.revenue) },
+              { label: tr('reports:figure.costOfGoodsSold'), value: `− ${formatMoney(profit.costOfGoods)}` },
+              { label: tr('reports:figure.grossProfit'), value: formatMoney(profit.grossProfit), tone: 'good' },
+              { label: tr('reports:figure.operatingExpenses'), value: `− ${formatMoney(profit.expenses)}`, tone: 'warn' },
               { label: tr('reports:detail.netProfit'), value: formatMoney(profit.netProfit), tone: profit.netProfit.minor >= 0 ? 'good' : 'bad' },
             ]}
           />
         </ReportSection>
         <ReportSection title={tr('reports:detail.monthlyDetail')}>
           <DataTable
-            headers={['Month', 'Revenue', 'Cost', 'Profit']}
+            headers={[tr('reports:column.month'), tr('reports:column.revenue'), tr('reports:column.cost'), tr('reports:column.profit')]}
             rows={profit.byMonth.map((m) => [
               monthLabel(m.key),
               formatMoney(m.revenue, { symbol: false, noDecimals: true }),
@@ -467,7 +478,7 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        ['Month', 'Revenue', 'Cost of goods', 'Expenses', 'Profit'],
+        [tr('reports:column.month'), tr('reports:column.revenue'), tr('reports:column.costOfGoods'), tr('reports:column.expenses'), tr('reports:column.profit')],
         profit.byMonth.map((m) => [m.key, toMajor(m.revenue), toMajor(m.cost), toMajor(m.expenses), toMajor(m.profit)]),
       );
   }

@@ -52,6 +52,18 @@ export function Text({ variant = 'body', tone = 'default', weight, center, style
     mono: { ...px(t.fontSize.small, 0), fontWeight: '500', fontVariant: ['tabular-nums'] },
   };
 
+  // Caller overrides go through the same script metrics as the variants. A
+  // new size without a line height would keep the variant's leading, which
+  // under Tamil puts a 10px label on a 23px line; and the tracking on
+  // uppercase captions spreads Tamil vowel signs away from their letters.
+  const override = StyleSheet.flatten(style);
+  const leading: TextStyle | null =
+    override?.fontSize != null && override.lineHeight == null
+      ? { lineHeight: t.type.lineHeight(override.fontSize) }
+      : null;
+  const tracked: TextStyle | null =
+    override?.letterSpacing != null ? { letterSpacing: t.type.tracking(override.letterSpacing) } : null;
+
   const tones: Record<TextTone, string> = {
     default: t.c.text,
     muted: t.c.muted,
@@ -69,7 +81,9 @@ export function Text({ variant = 'body', tone = 'default', weight, center, style
         { color: tones[tone] },
         weight ? { fontWeight: weight } : null,
         center ? styles.center : null,
+        leading,
         style,
+        tracked,
       ]}
       {...rest}
     />

@@ -1,5 +1,6 @@
 import type { Schema } from '@esmart/api-client';
 import { api } from './api';
+import { RemoteError } from './errors';
 
 export type ExportFormat = 'json-backup' | 'csv-zip' | 'tally-xml';
 export type BackupSettings = Schema<'BackupSettings'>;
@@ -18,11 +19,11 @@ export async function exportCompany(companyId: string, format: ExportFormat): Pr
   let current = job;
   const started = Date.now();
   while (current?.id && current.status !== 'completed' && current.status !== 'failed') {
-    if (Date.now() - started > GIVE_UP_MS) throw new Error('The export is taking longer than expected; try again shortly');
+    if (Date.now() - started > GIVE_UP_MS) throw new RemoteError('exportSlow', 'The export is taking longer than expected; try again shortly');
     await wait(POLL_MS);
     current = (await api.GET('/companies/{companyId}/exports/{id}', { params: { path: { companyId, id: current.id } } })).data;
   }
-  if (current?.status !== 'completed' || !current.downloadUrl) throw new Error('The export failed');
+  if (current?.status !== 'completed' || !current.downloadUrl) throw new RemoteError('exportFailed', 'The export failed');
   return current.downloadUrl;
 }
 

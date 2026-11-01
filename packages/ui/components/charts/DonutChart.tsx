@@ -65,7 +65,7 @@ export function DonutChart({
       ? [
           ...sorted.slice(0, maxSlices - 1),
           {
-            label: 'Other',
+            label: tr('common:component.other'),
             value: {
               minor: sorted.slice(maxSlices - 1).reduce((a, s) => a + s.value.minor, 0),
               currency,
@@ -134,7 +134,7 @@ export function DonutChart({
             {active ? `${activePct}%` : formatCompactMoney({ minor: total, currency })}
           </Text>
           <Text variant="micro" tone="muted" numberOfLines={1}>
-            {active ? active.label : (centerLabel ?? 'Total')}
+            {active ? active.label : (centerLabel ?? tr('common:totals.total'))}
           </Text>
         </View>
       </View>
@@ -148,7 +148,7 @@ export function DonutChart({
               onPress={() => setSelected(selected === i ? null : i)}
               accessibilityRole="button"
               accessibilityState={{ selected: selected === i }}
-              accessibilityLabel={`${s.label}: ${formatMoney(s.value)}, ${pct} percent`}
+              accessibilityLabel={tr('common:component.chartSlice', { label: s.label, amount: formatMoney(s.value), percent: pct })}
               style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}
             >
               <View

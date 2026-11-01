@@ -142,7 +142,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         next[i.field] = i.message;
       });
     setErrors(next);
-    toast.show(outcome.issues[0]?.message ?? 'The bill could not be raised', 'error');
+    toast.show(outcome.issues[0]?.message ?? tr('compliance:ewb.raiseFailed'), 'error');
   };
 
   return (
@@ -167,7 +167,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
           <PickerField
             label={tr('compliance:ewb.subSupplyType')}
-            value={EWAY_SUB_SUPPLY_TYPES[subSupplyType].label}
+            value={tr(`compliance:subSupply.${subSupplyType}`)}
             onPress={() => setSubSupplyOpen(true)}
             icon="tag-outline"
           />
@@ -218,7 +218,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             onChangeText={setTransporterId}
             autoCapitalize="characters"
             error={errors.transporterId}
-            placeholder="15-character GSTIN or TRANSIN"
+            placeholder={tr('compliance:ewb.transporterIdHint')}
           />
           <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
 
@@ -226,10 +226,10 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
             <Segmented
               options={[
-                { value: 'road', label: 'Road' },
-                { value: 'rail', label: 'Rail' },
-                { value: 'air', label: 'Air' },
-                { value: 'ship', label: 'Ship' },
+                { value: 'road', label: tr('compliance:mode.road') },
+                { value: 'rail', label: tr('compliance:mode.rail') },
+                { value: 'air', label: tr('compliance:mode.air') },
+                { value: 'ship', label: tr('compliance:mode.ship') },
               ]}
               value={transportMode}
               onChange={setTransportMode}
@@ -240,8 +240,8 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.cargo')}</Text>
             <Segmented
               options={[
-                { value: 'regular', label: 'Regular' },
-                { value: 'overDimensional', label: 'Over-dimensional' },
+                { value: 'regular', label: tr('compliance:cargo.regular') },
+                { value: 'overDimensional', label: tr('compliance:cargo.overDimensional') },
               ]}
               value={vehicleType}
               onChange={setVehicleType}
@@ -285,7 +285,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             value={distanceKm}
             onChangeText={setDistanceKm}
             keyboardType="number-pad"
-            suffix="km"
+            suffix={tr('compliance:ewb.km')}
             error={errors.distanceKm}
           />
 
@@ -294,14 +294,11 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text variant="small" weight="600">
-                {preview.days} {preview.days === 1 ? 'day' : 'days'} · valid to{' '}
-                {formatDate(preview.validUpto.slice(0, 10))}
+                {tr('compliance:ewb.validityPreview', { count: preview.days, date: formatDate(preview.validUpto.slice(0, 10)) })}
               </Text>
               <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                {vehicleType === 'overDimensional'
-                  ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
-                  : 'One day per 200 km, or part thereof.'}{' '}
-                Validity always runs to midnight.
+                {vehicleType === 'overDimensional' ? tr('compliance:ewb.ruleOdc') : tr('compliance:ewb.ruleRegular')}{' '}
+                {tr('compliance:ewb.midnight')}
               </Text>
             </View>
           </Card>
@@ -335,7 +332,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           title={tr('compliance:ewb.subSupplyType')}
           options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
             value: key,
-            label: EWAY_SUB_SUPPLY_TYPES[key].label,
+            label: tr(`compliance:subSupply.${key}`),
           }))}
           value={subSupplyType}
           onSelect={(v) => {
@@ -363,7 +360,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         <SelectSheet
           visible={stateSheet !== null}
           onClose={() => setStateSheet(null)}
-          title={stateSheet === 'from' ? 'Despatch state' : 'Delivery state'}
+          title={stateSheet === 'from' ? tr('compliance:ewb.despatchState') : tr('compliance:ewb.deliveryState')}
           options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
           value={stateSheet === 'from' ? from.stateCode : to.stateCode}
           onSelect={(code) => {

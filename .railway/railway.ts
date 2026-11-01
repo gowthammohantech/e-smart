@@ -22,6 +22,10 @@ export default defineRailway(() => {
     env: {
       NODE_ENV: 'production',
       LOG_LEVEL: 'info',
+      // The slim runtime image has no fonts, so headless Chromium prints Tamil
+      // (labels, and names typed in Tamil on English documents) as empty boxes.
+      // fonts-noto-core carries Noto Sans Tamil alongside the Latin faces.
+      RAILPACK_DEPLOY_APT_PACKAGES: 'fonts-noto-core',
       PUBLIC_BASE_URL: 'https://api-production-4abd.up.railway.app',
       // The web app, for the links people open: password resets and invites.
       // Point this at the deployed web app once it has a URL.

@@ -134,5 +134,10 @@ export function listJoin(items: string[]): string {
 }
 
 export function truncate(s: string, max: number): string {
-  return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+  if (s.length <= max) return s;
+  // Cutting before a vowel sign or virama strands the consonant it belongs to
+  // (and before a low surrogate, half an emoji), so back up to a whole letter.
+  let end = max - 1;
+  while (end > 0 && /[\p{M}\uDC00-\uDFFF]/u.test(s[end])) end--;
+  return `${s.slice(0, end)}…`;
 }

@@ -10,7 +10,20 @@
     "out": "Out",
     "low": "Low",
     "service": "Service",
-    "actions": "Stock actions"
+    "actions": "Stock actions",
+    "all": "All",
+    "trackedItems_one": "{{count}} tracked item",
+    "trackedItems_other": "{{count}} tracked items",
+    "outOfStock_one": "{{count}} out of stock",
+    "outOfStock_other": "{{count}} out of stock",
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} items",
+    "movements": "Movements",
+    "emptyFirst": "Add your first item to start tracking stock.",
+    "emptyFilter": "No items match this filter.",
+    "a11yStock": "{{name}}, {{qty}} in stock",
+    "a11yService": "{{name}}, service",
+    "setOpeningStock": "Set opening stock"
   },
   "form": {
     "name": "Name",
@@ -35,7 +48,16 @@
     "activeHint": "Inactive items are hidden when creating documents.",
     "namePlaceholderFull": "What you're selling",
     "trackStockHintFull": "Sales and purchases will move this item's stock automatically.",
-    "serviceUnitHint": "Services are always billed in Nos."
+    "serviceUnitHint": "Services are always billed in Nos.",
+    "itemName": "Item name",
+    "skuTaken": "Another item already uses this SKU",
+    "added": "Item added",
+    "updated": "Item updated",
+    "select": "Select",
+    "hsnCode": "HSN code",
+    "sacCode": "SAC code",
+    "openingLocked": "Use a stock adjustment to change this.",
+    "saveChanges": "Save changes"
   },
   "detail": {
     "inactive": "Inactive",
@@ -50,7 +72,20 @@
     "delete": "Delete",
     "deleted": "Item deleted",
     "pricing": "Pricing",
-    "stockMovements": "Stock movements"
+    "stockMovements": "Stock movements",
+    "perUnit": "per {{unit}}",
+    "cost": "cost {{amount}}",
+    "reorderAt": "reorder at {{qty}}",
+    "soldAllTime": "{{qty}} sold all-time",
+    "taxCategory": "Tax category",
+    "salePriceInclTax": "Sale price incl. tax",
+    "balance": "bal {{qty}}",
+    "adjustStock": "Adjust stock",
+    "transferBranches": "Transfer between branches",
+    "sellItem": "Sell this item",
+    "buyItem": "Buy this item",
+    "deleteItem": "Delete item",
+    "deleteTitle": "Delete {{name}}?"
   },
   "transfer": {
     "oneLocation": "You only have one location",
@@ -67,7 +102,10 @@
     "selectItem": "Select item",
     "fromBranch": "From branch",
     "toBranch": "To branch",
-    "done": "Stock transferred"
+    "done": "Stock transferred",
+    "onlyAvailable": "Only {{qty}} {{unit}} available at the source branch",
+    "available": "{{qty}} {{unit}} available",
+    "twoMovesNote": "Transfers post two movements — one out of the source branch and one into the destination — so total stock stays unchanged."
   },
   "adjust": {
     "item": "Item",
@@ -80,7 +118,22 @@
     "selectItem": "Select item",
     "done": "Stock adjusted",
     "newStock": "New stock",
-    "negativeWarning": "This would take stock negative. Check the quantity before saving."
+    "negativeWarning": "This would take stock negative. Check the quantity before saving.",
+    "decrease": "Decrease",
+    "increase": "Increase",
+    "currentStock": "Current stock",
+    "adjustment": "Adjustment",
+    "reasons": {
+      "damaged": "Damaged",
+      "lost": "Lost or stolen",
+      "expired": "Expired",
+      "sample": "Sample given",
+      "countCorrection": "Stock count correction",
+      "internalUse": "Internal use",
+      "found": "Found stock",
+      "customerReturn": "Returned from customer",
+      "production": "Production output"
+    }
   },
   "scan": {
     "barcode": "Barcode",
@@ -91,7 +144,9 @@
     "use": "Use",
     "pointCamera": "Point the camera at a barcode",
     "tryOne": "Try one of these",
-    "manualNote": "Camera scanning is not available yet. Type or paste the code from the label, or pick an item below."
+    "manualNote": "Camera scanning is not available yet. Type or paste the code from the label, or pick an item below.",
+    "inStock": "{{qty}} {{unit}} in stock",
+    "a11yUse": "Use barcode for {{name}}"
   },
   "lowStock": {
     "needAttention": "Need attention",
@@ -100,18 +155,32 @@
     "allStocked": "Everything is stocked",
     "allStockedBody": "No item is at or below its reorder level.",
     "out": "Out",
-    "raisePo": "Raise a purchase order"
+    "raisePo": "Raise a purchase order",
+    "reorderAt": "reorder at {{qty}} {{unit}}",
+    "buySuggestion": "buy {{qty}} ≈ {{amount}}"
   },
   "opening": {
     "asOn": "As on",
     "search": "Search items",
     "noTracked": "No stock-tracked items",
-    "submit": "Save opening stock"
+    "submit": "Save opening stock",
+    "intro": "Enter what you already had on hand when you started using the app. This posts an opening movement and does not affect your sales or purchase figures.",
+    "entryNote": "Opening stock entry",
+    "done_one": "Opening stock set for {{count}} item",
+    "done_other": "Opening stock set for {{count}} items",
+    "currently": "currently {{qty}} {{unit}}",
+    "entered_one": "{{count}} item entered",
+    "entered_other": "{{count}} items entered"
   },
   "movements": {
     "search": "Search by item or reference",
     "none": "No movements",
-    "noneBody": "Stock movements appear as you buy, sell and adjust."
+    "noneBody": "Stock movements appear as you buy, sell and adjust.",
+    "all": "All",
+    "count_one": "{{count}} movement",
+    "count_other": "{{count}} movements",
+    "unknownItem": "Unknown item",
+    "a11yRow": "{{name}}, {{type}}, {{qty}}"
   },
   "ocr": {
     "nothingScanned": "Nothing scanned yet",
@@ -139,6 +208,24 @@
     "items": "Items",
     "services": "Services",
     "noServices": "No services yet",
-    "noServicesBody": "Add the work you charge for, like installation or maintenance, to put it on invoices in a tap."
+    "noServicesBody": "Add the work you charge for, like installation or maintenance, to put it on invoices in a tap.",
+    "noMatch": "No match",
+    "noMatchBody": "No item matches that search.",
+    "noItems": "No items yet",
+    "noItemsBody": "Add what you sell to put it on invoices in a tap."
+  },
+  "type": {
+    "goods": "Product",
+    "service": "Service"
+  },
+  "movementType": {
+    "opening": "Opening stock",
+    "purchaseReceipt": "Purchase receipt",
+    "salesIssue": "Sales issue",
+    "salesReturn": "Sales return",
+    "purchaseReturn": "Purchase return",
+    "transferIn": "Transfer in",
+    "transferOut": "Transfer out",
+    "adjustment": "Adjustment"
   }
 }

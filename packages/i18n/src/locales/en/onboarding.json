@@ -97,7 +97,9 @@
     "cityPlaceholder": "Pune",
     "add": "Add branch",
     "namePlaceholder": "e.g. Pune warehouse",
-    "headOffice": "Head office"
+    "headOffice": "Head office",
+    "createdAutomatically": "{{place}} · created automatically",
+    "removeNamed": "Remove {{name}}"
   },
   "done": {
     "readyTitle": "{{business}} is ready",

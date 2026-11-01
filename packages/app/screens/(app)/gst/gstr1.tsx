@@ -10,7 +10,6 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import {
-  GSTR1_TABLE_LABELS,
   NIL_SUPPLY_LABELS,
   Gstr1Row,
   Gstr1Table,
@@ -34,7 +33,10 @@ const VIEWS: { value: View_; label: string }[] = [
   { value: 'docs', label: 'DOCS' },
 ];
 
+// The exported file keeps the GSTN offline tool's English column names and
+// values, so it lines up with what the portal expects; the screen translates.
 const NATURE_LABEL = { invoice: 'Invoices', creditNote: 'Credit notes' } as const;
+const NATURE_KEY = { invoice: 'compliance:gstr1.invoices', creditNote: 'compliance:gstr1.creditNotes' } as const;
 
 /**
  * GSTR-1, the outward-supplies return. Every sale lands in exactly one table,
@@ -43,7 +45,7 @@ const NATURE_LABEL = { invoice: 'Invoices', creditNote: 'Credit notes' } as cons
  */
 export default function Gstr1Report() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['compliance', 'nav']);
+  const { t: tr } = useTranslation(['compliance', 'nav', 'common']);
   const { scope, setScope } = useReportScope('thisMonth');
   const [view, setView] = useState<View_>('b2b');
 
@@ -81,9 +83,9 @@ export default function Gstr1Report() {
           formatMoney(h.totalValue),
         ])
       : view === 'nil'
-        ? summary.nil.map((n) => [NIL_SUPPLY_LABELS[n.supplyType], formatMoney(n.nilRated), formatMoney(n.exempt), formatMoney(n.nonGst)])
+        ? summary.nil.map((n) => [tr(`compliance:gstr1.nil.${n.supplyType}`), formatMoney(n.nilRated), formatMoney(n.exempt), formatMoney(n.nonGst)])
         : view === 'docs'
-          ? summary.docs.map((d) => [NATURE_LABEL[d.nature], `${d.from} – ${d.to}`, String(d.total), String(d.cancelled), String(d.total - d.cancelled)])
+          ? summary.docs.map((d) => [tr(NATURE_KEY[d.nature]), `${d.from} – ${d.to}`, String(d.total), String(d.cancelled), String(d.total - d.cancelled)])
           : rowsFor(view).map((r) => [
               r.number,
               r.gstin ? r.gstin.slice(0, 2) + '…' + r.gstin.slice(-4) : r.placeOfSupply,
@@ -94,12 +96,24 @@ export default function Gstr1Report() {
 
   const headers =
     view === 'hsn'
-      ? ['HSN', 'Qty', 'Taxable', 'Total']
+      ? ['HSN', tr('compliance:gstr1.col.qty'), tr('compliance:gstr1.col.taxable'), tr('common:table.total')]
       : view === 'nil'
-        ? ['Supply', 'Nil rated', 'Exempt', 'Non-GST']
+        ? [tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.nilRated'), tr('compliance:gstr1.col.exempt'), tr('compliance:gstr1.col.nonGst')]
         : view === 'docs'
-          ? ['Nature', 'Series', 'Total', 'Cancelled', 'Net']
-          : ['Document', view === 'b2b' || view === 'cdnr' ? 'GSTIN' : 'PoS', 'Rate', 'Taxable', 'Tax'];
+          ? [
+              tr('compliance:gstr1.col.nature'),
+              tr('compliance:gstr1.col.series'),
+              tr('common:table.total'),
+              tr('compliance:gstr1.col.cancelled'),
+              tr('compliance:gstr1.col.net'),
+            ]
+          : [
+              tr('compliance:gstr1.col.document'),
+              view === 'b2b' || view === 'cdnr' ? 'GSTIN' : tr('compliance:gstr1.col.pos'),
+              tr('compliance:gstr1.col.rate'),
+              tr('compliance:gstr1.col.taxable'),
+              tr('common:table.tax'),
+            ];
 
   const exportRows = () => {
     if (view === 'nil') {
@@ -163,9 +177,9 @@ export default function Gstr1Report() {
       >
         <KeyFigures
           rows={[
-            { label: 'Documents', value: String(summary.totals.documents) },
-            { label: 'Taxable value', value: formatMoney(summary.totals.taxableValue) },
-            { label: 'Tax', value: formatMoney(summary.totals.tax) },
+            { label: tr('compliance:gstr1.documents'), value: String(summary.totals.documents) },
+            { label: tr('common:totals.taxableValue'), value: formatMoney(summary.totals.taxableValue) },
+            { label: tr('common:table.tax'), value: formatMoney(summary.totals.tax) },
           ]}
         />
 
@@ -182,12 +196,12 @@ export default function Gstr1Report() {
 
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           {view === 'hsn'
-            ? 'Quantities and values rolled up by HSN, as table 12 of the return wants them.'
+            ? tr('compliance:gstr1.hsnNote')
             : view === 'nil'
-              ? 'Table 8 — nil-rated, exempted and non-GST supplies.'
+              ? tr('compliance:gstr1.nilNote')
               : view === 'docs'
-                ? 'Table 13 — documents issued in the period, by numbering series.'
-                : GSTR1_TABLE_LABELS[view]}
+                ? tr('compliance:gstr1.docsNote')
+                : `${VIEWS.find((v) => v.value === view)?.label} — ${tr(`compliance:gstr1.table.${view}`)}`}
         </Text>
 
         <View style={{ height: t.spacing.md }} />
@@ -203,7 +217,7 @@ export default function Gstr1Report() {
             />
           </Card>
         ) : (
-          <ReportSection title={`${count} row${count === 1 ? '' : 's'}`}>
+          <ReportSection title={tr('compliance:gstr1.rows', { count })}>
             <DataTable headers={headers} rows={tableRows} widths={[1.4, 1.2, 0.7, 1.1, 1]} />
           </ReportSection>
         )}

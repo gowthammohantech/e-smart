@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -98,6 +99,7 @@ export function PageHeader({
   right?: React.ReactNode;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const action = useHeaderAction();
   useDocumentTitle(title);
 
@@ -115,7 +117,7 @@ export function PageHeader({
         <Pressable
           onPress={onBack}
           accessibilityRole="link"
-          accessibilityLabel={backLabel ? `Back to ${backLabel}` : 'Back'}
+          accessibilityLabel={backLabel ? tr('common:component.backTo', { label: backLabel }) : tr('common:action.back')}
           style={(state) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -126,7 +128,7 @@ export function PageHeader({
         >
           <MaterialCommunityIcons name="chevron-left" size={18} color={t.c.muted} />
           <Text variant="small" tone="muted" weight="600" numberOfLines={1}>
-            {backLabel || 'Back'}
+            {backLabel || tr('common:action.back')}
           </Text>
         </Pressable>
       ) : null}

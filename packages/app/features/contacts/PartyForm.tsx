@@ -12,10 +12,10 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
 import { GstRegistrationType, Party, PartyKind } from '@esmart/core/types';
+import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { citiesForState } from '@esmart/core/data/cities';
-import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { CURRENCIES, currencyLocked } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
@@ -30,7 +30,7 @@ const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 
 export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts', 'common']);
+  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain']);
   const router = useRouter();
   const goBack = useGoBack();
   // Where Cancel and Save land when there is no screen to go back to.
@@ -91,18 +91,19 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (shipCity && !cities.includes(shipCity)) setShipCity('');
   };
 
-  const label = kind === 'customer' ? 'Customer' : 'Supplier';
+  const nameLabel = kind === 'customer' ? tr('contacts:form.customerName') : tr('contacts:form.supplierName');
+  const termsLabel = (days: number) => (days === 0 ? tr('contacts:form.dueOnReceipt') : tr('contacts:form.termsDays', { count: days }));
 
   const save = async () => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'> = {
-      name: required(name, `${label} name`),
+      name: required(name, nameLabel),
       email: validEmail(email),
       phone: phone.error(),
       taxId:
         partyGstinError(registration, gstin) ??
         (gstin && stateCode && gstin.slice(0, 2) !== stateCode
-          ? `This GSTIN is registered in ${stateNameOf(gstin.slice(0, 2))}, not the state below`
+          ? tr('contacts:form.gstinStateMismatch', { state: stateNameOf(gstin.slice(0, 2)) })
           : undefined),
       country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
       postalCode: validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
@@ -156,7 +157,11 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       createdAt: party?.createdAt ?? nowISO(),
     };
 
-    const res = await serverSave(() => saveParty(record), party ? `${label} updated` : `${label} added`);
+    const savedMessage =
+      kind === 'customer'
+        ? tr(party ? 'contacts:form.customerUpdated' : 'contacts:form.customerAdded')
+        : tr(party ? 'contacts:form.supplierUpdated' : 'contacts:form.supplierAdded');
+    const res = await serverSave(() => saveParty(record), savedMessage);
     if (!res) return;
     const id = res.id ?? record.id;
     if (party) goBack(backTo);
@@ -165,12 +170,12 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
-  const nameField = <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />;
+  const nameField = <TextField label={nameLabel} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />;
   const contactField = <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />;
   const registrationField = (
     <PickerField
       label={tr('contacts:form.gstRegistration')}
-      value={GST_REGISTRATION_LABELS[registration]}
+      value={tr(`domain:gstRegistration.${registration}`)}
       onPress={() => setRegistrationOpen(true)}
       icon="shield-account-outline"
       hint={tr('contacts:form.sezHint')}
@@ -240,7 +245,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   );
 
   const currencyField = <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />;
-  const termsField = <PickerField label={tr('contacts:form.paymentTerms')} value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
+  const termsField = <PickerField label={tr('contacts:form.paymentTerms')} value={termsLabel(terms)} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
   const creditLimitField =
     kind === 'customer' ? (
       <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
@@ -251,13 +256,17 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       value={openingBalance}
       onChangeValue={setOpeningBalance}
       currency={currency}
-      hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
+      hint={kind === 'customer' ? tr('contacts:form.openingBalanceHintCustomer') : tr('contacts:form.openingBalanceHintSupplier')}
     />
   );
   const notesField = <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />;
   const activeField = <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />;
 
-  const submitTitle = party ? 'Save changes' : `Add ${label.toLowerCase()}`;
+  const submitTitle = party
+    ? tr('settings:profile.save')
+    : kind === 'customer'
+      ? tr('common:quickAction.addCustomer')
+      : tr('contacts:form.addSupplier');
 
   const phoneHeading = (title: string) => (
     <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{title}</Text>
@@ -440,7 +449,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           visible={registrationOpen}
           onClose={() => setRegistrationOpen(false)}
           title={tr('contacts:form.gstRegistration')}
-          options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k], disabled: k === 'overseas' }))}
+          options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: tr(`domain:gstRegistration.${k}`), disabled: k === 'overseas' }))}
           value={registration}
           onSelect={(v) => {
             const type = v as GstRegistrationType;
@@ -482,7 +491,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           visible={termsOpen}
           onClose={() => setTermsOpen(false)}
           title={tr('contacts:form.paymentTerms')}
-          options={TERMS.map((d) => ({ value: String(d), label: d === 0 ? 'Due on receipt' : `${d} days` }))}
+          options={TERMS.map((d) => ({ value: String(d), label: termsLabel(d) }))}
           value={String(terms)}
           onSelect={(v) => setTerms(Number(v))}
           searchable={false}

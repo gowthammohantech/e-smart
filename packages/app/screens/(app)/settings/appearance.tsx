@@ -18,18 +18,18 @@ import { useBaseCurrency } from '../../../store/selectors';
 import { useToast } from '@esmart/ui/components/Toast';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const LIXI_WAYS: { key: keyof LixiAccess; label: string; description: string }[] = [
-  { key: 'holdTab', label: 'Hold a tab', description: 'Press and hold any tab; Lixi opens already answering about it.' },
-  { key: 'swipeUp', label: 'Swipe up on the tab bar', description: 'Pull up from the bar and let go once the orb locks in.' },
-  { key: 'floatingOrb', label: 'Floating orb', description: 'A small orb on the screen edge. Drag it anywhere; tap to open.' },
-  { key: 'pullDown', label: 'Pull down on Home', description: 'Pull the Home screen down, like refreshing, to ask Lixi.' },
-];
+const LIXI_WAYS = [
+  { key: 'holdTab', label: 'settings:appearance.way.holdTab', description: 'settings:appearance.way.holdTabHint' },
+  { key: 'swipeUp', label: 'settings:appearance.way.swipeUp', description: 'settings:appearance.way.swipeUpHint' },
+  { key: 'floatingOrb', label: 'settings:appearance.way.floatingOrb', description: 'settings:appearance.way.floatingOrbHint' },
+  { key: 'pullDown', label: 'settings:appearance.way.pullDown', description: 'settings:appearance.way.pullDownHint' },
+] as const satisfies readonly { key: keyof LixiAccess; label: string; description: string }[];
 
-const MODES: { value: ThemeMode; label: string; description: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
-  { value: 'system', label: 'Match device', description: 'Follows your phone’s light or dark setting.', icon: 'cellphone-cog' },
-  { value: 'dark', label: 'Dark', description: 'The default look, easy on the eyes indoors.', icon: 'weather-night' },
-  { value: 'light', label: 'Light', description: 'Higher contrast in bright sunlight.', icon: 'white-balance-sunny' },
-];
+const MODES = [
+  { value: 'system', label: 'settings:language.matchDevice', description: 'settings:appearance.mode.systemHint', icon: 'cellphone-cog' },
+  { value: 'dark', label: 'settings:appearance.mode.dark', description: 'settings:appearance.mode.darkHint', icon: 'weather-night' },
+  { value: 'light', label: 'settings:appearance.mode.light', description: 'settings:appearance.mode.lightHint', icon: 'white-balance-sunny' },
+] as const satisfies readonly { value: ThemeMode; label: string; description: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[];
 
 /**
  * Each language is listed in its own script, with its English name underneath —
@@ -126,8 +126,8 @@ export default function Appearance() {
           {MODES.map((m, i) => (
             <RadioRow
               key={m.value}
-              label={m.label}
-              description={m.description}
+              label={tr(m.label)}
+              description={tr(m.description)}
               icon={m.icon}
               active={themeMode === m.value}
               last={i === MODES.length - 1}
@@ -167,14 +167,14 @@ export default function Appearance() {
           {LIXI_WAYS.map((w) => (
             <SwitchField
               key={w.key}
-              label={w.label}
-              description={w.description}
+              label={tr(w.label)}
+              description={tr(w.description)}
               value={lixiAccess[w.key]}
               onValueChange={(on) => setLixiAccess(w.key, on)}
             />
           ))}
           <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.xs }}>
-            With every way off, Lixi is still under More → Ask Lixi.
+            {tr('settings:appearance.allOffNote', { more: tr('nav:more.header.title'), askLixi: tr('nav:more.entry.askLixi') })}
           </Text>
           {hintsLearned.swipeTabs || hintsLearned.swipeUp || hintsLearned.holdTab ? (
             <Pressable

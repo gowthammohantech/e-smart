@@ -21,11 +21,11 @@ import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const RESET_LABELS: Record<NumberingSeries['resetPolicy'], string> = {
-  never: 'Never reset',
-  yearly: 'Reset each financial year',
-  monthly: 'Reset each month',
-};
+const RESET_LABELS = {
+  never: 'settings:numbering.reset.never',
+  yearly: 'settings:numbering.reset.yearly',
+  monthly: 'settings:numbering.reset.monthly',
+} as const satisfies Record<NumberingSeries['resetPolicy'], string>;
 
 export default function NumberingSettings() {
   const t = useTheme();
@@ -73,7 +73,7 @@ export default function NumberingSettings() {
   const save = () => {
     if (!draft) return;
     saveNumberingSeries(draft);
-    toast.show(`${seriesLabel(tr, draft.kind)} numbering updated`, 'success');
+    toast.show(tr('settings:numbering.updated', { series: seriesLabel(tr, draft.kind) }), 'success');
     setEditing(null);
   };
 
@@ -84,8 +84,7 @@ export default function NumberingSettings() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Each document type has its own series. A number is assigned only when a document is finalised, and a finalised
-            number is never reused — drafts stay unnumbered so you can delete them freely.
+            {tr('settings:numbering.intro')}
           </Text>
         </Card>
 
@@ -95,10 +94,10 @@ export default function NumberingSettings() {
               key={s.id}
               title={seriesLabel(tr, s.kind)}
               subtitle={formatNumber(s, { date: today(), branchCode })}
-              meta={RESET_LABELS[s.resetPolicy]}
+              meta={tr(RESET_LABELS[s.resetPolicy])}
               icon="numeric"
               divider={i < series.length - 1}
-              right={<Badge label={`Next ${s.nextNumber}`} tone="neutral" size="sm" />}
+              right={<Badge label={tr('settings:numbering.nextBadge', { number: s.nextNumber })} tone="neutral" size="sm" />}
               onPress={() => open(s)}
               chevron
             />
@@ -147,7 +146,7 @@ export default function NumberingSettings() {
             value={padding}
             onChangeText={(v) => setPadding(v.replace(/[^0-9]/g, '').slice(0, 1))}
             keyboardType="number-pad"
-            hint="0001 uses four digits."
+            hint={tr('settings:numbering.digitsHint')}
           />
 
           <SwitchField
@@ -165,7 +164,7 @@ export default function NumberingSettings() {
             onValueChange={setIncludeBranch}
             disabled={branches.length < 2}
           />
-          <PickerField label={tr('settings:numbering.resetPolicy')} value={RESET_LABELS[resetPolicy]} onPress={() => setResetOpen(true)} icon="restart" />
+          <PickerField label={tr('settings:numbering.resetPolicy')} value={tr(RESET_LABELS[resetPolicy])} onPress={() => setResetOpen(true)} icon="restart" />
         </View>
       </Sheet>
 
@@ -173,7 +172,7 @@ export default function NumberingSettings() {
         visible={resetOpen}
         onClose={() => setResetOpen(false)}
         title={tr('settings:numbering.resetPolicy')}
-        options={(Object.keys(RESET_LABELS) as NumberingSeries['resetPolicy'][]).map((k) => ({ value: k, label: RESET_LABELS[k] }))}
+        options={(Object.keys(RESET_LABELS) as NumberingSeries['resetPolicy'][]).map((k) => ({ value: k, label: tr(RESET_LABELS[k]) }))}
         value={resetPolicy}
         onSelect={(v) => setResetPolicy(v as NumberingSeries['resetPolicy'])}
         searchable={false}

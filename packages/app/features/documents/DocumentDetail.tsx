@@ -23,7 +23,7 @@ import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
-import { documentKindLabel, statusLabel } from '@esmart/core/labels';
+import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { stockShortfalls } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
@@ -62,7 +62,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   useRefreshOnFocus();
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance']);
   const language = useResolvedLanguage();
   const router = useRouter();
   const goBack = useGoBack();
@@ -212,27 +212,27 @@ ${url}`;
       ? []
       : doc.kind === 'quote'
       ? [
-          { target: 'salesOrder', label: 'Convert to sales order', icon: 'clipboard-list-outline' },
-          { target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' },
+          { target: 'salesOrder', label: tr('sales:detail.convertToSalesOrder'), icon: 'clipboard-list-outline' },
+          { target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' },
         ]
       : doc.kind === 'salesOrder'
         ? [
-            { target: 'delivery', label: 'Create delivery note', icon: 'truck-outline' },
-            { target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' },
+            { target: 'delivery', label: tr('sales:detail.createDelivery'), icon: 'truck-outline' },
+            { target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' },
           ]
         : doc.kind === 'delivery'
-          ? [{ target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' }]
+          ? [{ target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' }]
           : doc.kind === 'invoice'
-            ? [{ target: 'salesReturn', label: 'Create a return', icon: 'keyboard-return' }]
+            ? [{ target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' }]
             : doc.kind === 'purchaseOrder'
               ? [
-                  { target: 'goodsReceipt', label: 'Create goods receipt', icon: 'package-down' },
-                  { target: 'purchaseBill', label: 'Convert to bill', icon: 'file-document-outline' },
+                  { target: 'goodsReceipt', label: tr('sales:detail.createGoodsReceipt'), icon: 'package-down' },
+                  { target: 'purchaseBill', label: tr('sales:detail.convertToBill'), icon: 'file-document-outline' },
                 ]
               : doc.kind === 'goodsReceipt'
-                ? [{ target: 'purchaseBill', label: 'Convert to bill', icon: 'file-document-outline' }]
+                ? [{ target: 'purchaseBill', label: tr('sales:detail.convertToBill'), icon: 'file-document-outline' }]
                 : doc.kind === 'purchaseBill'
-                  ? [{ target: 'purchaseReturn', label: 'Create a return', icon: 'package-up' }]
+                  ? [{ target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' }]
                   : [];
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
@@ -272,7 +272,7 @@ ${url}`;
             {doc.status !== 'draft' && !knownToServer(doc.id) ? <Badge label={tr('common:component.provisional')} tone="warning" size="sm" /> : null}
             {doc.status === 'overdue' && overdueDays > 0 ? (
               <Text variant="micro" tone="bad" weight="600">
-                {overdueDays} days late
+                {tr('sales:detail.daysLate', { count: overdueDays })}
               </Text>
             ) : null}
           </View>
@@ -290,13 +290,13 @@ ${url}`;
             )
           }
           accessibilityRole="button"
-          accessibilityLabel={`Open ${party?.name ?? 'contact'}`}
+          accessibilityLabel={party ? tr('sales:detail.openParty', { name: party.name }) : tr('sales:detail.openContact')}
           style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
         >
           <Avatar name={party?.name ?? '?'} size={42} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="body" weight="600">
-              {party?.name ?? 'Unknown'}
+              {party?.name ?? tr('common:placeholder.unknown')}
             </Text>
             <Text variant="caption" tone="muted" numberOfLines={1}>
               {party?.taxId ?? party?.phone ?? party?.email ?? '—'}
@@ -306,14 +306,14 @@ ${url}`;
         </Pressable>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-          {doc.dueDate ? <Badge label={`Due ${formatDate(doc.dueDate, 'dd MMM')}`} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
-          {doc.validUntil ? <Badge label={`Valid to ${formatDate(doc.validUntil, 'dd MMM')}`} tone="neutral" /> : null}
+          {doc.dueDate ? <Badge label={tr('sales:detail.dueOn', { date: formatDate(doc.dueDate, 'dd MMM') })} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
+          {doc.validUntil ? <Badge label={tr('sales:detail.validTo', { date: formatDate(doc.validUntil, 'dd MMM') })} tone="neutral" /> : null}
           {doc.currency !== baseCurrency ? <Badge label={`${doc.currency} @ ${doc.exchangeRate.toFixed(2)}`} tone="info" /> : null}
           {doc.placeOfSupplyStateCode ? (
-            <Badge label={`PoS ${INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode}`} tone="neutral" />
+            <Badge label={tr('sales:detail.placeOfSupplyBadge', { state: INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode })} tone="neutral" />
           ) : null}
-          {doc.reference ? <Badge label={`Ref ${doc.reference}`} tone="neutral" /> : null}
-          {doc.supplierDocNumber ? <Badge label={`Their no. ${doc.supplierDocNumber}`} tone="neutral" /> : null}
+          {doc.reference ? <Badge label={tr('sales:detail.referenceBadge', { reference: doc.reference })} tone="neutral" /> : null}
+          {doc.supplierDocNumber ? <Badge label={tr('sales:detail.theirNumber', { number: doc.supplierDocNumber })} tone="neutral" /> : null}
         </View>
       </Card>
     </>
@@ -332,7 +332,7 @@ ${url}`;
             </View>
             <View style={{ alignItems: 'flex-end', gap: 3 }}>
               <Text variant="caption" tone="muted">
-                Paid
+                {tr('sales:detail.paid')}
               </Text>
               <Text variant="title" weight="600" tone="good">
                 {formatMoney(paid)}
@@ -352,7 +352,7 @@ ${url}`;
 
           {outstanding.minor > 0 ? (
             <Button
-              title={doc.kind === 'invoice' ? 'Record payment' : 'Pay supplier'}
+              title={doc.kind === 'invoice' ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
               icon={doc.kind === 'invoice' ? 'cash-plus' : 'cash-minus'}
               onPress={() =>
                 router.push(
@@ -432,7 +432,7 @@ ${url}`;
                   key={p.id}
                   onPress={() => router.push(`/(app)/payments/${p.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Payment ${p.number}`}
+                  accessibilityLabel={tr('sales:detail.paymentNumber', { number: p.number })}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -449,7 +449,7 @@ ${url}`;
                       {p.number}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {formatDate(p.date)} · {p.method}
+                      {formatDate(p.date)} · {paymentMethodLabel(tr, p.method)}
                       {p.reference ? ` · ${p.reference}` : ''}
                     </Text>
                   </View>
@@ -673,17 +673,17 @@ ${url}`;
         {[
           ...(isFinalized(doc.status)
             ? [
-                { label: 'Share as PDF', icon: 'file-pdf-box' as const, onPress: shareDocument },
-                { label: 'Send by email', icon: 'email-outline' as const, onPress: () => sendVia('email') },
-                { label: 'Send on WhatsApp', icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
-                { label: Platform.OS === 'web' ? 'Copy link' : 'Share link', icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id))) },
+                { label: tr('sales:print.sharePdf'), icon: 'file-pdf-box' as const, onPress: shareDocument },
+                { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
+                { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
+                { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id))) },
                 ...(doc.kind === 'invoice' && outstanding.minor > 0
-                  ? [{ label: 'Payment link', icon: 'credit-card-outline' as const, onPress: () => runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url)) }]
+                  ? [{ label: tr('sales:detail.paymentLink'), icon: 'credit-card-outline' as const, onPress: () => runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url)) }]
                   : []),
               ]
-            : [{ label: 'Edit', icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
+            : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
           {
-            label: doc.kind === 'purchaseBill' ? 'Pay supplier' : 'Record payment',
+            label: doc.kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
             icon: 'cash-plus' as const,
             onPress: () => {
               if (!isPayable) return toast.show(tr('common:documentDetail.noPayment', { kind: kindName }), 'info');
@@ -694,26 +694,26 @@ ${url}`;
               );
             },
           },
-          { label: 'Preview document', icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
+          { label: tr('sales:detail.previewDocument'), icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
           ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'
-            ? [{ label: 'Generate e-invoice', icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
+            ? [{ label: tr('sales:detail.generateEInvoice'), icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
             : []),
           ...(canCancelIrn
-            ? [{ label: 'Cancel IRN', icon: 'shield-off-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('cancel'); } }]
+            ? [{ label: tr('compliance:einv.cancelIrnShort'), icon: 'shield-off-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('cancel'); } }]
             : []),
           ...(ewayBill
-            ? [{ label: 'View e-way bill', icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
+            ? [{ label: tr('sales:detail.viewEwayBill'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
             : ewayRequired
-              ? [{ label: 'Generate e-way bill', icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
+              ? [{ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
               : []),
           ...conversions.map((c) => ({ label: c.label, icon: c.icon, onPress: () => void convert(c.target) })),
-          { label: 'Duplicate', icon: 'content-duplicate' as const, onPress: () => {
+          { label: tr('sales:detail.duplicate'), icon: 'content-duplicate' as const, onPress: () => {
             setActionsOpen(false);
             void serverSave(() => duplicateDocument(doc.id)).then((res) => {
               if (res?.result) router.push(detailRouteFor(doc.kind, res.id ?? res.result) as never);
             });
           } },
-          ...(transitions.length ? [{ label: 'Change status', icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
+          ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
           ...(doc.status !== 'cancelled' && isFinalized(doc.status)
             ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => {
                 setActionsOpen(false);
@@ -731,7 +731,7 @@ ${url}`;
               } }]
             : []),
           ...(!isFinalized(doc.status)
-            ? [{ label: 'Delete draft', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
+            ? [{ label: tr('sales:detail.deleteDraft'), icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
             : []),
         ].map((a) => (
           <Pressable
@@ -828,7 +828,7 @@ ${url}`;
 
       <ConfirmDialog
         visible={confirmCancel}
-        title={`Cancel ${doc.number}?`}
+        title={tr('sales:detail.cancelTitle', { number: doc.number })}
         message={tr('sales:detail.cancelMessage')}
         confirmLabel={tr('sales:detail.cancelDocument')}
         destructive

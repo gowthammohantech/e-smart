@@ -396,7 +396,7 @@ export function AmountField({
 export function PickerField({
   label,
   value,
-  placeholder = 'Select',
+  placeholder: placeholderProp,
   onPress,
   icon,
   error,
@@ -423,6 +423,7 @@ export function PickerField({
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
+  const placeholder = placeholderProp ?? tr('common:component.select');
   const desktop = useIsDesktop();
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
@@ -434,7 +435,7 @@ export function PickerField({
         disabled={disabled}
         accessibilityRole="button"
         accessibilityState={{ disabled: !!disabled }}
-        accessibilityLabel={`${label ?? 'Select'}: ${value ?? placeholder}`}
+        accessibilityLabel={`${label ?? tr('common:component.select')}: ${value ?? placeholder}`}
         style={(state) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -655,7 +656,7 @@ export function QuantityStepper({
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-      {btn('minus', -step, 'Decrease quantity')}
+      {btn('minus', -step, tr('common:component.decreaseQuantity'))}
       <TextInput
         value={text}
         onChangeText={(v) => {
@@ -688,7 +689,7 @@ export function QuantityStepper({
           paddingVertical: 4,
         }}
       />
-      {btn('plus', step, 'Increase quantity')}
+      {btn('plus', step, tr('common:component.increaseQuantity'))}
     </View>
   );
 }

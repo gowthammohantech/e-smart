@@ -23,7 +23,7 @@ import { useGoBack } from '../../navigation/useGoBack';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory']);
+  const { t: tr } = useTranslation(['inventory', 'common']);
   const router = useRouter();
   const goBack = useGoBack();
   const { run: serverSave, saving } = useServerSave();
@@ -61,12 +61,12 @@ export function ItemForm({ item }: { item?: Item }) {
 
   const save = async () => {
     const next: Errors<'name' | 'sku' | 'hsn'> = {
-      name: required(name, 'Item name'),
+      name: required(name, tr('inventory:form.itemName')),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
     };
     const skuValue = sku.trim().toUpperCase() || `SKU-${String(existing.length + 1).padStart(4, '0')}`;
     if (existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
-      next.sku = 'Another item already uses this SKU';
+      next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);
     if (hasErrors(next)) return;
@@ -92,7 +92,7 @@ export function ItemForm({ item }: { item?: Item }) {
       createdAt: item?.createdAt ?? nowISO(),
     };
 
-    const res = await serverSave(() => saveItem(record), item ? 'Item updated' : 'Item added');
+    const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'));
     if (!res) return;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
@@ -108,8 +108,8 @@ export function ItemForm({ item }: { item?: Item }) {
         >
           <Segmented
             options={[
-              { value: 'goods', label: 'Product' },
-              { value: 'service', label: 'Service' },
+              { value: 'goods', label: tr('inventory:type.goods') },
+              { value: 'service', label: tr('inventory:type.service') },
             ]}
             value={type}
             onChange={(v) => {
@@ -141,12 +141,12 @@ export function ItemForm({ item }: { item?: Item }) {
           <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" disabled={type === 'service'} hint={type === 'service' ? tr('inventory:form.serviceUnitHint') : undefined} />
           <PickerField
             label={tr('inventory:form.taxRate')}
-            value={category ? `${category.name} (${formatPercent(category.rate)})` : 'Select'}
+            value={category ? `${category.name} (${formatPercent(category.rate)})` : tr('inventory:form.select')}
             onPress={() => setTaxOpen(true)}
             icon="percent-outline"
           />
           <TextField
-            label={type === 'goods' ? 'HSN code' : 'SAC code'}
+            label={type === 'goods' ? tr('inventory:form.hsnCode') : tr('inventory:form.sacCode')}
             value={hsnCode}
             onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
             placeholder={type === 'goods' ? '84821011' : '998719'}
@@ -178,7 +178,7 @@ export function ItemForm({ item }: { item?: Item }) {
                     keyboardType="decimal-pad"
                     containerStyle={{ flex: 1 }}
                     editable={!item}
-                    hint={item ? 'Use a stock adjustment to change this.' : undefined}
+                    hint={item ? tr('inventory:form.openingLocked') : undefined}
                   />
                   <TextField
                     label={tr('inventory:form.reorderLevel')}
@@ -198,7 +198,7 @@ export function ItemForm({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button title={item ? 'Save changes' : 'Add item'} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+          <Button title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
         </FormActions>
 
         <SelectSheet

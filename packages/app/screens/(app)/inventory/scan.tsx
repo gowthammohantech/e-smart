@@ -75,7 +75,7 @@ export default function ScanBarcode() {
                   {match.name}
                 </Text>
                 <Text variant="caption" tone="muted">
-                  {formatMoney(match.salePrice)} · {formatQty(stock[match.id] ?? 0)} {match.unit} in stock
+                  {formatMoney(match.salePrice)} · {tr('inventory:scan.inStock', { qty: formatQty(stock[match.id] ?? 0), unit: match.unit })}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
@@ -102,7 +102,7 @@ export default function ScanBarcode() {
               key={i.id}
               onPress={() => setCode(i.barcode ?? '')}
               accessibilityRole="button"
-              accessibilityLabel={`Use barcode for ${i.name}`}
+              accessibilityLabel={tr('inventory:scan.a11yUse', { name: i.name })}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',

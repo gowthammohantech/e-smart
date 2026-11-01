@@ -55,7 +55,7 @@ function LineEditorForm({
   maxQuantity,
 }: EditorProps) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales']);
+  const { t: tr } = useTranslation(['sales', 'common']);
 
   const [name, setName] = useState(line?.name ?? '');
   // The line's own description, filled from the item's when it was added.
@@ -138,7 +138,7 @@ function LineEditorForm({
       visible={visible}
       onClose={onClose}
       title={tr('sales:line.editLine')}
-      subtitle={line.name || 'New line'}
+      subtitle={line.name || tr('sales:line.newLine')}
       footer={
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           {onRemove ? (
@@ -201,7 +201,7 @@ function LineEditorForm({
         ) : null}
 
         <TextField
-          label={itemType === 'service' ? 'SAC code' : 'HSN code'}
+          label={itemType === 'service' ? tr('sales:line.sacCode') : tr('sales:line.hsnCode')}
           value={hsnCode}
           onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
           placeholder={itemType === 'service' ? '998719' : '84821011'}
@@ -245,7 +245,7 @@ function LineEditorForm({
 
         <PickerField
           label={tr('sales:line.tax')}
-          value={category ? `${category.name} (${formatPercent(category.rate)})` : 'No tax'}
+          value={category ? `${category.name} (${formatPercent(category.rate)})` : tr('common:totals.noTax')}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
         />
@@ -266,10 +266,10 @@ function LineEditorForm({
           }}
         >
           {[
-            { label: 'Amount', value: formatMoney(preview.gross) },
+            { label: tr('common:table.amount'), value: formatMoney(preview.gross) },
             { label: tr('sales:line.discount'), value: `− ${formatMoney(preview.discount)}` },
-            { label: 'Taxable', value: formatMoney(preview.taxable) },
-            { label: `Tax (${formatPercent(category?.rate ?? 0)})`, value: formatMoney(preview.taxAmount) },
+            { label: tr('common:totals.taxableValue'), value: formatMoney(preview.taxable) },
+            { label: tr('sales:line.taxWithRate', { rate: formatPercent(category?.rate ?? 0) }), value: formatMoney(preview.taxAmount) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="caption" tone="muted">

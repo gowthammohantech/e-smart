@@ -59,7 +59,7 @@ export default function GlobalSearch() {
                     key={h}
                     onPress={() => setQuery(h)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Search ${h}`}
+                    accessibilityLabel={tr('nav:shell.searchFor', { query: h })}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -87,7 +87,7 @@ export default function GlobalSearch() {
             />
           )
         ) : results.length === 0 && pages.length === 0 ? (
-          <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={`Nothing in ${'this business'} matches "${query}".`} />
+          <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={tr('nav:shell.noMatchesInBusiness', { query })} />
         ) : (
           <>
           {pages.length > 0 ? (

@@ -42,13 +42,7 @@ import {
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 
-const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
-  { value: 'none', label: 'Does not repeat' },
-  { value: 'weekly', label: 'Every week' },
-  { value: 'monthly', label: 'Every month' },
-  { value: 'quarterly', label: 'Every quarter' },
-  { value: 'yearly', label: 'Every year' },
-];
+const RECURRENCES: RecurrenceFrequency[] = ['none', 'weekly', 'monthly', 'quarterly', 'yearly'];
 
 /** Values to start a new expense from, e.g. a scanned receipt. */
 export type ExpenseInitial = {
@@ -65,7 +59,7 @@ export type ExpenseInitial = {
 
 export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'purchases', 'common']);
+  const { t: tr } = useTranslation(['domain', 'purchases', 'common', 'settings']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
@@ -218,7 +212,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       createdAt: expense?.createdAt ?? new Date().toISOString(),
     };
 
-    const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? 'Expense updated' : 'Expense recorded');
+    const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? tr('purchases:form.expenseUpdated') : tr('purchases:form.expenseRecorded'));
     if (!res) return;
     if (!res.result) {
       setAccountError(tr('purchases:form.accountRequired'));
@@ -286,7 +280,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const taxField = (
     <PickerField
       label={tr('purchases:form.tax')}
-      value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : 'No tax'}
+      value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : tr('purchases:form.noTax')}
       onPress={() => setTaxOpen(true)}
       icon="percent-outline"
       clearable
@@ -301,7 +295,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     <TextField label={tr('purchases:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('purchases:form.notesPlaceholder')} multiline />
   );
   const repeatsField = (
-    <PickerField label={tr('purchases:form.repeats')} value={RECURRENCES.find((r) => r.value === recurrence)?.label} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
+    <PickerField label={tr('purchases:form.repeats')} value={tr(`purchases:recurrence.${recurrence}`)} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
   );
   const billableField = (
     <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
@@ -312,10 +306,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         <MaterialCommunityIcons name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
         <View style={{ flex: 1 }}>
           <Text variant="body" weight="600">
-            {receiptUri ? 'Receipt attached' : 'Attach a receipt'}
+            {receiptUri ? tr('purchases:form.receiptAttached') : tr('purchases:form.attachAReceipt')}
           </Text>
           <Text variant="caption" tone="muted">
-            {receiptUri ? 'Tap to replace' : 'Photo or scan of the bill'}
+            {receiptUri ? tr('purchases:form.tapToReplace') : tr('purchases:form.receiptHint')}
           </Text>
         </View>
         <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
@@ -331,7 +325,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       fullWidth
     />
   );
-  const submitTitle = expense ? 'Save changes' : 'Record expense';
+  const submitTitle = expense ? tr('settings:profile.save') : tr('purchases:form.recordExpense');
 
   const phoneForm = (
     <ScrollView
@@ -356,9 +350,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           {inclusiveField}
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             {[
-              { label: 'Net amount', value: formatMoney(netAmount) },
-              { label: `Input tax (${formatPercent(taxRate)})`, value: formatMoney(taxAmount) },
-              { label: 'Total paid', value: formatMoney(totalPaid) },
+              { label: tr('common:totals.netAmount'), value: formatMoney(netAmount) },
+              { label: tr('purchases:form.inputTaxRate', { rate: formatPercent(taxRate) }), value: formatMoney(taxAmount) },
+              { label: tr('purchases:form.totalPaid'), value: formatMoney(totalPaid) },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="muted">
@@ -429,10 +423,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const summary = (
     <FormSection title={tr('purchases:form.summary')}>
       <View style={{ gap: t.spacing.md }}>
-        {taxRate > 0 ? summaryRow('Net amount', formatMoney(netAmount)) : null}
-        {taxRate > 0 ? summaryRow(`Input tax (${formatPercent(taxRate)})`, formatMoney(taxAmount)) : null}
+        {taxRate > 0 ? summaryRow(tr('common:totals.netAmount'), formatMoney(netAmount)) : null}
+        {taxRate > 0 ? summaryRow(tr('purchases:form.inputTaxRate', { rate: formatPercent(taxRate) }), formatMoney(taxAmount)) : null}
         {taxRate > 0 ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
-        {summaryRow('Total paid', formatMoney(totalPaid), true)}
+        {summaryRow(tr('purchases:form.totalPaid'), formatMoney(totalPaid), true)}
       </View>
     </FormSection>
   );
@@ -581,7 +575,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={recurrenceOpen}
           onClose={() => setRecurrenceOpen(false)}
           title={tr('purchases:form.repeats')}
-          options={RECURRENCES.map((r) => ({ value: r.value, label: r.label }))}
+          options={RECURRENCES.map((r) => ({ value: r, label: tr(`purchases:recurrence.${r}`) }))}
           value={recurrence}
           onSelect={(v) => setRecurrence(v as RecurrenceFrequency)}
           searchable={false}

@@ -52,7 +52,7 @@ export default function LowStock() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
-          <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={`${report.outCount} out of stock`} />
+          <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={tr('inventory:hub.outOfStock', { count: report.outCount })} />
           <StatTile
             label={tr('inventory:lowStock.restockCost')}
             value={{ minor: suggestedValue, currency: baseCurrency }}
@@ -74,7 +74,7 @@ export default function LowStock() {
                   key={r.item.id}
                   onPress={() => router.push(`/(app)/catalog/items/${r.item.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${r.item.name}, ${r.onHand} in stock`}
+                  accessibilityLabel={tr('inventory:hub.a11yStock', { name: r.item.name, qty: formatQty(r.onHand) })}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -102,7 +102,7 @@ export default function LowStock() {
                       {r.item.name}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {r.item.sku} · reorder at {formatQty(r.item.reorderLevel)} {r.item.unit}
+                      {r.item.sku} · {tr('inventory:lowStock.reorderAt', { qty: formatQty(r.item.reorderLevel), unit: r.item.unit })}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
@@ -113,7 +113,7 @@ export default function LowStock() {
                       <Badge label={tr('inventory:lowStock.out')} tone="danger" size="sm" />
                     ) : (
                       <Text variant="micro" tone="muted">
-                        buy {formatQty(shortfall)} ≈ {formatMoney(multiply(r.item.purchasePrice, shortfall))}
+                        {tr('inventory:lowStock.buySuggestion', { qty: formatQty(shortfall), amount: formatMoney(multiply(r.item.purchasePrice, shortfall)) })}
                       </Text>
                     )}
                   </View>

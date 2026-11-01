@@ -73,7 +73,7 @@ export default function BranchesStep() {
         <View style={{ flex: 1 }}>
           <Text variant="body" weight="600">{tr('onboarding:branches.headOffice')}</Text>
           <Text variant="caption" tone="muted">
-            {draft.address.city || tr('onboarding:branches.primary')} · created automatically
+            {tr('onboarding:branches.createdAutomatically', { place: draft.address.city || tr('onboarding:branches.primary') })}
           </Text>
         </View>
       </Card>
@@ -93,7 +93,7 @@ export default function BranchesStep() {
             onPress={() => set({ branches: draft.branches.filter((_, j) => j !== i) })}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={`Remove ${b.name}`}
+            accessibilityLabel={tr('onboarding:branches.removeNamed', { name: b.name })}
           >
             <MaterialCommunityIcons name="close-circle" size={19} color={t.c.muted} />
           </Pressable>

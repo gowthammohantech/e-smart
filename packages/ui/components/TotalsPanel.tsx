@@ -89,7 +89,12 @@ export function TotalsPanel({
 
       {showFx ? (
         <Text variant="micro" tone="muted" style={{ textAlign: 'right' }}>
-          ≈ {formatMoney(totals.grandTotalBase)} at 1 {currency} = {exchangeRate?.toFixed(4)} {baseCurrency}
+          {tr('common:totals.fxNote', {
+            amount: formatMoney(totals.grandTotalBase),
+            currency,
+            rate: exchangeRate?.toFixed(4),
+            baseCurrency,
+          })}
         </Text>
       ) : null}
     </View>

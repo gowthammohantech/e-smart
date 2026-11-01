@@ -28,7 +28,7 @@ type Mode = 'all' | 'overdue' | 'dueSoon';
 
 export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common']);
+  const { t: tr } = useTranslation(['sales', 'common', 'reports', 'contacts']);
   const router = useRouter();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const bp = useBreakpoint();
@@ -44,7 +44,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const [bucket, setBucket] = useState<AgingBucketKey | null>(null);
   const [reminderFor, setReminderFor] = useState<string | null>(null);
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown';
+  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? tr('common:placeholder.unknown');
   const partyOf = (id: string) => parties.find((p) => p.id === id);
 
   const rows = useMemo(() => {
@@ -107,9 +107,9 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const modeFilter = (
     <Segmented
       options={[
-        { value: 'all', label: 'All' },
+        { value: 'all', label: tr('sales:aging.all') },
         { value: 'overdue', label: tr('sales:aging.overdue') },
-        { value: 'dueSoon', label: 'Due soon' },
+        { value: 'dueSoon', label: tr('sales:aging.dueSoon') },
       ]}
       value={mode}
       onChange={(v) => setMode(v as Mode)}
@@ -119,7 +119,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
   const emptyCard = (
     <Card padded={false}>
-      <EmptyState illustration="all-settled" icon="check-all" title={tr('sales:aging.nothingOutstanding')} message={isReceivable ? 'Every invoice has been settled.' : 'You are all paid up.'} compact />
+      <EmptyState illustration="all-settled" icon="check-all" title={tr('sales:aging.nothingOutstanding')} message={isReceivable ? tr('sales:aging.allSettled') : tr('sales:aging.allPaidUp')} compact />
     </Card>
   );
 
@@ -140,7 +140,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
           <View style={{ width: 340 }}>{modeFilter}</View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
-              {rows.length} documents · {byParty.length} contacts
+              {tr('sales:aging.documentCount', { count: rows.length })} · {tr('sales:aging.contactCount', { count: byParty.length })}
             </Text>
             <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(shownTotal)}
@@ -171,17 +171,17 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <StatGrid>
             <StatTile
-              label={isReceivable ? 'Total receivable' : 'Total payable'}
+              label={isReceivable ? tr('reports:home.totalReceivable') : tr('reports:home.totalPayable')}
               value={data.summary.total}
               icon="scale-balance"
-              caption={`${data.outstanding.length} open documents`}
+              caption={tr('sales:payment.openDocuments', { count: data.outstanding.length })}
             />
             <StatTile
               label={tr('sales:aging.overdue')}
               value={data.summary.overdue}
               tone="bad"
               icon="alert-circle-outline"
-              caption={`${overdueCount} of ${data.outstanding.length} documents`}
+              caption={tr('sales:aging.overdueOfTotal', { overdue: overdueCount, total: data.outstanding.length })}
             />
             <StatTile
               label={tr('sales:aging.dueSoon')}
@@ -206,12 +206,12 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
           <StatTile
-            label={isReceivable ? 'Total receivable' : 'Total payable'}
+            label={isReceivable ? tr('reports:home.totalReceivable') : tr('reports:home.totalPayable')}
             value={data.summary.total}
             icon="scale-balance"
-            caption={`${data.outstanding.length} open documents`}
+            caption={tr('sales:payment.openDocuments', { count: data.outstanding.length })}
           />
-          <StatTile label={tr('sales:aging.overdue')} value={data.summary.overdue} tone="bad" icon="alert-circle-outline" caption={`Due soon ${formatMoney(data.summary.dueSoon)}`} />
+          <StatTile label={tr('sales:aging.overdue')} value={data.summary.overdue} tone="bad" icon="alert-circle-outline" caption={tr('sales:aging.dueSoonAmount', { amount: formatMoney(data.summary.dueSoon) })} />
         </StatRow>
 
         {agingCard}
@@ -222,7 +222,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: t.spacing.md }}>
           <Text variant="caption" tone="muted">
-            {rows.length} documents · {byParty.length} contacts
+            {tr('sales:aging.documentCount', { count: rows.length })} · {tr('sales:aging.contactCount', { count: byParty.length })}
           </Text>
           <Text variant="caption" weight="700">
             {formatMoney(shownTotal)}
@@ -245,8 +245,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                       {nameOf(group.id)}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {group.count} document{group.count === 1 ? '' : 's'}
-                      {group.oldest > 0 ? ` · oldest ${group.oldest}d late` : ''}
+                      {tr('sales:aging.documentCount', { count: group.count })}
+                      {group.oldest > 0 ? ` · ${tr('sales:aging.oldestLate', { days: group.oldest })}` : ''}
                     </Text>
                   </View>
                   <Text variant="title" weight="700" tone={group.oldest > 0 ? 'bad' : 'warn'}>
@@ -264,7 +264,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                         )
                       }
                       accessibilityRole="button"
-                      accessibilityLabel={`${o.document.number}, ${formatMoney(o.outstanding)} outstanding`}
+                      accessibilityLabel={tr('sales:aging.rowLabel', { number: o.document.number, amount: formatMoney(o.outstanding) })}
                       style={({ pressed }) => ({
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -279,10 +279,10 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                           {o.document.number}
                         </Text>
                         <Text variant="micro" tone="muted">
-                          due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
+                          {tr('sales:detail.dueOn', { date: formatDate(o.document.dueDate ?? o.document.date, 'dd MMM') })}
                         </Text>
                       </View>
-                      {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d`} tone="danger" size="sm" /> : null}
+                      {o.daysOverdue > 0 ? <Badge label={tr('sales:aging.daysShort', { days: o.daysOverdue })} tone="danger" size="sm" /> : null}
                       <Text variant="small" weight="600">
                         {formatMoney(o.outstanding)}
                       </Text>
@@ -296,7 +296,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                     <Button title={tr('sales:aging.remind')} variant="ghost" icon="bell-ring-outline" size="sm" onPress={() => setReminderFor(group.id)} style={{ flex: 1 }} />
                   ) : null}
                   <Button
-                    title={isReceivable ? 'Record payment' : 'Pay'}
+                    title={isReceivable ? tr('common:action.recordPayment') : tr('contacts:detail.pay')}
                     size="sm"
                     icon={isReceivable ? 'cash-plus' : 'cash-minus'}
                     onPress={() => router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${group.id}`)}
@@ -340,7 +340,7 @@ function DesktopPartyGroup({
   onRecord: () => void;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common']);
+  const { t: tr } = useTranslation(['sales', 'common', 'reports', 'contacts']);
   const header = (label: string, style: object) => (
     <Text variant="micro" tone="muted" weight="700" numberOfLines={1} style={{ textTransform: 'uppercase', letterSpacing: 0.6, ...style }}>
       {label}
@@ -356,8 +356,8 @@ function DesktopPartyGroup({
             {name}
           </Text>
           <Text variant="caption" tone="muted">
-            {group.count} document{group.count === 1 ? '' : 's'}
-            {group.oldest > 0 ? ` · oldest ${group.oldest}d late` : ''}
+            {tr('sales:aging.documentCount', { count: group.count })}
+            {group.oldest > 0 ? ` · ${tr('sales:aging.oldestLate', { days: group.oldest })}` : ''}
           </Text>
         </View>
         <Text variant="title" weight="700" tone={group.oldest > 0 ? 'bad' : 'warn'} style={{ fontVariant: ['tabular-nums'] }}>
@@ -367,7 +367,7 @@ function DesktopPartyGroup({
           {isReceivable ? (
             <Button title={tr('sales:aging.remind')} variant="secondary" icon="bell-ring-outline" size="sm" onPress={onRemind} />
           ) : null}
-          <Button title={isReceivable ? 'Record payment' : 'Pay'} size="sm" icon={isReceivable ? 'cash-plus' : 'cash-minus'} onPress={onRecord} />
+          <Button title={isReceivable ? tr('common:action.recordPayment') : tr('contacts:detail.pay')} size="sm" icon={isReceivable ? 'cash-plus' : 'cash-minus'} onPress={onRecord} />
         </View>
       </View>
 
@@ -395,7 +395,7 @@ function DesktopPartyGroup({
           key={o.document.id}
           onPress={() => onOpen(o.document.id)}
           accessibilityRole="link"
-          accessibilityLabel={`${o.document.number}, ${formatMoney(o.outstanding)} outstanding`}
+          accessibilityLabel={tr('sales:aging.rowLabel', { number: o.document.number, amount: formatMoney(o.outstanding) })}
           style={(state) => {
             const { pressed, hovered, focused } = state as WebPressState;
             return [
@@ -420,7 +420,7 @@ function DesktopPartyGroup({
             {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM yyyy')}
           </Text>
           <View style={{ width: 100, alignItems: 'flex-start' }}>
-            {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d`} tone="danger" size="sm" /> : <Text variant="small" tone="muted">—</Text>}
+            {o.daysOverdue > 0 ? <Badge label={tr('sales:aging.daysShort', { days: o.daysOverdue })} tone="danger" size="sm" /> : <Text variant="small" tone="muted">—</Text>}
           </View>
           <Text variant="small" weight="600" numberOfLines={1} style={{ width: 160, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
             {formatMoney(o.outstanding)}

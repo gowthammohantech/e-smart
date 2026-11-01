@@ -11,7 +11,7 @@ import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useBranches, useItems, useStockMovements } from '../../../store/selectors';
 import { useQueryParams } from '../../../navigation/queryParams';
-import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger';
+import { signedQuantity } from '@esmart/core/domain/stockLedger';
 import { StockMovementType } from '@esmart/core/types';
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
@@ -73,14 +73,14 @@ export default function StockMovements() {
                 }}
               >
                 <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                  {ty === 'all' ? 'All' : MOVEMENT_LABELS[ty]}
+                  {ty === 'all' ? tr('inventory:movements.all') : tr(`inventory:movementType.${ty}`)}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
         <Text variant="caption" tone="muted">
-          {filtered.length} movements
+          {tr('inventory:movements.count', { count: filtered.length })}
         </Text>
       </View>
 
@@ -98,7 +98,11 @@ export default function StockMovements() {
                   key={m.id}
                   onPress={() => item && router.push(`/(app)/catalog/items/${item.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${item?.name ?? 'Item'}, ${MOVEMENT_LABELS[m.type]}, ${delta}`}
+                  accessibilityLabel={tr('inventory:movements.a11yRow', {
+                    name: item?.name ?? tr('inventory:movements.unknownItem'),
+                    type: tr(`inventory:movementType.${m.type}`),
+                    qty: formatQty(delta),
+                  })}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -116,10 +120,10 @@ export default function StockMovements() {
                   />
                   <View style={{ flex: 1, gap: 3 }}>
                     <Text variant="body" weight="600" numberOfLines={1}>
-                      {item?.name ?? 'Unknown item'}
+                      {item?.name ?? tr('inventory:movements.unknownItem')}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
-                      {MOVEMENT_LABELS[m.type]} · {formatDate(m.date, 'dd MMM')}
+                      {tr(`inventory:movementType.${m.type}`)} · {formatDate(m.date, 'dd MMM')}
                       {m.referenceNumber ? ` · ${m.referenceNumber}` : ''}
                     </Text>
                   </View>

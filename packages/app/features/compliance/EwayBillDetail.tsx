@@ -30,9 +30,6 @@ import {
   EWAY_CANCEL_REASONS,
   EWAY_EXTEND_REASONS,
   EWAY_PART_B_REASONS,
-  EWAY_SUB_SUPPLY_TYPES,
-  EWAY_TRANSPORT_MODES,
-  EWAY_VEHICLE_TYPES,
   canCancelEwayBill,
   canExtendEwayBill,
   canUpdatePartB,
@@ -53,7 +50,7 @@ type Entry =
 export function EwayBillDetail({ bill }: { bill: EwayBill }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['compliance']);
+  const { t: tr } = useTranslation(['compliance', 'common']);
   const router = useRouter();
 
   const documents = useAppStore((s) => s.documents);
@@ -109,12 +106,14 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
 
           {status !== 'cancelled' ? (
             <Text variant="caption" tone={hours <= 24 ? 'warn' : 'muted'}>
-              {expiryPhrase(tr, hours)} · midnight expiry, per rule 138(10)
+              {tr('compliance:ewb.midnightRule', { phrase: expiryPhrase(tr, hours) })}
             </Text>
           ) : (
             <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-              Cancelled{bill.cancelledAt ? ` on ${formatDateTime(bill.cancelledAt)}` : ''}
-              {bill.cancelReasonCode ? ` · ${EWAY_CANCEL_REASONS[bill.cancelReasonCode]}` : ''}
+              {bill.cancelledAt
+                ? tr('compliance:ewb.cancelledAt', { date: formatDateTime(bill.cancelledAt) })
+                : tr('compliance:status.eway.cancelled')}
+              {bill.cancelReasonCode ? ` · ${tr(`compliance:cancelReason.eway.${bill.cancelReasonCode}`)}` : ''}
               {bill.cancelRemark ? `. ${bill.cancelRemark}` : ''}
             </Text>
           )}
@@ -139,7 +138,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
                   {doc.number}
                 </Text>
                 <Text variant="caption" tone="muted">
-                  {party?.name ?? 'Unknown'} · {formatMoney(bill.consignmentValue)}
+                  {party?.name ?? tr('common:placeholder.unknown')} · {formatMoney(bill.consignmentValue)}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
@@ -149,7 +148,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
 
         <SectionLabel>{tr('compliance:ewb.consignment')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
-          <Row label={tr('compliance:ewb.supply')} value={EWAY_SUB_SUPPLY_TYPES[bill.subSupplyType].label} />
+          <Row label={tr('compliance:ewb.supply')} value={tr(`compliance:subSupply.${bill.subSupplyType}`)} />
           <Row label={tr('compliance:ewb.documentType')} value={bill.docType} />
           <Row label={tr('compliance:ewb.taxableValue')} value={formatMoney(bill.taxableValue)} />
           <Row label={tr('compliance:ewb.totalValue')} value={formatMoney(bill.consignmentValue)} />
@@ -165,15 +164,15 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <MaterialCommunityIcons name="map-marker-distance" size={16} color={t.c.muted} />
             <Text variant="caption" tone="muted">
-              {bill.distanceKm} km
+              {tr('compliance:ewb.distanceValue', { distance: bill.distanceKm })}
             </Text>
           </View>
         </Card>
 
         <SectionLabel>{tr('compliance:ewb.transport')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
-          <Row label={tr('compliance:ewb.mode')} value={EWAY_TRANSPORT_MODES[bill.transportMode].label} />
-          <Row label={tr('compliance:ewb.cargo')} value={EWAY_VEHICLE_TYPES[bill.vehicleType].label} />
+          <Row label={tr('compliance:ewb.mode')} value={tr(`compliance:mode.${bill.transportMode}`)} />
+          <Row label={tr('compliance:ewb.cargo')} value={tr(bill.vehicleType === 'overDimensional' ? 'compliance:cargo.overDimensionalCargo' : 'compliance:cargo.regular')} />
           {bill.vehicleNumber ? <Row label={tr('compliance:ewb.vehicle')} value={bill.vehicleNumber} /> : null}
           {bill.transportDocNumber ? (
             <Row label={tr('compliance:ewb.transportDocument')} value={bill.transportDocNumber} />
@@ -262,8 +261,11 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
         {/* Saying why an action is shut is more use than hiding it. */}
         {!extension.allowed && status !== 'cancelled' ? (
           <Text variant="micro" tone="muted" center>
-            {extension.reason} — the window runs from {formatDateTime(extension.opensAt)} to{' '}
-            {formatDateTime(extension.closesAt)}.
+            {tr('compliance:ewb.extensionWindow', {
+              reason: extension.reason,
+              from: formatDateTime(extension.opensAt),
+              to: formatDateTime(extension.closesAt),
+            })}
           </Text>
         ) : null}
       </View>
@@ -277,16 +279,17 @@ export type EwayBillAction = 'partB' | 'extend' | 'cancel';
 
 /** A bill's Part-B updates and extensions, newest first. */
 export function useEwayBillHistory(bill: EwayBill): Entry[] {
+  const { t: tr } = useTranslation(['compliance']);
   return useMemo<Entry[]>(() => {
     const out: Entry[] = [
       ...bill.partBUpdates.map<Entry>((u) => ({
         at: u.updatedAt,
         kind: 'partB',
         icon: 'truck-outline',
-        label: EWAY_PART_B_REASONS[u.reasonCode],
+        label: tr(`compliance:partBReason.${u.reasonCode}`),
         detail: [
           u.vehicleNumber ?? u.transportDocNumber,
-          EWAY_TRANSPORT_MODES[u.mode].label,
+          tr(`compliance:mode.${u.mode}`),
           u.fromPlace,
           u.remark,
         ]
@@ -297,10 +300,10 @@ export function useEwayBillHistory(bill: EwayBill): Entry[] {
         at: e.extendedAt,
         kind: 'extension',
         icon: 'clock-plus-outline',
-        label: `Extended · ${EWAY_EXTEND_REASONS[e.reasonCode]}`,
+        label: tr('compliance:ewb.historyExtended', { reason: tr(`compliance:extendReason.${e.reasonCode}`) }),
         detail: [
-          `${e.remainingDistanceKm} km left from ${e.currentPlace}`,
-          `now valid to ${formatDate(e.newValidUpto.slice(0, 10))}`,
+          tr('compliance:ewb.historyLeft', { distance: e.remainingDistanceKm, place: e.currentPlace }),
+          tr('compliance:ewb.historyValidTo', { date: formatDate(e.newValidUpto.slice(0, 10)) }),
           e.remark,
         ]
           .filter(Boolean)
@@ -308,7 +311,7 @@ export function useEwayBillHistory(bill: EwayBill): Entry[] {
       })),
     ];
     return out.sort((a, b) => b.at.localeCompare(a.at));
-  }, [bill]);
+  }, [bill, tr]);
 }
 
 /**
@@ -337,7 +340,7 @@ export function EwayBillActionSheets({ bill, open, onClose }: { bill: EwayBill; 
             toast.show(tr('compliance:ewb.partBUpdated'), 'success');
             onClose();
           } else {
-            toast.show(outcome.issues[0]?.message ?? 'Part-B could not be updated', 'error');
+            toast.show(outcome.issues[0]?.message ?? tr('compliance:ewb.partBFailed'), 'error');
           }
         }}
       />
@@ -355,7 +358,7 @@ export function EwayBillActionSheets({ bill, open, onClose }: { bill: EwayBill; 
             toast.show(tr('compliance:ewb.validityExtended'), 'success');
             onClose();
           } else {
-            toast.show(outcome.issues[0]?.message ?? 'The bill could not be extended', 'error');
+            toast.show(outcome.issues[0]?.message ?? tr('compliance:ewb.extendFailed'), 'error');
           }
         }}
       />
@@ -383,7 +386,7 @@ export function EwayBillActionSheets({ bill, open, onClose }: { bill: EwayBill; 
           if (!args) return;
           const outcome = await compliance.cancelEwayBill(bill.id, args.code, args.remark);
           if (outcome.ok) toast.show(tr('compliance:ewb.cancelled'), 'success');
-          else toast.show(outcome.issues[0]?.message ?? 'The bill could not be cancelled', 'error');
+          else toast.show(outcome.issues[0]?.message ?? tr('compliance:ewb.cancelFailed'), 'error');
         }}
       />
     </>
@@ -531,16 +534,15 @@ function PartBSheet({
     >
       <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-          Part-B records each leg of the journey. Add an entry whenever the vehicle changes — a
-          breakdown, a transhipment, or a fresh carrier.
+          {tr('compliance:ewb.partBIntro')}
         </Text>
 
         <Segmented
           options={[
-            { value: 'road', label: 'Road' },
-            { value: 'rail', label: 'Rail' },
-            { value: 'air', label: 'Air' },
-            { value: 'ship', label: 'Ship' },
+            { value: 'road', label: tr('compliance:mode.road') },
+            { value: 'rail', label: tr('compliance:mode.rail') },
+            { value: 'air', label: tr('compliance:mode.air') },
+            { value: 'ship', label: tr('compliance:mode.ship') },
           ]}
           value={mode}
           onChange={setMode}
@@ -571,7 +573,7 @@ function PartBSheet({
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.reason')}</Text>
           {/* A list, like the other reasons here: four labels don't fit side by side on a phone. */}
           {(Object.keys(EWAY_PART_B_REASONS) as EwayPartBReasonCode[]).map((code) => (
-            <ReasonOption key={code} label={EWAY_PART_B_REASONS[code]} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
+            <ReasonOption key={code} label={tr(`compliance:partBReason.${code}`)} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
           ))}
         </View>
 
@@ -639,8 +641,7 @@ function ExtendSheet({
     >
       <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-          The new validity is worked out from the distance still to cover, not the original journey,
-          and counted from now.
+          {tr('compliance:ewb.extendIntro')}
         </Text>
 
         <TextField
@@ -649,13 +650,13 @@ function ExtendSheet({
           value={remaining}
           onChangeText={setRemaining}
           keyboardType="number-pad"
-          suffix="km"
+          suffix={tr('compliance:ewb.km')}
         />
 
         <Segmented
           options={[
-            { value: 'inMovement', label: 'In movement' },
-            { value: 'inTransit', label: 'In transit' },
+            { value: 'inMovement', label: tr('compliance:ewb.inMovement') },
+            { value: 'inTransit', label: tr('compliance:ewb.inTransit') },
           ]}
           value={transitType}
           onChange={setTransitType}
@@ -673,7 +674,7 @@ function ExtendSheet({
         <View style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.reason')}</Text>
           {(Object.keys(EWAY_EXTEND_REASONS) as EwayExtendReasonCode[]).map((code) => (
-            <ReasonOption key={code} label={EWAY_EXTEND_REASONS[code]} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
+            <ReasonOption key={code} label={tr(`compliance:extendReason.${code}`)} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
           ))}
         </View>
 
@@ -715,12 +716,11 @@ function CancelSheet({
     >
       <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-          A bill can be cancelled within 24 hours of being raised, and only if it has not already been
-          verified in transit. This one can be cancelled until {formatDateTime(deadline)}.
+          {tr('compliance:ewb.cancelIntro', { deadline: formatDateTime(deadline) })}
         </Text>
 
         {(Object.keys(EWAY_CANCEL_REASONS) as CancelReasonCode[]).map((code) => (
-          <ReasonOption key={code} label={EWAY_CANCEL_REASONS[code]} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
+          <ReasonOption key={code} label={tr(`compliance:cancelReason.eway.${code}`)} selected={reasonCode === code} onPress={() => setReasonCode(code)} />
         ))}
 
         <TextField label={tr('compliance:ewb.remark')} value={remark} onChangeText={setRemark} multiline />

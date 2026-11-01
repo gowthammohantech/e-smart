@@ -297,7 +297,7 @@ export default function NewPayment() {
       createdAt: new Date().toISOString(),
     };
 
-    const res = await serverSave(() => savePayment(payment), direction === 'received' ? 'Payment recorded' : 'Payment made');
+    const res = await serverSave(() => savePayment(payment), direction === 'received' ? tr('sales:payment.recorded') : tr('sales:payment.made'));
     if (!res) return;
     if (!res.result) {
       toast.show(tr('sales:payment.noAccountForMethod'), 'error');
@@ -319,7 +319,7 @@ export default function NewPayment() {
                 {party.name}
               </Text>
               <Text variant="caption" tone="muted">
-                {outstanding.length} open {outstanding.length === 1 ? 'document' : 'documents'}
+                {tr('sales:payment.openDocuments', { count: outstanding.length })}
               </Text>
             </View>
           </>
@@ -338,7 +338,7 @@ export default function NewPayment() {
               <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
             </View>
             <Text variant="body" weight="600" style={{ flex: 1 }}>
-              Select {direction === 'received' ? 'customer' : 'supplier'}
+              {tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
             </Text>
           </>
         )}
@@ -353,7 +353,7 @@ export default function NewPayment() {
       value={party?.name}
       onPress={() => setPartyOpen(true)}
       icon="account-search-outline"
-      hint={party ? `${outstanding.length} open ${outstanding.length === 1 ? 'document' : 'documents'}` : undefined}
+      hint={party ? tr('sales:payment.openDocuments', { count: outstanding.length }) : undefined}
       required
     />
   );
@@ -433,7 +433,7 @@ export default function NewPayment() {
   const rateField =
     currency !== baseCurrency ? (
       <TextField
-        label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
+        label={`${tr('sales:payment.settlementRate')} (1 ${currency} → ${baseCurrency})`}
         value={String(exchangeRate)}
         onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
         keyboardType="decimal-pad"
@@ -492,7 +492,7 @@ export default function NewPayment() {
             onPress={() => toggleAllocation(o.document.id, o.outstanding)}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: selected }}
-            accessibilityLabel={`Allocate to ${o.document.number}`}
+            accessibilityLabel={tr('sales:payment.allocateTo', { number: o.document.number })}
             style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
           >
             <MaterialCommunityIcons
@@ -505,14 +505,14 @@ export default function NewPayment() {
                 {o.document.number}
               </Text>
               <Text variant="caption" tone="muted">
-                {formatDate(o.document.date, 'dd MMM')} · due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
+                {formatDate(o.document.date, 'dd MMM')} · {tr('sales:detail.dueOn', { date: formatDate(o.document.dueDate ?? o.document.date, 'dd MMM') })}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end', gap: 3 }}>
               <Text variant="small" weight="700">
                 {formatMoney(o.outstanding)}
               </Text>
-              {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d late`} tone="danger" size="sm" /> : null}
+              {o.daysOverdue > 0 ? <Badge label={tr('sales:payment.daysLate', { days: o.daysOverdue })} tone="danger" size="sm" /> : null}
             </View>
           </Pressable>
 
@@ -548,8 +548,8 @@ export default function NewPayment() {
   const summaryRows = (
     <>
       {[
-        { label: 'Payment amount', value: formatMoney(amount) },
-        { label: 'Allocated', value: formatMoney(allocatedTotal) },
+        { label: tr('sales:payment.paymentAmount'), value: formatMoney(amount) },
+        { label: tr('sales:payment.allocated'), value: formatMoney(allocatedTotal) },
       ].map((r) => (
         <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="small" tone="muted">
@@ -563,7 +563,7 @@ export default function NewPayment() {
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
-          {overAllocated ? 'Over-allocated by' : 'Unallocated (advance)'}
+          {overAllocated ? tr('sales:payment.overAllocatedBy') : tr('sales:payment.unallocatedAdvance')}
         </Text>
         <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
           {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
@@ -572,7 +572,7 @@ export default function NewPayment() {
       {fxGainLoss && fxGainLoss.minor !== 0 ? (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
           <Text variant="caption" tone="muted">
-            FX {fxGainLoss.minor >= 0 ? 'gain' : 'loss'}
+            {fxGainLoss.minor >= 0 ? tr('sales:payment.fxGain') : tr('sales:payment.fxLoss')}
           </Text>
           <Text variant="caption" weight="600" tone={fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
             {formatMoney(fxGainLoss, { signed: true })}
@@ -584,7 +584,7 @@ export default function NewPayment() {
 
   const notesField = <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />;
 
-  const submitTitle = direction === 'received' ? 'Record payment' : 'Record payment made';
+  const submitTitle = direction === 'received' ? tr('common:action.recordPayment') : tr('sales:payment.recordPaymentMade');
 
   const phoneForm = (
     <ScrollView
@@ -697,7 +697,7 @@ export default function NewPayment() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>
-        <Stack.Screen options={{ title: direction === 'received' ? 'Receive payment' : 'Make payment' }} />
+        <Stack.Screen options={{ title: direction === 'received' ? tr('common:quickAction.receivePayment') : tr('sales:payment.makePayment') }} />
 
         {desktop ? desktopForm : phoneForm}
 
@@ -729,7 +729,7 @@ export default function NewPayment() {
         <SelectSheet
           visible={partyOpen}
           onClose={() => setPartyOpen(false)}
-          title={direction === 'received' ? 'Select customer' : 'Select supplier'}
+          title={tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
           options={parties.map((p) => ({ value: p.id, label: p.name, description: p.phone ?? p.email ?? p.code }))}
           value={partyId}
           onSelect={(id) => {

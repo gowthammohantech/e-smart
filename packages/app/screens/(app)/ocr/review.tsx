@@ -28,7 +28,7 @@ function confidenceTone(c: number): 'success' | 'warning' | 'danger' {
 
 export default function OcrReview() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'purchases']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -94,9 +94,7 @@ export default function OcrReview() {
         >
           <MaterialCommunityIcons name={lowConfidence > 0 ? 'alert-outline' : 'check-circle-outline'} size={20} color={lowConfidence > 0 ? t.c.warn : t.c.good} />
           <Text variant="small" style={{ flex: 1, lineHeight: 19 }}>
-            {lowConfidence > 0
-              ? `${lowConfidence} field${lowConfidence === 1 ? '' : 's'} need${lowConfidence === 1 ? 's' : ''} a quick check before saving.`
-              : 'Everything was read confidently. Review and save.'}
+            {lowConfidence > 0 ? tr('purchases:ocr.needsCheck', { count: lowConfidence }) : tr('purchases:ocr.allConfident')}
           </Text>
         </View>
 
@@ -110,7 +108,7 @@ export default function OcrReview() {
                       {f.label}
                     </Text>
                     <Badge
-                      label={f.confidence >= 1 ? 'Confirmed' : `${Math.round(f.confidence * 100)}% sure`}
+                      label={f.confidence >= 1 ? tr('purchases:ocr.confirmed') : tr('purchases:ocr.percentSure', { percent: Math.round(f.confidence * 100) })}
                       tone={f.confidence >= 1 ? 'info' : confidenceTone(f.confidence)}
                       size="sm"
                     />
@@ -128,11 +126,11 @@ export default function OcrReview() {
           <FormSection title={tr('inventory:ocr.lineItems')}>
             <View style={{ borderWidth: 1, borderColor: t.c.line, borderRadius: t.radius.md, overflow: 'hidden' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, minHeight: 36, paddingHorizontal: t.spacing.md, backgroundColor: t.c.card2 }}>
-                {headerCell('Item', { flex: 1 })}
-                {headerCell('Qty', { width: 70, textAlign: 'right' })}
-                {headerCell('Rate', { width: 120, textAlign: 'right' })}
-                {headerCell('Amount', { width: 130, textAlign: 'right' })}
-                {headerCell('Sure', { width: 64, textAlign: 'right' })}
+                {headerCell(tr('purchases:ocr.colItem'), { flex: 1 })}
+                {headerCell(tr('purchases:ocr.colQty'), { width: 70, textAlign: 'right' })}
+                {headerCell(tr('purchases:ocr.colRate'), { width: 120, textAlign: 'right' })}
+                {headerCell(tr('purchases:form.amount'), { width: 130, textAlign: 'right' })}
+                {headerCell(tr('purchases:ocr.colSure'), { width: 64, textAlign: 'right' })}
               </View>
               {result.lines.map((l, i) => (
                 <View
@@ -195,7 +193,7 @@ export default function OcrReview() {
             headerRight: () => (
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
                 <Button title={tr('inventory:ocr.rescan')} variant="ghost" icon="camera-retake-outline" onPress={rescan} />
-                <Button title={isExpense ? 'Create expense' : 'Create bill'} icon="arrow-right" onPress={create} />
+                <Button title={isExpense ? tr('purchases:ocr.createExpense') : tr('purchases:ocr.createBill')} icon="arrow-right" onPress={create} />
               </View>
             ),
           }}
@@ -245,9 +243,7 @@ export default function OcrReview() {
             color={lowConfidence > 0 ? t.c.warn : t.c.good}
           />
           <Text variant="small" style={{ flex: 1, lineHeight: 19 }}>
-            {lowConfidence > 0
-              ? `${lowConfidence} field${lowConfidence === 1 ? '' : 's'} need${lowConfidence === 1 ? 's' : ''} a quick check before saving.`
-              : 'Everything was read confidently. Review and save.'}
+            {lowConfidence > 0 ? tr('purchases:ocr.needsCheck', { count: lowConfidence }) : tr('purchases:ocr.allConfident')}
           </Text>
         </Card>
 
@@ -260,7 +256,7 @@ export default function OcrReview() {
                 {f.label}
               </Text>
               <Badge
-                label={f.confidence >= 1 ? 'Confirmed' : `${Math.round(f.confidence * 100)}% sure`}
+                label={f.confidence >= 1 ? tr('purchases:ocr.confirmed') : tr('purchases:ocr.percentSure', { percent: Math.round(f.confidence * 100) })}
                 tone={f.confidence >= 1 ? 'info' : confidenceTone(f.confidence)}
                 size="sm"
               />
@@ -334,7 +330,7 @@ export default function OcrReview() {
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <Button title={tr('inventory:ocr.rescan')} variant="ghost" onPress={() => router.replace('/(app)/ocr/capture')} style={{ flex: 1 }} />
           <Button
-            title={isExpense ? 'Create expense' : 'Create bill'}
+            title={isExpense ? tr('purchases:ocr.createExpense') : tr('purchases:ocr.createBill')}
             onPress={() => {
               toast.show(tr('inventory:ocr.carriedFields'), 'success');
               router.replace(isExpense ? '/(app)/expenses/new?fromScan=1' : '/(app)/purchases/bills/new?fromScan=1');
