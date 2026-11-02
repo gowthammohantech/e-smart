@@ -9,6 +9,7 @@ import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '@esmart/app/components/useServerSave';
+import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
 import { formatQty } from '@esmart/core/lib/format';
@@ -75,6 +76,7 @@ export function StockAdjustDesktop() {
       if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });
   };
+  useSaveShortcut(() => void save(), !saving && canSave);
 
   return (
     <View style={{ flex: 1 }}>

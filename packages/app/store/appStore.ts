@@ -859,7 +859,7 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             branchId: src.branchId,
-            status: 'draft',
+            status: initialStatus(src.kind),
           });
         },
 
@@ -884,11 +884,16 @@ export const useAppStore = create<AppState>()(
             charges: src.charges,
             applyRoundOff: src.applyRoundOff,
             roundOffManual: src.roundOffManual,
+            // The PO number and supplier's bill number travel with the conversion, as on the server.
+            reference: src.reference,
+            supplierDocNumber: src.supplierDocNumber,
             notes: src.notes,
+            terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             branchId: src.branchId,
             sourceDocumentId: src.id,
-            status: 'draft',
+            // A return starts as requested, not draft, or it has no way forward to post.
+            status: initialStatus(target),
           });
           audit(`converted to ${target}`, src.kind, src.id, src.number);
           return newId;

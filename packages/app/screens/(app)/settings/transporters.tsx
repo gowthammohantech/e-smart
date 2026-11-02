@@ -146,7 +146,7 @@ export default function TransportersSettings() {
           </View>
         }
       >
-        <View style={{ gap: t.spacing.md }}>
+        <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
           <TextField label={tr('settings:transporters.name')} required value={name} onChangeText={setName} placeholder={tr('settings:transporters.namePlaceholder')} />
           <TextField
             label={tr('settings:transporters.id')}

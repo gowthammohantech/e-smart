@@ -22,6 +22,7 @@ import {
   useEwayBills,
   useExpiringEwayBills,
   useParties,
+  usePendingEwayDocuments,
 } from '../../store/selectors';
 import { ewayBillStatusAt, hoursUntilExpiry } from '@esmart/core/domain/ewayBill';
 import { detailRouteFor } from '../documents/DocumentEditor';
@@ -42,8 +43,12 @@ const E_INVOICE_FILTERS: { key: EInvoiceStatus | 'all'; labelKey: string }[] = [
   { key: 'cancelled', labelKey: 'compliance:filter.cancelled' },
 ];
 
-const EWAY_FILTERS: { key: EwayBillStatus | 'all'; labelKey: string }[] = [
+/** `pending` lists the consignments that still need a bill, rather than bills. */
+type EwayFilter = EwayBillStatus | 'all' | 'pending';
+
+const EWAY_FILTERS: { key: EwayFilter; labelKey: string }[] = [
   { key: 'all', labelKey: 'compliance:filter.all' },
+  { key: 'pending', labelKey: 'compliance:filter.needsBill' },
   { key: 'active', labelKey: 'compliance:filter.active' },
   { key: 'expired', labelKey: 'compliance:filter.expired' },
   { key: 'cancelled', labelKey: 'compliance:filter.cancelled' },
@@ -63,10 +68,10 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const [params, setParams] = useQueryParams();
   const tab: Tab = params.tab === 'eway' ? 'eway' : 'eInvoice';
   const eInvoiceFilter = (params.einvoice ?? 'all') as EInvoiceStatus | 'all';
-  const ewayFilter = (params.eway ?? 'all') as EwayBillStatus | 'all';
+  const ewayFilter = (params.eway ?? 'all') as EwayFilter;
   const setTab = (v: Tab) => setParams({ tab: v === 'eInvoice' ? undefined : v });
   const setEInvoiceFilter = (v: EInvoiceStatus | 'all') => setParams({ einvoice: v === 'all' ? undefined : v });
-  const setEwayFilter = (v: EwayBillStatus | 'all') => setParams({ eway: v === 'all' ? undefined : v });
+  const setEwayFilter = (v: EwayFilter) => setParams({ eway: v === 'all' ? undefined : v });
   const [query, setQuery] = useState('');
 
   const settings = useComplianceSettings();
@@ -74,6 +79,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const documents = useEInvoiceDocuments();
   const bills = useEwayBills();
   const expiring = useExpiringEwayBills(24);
+  const unbilled = usePendingEwayDocuments();
   const parties = useParties();
   const allDocuments = useAppStore((s) => s.documents);
 
@@ -96,9 +102,16 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documents, eInvoiceFilter, query, parties]);
 
+  const unbilledRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? unbilled.filter((d) => d.number.toLowerCase().includes(q) || nameOf(d.partyId).toLowerCase().includes(q)) : unbilled;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unbilled, query, parties]);
+
   const ewayRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return bills.filter((b) => {
+      if (ewayFilter === 'pending') return false;
       if (ewayFilter !== 'all' && ewayBillStatusAt(b, now) !== ewayFilter) return false;
       if (!q) return true;
       return (
@@ -162,6 +175,18 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         </StatRow>
       )}
 
+      {tab === 'eway' && unbilled.length && ewayFilter !== 'pending' ? (
+        <Pressable onPress={() => setEwayFilter('pending')} accessibilityRole="button" style={{ marginTop: t.spacing.md }}>
+          <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, borderColor: t.c.warn }}>
+            <MaterialCommunityIcons name="truck-alert-outline" size={20} color={t.c.warn} />
+            <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
+              {tr('compliance:hub.unbilledBanner', { count: unbilled.length })}
+            </Text>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.warn} />
+          </Card>
+        </Pressable>
+      ) : null}
+
       {tab === 'eway' && expiring.length ? (
         <Pressable
           onPress={() => setEwayFilter('active')}
@@ -211,7 +236,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
               onPress={() =>
                 tab === 'eInvoice'
                   ? setEInvoiceFilter(f.key as EInvoiceStatus | 'all')
-                  : setEwayFilter(f.key as EwayBillStatus | 'all')
+                  : setEwayFilter(f.key as EwayFilter)
               }
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
@@ -262,6 +287,29 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
                 ? tr('compliance:hub.noInvoiceMatch')
                 : tr('compliance:hub.eInvoiceEmpty')
             }
+          />
+        )
+      ) : ewayFilter === 'pending' ? (
+        unbilledRows.length ? (
+          <Card padded={false}>
+            {unbilledRows.map((d, i) => (
+              <ListRow
+                key={d.id}
+                title={d.number}
+                subtitle={`${nameOf(d.partyId)} · ${formatDate(d.date)}`}
+                meta={formatMoney(d.totals.grandTotal)}
+                right={<Badge label={tr('compliance:hub.needsBill')} tone="warning" size="sm" />}
+                divider={i < unbilledRows.length - 1}
+                // The document's own page raises the bill.
+                onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
+              />
+            ))}
+          </Card>
+        ) : (
+          <EmptyState
+            illustration="all-settled"
+            title={tr('compliance:hub.nothingUnbilled')}
+            message={query ? tr('compliance:hub.noInvoiceMatch') : tr('compliance:hub.nothingUnbilledBody')}
           />
         )
       ) : ewayRows.length ? (

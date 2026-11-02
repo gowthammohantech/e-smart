@@ -86,6 +86,9 @@
     "exportTitle": "{{title}} export"
   },
   "detail": {
+    "openAdvances": "Open advances",
+    "noAdvances": "No open advances",
+    "noAdvancesBody": "Every payment in this period is fully set against invoices or bills.",
     "unknown": "Unknown report",
     "unknownBody": "Pick a report from the Reports tab.",
     "byMonth": "By month",
@@ -158,6 +161,11 @@
       "title": "Payments & cash",
       "description": "Money in and out by method"
     },
+    "advances": {
+      "title": "Advances",
+      "description": "Advance receipts and payments still to adjust",
+      "basis": "Payments dated in the period with money not yet set against an invoice or bill"
+    },
     "profit": {
       "title": "Profit snapshot",
       "description": "Revenue less cost and expenses",
@@ -165,6 +173,8 @@
     }
   },
   "figure": {
+    "advancesReceived": "Advance receipts",
+    "advancesPaid": "Advance payments",
     "totalInvoiced": "Total invoiced",
     "totalPurchased": "Total purchased",
     "discountsGiven": "Discounts given",
@@ -195,6 +205,8 @@
     "stockOnHand": "Stock on hand"
   },
   "caption": {
+    "advancesReceived": "From customers, to adjust against invoices",
+    "advancesPaid": "To suppliers, to adjust against bills",
     "documentsAvg_one": "{{count}} document · avg {{amount}}",
     "documentsAvg_other": "{{count}} documents · avg {{amount}}",
     "documents_one": "{{count}} document",
@@ -220,6 +232,7 @@
     "inOut": "In {{received}} · out {{paid}}"
   },
   "column": {
+    "toAdjust": "To adjust",
     "taxable": "Taxable",
     "document": "Document",
     "overdue": "Overdue",

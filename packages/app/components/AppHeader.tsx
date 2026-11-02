@@ -173,9 +173,18 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         {offline ? (
           <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
         ) : null}
-        {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} /> : null}
-        {pendingSync > 0 ? (
-          <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
+        {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
+        {failedSync > 0 || pendingSync > 0 ? (
+          <Pressable
+            onPress={() => router.push('/(app)/settings/sync')}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={tr('common:component.openSyncStatus')}
+            style={{ flexDirection: 'row', gap: t.spacing.xs, flexShrink: 1, alignSelf: 'center' }}
+          >
+            {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ flexShrink: 1 }} /> : null}
+            {pendingSync > 0 ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" style={{ flexShrink: 1 }} /> : null}
+          </Pressable>
         ) : null}
 
         {desktop ? null : (

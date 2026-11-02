@@ -37,6 +37,7 @@ export function paymentAccountToWire(row: AccountRow, balance: number): Schema<'
     currency,
     accountNumber: row.accountNumber,
     openingBalance: money(row.openingBalanceMinor, currency),
+    openingBalanceDate: row.openingBalanceDate,
     currentBalance: money(balance, currency),
     isDefault: row.isDefault,
   });

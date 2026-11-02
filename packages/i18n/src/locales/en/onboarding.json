@@ -99,7 +99,13 @@
     "namePlaceholder": "e.g. Pune warehouse",
     "headOffice": "Head office",
     "createdAutomatically": "{{place}} · created automatically",
-    "removeNamed": "Remove {{name}}"
+    "removeNamed": "Remove {{name}}",
+    "unsavedTitle": "This branch isn't added yet",
+    "unsavedAddMessage": "Add {{name}} to your locations before finishing?",
+    "unsavedDiscardMessage": "The branch details you typed are incomplete and will not be saved.",
+    "unsavedAdd": "Add and finish",
+    "unsavedDiscard": "Discard and finish",
+    "unsavedKeepEditing": "Keep editing"
   },
   "done": {
     "readyTitle": "{{business}} is ready",

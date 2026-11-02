@@ -207,8 +207,18 @@ export function TopBar() {
       <View style={{ flex: 1 }} />
 
       {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ alignSelf: 'center' }} /> : null}
-      {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ alignSelf: 'center' }} /> : null}
-      {pendingSync > 0 ? <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ alignSelf: 'center' }} /> : null}
+      {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
+      {failedSync > 0 || pendingSync > 0 ? (
+        <Pressable
+          onPress={() => router.push('/(app)/settings/sync')}
+          accessibilityRole="button"
+          accessibilityLabel={tr('common:component.openSyncStatus')}
+          style={(state) => [{ flexDirection: 'row', gap: t.spacing.xs, alignSelf: 'center', borderRadius: 999, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
+        >
+          {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" /> : null}
+          {pendingSync > 0 ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" /> : null}
+        </Pressable>
+      ) : null}
 
       <LixiButton label={tr('nav:more.entry.askLixi')} />
       <IconButton ref={bellAnchor} icon="bell-outline" label={tr('nav:shell.notifications')} onPress={openBellMenu} badge={unread} />

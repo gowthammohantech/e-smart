@@ -18,6 +18,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../../components/useServerSave';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
 import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivables';
@@ -252,7 +253,7 @@ export default function NewPayment() {
     return money(total, baseCurrency);
   }, [outstanding, allocations, currency, baseCurrency, exchangeRate]);
 
-  // Money going out cannot exceed what the account holds; cash in hand can never go negative.
+  // Money going out cannot exceed what the account holds, whether cash, bank or wallet.
   const account = accounts.find((a) => a.id === accountId);
   const balance = useMemo(
     () => (accountId ? accountBalances(accounts, allPayments, expenses)[accountId] : undefined),
@@ -260,7 +261,7 @@ export default function NewPayment() {
   );
   const amountInBase = Math.round(amount.minor * (exchangeRate || 1));
   const shortfall = direction === 'paid' && balance !== undefined && amountInBase > balance;
-  const balanceBlocks = shortfall && account?.type === 'cash';
+  const balanceBlocks = shortfall && !!account;
 
   const canSave = !!partyId && amount.minor > 0 && !overAllocated && !!accountId && !balanceBlocks;
 
@@ -310,6 +311,7 @@ export default function NewPayment() {
     }
     router.replace(`/(app)/payments/${res.id ?? res.result}`);
   };
+  useSaveShortcut(() => void save(), !saving && canSave);
 
   // Every block is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
@@ -406,7 +408,7 @@ export default function NewPayment() {
         methodAccounts.length === 0
           ? tr('sales:payment.noAccountForMethod')
           : balanceBlocks
-            ? tr('sales:payment.insufficientCash', { balance: formatMoney(money(balance ?? 0, baseCurrency)) })
+            ? tr('sales:payment.insufficientInAccount', { account: account?.name ?? '', balance: formatMoney(money(balance ?? 0, baseCurrency)) })
             : undefined
       }
       hint={

@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { Schema } from '@esmart/api-client';
 import type { SyncQueueEntry } from '@esmart/core/types';
-import { emptyData, useAppStore } from '../store/appStore';
+import { emptyData, useAppStore, type AppData } from '../store/appStore';
+import { COLLECTIONS } from './collections';
 import { api, isNetworkError } from './api';
 import { RemoteError } from './errors';
 import { useLogoQueue } from './logoQueue';
@@ -132,13 +133,39 @@ export function watchSessionEnd(): () => void {
   });
 }
 
+/**
+ * The rows a change still waits to send, collection by collection. The server
+ * doesn't have them yet, so a reload that dropped them would empty the screen
+ * (a business made offline, with everything in it).
+ */
+function unsentRows(): Partial<AppData> {
+  const s = useAppStore.getState();
+  const unsent = new Set(s.syncQueue.filter(isOpen).map((e) => e.entityId));
+  const kept: Partial<AppData> = {};
+  for (const { collection, key } of Object.values(COLLECTIONS)) {
+    const rows = (s[collection] as unknown as Record<string, unknown>[]).filter((r) => unsent.has(String(r[key])));
+    if (rows.length) (kept as Record<string, unknown>)[collection] = rows;
+  }
+  return kept;
+}
+
 /** Reloads everything from the server, keeping the session (Settings → Sync). */
 export async function resync() {
   try {
     await reloadSnapshot(() => {
-      const { session, activeCompanyId, activeBranchId, syncQueue } = useAppStore.getState();
-      useAppStore.setState({ ...emptyData(), syncQueue, session, activeCompanyId, activeBranchId });
+      const { accountId, session, activeCompanyId, activeBranchId, syncQueue } = useAppStore.getState();
+      useAppStore.setState({ ...emptyData(), ...unsentRows(), accountId, syncQueue, session, activeCompanyId, activeBranchId });
     });
+    // The active business or branch may have been a discarded change: open one that is still there.
+    const s = useAppStore.getState();
+    if (!s.companies.some((c) => c.id === s.activeCompanyId)) {
+      const companyId = s.companies[0]?.id ?? '';
+      const branches = s.branches.filter((b) => b.companyId === companyId);
+      useAppStore.setState({ activeCompanyId: companyId, activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '' });
+    } else if (!s.branches.some((b) => b.id === s.activeBranchId && b.companyId === s.activeCompanyId)) {
+      const branches = s.branches.filter((b) => b.companyId === s.activeCompanyId);
+      useAppStore.setState({ activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '' });
+    }
   } catch (err) {
     useRemoteMeta.getState().patch(isNetworkError(err) ? { online: false } : { lastError: err instanceof Error ? err.message : String(err) });
   }

@@ -11,6 +11,7 @@ import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../../components/useServerSave';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
 import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
 import { formatQty } from '@esmart/core/lib/format';
@@ -75,6 +76,7 @@ export default function StockAdjust() {
       if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });
   };
+  useSaveShortcut(() => void save(), !saving && canSave);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

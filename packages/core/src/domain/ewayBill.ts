@@ -113,10 +113,17 @@ const HOUR = 3600 * 1000;
 
 export type EwayRequirement = { required: boolean; reason: string };
 
-/** Lines that resolve to a stocked good. Services never trigger an e-way bill. */
+/**
+ * Whether any line is a good. A catalogue line goes by its item's type; a line
+ * typed in by hand (or whose item is gone) counts as goods unless its code is a
+ * SAC (99…), the service chapter. Services never trigger an e-way bill.
+ */
 export function hasGoods(doc: BusinessDocument, items: Pick<Item, 'id' | 'type'>[]): boolean {
   const type = new Map(items.map((i) => [i.id, i.type]));
-  return doc.lines.some((line) => (line.itemId ? type.get(line.itemId) === 'goods' : false));
+  return doc.lines.some((line) => {
+    const itemType = line.itemId ? type.get(line.itemId) : undefined;
+    return itemType ? itemType === 'goods' : !line.hsnCode?.trim().startsWith('99');
+  });
 }
 
 /**
@@ -141,8 +148,9 @@ export function isEwayBillRequired(args: {
   if (doc.status === 'cancelled') return no('The document is cancelled');
   if (!hasGoods(doc, items)) return no('The document has no goods on it');
 
-  // The statute says the value must *exceed* the threshold, not merely meet it.
-  if (doc.totals.grandTotal.minor <= settings.ewayBillThreshold.minor) {
+  // The statute says the value must *exceed* the threshold, not merely meet it. The
+  // threshold is in rupees, so a document in another currency is converted first.
+  if (Math.round(doc.totals.grandTotal.minor * (doc.exchangeRate || 1)) <= settings.ewayBillThreshold.minor) {
     return no('The consignment value is at or below the threshold');
   }
 

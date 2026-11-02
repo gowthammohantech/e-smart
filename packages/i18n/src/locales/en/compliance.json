@@ -1,5 +1,10 @@
 {
   "hub": {
+    "needsBill": "Needs bill",
+    "unbilledBanner_one": "{{count}} invoice above the threshold still needs an e-way bill. Tap to see it.",
+    "unbilledBanner_other": "{{count}} invoices above the threshold still need an e-way bill. Tap to see them.",
+    "nothingUnbilled": "Nothing waiting for a bill",
+    "nothingUnbilledBody": "Every finalised invoice and delivery note of goods above the threshold has an active e-way bill.",
     "subtitle": "E-invoice, e-way bill and returns",
     "reported": "Reported",
     "needsAttention": "Needs attention",
@@ -233,6 +238,7 @@
     }
   },
   "filter": {
+    "needsBill": "Needs e-way bill",
     "all": "All",
     "reported": "Reported",
     "notReported": "Not reported",
@@ -304,6 +310,7 @@
     "testConnection": "Test connection",
     "credentialsMissing": "Enter the portal username and password first.",
     "credentialsSaved": "Credentials saved. They are encrypted on the server and never shown again.",
+    "credentialsUnchanged": "Already saved. Type a new password only to change the login.",
     "connectionOk": "Connected.",
     "connectionFailed": "Could not sign in to the portal."
   },

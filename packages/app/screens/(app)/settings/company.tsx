@@ -10,6 +10,7 @@ import { PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useDocuments } from '../../../store/selectors';
 import { profileLocks } from '@esmart/core/domain/companyLock';
@@ -118,6 +119,7 @@ export default function CompanySettings() {
     if (!res) return;
     goBack('/(app)/(tabs)/more');
   };
+  useSaveShortcut(() => void save(), !saving);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

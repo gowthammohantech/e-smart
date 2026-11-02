@@ -13,13 +13,14 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import type { SyncQueueEntry, SyncStatus as SyncState } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { formatRelative } from '@esmart/core/lib/date';
 import { blockerOf, type Entry } from '../../../remote/outbox';
 import { remoteSession, useRemoteMeta } from '../../../remote';
 import { useSyncToasts } from '../../../features/session/useSyncToasts';
-import { drop } from '../../../remote/outbox';
+import { drop, dropAll } from '../../../remote/outbox';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 const STATUS_LABELS = {
@@ -43,6 +44,7 @@ export default function SyncStatus() {
   const lastSyncAt = useRemoteMeta((m) => m.lastSyncAt);
   const lastError = useRemoteMeta((m) => m.lastError);
   const [open, setOpen] = useState<SyncQueueEntry | null>(null);
+  const [discardAllOpen, setDiscardAllOpen] = useState(false);
   const offline = !online;
   const waitingOn = (q: SyncQueueEntry) => {
     const blocker = q.method && q.path ? blockerOf(q as Entry) : undefined;
@@ -114,6 +116,17 @@ export default function SyncStatus() {
             fullWidth
           />
         ) : null}
+        {queue.length > 0 ? (
+          <Button
+            title={tr('settings:sync.discardAll')}
+            variant="ghost"
+            icon="delete-sweep-outline"
+            disabled={offline}
+            style={{ marginTop: t.spacing.sm }}
+            onPress={() => setDiscardAllOpen(true)}
+            fullWidth
+          />
+        ) : null}
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
           <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
@@ -162,6 +175,22 @@ export default function SyncStatus() {
           </Text>
         </View>
       </Sheet>
+      <ConfirmDialog
+        visible={discardAllOpen}
+        title={tr('settings:sync.discardAllTitle', { count: queue.length })}
+        message={tr('settings:sync.discardAllMessage')}
+        confirmLabel={tr('settings:sync.discardAll')}
+        destructive
+        onCancel={() => setDiscardAllOpen(false)}
+        onConfirm={() => {
+          const count = queue.length;
+          dropAll(queue.map((q) => q.id));
+          setDiscardAllOpen(false);
+          // Put back the server's version of everything the changes touched.
+          void remoteSession.resync();
+          toast.show(tr('settings:sync.discardedAll', { count }), 'success', { icon: 'delete-sweep-outline' });
+        }}
+      />
     </View>
   );
 }

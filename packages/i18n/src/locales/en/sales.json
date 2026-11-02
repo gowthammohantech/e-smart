@@ -243,7 +243,7 @@
     "advanceNothingToAdjust": "No advance could be adjusted",
     "nothingLeftToApply": "The whole amount is already applied — increase the amount first",
     "currency": "Currency",
-    "insufficientCash": "Cash in hand has only {{balance}}",
+    "insufficientInAccount": "{{account}} has only {{balance}}",
     "insufficientBalance": "More than the balance of {{balance}}",
     "accountBalance": "Balance {{balance}}",
     "useAdvanceHere": "Use advance ({{amount}}) on this",

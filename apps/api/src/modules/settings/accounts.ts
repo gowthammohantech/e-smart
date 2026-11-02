@@ -52,11 +52,14 @@ async function toWire(db: DbOrTx, row: AccountRow) {
   return paymentAccountToWire(row, balances[row.id] ?? row.openingBalanceMinor);
 }
 
-async function validate(db: DbOrTx, body: Schema<'PaymentAccount'>) {
+async function validate(db: DbOrTx, body: Schema<'PaymentAccount'>, today: string) {
   const issues: Issue[] = [];
   if (!body.name.trim()) issues.push({ field: 'name', message: 'Name is required', severity: 'blocking' });
   if (body.openingBalance.currency !== body.currency) {
     issues.push({ field: 'openingBalance.currency', message: `Must be in the account's currency (${body.currency})`, severity: 'blocking' });
+  }
+  if (body.openingBalanceDate && body.openingBalanceDate > today) {
+    issues.push({ field: 'openingBalanceDate', message: 'Opening balance date cannot be in the future', severity: 'blocking' });
   }
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.currency));
   if (!cur) issues.push({ field: 'currency', message: `Unknown currency ${body.currency}`, severity: 'blocking' });
@@ -70,6 +73,7 @@ function columns(body: Schema<'PaymentAccount'>) {
     currency: body.currency,
     accountNumber: body.accountNumber ?? null,
     openingBalanceMinor: body.openingBalance.minor,
+    openingBalanceDate: body.openingBalanceDate ?? null,
   };
 }
 
@@ -91,7 +95,7 @@ export const accountHandlers = defineHandlers({
   },
 
   async createPaymentAccount(ctx) {
-    await validate(ctx.db, ctx.body);
+    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
     const row = await ctx.db.transaction(async (tx) => {
       // The company's first account is its default whatever the body says.
       const [existingDefault] = await tx.select({ id: A.id }).from(A).where(and(eq(A.companyId, ctx.company.id), eq(A.isDefault, true)));
@@ -109,7 +113,7 @@ export const accountHandlers = defineHandlers({
   async savePaymentAccount(ctx) {
     const current = await findAccount(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    await validate(ctx.db, ctx.body);
+    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
     // Accounts with money through them keep their currency: past balances are in it.
     if (ctx.body.currency !== current.currency.trim()) {
       const used = await firstUse(ctx.db, [

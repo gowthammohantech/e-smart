@@ -111,6 +111,8 @@
     "create": "Create",
     "offline": "Offline",
     "failedSync": "{{count}} failed",
+    "queuedSync": "{{count}} queued",
+    "openSyncStatus": "Open sync status",
     "provisional": "Provisional number",
     "pastCreditNoteDeadline": "Past the GST credit note deadline",
     "notifications": "Notifications",

@@ -327,6 +327,55 @@ export function summarizePayments(
 }
 
 /* ------------------------------------------------------------------ */
+/* Advances                                                            */
+/* ------------------------------------------------------------------ */
+
+/** A payment with money not yet set against any document: an advance. */
+export type AdvanceRow = {
+  id: string;
+  number: string;
+  date: string;
+  partyId: string;
+  direction: Payment['direction'];
+  amount: Money;
+  /** What is still to adjust, in the base currency. */
+  unallocated: Money;
+};
+
+export type AdvanceSummary = {
+  /** Advances received from customers, still to adjust against their invoices. */
+  received: Money;
+  /** Advances paid to suppliers, still to adjust against their bills. */
+  paid: Money;
+  rows: AdvanceRow[];
+};
+
+/** Open advances, received and paid, from payments dated in the range. */
+export function summarizeAdvances(payments: Payment[], baseCurrency: string, filters: ReportFilters): AdvanceSummary {
+  const rows: AdvanceRow[] = payments
+    .filter(
+      (p) =>
+        p.unallocated.minor > 0 &&
+        inRange(p.date, filters.range) &&
+        (!filters.branchId || p.branchId === filters.branchId) &&
+        (!filters.partyId || p.partyId === filters.partyId),
+    )
+    .map((p) => ({
+      id: p.id,
+      number: p.number,
+      date: p.date,
+      partyId: p.partyId,
+      direction: p.direction,
+      amount: inBase(p.amount, p.exchangeRate, baseCurrency),
+      unallocated: inBase(p.unallocated, p.exchangeRate, baseCurrency),
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const total = (direction: Payment['direction']) =>
+    sum(rows.filter((r) => r.direction === direction).map((r) => r.unallocated), baseCurrency);
+  return { received: total('received'), paid: total('paid'), rows };
+}
+
+/* ------------------------------------------------------------------ */
 /* Stock                                                               */
 /* ------------------------------------------------------------------ */
 

@@ -9,6 +9,7 @@ import { FormActions } from '@esmart/ui/components/ActionBar';
 import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../components/useServerSave';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { Item, ItemType } from '@esmart/core/types';
 import { UNITS, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
@@ -106,6 +107,7 @@ export function ItemForm({ item }: { item?: Item }) {
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
   };
+  useSaveShortcut(() => void save(), !saving);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

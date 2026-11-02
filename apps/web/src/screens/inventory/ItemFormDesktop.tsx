@@ -8,6 +8,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '@esmart/app/components/useServerSave';
+import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import { Item, ItemType } from '@esmart/core/types';
 import { UNITS, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, money, toMajor, zero } from '@esmart/core/lib/money';
@@ -112,6 +113,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
   };
+  useSaveShortcut(() => void save(), !saving);
 
   return (
     <View style={{ flex: 1 }}>

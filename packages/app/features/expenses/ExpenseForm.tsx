@@ -16,6 +16,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
@@ -235,6 +236,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };
+  useSaveShortcut(() => void save(), !saving && !uploading && amount.minor > 0);
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.

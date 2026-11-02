@@ -299,7 +299,7 @@ describe('compliance: e-way bills', () => {
     const small = await b2b(m);
     const notNeeded = await t.post(`${m.c}/eway-bills`, ewayInput(small.id), { token: m.token });
     expect(notNeeded.status).toBe(422);
-    expect(notNeeded.body.issues[0]).toMatchObject({ code: 'EWB001', message: 'The document has no goods on it' });
+    expect(notNeeded.body.issues[0]).toMatchObject({ code: 'EWB001', message: 'The consignment value is at or below the threshold' });
     const noVehicle = await t.post(`${m.c}/eway-bills`, ewayInput((await goodsInvoice(m)).id, { vehicleNumber: 'mh 04 ab 1234' }), { token: m.token });
     expect(noVehicle.status).toBe(422);
     expect(noVehicle.body.issues[0]).toMatchObject({ code: 'EWB201', field: 'vehicleNumber' });

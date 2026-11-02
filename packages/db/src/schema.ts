@@ -302,6 +302,7 @@ export const paymentAccounts = pgTable("payment_accounts", {
 	currency: char({ length: 3 }).notNull(),
 	accountNumber: varchar("account_number", { length: 40 }),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
+	openingBalanceDate: date("opening_balance_date"),
 	isDefault: boolean("is_default").default(false).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

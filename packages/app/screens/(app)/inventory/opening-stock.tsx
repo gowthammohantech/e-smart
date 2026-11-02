@@ -12,6 +12,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../../components/useServerSave';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
@@ -70,6 +71,7 @@ export default function OpeningStock() {
       if (res) goBack('/(app)/(tabs)/inventory');
     });
   };
+  useSaveShortcut(() => void save(), !saving && entered.length > 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

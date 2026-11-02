@@ -869,6 +869,18 @@ describe('e-way bill requirement (FRD 16)', () => {
     expect(required(mixed).required).toBe(true);
   });
 
+  it('counts a line typed in by hand as goods, unless its code is a service (SAC) code', () => {
+    expect(required(consignment({ lines: [line({ itemId: undefined, hsnCode: '8482' })] })).required).toBe(true);
+    expect(required(consignment({ lines: [line({ itemId: undefined, hsnCode: undefined })] })).required).toBe(true);
+    expect(required(consignment({ lines: [line({ itemId: undefined, hsnCode: '998314' })] })).required).toBe(false);
+  });
+
+  it('compares a foreign-currency consignment in rupees', () => {
+    const doc = consignment({ currency: 'USD', exchangeRate: 83 });
+    doc.totals.grandTotal = { minor: 100000, currency: 'USD' }; // $1,000 is ₹83,000
+    expect(required(doc).required).toBe(true);
+  });
+
   it('is not required at exactly fifty thousand rupees', () => {
     const doc = consignment();
     doc.totals.grandTotal = fromMajor('50000', 'INR');

@@ -462,15 +462,25 @@ export function useComplianceSummary(): ComplianceSummary {
       if (status === 'active' && hoursUntilExpiry(b, now) <= 24) expiringSoon += 1;
     });
 
-    const live = new Set(
-      bills.filter((b) => ewayBillStatusAt(b, now) === 'active').map((b) => b.documentId),
-    );
-    const ewayOutstanding = allDocuments.filter(
-      (d) => isEwayBillRequired({ document: d, items, settings }).required && !live.has(d.id),
-    ).length;
+    const ewayOutstanding = needingEwayBill(allDocuments, bills, items, settings, now).length;
 
     return { eInvoice, eway, expiringSoon, ewayOutstanding };
   }, [documents, allDocuments, bills, items, settings]);
+}
+
+/** Documents that need an e-way bill and have no live one, newest first. */
+function needingEwayBill(documents: BusinessDocument[], bills: EwayBill[], items: Item[], settings: ComplianceSettings, now: string) {
+  const live = new Set(bills.filter((b) => ewayBillStatusAt(b, now) === 'active').map((b) => b.documentId));
+  return documents.filter((d) => isEwayBillRequired({ document: d, items, settings }).required && !live.has(d.id));
+}
+
+/** The consignments still waiting for an e-way bill, for the compliance register. */
+export function usePendingEwayDocuments(): BusinessDocument[] {
+  const documents = useDocuments();
+  const bills = useEwayBills();
+  const settings = useComplianceSettings();
+  const items = useAppStore((s) => s.items);
+  return useMemo(() => needingEwayBill(documents, bills, items, settings, nowISO()), [documents, bills, items, settings]);
 }
 
 /** Live bills close to running out, for the hub's warning banner. */

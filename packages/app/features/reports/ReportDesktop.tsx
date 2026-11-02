@@ -12,6 +12,7 @@ import { DonutChart } from '@esmart/ui/components/charts/DonutChart';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import type {
+  AdvanceSummary,
   ExpenseSummary,
   PaymentSummary,
   ProfitSnapshot,
@@ -41,6 +42,7 @@ export type ReportData = {
   stock: StockReport;
   tax: TaxSummary;
   paymentSummary: PaymentSummary;
+  advances: AdvanceSummary;
   profit: ProfitSnapshot;
   parties: Party[];
   branches: Branch[];
@@ -329,6 +331,42 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           title={tr('reports:detail.withCount', { title: tr('reports:figure.payments'), count: p.payments.length })}
           columns={columns}
           rows={p.payments}
+          rowKey={(r) => r.id}
+          onRowPress={(r) => router.push(`/(app)/payments/${r.id}`)}
+          initialSort={{ key: 'date', dir: 'desc' }}
+        />
+      </>
+    );
+  }
+
+  if (report === 'advances') {
+    const a = data.advances;
+    const columns: Column<AdvanceSummary['rows'][number]>[] = [
+      { key: 'number', header: tr('common:table.number'), flex: 1.2, render: (r) => <Cell weight="600">{r.number}</Cell>, sortValue: (r) => r.number },
+      { key: 'date', header: tr('common:table.date'), flex: 1, render: (r) => <Cell tone="muted">{formatDate(r.date)}</Cell>, sortValue: (r) => r.date },
+      { key: 'party', header: tr('reports:shell.contact'), flex: 2, render: (r) => <Cell>{partyName(r.partyId)}</Cell>, sortValue: (r) => partyName(r.partyId) },
+      { key: 'direction', header: tr('reports:column.direction'), flex: 1, secondary: true, render: (r) => <Cell tone="muted">{tr(`domain:status.${r.direction}`)}</Cell>, sortValue: (r) => r.direction },
+      { key: 'amount', header: tr('common:table.amount'), flex: 1.2, align: 'right', secondary: true, render: (r) => <Cell mono tone="muted">{money(r.amount)}</Cell>, sortValue: (r) => sortMoney(r.amount) },
+      {
+        key: 'unallocated',
+        header: tr('reports:column.toAdjust'),
+        flex: 1.3,
+        align: 'right',
+        render: (r) => <Cell mono weight="600" tone={r.direction === 'received' ? 'good' : 'default'}>{money(r.unallocated)}</Cell>,
+        sortValue: (r) => sortMoney(r.unallocated),
+      },
+    ];
+    return (
+      <>
+        <Kpis>
+          <StatTile label={tr('reports:figure.advancesReceived')} value={a.received} tone="good" icon="arrow-bottom-left" caption={tr('reports:caption.advancesReceived')} />
+          <StatTile label={tr('reports:figure.advancesPaid')} value={a.paid} tone="warn" icon="arrow-top-right" caption={tr('reports:caption.advancesPaid')} />
+          <StatTile label={tr('reports:figure.payments')} value={String(a.rows.length)} icon="format-list-numbered" />
+        </Kpis>
+        <TableSection
+          title={tr('reports:detail.withCount', { title: tr('reports:detail.openAdvances'), count: a.rows.length })}
+          columns={columns}
+          rows={a.rows}
           rowKey={(r) => r.id}
           onRowPress={(r) => router.push(`/(app)/payments/${r.id}`)}
           initialSort={{ key: 'date', dir: 'desc' }}

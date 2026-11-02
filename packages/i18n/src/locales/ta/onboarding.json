@@ -99,7 +99,13 @@
     "namePlaceholder": "எ.கா. புனே கிடங்கு",
     "headOffice": "தலைமை அலுவலகம்",
     "createdAutomatically": "{{place}} · தானாக உருவாக்கப்பட்டது",
-    "removeNamed": "{{name}}-ஐ நீக்கு"
+    "removeNamed": "{{name}}-ஐ நீக்கு",
+    "unsavedTitle": "இந்தக் கிளை இன்னும் சேர்க்கப்படவில்லை",
+    "unsavedAddMessage": "முடிப்பதற்கு முன் {{name}}-ஐ உங்கள் இடங்களில் சேர்க்கவா?",
+    "unsavedDiscardMessage": "நீங்கள் உள்ளிட்ட கிளை விவரங்கள் முழுமையாக இல்லை, அவை சேமிக்கப்படாது.",
+    "unsavedAdd": "சேர்த்து முடி",
+    "unsavedDiscard": "நீக்கி முடி",
+    "unsavedKeepEditing": "தொடர்ந்து திருத்து"
   },
   "done": {
     "readyTitle": "{{business}} தயார்",

@@ -178,6 +178,19 @@ describe('payments', () => {
     expect(edited.status).toBe(200);
   });
 
+  it('will not overdraw a bank account either', async () => {
+    const m = await moneySetup(t);
+    const [bank] = await t.deps.db
+      .insert(schema.paymentAccounts)
+      .values({ id: 'acc_test_bank', companyId: m.companyId, name: 'HDFC Current', type: 'bank', currency: 'INR', openingBalanceMinor: 30000 })
+      .returning();
+    const fromBank = (minor: number) => payment(m, { direction: 'paid', partyId: m.supplier!.id, method: 'bank', accountId: bank.id, amount: { minor, currency: 'INR' } });
+    const over = await t.post(`${m.c}/payments`, fromBank(50000), { token: m.token });
+    expect(over.status).toBe(422);
+    expect(over.body.code).toBe('INSUFFICIENT_BALANCE');
+    expect((await t.post(`${m.c}/payments`, fromBank(30000), { token: m.token })).status).toBe(201);
+  });
+
   it('prints a receipt, filters the list, and gates payments made on the plan', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);

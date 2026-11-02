@@ -111,6 +111,8 @@
     "create": "உருவாக்கு",
     "offline": "இணையம் இல்லை",
     "failedSync": "{{count}} தோல்வி",
+    "queuedSync": "{{count}} வரிசையில்",
+    "openSyncStatus": "ஒத்திசைவு நிலையைத் திற",
     "provisional": "தற்காலிக எண்",
     "pastCreditNoteDeadline": "GST வரவுக் குறிப்பு காலக்கெடு கடந்தது",
     "notifications": "அறிவிப்புகள்",

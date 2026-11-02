@@ -328,6 +328,34 @@ describe('reloading', () => {
 
     expect(actions().documents).toHaveLength(before);
   });
+
+  it('keeps rows still waiting to send, and the account, when the reload succeeds', async () => {
+    actions().saveParty(party());
+    const accountId = actions().accountId;
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/sync/pull') return { data: { changes: [{ op: 'upsert', entityType: 'company', entityId: BOOK.companyId, data: actions().companies[0] }], cursor: '9', hasMore: false } };
+      return { data: { data: [], nextCursor: null } };
+    });
+
+    await resync();
+
+    expect(actions().parties.map((p) => p.id)).toContain('pty_offline1');
+    expect(actions().accountId).toBe(accountId);
+    expect(actions().activeCompanyId).toBe(BOOK.companyId);
+  });
+
+  it('opens a business that is still there when the active one did not come back', async () => {
+    const other = { ...actions().companies[0], id: 'cmp_other' };
+    useAppStore.setState({ activeCompanyId: 'cmp_gone' });
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/sync/pull') return { data: { changes: [{ op: 'upsert', entityType: 'company', entityId: other.id, data: other }], cursor: '9', hasMore: false } };
+      return { data: { data: [], nextCursor: null } };
+    });
+
+    await resync();
+
+    expect(actions().activeCompanyId).toBe('cmp_other');
+  });
 });
 
 describe('entries that depend on each other', () => {
@@ -361,6 +389,21 @@ describe('entries that depend on each other', () => {
     actions().setDocumentStatus(copy, 'issued');
     const convert = queue().find((e) => e.path.endsWith('/convert'))!;
     expect(convert.body).toMatchObject({ targetKind: 'salesReturn' });
+  });
+
+  it('a document converted offline keeps the PO number and supplier bill number', () => {
+    const source = actions().documents.find((d) => d.kind === 'invoice')!;
+    actions().updateDocument(source.id, { reference: 'PO-4471', supplierDocNumber: 'SB-88' });
+    const id = actions().convertDocument(source.id, 'delivery');
+    const copy = actions().documents.find((d) => d.id === id)!;
+    expect(copy).toMatchObject({ reference: 'PO-4471', supplierDocNumber: 'SB-88', sourceDocumentId: source.id });
+  });
+
+  it('a return converted offline starts as requested, so it can be approved and posted', () => {
+    const source = actions().documents.find((d) => d.kind === 'invoice')!;
+    const id = actions().convertDocument(source.id, 'salesReturn');
+    const copy = actions().documents.find((d) => d.id === id)!;
+    expect(copy.status).toBe('requested');
   });
 
   it('B2: keeps the chosen numbering when a pending company is edited', () => {

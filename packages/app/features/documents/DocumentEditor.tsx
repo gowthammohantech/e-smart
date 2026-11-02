@@ -62,6 +62,7 @@ import { LineEditorSheet } from './LineEditorSheet';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useSaveOnline } from '../../remote/save';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -501,6 +502,11 @@ export function DocumentEditor({
       setDocumentStatus(id, target, creditOverride ? { overrideCreditLimit: true } : undefined);
     }
   };
+  // Ctrl+S (⌘+S) saves the draft, as "Save draft" does; not over another sheet.
+  useSaveShortcut(
+    () => void save(false),
+    !saving && !!draft.partyId && !confirmFinalize && !creditWarning && !editingLine && !itemOpen && !partyOpen && !currencyOpen && !posOpen && !branchOpen,
+  );
 
   /* ---------------------------------------------------------------- */
 

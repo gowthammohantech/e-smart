@@ -11,6 +11,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -31,11 +32,17 @@ export default function BranchesStep() {
   const [postalCode, setPostalCode] = useState('');
   const [gstin, setGstin] = useState('');
   const [stateOpen, setStateOpen] = useState(false);
+  const [unsavedOpen, setUnsavedOpen] = useState(false);
   const gstinError = validGstin(gstin);
   const pinError = validPostalCode(postalCode, draft.address.country, stateCode);
+  const canAdd = !!name.trim() && !(gstin && gstinError) && !pinError;
+  // Typed but not added yet: finishing now would lose it.
+  const unsaved = [name, code, city, line1, postalCode, gstin].some((v) => v.trim());
+
+  const finish = () => router.push(nextStepRoute('branches', draft.plan));
 
   const add = () => {
-    if (!name.trim() || gstinError || pinError) return;
+    if (!canAdd) return;
     set({
       branches: [
         ...draft.branches,
@@ -65,8 +72,8 @@ export default function BranchesStep() {
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('branches', draft.plan)}
       primaryLabel={tr('onboarding:branches.finish')}
-      onPrimary={() => router.push(nextStepRoute('branches', draft.plan))}
-      onSkip={() => router.push(nextStepRoute('branches', draft.plan))}
+      onPrimary={() => (unsaved ? setUnsavedOpen(true) : finish())}
+      onSkip={finish}
     >
       <Card variant="flat" style={{ gap: t.spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
         <MaterialCommunityIcons name="office-building-outline" size={20} color={t.c.primary} />
@@ -152,8 +159,23 @@ export default function BranchesStep() {
           error={gstin.length === 15 ? gstinError : undefined}
           hint={tr('settings:branches.gstinHint')}
         />
-        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!name.trim() || (!!gstin && !!gstinError) || !!pinError} />
+        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!canAdd} />
       </View>
+
+      <ConfirmDialog
+        visible={unsavedOpen}
+        title={tr('onboarding:branches.unsavedTitle')}
+        message={tr(canAdd ? 'onboarding:branches.unsavedAddMessage' : 'onboarding:branches.unsavedDiscardMessage', { name: name.trim() })}
+        confirmLabel={tr(canAdd ? 'onboarding:branches.unsavedAdd' : 'onboarding:branches.unsavedDiscard')}
+        cancelLabel={tr('onboarding:branches.unsavedKeepEditing')}
+        destructive={!canAdd}
+        onCancel={() => setUnsavedOpen(false)}
+        onConfirm={() => {
+          setUnsavedOpen(false);
+          if (canAdd) add();
+          finish();
+        }}
+      />
 
       <SelectSheet
         visible={stateOpen}

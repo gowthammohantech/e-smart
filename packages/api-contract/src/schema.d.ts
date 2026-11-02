@@ -2698,6 +2698,11 @@ export interface components {
             currency: string;
             accountNumber?: string;
             openingBalance: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description The day the opening balance was counted; not after today.
+             */
+            openingBalanceDate?: string;
             readonly currentBalance?: components["schemas"]["Money"];
             isDefault?: boolean;
         };

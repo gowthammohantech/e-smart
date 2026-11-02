@@ -3565,6 +3565,7 @@ components:
         currency: { type: string }
         accountNumber: { type: string }
         openingBalance: { $ref: '#/components/schemas/Money' }
+        openingBalanceDate: { type: string, format: date, description: "The day the opening balance was counted; not after today." }
         currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
         isDefault: { type: boolean }
     ExchangeRate:

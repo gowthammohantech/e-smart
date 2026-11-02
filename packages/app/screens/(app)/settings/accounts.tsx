@@ -12,6 +12,8 @@ import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
+import { today } from '@esmart/core/lib/date';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { PaymentAccount } from '@esmart/core/types';
@@ -43,6 +45,7 @@ export default function AccountSettings() {
   const [type, setType] = useState<PaymentAccount['type']>('bank');
   const [accountNumber, setAccountNumber] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(today());
   const [isDefault, setIsDefault] = useState(false);
   const typeLabels: Record<PaymentAccount['type'], string> = {
     bank: tr('settings:accounts.typeBank'),
@@ -61,6 +64,7 @@ export default function AccountSettings() {
     setType(a?.type ?? 'bank');
     setAccountNumber(a?.accountNumber ?? '');
     setOpeningBalance(a ? String(toMajor(a.openingBalance)) : '');
+    setOpeningBalanceDate(a?.openingBalanceDate ?? today());
     setIsDefault(a?.isDefault ?? false);
   };
 
@@ -75,6 +79,7 @@ export default function AccountSettings() {
       currency: baseCurrency,
       accountNumber: accountNumber.trim() || undefined,
       openingBalance: fromMajor(openingBalance || '0', baseCurrency),
+      openingBalanceDate,
       isDefault,
     });
     toast.show(editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'), 'success', { icon: 'bank-check' });
@@ -158,6 +163,14 @@ export default function AccountSettings() {
             <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
           ) : null}
           <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
+          {/* The day the balance was counted; never a future day. */}
+          <DateField
+            label={tr('settings:accounts.openingBalanceDate')}
+            value={openingBalanceDate}
+            onChange={setOpeningBalanceDate}
+            maximumDate={new Date()}
+            hint={tr('settings:accounts.openingBalanceDateHint')}
+          />
           <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />
         </View>
       </Sheet>

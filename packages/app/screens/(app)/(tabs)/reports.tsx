@@ -39,7 +39,7 @@ type ReportLink = {
 /** Each report's route key, its catalogue entry under `reports:report`, and its icon. */
 const REPORTS: {
   key: string;
-  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'profit';
+  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'advances' | 'profit';
   icon: ReportLink['icon'];
 }[] = [
   { key: 'sales-summary', id: 'salesSummary', icon: 'trending-up' },
@@ -50,6 +50,7 @@ const REPORTS: {
   { key: 'stock', id: 'stock', icon: 'warehouse' },
   { key: 'tax-summary', id: 'taxSummary', icon: 'percent-outline' },
   { key: 'payments', id: 'payments', icon: 'cash-sync' },
+  { key: 'advances', id: 'advances', icon: 'cash-clock' },
   { key: 'profit', id: 'profit', icon: 'chart-line' },
 ];
 

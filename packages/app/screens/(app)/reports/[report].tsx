@@ -19,6 +19,7 @@ import { ReportDesktop } from '../../../features/reports/ReportDesktop';
 
 import {
   profitSnapshot,
+  summarizeAdvances,
   summarizeDocuments,
   summarizeExpenses,
   summarizePayments,
@@ -60,6 +61,7 @@ export default function Report() {
     stock: { title: tr('reports:report.stock.title'), subtitle: tr('reports:report.stock.basis') },
     'tax-summary': { title: tr('reports:report.taxSummary.title'), subtitle: tr('reports:report.taxSummary.basis') },
     payments: { title: tr('reports:report.payments.title') },
+    advances: { title: tr('reports:report.advances.title'), subtitle: tr('reports:report.advances.basis') },
     profit: { title: tr('reports:report.profit.title'), subtitle: tr('reports:report.profit.basis') },
   };
   const meta = titles[key];
@@ -114,6 +116,7 @@ export default function Report() {
     () => summarizePayments(payments, accountNames, methodLabels, baseCurrency, scope.filters),
     [payments, accountNames, methodLabels, baseCurrency, scope.filters],
   );
+  const advances = useMemo(() => summarizeAdvances(payments, baseCurrency, scope.filters), [payments, baseCurrency, scope.filters]);
   const stock = useMemo(
     () => summarizeStock(items, movements, baseCurrency, scope.filters.branchId),
     [items, movements, baseCurrency, scope.filters.branchId],
@@ -437,6 +440,39 @@ export default function Report() {
       );
   }
 
+  if (key === 'advances') {
+    const partyName = (id: string) => parties.find((x) => x.id === id)?.name ?? '';
+    body = advances.rows.length ? (
+      <>
+        <KeyFigures
+          rows={[
+            { label: tr('reports:figure.advancesReceived'), value: formatMoney(advances.received), tone: 'good' },
+            { label: tr('reports:figure.advancesPaid'), value: formatMoney(advances.paid), tone: 'warn' },
+          ]}
+        />
+        <ReportSection title={tr('reports:detail.openAdvances')}>
+          <DataTable
+            headers={[tr('common:table.number'), tr('reports:shell.contact'), tr('reports:column.direction'), tr('reports:column.toAdjust')]}
+            rows={advances.rows.map((r) => [
+              r.number,
+              partyName(r.partyId),
+              tr(`domain:status.${r.direction}`),
+              formatMoney(r.unallocated, { symbol: false }),
+            ])}
+            widths={[1, 1.6, 1, 1.2]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="cash-check" title={tr('reports:detail.noAdvances')} message={tr('reports:detail.noAdvancesBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('common:table.number'), tr('common:table.date'), tr('reports:column.direction'), tr('reports:shell.contact'), tr('common:table.amount'), tr('reports:column.toAdjust')],
+        advances.rows.map((r) => [r.number, r.date, tr(`domain:status.${r.direction}`), partyName(r.partyId), toMajor(r.amount), toMajor(r.unallocated)]),
+      );
+  }
+
   if (key === 'profit') {
     body = (
       <>
@@ -488,7 +524,7 @@ export default function Report() {
     body = (
       <ReportDesktop
         report={key}
-        data={{ sales, purchases, expenseSummary, receivables, payables, stock, tax, paymentSummary, profit, parties, branches, expenseCategories }}
+        data={{ sales, purchases, expenseSummary, receivables, payables, stock, tax, paymentSummary, advances, profit, parties, branches, expenseCategories }}
       />
     );
   }
@@ -501,7 +537,7 @@ export default function Report() {
         subtitle={meta.subtitle}
         scope={scope}
         onScopeChange={setScope}
-        showPartyFilter={['sales-summary', 'purchase-summary', 'payments'].includes(key)}
+        showPartyFilter={['sales-summary', 'purchase-summary', 'payments', 'advances'].includes(key)}
         exportRows={exportRows}
       >
         {body}

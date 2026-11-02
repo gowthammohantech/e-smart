@@ -52,7 +52,7 @@ export default function BranchSettings() {
   const [postalCode, setPostalCode] = useState('');
   const [gstin, setGstin] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
-  const [errors, setErrors] = useState<Errors<'gstin' | 'postalCode' | 'phone'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'code' | 'gstin' | 'postalCode' | 'phone'>>({});
 
   const open = (branch?: Branch) => {
     // A new branch starts with a blank address: copying head office's street
@@ -106,7 +106,14 @@ export default function BranchSettings() {
   const save = () => {
     if (!editing || !name.trim()) return;
     const cleanGstin = gstin ? normalizeGstin(gstin) : '';
-    const next: Errors<'gstin' | 'postalCode' | 'phone'> = {
+    const nextCode = (code || name.slice(0, 3)).toUpperCase();
+    // The same branch twice: the server refuses a repeated code, and a repeated name is the same place.
+    const others = branches.filter((b) => b.id !== editing.id);
+    const next: Errors<'name' | 'code' | 'gstin' | 'postalCode' | 'phone'> = {
+      name: others.some((b) => b.name.trim().toLowerCase() === name.trim().toLowerCase())
+        ? tr('settings:branches.nameTaken', { name: name.trim() })
+        : undefined,
+      code: others.some((b) => b.code.toUpperCase() === nextCode) ? tr('settings:branches.codeTaken', { code: nextCode }) : undefined,
       gstin: cleanGstin
         ? validGstin(cleanGstin) ??
           (stateCode && cleanGstin.slice(0, 2) !== stateCode
@@ -124,7 +131,7 @@ export default function BranchSettings() {
       id: editing.id || uid('brn'),
       companyId: company.id,
       name: name.trim(),
-      code: (code || name.slice(0, 3)).toUpperCase(),
+      code: nextCode,
       phone: phone.value || undefined,
       gstin: cleanGstin || undefined,
       isPrimary,
@@ -202,7 +209,7 @@ export default function BranchSettings() {
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <TextField label={tr('settings:branches.name')} value={name} onChangeText={setName} placeholder={tr('settings:branches.namePlaceholder')} icon="warehouse" required />
+          <TextField label={tr('settings:branches.name')} value={name} onChangeText={setName} placeholder={tr('settings:branches.namePlaceholder')} icon="warehouse" required error={errors.name} />
           <TextField
             label={tr('settings:branches.gstin')}
             value={gstin}
@@ -229,7 +236,7 @@ export default function BranchSettings() {
             icon="map-outline"
           />
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            <TextField label={tr('settings:branches.code')} value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" containerStyle={{ flex: 1 }} />
+            <TextField label={tr('settings:branches.code')} value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" error={errors.code} containerStyle={{ flex: 1 }} />
             <CityField label={tr('settings:branches.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
           </View>
           <TextField

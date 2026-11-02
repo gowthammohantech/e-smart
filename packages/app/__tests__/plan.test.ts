@@ -60,16 +60,12 @@ describe('plan tiers', () => {
 });
 
 describe('onboarding by plan', () => {
-  it('skips country and branches on a sales plan', () => {
-    expect(onboardingSteps('basic')).toEqual(['business', 'tax', 'numbering']);
-    expect(nextStepRoute('business', 'basic')).toBe('/(onboarding)/tax');
-    expect(nextStepRoute('numbering', 'basic')).toBe('/(onboarding)/done');
-  });
-
-  it('walks every step on a full plan', () => {
-    expect(onboardingSteps('pro')).toHaveLength(5);
-    expect(nextStepRoute('business', 'pro')).toBe('/(onboarding)/country');
-    expect(nextStepRoute('numbering', 'pro')).toBe('/(onboarding)/branches');
+  it('walks business, tax and numbering on every plan, as India and one location are the defaults', () => {
+    for (const plan of ['basic', 'pro', 'business'] as const) {
+      expect(onboardingSteps(plan)).toEqual(['business', 'tax', 'numbering']);
+      expect(nextStepRoute('business', plan)).toBe('/(onboarding)/tax');
+      expect(nextStepRoute('numbering', plan)).toBe('/(onboarding)/done');
+    }
   });
 });
 

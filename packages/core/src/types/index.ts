@@ -636,6 +636,8 @@ export type PaymentAccount = {
   currency: string;
   accountNumber?: string;
   openingBalance: Money;
+  /** The day the opening balance was counted (ISO date, not after today). */
+  openingBalanceDate?: string;
   isDefault: boolean;
 };
 

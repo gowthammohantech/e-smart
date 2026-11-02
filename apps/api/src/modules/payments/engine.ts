@@ -99,7 +99,7 @@ export async function writePayment(
     .where(and(eq(schema.paymentAccounts.companyId, company.id), eq(schema.paymentAccounts.id, input.accountId)))
     .for('update');
   if (!account) blocking('accountId', 'No such payment account in this company');
-  else if (!accountFitsMethod(input.method, { ...account, currency: account.currency.trim(), openingBalance: { minor: account.openingBalanceMinor, currency: account.currency.trim() }, accountNumber: account.accountNumber ?? undefined })) {
+  else if (!accountFitsMethod(input.method, { ...account, currency: account.currency.trim(), openingBalance: { minor: account.openingBalanceMinor, currency: account.currency.trim() }, openingBalanceDate: account.openingBalanceDate ?? undefined, accountNumber: account.accountNumber ?? undefined })) {
     blocking('accountId', `A ${input.method} payment cannot go through a ${account.type} account`);
   }
   if (input.amountCurrency && input.amountCurrency !== input.currency) blocking('amount.currency', `Must match the payment currency (${input.currency})`);
@@ -158,10 +158,9 @@ export async function writePayment(
   const allocated = input.allocations.reduce((s, a) => s + a.amountMinor, 0);
   if (allocated > input.amountMinor) blocking('allocations', `Allocations (${allocated}) exceed the payment (${input.amountMinor})`);
 
-  // Cash cannot go below zero. A bank account may be overdrawn, as the app
-  // only warns there.
+  // No account pays out more than it holds: cash, bank or wallet.
   let shortOfCash = false;
-  if (input.direction === 'paid' && account?.type === 'cash' && exchangeRate && !issues.length) {
+  if (input.direction === 'paid' && account && exchangeRate && !issues.length) {
     const balance = await accountBalanceMinor(tx, account, existing?.id);
     const amountBase = Math.round(input.amountMinor * exchangeRate);
     if (amountBase > balance) {

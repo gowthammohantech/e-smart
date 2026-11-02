@@ -11,6 +11,7 @@ import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '@esmart/app/components/useServerSave';
+import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import type { Item } from '@esmart/core/types';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
@@ -74,6 +75,7 @@ export function OpeningStockDesktop() {
       if (res) goBack('/(app)/(tabs)/inventory');
     });
   };
+  useSaveShortcut(() => void save(), !saving && entered.length > 0);
 
   return (
     <View style={{ flex: 1 }}>

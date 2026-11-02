@@ -13,12 +13,13 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { remoteSession, useRemoteMeta } from '@esmart/app/remote';
 import { useSyncToasts } from '@esmart/app/features/session/useSyncToasts';
-import { drop } from '@esmart/app/remote/outbox';
+import { drop, dropAll } from '@esmart/app/remote/outbox';
 
 function SectionTitle({ children }: { children: string }) {
   return (
@@ -97,6 +98,7 @@ export function SyncStatusDesktop() {
 
   const failed = queue.filter((q) => q.status === 'failed').length;
   const canRetryAll = failed > 0;
+  const [discardAllOpen, setDiscardAllOpen] = useState(false);
   const lastSynced = offline
     ? tr('settings:sync.offlineNow')
     : lastSyncAt
@@ -182,15 +184,27 @@ export function SyncStatusDesktop() {
           <View style={{ flexGrow: 3, flexBasis: 440, gap: t.spacing.md, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 }}>
               <SectionTitle>{tr('settings:sync.queue')}</SectionTitle>
-              {canRetryAll ? (
-                <Button
-                  title={tr('settings:sync.retryAll')}
-                  variant="secondary"
-                  size="sm"
-                  icon="sync"
-                  onPress={() => void sync.syncEverything()}
-                />
-              ) : null}
+              <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+                {queue.length > 0 ? (
+                  <Button
+                    title={tr('settings:sync.discardAll')}
+                    variant="ghost"
+                    size="sm"
+                    icon="delete-sweep-outline"
+                    disabled={offline}
+                    onPress={() => setDiscardAllOpen(true)}
+                  />
+                ) : null}
+                {canRetryAll ? (
+                  <Button
+                    title={tr('settings:sync.retryAll')}
+                    variant="secondary"
+                    size="sm"
+                    icon="sync"
+                    onPress={() => void sync.syncEverything()}
+                  />
+                ) : null}
+              </View>
             </View>
             {queue.length === 0 ? (
               <Card padded={false}>
@@ -311,6 +325,22 @@ export function SyncStatusDesktop() {
           </Text>
         </View>
       </Sheet>
+      <ConfirmDialog
+        visible={discardAllOpen}
+        title={tr('settings:sync.discardAllTitle', { count: queue.length })}
+        message={tr('settings:sync.discardAllMessage')}
+        confirmLabel={tr('settings:sync.discardAll')}
+        destructive
+        onCancel={() => setDiscardAllOpen(false)}
+        onConfirm={() => {
+          const count = queue.length;
+          dropAll(queue.map((q) => q.id));
+          setDiscardAllOpen(false);
+          // Put back the server's version of everything the changes touched.
+          void remoteSession.resync();
+          toast.show(tr('settings:sync.discardedAll', { count }), 'success', { icon: 'delete-sweep-outline' });
+        }}
+      />
     </View>
   );
 }

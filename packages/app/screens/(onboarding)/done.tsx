@@ -14,8 +14,7 @@ import { Illustration } from '@esmart/ui/components/Illustration';
 import { useAppStore } from '../../store/appStore';
 import { queueLogo } from '../../remote/logo';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { COUNTRIES, stateName } from '@esmart/core/data/masters';
-import { uid } from '@esmart/core/lib/id';
+import { COUNTRIES } from '@esmart/core/data/masters';
 import { joinPhone } from '@esmart/core/lib/phone';
 
 const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey: string; bodyKey: string }[] = [
@@ -35,7 +34,6 @@ export default function Done() {
   const [busy, setBusy] = useState(false);
 
   const createCompany = useAppStore((s) => s.createCompany);
-  const saveBranch = useAppStore((s) => s.saveBranch);
   const completeOnboarding = useAppStore((s) => s.completeOnboarding);
   const numberingSeries = useAppStore((s) => s.numberingSeries);
   const saveNumberingSeries = useAppStore((s) => s.saveNumberingSeries);
@@ -69,27 +67,6 @@ export default function Done() {
 
     // Uploads by itself once the business has reached the server; until then the picked image is what shows.
     if (draft.logoUri) queueLogo(companyId, draft.logoUri);
-
-    draft.branches.forEach((b) => {
-      saveBranch({
-        id: uid('brn'),
-        companyId,
-        name: b.name,
-        code: b.code,
-        // A branch has its own address (it goes on e-way bills); fall back to the
-        // head office only for what was left blank.
-        address: {
-          line1: b.line1 || '',
-          city: b.city || draft.address.city,
-          stateCode: b.stateCode || draft.address.stateCode,
-          state: b.stateCode ? stateName(b.stateCode) : draft.address.state,
-          postalCode: b.postalCode || '',
-          country: draft.address.country,
-        },
-        gstin: b.gstin || undefined,
-        isPrimary: false,
-      });
-    });
 
     // Apply the numbering choices to the newly created invoice series.
     const series = useAppStore

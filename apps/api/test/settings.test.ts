@@ -137,6 +137,19 @@ describe('payment accounts', () => {
     expect(inUse.body.code).toBe('PAYMENT_ACCOUNT_IN_USE');
   });
 
+  it('keeps the day the opening balance was counted, never after today', async () => {
+    const { token, c } = await ownerWithCompany(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    const body = { name: 'SBI Savings', type: 'bank', currency: 'INR', openingBalance: { minor: 50000, currency: 'INR' } };
+    const future = await t.post(`${c}/payment-accounts`, { ...body, openingBalanceDate: '2026-09-30' }, { token });
+    expect(future.status).toBe(422);
+    expect(future.body.issues[0].field).toBe('openingBalanceDate');
+
+    const created = await t.post(`${c}/payment-accounts`, { ...body, openingBalanceDate: '2026-04-01' }, { token });
+    expect(created.status).toBe(201);
+    expect(created.body.openingBalanceDate).toBe('2026-04-01');
+  });
+
   it('hands the default on when the default account is deleted', async () => {
     const { token, c } = await ownerWithCompany(t);
     const [cash] = (await t.get(`${c}/payment-accounts`, { token })).body.data;

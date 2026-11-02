@@ -11,6 +11,7 @@ import { AmountField, PhoneField, PickerField, SwitchField, TextField, usePhoneI
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { GstRegistrationType, Party, PartyKind } from '@esmart/core/types';
 import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
@@ -183,6 +184,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (party) goBack(backTo);
     else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`);
   };
+  useSaveShortcut(() => void save(), !saving);
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.

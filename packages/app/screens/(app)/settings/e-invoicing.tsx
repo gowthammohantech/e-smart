@@ -60,7 +60,9 @@ export default function EInvoicingSettings() {
     einvoice: { password: '' },
     ewaybill: { password: '' },
   });
-  const savedUsername = (portal === 'einvoice' ? stored.irpUsername : stored.ewbUsername) ?? '';
+  // A login saved here counts as saved before sync brings the username back.
+  const [savedHere, setSavedHere] = useState<Record<Portal, string>>({ einvoice: '', ewaybill: '' });
+  const savedUsername = (portal === 'einvoice' ? stored.irpUsername : stored.ewbUsername) || savedHere[portal];
   const isSaved = savedUsername !== '';
   const login = { username: edits[portal].username ?? savedUsername, password: edits[portal].password };
   const setLogin = (over: Partial<{ username: string; password: string }>) =>
@@ -70,6 +72,11 @@ export default function EInvoicingSettings() {
   const [credMessage, setCredMessage] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
 
   const saveCredentials = async (): Promise<boolean> => {
+    // Saving again with nothing new: the stored login stands (the password is never shown, so it is not retyped).
+    if (company && isSaved && !login.password && login.username.trim() === savedUsername) {
+      setCredMessage({ tone: 'good', text: tr('compliance:settings.credentialsUnchanged') });
+      return true;
+    }
     if (!company || !login.username.trim() || !login.password) {
       setCredMessage({ tone: 'bad', text: tr('compliance:settings.credentialsMissing') });
       return false;
@@ -82,6 +89,7 @@ export default function EInvoicingSettings() {
         password: login.password,
       });
       setEdits((e) => ({ ...e, [portal]: { ...e[portal], password: '' } }));
+      setSavedHere((s) => ({ ...s, [portal]: login.username.trim() }));
       setCredMessage({ tone: 'good', text: tr('compliance:settings.credentialsSaved') });
       return true;
     } catch (err: unknown) {

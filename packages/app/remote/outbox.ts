@@ -150,6 +150,12 @@ export function rebase(entityId: string, version: number) {
 }
 
 export function drop(id: string) {
-  write(useAppStore.getState().syncQueue.filter((e) => e.id !== id));
+  dropAll([id]);
+}
+
+/** Forgets these changes unsent; a reload then puts back the server's version of what they touched. */
+export function dropAll(ids: string[]) {
+  const gone = new Set(ids);
+  write(useAppStore.getState().syncQueue.filter((e) => !gone.has(e.id)));
   listeners();
 }
