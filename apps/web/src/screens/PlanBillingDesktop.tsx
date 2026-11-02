@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -64,7 +64,7 @@ export function PlanBillingDesktop() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name="star-circle-outline" size={24} color={t.c.primary} />
+                <Icon name="star-circle-outline" size={24} color={t.c.primary} />
               </View>
               <View style={{ gap: 2, flexShrink: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
@@ -165,7 +165,7 @@ export function PlanBillingDesktop() {
                 <View style={{ gap: t.spacing.sm, flex: 1 }}>
                   {planFeatures(tr, p).map((f) => (
                     <View key={f} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm }}>
-                      <MaterialCommunityIcons name="check-circle" size={16} color={t.c.good} style={{ marginTop: 1 }} />
+                      <Icon name="check-circle" size={16} color={t.c.good} style={{ marginTop: 1 }} />
                       <Text variant="small" style={{ flex: 1 }}>
                         {f}
                       </Text>

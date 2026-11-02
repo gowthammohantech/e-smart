@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from '@esmart/ui/components/Icon';
 import { DocumentEwayStatus, EInvoiceStatus, EwayBillStatus } from '@esmart/core/types';
 import { StatusTone } from '@esmart/core/domain/documentStates';
 import type { Translate } from '@esmart/core/labels';
@@ -7,7 +7,7 @@ import type { Translate } from '@esmart/core/labels';
  * How a compliance state is presented. The tone and the icon are fixed; the
  * word is a catalogue key, resolved where it is rendered.
  */
-type Meta = { labelKey: string; tone: StatusTone; icon: keyof typeof MaterialCommunityIcons.glyphMap };
+type Meta = { labelKey: string; tone: StatusTone; icon: IconName };
 
 /** Presentation for the e-invoice states, mirroring STATUS_TONE for documents. */
 export const E_INVOICE_STATUS_META: Record<EInvoiceStatus, Meta> = {

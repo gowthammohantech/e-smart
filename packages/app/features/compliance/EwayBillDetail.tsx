@@ -4,7 +4,7 @@ import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -133,7 +133,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
                 opacity: pressed ? 0.6 : 1,
               })}
             >
-              <MaterialCommunityIcons name="file-document-outline" size={20} color={t.c.primary} />
+              <Icon name="file-document-outline" size={20} color={t.c.primary} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="small" weight="600">
                   {doc.number}
@@ -142,7 +142,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
                   {party?.name ?? tr('common:placeholder.unknown')} · {formatMoney(bill.consignmentValue)}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+              <Icon name="chevron-right" size={20} color={t.c.muted} />
             </Pressable>
           ) : null}
         </Card>
@@ -163,7 +163,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
           <View style={{ height: 1, backgroundColor: t.c.line }} />
           <Leg title={tr('compliance:ewb.to')} place={bill.to} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-            <MaterialCommunityIcons name="map-marker-distance" size={16} color={t.c.muted} />
+            <Icon name="map-marker-distance" size={16} color={t.c.muted} />
             <Text variant="caption" tone="muted">
               {tr('compliance:ewb.distanceValue', { distance: bill.distanceKm })}
             </Text>
@@ -197,7 +197,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
                     borderBottomColor: t.c.line,
                   }}
                 >
-                  <MaterialCommunityIcons
+                  <Icon
                     name={entry.icon}
                     size={18}
                     color={entry.kind === 'extension' ? t.c.warn : t.c.primary}
@@ -469,7 +469,7 @@ function ReasonOption({ label, selected, onPress }: { label: string; selected: b
         backgroundColor: selected ? t.c.chip : 'transparent',
       }}
     >
-      <MaterialCommunityIcons name={selected ? 'radiobox-marked' : 'radiobox-blank'} size={18} color={selected ? t.c.primary : t.c.muted} />
+      <Icon name={selected ? 'radiobox-marked' : 'radiobox-blank'} size={18} color={selected ? t.c.primary : t.c.muted} />
       <Text variant="small" style={{ flex: 1 }}>
         {label}
       </Text>

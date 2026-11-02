@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Linking, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -110,7 +110,7 @@ export default function BackupExport() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-            <MaterialCommunityIcons name="database-export-outline" size={21} color={t.c.primary} />
+            <Icon name="database-export-outline" size={21} color={t.c.primary} />
             <Text variant="title" weight="700" style={{ flex: 1 }}>
               {company.name}
             </Text>
@@ -148,7 +148,7 @@ export default function BackupExport() {
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-            <MaterialCommunityIcons name="cloud-check-outline" size={19} color={t.c.good} />
+            <Icon name="cloud-check-outline" size={19} color={t.c.good} />
             <Text variant="small" weight="600" style={{ flex: 1 }}>{tr('settings:backup.automatic')}</Text>
             {backup?.automatic ? <Badge label={backup.frequency === 'weekly' ? tr('settings:backup.weekly') : tr('settings:backup.nightly')} tone="success" size="sm" /> : null}
           </View>

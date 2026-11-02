@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
@@ -21,7 +21,6 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { useQueryParams } from '../../navigation/queryParams';
 import type { AppNotification } from '@esmart/core/types';
-
 
 export default function Notifications() {
   const t = useTheme();
@@ -51,7 +50,6 @@ export default function Notifications() {
     [notifications, filter],
   );
   const unread = notifications.filter((n) => !n.read).length;
-
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -157,7 +155,7 @@ export default function Notifications() {
                       justifyContent: 'center',
                     }}
                   >
-                    <MaterialCommunityIcons
+                    <Icon
                       name={meta.icon}
                       size={18}
                       color={

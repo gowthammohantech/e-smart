@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -546,7 +546,7 @@ export function DocumentEditor({
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name="account-plus-outline" size={22} color={t.c.primary} />
+                <Icon name="account-plus-outline" size={22} color={t.c.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text variant="body" weight="600">
@@ -556,7 +556,7 @@ export function DocumentEditor({
               </View>
             </>
           )}
-          <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+          <Icon name="chevron-right" size={20} color={t.c.muted} />
         </Card>
       </Pressable>
 
@@ -720,7 +720,7 @@ export function DocumentEditor({
                     <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
                       {formatMoney(lineTotal)}
                     </Text>
-                    <MaterialCommunityIcons name="pencil-outline" size={15} color={t.c.muted} />
+                    <Icon name="pencil-outline" size={15} color={t.c.muted} />
                   </View>
                 </Pressable>
                 {/* The quantity changes right here, outside the tap that opens the full editor. */}
@@ -931,7 +931,7 @@ export function DocumentEditor({
       {/* Shown on the draft too, not only when finalising. */}
       {creditNotice ? (
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <MaterialCommunityIcons name="alert-outline" size={19} color={t.c.warn} />
+          <Icon name="alert-outline" size={19} color={t.c.warn} />
           <Text variant="caption" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
             {creditNotice}
           </Text>
@@ -939,7 +939,7 @@ export function DocumentEditor({
       ) : null}
 
       <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-        <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
+        <Icon name="information-outline" size={19} color={t.c.muted} />
         <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
           {tr(kind === 'invoice' || kind === 'delivery' ? 'sales:editor.finaliseNoteStock' : 'sales:editor.finaliseNote')}
         </Text>

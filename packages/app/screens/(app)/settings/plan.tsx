@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -33,7 +33,6 @@ export default function PlanBilling() {
   const current = planInfo(currentPlan);
   const seatLimit = userLimit(currentPlan);
 
-
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('plan:billing.title') }} />
@@ -41,7 +40,7 @@ export default function PlanBilling() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-            <MaterialCommunityIcons name="star-circle-outline" size={22} color={t.c.primary} />
+            <Icon name="star-circle-outline" size={22} color={t.c.primary} />
             <Text variant="title" weight="700" style={{ flex: 1 }}>
               {current.name}
             </Text>
@@ -119,7 +118,7 @@ export default function PlanBilling() {
               <View style={{ gap: 7 }}>
                 {planFeatures(tr, p).map((f) => (
                   <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    <MaterialCommunityIcons name="check" size={15} color={t.c.good} />
+                    <Icon name="check" size={15} color={t.c.good} />
                     <Text variant="small" tone="muted" style={{ flex: 1 }}>
                       {f}
                     </Text>

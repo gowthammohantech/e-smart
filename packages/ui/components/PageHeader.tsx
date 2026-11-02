@@ -2,13 +2,11 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import type { WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { Button } from './Button';
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 export type PageAction = {
   label: string;
@@ -120,7 +118,7 @@ export function PageHeader({
     <View
       style={{
         paddingHorizontal: t.spacing.lg,
-        paddingTop: t.spacing.xl,
+        paddingTop: t.spacing.xxl,
         paddingBottom: t.spacing.lg,
         backgroundColor: t.c.bg,
         gap: t.spacing.xs,
@@ -139,8 +137,8 @@ export function PageHeader({
             opacity: (state as WebPressState).hovered ? 0.7 : 1,
           })}
         >
-          <MaterialCommunityIcons name="chevron-left" size={18} color={t.c.muted} />
-          <Text variant="small" tone="muted" weight="600" numberOfLines={1}>
+          <Icon name="chevron-left" size={16} color={t.c.muted} />
+          <Text variant="small" tone="muted" weight="500" numberOfLines={1}>
             {backLabel || tr('common:action.back')}
           </Text>
         </Pressable>

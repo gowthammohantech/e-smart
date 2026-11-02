@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -69,7 +69,7 @@ export default function PaymentDetail() {
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons name={isIn ? 'arrow-down' : 'arrow-up'} size={27} color={isIn ? t.c.good : t.c.bad} />
+            <Icon name={isIn ? 'arrow-down' : 'arrow-up'} size={27} color={isIn ? t.c.good : t.c.bad} />
           </View>
           <Text variant="h1" weight="700" tone={isIn ? 'good' : 'bad'}>
             {formatMoney(payment.amount)}
@@ -118,7 +118,7 @@ export default function PaymentDetail() {
                 {party.phone ?? party.email ?? party.code}
               </Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+            <Icon name="chevron-right" size={18} color={t.c.muted} />
           </Card>
         ) : null}
 
@@ -152,14 +152,14 @@ export default function PaymentDetail() {
                   backgroundColor: pressed ? t.c.card2 : 'transparent',
                 })}
               >
-                <MaterialCommunityIcons name="file-document-outline" size={20} color={t.c.primary} />
+                <Icon name="file-document-outline" size={20} color={t.c.primary} />
                 <Text variant="body" weight="600" style={{ flex: 1 }}>
                   {a.documentNumber}
                 </Text>
                 <Text variant="body" weight="700">
                   {formatMoney(a.amount)}
                 </Text>
-                <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
               </Pressable>
             ))
           )}
@@ -167,7 +167,7 @@ export default function PaymentDetail() {
 
         {payment.unallocated.minor > 0 ? (
           <Card variant="flat" style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <MaterialCommunityIcons name="wallet-outline" size={20} color={t.c.warn} />
+            <Icon name="wallet-outline" size={20} color={t.c.warn} />
             <Text variant="small" style={{ flex: 1 }}>
               {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
             </Text>

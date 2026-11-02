@@ -1,4 +1,4 @@
-import type { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from './Icon';
 
 /**
  * What a screen can ask of a toast. Toast.tsx (the phone apps) and
@@ -8,7 +8,7 @@ import type { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'error';
 
-export type ToastIcon = keyof typeof MaterialCommunityIcons.glyphMap;
+export type ToastIcon = IconName;
 
 export type ToastAction = { label: string; onPress: () => void };
 

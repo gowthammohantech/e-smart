@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -90,7 +90,7 @@ export default function ExpenseDetail() {
       <View style={{ gap: t.spacing.lg }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg }}>
           <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: `${tint}22`, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialCommunityIcons name={(category?.icon ?? 'cash') as keyof typeof MaterialCommunityIcons.glyphMap} size={26} color={tint} />
+            <Icon name={(category?.icon ?? 'cash') as IconName} size={26} color={tint} />
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text variant="small" tone="muted" numberOfLines={1}>
@@ -177,7 +177,7 @@ export default function ExpenseDetail() {
                   {supplier.phone ?? supplier.email ?? supplier.code}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+              <Icon name="chevron-right" size={18} color={t.c.muted} />
             </Pressable>
           </FormSection>
         ) : null}
@@ -185,7 +185,7 @@ export default function ExpenseDetail() {
         {expense.attachmentIds.length > 0 ? (
           <FormSection title={tr('purchases:expense.attachments')}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-              <MaterialCommunityIcons name="paperclip" size={19} color={t.c.primary} />
+              <Icon name="paperclip" size={19} color={t.c.primary} />
               <Text variant="small">
                 {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
               </Text>
@@ -243,8 +243,8 @@ export default function ExpenseDetail() {
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons
-              name={(category?.icon ?? 'cash') as keyof typeof MaterialCommunityIcons.glyphMap}
+            <Icon
+              name={(category?.icon ?? 'cash') as IconName}
               size={27}
               color={category?.color ?? t.c.muted}
             />
@@ -300,7 +300,7 @@ export default function ExpenseDetail() {
 
         {expense.attachmentIds.length > 0 ? (
           <Card variant="flat" style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <MaterialCommunityIcons name="paperclip" size={19} color={t.c.primary} />
+            <Icon name="paperclip" size={19} color={t.c.primary} />
             <Text variant="small" style={{ flex: 1 }}>
               {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
             </Text>

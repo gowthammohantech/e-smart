@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from '@esmart/ui/components/Icon';
 import {
   useDocuments,
   useExpenses,
@@ -21,7 +21,7 @@ export type SearchResult = {
   title: string;
   subtitle: string;
   trailing?: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   route: string;
 };
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
@@ -66,7 +66,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(app)/(tabs)/more' as never));
 
   const iconButton = (
-    icon: keyof typeof MaterialCommunityIcons.glyphMap,
+    icon: IconName,
     label: string,
     onPress: () => void,
     badge?: number,
@@ -88,7 +88,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <MaterialCommunityIcons name={icon} size={19} color={t.c.text} />
+      <Icon name={icon} size={19} color={t.c.text} />
       {badge && badge > 0 ? (
         <View
           style={{
@@ -153,7 +153,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
             <Text variant="title" weight="700" numberOfLines={1} style={{ flexShrink: 1 }}>
               {title ?? company?.name ?? tr('common:component.business')}
             </Text>
-            {!title ? <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} /> : null}
+            {!title ? <Icon name="chevron-down" size={18} color={t.c.muted} /> : null}
           </Pressable>
           <Pressable
             onPress={() => setBranchOpen(true)}

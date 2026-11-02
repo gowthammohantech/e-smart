@@ -1,12 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import type { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from '@esmart/ui/components/Icon';
 import { countLabel } from '@esmart/core/lib/format';
 import { useCanOpen, useComplianceSummary, useModuleSet, useUnreadCount } from '../store/selectors';
 import { useRemoteMeta } from '../remote/meta';
 
 export type MoreEntry = {
   label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   route: string;
   badge?: string;
 };

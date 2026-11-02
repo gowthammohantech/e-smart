@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback} from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTranslation } from 'react-i18next';
 import { useRefreshOnFocus } from '../remote/useRefreshOnFocus';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -133,7 +133,6 @@ export function DocumentListView({
 
   const activeFilterCount =
     filters.statuses.length + (filters.partyId ? 1 : 0) + (filters.range !== 'all' ? 1 : 0);
-
 
   const toggleStatus = (s: DocStatus) =>
     setFilters((f) => ({
@@ -307,7 +306,7 @@ export function DocumentListView({
               accessibilityLabel={tr('common:filters.title')}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
-              <MaterialCommunityIcons
+              <Icon
                 name="tune-variant"
                 size={19}
                 color={activeFilterCount ? t.c.primary : t.c.muted}

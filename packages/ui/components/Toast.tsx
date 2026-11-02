@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { settledContent, settledText, type ToastApi, type ToastOptions, type ToastTone } from './toastTypes';
@@ -101,7 +101,7 @@ function ToastView({ message, onDone }: { message: ToastMessage; onDone: (id: nu
         : message.tone === 'warning'
           ? t.c.warn
           : t.c.primary;
-  const glyph = sticky ? <ActivityIndicator size="small" color={t.c.primary} /> : <MaterialCommunityIcons name={icon} size={19} color={color} />;
+  const glyph = sticky ? <ActivityIndicator size="small" color={t.c.primary} /> : <Icon name={icon} size={19} color={color} />;
   const action = message.action ? (
     <Pressable
       onPress={() => {

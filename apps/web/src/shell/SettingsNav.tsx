@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -36,21 +36,21 @@ function Entry({ entry, active }: { entry: MoreEntry; active: boolean }) {
             flexDirection: 'row',
             alignItems: 'center',
             gap: t.spacing.sm,
-            height: 34,
+            height: 32,
             paddingHorizontal: t.spacing.sm,
             borderRadius: t.radius.sm,
-            backgroundColor: active ? t.c.chip : pressed || hovered ? t.c.card2 : 'transparent',
+            backgroundColor: active ? t.c.chip : pressed || hovered ? t.c.mutedSoft : 'transparent',
           },
           focusRing(t, focused),
         ];
       }}
     >
-      <MaterialCommunityIcons name={entry.icon} size={16} color={active ? t.c.primary : t.c.muted} />
-      <Text variant="small" weight={active ? '700' : '500'} tone={active ? 'primary' : 'default'} numberOfLines={1} style={{ flex: 1 }}>
+      <Icon name={entry.icon} size={16} color={active ? t.c.primary : t.c.muted} />
+      <Text variant="small" weight={active ? '600' : '500'} tone={active ? 'primary' : 'default'} numberOfLines={1} style={{ flex: 1 }}>
         {entry.label}
       </Text>
       {entry.badge ? (
-        <Text variant="micro" tone="bad" weight="700">
+        <Text variant="micro" tone="bad" weight="600">
           {entry.badge}
         </Text>
       ) : null}
@@ -70,7 +70,7 @@ export function SettingsNav() {
   const profile: MoreEntry = { label: tr('nav:title.yourProfile'), icon: 'account-circle-outline', route: '/(app)/settings/profile' };
 
   return (
-    <View style={{ width: SETTINGS_NAV_WIDTH, paddingTop: t.spacing.xl }}>
+    <View style={{ width: SETTINGS_NAV_WIDTH, paddingTop: t.spacing.xxl }}>
       <ScrollView contentContainerStyle={{ gap: t.spacing.lg, paddingBottom: t.spacing.xl }}>
         <Entry entry={profile} active={pathname === publicPath(profile.route)} />
         {groups.map((g) => (
@@ -78,8 +78,8 @@ export function SettingsNav() {
             <Text
               variant="micro"
               tone="muted"
-              weight="700"
-              style={{ textTransform: 'uppercase', letterSpacing: 0.8, paddingHorizontal: t.spacing.sm, paddingBottom: 4 }}
+              weight="600"
+              style={{ textTransform: 'uppercase', letterSpacing: 0.6, paddingHorizontal: t.spacing.sm, paddingBottom: 4 }}
             >
               {g.title}
             </Text>

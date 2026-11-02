@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -287,7 +287,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                       <Text variant="small" weight="600">
                         {formatMoney(o.outstanding)}
                       </Text>
-                      <MaterialCommunityIcons name="chevron-right" size={16} color={t.c.muted} />
+                      <Icon name="chevron-right" size={16} color={t.c.muted} />
                     </Pressable>
                   ))}
                 </View>
@@ -430,7 +430,7 @@ function DesktopPartyGroup({
           <Text variant="small" weight="600" numberOfLines={1} style={{ width: 160, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
             {formatMoney(o.outstanding)}
           </Text>
-          <MaterialCommunityIcons name="chevron-right" size={16} color={t.c.muted} />
+          <Icon name="chevron-right" size={16} color={t.c.muted} />
         </Pressable>
       ))}
     </Card>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -97,7 +97,7 @@ export function ScanBarcodeDesktop() {
                           justifyContent: 'center',
                         }}
                       >
-                        <MaterialCommunityIcons name="check" size={22} color={t.c.good} />
+                        <Icon name="check" size={22} color={t.c.good} />
                       </View>
                       <View style={{ flex: 1, gap: 3 }}>
                         <Text weight="600">{match.name}</Text>
@@ -105,7 +105,7 @@ export function ScanBarcodeDesktop() {
                           {formatMoney(match.salePrice)} · {formatQty(stock[match.id] ?? 0)} {match.unit} in stock
                         </Text>
                       </View>
-                      <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+                      <Icon name="chevron-right" size={20} color={t.c.muted} />
                     </Pressable>
                   ) : (
                     <Card variant="flat">

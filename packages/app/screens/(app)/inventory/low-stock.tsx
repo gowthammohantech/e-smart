@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { Text } from '@esmart/ui/components/Text';
@@ -95,7 +95,7 @@ export default function LowStock() {
                       justifyContent: 'center',
                     }}
                   >
-                    <MaterialCommunityIcons name="package-variant" size={19} color={r.onHand <= 0 ? t.c.bad : t.c.warn} />
+                    <Icon name="package-variant" size={19} color={r.onHand <= 0 ? t.c.bad : t.c.warn} />
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
                     <Text variant="body" weight="600" numberOfLines={1}>

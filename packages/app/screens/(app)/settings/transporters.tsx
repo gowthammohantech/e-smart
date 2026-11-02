@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Screen } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
@@ -117,7 +117,7 @@ export default function TransportersSettings() {
                   backgroundColor: pressed ? t.c.card2 : 'transparent',
                 })}
               >
-                <MaterialCommunityIcons name="truck-outline" size={20} color={t.c.muted} />
+                <Icon name="truck-outline" size={20} color={t.c.muted} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text variant="body" weight="600">
                     {transporter.name}
@@ -127,7 +127,7 @@ export default function TransportersSettings() {
                   </Text>
                 </View>
                 {transporter.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : null}
-                <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
               </Pressable>
             ))}
           </Card>

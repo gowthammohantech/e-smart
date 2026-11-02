@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -146,7 +146,7 @@ export default function OcrCapture() {
 
         {/* Reading a bill needs the phone app; say so before the person tries it here. */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm, padding: t.spacing.md, borderRadius: t.radius.md, backgroundColor: t.c.chip }}>
-          <MaterialCommunityIcons name="information-outline" size={18} color={t.c.primary} />
+          <Icon name="information-outline" size={18} color={t.c.primary} />
           <Text variant="small" tone="muted" style={{ flex: 1, lineHeight: 20 }}>
             {tr('inventory:ocr.ocrUnavailable')}
           </Text>
@@ -160,7 +160,7 @@ export default function OcrCapture() {
           {STEPS.map((s, i) => (
             <View key={s.label} style={{ flexDirection: 'row', gap: t.spacing.md }}>
               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialCommunityIcons name={s.icon} size={17} color={t.c.primary} />
+                <Icon name={s.icon} size={17} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
@@ -174,7 +174,7 @@ export default function OcrCapture() {
           ))}
         </View>
         <View style={{ flexDirection: 'row', gap: t.spacing.sm, paddingTop: t.spacing.md, borderTopWidth: 1, borderTopColor: t.c.line }}>
-          <MaterialCommunityIcons name="shield-check-outline" size={18} color={t.c.good} />
+          <Icon name="shield-check-outline" size={18} color={t.c.good} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.howItWorksBody')}</Text>
         </View>
       </FormSection>
@@ -261,7 +261,7 @@ export default function OcrCapture() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name={s.icon} size={17} color={t.c.primary} />
+                <Icon name={s.icon} size={17} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
@@ -276,7 +276,7 @@ export default function OcrCapture() {
         </Card>
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <MaterialCommunityIcons name="shield-check-outline" size={19} color={t.c.good} />
+          <Icon name="shield-check-outline" size={19} color={t.c.good} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.howItWorksBody')}</Text>
         </Card>
       </ScrollView>

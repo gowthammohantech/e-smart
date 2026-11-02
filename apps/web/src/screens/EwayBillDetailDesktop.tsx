@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -166,7 +166,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name="truck-fast-outline" size={30} color={t.c.primary} />
+              <Icon name="truck-fast-outline" size={30} color={t.c.primary} />
             </View>
 
             <View style={{ flexGrow: 1, flexBasis: 280, gap: 4 }}>
@@ -245,7 +245,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
               <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.xl }}>
                 <Leg title={tr('compliance:ewb.from')} place={bill.from} />
                 <View style={{ alignItems: 'center', gap: 4 }}>
-                  <MaterialCommunityIcons name="arrow-right" size={22} color={t.c.primary} />
+                  <Icon name="arrow-right" size={22} color={t.c.primary} />
                   <Text variant="caption" tone="muted">
                     {bill.distanceKm} km
                   </Text>
@@ -281,7 +281,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                           justifyContent: 'center',
                         }}
                       >
-                        <MaterialCommunityIcons name={entry.icon} size={17} color={entry.kind === 'extension' ? t.c.warn : t.c.primary} />
+                        <Icon name={entry.icon} size={17} color={entry.kind === 'extension' ? t.c.warn : t.c.primary} />
                       </View>
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text variant="small" weight="600">
@@ -331,7 +331,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                     ];
                   }}
                 >
-                  {party ? <Avatar name={party.name} size={44} /> : <MaterialCommunityIcons name="file-document-outline" size={24} color={t.c.primary} />}
+                  {party ? <Avatar name={party.name} size={44} /> : <Icon name="file-document-outline" size={24} color={t.c.primary} />}
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text weight="600" numberOfLines={1}>
                       {doc.number}
@@ -340,7 +340,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                       {party?.name ?? 'Unknown'} · {formatMoney(bill.consignmentValue)}
                     </Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+                  <Icon name="chevron-right" size={20} color={t.c.muted} />
                 </Pressable>
               </View>
             ) : null}

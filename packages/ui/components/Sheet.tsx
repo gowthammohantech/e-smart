@@ -16,7 +16,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
@@ -207,7 +207,7 @@ export function Sheet({
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name="close" size={17} color={t.c.muted} />
+                <Icon name="close" size={17} color={t.c.muted} />
               </Pressable>
             </View>
           ) : null}

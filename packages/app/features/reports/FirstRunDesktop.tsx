@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Card } from '@esmart/ui/components/Card';
@@ -17,7 +17,7 @@ import { useActiveCompany, useCanOpen, useCurrentUser, useDocuments, useItems, u
 
 type Step = {
   key: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   route: string;
   done: boolean;
 };
@@ -107,7 +107,7 @@ export function FirstRunDesktop() {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: s.done ? t.c.goodSoft : t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                  <MaterialCommunityIcons name={s.done ? 'check' : s.icon} size={20} color={s.done ? t.c.good : t.c.primary} />
+                  <Icon name={s.done ? 'check' : s.icon} size={20} color={s.done ? t.c.good : t.c.primary} />
                 </View>
                 <Text variant="caption" tone="muted" weight="600">
                   {tr('reports:home.stepNumber', { n: i + 1 })}
@@ -151,12 +151,12 @@ export function FirstRunDesktop() {
                     })}
                   >
                     <View style={{ width: 36, height: 36, borderRadius: t.radius.md, backgroundColor: a.color ? t.c.primary : t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                      <MaterialCommunityIcons name={a.icon} size={19} color={a.color ? t.c.onPrimary : t.c.primary} />
+                      <Icon name={a.icon} size={19} color={a.color ? t.c.onPrimary : t.c.primary} />
                     </View>
                     <Text variant="body" weight="500" style={{ flex: 1 }} numberOfLines={1}>
                       {a.label}
                     </Text>
-                    <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                    <Icon name="chevron-right" size={18} color={t.c.muted} />
                   </Pressable>
                 ) : (
                   // Sized like a card (padding and border count towards flex) so the columns line up.

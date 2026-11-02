@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AppHeader } from '../../../components/AppHeader';
 import { SectionHeader } from '@esmart/ui/components/Screen';
@@ -33,7 +33,7 @@ type ReportLink = {
   key: string;
   label: string;
   description: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
 };
 
 /** Each report's route key, its catalogue entry under `reports:report`, and its icon. */
@@ -240,7 +240,7 @@ export default function ReportsTab() {
                           justifyContent: 'center',
                         }}
                       >
-                        <MaterialCommunityIcons name={r.icon} size={22} color={t.c.primary} />
+                        <Icon name={r.icon} size={22} color={t.c.primary} />
                       </View>
                       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                         <Text variant="body" weight="600" numberOfLines={1}>
@@ -250,7 +250,7 @@ export default function ReportsTab() {
                           {r.description}
                         </Text>
                       </View>
-                      <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                      <Icon name="chevron-right" size={18} color={t.c.muted} />
                     </Pressable>
                   ) : (
                     // Sized like a card (padding and border count towards flex) so the columns line up.
@@ -288,7 +288,7 @@ export default function ReportsTab() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name={r.icon} size={19} color={t.c.primary} />
+                <Icon name={r.icon} size={19} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
@@ -298,7 +298,7 @@ export default function ReportsTab() {
                   {r.description}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+              <Icon name="chevron-right" size={18} color={t.c.muted} />
             </Pressable>
           ))}
         </Card>

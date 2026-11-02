@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { FieldShell } from '../Field';
 import { Text } from '../Text';
@@ -77,11 +77,11 @@ export function DateField({
           opacity: pressed ? 0.7 : 1,
         })}
       >
-        <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
+        <Icon name="calendar-outline" size={18} color={t.c.muted} />
         <Text style={{ flex: 1 }} tone={value ? 'default' : 'muted'}>
           {value ? formatDate(value) : tr('common:component.selectDate')}
         </Text>
-        <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} />
+        <Icon name="chevron-down" size={18} color={t.c.muted} />
       </Pressable>
 
       {Platform.OS === 'android' && open ? picker : null}

@@ -6,7 +6,7 @@ import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-nat
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -228,7 +228,7 @@ ${url}`;
     if (res?.result) router.push(detailRouteFor(target, res.id ?? res.result) as never);
   };
 
-  const offered: { target: DocumentKind; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] =
+  const offered: { target: DocumentKind; label: string; icon: IconName }[] =
     doc.kind === 'quote'
       ? [
           { target: 'salesOrder', label: tr('sales:detail.convertToSalesOrder'), icon: 'clipboard-list-outline' },
@@ -281,7 +281,7 @@ ${url}`;
                 accessibilityRole="link"
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 2 }}
               >
-                <MaterialCommunityIcons name="link-variant" size={14} color={t.c.primary} />
+                <Icon name="link-variant" size={14} color={t.c.primary} />
                 <Text variant="caption" tone="primary" weight="600">
                   {tr('sales:detail.against', { kind: documentKindLabel(tr, sourceDoc.kind, 1), number: sourceDoc.number })}
                 </Text>
@@ -324,7 +324,7 @@ ${url}`;
               {party?.taxId ?? party?.phone ?? party?.email ?? '—'}
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+          <Icon name="chevron-right" size={18} color={t.c.muted} />
         </Pressable>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
@@ -465,7 +465,7 @@ ${url}`;
                     backgroundColor: pressed ? t.c.card2 : 'transparent',
                   })}
                 >
-                  <MaterialCommunityIcons name="cash-check" size={20} color={t.c.good} />
+                  <Icon name="cash-check" size={20} color={t.c.good} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="body" weight="600">
                       {p.number}
@@ -785,7 +785,7 @@ ${url}`;
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.text} />
+            <Icon name={a.icon} size={20} color={t.c.text} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>
@@ -838,7 +838,7 @@ ${url}`;
             >
               <Badge label={statusLabel(tr, s)} tone={STATUS_TONE[s]} />
               <View style={{ flex: 1 }} />
-              <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+              <Icon name="chevron-right" size={18} color={t.c.muted} />
             </Pressable>
           ))
         )}

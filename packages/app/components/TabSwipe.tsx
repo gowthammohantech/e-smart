@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, PanResponder, Platform, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { useUiStore } from '../store/uiStore';
 
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 export type SwipeTab = { name: string; title: string; icon: IconName };
 
 /** How far sideways the finger must travel before letting go switches tabs. */
@@ -123,11 +122,11 @@ export function TabSwipe({
             t.shadow.card,
           ]}
         >
-          <MaterialCommunityIcons name={tab.icon} size={18} color={armed ? t.c.onPrimary : t.c.primary} />
+          <Icon name={tab.icon} size={18} color={armed ? t.c.onPrimary : t.c.primary} />
           <Text variant="caption" weight="700" style={{ color: armed ? t.c.onPrimary : t.c.text }}>
             {tab.title}
           </Text>
-          <MaterialCommunityIcons
+          <Icon
             name={side === 'right' ? 'chevron-right' : 'chevron-left'}
             size={16}
             color={armed ? t.c.onPrimary : t.c.muted}

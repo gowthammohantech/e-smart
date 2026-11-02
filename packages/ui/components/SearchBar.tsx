@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, StyleProp, TextInput, View, ViewStyle } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { WEB_INPUT_RESET, webFocusHalo } from './Field';
 
@@ -45,7 +45,7 @@ export function SearchBar({
         style,
       ]}
     >
-      <MaterialCommunityIcons name="magnify" size={19} color={t.c.muted} />
+      <Icon name="magnify" size={19} color={t.c.muted} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -62,7 +62,7 @@ export function SearchBar({
       />
       {value.length > 0 ? (
         <Pressable onPress={() => onChangeText('')} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.clearSearch')}>
-          <MaterialCommunityIcons name="close-circle" size={17} color={t.c.muted} />
+          <Icon name="close-circle" size={17} color={t.c.muted} />
         </Pressable>
       ) : null}
       {right}

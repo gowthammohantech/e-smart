@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { isValidGstin, normalizeGstin } from '@esmart/core/domain/gstin';
 import { lookupGstin, type GstinDetails } from '../../remote/reference';
@@ -60,7 +60,7 @@ export function useGstinLookup({ gstin, opened, enabled = true, fill }: { gstin:
   if (outcome.kind === 'failed') return { hint: tr('common:gstinLookup.failed') };
   const { status } = outcome.details;
   if (status && status !== 'Active') {
-    return { hint: tr('common:gstinLookup.inactive', { status }), suffix: <MaterialCommunityIcons name="alert-circle-outline" size={18} color={t.c.warn} /> };
+    return { hint: tr('common:gstinLookup.inactive', { status }), suffix: <Icon name="alert-circle-outline" size={18} color={t.c.warn} /> };
   }
-  return { hint: tr('common:gstinLookup.filled'), suffix: <MaterialCommunityIcons name="check-decagram" size={18} color={t.c.good} /> };
+  return { hint: tr('common:gstinLookup.filled'), suffix: <Icon name="check-decagram" size={18} color={t.c.good} /> };
 }

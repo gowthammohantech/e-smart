@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -41,7 +41,7 @@ function PlaceColumn({
   onPickState,
 }: {
   title: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   place: EwayPlace;
   onChange: (p: EwayPlace) => void;
   errors: Record<string, string>;
@@ -54,7 +54,7 @@ function PlaceColumn({
     <View style={{ flex: 1, minWidth: 0, gap: t.spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-          <MaterialCommunityIcons name={icon} size={16} color={t.c.primary} />
+          <Icon name={icon} size={16} color={t.c.primary} />
         </View>
         <Text weight="700">{title}</Text>
       </View>
@@ -149,7 +149,7 @@ function ValidityCard({ form }: { form: EwayBillFormState }) {
       <Label>{tr('compliance:ewb.validUntil')}</Label>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-          <MaterialCommunityIcons name="clock-outline" size={22} color={t.c.primary} />
+          <Icon name="clock-outline" size={22} color={t.c.primary} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="title" weight="700">
@@ -372,7 +372,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
       <Card style={{ gap: t.spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
           <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialCommunityIcons name="truck-fast-outline" size={22} color={t.c.primary} />
+            <Icon name="truck-fast-outline" size={22} color={t.c.primary} />
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Label>{tr('compliance:ewb.consignment')}</Label>

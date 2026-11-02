@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import type { WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -13,8 +13,6 @@ import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
 import { matchPages, SETTINGS_GROUPS, useAppPages } from '@esmart/app/navigation/pages';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
 import { useUiStore } from '@esmart/app/store/uiStore';
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 type Entry = { key: string; group: string; title: string; subtitle?: string; trailing?: string; icon: IconName; route: string };
 
@@ -101,7 +99,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               borderBottomColor: t.c.line,
             }}
           >
-            <MaterialCommunityIcons name="magnify" size={20} color={t.c.muted} />
+            <Icon name="magnify" size={20} color={t.c.muted} />
             <TextInput
               autoFocus
               value={query}
@@ -166,7 +164,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                       backgroundColor: active || (state as WebPressState).pressed ? t.c.card2 : 'transparent',
                     })}
                   >
-                    <MaterialCommunityIcons name={entry.icon} size={18} color={active ? t.c.primary : t.c.muted} />
+                    <Icon name={entry.icon} size={18} color={active ? t.c.primary : t.c.muted} />
                     <View style={{ flex: 1, gap: 1 }}>
                       <Text variant="small" weight="600" numberOfLines={1}>
                         {entry.title}
@@ -182,7 +180,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                         {entry.trailing}
                       </Text>
                     ) : null}
-                    {active ? <MaterialCommunityIcons name="keyboard-return" size={16} color={t.c.muted} /> : null}
+                    {active ? <Icon name="keyboard-return" size={16} color={t.c.muted} /> : null}
                   </Pressable>
                 </React.Fragment>
               );

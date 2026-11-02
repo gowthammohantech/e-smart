@@ -1,6 +1,4 @@
-import type { MaterialCommunityIcons } from '@expo/vector-icons';
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+import type { IconName } from '@esmart/ui/components/Icon';
 
 export type TabName = 'index' | 'sales' | 'purchases' | 'inventory' | 'gst' | 'contacts' | 'reports' | 'more';
 

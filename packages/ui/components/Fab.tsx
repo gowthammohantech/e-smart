@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
@@ -16,7 +16,7 @@ export function Fab({
   onPress,
   bottom = 0,
 }: {
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   label?: string;
   onPress: () => void;
   bottom?: number;
@@ -63,7 +63,7 @@ export function Fab({
         ];
         }}
       >
-        <MaterialCommunityIcons name={icon} size={desktop ? 20 : 26} color={t.c.onPrimary} />
+        <Icon name={icon} size={desktop ? 20 : 26} color={t.c.onPrimary} />
         {shownLabel ? (
           <Text weight="600" style={{ color: t.c.onPrimary }}>
             {shownLabel}

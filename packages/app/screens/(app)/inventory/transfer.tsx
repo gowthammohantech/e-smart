@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -97,7 +97,7 @@ export default function StockTransfer() {
             icon="warehouse"
           />
           <View style={{ height: 48, justifyContent: 'center' }}>
-            <MaterialCommunityIcons name="arrow-right" size={20} color={t.c.muted} />
+            <Icon name="arrow-right" size={20} color={t.c.muted} />
           </View>
           <PickerField
             label={tr('inventory:transfer.to')}

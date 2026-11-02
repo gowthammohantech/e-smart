@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
@@ -89,7 +89,7 @@ export function MenuItem({
   trailing,
   onPress,
 }: {
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   /** Drawn where the icon goes, in its place: e.g. a business's logo. */
   leading?: React.ReactNode;
   label: string;
@@ -123,7 +123,7 @@ export function MenuItem({
         ];
       }}
     >
-      {leading ?? (icon ? <MaterialCommunityIcons name={icon} size={18} color={destructive ? t.c.bad : t.c.muted} /> : null)}
+      {leading ?? (icon ? <Icon name={icon} size={18} color={destructive ? t.c.bad : t.c.muted} /> : null)}
       <View style={{ flex: 1, gap: 1 }}>
         <Text variant="small" weight={selected ? '700' : '500'} numberOfLines={1} style={{ color }}>
           {label}
@@ -135,7 +135,7 @@ export function MenuItem({
         ) : null}
       </View>
       {trailing}
-      {selected ? <MaterialCommunityIcons name="check" size={16} color={t.c.primary} /> : null}
+      {selected ? <Icon name="check" size={16} color={t.c.primary} /> : null}
     </Pressable>
   );
 }

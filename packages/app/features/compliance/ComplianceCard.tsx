@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -150,7 +150,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
                 .slice(0, 3)
                 .map((issue, i) => (
                   <View key={i} style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'flex-start' }}>
-                    <MaterialCommunityIcons
+                    <Icon
                       name="alert-circle-outline"
                       size={14}
                       color={t.c.bad}
@@ -253,7 +253,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
                     : `${tr('compliance:ewb.validUntilDate', { date: formatDate(bill.validUpto.slice(0, 10)) })} · ${expiryPhrase(tr, hours)}`}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+              <Icon name="chevron-right" size={20} color={t.c.muted} />
             </Pressable>
           ) : null}
 

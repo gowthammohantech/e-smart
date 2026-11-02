@@ -6,7 +6,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "icons:web": "node scripts/gen-web-icons.mjs"
   },
   "dependencies": {
     "@esmart/core": "*",
@@ -32,6 +33,7 @@
     "eslint": "^9.39.5",
     "jest": "^30.5.1",
     "jest-expo": "~57.0.5",
+    "lucide-react": "1.55.0",
     "typescript": "~6.0.3"
   }
 }

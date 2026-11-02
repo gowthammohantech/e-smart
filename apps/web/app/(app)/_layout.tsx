@@ -8,7 +8,7 @@ import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth } from '../../src/si
 import { TopBar } from '../../src/shell/TopBar';
 import { LixiPanel } from '../../src/shell/LixiPanel';
 import { SettingsNav } from '../../src/shell/SettingsNav';
-import { CONTENT_MAX_WIDTH, useIsDesktop } from '../../src/layout';
+import { CONTENT_MAX_WIDTH, useBreakpoint, useIsDesktop } from '../../src/layout';
 
 /**
  * The signed-in shell for the browser. On a desktop: the sidebar on the
@@ -19,6 +19,7 @@ import { CONTENT_MAX_WIDTH, useIsDesktop } from '../../src/layout';
 export default function WebAppLayout() {
   const t = useTheme();
   const desktop = useIsDesktop();
+  const wide = useBreakpoint() === 'wide';
   const pathname = usePathname();
   // Settings pages get their own list of pages beside them (and a narrower,
   // form-width column); everything else uses the full content width.
@@ -66,7 +67,7 @@ export default function WebAppLayout() {
         <Sidebar />
         <View style={{ flex: 1 }}>
           <TopBar />
-          <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: t.spacing.lg }}>
+          <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: wide ? t.spacing.xxl : t.spacing.lg }}>
             {/* A folded sidebar hands its width to the page: the column's cap
                 grows by exactly what the sidebar gave up. */}
             <Animated.View
@@ -79,7 +80,7 @@ export default function WebAppLayout() {
                   extrapolate: 'clamp',
                 }),
                 flexDirection: 'row',
-                gap: t.spacing.lg,
+                gap: t.spacing.xxl,
               }}
             >
               {/* Kept in place (null when hidden) so the Stack never remounts. */}

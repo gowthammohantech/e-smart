@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -92,7 +92,7 @@ export default function OcrReview() {
             backgroundColor: lowConfidence > 0 ? t.c.warnSoft : t.c.goodSoft,
           }}
         >
-          <MaterialCommunityIcons name={lowConfidence > 0 ? 'alert-outline' : 'check-circle-outline'} size={20} color={lowConfidence > 0 ? t.c.warn : t.c.good} />
+          <Icon name={lowConfidence > 0 ? 'alert-outline' : 'check-circle-outline'} size={20} color={lowConfidence > 0 ? t.c.warn : t.c.good} />
           <Text variant="small" style={{ flex: 1, lineHeight: 19 }}>
             {lowConfidence > 0 ? tr('purchases:ocr.needsCheck', { count: lowConfidence }) : tr('purchases:ocr.allConfident')}
           </Text>
@@ -178,7 +178,7 @@ export default function OcrReview() {
         ) : null}
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
+          <Icon name="information-outline" size={19} color={t.c.muted} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.saveNote')}</Text>
         </Card>
       </>
@@ -237,7 +237,7 @@ export default function OcrReview() {
             borderWidth: 0,
           }}
         >
-          <MaterialCommunityIcons
+          <Icon
             name={lowConfidence > 0 ? 'alert-outline' : 'check-circle-outline'}
             size={21}
             color={lowConfidence > 0 ? t.c.warn : t.c.good}
@@ -302,7 +302,7 @@ export default function OcrReview() {
         ) : null}
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
+          <Icon name="information-outline" size={19} color={t.c.muted} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.saveNote')}</Text>
         </Card>
       </ScrollView>

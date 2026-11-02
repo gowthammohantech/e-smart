@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -21,9 +21,7 @@ import { useSignOut } from '@esmart/app/features/session/useSignOut';
 import { NOTIFICATION_META, notificationRoute } from '@esmart/app/features/notifications/notificationMeta';
 import { CommandPalette } from './CommandPalette';
 
-export const TOP_BAR_HEIGHT = 60;
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+export const TOP_BAR_HEIGHT = 56;
 
 const IconButton = React.forwardRef<
   View,
@@ -40,8 +38,8 @@ const IconButton = React.forwardRef<
         const { pressed, hovered, focused } = state as WebPressState;
         return [
           {
-            width: 38,
-            height: 38,
+            width: 36,
+            height: 36,
             borderRadius: t.radius.md,
             alignItems: 'center',
             justifyContent: 'center',
@@ -51,13 +49,15 @@ const IconButton = React.forwardRef<
         ];
       }}
     >
-      <MaterialCommunityIcons name={icon} size={20} color={t.c.text} />
+      <Icon name={icon} size={18} color={t.c.muted} />
       {badge ? (
         <View
           style={{
             position: 'absolute',
-            top: 3,
-            right: 3,
+            top: 2,
+            right: 2,
+            borderWidth: 2,
+            borderColor: t.c.paper,
             minWidth: 16,
             height: 16,
             borderRadius: 8,
@@ -67,7 +67,7 @@ const IconButton = React.forwardRef<
             justifyContent: 'center',
           }}
         >
-          <Text variant="micro" tone="onPrimary" weight="700" style={{ fontSize: 9 }}>
+          <Text variant="micro" tone="onPrimary" weight="600" style={{ fontSize: 9 }}>
             {countLabel(badge)}
           </Text>
         </View>
@@ -92,10 +92,10 @@ function LixiButton({ label }: { label: string }) {
           {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 8,
-            height: 38,
-            paddingLeft: 8,
-            paddingRight: 14,
+            gap: 6,
+            height: 36,
+            paddingLeft: 6,
+            paddingRight: 12,
             borderRadius: t.radius.md,
             backgroundColor: open || pressed || hovered ? t.c.chip : 'transparent',
           },
@@ -103,8 +103,8 @@ function LixiButton({ label }: { label: string }) {
         ];
       }}
     >
-      <LixiMark size={26} />
-      <Text weight="600" style={{ color: LIXI.blue }}>
+      <LixiMark size={22} />
+      <Text variant="small" weight="600" style={{ color: LIXI.blue }}>
         Lixi
       </Text>
     </Pressable>
@@ -162,8 +162,8 @@ export function TopBar() {
         height: TOP_BAR_HEIGHT,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: t.spacing.md,
-        paddingHorizontal: t.spacing.lg,
+        gap: t.spacing.sm,
+        paddingHorizontal: t.spacing.xxl,
         backgroundColor: t.c.paper,
         borderBottomWidth: 1,
         borderBottomColor: t.c.line,
@@ -178,27 +178,27 @@ export function TopBar() {
           return [
             {
               flex: 1,
-              maxWidth: 520,
-              height: 38,
+              maxWidth: 480,
+              height: 36,
               flexDirection: 'row',
               alignItems: 'center',
               gap: t.spacing.sm,
               paddingHorizontal: t.spacing.md,
               borderRadius: t.radius.md,
               borderWidth: 1,
-              borderColor: hovered ? t.c.muted : t.c.line,
-              backgroundColor: t.c.bg,
+              borderColor: hovered ? t.c.lineStrong : t.c.line,
+              backgroundColor: t.c.card2,
             },
             focusRing(t, focused),
           ];
         }}
       >
-        <MaterialCommunityIcons name="magnify" size={18} color={t.c.muted} />
+        <Icon name="magnify" size={16} color={t.c.muted} />
         <Text variant="small" tone="muted" numberOfLines={1} style={{ flex: 1 }}>
           {tr('nav:shell.searchPlaceholder')}
         </Text>
-        <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: t.c.line }}>
-          <Text variant="micro" tone="muted" weight="700">
+        <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: t.c.line, backgroundColor: t.c.card }}>
+          <Text variant="micro" tone="muted" weight="500">
             {tr('nav:shell.searchShortcut')}
           </Text>
         </View>
@@ -230,12 +230,12 @@ export function TopBar() {
         accessibilityLabel={tr('nav:shell.account')}
         style={(state) => [{ borderRadius: 18, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
       >
-        <Avatar name={user?.name ?? '?'} size={34} color={user?.avatarColor} />
+        <Avatar name={user?.name ?? '?'} size={30} color={user?.avatarColor} />
       </Pressable>
 
       <Menu anchor={bellRect} onClose={closeBellMenu} align="right" width={380}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm }}>
-          <Text variant="body" weight="700" style={{ flex: 1 }}>
+          <Text variant="body" weight="600" style={{ flex: 1 }}>
             {tr('nav:shell.notifications')}
           </Text>
           {unread > 0 ? (
@@ -279,7 +279,7 @@ export function TopBar() {
 
       <Menu anchor={accountRect} onClose={closeAccountMenu} align="right" width={260}>
         <View style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm, gap: 2 }}>
-          <Text variant="small" weight="700" numberOfLines={1}>
+          <Text variant="small" weight="600" numberOfLines={1}>
             {user?.name}
           </Text>
           <Text variant="caption" tone="muted" numberOfLines={1}>

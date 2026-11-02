@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -314,7 +314,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const receiptCard = (
     <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
       <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-        <MaterialCommunityIcons name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
+        <Icon name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
         <View style={{ flex: 1 }}>
           <Text variant="body" weight="600">
             {receiptUri ? tr('purchases:form.receiptAttached') : tr('purchases:form.attachAReceipt')}
@@ -323,7 +323,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
             {receiptUri ? tr('purchases:form.tapToReplace') : tr('purchases:form.receiptHint')}
           </Text>
         </View>
-        <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+        <Icon name="chevron-right" size={18} color={t.c.muted} />
       </Card>
     </Pressable>
   );

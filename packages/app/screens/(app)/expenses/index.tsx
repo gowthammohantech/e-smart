@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -196,7 +196,7 @@ export default function ExpensesList() {
                     const cat = categories.find((c) => c.id === e.categoryId);
                     return (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
-                        <MaterialCommunityIcons name={(cat?.icon ?? 'cash') as keyof typeof MaterialCommunityIcons.glyphMap} size={16} color={cat?.color ?? t.c.muted} />
+                        <Icon name={(cat?.icon ?? 'cash') as IconName} size={16} color={cat?.color ?? t.c.muted} />
                         <Cell>{cat?.name ?? tr('purchases:expense.uncategorised')}</Cell>
                       </View>
                     );
@@ -308,8 +308,8 @@ export default function ExpensesList() {
                       justifyContent: 'center',
                     }}
                   >
-                    <MaterialCommunityIcons
-                      name={(cat?.icon ?? 'cash') as keyof typeof MaterialCommunityIcons.glyphMap}
+                    <Icon
+                      name={(cat?.icon ?? 'cash') as IconName}
                       size={19}
                       color={cat?.color ?? t.c.muted}
                     />

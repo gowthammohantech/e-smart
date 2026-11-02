@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { statusLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme , ThemeMode } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -29,7 +29,7 @@ const MODES = [
   { value: 'system', label: 'settings:language.matchDevice', description: 'settings:appearance.mode.systemHint', icon: 'cellphone-cog' },
   { value: 'dark', label: 'settings:appearance.mode.dark', description: 'settings:appearance.mode.darkHint', icon: 'weather-night' },
   { value: 'light', label: 'settings:appearance.mode.light', description: 'settings:appearance.mode.lightHint', icon: 'white-balance-sunny' },
-] as const satisfies readonly { value: ThemeMode; label: string; description: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[];
+] as const satisfies readonly { value: ThemeMode; label: string; description: string; icon: IconName }[];
 
 /**
  * Each language is listed in its own script, with its English name underneath —
@@ -39,21 +39,21 @@ const LANGUAGE_OPTIONS: {
   value: AppLanguage;
   label: string;
   description: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
 }[] = [
   { value: 'system', label: '', description: '', icon: 'cellphone-cog' },
   ...SUPPORTED_LANGUAGES.map((l) => ({
     value: l.code as AppLanguage,
     label: l.native,
     description: l.label,
-    icon: 'translate' as keyof typeof MaterialCommunityIcons.glyphMap,
+    icon: 'translate' as IconName,
   })),
 ];
 
 type RadioRowProps = {
   label: string;
   description: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   active: boolean;
   last: boolean;
   onPress: () => void;
@@ -88,7 +88,7 @@ function RadioRow({ label, description, icon, active, last, onPress }: RadioRowP
           justifyContent: 'center',
         }}
       >
-        <MaterialCommunityIcons name={icon} size={19} color={active ? t.c.primary : t.c.muted} />
+        <Icon name={icon} size={19} color={active ? t.c.primary : t.c.muted} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="body" weight="600">
@@ -98,7 +98,7 @@ function RadioRow({ label, description, icon, active, last, onPress }: RadioRowP
           {description}
         </Text>
       </View>
-      {active ? <MaterialCommunityIcons name="check-circle" size={20} color={t.c.primary} /> : null}
+      {active ? <Icon name="check-circle" size={20} color={t.c.primary} /> : null}
     </Pressable>
   );
 }
