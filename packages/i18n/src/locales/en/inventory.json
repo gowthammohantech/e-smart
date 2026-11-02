@@ -60,7 +60,9 @@
     "hsnCode": "HSN code",
     "sacCode": "SAC code",
     "openingLocked": "Use a stock adjustment to change this.",
-    "saveChanges": "Save changes"
+    "saveChanges": "Save changes",
+    "type": "Type",
+    "status": "Status"
   },
   "detail": {
     "inactive": "Inactive",

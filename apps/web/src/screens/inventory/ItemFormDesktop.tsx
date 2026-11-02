@@ -5,7 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
-import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, FieldShell, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
@@ -136,21 +136,29 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           main={
             <>
               <Panel title="Item details" subtitle="What you sell and how it is identified" icon="tag-outline">
-                <Segmented
-                  style={{ alignSelf: 'flex-start', width: 280 }}
-                  options={[
-                    { value: 'goods', label: 'Product' },
-                    { value: 'service', label: 'Service' },
-                  ]}
-                  value={type}
-                  onChange={(v) => {
-                    setType(v as ItemType);
-                    if (v === 'service') {
-                      setTrackInventory(false);
-                      setUnit('NOS');
-                    }
-                  }}
-                />
+                {/* What it is on the left, and whether it is offered on new documents on the right. */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: t.spacing.lg }}>
+                  <FieldShell label={tr('inventory:form.type')}>
+                    <Segmented
+                      style={{ width: 280 }}
+                      options={[
+                        { value: 'goods', label: 'Product' },
+                        { value: 'service', label: 'Service' },
+                      ]}
+                      value={type}
+                      onChange={(v) => {
+                        setType(v as ItemType);
+                        if (v === 'service') {
+                          setTrackInventory(false);
+                          setUnit('NOS');
+                        }
+                      }}
+                    />
+                  </FieldShell>
+                  <FieldShell label={tr('inventory:form.status')} hint={tr('inventory:form.activeHint')} style={{ width: 240 }}>
+                    <SwitchField label={tr('inventory:form.active')} value={active} onValueChange={setActive} />
+                  </FieldShell>
+                </View>
                 <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
                 <Row>
                   <TextField
@@ -266,10 +274,6 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                     ) : null}
                   </>
                 ) : null}
-              </Panel>
-
-              <Panel title="Status" icon="toggle-switch-outline">
-                <SwitchField label={tr('inventory:form.active')} description={tr('inventory:form.activeHint')} value={active} onValueChange={setActive} />
               </Panel>
             </>
           }
