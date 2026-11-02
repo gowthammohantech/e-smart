@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 /**
  * Categorical series palettes, selected per surface and validated with the
  * data-viz six-check validator (lightness band, chroma floor, adjacent-pair
@@ -37,8 +35,11 @@ export const MAX_SERIES = SERIES_DARK.length;
 const WEB_SERIES_DARK = ['#3B8BFF', ...SERIES_DARK.slice(1)] as const;
 const WEB_SERIES_LIGHT = ['#0A6CF0', ...SERIES_LIGHT.slice(1)] as const;
 
+// In a browser, told without react-native: the admin console (Vite, no React Native) uses this file too.
+const onWeb = typeof document !== 'undefined';
+
 export function seriesPalette(scheme: 'light' | 'dark'): readonly string[] {
-  if (Platform.OS === 'web') return scheme === 'dark' ? WEB_SERIES_DARK : WEB_SERIES_LIGHT;
+  if (onWeb) return scheme === 'dark' ? WEB_SERIES_DARK : WEB_SERIES_LIGHT;
   return scheme === 'dark' ? SERIES_DARK : SERIES_LIGHT;
 }
 
