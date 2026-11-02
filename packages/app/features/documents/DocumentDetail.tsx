@@ -22,7 +22,7 @@ import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
-import { STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { STATUS_TONE, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { stockShortfalls } from '@esmart/core/domain/stockLedger';
@@ -85,6 +85,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const removeDocument = useAppStore((s) => s.removeDocument);
   const duplicateDocument = useAppStore((s) => s.duplicateDocument);
   const convertDocument = useAppStore((s) => s.convertDocument);
+  const allDocuments = useAppStore((s) => s.documents);
 
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -227,11 +228,8 @@ ${url}`;
     if (res?.result) router.push(detailRouteFor(target, res.id ?? res.result) as never);
   };
 
-  const conversions: { target: DocumentKind; label: string; icon: IconName }[] =
-    // A cancelled document no longer counts, so nothing can be made from it.
-    doc.status === 'cancelled'
-      ? []
-      : doc.kind === 'quote'
+  const offered: { target: DocumentKind; label: string; icon: IconName }[] =
+    doc.kind === 'quote'
       ? [
           { target: 'salesOrder', label: tr('sales:detail.convertToSalesOrder'), icon: 'clipboard-list-outline' },
           { target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' },
@@ -255,6 +253,9 @@ ${url}`;
                 : doc.kind === 'purchaseBill'
                   ? [{ target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' }]
                   : [];
+  // Only what can be made now: nothing from a draft or a cancelled document,
+  // and an order or quote carried forward once (conversionBlock).
+  const conversions = offered.filter((c) => !conversionBlock(doc, c.target, allDocuments));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
 

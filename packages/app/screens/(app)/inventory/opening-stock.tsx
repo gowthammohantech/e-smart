@@ -147,7 +147,7 @@ export default function OpeningStock() {
             {formatMoney(money(totalValue, baseCurrency))}
           </Text>
         </View>
-        <Button title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={entered.length === 0} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={entered.length === 0} fullWidth size="lg" />
       </View>
     </View>
   );

@@ -17,6 +17,7 @@ import { describeError } from '../../../remote/errors';
 import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary } from '../../../store/selectors';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
@@ -130,6 +131,9 @@ export default function EInvoicingSettings() {
     toast.show(tr('compliance:settings.saved'), 'success', { icon: 'shield-check-outline' });
   };
 
+  // Ctrl+S (⌘+S) does what Save does.
+  useSaveShortcut(onSave);
+
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen
@@ -138,7 +142,7 @@ export default function EInvoicingSettings() {
             ? // A desktop puts Save with the page title, top right, instead of a bar at the bottom.
               {
                 title: tr('nav:title.eInvoicingAndEWayBill'),
-                headerRight: () => <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} />,
+                headerRight: () => <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} />,
               }
             : { title: tr('nav:title.eInvoicingAndEWayBill') }
         }
@@ -352,7 +356,7 @@ export default function EInvoicingSettings() {
             backgroundColor: t.c.paper,
           }}
         >
-          <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
+          <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
         </View>
       )}
     </View>

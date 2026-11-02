@@ -24,6 +24,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 export default function AccountSettings() {
   const t = useTheme();
@@ -86,6 +87,9 @@ export default function AccountSettings() {
     setEditing(null);
   };
 
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing);
+
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.paymentAccounts') }} />
@@ -144,7 +148,7 @@ export default function AccountSettings() {
                 }}
               />
             ) : null}
-            <Button title={tr('settings:accounts.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:accounts.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
           </View>
         }
       >

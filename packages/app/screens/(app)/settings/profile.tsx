@@ -19,6 +19,7 @@ import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/valida
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 const ROLE_LABELS = {
   owner: 'auth:invite.roles.owner',
@@ -57,6 +58,9 @@ export default function Profile() {
     toast.show(tr('settings:profile.saved'), 'success', { icon: 'account-check-outline' });
     goBack('/(app)/(tabs)/more');
   };
+
+  // Ctrl+S (⌘+S) does what Save does.
+  useSaveShortcut(save);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -101,7 +105,7 @@ export default function Profile() {
       </ScrollView>
 
       <FormActions>
-        <Button title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
       </FormActions>
     </KeyboardAvoidingView>
   );

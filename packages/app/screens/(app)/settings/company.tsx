@@ -213,7 +213,7 @@ export default function CompanySettings() {
       </ScrollView>
 
       <FormActions>
-        <Button title={tr('settings:company.save')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
       </FormActions>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />

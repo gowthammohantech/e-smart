@@ -20,6 +20,7 @@ import { useBranches, useNumberingSeries } from '../../../store/selectors';
 import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 const RESET_LABELS = {
   never: 'settings:numbering.reset.never',
@@ -77,6 +78,9 @@ export default function NumberingSettings() {
     setEditing(null);
   };
 
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing);
+
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.documentNumbering') }} />
@@ -109,7 +113,7 @@ export default function NumberingSettings() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing ? seriesLabel(tr, editing.kind) : ''}
-        footer={<Button title={tr('settings:numbering.save')} onPress={save} fullWidth />}
+        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} fullWidth />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>

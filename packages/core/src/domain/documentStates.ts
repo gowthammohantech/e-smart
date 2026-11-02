@@ -102,6 +102,28 @@ export function isCancelled(status: DocStatus): boolean {
   return status === 'cancelled' || status === 'rejected';
 }
 
+const RETURN_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn'];
+
+/**
+ * Why nothing of `target` can be made from `source` now, or null when it can.
+ * A draft isn't final, so nothing is made from it. And a quote or order is
+ * carried forward once: after an order, delivery, invoice, receipt or bill has
+ * been made from it (and not cancelled), it can't be converted again, so the
+ * same goods aren't delivered or billed twice. Returns are the exception:
+ * several can be raised against one invoice or bill, up to what it carried.
+ */
+export function conversionBlock(
+  source: { id: string; status: DocStatus },
+  target: DocumentKind,
+  made: { kind: DocumentKind; status: DocStatus; sourceDocumentId?: string | null }[],
+): 'cancelled' | 'draft' | 'converted' | null {
+  if (isCancelled(source.status)) return 'cancelled';
+  if (!isFinalized(source.status)) return 'draft';
+  if (RETURN_KINDS.includes(target)) return null;
+  const onward = made.some((d) => d.sourceDocumentId === source.id && !RETURN_KINDS.includes(d.kind) && !isCancelled(d.status));
+  return onward ? 'converted' : null;
+}
+
 /** Documents that create a receivable / payable. */
 export function isPayableDocument(kind: DocumentKind): boolean {
   return kind === 'invoice' || kind === 'purchaseBill';

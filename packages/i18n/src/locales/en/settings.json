@@ -103,7 +103,8 @@
     "nameTaken": "Another branch is already called {{name}}.",
     "codeTaken": "Another branch already uses the code {{code}}. Pick a different code.",
     "intro": "Branches let you keep stock and documents separate by location. Every document records which branch it belongs to, and reports can be filtered by it.",
-    "deleteTitle": "Delete {{name}}?"
+    "deleteTitle": "Delete {{name}}?",
+    "addressTaken": "Another branch ({{name}}) is already at this address."
   },
   "taxes": {
     "none": "No tax rates",
@@ -273,7 +274,11 @@
     "idInvalid": "Transporter ID must be a valid 15-character GSTIN or TRANSIN",
     "updated": "Transporter updated",
     "added": "Transporter added",
-    "editTitle": "Edit transporter"
+    "editTitle": "Edit transporter",
+    "idTaken": "Another transporter already has this ID",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteMessage": "E-way bills already raised keep it; it just won't be offered for new ones.",
+    "dialogBody": "Carriers you pick from when you fill in Part-B of an e-way bill."
   },
   "numbering": {
     "save": "Save",

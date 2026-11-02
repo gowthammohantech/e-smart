@@ -147,7 +147,7 @@ export function OpeningStockDesktop() {
               <Divider />
               <SummaryRow label="Items entered" value={String(entered.length)} />
               <SummaryRow label="Stock value" value={formatMoney(money(totalValue, baseCurrency))} strong />
-              <Button title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={entered.length === 0} />
+              <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={entered.length === 0} />
             </Panel>
           }
         />

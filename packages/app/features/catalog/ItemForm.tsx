@@ -221,7 +221,7 @@ export function ItemForm({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
         </FormActions>
 
         <SelectSheet

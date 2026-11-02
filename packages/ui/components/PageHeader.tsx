@@ -16,6 +16,8 @@ export type PageAction = {
   loading?: boolean;
   /** "N" runs it. Off for an action that commits something, like raising an e-way bill. */
   shortcut?: boolean;
+  /** A Ctrl/⌘ letter the screen also runs it with (e.g. "S"), shown on the button. */
+  keyHint?: string;
 };
 
 type Slot = { action: PageAction | null; owner: object | null };
@@ -64,14 +66,15 @@ export function usePageAction(action: PageAction | null): boolean {
   const icon = action?.icon;
   const loading = action?.loading;
   const shortcut = action?.shortcut;
+  const keyHint = action?.keyHint;
   const setSlot = ctx?.setSlot;
 
   useFocusEffect(
     useCallback(() => {
       if (!setSlot || !label) return undefined;
-      setSlot({ action: { label, icon, loading, shortcut, onPress: () => onPress.current?.() }, owner });
+      setSlot({ action: { label, icon, loading, shortcut, keyHint, onPress: () => onPress.current?.() }, owner });
       return () => setSlot({ action: null, owner: null });
-    }, [setSlot, label, icon, loading, shortcut, owner]),
+    }, [setSlot, label, icon, loading, shortcut, keyHint, owner]),
   );
 
   return !!ctx && !!action;
@@ -152,7 +155,7 @@ export function PageHeader({
           ) : null}
         </View>
         {right}
-        {action ? <Button title={action.label} icon={action.icon ?? 'plus'} onPress={action.onPress} loading={action.loading} /> : null}
+        {action ? <Button title={action.label} icon={action.icon ?? 'plus'} onPress={action.onPress} loading={action.loading} shortcut={action.keyHint} /> : null}
       </View>
     </View>
   );

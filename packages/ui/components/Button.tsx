@@ -22,7 +22,17 @@ type Props = {
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
   haptic?: boolean;
+  /**
+   * A key that runs it with Ctrl (⌘ on a Mac): a letter, e.g. "S" for a Save
+   * the screen binds to Ctrl+S, or "Enter". Shown in a tooltip when the
+   * button is hovered in a desktop browser; the screen does the listening
+   * (useSaveShortcut).
+   */
+  shortcut?: string;
 };
+
+// A Mac's browser names the key ⌘; every other one, Ctrl.
+const onMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 
 export function Button({
   title,
@@ -36,6 +46,7 @@ export function Button({
   fullWidth,
   style,
   haptic = true,
+  shortcut,
 }: Props) {
   const t = useTheme();
 
@@ -57,6 +68,7 @@ export function Button({
   };
   const p = palette[variant];
   const isDisabled = disabled || loading;
+  const keys = shortcut && desktop && Platform.OS === 'web' ? `${onMac ? '⌘' : 'Ctrl+'}${shortcut === 'Enter' ? 'Enter' : shortcut.toUpperCase()}` : null;
 
   // The browser draws hover and press as colour, the way web buttons do; a
   // phone has no hover and keeps its opacity dip on press.
@@ -99,29 +111,45 @@ export function Button({
           paddingHorizontal: size === 'sm' ? t.spacing.md : t.spacing.xl,
           opacity: isDisabled ? 0.45 : WEB ? (pressed && variant !== 'primary' && variant !== 'ghost' ? 0.85 : 1) : pressed ? 0.8 : hovered ? 0.9 : 1,
           alignSelf: fullWidth ? 'stretch' : 'auto',
+          // Its tooltip sits over whatever is next to it.
+          zIndex: keys && hovered ? 10 : undefined,
         },
         focusRing(t, focused),
         style,
       ];
       }}
     >
-      {loading ? (
-        <ActivityIndicator color={p.fg} size="small" />
-      ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
-          {icon ? <Icon name={icon} size={WEB ? 16 : fonts[size] + 3} color={p.fg} /> : null}
-          {/* The height is fixed, so a label that wrapped would spill out of
-              it; Tamil runs long, so shrink a little and then truncate. */}
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.85}
-            style={{ color: p.fg, fontSize: fonts[size], fontWeight: WEB ? '500' : '600', flexShrink: 1 }}
-          >
-            {title}
-          </Text>
-          {iconRight ? <Icon name={iconRight} size={WEB ? 16 : fonts[size] + 3} color={p.fg} /> : null}
-        </View>
+      {(state) => (
+        <>
+          {loading ? (
+            <ActivityIndicator color={p.fg} size="small" />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+              {icon ? <Icon name={icon} size={WEB ? 16 : fonts[size] + 3} color={p.fg} /> : null}
+              {/* The height is fixed, so a label that wrapped would spill out of
+                  it; Tamil runs long, so shrink a little and then truncate. */}
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+                style={{ color: p.fg, fontSize: fonts[size], fontWeight: WEB ? '500' : '600', flexShrink: 1 }}
+              >
+                {title}
+              </Text>
+              {iconRight ? <Icon name={iconRight} size={WEB ? 16 : fonts[size] + 3} color={p.fg} /> : null}
+            </View>
+          )}
+          {/* The keyboard shortcut, in a tooltip above the button while it is hovered. */}
+          {keys && (state as WebPressState).hovered && !isDisabled ? (
+            <View pointerEvents="none" style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, alignItems: 'center', marginBottom: 6 }}>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: t.c.text }}>
+                <Text numberOfLines={1} style={{ color: t.c.bg, fontSize: 11, fontWeight: '600' }}>
+                  {keys}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </>
       )}
     </Pressable>
   );

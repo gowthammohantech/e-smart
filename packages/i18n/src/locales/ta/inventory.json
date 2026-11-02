@@ -60,7 +60,9 @@
     "hsnCode": "HSN குறியீடு",
     "sacCode": "SAC குறியீடு",
     "openingLocked": "இதை மாற்ற, இருப்பு சரிசெய்தலைப் பயன்படுத்துங்கள்.",
-    "saveChanges": "மாற்றங்களைச் சேமி"
+    "saveChanges": "மாற்றங்களைச் சேமி",
+    "type": "வகை",
+    "status": "நிலை"
   },
   "detail": {
     "inactive": "செயலற்றது",

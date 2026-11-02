@@ -26,6 +26,7 @@ import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/valida
 import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 const ROLE_KEYS = [
   { value: 'owner', label: 'auth:invite.roles.owner', description: 'settings:users.roleHint.owner' },
@@ -127,6 +128,9 @@ export default function UserSettings() {
       .finally(() => setBusy(false));
   };
 
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing && !busy && !isGuest);
+
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.usersAndRoles') }} />
@@ -191,7 +195,7 @@ export default function UserSettings() {
             {editing?.id && editing.status === 'invited' ? (
               <Button title={tr('settings:users.resend')} variant="secondary" loading={busy} onPress={resend} style={{ flex: 2 }} />
             ) : null}
-            {isGuest ? null : <Button title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={{ flex: 2 }} />}
+            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={{ flex: 2 }} />}
           </View>
         }
       >

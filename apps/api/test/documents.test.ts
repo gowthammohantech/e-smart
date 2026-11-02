@@ -192,6 +192,14 @@ describe('documents: numbering and lifecycle', () => {
     expect(wrong.body.code).toBe('INVALID_CONVERSION');
     const returnFromDraft = await t.post(`${m.c}/documents/${order.body.id}/convert`, { targetKind: 'salesReturn' }, { token: m.token });
     expect(returnFromDraft.status).toBe(409);
+    // The order is still a draft, so nothing is made from it yet.
+    const fromDraft = await t.post(`${m.c}/documents/${order.body.id}/convert`, { targetKind: 'delivery' }, { token: m.token });
+    expect(fromDraft.status).toBe(409);
+    expect(fromDraft.body.code).toBe('INVALID_CONVERSION');
+    // The quote has been carried forward once already.
+    const again = await t.post(`${m.c}/documents/${quote.body.id}/convert`, { targetKind: 'invoice' }, { token: m.token });
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('ALREADY_CONVERTED');
 
     const detail = await t.get(`${m.c}/documents/${quote.body.id}`, { token: m.token });
     expect(detail.body.linkedDocuments.map((d: { id: string }) => d.id)).toEqual([order.body.id]);
