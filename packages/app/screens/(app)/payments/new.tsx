@@ -25,7 +25,7 @@ import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivab
 import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
 import { resolveRate, settlementGainLoss } from '@esmart/core/domain/fx';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
-import { CURRENCIES, currencyLocked } from '@esmart/core/lib/currencies';
+import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { formatDate, today } from '@esmart/core/lib/date';
@@ -750,7 +750,7 @@ export default function NewPayment() {
           visible={currencyOpen}
           onClose={() => setCurrencyOpen(false)}
           title={tr('sales:payment.currency')}
-          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol, disabled: currencyLocked(c.code) }))}
+          options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
           value={currency}
           onSelect={(code) => {
             setCurrencyChoice(code === (party?.currency ?? baseCurrency) ? null : code);
