@@ -5,10 +5,11 @@ type Props = {
   children: React.ReactNode;
   variant?: 'filled' | 'outline';
   className?: string;
+  onClick?: () => void;
 };
 
 /** A link styled as a button, with the circled arrow from the design. */
-export function Button({ href, children, variant = 'filled', className = '' }: Props) {
+export function Button({ href, children, variant = 'filled', className = '', onClick }: Props) {
   const look =
     variant === 'filled'
       ? 'bg-primary text-white hover:bg-primary-pressed'
@@ -17,6 +18,7 @@ export function Button({ href, children, variant = 'filled', className = '' }: P
   return (
     <a
       href={href}
+      onClick={onClick}
       className={`group inline-flex items-center justify-center gap-2.5 rounded-btn px-4 py-2.5 text-sm font-medium transition-colors ${look} ${className}`}
     >
       {children}

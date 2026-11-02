@@ -10,6 +10,16 @@ import en from '@esmart/i18n/locales/en';
  * detail. Replace it before launch: `grep -n "placeholder: true" content/site.ts`.
  */
 
+/**
+ * Where the site sends people. NEXT_PUBLIC_* is inlined at build time (see
+ * .env.example); unset or empty falls back to production.
+ */
+export const links = {
+  webApp: process.env.NEXT_PUBLIC_WEB_APP_URL || 'https://smart.elixir-books.com/sign-in',
+  appStore: process.env.NEXT_PUBLIC_APP_STORE_URL || 'https://apps.apple.com/in/app/elixir-books-smart/id6822206449',
+  playStore: process.env.NEXT_PUBLIC_PLAY_STORE_URL || 'https://play.google.com/store/apps/details?id=com.elixir.bookssmart',
+};
+
 export const brand = {
   name: 'Elixir Books Smart',
   short: 'Elixir Books',
@@ -24,7 +34,7 @@ export const nav = {
     { label: 'FAQ', href: '#faq' },
     { label: 'Cookbook', href: '/docs' },
   ],
-  cta: { label: 'Get started', href: '#pricing' },
+  cta: { label: 'Get started', href: links.webApp },
 };
 
 export const hero = {
@@ -34,8 +44,8 @@ export const hero = {
   side: "Your books, online and offline. Lixi, your AI assistant, keeps an eye on what's overdue, what's low and what's about to expire, and drafts the next step for you to confirm.",
   downloadLabel: 'Download the app:',
   stores: [
-    { store: 'apple', top: 'Download on the', name: 'App Store', href: '#', placeholder: true },
-    { store: 'google', top: 'Get it on', name: 'Google Play', href: '#', placeholder: true },
+    { store: 'apple', top: 'Download on the', name: 'App Store', href: links.appStore },
+    { store: 'google', top: 'Get it on', name: 'Google Play', href: links.playStore },
   ],
   chips: [
     { tone: 'good', title: 'IRN generated', detail: 'Signed QR on the invoice' },
@@ -65,7 +75,28 @@ export const about = {
 export const howItWorks = {
   eyebrow: 'Simplified process',
   title: 'From first invoice to filed return',
-  demo: { label: 'Watch demo', videoUrl: '', placeholder: true },
+  demo: {
+    label: 'Watch demo',
+    videoUrl: '',
+    placeholder: true,
+    /** Shown in place of the video until videoUrl is set: one roast at random, then a nudge to book a live demo. */
+    pitch: {
+      eyebrow: 'Nice try',
+      roasts: [
+        'Oh, you wanted a two-minute video? Your accountant deserves more effort than that.',
+        "Pressing play doesn't count as due diligence. We checked.",
+        'A video can\'t answer "but what about my GST?" We can.',
+        "You'd skip to the end anyway. Be honest.",
+        'Bold of you to think a video could do it justice.',
+        "Videos don't talk back. Our team does, and they actually enjoy GST questions.",
+      ],
+      reroll: 'Roast me again',
+      body: 'Book a live walkthrough instead: we run the app on your kind of business and answer every question you bring.',
+      perks: ['Live walkthrough of your workflow', 'Open Q&A, as long as you like', 'Free, no commitment'],
+      cta: { label: 'Book a free demo', href: 'https://elixir-books.com/contact' },
+      secondary: "Fine, I'll leave",
+    },
+  },
   steps: [
     {
       title: 'Set up your business',
@@ -264,21 +295,27 @@ export const testimonials = {
 
 export const footer = {
   socials: [
-    { label: 'X', href: '#', placeholder: true },
-    { label: 'LinkedIn', href: '#', placeholder: true },
-    { label: 'Instagram', href: '#', placeholder: true },
-    { label: 'YouTube', href: '#', placeholder: true },
+    { label: 'Facebook', href: 'https://www.facebook.com/Elixirbooksofficial' },
+    { label: 'X', href: 'https://x.com/Elixirbooks_c' },
+    { label: 'LinkedIn', href: 'https://www.linkedin.com/company/elixirglobal/' },
+    { label: 'Instagram', href: 'https://www.instagram.com/Elixirbooks' },
   ],
   payments: ['UPI', 'RuPay', 'Visa', 'Mastercard'],
+  // From elixir-books.com/contact.
   contacts: [
-    { icon: 'phone', title: 'Phone', lines: ['+91 00000 00000', 'Mon–Sat, 9am–7pm IST'], placeholder: true },
-    { icon: 'mail', title: 'Email', lines: ['hello@elixirbooks.example', 'support@elixirbooks.example'], placeholder: true },
-    { icon: 'pin', title: 'Office', lines: ['Chennai, Tamil Nadu', 'India'], placeholder: true },
+    { icon: 'phone', title: 'Phone', lines: ['+91 89256 33391', 'Mon–Sat, 9:30am–7pm IST'], href: 'tel:+918925633391' },
+    { icon: 'mail', title: 'Email', lines: ['contact@elixir-books.com', 'We reply within 1 business hour'], href: 'mailto:contact@elixir-books.com' },
+    {
+      icon: 'pin',
+      title: 'Office',
+      lines: ['7th Floor, KRM Center, 2 Harrington Road', 'Chetpet, Chennai 600031'],
+      href: 'https://elixir-books.com/contact',
+    },
   ],
-  copyright: '© 2026 Elixir Books. All rights reserved.',
+  copyright: '© 2026 Elixir Business Solutions India Pvt. Ltd. All rights reserved.',
   legal: [
     { label: 'Cookbook', href: '/docs' },
-    { label: 'Privacy Policy', href: '#' },
-    { label: 'Terms of Use', href: '#' },
+    { label: 'Privacy Policy', href: 'https://elixir-books.com/privacy-policy' },
+    { label: 'Terms & Conditions', href: 'https://elixir-books.com/terms-and-conditions' },
   ],
 } as const;

@@ -117,7 +117,8 @@ export default defineRailway(() => {
 
   /**
    * The marketing site: a static Next.js export in apps/site/out, served
-   * by sirv. It reads no API and has no secrets.
+   * by sirv. It reads no API and has no secrets. The NEXT_PUBLIC_* links
+   * are compiled in at build time, so changing one needs a rebuild.
    */
   const site = service('site', {
     build: 'npm run build -w @esmart/site',
@@ -125,6 +126,9 @@ export default defineRailway(() => {
     healthcheck: '/',
     env: {
       NODE_ENV: 'production',
+      NEXT_PUBLIC_WEB_APP_URL: 'https://smart.elixir-books.com/sign-in',
+      NEXT_PUBLIC_APP_STORE_URL: 'https://apps.apple.com/in/app/elixir-books-smart/id6822206449',
+      NEXT_PUBLIC_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=com.elixir.bookssmart',
     },
   });
 

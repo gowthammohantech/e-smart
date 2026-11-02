@@ -12,6 +12,8 @@ export function Footer() {
               <li key={s.label}>
                 <a
                   href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="grid h-7 min-w-7 place-items-center rounded-md border border-line px-2 text-[11px] font-medium text-muted transition-colors hover:border-line-strong hover:text-fg"
                 >
                   {s.label}
@@ -30,16 +32,22 @@ export function Footer() {
           </ul>
         </div>
         <hr className="my-10 border-line" />
-        <ul className="grid gap-8 text-center sm:grid-cols-3">
+        <ul id="contact" className="grid gap-8 text-center sm:grid-cols-3">
           {footer.contacts.map((c) => (
             <li key={c.title} className="flex flex-col items-center">
               <IconTile name={c.icon} />
               <p className="mt-3 font-medium text-fg">{c.title}</p>
-              {c.lines.map((line) => (
-                <p key={line} className="text-sm text-muted">
-                  {line}
-                </p>
-              ))}
+              {c.lines.map((line, i) =>
+                i === 0 ? (
+                  <a key={line} href={c.href} className="text-sm text-muted hover:text-fg">
+                    {line}
+                  </a>
+                ) : (
+                  <p key={line} className="text-sm text-muted">
+                    {line}
+                  </p>
+                ),
+              )}
             </li>
           ))}
         </ul>

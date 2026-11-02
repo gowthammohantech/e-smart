@@ -3,7 +3,7 @@
 import { animate, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
-import type { PlanCard } from '@/content/site';
+import { links, type PlanCard } from '@/content/site';
 
 import { Button } from './ui/Button';
 import { SectionHeading } from './ui/SectionHeading';
@@ -104,7 +104,7 @@ export function Pricing({ copy }: { copy: Copy }) {
                     )}
                   </p>
                   <hr className="my-6 border-line" />
-                  <Button href="#top" variant={plan.popular ? 'filled' : 'outline'} className="w-full">
+                  <Button href={links.webApp} variant={plan.popular ? 'filled' : 'outline'} className="w-full">
                     {price === 0 ? 'Start free' : 'Choose plan'}
                   </Button>
                   <p className="mt-7 text-sm font-medium text-fg">Plan details:</p>

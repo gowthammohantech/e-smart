@@ -22,6 +22,8 @@ export function StoreBadge({ store, top, name, href }: Props) {
   return (
     <a
       href={href}
+      target="_blank"
+      rel="noopener noreferrer"
       className="inline-flex items-center gap-3 rounded-full border border-line bg-surface/60 py-2 pr-5 pl-4 text-fg transition-colors hover:border-line-strong"
     >
       <StoreGlyph store={store} />
