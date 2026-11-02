@@ -4,7 +4,7 @@ import { Platform, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
 import { BottomTabBar } from 'expo-router/build/react-navigation/bottom-tabs';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useComplianceSummary, useModuleSet, useUnreadCount } from '../../../store/selectors';
 import { useUiStore } from '../../../store/uiStore';
@@ -128,7 +128,7 @@ export default function TabsLayout() {
               tabBarBadge: tab.name === 'more' && unread > 0 ? countLabel(unread) : undefined,
               tabBarBadgeStyle: { backgroundColor: t.c.bad, fontSize: 10 },
               tabBarIcon: ({ color, focused }) => (
-                <MaterialCommunityIcons name={focused ? tab.activeIcon : tab.icon} size={23} color={color} />
+                <Icon name={focused ? tab.activeIcon : tab.icon} size={23} color={color} />
               ),
             }}
           />

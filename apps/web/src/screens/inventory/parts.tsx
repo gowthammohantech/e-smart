@@ -1,11 +1,9 @@
 import React from 'react';
 import { View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
 import { Text, type TextTone } from '@esmart/ui/components/Text';
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 /** The widest a desktop form page gets; wider just spreads the fields apart. */
 export const PAGE_MAX_WIDTH = 1100;
@@ -78,7 +76,7 @@ export function Panel({
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons name={icon} size={20} color={t.c.primary} />
+            <Icon name={icon} size={20} color={t.c.primary} />
           </View>
         ) : null}
         <View style={{ flex: 1, gap: 1 }}>
@@ -150,7 +148,7 @@ export function Note({ children }: { children: React.ReactNode }) {
   const t = useTheme();
   return (
     <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-      <MaterialCommunityIcons name="information-outline" size={18} color={t.c.muted} style={{ marginTop: 1 }} />
+      <Icon name="information-outline" size={18} color={t.c.muted} style={{ marginTop: 1 }} />
       <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
         {children}
       </Text>

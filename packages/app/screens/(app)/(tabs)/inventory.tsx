@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AppHeader } from '../../../components/AppHeader';
 import { SectionHeader } from '@esmart/ui/components/Screen';
@@ -88,7 +88,7 @@ export default function InventoryTab() {
                 accessibilityRole="button"
                 accessibilityLabel={tr('inventory:hub.scanBarcode')}
               >
-                <MaterialCommunityIcons name="barcode-scan" size={19} color={t.c.primary} />
+                <Icon name="barcode-scan" size={19} color={t.c.primary} />
               </Pressable>
             }
           />
@@ -152,7 +152,7 @@ export default function InventoryTab() {
                       justifyContent: 'center',
                     }}
                   >
-                    <MaterialCommunityIcons
+                    <Icon
                       name={item.trackInventory ? 'package-variant-closed' : 'hammer-wrench'}
                       size={19}
                       color={item.trackInventory ? t.c.primary : t.c.muted}
@@ -228,11 +228,11 @@ export default function InventoryTab() {
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.primary} />
+            <Icon name={a.icon} size={20} color={t.c.primary} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+            <Icon name="chevron-right" size={18} color={t.c.muted} />
           </Pressable>
         ))}
       </Sheet>

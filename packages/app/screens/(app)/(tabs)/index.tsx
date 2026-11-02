@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AppHeader } from '../../../components/AppHeader';
 import { Screen, SectionHeader } from '@esmart/ui/components/Screen';
@@ -125,7 +125,7 @@ export default function Home() {
   const nameOf = (id: string) => customers.find((c) => c.id === id)?.name ?? tr('common:placeholder.unknown');
 
   type AttentionItem = {
-    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    icon: IconName;
     label: string;
     count: number;
     route: string;
@@ -217,12 +217,12 @@ export default function Home() {
                     justifyContent: 'center',
                   }}
                 >
-                  <MaterialCommunityIcons name={step.icon} size={19} color={t.c.primary} />
+                  <Icon name={step.icon} size={19} color={t.c.primary} />
                 </View>
                 <Text variant="body" weight="500" style={{ flex: 1 }}>
                   {step.label}
                 </Text>
-                <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
               </Pressable>
             ))}
           </Card>
@@ -392,7 +392,7 @@ export default function Home() {
                           backgroundColor: pressed ? t.c.card2 : 'transparent',
                         })}
                       >
-                        <MaterialCommunityIcons
+                        <Icon
                           name={a.icon}
                           size={20}
                           color={a.tone === 'danger' ? t.c.bad : a.tone === 'warning' ? t.c.warn : t.c.primary}
@@ -401,7 +401,7 @@ export default function Home() {
                           {a.label}
                         </Text>
                         <Badge label={String(a.count)} tone={a.tone} size="sm" />
-                        <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                        <Icon name="chevron-right" size={18} color={t.c.muted} />
                       </Pressable>
                     ))}
                   </Card>
@@ -486,12 +486,12 @@ export default function Home() {
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name={a.icon} size={20} color={t.c.primary} />
+              <Icon name={a.icon} size={20} color={t.c.primary} />
             </View>
             <Text variant="body" weight="500" style={{ flex: 1 }}>
               {a.label}
             </Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+            <Icon name="chevron-right" size={18} color={t.c.muted} />
           </Pressable>
         ))}
       </Sheet>

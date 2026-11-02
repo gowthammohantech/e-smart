@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -36,7 +36,7 @@ function Tile({
   caption,
   color,
 }: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   label: string;
   value: string;
   caption?: string;
@@ -55,7 +55,7 @@ function Tile({
           justifyContent: 'center',
         }}
       >
-        <MaterialCommunityIcons name={icon} size={22} color={color} />
+        <Icon name={icon} size={22} color={color} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="caption" tone="muted" numberOfLines={1}>
@@ -227,7 +227,7 @@ export function SyncStatusDesktop() {
                     flex: 3,
                     render: (q) => (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                        <MaterialCommunityIcons
+                        <Icon
                           name={q.status === 'failed' ? 'cloud-alert' : 'cloud-upload-outline'}
                           size={18}
                           color={q.status === 'failed' ? t.c.bad : t.c.primary}
@@ -277,7 +277,7 @@ export function SyncStatusDesktop() {
           {/* Controls and the note */}
           <View style={{ flexGrow: 2, flexBasis: 300, gap: t.spacing.lg, minWidth: 0 }}>
             <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
+              <Icon name="information-outline" size={19} color={t.c.muted} />
               <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
                 {tr('settings:sync.conflictNote')}
               </Text>

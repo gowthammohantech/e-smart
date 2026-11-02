@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
@@ -16,7 +16,7 @@ export function EmptyState({
   onAction,
   compact,
 }: {
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   /** Shown instead of the icon. Small in-sheet states are better off with the icon. */
   illustration?: IllustrationName;
   title: string;
@@ -41,7 +41,7 @@ export function EmptyState({
             justifyContent: 'center',
           }}
         >
-          <MaterialCommunityIcons name={icon} size={compact ? 24 : 32} color={t.c.muted} />
+          <Icon name={icon} size={compact ? 24 : 32} color={t.c.muted} />
         </View>
       )}
       <Text variant={compact ? 'body' : 'title'} weight="600" center>

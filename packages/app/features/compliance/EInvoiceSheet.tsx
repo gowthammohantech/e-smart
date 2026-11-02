@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -173,7 +173,7 @@ export function EInvoiceSheet({
                   backgroundColor: reasonCode === code ? t.c.chip : t.c.card2,
                 }}
               >
-                <MaterialCommunityIcons
+                <Icon
                   name={reasonCode === code ? 'radiobox-marked' : 'radiobox-blank'}
                   size={20}
                   color={reasonCode === code ? t.c.primary : t.c.muted}
@@ -311,7 +311,7 @@ export function EInvoiceSheet({
 
             <Pressable onPress={() => setShowPayload((v) => !v)} accessibilityRole="button">
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                <MaterialCommunityIcons
+                <Icon
                   name={showPayload ? 'chevron-down' : 'chevron-right'}
                   size={18}
                   color={t.c.muted}
@@ -373,7 +373,7 @@ export function IssueList({
       </Text>
       {issues.length === 0 ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-          <MaterialCommunityIcons name="check-circle-outline" size={16} color={t.c.good} />
+          <Icon name="check-circle-outline" size={16} color={t.c.good} />
           <Text variant="small" tone="good">
             {emptyMessage}
           </Text>
@@ -384,7 +384,7 @@ export function IssueList({
             key={`${issue.code}-${issue.field}-${i}`}
             style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'flex-start' }}
           >
-            <MaterialCommunityIcons
+            <Icon
               name={tone === 'bad' ? 'alert-circle-outline' : 'information-outline'}
               size={16}
               color={tone === 'bad' ? t.c.bad : t.c.warn}

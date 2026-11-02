@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { WizardShell } from '@esmart/ui/components/WizardShell';
 import { PickerField, TextField } from '@esmart/ui/components/Field';
@@ -76,7 +76,7 @@ export default function BranchesStep() {
       onSkip={finish}
     >
       <Card variant="flat" style={{ gap: t.spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
-        <MaterialCommunityIcons name="office-building-outline" size={20} color={t.c.primary} />
+        <Icon name="office-building-outline" size={20} color={t.c.primary} />
         <View style={{ flex: 1 }}>
           <Text variant="body" weight="600">{tr('onboarding:branches.headOffice')}</Text>
           <Text variant="caption" tone="muted">
@@ -87,7 +87,7 @@ export default function BranchesStep() {
 
       {draft.branches.map((b, i) => (
         <Card key={`${b.code}-${i}`} variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-          <MaterialCommunityIcons name="warehouse" size={20} color={t.c.muted} />
+          <Icon name="warehouse" size={20} color={t.c.muted} />
           <View style={{ flex: 1 }}>
             <Text variant="body" weight="600">
               {b.name}
@@ -102,7 +102,7 @@ export default function BranchesStep() {
             accessibilityRole="button"
             accessibilityLabel={tr('onboarding:branches.removeNamed', { name: b.name })}
           >
-            <MaterialCommunityIcons name="close-circle" size={19} color={t.c.muted} />
+            <Icon name="close-circle" size={19} color={t.c.muted} />
           </Pressable>
         </Card>
       ))}

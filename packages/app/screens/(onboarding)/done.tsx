@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -17,7 +17,7 @@ import { useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES } from '@esmart/core/data/masters';
 import { joinPhone } from '@esmart/core/lib/phone';
 
-const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey: string; bodyKey: string }[] = [
+const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string }[] = [
   { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody' },
   { icon: 'tag-outline', labelKey: 'itemsLabel', bodyKey: 'itemsBody' },
   { icon: 'file-document-outline', labelKey: 'invoiceLabel', bodyKey: 'invoiceBody' },
@@ -125,7 +125,7 @@ export default function Done() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name={s.icon} size={19} color={t.c.primary} />
+                <Icon name={s.icon} size={19} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">

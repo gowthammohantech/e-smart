@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Easing, Pressable, ScrollView, useWindowDimensions, View, type ViewStyle } from 'react-native';
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
@@ -21,16 +21,16 @@ import {
 } from './sidebarState';
 import { SECTION_LINKS, SETTINGS_HREF, type SubLink } from './navLinks';
 import { CompanySwitcher } from './shell/CompanySwitcher';
+import { TOP_BAR_HEIGHT } from './shell/TopBar';
 
 export { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH };
 
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type Rect = { x: number; y: number; width: number; height: number };
 type GroupKey = 'transactions' | 'compliance' | 'manage';
 
-const ICON_SIZE = 22;
-const ROW_HEIGHT = 42;
-const SUB_ROW_HEIGHT = 34;
+const ICON_SIZE = 18;
+const ROW_HEIGHT = 36;
+const SUB_ROW_HEIGHT = 32;
 
 /**
  * The sections under small headings. Home sits alone at the top; a section
@@ -44,7 +44,9 @@ const GROUPS: { key: GroupKey | null; tabs: TabName[] }[] = [
 ];
 
 function groupOf(name: TabName): GroupKey | null {
-  return GROUPS.find((g) => g.tabs.includes(name))?.key ?? 'manage';
+  const group = GROUPS.find((g) => g.tabs.includes(name));
+  // Not `?.key ?? 'manage'`: Home's group key is null, which `??` would also send to Manage.
+  return group ? group.key : 'manage';
 }
 
 /** react-native-web passes `fixed` through; the native types don't know it. */
@@ -70,7 +72,7 @@ function HomeLogo({ compact }: { compact: boolean }) {
       hitSlop={6}
       style={(state) => ({ borderRadius: 6, ...focusRing(t, (state as WebPressState).focused) })}
     >
-      {compact ? <BrandLogo variant="mark" height={30} /> : <BrandLogo height={42} />}
+      {compact ? <BrandLogo variant="mark" height={28} /> : <BrandLogo height={34} />}
     </Pressable>
   );
 }
@@ -130,25 +132,26 @@ function NavItem({
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: compact ? 'center' : 'flex-start',
-            gap: t.spacing.md,
-            paddingLeft: compact ? 0 : t.spacing.md,
-            paddingRight: compact ? 0 : trailing ? 40 : t.spacing.md,
+            gap: t.spacing.md - 2,
+            paddingLeft: compact ? 0 : t.spacing.md - 2,
+            paddingRight: compact ? 0 : trailing ? 36 : t.spacing.md - 2,
             height: ROW_HEIGHT,
             borderRadius: t.radius.md,
-            backgroundColor: active
-              ? pressed
-                ? t.c.primaryPressed
-                : t.c.primary
-              : pressed || hovered
-                ? t.c.mutedSoft
-                : 'transparent',
+            // The page you're on is tinted, not filled: the blue marks it
+            // without outshouting the page's own primary button.
+            backgroundColor: active ? t.c.chip : pressed || hovered ? t.c.mutedSoft : 'transparent',
             ...focusRing(t, focused),
           };
         }}
       >
-        <MaterialCommunityIcons name={icon} size={ICON_SIZE} color={active ? t.c.onPrimary : t.c.muted} />
+        <Icon name={icon} size={ICON_SIZE} color={active ? t.c.primary : t.c.muted} />
         {compact ? null : (
-          <Text weight={active ? '600' : '500'} tone={active ? 'onPrimary' : 'muted'} style={{ flex: 1 }} numberOfLines={1}>
+          <Text
+            variant="small"
+            weight={active ? '600' : '500'}
+            style={{ flex: 1, color: active ? t.c.primary : t.c.text, opacity: active ? 1 : 0.86 }}
+            numberOfLines={1}
+          >
             {label}
           </Text>
         )}
@@ -158,10 +161,10 @@ function NavItem({
               position: compact ? 'absolute' : 'relative',
               top: compact ? 2 : undefined,
               right: compact ? 6 : undefined,
-              minWidth: 20,
-              height: 20,
-              borderRadius: 10,
-              paddingHorizontal: 6,
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              paddingHorizontal: 5,
               backgroundColor: t.c.bad,
               alignItems: 'center',
               justifyContent: 'center',
@@ -181,7 +184,7 @@ function NavItem({
 }
 
 /** Opens or closes a section's page list without leaving the current page. */
-function ExpandToggle({ open, onPrimary, label, onPress }: { open: boolean; onPrimary: boolean; label: string; onPress: () => void }) {
+function ExpandToggle({ open, label, onPress }: { open: boolean; label: string; onPress: () => void }) {
   const t = useTheme();
   return (
     <Pressable
@@ -192,20 +195,20 @@ function ExpandToggle({ open, onPrimary, label, onPress }: { open: boolean; onPr
       style={(state) => {
         const { pressed, hovered, focused } = state as WebPressState;
         return {
-          width: 30,
-          height: 30,
+          width: 26,
+          height: 26,
           borderRadius: t.radius.sm,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: pressed || hovered ? (onPrimary ? t.c.primaryPressed : t.c.mutedSoft) : 'transparent',
+          backgroundColor: pressed || hovered ? t.c.mutedSoft : 'transparent',
           ...focusRing(t, focused),
         };
       }}
     >
-      <MaterialCommunityIcons
+      <Icon
         name={open ? 'chevron-down' : 'chevron-right'}
-        size={18}
-        color={onPrimary ? t.c.onPrimary : t.c.muted}
+        size={16}
+        color={t.c.muted}
       />
     </Pressable>
   );
@@ -245,12 +248,12 @@ function SubItem({
           paddingLeft: indent,
           paddingRight: t.spacing.md,
           borderRadius: t.radius.sm,
-          backgroundColor: active ? t.c.chip : pressed || hovered ? t.c.mutedSoft : 'transparent',
+          backgroundColor: pressed || hovered ? t.c.mutedSoft : 'transparent',
           ...focusRing(t, focused),
         };
       }}
     >
-      <Text variant="small" weight={active ? '700' : '500'} tone={active ? 'primary' : 'muted'} numberOfLines={1}>
+      <Text variant="small" weight={active ? '600' : '400'} tone={active ? 'primary' : 'muted'} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -265,14 +268,14 @@ function GroupHeading({ label, compact }: { label: string; compact: boolean }) {
   return (
     <Text
       variant="micro"
-      weight="700"
+      weight="600"
       tone="muted"
       numberOfLines={1}
       style={{
         textTransform: 'uppercase',
-        letterSpacing: 0.8,
-        paddingHorizontal: t.spacing.md,
-        paddingTop: t.spacing.md,
+        letterSpacing: 0.6,
+        paddingHorizontal: t.spacing.md - 2,
+        paddingTop: t.spacing.lg,
         paddingBottom: t.spacing.xs,
       }}
     >
@@ -336,7 +339,7 @@ function Flyout({
     >
       <Text
         variant="small"
-        weight="700"
+        weight="600"
         numberOfLines={1}
         style={links.length ? { paddingHorizontal: t.spacing.sm, paddingVertical: t.spacing.sm } : undefined}
       >
@@ -437,7 +440,7 @@ export function Sidebar() {
     <Animated.View
       style={{
         width,
-        backgroundColor: t.c.card2,
+        backgroundColor: t.c.card,
         borderRightWidth: 1,
         borderRightColor: t.c.line,
         // Above the page, so the fly-out sits over it.
@@ -447,7 +450,7 @@ export function Sidebar() {
       <View style={{ flex: 1, overflow: 'hidden' }}>
         <View
           style={{
-            height: 60,
+            height: TOP_BAR_HEIGHT,
             justifyContent: 'center',
             paddingHorizontal: compact ? t.spacing.sm : t.spacing.lg,
             alignItems: compact ? 'center' : 'flex-start',
@@ -458,7 +461,7 @@ export function Sidebar() {
         <View style={{ paddingHorizontal: t.spacing.sm }}>
           <CompanySwitcher compact={compact} />
         </View>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: t.spacing.sm, gap: t.spacing.xs }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: t.spacing.sm, gap: t.spacing.xxs }}>
           {groups.map((group) => (
             <React.Fragment key={group.key ?? 'top'}>
               {group.key ? <GroupHeading label={tr(`nav:shell.group.${group.key}`)} compact={compact} /> : null}
@@ -479,7 +482,6 @@ export function Sidebar() {
                         links.length > 0 ? (
                           <ExpandToggle
                             open={open}
-                            onPrimary={active}
                             label={tr(open ? 'nav:shell.hidePages' : 'nav:shell.showPages', { label })}
                             onPress={() => sections.toggle(tab.name)}
                           />
@@ -504,7 +506,7 @@ export function Sidebar() {
                             label={l.label}
                             active={pathname === l.href || pathname.startsWith(`${l.href}/`)}
                             // Lines the text up with the section label above (icon + gap).
-                            indent={t.spacing.md + ICON_SIZE + t.spacing.md}
+                            indent={t.spacing.md - 2 + ICON_SIZE + t.spacing.md - 2}
                           />
                         ))}
                       </View>
@@ -521,6 +523,8 @@ export function Sidebar() {
             alignItems: compact ? 'stretch' : 'center',
             padding: t.spacing.sm,
             gap: t.spacing.xs,
+            borderTopWidth: 1,
+            borderTopColor: t.c.line,
           }}
         >
           <View style={compact ? undefined : { flex: 1 }}>
@@ -559,9 +563,9 @@ export function Sidebar() {
                 };
               }}
             >
-              <MaterialCommunityIcons
+              <Icon
                 name={collapsed ? 'chevron-double-right' : 'chevron-double-left'}
-                size={20}
+                size={18}
                 color={t.c.muted}
               />
             </Pressable>

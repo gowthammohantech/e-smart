@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { SHOW_SCROLLBAR, useBreakpoint } from '../theme/breakpoints';
 import { focusRing, type WebPressState } from '../theme/interaction';
@@ -121,7 +121,7 @@ export function DataTable<T>({
       {columns.map((c) => {
         const active = sort?.key === c.key;
         const label = (
-          <Text variant="micro" tone={active ? 'default' : 'muted'} weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }} numberOfLines={1}>
+          <Text variant="caption" tone={active ? 'default' : 'muted'} weight={active ? '600' : '500'} numberOfLines={1}>
             {c.header}
           </Text>
         );
@@ -133,15 +133,15 @@ export function DataTable<T>({
                 accessibilityRole="button"
                 accessibilityLabel={`Sort by ${c.header}`}
                 style={(state) => [
-                  { flexDirection: 'row', alignItems: 'center', gap: 2, opacity: (state as WebPressState).hovered ? 0.7 : 1 },
+                  { flexDirection: 'row', alignItems: 'center', gap: 4, opacity: (state as WebPressState).hovered ? 0.7 : 1 },
                   focusRing(t, (state as WebPressState).focused),
                 ]}
               >
                 {label}
-                <MaterialCommunityIcons
-                  name={active ? (sort?.dir === 'asc' ? 'arrow-up' : 'arrow-down') : 'swap-vertical'}
+                <Icon
+                  name={active ? (sort?.dir === 'asc' ? 'arrow-up' : 'arrow-down') : 'unfold-more-horizontal'}
                   size={12}
-                  color={active ? t.c.text : t.c.line}
+                  color={active ? t.c.text : t.c.lineStrong}
                 />
               </Pressable>
             ) : (
@@ -166,7 +166,7 @@ export function DataTable<T>({
         const rowStyle = {
           flexDirection: 'row' as const,
           alignItems: 'center' as const,
-          minHeight: 52,
+          minHeight: 48,
           paddingHorizontal: 4,
           paddingVertical: 6,
           borderBottomWidth: i < visible.length - 1 || footer ? 1 : 0,
@@ -218,7 +218,7 @@ export function DataTable<T>({
             height: 30,
             borderRadius: t.radius.sm,
             borderWidth: 1,
-            borderColor: t.c.line,
+            borderColor: hovered && !disabled ? t.c.lineStrong : t.c.line,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: hovered && !disabled ? t.c.card2 : 'transparent',
@@ -228,7 +228,7 @@ export function DataTable<T>({
         ];
       }}
     >
-      <MaterialCommunityIcons name={icon} size={18} color={t.c.text} />
+      <Icon name={icon} size={16} color={t.c.text} />
     </Pressable>
   );
 
@@ -287,6 +287,7 @@ export function DataTable<T>({
         borderWidth: 1,
         borderColor: t.c.line,
         overflow: 'hidden',
+        ...t.shadow.card,
       }}
     >
       {desktop ? (

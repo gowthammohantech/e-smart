@@ -1,7 +1,9 @@
 import React from 'react';
-import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { focusRing, type WebPressState } from '../theme/interaction';
+
+const WEB = Platform.OS === 'web';
 
 type Props = {
   children: React.ReactNode;
@@ -17,7 +19,9 @@ export function Card({ children, style, onPress, padded = true, variant = 'raise
   const base: ViewStyle = {
     backgroundColor: variant === 'flat' ? t.c.card2 : t.c.card,
     borderRadius: t.radius.lg,
-    borderWidth: variant === 'outline' ? 1 : t.scheme === 'dark' ? 1 : 0,
+    // The browser draws every card with a hairline, in both themes; a phone
+    // keeps its borderless light cards.
+    borderWidth: variant === 'outline' || WEB ? 1 : t.scheme === 'dark' ? 1 : 0,
     borderColor: t.c.line,
     padding: padded ? t.spacing.lg : 0,
     overflow: 'hidden',
@@ -34,7 +38,9 @@ export function Card({ children, style, onPress, padded = true, variant = 'raise
           return [
             base,
             variant === 'raised' ? t.shadow.card : null,
-            { opacity: pressed ? 0.75 : hovered ? 0.9 : 1 },
+            WEB
+              ? { borderColor: hovered || pressed ? t.c.lineStrong : t.c.line, opacity: pressed ? 0.9 : 1 }
+              : { opacity: pressed ? 0.75 : hovered ? 0.9 : 1 },
             focusRing(t, focused),
             style,
           ];

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Card } from '@esmart/ui/components/Card';
@@ -124,7 +124,7 @@ export function TransportersDesktop() {
                   ];
                 }}
               >
-                <MaterialCommunityIcons name="truck-outline" size={20} color={t.c.muted} />
+                <Icon name="truck-outline" size={20} color={t.c.muted} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text variant="body" weight="600">
                     {transporter.name}
@@ -134,7 +134,7 @@ export function TransportersDesktop() {
                   </Text>
                 </View>
                 {transporter.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : null}
-                <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
               </Pressable>
             ))}
           </Card>
@@ -196,7 +196,7 @@ export function TransportersDesktop() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name="truck-outline" size={24} color={t.c.primary} />
+                <Icon name="truck-outline" size={24} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="h3" weight="700">
@@ -225,7 +225,7 @@ export function TransportersDesktop() {
                   ];
                 }}
               >
-                <MaterialCommunityIcons name="close" size={20} color={t.c.muted} />
+                <Icon name="close" size={20} color={t.c.muted} />
               </Pressable>
             </View>
 

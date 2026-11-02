@@ -4,7 +4,7 @@ import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -96,7 +96,7 @@ export function PartyDetail({ party }: { party: Party }) {
 
   const overdueCount = outstanding.filter((o) => o.daysOverdue > 0).length;
 
-  const contactAction = (icon: keyof typeof MaterialCommunityIcons.glyphMap, label: string, onPress: () => void, disabled?: boolean) => (
+  const contactAction = (icon: IconName, label: string, onPress: () => void, disabled?: boolean) => (
     <Pressable
       onPress={onPress}
       disabled={disabled}
@@ -120,7 +120,7 @@ export function PartyDetail({ party }: { party: Party }) {
           justifyContent: 'center',
         }}
       >
-        <MaterialCommunityIcons name={icon} size={19} color={t.c.primary} />
+        <Icon name={icon} size={19} color={t.c.primary} />
       </View>
       <Text variant="micro" tone="muted">
         {label}
@@ -272,7 +272,7 @@ export function PartyDetail({ party }: { party: Party }) {
                 backgroundColor: pressed ? t.c.card2 : 'transparent',
               })}
             >
-              <MaterialCommunityIcons
+              <Icon
                 name={p.direction === 'received' ? 'arrow-down' : 'arrow-up'}
                 size={19}
                 color={p.direction === 'received' ? t.c.good : t.c.bad}
@@ -461,7 +461,7 @@ export function PartyDetail({ party }: { party: Party }) {
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.text} />
+            <Icon name={a.icon} size={20} color={t.c.text} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -117,7 +117,7 @@ export function PaymentDetailDesktop() {
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name={isIn ? 'arrow-down' : 'arrow-up'} size={30} color={tone} />
+              <Icon name={isIn ? 'arrow-down' : 'arrow-up'} size={30} color={tone} />
             </View>
 
             <View style={{ flexGrow: 1, flexBasis: 280, gap: 4 }}>
@@ -177,7 +177,7 @@ export function PaymentDetailDesktop() {
                     flex: 2,
                     render: (a) => (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                        <MaterialCommunityIcons name="file-document-outline" size={18} color={t.c.primary} />
+                        <Icon name="file-document-outline" size={18} color={t.c.primary} />
                         <Cell weight="600">{a.documentNumber}</Cell>
                       </View>
                     ),
@@ -211,7 +211,7 @@ export function PaymentDetailDesktop() {
 
             {payment.unallocated.minor > 0 ? (
               <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-                <MaterialCommunityIcons name="wallet-outline" size={20} color={t.c.warn} />
+                <Icon name="wallet-outline" size={20} color={t.c.warn} />
                 <Text variant="small" style={{ flex: 1 }}>
                   {formatMoney(payment.unallocated)} is unallocated and available as an advance.
                 </Text>
@@ -307,7 +307,7 @@ export function PaymentDetailDesktop() {
                       {party.phone ?? party.email ?? party.code}
                     </Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+                  <Icon name="chevron-right" size={20} color={t.c.muted} />
                 </Pressable>
               </View>
             ) : null}

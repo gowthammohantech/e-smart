@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from '@esmart/ui/components/Icon';
 import { canOpen } from '@esmart/core/domain/plan';
 import { usePlan } from '../store/selectors';
 import { TABS, tabPath, type TabName } from './tabs';
@@ -53,7 +53,7 @@ export type AppPage = {
   title: string;
   /** The section it sits in, e.g. "Sell". */
   subtitle?: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   route: string;
 };
 

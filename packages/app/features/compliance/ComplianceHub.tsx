@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -178,11 +178,11 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       {tab === 'eway' && unbilled.length && ewayFilter !== 'pending' ? (
         <Pressable onPress={() => setEwayFilter('pending')} accessibilityRole="button" style={{ marginTop: t.spacing.md }}>
           <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, borderColor: t.c.warn }}>
-            <MaterialCommunityIcons name="truck-alert-outline" size={20} color={t.c.warn} />
+            <Icon name="truck-alert-outline" size={20} color={t.c.warn} />
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
               {tr('compliance:hub.unbilledBanner', { count: unbilled.length })}
             </Text>
-            <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.warn} />
+            <Icon name="chevron-right" size={20} color={t.c.warn} />
           </Card>
         </Pressable>
       ) : null}
@@ -202,7 +202,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
               borderColor: t.c.warn,
             }}
           >
-            <MaterialCommunityIcons name="clock-alert-outline" size={20} color={t.c.warn} />
+            <Icon name="clock-alert-outline" size={20} color={t.c.warn} />
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
               {tr('compliance:hub.expiringBanner', { count: expiring.length })}
             </Text>

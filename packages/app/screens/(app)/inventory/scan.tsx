@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -68,7 +68,7 @@ export default function ScanBarcode() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name="check" size={22} color={t.c.good} />
+                <Icon name="check" size={22} color={t.c.good} />
               </View>
               <View style={{ flex: 1, gap: 3 }}>
                 <Text variant="body" weight="600">
@@ -78,7 +78,7 @@ export default function ScanBarcode() {
                   {formatMoney(match.salePrice)} · {tr('inventory:scan.inStock', { qty: formatQty(stock[match.id] ?? 0), unit: match.unit })}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+              <Icon name="chevron-right" size={18} color={t.c.muted} />
             </Card>
           ) : (
             <Card variant="flat">

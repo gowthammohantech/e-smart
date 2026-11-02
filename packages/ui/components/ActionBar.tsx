@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from './Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
@@ -54,7 +54,7 @@ export function PrimaryActionBar({
   loading,
 }: {
   title: string;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   onPress: () => void;
   loading?: boolean;
 }) {

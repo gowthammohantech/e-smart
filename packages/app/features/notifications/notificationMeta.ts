@@ -1,8 +1,8 @@
-import type { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from '@esmart/ui/components/Icon';
 import type { NotificationKind } from '@esmart/core/types';
 
 /** How each kind of notification is drawn. */
-export const NOTIFICATION_META: Record<NotificationKind, { icon: keyof typeof MaterialCommunityIcons.glyphMap; tone: 'info' | 'success' | 'warning' | 'danger' | 'neutral' }> = {
+export const NOTIFICATION_META: Record<NotificationKind, { icon: IconName; tone: 'info' | 'success' | 'warning' | 'danger' | 'neutral' }> = {
   invoiceSent: { icon: 'send-outline', tone: 'info' },
   paymentReceived: { icon: 'cash-check', tone: 'success' },
   invoiceOverdue: { icon: 'alert-circle-outline', tone: 'danger' },

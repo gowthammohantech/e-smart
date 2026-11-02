@@ -7,6 +7,8 @@
 export type ColorTokens = {
   primary: string;
   primaryPressed: string;
+  /** Pointer-over state for primary surfaces; only the web draws hover. */
+  primaryHover: string;
   onPrimary: string;
   bg: string;
   canvas: string;
@@ -14,6 +16,8 @@ export type ColorTokens = {
   card2: string;
   paper: string;
   line: string;
+  /** A firmer border, for inputs and hovered cards. */
+  lineStrong: string;
   text: string;
   muted: string;
   good: string;
@@ -32,6 +36,7 @@ export type ColorTokens = {
 const dark: ColorTokens = {
   primary: '#007AFF',
   primaryPressed: '#0062CC',
+  primaryHover: '#1A86FF',
   onPrimary: '#FFFFFF',
   bg: '#0E121A',
   canvas: '#05070B',
@@ -39,6 +44,7 @@ const dark: ColorTokens = {
   card2: '#151A24',
   paper: '#141A24',
   line: '#1D273B',
+  lineStrong: '#2A3650',
   text: '#FFFFFF',
   muted: '#8E98AC',
   good: '#34C88A',
@@ -57,6 +63,7 @@ const dark: ColorTokens = {
 const light: ColorTokens = {
   primary: '#007AFF',
   primaryPressed: '#0062CC',
+  primaryHover: '#0070EB',
   onPrimary: '#FFFFFF',
   bg: '#F4F6FA',
   canvas: '#DBE2EE',
@@ -64,6 +71,7 @@ const light: ColorTokens = {
   card2: '#EDF1F7',
   paper: '#FFFFFF',
   line: '#E2E8F1',
+  lineStrong: '#C9D1DF',
   text: '#0E121A',
   muted: '#5A6478',
   good: '#12855C',

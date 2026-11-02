@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { pickLogo } from '../../features/company/pickLogo';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -92,7 +92,7 @@ export default function BusinessStep() {
           {draft.logoUri ? (
             <CompanyLogo uri={draft.logoUri} name={draft.name || tr('common:component.business')} size={84} />
           ) : (
-            <MaterialCommunityIcons name="image-plus" size={26} color={t.c.muted} />
+            <Icon name="image-plus" size={26} color={t.c.muted} />
           )}
         </Pressable>
         <View style={{ gap: 2, alignItems: desktop ? 'flex-start' : 'center' }}>

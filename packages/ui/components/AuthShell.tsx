@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { BrandLogo } from './BrandLogo';
@@ -63,7 +63,7 @@ export function AuthShell({
                 opacity: (state as WebPressState).hovered ? 0.7 : 1,
               })}
             >
-              <MaterialCommunityIcons name="arrow-left" size={16} color={t.c.muted} />
+              <Icon name="arrow-left" size={16} color={t.c.muted} />
               <Text variant="small" tone="muted" weight="600">
                 {tr('common:component.goBack')}
               </Text>
@@ -116,7 +116,7 @@ export function AuthShell({
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons name="arrow-left" size={19} color={t.c.text} />
+            <Icon name="arrow-left" size={19} color={t.c.text} />
           </Pressable>
         ) : null}
 

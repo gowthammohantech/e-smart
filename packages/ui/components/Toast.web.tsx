@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { Toaster, sileo, type SileoOptions } from 'sileo';
 import { useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
@@ -176,7 +176,7 @@ function PageToaster({ children }: { children: React.ReactNode }) {
     };
     const colors: Record<ToastTone, string> = { success: t.c.good, error: t.c.bad, warning: t.c.warn, info: t.c.primary };
     const glyph = (icon: ToastIcon | undefined, color: string) =>
-      icon ? <MaterialCommunityIcons name={icon} size={15} color={color} /> : undefined;
+      icon ? <Icon name={icon} size={15} color={color} /> : undefined;
     // The message itself is the pill ("Welcome back", "PDF downloaded"), opening
     // out only for its detail or button. One too long for the pill gets a heading
     // for its kind instead, with the whole message beneath; so does one whose

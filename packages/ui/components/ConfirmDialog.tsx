@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
@@ -29,7 +29,7 @@ export function ConfirmDialog({
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -72,7 +72,7 @@ export function ConfirmDialog({
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons
+            <Icon
               name={icon ?? (destructive ? 'alert-outline' : 'help-circle-outline')}
               size={22}
               color={destructive ? t.c.bad : t.c.primary}

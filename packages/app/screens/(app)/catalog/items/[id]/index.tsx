@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -96,7 +96,7 @@ export default function ItemDetail() {
             justifyContent: 'center',
           }}
         >
-          <MaterialCommunityIcons
+          <Icon
             name={item.trackInventory ? 'package-variant-closed' : 'hammer-wrench'}
             size={25}
             color={item.trackInventory ? t.c.primary : t.c.muted}
@@ -207,7 +207,7 @@ export default function ItemDetail() {
                     borderBottomColor: t.c.line,
                   }}
                 >
-                  <MaterialCommunityIcons
+                  <Icon
                     name={delta >= 0 ? 'arrow-down-bold-circle-outline' : 'arrow-up-bold-circle-outline'}
                     size={21}
                     color={delta >= 0 ? t.c.good : t.c.bad}
@@ -339,7 +339,7 @@ export default function ItemDetail() {
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.text} />
+            <Icon name={a.icon} size={20} color={t.c.text} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>

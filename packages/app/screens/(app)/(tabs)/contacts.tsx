@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, SectionList, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { AppHeader } from '../../../components/AppHeader';
@@ -264,7 +264,7 @@ export default function ContactsTab() {
                     <Text variant="micro" tone="muted">{tr('contacts:hub.settled')}</Text>
                   )}
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
               </Pressable>
             );
           }}

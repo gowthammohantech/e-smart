@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
@@ -11,7 +11,7 @@ type Props = {
   meta?: string;
   right?: React.ReactNode;
   left?: React.ReactNode;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   iconColor?: string;
   onPress?: () => void;
   onLongPress?: () => void;
@@ -69,7 +69,7 @@ export function ListRow({
             justifyContent: 'center',
           }}
         >
-          <MaterialCommunityIcons name={icon} size={19} color={iconColor ?? t.c.primary} />
+          <Icon name={icon} size={19} color={iconColor ?? t.c.primary} />
         </View>
       ) : null}
 
@@ -90,7 +90,7 @@ export function ListRow({
       </View>
 
       {right}
-      {chevron ? <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} /> : null}
+      {chevron ? <Icon name="chevron-right" size={20} color={t.c.muted} /> : null}
     </View>
   );
 

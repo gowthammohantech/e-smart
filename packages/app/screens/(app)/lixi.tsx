@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -211,7 +212,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
               accessibilityLabel={tr('lixi:ui.newChat')}
               style={{ padding: 6 }}
             >
-              <MaterialCommunityIcons name="broom" size={20} color={t.c.muted} />
+              <Icon name="broom" size={20} color={t.c.muted} />
             </Pressable>
           ) : null}
           {/* Only the switch for now; it doesn't change anything yet. */}
@@ -257,7 +258,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
           accessibilityLabel={tr('lixi:ui.closeLixi')}
           style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.c.card, alignItems: 'center', justifyContent: 'center' }}
         >
-          <MaterialCommunityIcons name="chevron-down" size={24} color={t.c.text} />
+          <Icon name="chevron-down" size={24} color={t.c.text} />
         </Pressable>
         <LixiOrb size={38} thinking={thinking} />
         <View style={{ flex: 1 }}>
@@ -275,7 +276,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             accessibilityRole="button"
             accessibilityLabel={tr('lixi:ui.newChat')}
           >
-            <MaterialCommunityIcons name="broom" size={22} color={t.c.muted} />
+            <Icon name="broom" size={22} color={t.c.muted} />
           </Pressable>
         ) : null}
       </View>
@@ -367,7 +368,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             transform: [{ scale: pressed ? 0.92 : 1 }],
           })}
         >
-          <MaterialCommunityIcons name="arrow-up" size={22} color={draft.trim() && !thinking ? '#fff' : t.c.muted} />
+          <Icon name="arrow-up" size={22} color={draft.trim() && !thinking ? '#fff' : t.c.muted} />
         </Pressable>
       </View>
 
@@ -415,7 +416,7 @@ function Chip({ label, icon, onPress }: { label: string; icon?: string; onPress:
       })}
     >
       {icon ? (
-        <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={16} color={t.c.primary} />
+        <Icon name={icon as IconName} size={16} color={t.c.primary} />
       ) : null}
       <Text variant="small" tone="primary" weight="600">
         {label}

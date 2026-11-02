@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Sheet } from '../Sheet';
 import { SearchBar } from '../SearchBar';
@@ -15,7 +15,7 @@ export type SelectOption = {
   value: string;
   label: string;
   description?: string;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   /** Drawn where the icon goes, in its place: e.g. a business's logo. */
   leading?: React.ReactNode;
   trailing?: string;
@@ -126,7 +126,7 @@ export function SelectSheet({
         backgroundColor: pressed ? t.c.card2 : 'transparent',
       })}
     >
-      <MaterialCommunityIcons name="plus" size={20} color={t.c.primary} />
+      <Icon name="plus" size={20} color={t.c.primary} />
       <Text variant="body" weight="600" tone="primary" numberOfLines={1} style={{ flex: 1 }}>
         {createText}
       </Text>
@@ -208,13 +208,13 @@ export function SelectSheet({
               })}
             >
               {multiple ? (
-                <MaterialCommunityIcons
+                <Icon
                   name={checked ? 'checkbox-marked' : 'checkbox-blank-outline'}
                   size={22}
                   color={checked ? t.c.primary : t.c.muted}
                 />
               ) : null}
-              {o.leading ?? (o.icon ? <MaterialCommunityIcons name={o.icon} size={20} color={t.c.muted} /> : null)}
+              {o.leading ?? (o.icon ? <Icon name={o.icon} size={20} color={t.c.muted} /> : null)}
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight={selected ? '600' : '400'} numberOfLines={1}>
                   {o.label}
@@ -235,7 +235,7 @@ export function SelectSheet({
                   {o.trailing}
                 </Text>
               ) : null}
-              {selected && !multiple ? <MaterialCommunityIcons name="check" size={19} color={t.c.primary} /> : null}
+              {selected && !multiple ? <Icon name="check" size={19} color={t.c.primary} /> : null}
             </Pressable>
           );
         })

@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -86,8 +86,8 @@ export default function Integrations() {
                         justifyContent: 'center',
                       }}
                     >
-                      <MaterialCommunityIcons
-                        name={i.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                      <Icon
+                        name={i.icon as IconName}
                         size={19}
                         color={i.connected ? t.c.primary : t.c.muted}
                       />
@@ -111,7 +111,7 @@ export default function Integrations() {
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
                         >
                           <Text variant="caption" tone="primary" weight="600">{tr('settings:integrations.configure')}</Text>
-                          <MaterialCommunityIcons name="chevron-right" size={14} color={t.c.primary} />
+                          <Icon name="chevron-right" size={14} color={t.c.primary} />
                         </Pressable>
                       ) : null}
                     </View>

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -416,7 +416,7 @@ export function ValidityNote({ form }: { form: EwayBillFormState }) {
   const { preview, vehicleType } = form;
   return (
     <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
-      <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
+      <Icon name="clock-outline" size={20} color={t.c.primary} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="small" weight="600">
           {tr('compliance:ewb.validityPreview', { count: preview.days, date: formatDate(preview.validUpto.slice(0, 10)) })}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { FormActions } from '@esmart/ui/components/ActionBar';
@@ -342,14 +342,14 @@ export default function NewPayment() {
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
+              <Icon name="account-search-outline" size={21} color={t.c.primary} />
             </View>
             <Text variant="body" weight="600" style={{ flex: 1 }}>
               {tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
             </Text>
           </>
         )}
-        <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+        <Icon name="chevron-right" size={20} color={t.c.muted} />
       </Card>
     </Pressable>
   );
@@ -452,7 +452,7 @@ export default function NewPayment() {
   const advanceCard =
     partyId && advance.minor > 0 && outstanding.length > 0 ? (
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-        <MaterialCommunityIcons name="wallet-outline" size={22} color={t.c.primary} />
+        <Icon name="wallet-outline" size={22} color={t.c.primary} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
           <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
@@ -502,7 +502,7 @@ export default function NewPayment() {
             accessibilityLabel={tr('sales:payment.allocateTo', { number: o.document.number })}
             style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
           >
-            <MaterialCommunityIcons
+            <Icon
               name={selected ? 'checkbox-marked' : 'checkbox-blank-outline'}
               size={21}
               color={selected ? t.c.primary : t.c.muted}
@@ -530,7 +530,7 @@ export default function NewPayment() {
               accessibilityRole="button"
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}
             >
-              <MaterialCommunityIcons name="wallet-outline" size={15} color={t.c.primary} />
+              <Icon name="wallet-outline" size={15} color={t.c.primary} />
               <Text variant="caption" tone="primary" weight="600">
                 {tr('sales:payment.useAdvanceHere', {
                   amount: formatMoney(money(Math.min(advance.minor, o.outstanding.minor), currency)),

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
 import { Animated, AppState, Keyboard, Pressable, View } from 'react-native';
 import { useIsFocused } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { NATIVE_DRIVER } from '@esmart/ui/theme/motion';
 import { Text } from '@esmart/ui/components/Text';
@@ -130,17 +130,17 @@ export function LixiGestureHint({ bottom }: { bottom: number }) {
       >
         {rendered === 'swipeTabs' ? (
           <Animated.View style={{ transform: [{ translateX: bob.interpolate({ inputRange: [0, 1], outputRange: [-4, 4] }) }] }}>
-            <MaterialCommunityIcons name="gesture-swipe-horizontal" size={20} color={t.c.primary} />
+            <Icon name="gesture-swipe-horizontal" size={20} color={t.c.primary} />
           </Animated.View>
         ) : (
           <LixiOrb size={22} />
         )}
         {rendered === 'swipeTabs' ? null : rendered === 'swipeUp' ? (
           <Animated.View style={{ transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [2, -3] }) }] }}>
-            <MaterialCommunityIcons name="gesture-swipe-up" size={18} color={t.c.primary} />
+            <Icon name="gesture-swipe-up" size={18} color={t.c.primary} />
           </Animated.View>
         ) : (
-          <MaterialCommunityIcons name="gesture-tap-hold" size={18} color={t.c.primary} />
+          <Icon name="gesture-tap-hold" size={18} color={t.c.primary} />
         )}
         <Text variant="caption" weight="600">
           {keyLabel(tr, HINT_TEXT_KEY[rendered])}

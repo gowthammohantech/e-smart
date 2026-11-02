@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
@@ -153,7 +153,7 @@ export function WizardShell({
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name="arrow-left" size={19} color={t.c.text} />
+              <Icon name="arrow-left" size={19} color={t.c.text} />
             </Pressable>
           ) : onSignOut ? (
             <Pressable onPress={onSignOut} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.signOut')}>

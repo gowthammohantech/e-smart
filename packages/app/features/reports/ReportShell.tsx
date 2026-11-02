@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -94,7 +94,7 @@ export function ReportShell({
     }
   };
 
-  const EXPORTS: { format: 'pdf' | 'xlsx' | 'csv'; icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string }[] = [
+  const EXPORTS: { format: 'pdf' | 'xlsx' | 'csv'; icon: IconName; label: string }[] = [
     { format: 'pdf', icon: 'file-pdf-box', label: tr('reports:shell.exportPdf') },
     { format: 'xlsx', icon: 'file-excel-box', label: tr('reports:shell.exportExcel') },
     { format: 'csv', icon: 'file-delimited-outline', label: tr('reports:shell.exportCsv') },
@@ -122,10 +122,10 @@ export function ReportShell({
       </Text>
       {active && onClear ? (
         <Pressable onPress={onClear} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('reports:shell.clearFilter', { label })}>
-          <MaterialCommunityIcons name="close-circle" size={13} color={t.c.primary} />
+          <Icon name="close-circle" size={13} color={t.c.primary} />
         </Pressable>
       ) : (
-        <MaterialCommunityIcons name="chevron-down" size={13} color={active ? t.c.primary : t.c.muted} />
+        <Icon name="chevron-down" size={13} color={active ? t.c.primary : t.c.muted} />
       )}
     </Pressable>
   );
@@ -218,7 +218,7 @@ export function ReportShell({
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={e.icon} size={20} color={t.c.text} />
+            <Icon name={e.icon} size={20} color={t.c.text} />
             <Text variant="body" style={{ flex: 1 }}>
               {e.label}
             </Text>
@@ -247,7 +247,7 @@ export function ReportShell({
             <Text variant="body" style={{ flex: 1 }} weight={scope.preset === p ? '600' : '400'}>
               {dateRangeLabel(tr, p)}
             </Text>
-            {scope.preset === p ? <MaterialCommunityIcons name="check" size={19} color={t.c.primary} /> : null}
+            {scope.preset === p ? <Icon name="check" size={19} color={t.c.primary} /> : null}
           </Pressable>
         ))}
       </Sheet>

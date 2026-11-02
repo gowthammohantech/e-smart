@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useToast } from '@esmart/ui/components/Toast';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
@@ -54,18 +54,18 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
                   padding: t.spacing.sm,
                   borderRadius: t.radius.md,
                   borderWidth: 1,
-                  borderColor: t.c.line,
+                  borderColor: hovered ? t.c.lineStrong : t.c.line,
                 },
-            { backgroundColor: pressed || hovered ? t.c.paper : compact ? 'transparent' : t.c.card },
+            { backgroundColor: pressed || hovered ? t.c.card2 : 'transparent' },
             focusRing(t, focused),
           ];
         }}
       >
-        <CompanyLogo uri={company?.logoUri} name={company?.name ?? '?'} size={compact ? 36 : 34} />
+        <CompanyLogo uri={company?.logoUri} name={company?.name ?? '?'} size={compact ? 32 : 30} />
         {compact ? null : (
           <>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text variant="small" weight="700" numberOfLines={1}>
+              <Text variant="small" weight="600" numberOfLines={1}>
                 {company?.name ?? tr('common:component.business')}
               </Text>
               <Text variant="micro" tone="muted" numberOfLines={1}>
@@ -77,7 +77,7 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
                 </Text>
               ) : null}
             </View>
-            <MaterialCommunityIcons name="unfold-more-horizontal" size={16} color={t.c.muted} />
+            <Icon name="unfold-more-horizontal" size={16} color={t.c.muted} />
           </>
         )}
       </Pressable>

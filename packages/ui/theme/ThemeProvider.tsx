@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 import {
   ColorTokens,
   fontSize,
@@ -9,6 +9,7 @@ import {
   spacing,
   typeMetrics,
 } from './tokens';
+import { WEB_FONT_FAMILY, webFontSize, webPalettes, webRadius, webShadows } from './webTokens';
 import type { Script } from '@esmart/i18n/config';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -24,9 +25,11 @@ export type Theme = {
     lineHeight: (size: number) => number | undefined;
   };
   c: ColorTokens;
+  /** The face every Text uses; undefined on native, which keeps the system font. */
+  fontFamily?: string;
   spacing: typeof spacing;
-  radius: typeof radius;
-  fontSize: typeof fontSize;
+  radius: Record<keyof typeof radius, number>;
+  fontSize: Record<keyof typeof fontSize, number>;
   fontWeight: typeof fontWeight;
   /** Elevation preset used by cards and sheets. */
   shadow: {
@@ -38,8 +41,11 @@ export type Theme = {
 
 const ThemeContext = createContext<Theme | null>(null);
 
+/** The browser gets its own tokens (webTokens.ts); iOS and Android never see them. */
+const WEB = Platform.OS === 'web';
+
 function buildTheme(scheme: 'light' | 'dark', script: Script): Theme {
-  const c = palettes[scheme];
+  const c = (WEB ? webPalettes : palettes)[scheme];
   const metrics = typeMetrics[script];
   return {
     scheme,
@@ -50,27 +56,30 @@ function buildTheme(scheme: 'light' | 'dark', script: Script): Theme {
       lineHeight: (size) => (metrics.lineHeight ? Math.round(size * metrics.lineHeight) : undefined),
     },
     c,
+    fontFamily: WEB ? WEB_FONT_FAMILY : undefined,
     spacing,
-    radius,
-    fontSize,
+    radius: WEB ? webRadius : radius,
+    fontSize: WEB ? webFontSize : fontSize,
     fontWeight,
-    shadow: {
-      card:
-        scheme === 'dark'
-          ? { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 }
-          : { shadowColor: '#5A6478', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-      sheet:
-        scheme === 'dark'
-          ? { shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: -6 }, elevation: 16 }
-          : { shadowColor: '#5A6478', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: -4 }, elevation: 16 },
-      fab: {
-        shadowColor: '#007AFF',
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 8,
-      },
-    },
+    shadow: WEB
+      ? webShadows(scheme, c.primary)
+      : {
+          card:
+            scheme === 'dark'
+              ? { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 }
+              : { shadowColor: '#5A6478', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+          sheet:
+            scheme === 'dark'
+              ? { shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: -6 }, elevation: 16 }
+              : { shadowColor: '#5A6478', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: -4 }, elevation: 16 },
+          fab: {
+            shadowColor: '#007AFF',
+            shadowOpacity: 0.35,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 6 },
+            elevation: 8,
+          },
+        },
   };
 }
 

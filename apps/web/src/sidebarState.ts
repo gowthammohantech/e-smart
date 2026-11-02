@@ -4,7 +4,7 @@ import { Animated } from 'react-native';
 export const SIDEBAR_WIDTH = 248;
 
 /** Between the desktop and full-sidebar breakpoints only the icons show. */
-export const SIDEBAR_COMPACT_WIDTH = 68;
+export const SIDEBAR_COMPACT_WIDTH = 64;
 
 const COLLAPSED_KEY = 'esmart.sidebar.collapsed';
 

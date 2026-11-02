@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsDesktop } from '../../theme/breakpoints';
 import { FieldShell, webFocusHalo } from '../Field';
@@ -61,7 +61,7 @@ export function DateField({
           ...webFocusHalo(t, focused && !error && !stray),
         }}
       >
-        <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
+        <Icon name="calendar-outline" size={18} color={t.c.muted} />
         <input
           type="date"
           aria-label={label ?? tr('common:component.date')}
@@ -91,7 +91,7 @@ export function DateField({
             color: t.c.text,
             fontSize: t.fontSize.body,
             // RN Web sets the font on Text only, so a raw input needs it spelled out.
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            fontFamily: t.fontFamily,
             colorScheme: t.scheme,
           }}
         />

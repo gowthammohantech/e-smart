@@ -17,7 +17,7 @@ import { profileLocks } from '@esmart/core/domain/companyLock';
 import { isFinalized } from '@esmart/core/domain/documentStates';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Card } from '@esmart/ui/components/Card';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
@@ -132,7 +132,7 @@ export default function CompanySettings() {
       >
         {posted ? (
           <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            <MaterialCommunityIcons name="lock-outline" size={19} color={t.c.muted} />
+            <Icon name="lock-outline" size={19} color={t.c.muted} />
             <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
               {tr('settings:company.lockedNotice')}
             </Text>

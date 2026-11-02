@@ -11,7 +11,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { type Theme, useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
 import { focusRing, type WebPressState } from '../theme/interaction';
@@ -63,12 +63,12 @@ export function FieldShell({
   return (
     <View style={[{ gap: 6 }, style]}>
       {label ? (
-        <Text variant="caption" tone="muted" weight="600">
+        <Text variant={WEB ? 'small' : 'caption'} tone={WEB ? 'default' : 'muted'} weight={WEB ? '500' : '600'}>
           {label}
           {required ? (
             // On the web the asterisk must match the label's size, or a required
             // label runs taller and its field sits lower than the one beside it.
-            <Text variant={WEB ? 'caption' : undefined} style={{ color: t.c.bad }}> *</Text>
+            <Text variant={WEB ? 'small' : undefined} style={{ color: t.c.bad }}> *</Text>
           ) : null}
         </Text>
       ) : null}
@@ -95,7 +95,7 @@ type TextFieldProps = TextInputProps & {
   error?: string;
   hint?: string;
   required?: boolean;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   suffix?: React.ReactNode;
   containerStyle?: StyleProp<ViewStyle>;
 };
@@ -136,13 +136,13 @@ export function TextField({
           // Tamil's below-line vowel signs need a few more pixels. The extra
           // goes on the box rather than as `lineHeight` on the TextInput,
           // which mis-centres the caret on Android.
-          minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 42 : 48,
+          minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48,
           // Read-only fields look it, rather than only refusing input.
           opacity: rest.editable === false ? 0.6 : 1,
           ...webFocusHalo(t, focused && !error),
         }}
       >
-        {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null}
+        {icon ? <Icon name={icon} size={18} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null}
         <TextInput
           style={[
             {
@@ -173,7 +173,7 @@ export function TextField({
             accessibilityLabel={tr(revealed ? 'common:component.hidePassword' : 'common:component.showPassword')}
             hitSlop={8}
           >
-            <MaterialCommunityIcons name={!revealed ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.c.muted} />
+            <Icon name={!revealed ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.c.muted} />
           </Pressable>
         ) : null}
         {/* Text can't sit straight inside a View, so a plain unit such as "km" gets its own Text. */}
@@ -222,7 +222,7 @@ export function PhoneField({
   hint?: string;
   required?: boolean;
   placeholder?: string;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   containerStyle?: StyleProp<ViewStyle>;
   /** Shown grayed out and not editable, e.g. a phone already verified by OTP. */
   disabled?: boolean;
@@ -250,12 +250,12 @@ export function PhoneField({
           borderWidth: 1,
           borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
-          minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 42 : 48,
+          minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48,
           ...webFocusHalo(t, focused && !error),
           ...(disabled ? { opacity: 0.65 } : null),
         }}
       >
-        {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} /> : null}
+        {icon ? <Icon name={icon} size={18} color={t.c.muted} /> : null}
         <Text style={{ color: disabled ? t.c.muted : t.c.text, fontSize: t.fontSize.body }} accessibilityLabel={`${tr('common:component.countryCode')} ${dialCode}`}>
           {dialCode}
         </Text>
@@ -350,7 +350,7 @@ export function AmountField({
           borderWidth: 1,
           borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
-          height: size === 'lg' ? 64 : desktop ? 42 : 48,
+          height: size === 'lg' ? 64 : desktop ? 40 : 48,
           ...webFocusHalo(t, focused && !error),
         }}
       >
@@ -413,7 +413,7 @@ export function PickerField({
   onPress: () => void;
   /** Read-only: shows the value but does not open the picker. */
   disabled?: boolean;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   error?: string;
   hint?: string;
   required?: boolean;
@@ -445,22 +445,22 @@ export function PickerField({
           borderWidth: 1,
           borderColor: error ? t.c.bad : t.c.line,
           paddingHorizontal: t.spacing.md,
-          height: desktop ? 42 : 48,
+          height: desktop ? 40 : 48,
           opacity: disabled ? 0.6 : state.pressed ? 0.7 : 1,
           // The app's keyboard focus ring, in place of the browser's black outline.
           ...(WEB ? focusRing(t, (state as WebPressState).focused) : {}),
         })}
       >
-        {icon ? <MaterialCommunityIcons name={icon} size={18} color={t.c.muted} /> : null}
+        {icon ? <Icon name={icon} size={18} color={t.c.muted} /> : null}
         <Text style={{ flex: 1 }} tone={value ? 'default' : 'muted'} numberOfLines={1}>
           {value ?? placeholder}
         </Text>
         {disabled ? (
-          <MaterialCommunityIcons name="lock-outline" size={16} color={t.c.muted} />
+          <Icon name="lock-outline" size={16} color={t.c.muted} />
         ) : clearable && value ? (
           <View style={{ width: 17 }} />
         ) : (
-          <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} />
+          <Icon name="chevron-down" size={18} color={t.c.muted} />
         )}
       </Pressable>
       {!disabled && clearable && value ? (
@@ -471,7 +471,7 @@ export function PickerField({
           accessibilityLabel={tr('common:component.clear')}
           style={{ position: 'absolute', right: t.spacing.md, top: 0, bottom: 0, justifyContent: 'center' }}
         >
-          <MaterialCommunityIcons name="close-circle" size={17} color={t.c.muted} />
+          <Icon name="close-circle" size={17} color={t.c.muted} />
         </Pressable>
       ) : null}
       </View>
@@ -641,7 +641,7 @@ export function QuantityStepper({
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <MaterialCommunityIcons name={icon} size={17} color={t.c.text} />
+      <Icon name={icon} size={17} color={t.c.text} />
     </Pressable>
   );
 

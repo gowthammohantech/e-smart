@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -15,7 +15,7 @@ import { formatDateTime } from '@esmart/core/lib/date';
 import { auditChanges } from '@esmart/core/domain/auditDiff';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+const ICONS: Record<string, IconName> = {
   created: 'plus-circle-outline',
   updated: 'pencil-outline',
   deleted: 'trash-can-outline',
@@ -85,7 +85,7 @@ export default function AuditTrail() {
                     <Avatar name={e.actorName} size={34} />
                     <View style={{ flex: 1, gap: 3 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <MaterialCommunityIcons name={iconFor(e.action)} size={14} color={t.c.muted} />
+                        <Icon name={iconFor(e.action)} size={14} color={t.c.muted} />
                         <Text variant="small" weight="600" style={{ flex: 1 }} numberOfLines={1}>
                           {e.actorName} {e.action} {e.entityLabel}
                         </Text>
@@ -96,7 +96,7 @@ export default function AuditTrail() {
                       </Text>
                     </View>
                     {e.device ? <Badge label={e.device} tone="neutral" size="sm" /> : null}
-                    {changes.length ? <MaterialCommunityIcons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={t.c.muted} /> : null}
+                    {changes.length ? <Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} color={t.c.muted} /> : null}
                   </View>
                   {open ? (
                     <View style={{ marginLeft: 34 + t.spacing.md, gap: t.spacing.sm }}>
@@ -118,7 +118,7 @@ export default function AuditTrail() {
         </Card>
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
-          <MaterialCommunityIcons name="lock-outline" size={19} color={t.c.muted} />
+          <Icon name="lock-outline" size={19} color={t.c.muted} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('settings:audit.note')}</Text>
         </Card>
       </ScrollView>

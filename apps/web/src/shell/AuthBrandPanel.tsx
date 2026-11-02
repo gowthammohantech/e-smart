@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { BrandLogo } from '@esmart/ui/components/BrandLogo';
 import { WelcomeBackdrop } from '@esmart/ui/components/WelcomeBackdrop';
 import { WelcomeScene } from '@esmart/ui/components/welcome/WelcomeScene';
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 /** The panel's copy column: centred, at a comfortable reading width. */
 const CONTENT_WIDTH = 460;
@@ -89,7 +87,7 @@ export function AuthBrandPanel() {
                     justifyContent: 'center',
                   }}
                 >
-                  <MaterialCommunityIcons name={f.icon} size={16} color={t.c.primary} />
+                  <Icon name={f.icon} size={16} color={t.c.primary} />
                 </View>
                 <Text variant="small" weight="500">
                   {tr(`auth:panel.feature.${f.key}`)}

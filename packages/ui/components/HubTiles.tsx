@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { useBreakpoint } from '../theme/breakpoints';
 import { focusRing, type WebPressState } from '../theme/interaction';
@@ -10,7 +10,7 @@ import { Text } from './Text';
 export type HubTile = {
   key: string;
   label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   route: string;
   count?: number;
   tone?: 'default' | 'danger' | 'warning';
@@ -61,7 +61,7 @@ export function HubTiles({ tiles }: { tiles: HubTile[] }) {
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name={tile.icon} size={19} color={t.c.primary} />
+              <Icon name={tile.icon} size={19} color={t.c.primary} />
             </View>
             {tile.count !== undefined ? (
               <Text

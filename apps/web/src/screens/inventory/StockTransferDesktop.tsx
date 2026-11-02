@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -116,7 +116,7 @@ export function StockTransferDesktop() {
                       icon="warehouse"
                     />
                   </View>
-                  <MaterialCommunityIcons name="arrow-right" size={22} color={t.c.muted} style={{ marginTop: 18 }} />
+                  <Icon name="arrow-right" size={22} color={t.c.muted} style={{ marginTop: 18 }} />
                   <View style={{ flexGrow: 1, flexBasis: 200 }}>
                     <PickerField
                       label={tr('inventory:transfer.to')}

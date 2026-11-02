@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
@@ -19,7 +19,7 @@ export function FilterMenu<V extends string>({
   onChange,
   width = 240,
 }: {
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   /** Screen-reader name of the filter. */
   label: string;
   value: V;
@@ -59,11 +59,11 @@ export function FilterMenu<V extends string>({
           ];
         }}
       >
-        {icon ? <MaterialCommunityIcons name={icon} size={15} color={active ? t.c.primary : t.c.muted} /> : null}
+        {icon ? <Icon name={icon} size={15} color={active ? t.c.primary : t.c.muted} /> : null}
         <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'} numberOfLines={1}>
           {current}
         </Text>
-        <MaterialCommunityIcons name="chevron-down" size={15} color={t.c.muted} />
+        <Icon name="chevron-down" size={15} color={t.c.muted} />
       </Pressable>
       <Menu anchor={rect} onClose={close} width={width}>
         {options.map((o) => (
