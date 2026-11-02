@@ -39,6 +39,7 @@ import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { portalToast } from './portalToast';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 
 /**
  * Everything the e-way bill form holds and does, apart from how it is laid
@@ -142,6 +143,9 @@ export function useEwayBillForm(doc: BusinessDocument) {
       });
     setErrors(next);
   };
+
+  // Ctrl+S (⌘+S) generates the bill, as the button does.
+  useSaveShortcut(() => void submit(), !busy);
 
   return {
     doc,

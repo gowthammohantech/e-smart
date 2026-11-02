@@ -49,7 +49,7 @@ describe('fields the app has that the contract gained', () => {
 
   it('keeps a branch GSTIN, checking its check digit and state', async () => {
     const m = await moneySetup(t);
-    const ok = await t.post(`${m.c}/branches`, { name: 'Andheri', code: 'AND', address: MUMBAI, gstin: '27aapfu0939f1zv' }, { token: m.token });
+    const ok = await t.post(`${m.c}/branches`, { name: 'Andheri', code: 'AND', address: { ...MUMBAI, line1: '5 Andheri Kurla Road' }, gstin: '27aapfu0939f1zv' }, { token: m.token });
     expect(ok.status).toBe(201);
     expect(ok.body.gstin).toBe('27AAPFU0939F1ZV');
     const list = await t.get(`${m.c}/branches`, { token: m.token });

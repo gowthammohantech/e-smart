@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import { SALES_KINDS, canTransition, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { SALES_KINDS, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -301,8 +301,7 @@ export const documentsHandlers = defineHandlers({
     const open = isFinalized(status) && status !== 'cancelled';
     const conversions = CONVERSIONS[row.kind].filter((target) => {
       if (isPurchaseKind(target) && !hasModule(ctx.company.plan, 'purchases')) return false;
-      if (['cancelled', 'rejected'].includes(status)) return false;
-      return target === 'salesReturn' || target === 'purchaseReturn' ? open : true;
+      return !conversionBlock({ id: row.id, status }, target, related as { kind: DocumentKind; status: DocStatus; sourceDocumentId: string | null }[]);
     });
     setEtag(ctx.reply, row.version);
     return {
@@ -422,9 +421,16 @@ export const documentsHandlers = defineHandlers({
     assertKindAllowed(ctx.company, target);
     const status = effectiveStatus(src, today(ctx.now));
     if (!CONVERSIONS[src.kind].includes(target)) throw conflict('INVALID_CONVERSION', `A ${src.kind} cannot be converted to a ${target}`);
-    if (['cancelled', 'rejected'].includes(status)) throw conflict('INVALID_CONVERSION', `${src.number} is ${status}`);
-    if ((target === 'salesReturn' || target === 'purchaseReturn') && !isFinalized(src.status)) {
-      throw conflict('INVALID_CONVERSION', 'A return is raised against a finalised document');
+    // Nothing from a draft or a cancelled document, and an order or quote is carried forward once.
+    const made = await ctx.db.select({ kind: D.kind, status: D.status, sourceDocumentId: D.sourceDocumentId, number: D.number }).from(D).where(and(eq(D.companyId, ctx.company.id), eq(D.sourceDocumentId, src.id)));
+    const block = conversionBlock({ id: src.id, status }, target, made as { kind: DocumentKind; status: DocStatus; sourceDocumentId: string | null; number: string | null }[]);
+    if (block === 'cancelled') throw conflict('INVALID_CONVERSION', `${src.number} is ${status}`);
+    if (block === 'draft') {
+      throw conflict('INVALID_CONVERSION', target === 'salesReturn' || target === 'purchaseReturn' ? 'A return is raised against a finalised document' : 'A draft is finalised before anything is made from it');
+    }
+    if (block === 'converted') {
+      const onward = made.find((d) => d.kind !== 'salesReturn' && d.kind !== 'purchaseReturn' && d.status !== 'cancelled' && d.status !== 'rejected');
+      throw conflict('ALREADY_CONVERTED', `${src.number} has already been carried forward${onward?.number ? ` to ${onward.number}` : ''}; cancel that first to convert it again`);
     }
     const stored = linesFromRows(await ctx.db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, src.id)));
     let lines = stored;

@@ -17,6 +17,7 @@ import { describeError } from '../../../remote/errors';
 import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary } from '../../../store/selectors';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
@@ -129,6 +130,9 @@ export default function EInvoicingSettings() {
     });
     toast.show(tr('compliance:settings.saved'), 'success', { icon: 'shield-check-outline' });
   };
+
+  // Ctrl+S (⌘+S) does what Save does.
+  useSaveShortcut(onSave);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

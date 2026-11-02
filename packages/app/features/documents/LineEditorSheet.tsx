@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { AmountField, PickerField, Segmented, SwitchField, TextField , QuantityStepper } from '@esmart/ui/components/Field';
@@ -39,7 +40,7 @@ type EditorProps = {
  */
 export function LineEditorSheet(props: EditorProps) {
   if (!props.line) return null;
-  return <LineEditorForm key={props.line.id} {...props} />;
+  return <LineEditorForm key={props.line.id} {...props} line={props.line} />;
 }
 
 function LineEditorForm({
@@ -53,7 +54,7 @@ function LineEditorForm({
   onRemove,
   hsnRequired = false,
   maxQuantity,
-}: EditorProps) {
+}: EditorProps & { line: DocumentLine }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common']);
 
@@ -79,8 +80,6 @@ function LineEditorForm({
   // A catalogue line keeps the unit and HSN from the item master; only one-off lines choose their own.
   const fromCatalogue = !!line?.itemId;
   const decimals = unitDecimals(unit);
-
-  if (!line) return null;
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
   const preview = calculateLine(
@@ -132,6 +131,9 @@ function LineEditorForm({
     });
     onClose();
   };
+
+  // Ctrl+S (⌘+S) saves the line while this sheet is up, not over its pickers.
+  useSaveShortcut(save, visible && !unitOpen && !taxOpen);
 
   return (
     <Sheet

@@ -26,6 +26,7 @@ import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/valida
 import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 const ROLE_KEYS = [
   { value: 'owner', label: 'auth:invite.roles.owner', description: 'settings:users.roleHint.owner' },
@@ -126,6 +127,9 @@ export default function UserSettings() {
       .catch((err: unknown) => setServerError(describeError(err, tr)))
       .finally(() => setBusy(false));
   };
+
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing && !busy && !isGuest);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

@@ -319,6 +319,8 @@ export default function ExpensesList() {
                       {cat?.name ?? tr('purchases:expense.uncategorised')}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
+                      {/* The number first, as the desktop table has it, so an expense can be found by it. */}
+                      {e.number ? `${e.number} · ` : ''}
                       {formatDate(e.date, 'dd MMM')} · {paymentMethodLabel(tr, e.method)}
                       {e.notes ? ` · ${e.notes}` : ''}
                     </Text>

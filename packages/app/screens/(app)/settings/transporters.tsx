@@ -10,6 +10,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
@@ -19,6 +20,7 @@ import { useTransporters } from '../../../store/selectors';
 import { Transporter } from '@esmart/core/types';
 import { formatGstin, isValidTransporterId } from '@esmart/core/domain/gstin';
 import { uid } from '@esmart/core/lib/id';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 /** The transporter master, used for Part-B of an e-way bill. */
 export default function TransportersSettings() {
@@ -36,7 +38,9 @@ export default function TransportersSettings() {
   const [transporterId, setTransporterId] = useState('');
   const phone = usePhoneInput();
   const [phoneError, setPhoneError] = useState<string | undefined>();
-  const [error, setError] = useState<string | undefined>();
+  const [nameError, setNameError] = useState<string | undefined>();
+  const [idError, setIdError] = useState<string | undefined>();
+  const [confirmDelete, setConfirmDelete] = useState<Transporter | null>(null);
 
   const open = (transporter?: Transporter) => {
     setEditing(transporter ?? null);
@@ -44,21 +48,26 @@ export default function TransportersSettings() {
     setTransporterId(transporter?.transporterId ?? '');
     phone.reset(transporter?.phone);
     setPhoneError(undefined);
-    setError(undefined);
+    setNameError(undefined);
+    setIdError(undefined);
     setSheetOpen(true);
   };
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const save = () => {
-    if (!name.trim()) return setError(tr('errors:validation.required', { field: tr('settings:transporters.name') }));
-    if (!isValidTransporterId(transporterId)) {
-      return setError(tr('settings:transporters.idInvalid'));
-    }
-    setError(undefined);
+    const id = transporterId.trim().toUpperCase();
+    const badName = name.trim() ? undefined : tr('errors:validation.required', { field: tr('settings:transporters.name') });
+    const badId = !isValidTransporterId(id)
+      ? tr('settings:transporters.idInvalid')
+      : transporters.some((x) => x.transporterId === id && x.id !== editing?.id)
+        ? tr('settings:transporters.idTaken')
+        : undefined;
     const badPhone = phone.error();
+    setNameError(badName);
+    setIdError(badId);
     setPhoneError(badPhone);
-    if (badPhone) return;
+    if (badName || badId || badPhone) return;
     saveTransporter({
       id: editing?.id ?? uid('trn'),
       companyId: editing?.companyId ?? activeCompanyId,
@@ -70,6 +79,9 @@ export default function TransportersSettings() {
     toast.show(editing ? tr('settings:transporters.updated') : tr('settings:transporters.added'), 'success', { icon: 'truck-outline' });
     setSheetOpen(false);
   };
+
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, sheetOpen);
 
   return (
     <>
@@ -137,9 +149,8 @@ export default function TransportersSettings() {
                 variant="ghost"
                 fullWidth
                 onPress={() => {
-                  removeTransporter(editing.id);
                   setSheetOpen(false);
-                  toast.show(tr('settings:transporters.removed'), 'success', { icon: 'truck-remove-outline' });
+                  setConfirmDelete(editing);
                 }}
               />
             ) : null}
@@ -147,20 +158,35 @@ export default function TransportersSettings() {
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
-          <TextField label={tr('settings:transporters.name')} required value={name} onChangeText={setName} placeholder={tr('settings:transporters.namePlaceholder')} />
+          <TextField label={tr('settings:transporters.name')} required value={name} onChangeText={setName} placeholder={tr('settings:transporters.namePlaceholder')} error={nameError} />
           <TextField
             label={tr('settings:transporters.id')}
             required
             value={transporterId}
-            onChangeText={(v) => setTransporterId(v.toUpperCase())}
+            onChangeText={(v) => setTransporterId(((v) => v.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15))(v))}
             placeholder="27AABCT5512M1Z6"
             autoCapitalize="characters"
-            error={error}
+            maxLength={15}
+            error={idError}
             hint={tr('settings:transporters.idHint')}
           />
           <PhoneField label={tr('settings:transporters.phone')} {...phone.field} placeholder="22 6789 1000" error={phoneError} />
         </View>
       </Sheet>
+
+      <ConfirmDialog
+        visible={!!confirmDelete}
+        title={tr('settings:transporters.deleteTitle', { name: confirmDelete?.name ?? '' })}
+        message={tr('settings:transporters.deleteMessage')}
+        confirmLabel={tr('settings:transporters.delete')}
+        destructive
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (confirmDelete) removeTransporter(confirmDelete.id);
+          setConfirmDelete(null);
+          toast.show(tr('settings:transporters.removed'), 'success', { icon: 'truck-remove-outline' });
+        }}
+      />
     </>
   );
 }

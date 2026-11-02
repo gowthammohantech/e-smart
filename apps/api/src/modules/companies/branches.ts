@@ -41,6 +41,19 @@ async function assertCodeFree(db: DbOrTx, companyId: string, code: string, excep
   if (dupe) throw conflict('BRANCH_CODE_TAKEN', `Another branch already uses the code ${code}`);
 }
 
+/** The same place twice: another branch with this name, or at this street and PIN. */
+async function assertNotDuplicate(db: DbOrTx, companyId: string, cols: { name: string; addressLine1: string; addressPostalCode: string }, exceptId?: string) {
+  const others = [eq(B.companyId, companyId), ...(exceptId ? [ne(B.id, exceptId)] : [])];
+  const [named] = await db.select({ id: B.id }).from(B).where(and(...others, sql`lower(${B.name}) = lower(${cols.name})`));
+  if (named) throw conflict('BRANCH_NAME_TAKEN', `Another branch is already called ${cols.name}`);
+  if (!cols.addressLine1.trim()) return;
+  const [placed] = await db
+    .select({ name: B.name })
+    .from(B)
+    .where(and(...others, sql`lower(trim(${B.addressLine1})) = lower(trim(${cols.addressLine1}))`, eq(B.addressPostalCode, cols.addressPostalCode)));
+  if (placed) throw conflict('BRANCH_ADDRESS_TAKEN', `${placed.name} is already at this address`);
+}
+
 /** Exactly one primary per company: promoting one demotes the rest. */
 async function demoteOthers(tx: DbOrTx, actor: AuthUser, companyId: string, keepId: string, now: Date) {
   const others = await tx.select().from(B).where(and(eq(B.companyId, companyId), eq(B.isPrimary, true), ne(B.id, keepId)));
@@ -79,6 +92,7 @@ export const branchHandlers = defineHandlers({
     const cols = branchColumns(ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
       await assertCodeFree(tx, ctx.company.id, cols.code);
+      await assertNotDuplicate(tx, ctx.company.id, cols);
       const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(B).where(eq(B.companyId, ctx.company.id));
       const isPrimary = n === 0 || !!ctx.body.isPrimary;
       const [created] = await tx
@@ -104,6 +118,7 @@ export const branchHandlers = defineHandlers({
     }
     const row = await ctx.db.transaction(async (tx) => {
       if (cols.code !== current.code) await assertCodeFree(tx, ctx.company.id, cols.code, current.id);
+      await assertNotDuplicate(tx, ctx.company.id, cols, current.id);
       const [updated] = await tx
         .update(B)
         .set({ ...cols, isPrimary, version: current.version + 1, updatedAt: ctx.now })

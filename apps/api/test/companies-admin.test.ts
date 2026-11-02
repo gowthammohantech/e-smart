@@ -102,6 +102,9 @@ describe('branches', () => {
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ code: 'BLR', isPrimary: false, version: 1 });
     expect((await t.post(`${c}/branches`, branch({ name: 'Other' }), { token })).body.code).toBe('BRANCH_CODE_TAKEN');
+    // The same place under another code: same name, or same street and PIN.
+    expect((await t.post(`${c}/branches`, branch({ code: 'BL2' }), { token })).body.code).toBe('BRANCH_NAME_TAKEN');
+    expect((await t.post(`${c}/branches`, branch({ name: 'Other', code: 'BL3' }), { token })).body.code).toBe('BRANCH_ADDRESS_TAKEN');
 
     const promoted = await t.put(`${c}/branches/${created.body.id}`, { ...created.body, isPrimary: true }, { token, headers: { 'if-match': '"v1"' } });
     expect(promoted.body.isPrimary).toBe(true);
@@ -124,7 +127,7 @@ describe('branches', () => {
     expect((await t.del(`${c}/branches/${primary.id}`, { token })).body.code).toBe('BRANCH_IN_USE');
 
     const spare = await t.post(`${c}/branches`, branch(), { token });
-    const used = await t.post(`${c}/branches`, branch({ code: 'PUN', name: 'Pune' }), { token });
+    const used = await t.post(`${c}/branches`, branch({ code: 'PUN', name: 'Pune', address: { ...BENGALURU, line1: '12 Old Airport Road' } }), { token });
     const [account] = await t.deps.db.select().from(schema.paymentAccounts).where(eq(schema.paymentAccounts.companyId, company.id!));
     const party = await t.post(`${c}/parties`, { kind: 'customer', name: 'Sunrise', currency: 'INR', billingAddress: MUMBAI, openingBalance: { minor: 0, currency: 'INR' }, paymentTermsDays: 0 }, { token });
     await t.deps.db.insert(schema.payments).values({

@@ -12,12 +12,14 @@ import { Button } from '@esmart/ui/components/Button';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useTransporters } from '@esmart/app/store/selectors';
 import { Transporter } from '@esmart/core/types';
 import { formatGstin, isValidTransporterId } from '@esmart/core/domain/gstin';
 import { uid } from '@esmart/core/lib/id';
+import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 
 const DIALOG_WIDTH = 560;
 
@@ -30,7 +32,7 @@ const DIALOG_WIDTH = 560;
  */
 export function TransportersDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings', 'common']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'common', 'errors']);
   const toast = useToast();
 
   const transporters = useTransporters();
@@ -46,6 +48,7 @@ export function TransportersDesktop() {
   const [nameError, setNameError] = useState<string | undefined>();
   const [idError, setIdError] = useState<string | undefined>();
   const [phoneError, setPhoneError] = useState<string | undefined>();
+  const [confirmDelete, setConfirmDelete] = useState<Transporter | null>(null);
   const [fade] = useState(() => new Animated.Value(0));
 
   const open = (transporter?: Transporter) => {
@@ -64,13 +67,18 @@ export function TransportersDesktop() {
   const close = () => setSheetOpen(false);
 
   const save = () => {
-    const missingName = !name.trim();
-    const badId = !isValidTransporterId(transporterId);
-    setNameError(missingName ? 'Name is required' : undefined);
-    setIdError(badId ? 'Transporter ID must be a valid 15-character GSTIN or TRANSIN' : undefined);
+    const id = transporterId.trim().toUpperCase();
+    const badName = name.trim() ? undefined : tr('errors:validation.required', { field: tr('settings:transporters.name') });
+    const badId = !isValidTransporterId(id)
+      ? tr('settings:transporters.idInvalid')
+      : transporters.some((x) => x.transporterId === id && x.id !== editing?.id)
+        ? tr('settings:transporters.idTaken')
+        : undefined;
     const badPhone = phone.error();
+    setNameError(badName);
+    setIdError(badId);
     setPhoneError(badPhone);
-    if (missingName || badId || badPhone) return;
+    if (badName || badId || badPhone) return;
     saveTransporter({
       id: editing?.id ?? uid('trn'),
       companyId: editing?.companyId ?? activeCompanyId,
@@ -79,15 +87,18 @@ export function TransportersDesktop() {
       phone: phone.value || undefined,
       status: 'active',
     });
-    toast.show(editing ? 'Transporter updated' : 'Transporter added', 'success', { icon: 'truck-outline' });
+    toast.show(editing ? tr('settings:transporters.updated') : tr('settings:transporters.added'), 'success', { icon: 'truck-outline' });
     close();
   };
+
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, sheetOpen);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.transporters') }} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48 }}>
         {transporters.length === 0 ? (
           <Card padded={false}>
             <EmptyState
@@ -200,10 +211,10 @@ export function TransportersDesktop() {
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="h3" weight="700">
-                  {editing ? 'Edit transporter' : 'Add a transporter'}
+                  {editing ? tr('settings:transporters.editTitle') : tr('settings:transporters.add')}
                 </Text>
                 <Text variant="small" tone="muted">
-                  Carriers you pick from when you fill in Part-B of an e-way bill.
+                  {tr('settings:transporters.dialogBody')}
                 </Text>
               </View>
               <Pressable
@@ -251,11 +262,12 @@ export function TransportersDesktop() {
                     icon="card-account-details-outline"
                     value={transporterId}
                     onChangeText={(v) => {
-                      setTransporterId(v.toUpperCase());
+                      setTransporterId(((v) => v.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15))(v));
                       setIdError(undefined);
                     }}
                     placeholder="27AABCT5512M1Z6"
                     autoCapitalize="characters"
+                    maxLength={15}
                     error={idError}
                     hint={tr('settings:transporters.idHint')}
                   />
@@ -290,9 +302,8 @@ export function TransportersDesktop() {
                   variant="danger"
                   icon="trash-can-outline"
                   onPress={() => {
-                    removeTransporter(editing.id);
                     close();
-                    toast.show(tr('settings:transporters.removed'), 'success', { icon: 'truck-remove-outline' });
+                    setConfirmDelete(editing);
                   }}
                 />
               ) : null}
@@ -303,6 +314,20 @@ export function TransportersDesktop() {
           </Animated.View>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={!!confirmDelete}
+        title={tr('settings:transporters.deleteTitle', { name: confirmDelete?.name ?? '' })}
+        message={tr('settings:transporters.deleteMessage')}
+        confirmLabel={tr('settings:transporters.delete')}
+        destructive
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (confirmDelete) removeTransporter(confirmDelete.id);
+          setConfirmDelete(null);
+          toast.show(tr('settings:transporters.removed'), 'success', { icon: 'truck-remove-outline' });
+        }}
+      />
     </View>
   );
 }

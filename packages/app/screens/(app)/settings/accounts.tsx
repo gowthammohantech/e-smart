@@ -24,6 +24,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 export default function AccountSettings() {
   const t = useTheme();
@@ -85,6 +86,9 @@ export default function AccountSettings() {
     toast.show(editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'), 'success', { icon: 'bank-check' });
     setEditing(null);
   };
+
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

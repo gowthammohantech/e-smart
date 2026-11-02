@@ -44,7 +44,7 @@ import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { formatNumber } from '@esmart/core/domain/numbering';
-import { initialStatus, isFinalized } from '@esmart/core/domain/documentStates';
+import { conversionBlock, initialStatus, isFinalized } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import { LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, statusForOutstanding } from '@esmart/core/domain/receivables';
@@ -865,8 +865,8 @@ export const useAppStore = create<AppState>()(
 
         convertDocument: (id, target) => {
           const src = get().documents.find((d) => d.id === id);
-          // Nothing is made from a cancelled document.
-          if (!src || src.status === 'cancelled') return '';
+          // Nothing is made from a cancelled or draft document, nor twice from one order.
+          if (!src || conversionBlock(src, target, get().documents)) return '';
           const party = get().parties.find((p) => p.id === src.partyId);
           const newId = get().createDocument({
             kind: target,

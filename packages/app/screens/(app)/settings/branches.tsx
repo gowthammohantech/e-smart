@@ -27,6 +27,7 @@ import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGstinLookup, type GstinDetails } from '../../../features/gstin/useGstinLookup';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 export default function BranchSettings() {
   const t = useTheme();
@@ -52,7 +53,7 @@ export default function BranchSettings() {
   const [postalCode, setPostalCode] = useState('');
   const [gstin, setGstin] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'code' | 'gstin' | 'postalCode' | 'phone'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'code' | 'line1' | 'gstin' | 'postalCode' | 'phone'>>({});
 
   const open = (branch?: Branch) => {
     // A new branch starts with a blank address: copying head office's street
@@ -107,13 +108,18 @@ export default function BranchSettings() {
     if (!editing || !name.trim()) return;
     const cleanGstin = gstin ? normalizeGstin(gstin) : '';
     const nextCode = (code || name.slice(0, 3)).toUpperCase();
-    // The same branch twice: the server refuses a repeated code, and a repeated name is the same place.
+    // The same branch twice: a repeated name, code, or street and PIN is the same place (the server refuses them too).
     const others = branches.filter((b) => b.id !== editing.id);
-    const next: Errors<'name' | 'code' | 'gstin' | 'postalCode' | 'phone'> = {
+    const street = (s: string) => s.trim().toLowerCase().replace(/[\s,.]+/g, ' ');
+    const sameAddress = line1.trim()
+      ? others.find((b) => street(b.address.line1) === street(line1) && b.address.postalCode.trim() === postalCode.trim())
+      : undefined;
+    const next: Errors<'name' | 'code' | 'line1' | 'gstin' | 'postalCode' | 'phone'> = {
       name: others.some((b) => b.name.trim().toLowerCase() === name.trim().toLowerCase())
         ? tr('settings:branches.nameTaken', { name: name.trim() })
         : undefined,
       code: others.some((b) => b.code.toUpperCase() === nextCode) ? tr('settings:branches.codeTaken', { code: nextCode }) : undefined,
+      line1: sameAddress ? tr('settings:branches.addressTaken', { name: sameAddress.name }) : undefined,
       gstin: cleanGstin
         ? validGstin(cleanGstin) ??
           (stateCode && cleanGstin.slice(0, 2) !== stateCode
@@ -150,6 +156,9 @@ export default function BranchSettings() {
   };
 
   const docCount = (branchId: string) => documents.filter((d) => d.branchId === branchId).length;
+
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing && !!name.trim());
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -228,6 +237,7 @@ export default function BranchSettings() {
             placeholder={tr('settings:branches.addressPlaceholder')}
             icon="map-marker-outline"
             multiline
+            error={errors.line1}
           />
           <PickerField
             label={tr('settings:branches.state')}

@@ -24,6 +24,7 @@ import { CURRENCIES, currencyMeta } from '@esmart/core/lib/currencies';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 
 export default function CurrencySettings() {
   const t = useTheme();
@@ -79,6 +80,9 @@ export default function CurrencySettings() {
     toast.show(tr('settings:currencies.saved'), 'success', { icon: 'currency-inr' });
     setEditing(null);
   };
+
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing && !!Number(rate));
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>

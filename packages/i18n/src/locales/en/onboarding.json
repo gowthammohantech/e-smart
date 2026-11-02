@@ -74,7 +74,8 @@
     "defaultSlabs": "Default tax slabs",
     "unregisteredNote": "Your invoices will be raised without a tax breakdown. You can register later without losing any history.",
     "registeredFor": "I'm registered for {{regime}}",
-    "slabsNote": "These are created for you. Add or edit slabs any time in Settings → Taxes."
+    "slabsNote": "These are created for you. Add or edit slabs any time in Settings → Taxes.",
+    "fromPortal": "Filled in from the GST portal"
   },
   "numbering": {
     "title": "Invoice numbering",
