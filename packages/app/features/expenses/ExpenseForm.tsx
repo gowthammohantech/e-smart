@@ -495,11 +495,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
-            <Button title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} />
           </FormActions>
         ) : (
           <FormActions>
-            <Button title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
           </FormActions>
         )}
 

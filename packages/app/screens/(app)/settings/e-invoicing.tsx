@@ -142,7 +142,7 @@ export default function EInvoicingSettings() {
             ? // A desktop puts Save with the page title, top right, instead of a bar at the bottom.
               {
                 title: tr('nav:title.eInvoicingAndEWayBill'),
-                headerRight: () => <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} />,
+                headerRight: () => <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} />,
               }
             : { title: tr('nav:title.eInvoicingAndEWayBill') }
         }
@@ -356,7 +356,7 @@ export default function EInvoicingSettings() {
             backgroundColor: t.c.paper,
           }}
         >
-          <Button title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
+          <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
         </View>
       )}
     </View>

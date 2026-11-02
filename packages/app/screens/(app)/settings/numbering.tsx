@@ -113,7 +113,7 @@ export default function NumberingSettings() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing ? seriesLabel(tr, editing.kind) : ''}
-        footer={<Button title={tr('settings:numbering.save')} onPress={save} fullWidth />}
+        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} fullWidth />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>

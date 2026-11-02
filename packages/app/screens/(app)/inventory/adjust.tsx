@@ -170,7 +170,7 @@ export default function StockAdjust() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} fullWidth size="lg" />
       </View>
 
       <SelectSheet

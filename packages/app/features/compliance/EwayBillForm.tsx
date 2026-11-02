@@ -400,6 +400,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         >
           <Button
             title={tr('compliance:ewb.generate')}
+            shortcut="S"
             icon="truck-fast-outline"
             loading={busy}
             onPress={submit}

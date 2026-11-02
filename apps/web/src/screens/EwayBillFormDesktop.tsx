@@ -236,7 +236,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
   // The button to raise it sits at the top right, beside the page title. It
   // commits to the portal, so the header's "N" shortcut doesn't run it.
-  const inHeader = usePageAction({ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline', onPress: () => void submit(), loading: busy, shortcut: false });
+  const inHeader = usePageAction({ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline', onPress: () => void submit(), loading: busy, shortcut: false, keyHint: 'S' });
 
   const distanceField = (
     <TextField
@@ -410,7 +410,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
       <ValidityCard form={form} />
 
-      {inHeader ? null : <Button title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} fullWidth size="lg" />}
+      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} fullWidth size="lg" />}
     </>
   );
 

@@ -124,7 +124,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
               <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/catalog/items')} />
-              <Button title={item ? 'Save changes' : 'Add item'} onPress={() => void save()} loading={saving} />
+              <Button shortcut="S" title={item ? 'Save changes' : 'Add item'} onPress={() => void save()} loading={saving} />
             </View>
           ),
         }}

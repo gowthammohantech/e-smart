@@ -155,7 +155,7 @@ function LineEditorForm({
               style={{ flex: 1 }}
             />
           ) : null}
-          <Button title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2 }} />
+          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2 }} />
         </View>
       }
     >

@@ -142,7 +142,7 @@ export default function TransportersSettings() {
         title={editing ? tr('settings:transporters.editTitle') : tr('settings:transporters.add')}
         footer={
           <View style={{ gap: t.spacing.sm }}>
-            <Button title={tr('settings:transporters.save')} fullWidth onPress={save} />
+            <Button shortcut="S" title={tr('settings:transporters.save')} fullWidth onPress={save} />
             {editing ? (
               <Button
                 title={tr('settings:transporters.delete')}

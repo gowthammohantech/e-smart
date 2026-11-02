@@ -195,7 +195,7 @@ export default function UserSettings() {
             {editing?.id && editing.status === 'invited' ? (
               <Button title={tr('settings:users.resend')} variant="secondary" loading={busy} onPress={resend} style={{ flex: 2 }} />
             ) : null}
-            {isGuest ? null : <Button title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={{ flex: 2 }} />}
+            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={{ flex: 2 }} />}
           </View>
         }
       >

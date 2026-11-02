@@ -711,7 +711,7 @@ export default function NewPayment() {
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made')} />
-            <Button title={submitTitle} onPress={() => void save()} loading={saving} disabled={!canSave} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={!canSave} />
           </FormActions>
         ) : (
           <View

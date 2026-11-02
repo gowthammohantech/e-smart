@@ -177,7 +177,7 @@ export function StockAdjustDesktop() {
 
         <FormFooter>
           <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/(tabs)/inventory')} />
-          <Button title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} />
+          <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} />
         </FormFooter>
       </ScrollView>
 

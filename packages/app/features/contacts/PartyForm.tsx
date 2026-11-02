@@ -449,10 +449,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           {desktop ? (
             <>
               <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(backTo)} />
-              <Button title={submitTitle} onPress={() => void save()} loading={saving} />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} />
             </>
           ) : (
-            <Button title={submitTitle} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} fullWidth size="lg" />
           )}
         </FormActions>
 

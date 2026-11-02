@@ -105,7 +105,7 @@ export default function Profile() {
       </ScrollView>
 
       <FormActions>
-        <Button title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
       </FormActions>
     </KeyboardAvoidingView>
   );

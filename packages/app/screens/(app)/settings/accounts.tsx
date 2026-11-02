@@ -148,7 +148,7 @@ export default function AccountSettings() {
                 }}
               />
             ) : null}
-            <Button title={tr('settings:accounts.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:accounts.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
           </View>
         }
       >

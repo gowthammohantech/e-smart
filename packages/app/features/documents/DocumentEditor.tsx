@@ -69,10 +69,6 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
 
-/** The finalise shortcut as a Mac or a PC writes it; only a browser ever shows it. */
-const SHORTCUT_KEYS =
-  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '') ? '⌘ + Enter' : 'Ctrl + Enter';
-
 export function DocumentEditor({
   kind,
   documentId,
@@ -384,7 +380,7 @@ export function DocumentEditor({
     else setConfirmFinalize(true);
   };
 
-  // Ctrl+Enter (⌘+Enter on a Mac, shown as SHORTCUT_KEYS) does what the Finalise button does: the same
+  // Ctrl+Enter (⌘+Enter on a Mac, shown on the Finalise button) does what the Finalise button does: the same
   // checks, then the same confirmation, so nothing is finalised without it.
   // Only while this editor is the screen in view; a phone has no keyboard for it.
   const finalizeShortcut = useRef(() => {});
@@ -963,12 +959,8 @@ export function DocumentEditor({
               options={{
                 headerRight: () => (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    {/* Tells a keyboard user about the shortcut wired up above. */}
-                    <Text variant="caption" tone="muted" style={{ marginRight: t.spacing.xs }}>
-                      {tr('sales:editor.finaliseShortcut', { keys: SHORTCUT_KEYS })}
-                    </Text>
-                    <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={!draft.partyId} />
-                    <Button title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={!draft.partyId || draft.lines.length === 0} />
+                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={!draft.partyId} />
+                    <Button shortcut="Enter" title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={!draft.partyId || draft.lines.length === 0} />
                   </View>
                 ),
               }}
@@ -1049,7 +1041,7 @@ export function DocumentEditor({
                 />
               ) : (
                 <>
-                  <Button title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} style={{ flex: 1 }} />
                   <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} style={{ flex: 1 }} />
                 </>
               )}

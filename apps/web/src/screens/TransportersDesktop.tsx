@@ -309,7 +309,7 @@ export function TransportersDesktop() {
               ) : null}
               <View style={{ flex: 1 }} />
               <Button title={tr('common:component.cancel')} variant="ghost" onPress={close} />
-              <Button title={tr('settings:transporters.save')} onPress={save} />
+              <Button shortcut="S" title={tr('settings:transporters.save')} onPress={save} />
             </View>
           </Animated.View>
         </View>

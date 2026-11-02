@@ -162,7 +162,7 @@ export default function CurrencySettings() {
                 }}
               />
             ) : null}
-            <Button title={tr('settings:currencies.save')} onPress={save} disabled={!Number(rate)} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:currencies.save')} onPress={save} disabled={!Number(rate)} style={{ flex: 2 }} />
           </View>
         }
       >
