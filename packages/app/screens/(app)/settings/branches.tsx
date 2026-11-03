@@ -99,7 +99,9 @@ export default function BranchSettings() {
     if (street) setLine1(street);
     const code = a.stateCode ?? gstin.slice(0, 2);
     if (INDIAN_STATES.some((st) => st.code === code)) setStateCode(code);
+    // A city left from another state goes, as when the state is picked by hand.
     if (a.city) setCity(a.city);
+    else if (city && !citiesForState(code).includes(city)) setCity('');
     if (a.postalCode) setPostalCode(a.postalCode);
   };
   const gstinLookup = useGstinLookup({ gstin, opened: editing?.gstin, enabled: !!editing, fill: fillFromPortal });

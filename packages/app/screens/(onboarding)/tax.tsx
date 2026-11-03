@@ -9,47 +9,17 @@ import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
-import { COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
+import { COUNTRIES } from '@esmart/core/data/masters';
 import { validGstin } from '@esmart/core/lib/validators';
-import { useGstinLookup, type GstinDetails } from '../../features/gstin/useGstinLookup';
 
 export default function TaxStep() {
   const t = useTheme();
   const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
-  const { draft, set, setAddress } = useOnboardingStore();
+  const { draft, set } = useOnboardingStore();
   const [error, setError] = useState<string | undefined>();
-  // Set once the portal has filled the business in, to show what it put there.
-  const [filled, setFilled] = useState(false);
-
   const country = COUNTRIES.find((c) => c.code === draft.country);
   const isGst = country?.regime === 'GST';
-
-  // The GSTIN is the head office's: the GST portal's record of it fills in the
-  // legal name and the registered address the head-office branch is made with.
-  const fillFromPortal = (d: GstinDetails) => {
-    const legal = d.legalName ?? d.tradeName;
-    if (legal) set({ legalName: legal, ...(draft.name.trim() ? {} : { name: d.tradeName ?? legal }) });
-    if (d.registrationType === 'composition') set({ compositionScheme: true });
-    const a = d.address;
-    if (a) {
-      const code = a.stateCode ?? draft.taxIdentifier.slice(0, 2);
-      const state = INDIAN_STATES.find((s) => s.code === code);
-      setAddress({
-        ...(a.line1 ? { line1: [a.line1, a.line2].filter(Boolean).join(', ') } : {}),
-        ...(a.city ? { city: a.city } : {}),
-        ...(state ? { state: state.name, stateCode: state.code } : {}),
-        ...(a.postalCode ? { postalCode: a.postalCode } : {}),
-      });
-    }
-    setFilled(true);
-  };
-  const gstinLookup = useGstinLookup({
-    gstin: draft.taxIdentifier,
-    enabled: draft.taxRegistered && isGst && draft.country === 'IN',
-    fill: fillFromPortal,
-  });
-  const where = [draft.address.line1, draft.address.city, draft.address.state, draft.address.postalCode].filter(Boolean).join(', ');
 
   const next = () => {
     if (draft.taxRegistered && isGst && draft.country === 'IN') {
@@ -92,19 +62,8 @@ export default function TaxStep() {
             autoCapitalize="characters"
             icon="card-account-details-outline"
             error={error}
-            hint={gstinLookup.hint ?? (draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined)}
-            suffix={gstinLookup.suffix}
+            hint={draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined}
           />
-
-          {filled && gstinLookup.suffix ? (
-            <Card variant="flat" style={{ gap: t.spacing.xs }}>
-              <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                {tr('onboarding:tax.fromPortal')}
-              </Text>
-              <Text variant="body" weight="600">{draft.legalName}</Text>
-              {where ? <Text variant="small" tone="muted">{where}</Text> : null}
-            </Card>
-          ) : null}
 
           {isGst && draft.country === 'IN' ? (
             <SwitchField
