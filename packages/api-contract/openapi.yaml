@@ -3490,19 +3490,21 @@ components:
             phone: { type: string }
             gstin: { type: string, description: 'The branch''s own GSTIN when it is registered separately; printed as the seller' }
     User:
-      type: object
-      properties:
-        id: { type: string, readOnly: true }
-        accountId: { type: string, readOnly: true }
-        name: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
-        role: { $ref: '#/components/schemas/UserRole' }
-        companyIds: { type: array, items: { type: string } }
-        branchIds: { type: array, items: { type: string }, description: Empty means all branches }
-        avatarColor: { type: string }
-        status: { type: string, enum: [active, invited, disabled] }
-        lastActiveAt: { type: string, format: date-time, readOnly: true }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          properties:
+            id: { type: string, readOnly: true }
+            accountId: { type: string, readOnly: true }
+            name: { type: string }
+            email: { type: string, format: email }
+            phone: { type: string }
+            role: { $ref: '#/components/schemas/UserRole' }
+            companyIds: { type: array, items: { type: string } }
+            branchIds: { type: array, items: { type: string }, description: Empty means all branches }
+            avatarColor: { type: string }
+            status: { type: string, enum: [active, invited, disabled] }
+            lastActiveAt: { type: string, format: date-time, readOnly: true }
     DeviceSession:
       type: object
       properties:

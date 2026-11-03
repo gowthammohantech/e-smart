@@ -254,6 +254,25 @@ describe('resilience', () => {
     expect(useRemoteMeta.getState().versions.cmp_FREE).toBe(1);
   });
 
+  it('pulls a business again once its plan changes, for what the old plan could not read', async () => {
+    const id = BOOK.companyId;
+    useRemoteMeta.getState().patch({ plans: { [id]: 'free' } });
+    useAppStore.setState({ companies: actions().companies.map((c) => (c.id === id ? { ...c, plan: 'pro' } : c)) });
+    const category = { id: 'exc_SERVER', companyId: id, name: 'Rent', version: 1 };
+    GET.mockImplementation(async (path: string, opts?: { params?: { query?: { companyId?: string } } }) => {
+      if (path === '/sync/pull') {
+        // Only a pull of that business from the start brings what Free kept back.
+        const changes = opts?.params?.query?.companyId === id ? [{ op: 'upsert', entityType: 'expense_category', entityId: category.id, data: category }] : [];
+        return { data: { changes, cursor: '1', hasMore: false } };
+      }
+      return { data: { data: [], nextCursor: null } };
+    });
+    await syncNow();
+
+    expect(actions().expenseCategories.some((c) => c.id === category.id)).toBe(true);
+    expect(useRemoteMeta.getState().plans[id]).toBe('pro');
+  });
+
   it('B7: narrows down a refused batch, so one bad entry fails alone', async () => {
     actions().saveParty(party({ id: 'pty_good', name: 'Good' }));
     actions().saveParty(party({ id: 'pty_bad', name: 'Bad' }));

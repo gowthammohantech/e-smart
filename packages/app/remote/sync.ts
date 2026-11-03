@@ -225,6 +225,7 @@ async function runLocked() {
     await flushPendingReceipts(started);
     await pullNewCompanies(started);
     await pullAll(started);
+    await pullChangedPlans(started);
     await refreshLists(started);
     if (pushError) throw pushError;
     // Best effort: a logo link that can't refresh now is retried on the next run.
@@ -407,15 +408,34 @@ async function pullNewCompanies(started: number) {
   assertSession(started);
   const known = new Set(useAppStore.getState().companies.map((c) => c.id));
   for (const { id } of (me?.companies ?? []) as { id?: string }[]) {
-    if (!id || known.has(id)) continue;
-    let since: string | undefined;
-    for (;;) {
-      const { data } = await api.GET('/sync/pull', { params: { query: { companyId: id, ...(since ? { since } : {}), limit: 500 } } });
-      assertSession(started);
-      applyChanges(data?.changes ?? []);
-      since = data?.cursor ?? since;
-      if (!data?.hasMore) break;
-    }
+    if (id && !known.has(id)) await pullCompany(id, started);
+  }
+}
+
+/** One business's whole history, from the start; the main cursor stays where it is. */
+async function pullCompany(companyId: string, started: number) {
+  let since: string | undefined;
+  for (;;) {
+    const { data } = await api.GET('/sync/pull', { params: { query: { companyId, ...(since ? { since } : {}), limit: 500 } } });
+    assertSession(started);
+    applyChanges(data?.changes ?? []);
+    since = data?.cursor ?? since;
+    if (!data?.hasMore) break;
+  }
+}
+
+/**
+ * A plan opens more of a business (expenses on Pro). What the old plan
+ * couldn't read came through the pull empty and was passed over, so a
+ * business whose plan has changed is pulled again from the start.
+ */
+async function pullChangedPlans(started: number) {
+  for (const c of useAppStore.getState().companies) {
+    const seen = useRemoteMeta.getState().plans[c.id];
+    if (seen === c.plan || !knownToServer(c.id)) continue;
+    if (seen !== undefined) await pullCompany(c.id, started);
+    const { plans, patch } = useRemoteMeta.getState();
+    patch({ plans: { ...plans, [c.id]: c.plan } });
   }
 }
 
@@ -471,7 +491,11 @@ async function refreshLists(started = session) {
   replaceForCompany('notifications', companyId, notifications as never);
   replaceForCompany('auditEvents', companyId, audit as never);
   replaceForCompany('stockMovements', companyId, movements as never);
-  useAppStore.setState({ devices: devices as never, users: users as never });
+  // A person with a change still to send (an invite, an edit) keeps it on screen until it is answered.
+  const s = useAppStore.getState();
+  const unsent = new Set(s.syncQueue.filter((e) => e.status !== 'synced').map((e) => e.entityId));
+  const kept = s.users.filter((u) => unsent.has(u.id));
+  useAppStore.setState({ devices: devices as never, users: [...(users as typeof s.users).filter((u) => !unsent.has(u.id)), ...kept] });
   // Team members may not be in the change log, yet the server knows them: an edit is an update.
   const { setVersion } = useRemoteMeta.getState();
   for (const u of users as { id?: string; version?: number }[]) if (u.id && typeof u.version === 'number') setVersion(u.id, u.version);

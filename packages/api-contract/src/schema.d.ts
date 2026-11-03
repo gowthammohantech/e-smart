@@ -2619,7 +2619,7 @@ export interface components {
             /** @description The branch's own GSTIN when it is registered separately; printed as the seller */
             gstin?: string;
         };
-        User: {
+        User: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly accountId?: string;
             name?: string;
