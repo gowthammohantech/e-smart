@@ -4,7 +4,7 @@ import type { Config } from '../config';
 import { LOGO_CID, LOGO_PNG_BASE64 } from '../lib/emailLogo';
 import { sendPay4smsOtp } from './pay4sms';
 
-export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; at: Date };
+export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; html?: string; inline?: InlineImage[]; at: Date };
 
 /** In-process outbox. The log providers write here; tests read OTPs and links from it. */
 export class Outbox {
@@ -29,9 +29,18 @@ export interface SmsProvider {
 /** The logo goes along as an inline attachment when the email's HTML refers to it. */
 const inlineLogo = (html?: string) => (html?.includes(`cid:${LOGO_CID}`) ? { name: 'logo.png', contentType: 'image/png', base64: LOGO_PNG_BASE64, cid: LOGO_CID } : undefined);
 
+/** An image carried inside the email, referred to from its HTML as `cid:<cid>`. */
+export type InlineImage = { cid: string; name: string; contentType: string; base64: string };
+
 export interface EmailProvider {
-  send(msg: { to: string; subject: string; text: string; html?: string }): Promise<SendResult>;
+  send(msg: { to: string; subject: string; text: string; html?: string; inline?: InlineImage[] }): Promise<SendResult>;
 }
+
+/** Every image the email carries: the Elixir Books mark when its HTML uses it, and any the sender added. */
+const inlineImages = (msg: { html?: string; inline?: InlineImage[] }): InlineImage[] => {
+  const logo = inlineLogo(msg.html);
+  return [...(logo ? [logo] : []), ...(msg.inline ?? [])];
+};
 export interface WhatsAppProvider {
   /** Sends text, optionally with a document link (a PDF share link). */
   send(msg: { to: string; text: string; documentUrl?: string; filename?: string }): Promise<SendResult>;
@@ -95,11 +104,11 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
       ? {
           async send(msg) {
             // Plain fetch against Resend's REST API, so there is no SDK to carry.
-            const logo = inlineLogo(msg.html);
+            const images = inlineImages(msg);
             const res = await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: { authorization: `Bearer ${config.RESEND_API_KEY ?? ''}`, 'content-type': 'application/json' },
-              body: JSON.stringify({ from: config.EMAIL_FROM, to: [msg.to], subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}), ...(config.EMAIL_REPLY_TO ? { reply_to: config.EMAIL_REPLY_TO } : {}), ...(logo ? { attachments: [{ filename: logo.name, content: logo.base64, content_type: logo.contentType, content_id: logo.cid }] } : {}) }),
+              body: JSON.stringify({ from: config.EMAIL_FROM, to: [msg.to], subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}), ...(config.EMAIL_REPLY_TO ? { reply_to: config.EMAIL_REPLY_TO } : {}), ...(images.length ? { attachments: images.map((i) => ({ filename: i.name, content: i.base64, content_type: i.contentType, content_id: i.cid })) } : {}) }),
             });
             const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
             if (!res.ok) throw new Error(`Resend ${res.status}${body.message ? `: ${body.message}` : ''}`);
@@ -110,13 +119,13 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
       ? {
           async send(msg) {
             acs ??= new EmailClient(config.ACS_CONNECTION_STRING ?? '');
-            const logo = inlineLogo(msg.html);
+            const images = inlineImages(msg);
             const poller = await acs.beginSend({
               senderAddress: emailAddress(config.EMAIL_FROM),
               content: { subject: msg.subject, plainText: msg.text, ...(msg.html ? { html: msg.html } : {}) },
               recipients: { to: [{ address: msg.to }] },
               ...(config.EMAIL_REPLY_TO ? { replyTo: [{ address: config.EMAIL_REPLY_TO }] } : {}),
-              ...(logo ? { attachments: [{ name: logo.name, contentType: logo.contentType, contentInBase64: logo.base64, contentId: logo.cid }] } : {}),
+              ...(images.length ? { attachments: images.map((i) => ({ name: i.name, contentType: i.contentType, contentInBase64: i.base64, contentId: i.cid })) } : {}),
             });
             const out = await poller.pollUntilDone();
             if (out.status !== 'Succeeded') throw new Error(`ACS email ${out.status}${out.error?.message ? `: ${out.error.message}` : ''}`);
@@ -144,7 +153,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
         }
       : {
           async send(msg) {
-            outbox.push({ channel: 'email', to: msg.to, subject: msg.subject, text: msg.text });
+            outbox.push({ channel: 'email', to: msg.to, subject: msg.subject, text: msg.text, html: msg.html, inline: msg.inline });
             log(`[email → ${msg.to}] ${msg.subject}\n${msg.text}`);
             return { providerMessageId: localId('email') };
           },

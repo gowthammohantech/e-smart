@@ -412,6 +412,16 @@ describe('documents: output', () => {
     expect(sentQuote.body).toMatchObject({ status: 'sent', number: 'QT/26-27/0001' });
   });
 
+  it('carries the business logo inside the email only when there is one, and signs off with Elixir Books', async () => {
+    const m = await moneySetup(t);
+    const inv = await issueInvoice(t, m);
+    await t.post(`${m.c}/documents/${inv.id}/send`, { channel: 'email' }, { token: m.token });
+    const plain = t.providers.outbox.last('email');
+    expect(plain?.html).not.toContain('cid:business-logo');
+    expect(plain?.inline ?? []).toHaveLength(0);
+    expect(plain?.html).toContain('cid:elixir-logo');
+  });
+
   it('says so when the provider refuses the email, rather than reporting it sent', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);

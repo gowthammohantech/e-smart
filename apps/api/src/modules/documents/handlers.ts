@@ -34,11 +34,16 @@ import {
 } from './engine';
 import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, assertNoLiveReturns, assertPeriodOpen, finalizeInTx, isReturn, reverseStock, syncPaymentState, today } from './lifecycle';
 import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
-import { companyLogoLink } from '../companies/logo';
+import { companyLogoFile } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { documentsToWire, summariesToWire, type DocumentWire, type SummaryRow } from './wire';
+
+/** How the email's HTML refers to the business logo it carries. */
+const BUSINESS_LOGO_CID = 'business-logo';
+/** A logo bigger than this stays out of the email rather than weigh it down; the name shows instead. */
+const LOGO_EMAIL_MAX_BYTES = 1024 * 1024;
 
 /** What a sent document calls itself in the email, as the app names it. */
 const EMAIL_TITLES: Record<DocumentKind, string> = {
@@ -502,7 +507,7 @@ export const documentsHandlers = defineHandlers({
     // A payment link only makes sense for an invoice that still has money owing.
     const payable = row.kind === 'invoice' && !['draft', 'cancelled', 'paid'].includes(effectiveStatus(row, today(ctx.now)));
 
-    const { messageId, queued, text, html, pdfUrl } = await ctx.db.transaction(async (tx) => {
+    const { messageId, queued, text, html, inline, pdfUrl } = await ctx.db.transaction(async (tx) => {
       const share = await createShareLinkFor(tx, ctx.deps, ctx.user, row, ctx.now);
       const pay = body.includePaymentLink && payable ? await paymentLinkFor(tx, ctx.deps, ctx.company, ctx.user, row, ctx.now) : null;
       let pdfUrl: string | undefined;
@@ -518,12 +523,16 @@ export const documentsHandlers = defineHandlers({
       const due = row.grandTotalMinor - row.amountPaidMinor;
       const partPaid = (row.kind === 'invoice' || row.kind === 'purchaseBill') && row.amountPaidMinor > 0 && due > 0;
       const c = ctx.company;
+      // The logo rides inside the email (a link would need public storage, and mail apps block remote
+      // images); none on file, or one too big to carry, and only the name shows.
+      const logo = body.channel === 'email' ? await companyLogoFile(tx, ctx.deps, c, LOGO_EMAIL_MAX_BYTES) : undefined;
+      const inline = logo ? [{ cid: BUSINESS_LOGO_CID, name: `logo.${logo.mime === 'image/png' ? 'png' : 'jpg'}`, contentType: logo.mime, base64: logo.base64 }] : undefined;
       const html =
         body.channel === 'email'
           ? renderDocumentEmailHtml({
               businessName: c.name,
               // Lives as long as the share link, so the email still shows it when the customer comes back to it.
-              logoUrl: await companyLogoLink(tx, ctx.deps, c, SHARE_LINK_DAYS * 86_400),
+              logoCid: logo ? BUSINESS_LOGO_CID : undefined,
               businessDetails: [
                 [c.addressLine1, c.addressLine2, c.addressCity, [c.addressState, c.addressPostalCode].filter(Boolean).join(' ')].filter(Boolean).join(', '),
                 [c.phone, c.email].filter(Boolean).join(' · '),
@@ -581,7 +590,7 @@ export const documentsHandlers = defineHandlers({
           createdAt: ctx.now,
         });
       }
-      return { messageId: first!, queued, text, html, pdfUrl };
+      return { messageId: first!, queued, text, html, inline, pdfUrl };
     });
 
     // After the commit: the links they carry exist by now, and a message can't be unsent by a rollback.
@@ -590,7 +599,7 @@ export const documentsHandlers = defineHandlers({
       try {
         const sent =
             body.channel === 'email'
-              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text, html })
+              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text, html, inline })
               : body.channel === 'whatsapp'
                 ? await ctx.deps.providers.whatsapp.send({ to, text, documentUrl: pdfUrl, filename: pdfFilename(row.number) })
                 : await ctx.deps.providers.sms.send(to, text);

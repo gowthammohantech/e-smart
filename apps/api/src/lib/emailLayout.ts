@@ -21,8 +21,8 @@ const withBold = (s: string) => escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<strong
 
 export type DocumentEmail = {
   businessName: string;
-  /** A link to the business logo. Remote, so the client may ask before showing it; the name stands in until then. */
-  logoUrl?: string;
+  /** The `cid` of the business logo carried inside the email; without one only the name shows. */
+  logoCid?: string;
   /** Address, phone, email, tax number: one line each, for the footer. */
   businessDetails: string[];
   /** What the document is, e.g. "Invoice", and its number. */
@@ -76,7 +76,7 @@ export function renderDocumentEmailHtml(e: DocumentEmail): string {
               <td style="padding:0 4px 16px;">
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
-                    ${e.logoUrl ? `<td style="padding-right:12px;vertical-align:middle;"><img src="${escapeHtml(e.logoUrl)}" alt="${name}" height="44" style="display:block;border:0;outline:none;width:auto;height:auto;max-height:44px;max-width:150px;"></td>` : ''}
+                    ${e.logoCid ? `<td style="padding-right:12px;vertical-align:middle;"><img src="cid:${escapeHtml(e.logoCid)}" alt="" height="44" style="display:block;border:0;outline:none;width:auto;height:auto;max-height:44px;max-width:150px;"></td>` : ''}
                     <td style="vertical-align:middle;font-size:18px;font-weight:700;color:#1c1f23;">${name}</td>
                   </tr>
                 </table>
@@ -116,6 +116,17 @@ export function renderDocumentEmailHtml(e: DocumentEmail): string {
               <td align="center" style="padding:20px 12px 0;font-size:12px;line-height:1.6;color:#6b7280;">
                 <div style="font-weight:600;color:#4b5563;">${name}</div>
                 ${e.businessDetails.map((d) => `<div>${escapeHtml(d)}</div>`).join('')}
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:24px 12px 0;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;padding-right:6px;font-size:11px;color:#9ca3af;">Sent with</td>
+                    <td style="vertical-align:middle;padding-right:5px;"><img src="cid:${LOGO_CID}" alt="" width="11" height="16" style="display:block;border:0;outline:none;width:11px;height:16px;"></td>
+                    <td style="vertical-align:middle;font-size:12px;font-weight:700;letter-spacing:0.2px;color:#2e3590;">Elixir Books</td>
+                  </tr>
+                </table>
               </td>
             </tr>
           </table>
