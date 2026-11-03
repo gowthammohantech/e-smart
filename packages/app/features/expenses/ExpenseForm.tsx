@@ -238,7 +238,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       useReceiptQueue.getState().add(id, record.companyId, receiptLater);
       toast.show(tr('purchases:form.receiptQueued'), 'success');
     }
-    leaveGuard.release();
+    await leaveGuard.release();
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };

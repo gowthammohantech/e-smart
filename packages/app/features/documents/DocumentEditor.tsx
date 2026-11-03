@@ -488,7 +488,7 @@ export function DocumentEditor({
       },
     );
     // Saved: leaving for the saved document isn't leaving changes behind.
-    leaveGuard.release();
+    await leaveGuard.release();
     if (onSaved) onSaved(id);
     else router.replace(detailRouteFor(kind, id) as never);
   };

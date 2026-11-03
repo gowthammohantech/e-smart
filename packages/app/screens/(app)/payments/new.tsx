@@ -314,7 +314,7 @@ export default function NewPayment() {
       toast.show(tr('sales:payment.noAccountForMethod'), 'error', { icon: 'bank-off-outline' });
       return;
     }
-    leaveGuard.release();
+    await leaveGuard.release();
     router.replace(`/(app)/payments/${res.id ?? res.result}`);
   };
   useSaveShortcut(() => void save(), !saving && canSave);
