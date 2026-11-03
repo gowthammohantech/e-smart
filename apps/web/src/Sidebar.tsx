@@ -12,6 +12,8 @@ import { canOpen } from '@esmart/core/domain/plan';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
 import { usePayment, usePlan } from '@esmart/app/store/selectors';
+// A page swap the open form can't see coming; it asks first when there are unsaved changes.
+import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
 import {
   SIDEBAR_COMPACT_WIDTH,
   SIDEBAR_WIDTH,
@@ -65,7 +67,7 @@ function HomeLogo({ compact }: { compact: boolean }) {
       {...({ href: home } as object)}
       onPress={(e) => {
         e.preventDefault();
-        router.navigate(home as never);
+        leaveGuarded(() => router.navigate(home as never));
       }}
       accessibilityRole="link"
       accessibilityLabel={label}
@@ -115,7 +117,7 @@ function NavItem({
         onPress={(e) => {
           if (href) {
             e.preventDefault();
-            router.navigate(href as never);
+            leaveGuarded(() => router.navigate(href as never));
           }
           onPress?.();
         }}
@@ -235,8 +237,10 @@ function SubItem({
       {...({ href } as object)}
       onPress={(e) => {
         e.preventDefault();
-        router.navigate(href as never);
-        onNavigate?.();
+        leaveGuarded(() => {
+          router.navigate(href as never);
+          onNavigate?.();
+        });
       }}
       accessibilityRole="link"
       accessibilityState={{ selected: active }}

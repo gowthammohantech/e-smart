@@ -194,9 +194,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     );
 
   /**
-   * Email / WhatsApp. A browser (or a party with no address on file) can't use
-   * the server's send, which only queues the message, so the person's own mail
-   * app or WhatsApp opens with the document's details and link filled in.
+   * Email / WhatsApp for a party with no address on file (and WhatsApp in a
+   * browser): the person's own mail app or WhatsApp opens with the document's
+   * details and link filled in.
    */
   const compose = (channel: 'email' | 'whatsapp') =>
     runRemote(async () => {
@@ -216,7 +216,9 @@ ${url}`;
 
   const sendVia = (channel: 'email' | 'whatsapp') => {
     const hasContact = channel === 'email' ? !!party?.email : !!party?.phone;
-    if (Platform.OS === 'web' || !hasContact) compose(channel);
+    // Email goes from the server wherever it is sent from, so the customer gets the designed
+    // email with the PDF and payment links; a browser opening a mail app could only send text.
+    if (!hasContact || (Platform.OS === 'web' && channel === 'whatsapp')) compose(channel);
     else send(channel);
   };
 

@@ -6312,6 +6312,7 @@ export interface operations {
                     };
                 };
             };
+            502: components["responses"]["UpstreamError"];
         };
     };
     createPaymentLink: {

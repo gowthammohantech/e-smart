@@ -6,7 +6,7 @@ import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type AuthUser, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, invalid, notFound, preconditionFailed, unprocessable } from '../../http/errors';
+import { conflict, invalid, notFound, preconditionFailed, unprocessable, upstream } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -585,6 +585,7 @@ export const documentsHandlers = defineHandlers({
     });
 
     // After the commit: the links they carry exist by now, and a message can't be unsent by a rollback.
+    const failures: string[] = [];
     for (const { id, to } of queued) {
       try {
         const sent =
@@ -596,7 +597,13 @@ export const documentsHandlers = defineHandlers({
         await ctx.db.update(schema.messageDeliveries).set({ status: 'sent', providerMessageId: sent.providerMessageId }).where(eq(schema.messageDeliveries.id, id));
       } catch (err) {
         await ctx.db.update(schema.messageDeliveries).set({ status: 'failed', error: (err as Error).message }).where(eq(schema.messageDeliveries.id, id));
+        failures.push((err as Error).message);
       }
+    }
+    // Nobody got it: say so, rather than "sent" for a message the provider refused
+    // (Resend's test sender, for one, only delivers to its own account's address).
+    if (queued.length && failures.length === queued.length) {
+      throw upstream('SEND_FAILED', `The ${body.channel} could not be sent: ${failures[0]}`);
     }
     if (queued.length) {
       await notify(ctx.db, ctx.deps, {

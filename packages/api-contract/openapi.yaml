@@ -1633,6 +1633,7 @@ paths:
                 properties:
                   messageId: { type: string }
                   status: { type: string, enum: [queued] }
+        '502': { $ref: '#/components/responses/UpstreamError' }
   /companies/{companyId}/documents/{id}/payment-link:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }

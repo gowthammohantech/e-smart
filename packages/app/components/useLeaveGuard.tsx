@@ -4,6 +4,19 @@ import { Platform } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 
+/** The form on screen with unsaved changes, if any, asking before `proceed` runs. */
+let asking: ((proceed: () => void) => void) | null = null;
+
+/**
+ * For navigation that swaps the whole page rather than leaving the screen (the
+ * web sidebar), which a screen can't stop on its own: asks the form on screen
+ * first, and goes straight on when nothing is unsaved.
+ */
+export function leaveGuarded(proceed: () => void) {
+  if (asking) asking(proceed);
+  else proceed();
+}
+
 /**
  * Asks before a form with unsaved changes is left. Leaving its screen in the
  * app (back, the sidebar, a link) asks "Leave without saving?" first; closing
@@ -32,6 +45,15 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
       }),
     [navigation],
   );
+
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const ask = (proceed: () => void) => (guarding.current ? setPending(() => proceed) : proceed());
+    asking = ask;
+    return () => {
+      if (asking === ask) asking = null;
+    };
+  }, [dirty]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !dirty) return undefined;
