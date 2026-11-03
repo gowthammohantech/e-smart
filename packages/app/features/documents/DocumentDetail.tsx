@@ -89,6 +89,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [complianceSheet, setComplianceSheet] = useState<'generate' | 'cancel' | null>(null);
@@ -258,6 +259,31 @@ ${url}`;
   const conversions = offered.filter((c) => !conversionBlock(doc, c.target, allDocuments));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
+  // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
+  const finaliseTo = isFinalized(doc.status) ? undefined : transitions.find(isFinalized);
+
+  const markAs = (s: DocStatus, message = tr('common:documentDetail.marked', { status: statusLabel(tr, s) })) => {
+    // Finalising from here must pass the same stock check as the editor.
+    const short = !isFinalized(doc.status) && isFinalized(s)
+      ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
+      : [];
+    if (short.length) {
+      toast.show(
+        tr('sales:editor.insufficientStock', {
+          date: formatDate(doc.date),
+          names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
+        }),
+        'warning',
+        { icon: 'package-variant-closed-remove' },
+      );
+      return;
+    }
+    setStatusOpen(false);
+    void serverSave(() => setDocumentStatus(doc.id, s), message, { icon: 'flag-checkered', detail: doc.number, varies: true });
+  };
+
+  // Finalise asks once, then finalises; the status list is for anything else.
+  const finalise = () => (finaliseTo ? setConfirmFinalize(true) : setStatusOpen(true));
 
   const headerCard = (
     <>
@@ -588,7 +614,7 @@ ${url}`;
       ) : null}
       <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
       {!isFinalized(doc.status) ? (
-        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={() => setStatusOpen(true)} />
+        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={finalise} />
       ) : (
         <Button title={tr('sales:print.savePdf')} icon="file-download-outline" onPress={shareDocument} loading={busy} />
       )}
@@ -679,7 +705,7 @@ ${url}`;
             <Button
               title={tr('sales:detail.finalise')}
               icon="check-decagram-outline"
-              onPress={() => setStatusOpen(true)}
+              onPress={finalise}
               style={{ flex: 1 }}
             />
           ) : (
@@ -806,25 +832,7 @@ ${url}`;
           transitions.map((s: DocStatus) => (
             <Pressable
               key={s}
-              onPress={() => {
-                // Finalising from here must pass the same stock check as the editor.
-                const short = !isFinalized(doc.status) && isFinalized(s)
-                  ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
-                  : [];
-                if (short.length) {
-                  toast.show(
-                    tr('sales:editor.insufficientStock', {
-                      date: formatDate(doc.date),
-                      names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
-                    }),
-                    'warning',
-                    { icon: 'package-variant-closed-remove' },
-                  );
-                  return;
-                }
-                setStatusOpen(false);
-                void serverSave(() => setDocumentStatus(doc.id, s), tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), { icon: 'flag-checkered', detail: doc.number, varies: true });
-              }}
+              onPress={() => markAs(s)}
               accessibilityRole="button"
               accessibilityLabel={tr('common:documentDetail.markAs', { status: statusLabel(tr, s) })}
               style={({ pressed }) => ({
@@ -843,6 +851,19 @@ ${url}`;
           ))
         )}
       </Sheet>
+
+      <ConfirmDialog
+        visible={confirmFinalize}
+        title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
+        message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
+        confirmLabel={tr('sales:detail.finalise')}
+        icon="check-decagram-outline"
+        onCancel={() => setConfirmFinalize(false)}
+        onConfirm={() => {
+          setConfirmFinalize(false);
+          if (finaliseTo) markAs(finaliseTo, tr('common:documentEditor.finalised', { kind: kindName }));
+        }}
+      />
 
       <ConfirmDialog
         visible={confirmDelete}
