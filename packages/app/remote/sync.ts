@@ -280,12 +280,15 @@ function nextBatch(tried: Set<string>, size: number): outbox.Entry[] {
  */
 async function adoptCompanyDefaults(companyId: string) {
   const path = { companyId };
+  // A list the plan doesn't open (expenses on Free) comes back empty. Thrown, it would stop the
+  // create from ever counting as done: resent each sync, and a logo picked in setup never sent.
+  const list = (p: Promise<{ data?: unknown }>) => allowed<{ data?: unknown }>(p, {});
   const [branches, series, taxes, categories, accounts] = await Promise.all([
-    api.GET('/companies/{companyId}/branches', { params: { path } }),
-    api.GET('/companies/{companyId}/numbering-series', { params: { path } }),
-    api.GET('/companies/{companyId}/tax-categories', { params: { path } }),
-    api.GET('/companies/{companyId}/expense-categories', { params: { path } }),
-    api.GET('/companies/{companyId}/payment-accounts', { params: { path } }),
+    list(api.GET('/companies/{companyId}/branches', { params: { path } })),
+    list(api.GET('/companies/{companyId}/numbering-series', { params: { path } })),
+    list(api.GET('/companies/{companyId}/tax-categories', { params: { path } })),
+    list(api.GET('/companies/{companyId}/expense-categories', { params: { path } })),
+    list(api.GET('/companies/{companyId}/payment-accounts', { params: { path } })),
   ]);
   type Row = { id?: string; companyId?: string; [k: string]: unknown };
   const s = useAppStore.getState();

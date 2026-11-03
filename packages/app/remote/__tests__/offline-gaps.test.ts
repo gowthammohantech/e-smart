@@ -236,6 +236,24 @@ describe('resilience', () => {
     expect(actions().taxCategories.some((x) => x.id === localTax.id)).toBe(false);
   });
 
+  it('counts a new company as synced when its plan keeps a defaults list closed', async () => {
+    const companyId = actions().createCompany({ ...actions().companies[0], name: 'Free Co' } as never);
+    const { ApiError } = jest.requireActual('@esmart/api-client');
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/sync/pull') return { data: { changes: [], cursor: '1', hasMore: false } };
+      // Expenses need the pro plan: the server refuses the list on Free.
+      if (path === '/companies/{companyId}/expense-categories') throw new ApiError(403, { detail: 'The expenses module needs the pro plan' });
+      return { data: { data: [], nextCursor: null } };
+    });
+    POST.mockImplementation(async (_p: string, { body }: { body: { mutations: Sent[] } }) => ({
+      data: { results: body.mutations.map((m) => ({ id: m.id, status: 'applied', entity: { id: 'cmp_FREE', version: 1 } })) },
+    }));
+    await syncNow();
+
+    expect(queue().filter((e) => e.entityId === companyId || e.entityId === 'cmp_FREE')).toHaveLength(0);
+    expect(useRemoteMeta.getState().versions.cmp_FREE).toBe(1);
+  });
+
   it('B7: narrows down a refused batch, so one bad entry fails alone', async () => {
     actions().saveParty(party({ id: 'pty_good', name: 'Good' }));
     actions().saveParty(party({ id: 'pty_bad', name: 'Bad' }));
