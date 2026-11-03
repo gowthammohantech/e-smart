@@ -379,9 +379,14 @@ export function Sidebar() {
   const breakpoint = useBreakpoint();
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   const sections = useExpandedSections();
-  // A narrow window is always icons-only; a wider one can be folded by hand.
+  // A narrow window, such as a tablet, starts icons-only and opens by hand
+  // for a moment: a touch screen has no hover to show a section's pages, and
+  // picking a page folds it again to give the room back. A wider one stays as
+  // it was folded.
   const narrow = breakpoint === 'tablet';
-  const folded = narrow || collapsed;
+  const [openedOn, setOpenedOn] = useState<string | null>(null);
+  const folded = narrow ? openedOn !== pathname : collapsed;
+  const toggleFolded = narrow ? () => setOpenedOn(folded ? pathname : null) : toggleCollapsed;
 
   // The width eases between the two sizes. Going narrower, the labels stay
   // until the sidebar has finished closing; going wider, they appear as it
@@ -549,31 +554,29 @@ export function Sidebar() {
               onHoverOut={compact ? scheduleClose : undefined}
             />
           </View>
-          {narrow ? null : (
-            <Pressable
-              onPress={toggleCollapsed}
-              accessibilityRole="button"
-              accessibilityLabel={tr(collapsed ? 'nav:shell.expandSidebar' : 'nav:shell.collapseSidebar')}
-              style={(state) => {
-                const { pressed, hovered, focused } = state as WebPressState;
-                return {
-                  width: compact ? undefined : ROW_HEIGHT,
-                  height: ROW_HEIGHT,
-                  borderRadius: t.radius.md,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: pressed || hovered ? t.c.mutedSoft : 'transparent',
-                  ...focusRing(t, focused),
-                };
-              }}
-            >
-              <Icon
-                name={collapsed ? 'chevron-double-right' : 'chevron-double-left'}
-                size={18}
-                color={t.c.muted}
-              />
-            </Pressable>
-          )}
+          <Pressable
+            onPress={toggleFolded}
+            accessibilityRole="button"
+            accessibilityLabel={tr(folded ? 'nav:shell.expandSidebar' : 'nav:shell.collapseSidebar')}
+            style={(state) => {
+              const { pressed, hovered, focused } = state as WebPressState;
+              return {
+                width: compact ? undefined : ROW_HEIGHT,
+                height: ROW_HEIGHT,
+                borderRadius: t.radius.md,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed || hovered ? t.c.mutedSoft : 'transparent',
+                ...focusRing(t, focused),
+              };
+            }}
+          >
+            <Icon
+              name={folded ? 'chevron-double-right' : 'chevron-double-left'}
+              size={18}
+              color={t.c.muted}
+            />
+          </Pressable>
         </View>
       </View>
       {/* Opened on another page or before unfolding: stale, so not shown. */}
