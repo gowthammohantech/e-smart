@@ -93,9 +93,9 @@ function validate(schema: object, body: unknown, where: string) {
  * A server on the test database, truncated before every test. Call once at
  * the top of a test file.
  */
-export function setupApi(): TestContext {
+export function setupApi(env: Record<string, string> = {}): TestContext {
   const url = process.env.TEST_DATABASE_URL!;
-  const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, LOG_LEVEL: 'silent', DEMO_OTP: 'false', RATE_LIMIT_PER_MINUTE: '100000' });
+  const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, LOG_LEVEL: 'silent', DEMO_OTP: 'false', RATE_LIMIT_PER_MINUTE: '100000', AUTH_RATE_LIMIT_PER_MINUTE: '100000', ...env });
   const pool = createPool(url, 5);
   const db = createDb(pool);
   const providers = createProviders(config, { info: () => {} }, db);

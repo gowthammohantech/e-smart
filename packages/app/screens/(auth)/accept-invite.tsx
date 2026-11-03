@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Linking, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import type { Schema } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -15,6 +15,7 @@ import { ApiError } from '@esmart/api-client';
 import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { onMobileBrowser, openInApp as openAppAt } from '../../navigation/openInApp';
+import { LEGAL } from '../../lib/legal';
 
 type Invite = Schema<'InviteDetails'>;
 
@@ -135,6 +136,12 @@ export default function AcceptInvite() {
           fullWidth
           size="lg"
         />
+        <Text variant="caption" tone="muted" center>
+          {tr('auth:invite.agree')}{' '}
+          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.terms)}>{tr('auth:signUp.readTerms')}</Text>
+          {' · '}
+          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.privacy)}>{tr('auth:signUp.readPrivacy')}</Text>
+        </Text>
         {errors.password ? <Text variant="small" tone="bad">{errors.password}</Text> : null}
         {onMobileBrowser() ? <Button title={tr('auth:invite.openApp')} variant="secondary" onPress={openInApp} fullWidth size="lg" /> : null}
       </AuthShell>

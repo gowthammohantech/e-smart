@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ApiError } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -11,6 +11,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { toE164 } from '../../remote/phone';
+import { LEGAL } from '../../lib/legal';
 import { Errors, hasErrors, minLength, required, validEmail } from '@esmart/core/lib/validators';
 
 export default function SignUp() {
@@ -49,6 +50,7 @@ export default function SignUp() {
         phone: phone.value ? toE164(phone.value) : undefined,
         phoneVerificationId: verified ? verificationId : undefined,
         password,
+        termsVersion: LEGAL.termsVersion,
       })
       .catch((err: unknown) => {
         setBusy(false);
@@ -99,6 +101,11 @@ export default function SignUp() {
           value={accepted}
           onValueChange={setAccepted}
         />
+        <Text variant="caption" tone="muted">
+          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.terms)}>{tr('auth:signUp.readTerms')}</Text>
+          {' · '}
+          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.privacy)}>{tr('auth:signUp.readPrivacy')}</Text>
+        </Text>
         {errors.terms ? (
           <Text variant="caption" tone="bad">
             {errors.terms}

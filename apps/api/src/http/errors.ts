@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { Schema } from '@esmart/api-contract';
+import { reportError } from '../lib/reporter';
 
 export type Issue = Schema<'ComplianceIssue'>;
 type PlanTier = Schema<'PlanTier'>;
@@ -93,7 +94,12 @@ export function problemHandler(app: FastifyInstance) {
       body = { code: err.code ?? 'BAD_REQUEST', detail: err.message };
     } else {
       status = 500;
-      req.log.error({ err }, 'unhandled error');
+      reportError(req.log, err, {
+        requestId: req.id,
+        userId: req.authUser?.id,
+        companyId: req.company?.id,
+        route: req.routeOptions?.url,
+      });
       body = { code: 'INTERNAL', detail: 'Something went wrong on our side' };
     }
     void reply

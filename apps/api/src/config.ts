@@ -47,6 +47,13 @@ const Env = z.object({
     .default('')
     .transform((v) => v.split(',').map((p) => p.replace(/\D/g, '').slice(-10)).filter(Boolean)),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(300),
+  /** Sign-in, sign-up, OTP and password-reset calls per IP per minute, on top of the per-account limits. */
+  AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(10),
+  /**
+   * Proxies in front of the API whose X-Forwarded-For entries are believed. Railway has one edge proxy.
+   * Trusting more lets a client choose its own IP, and with it a fresh rate-limit bucket.
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
 
   SMS_PROVIDER: z.enum(['log', 'msg91', 'pay4sms']).default('log'),
   MSG91_AUTH_KEY: z.string().optional(),
@@ -193,7 +200,15 @@ export function productionProblems(config: Config, env: Record<string, string | 
   need(config.JWT_SECRET.startsWith('dev-only'), 'JWT_SECRET must be set in production.');
   need(config.DEMO_OTP, 'DEMO_OTP must be off in production.');
   need(env.CREDENTIALS_KEY === undefined, 'CREDENTIALS_KEY must be set in production.');
+  need(env.CREDENTIALS_KEY !== undefined && Buffer.from(config.CREDENTIALS_KEY, 'base64').length !== 32, 'CREDENTIALS_KEY must be 32 bytes, base64 (openssl rand -base64 32).');
   need(config.CORS_ORIGINS.split(',').some((o) => o.trim() === '*'), "CORS_ORIGINS='*' is not allowed in production; list the web and admin origins.");
+  for (const key of ['APP_URL', 'PUBLIC_BASE_URL'] as const) {
+    need(!isPublicHttps(config[key]), `${key} must be the public https:// address in production, not ${config[key]}.`);
+  }
+  need(
+    isPublicHttps(config.APP_URL) && !config.CORS_ORIGINS.split(',').some((o) => o.trim() === new URL(config.APP_URL).origin),
+    `CORS_ORIGINS must include the web app (${isPublicHttps(config.APP_URL) ? new URL(config.APP_URL).origin : 'APP_URL'}).`,
+  );
 
   // Simulators and log-only providers.
   for (const key of ['SMS_PROVIDER', 'EMAIL_PROVIDER', 'WHATSAPP_PROVIDER', 'PUSH_PROVIDER'] as const) {
@@ -221,6 +236,10 @@ export function productionProblems(config: Config, env: Record<string, string | 
   need(config.EMAIL_PROVIDER !== 'log' && config.EMAIL_FROM === EXAMPLE_EMAIL_FROM, 'EMAIL_FROM must be a verified sender in production, not the example address.');
   need(config.WHATSAPP_PROVIDER === 'meta' && (!config.WHATSAPP_TOKEN || !config.WHATSAPP_PHONE_NUMBER_ID), 'WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set for WHATSAPP_PROVIDER=meta.');
   need(config.STORAGE_PROVIDER === 'azure' && !config.AZURE_STORAGE_CONNECTION_STRING, 'AZURE_STORAGE_CONNECTION_STRING must be set for STORAGE_PROVIDER=azure.');
+  need(
+    config.STORAGE_PROVIDER === 's3' && !((env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) || env.AWS_WEB_IDENTITY_TOKEN_FILE || env.AWS_PROFILE),
+    'AWS credentials (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or a role) must be set for STORAGE_PROVIDER=s3.',
+  );
   problems.push(...gspProblems(config));
   need(config.PAYMENTS_PROVIDER === 'razorpay' && (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET), 'RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set for PAYMENTS_PROVIDER=razorpay.');
   need(config.FX_PROVIDER === 'openexchangerates' && !config.OPENEXCHANGERATES_APP_ID, 'OPENEXCHANGERATES_APP_ID must be set for FX_PROVIDER=openexchangerates.');
@@ -299,8 +318,21 @@ export function whitebooksSettings(
   };
 }
 
-/** Problems ALLOW_UNCONFIGURED_PROVIDERS never waives: forged tokens, readable credentials, a guessable OTP. */
-const ALWAYS_FATAL = /^(JWT_SECRET|CREDENTIALS_KEY|DEMO_OTP)\b/;
+/** An https URL on a real host: what people outside the server can open. */
+function isPublicHttps(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return protocol === 'https:' && !/^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Problems ALLOW_UNCONFIGURED_PROVIDERS never waives: forged tokens, readable credentials, a guessable OTP,
+ * and links in emails that point at localhost.
+ */
+const ALWAYS_FATAL = /^(JWT_SECRET|CREDENTIALS_KEY|DEMO_OTP|APP_URL|PUBLIC_BASE_URL)\b/;
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const config = Env.parse(env);

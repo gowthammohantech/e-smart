@@ -97,7 +97,10 @@ class RazorpayPayments implements PaymentsProvider {
   readonly name = 'razorpay' as const;
   readonly keyId: string;
   readonly verifyWebhookSignature: PaymentsProvider['verifyWebhookSignature'];
-  /** Razorpay subscriptions need a plan object; one per price, created on first use. */
+  /**
+   * Razorpay subscriptions need a plan object; one per price. Found in Razorpay by the key in its notes,
+   * created only when none matches, so a restart or a second replica reuses it instead of making another.
+   */
   private readonly planIds = new Map<string, string>();
   private readonly auth: string;
 
@@ -113,6 +116,8 @@ class RazorpayPayments implements PaymentsProvider {
       method,
       headers: { authorization: this.auth, 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
+      // A stalled gateway fails the request instead of holding it open.
+      signal: AbortSignal.timeout(15_000),
     });
     const json = (await res.json().catch(() => ({}))) as T & RazorpayError;
     if (!res.ok) throw new Error(`Razorpay ${res.status}: ${json.error?.description ?? json.error?.code ?? 'request failed'}`);
@@ -137,11 +142,20 @@ class RazorpayPayments implements PaymentsProvider {
     const key = `${req.plan}:${req.cycle}:${req.amountMinor}:${req.currency}`;
     const known = this.planIds.get(key);
     if (known) return known;
+    for (let skip = 0; ; skip += 100) {
+      const page = await this.call<{ items: { id: string; notes?: { key?: string } }[] }>('GET', `/plans?count=100&skip=${skip}`);
+      const match = page.items.find((p) => p.notes?.key === key);
+      if (match) {
+        this.planIds.set(key, match.id);
+        return match.id;
+      }
+      if (page.items.length < 100) break;
+    }
     const plan = await this.call<{ id: string }>('POST', '/plans', {
       period: req.cycle,
       interval: 1,
       item: { name: `${req.planName} (${req.cycle})`, amount: req.amountMinor, currency: req.currency },
-      notes: { plan: req.plan, cycle: req.cycle },
+      notes: { plan: req.plan, cycle: req.cycle, key },
     });
     this.planIds.set(key, plan.id);
     return plan.id;

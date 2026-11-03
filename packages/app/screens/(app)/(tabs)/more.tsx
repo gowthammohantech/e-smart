@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
 import { useMoreGroups } from '../../../navigation/moreGroups';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { appVersion } from '../../../lib/appVersion';
 
 export default function MoreTab() {
   const t = useTheme();
@@ -91,7 +92,7 @@ export default function MoreTab() {
         </Card>
 
         <Text variant="micro" tone="muted" center style={{ marginTop: t.spacing.xl }}>
-          {tr('nav:more.build', { version: '1.0.0' })}
+          {tr('nav:more.build', { version: appVersion().label })}
         </Text>
       </ScrollView>
 

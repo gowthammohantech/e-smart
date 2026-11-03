@@ -79,17 +79,24 @@ describe('integrations', () => {
     expect(await state()).toEqual({ int_einvoice: false, int_eway: false });
   });
 
-  it('gates by the integration minimum plan, and OAuth providers return an authorize URL', async () => {
+  it('gates by the integration minimum plan, and refuses the OAuth providers while they are coming soon', async () => {
     const free = await ownerWithCompany(t);
     const denied = await t.post(`${free.c}/integrations/int_drive/connect`, {}, { token: free.token });
     expect(denied.status).toBe(403);
     expect(denied.body).toMatchObject({ code: 'PLAN_UPGRADE_REQUIRED', requiredPlan: 'business' });
 
     const biz = await ownerWithCompany(t, { plan: 'business' });
-    const res = await t.post(`${biz.c}/integrations/int_drive/connect`, {}, { token: biz.token });
-    expect(res.status).toBe(200);
-    expect(res.body.integration.connected).toBe(false);
-    expect(res.body.authorizeUrl).toMatch(/^https:\/\/accounts\.google\.com\//);
+    for (const id of ['int_drive', 'int_razorpay']) {
+      const res = await t.post(`${biz.c}/integrations/${id}/connect`, {}, { token: biz.token });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('INTEGRATION_COMING_SOON');
+    }
+    const list = await t.get(`${biz.c}/integrations`, { token: biz.token });
+    const byId = Object.fromEntries(list.body.data.map((i: { id: string; available: boolean }) => [i.id, i.available]));
+    expect(byId).toMatchObject({ int_drive: false, int_razorpay: false, int_upi: true });
+    // Razorpay keys sent directly still connect.
+    const keys = await t.post(`${biz.c}/integrations/int_razorpay/connect`, { config: { key_id: 'rzp_test_x', key_secret: 's' } }, { token: biz.token });
+    expect(keys.body.integration).toMatchObject({ connected: true, available: true });
   });
 
   it('is for owners and admins', async () => {

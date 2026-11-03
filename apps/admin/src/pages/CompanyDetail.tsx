@@ -27,7 +27,7 @@ const EVENT_LABELS: Record<string, string> = {
   'cancel.requested': 'Cancellation requested',
 };
 
-function PlanOverride({ company }: { company: Schema<'PlatformCompany'> }) {
+function PlanOverride({ company, billedBy }: { company: Schema<'PlatformCompany'>; billedBy: string | null }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [plan, setPlan] = useState<Schema<'PlanTier'>>(company.plan);
@@ -69,6 +69,11 @@ function PlanOverride({ company }: { company: Schema<'PlatformCompany'> }) {
           await queryClient.invalidateQueries();
         }}
       >
+        {billedBy ? (
+          <div className="alert warn">
+            This company is billed through {billedBy}. Its next billing event (a renewal, a failed payment) may change the plan back.
+          </div>
+        ) : null}
         <label className="field">
           <span>Plan</span>
           <select className="select" value={plan} onChange={(e) => setPlan(e.target.value as Schema<'PlanTier'>)}>
@@ -118,7 +123,7 @@ export function CompanyDetail() {
               ]}
               title={company.name}
               sub={<span className="mono">{company.id}</span>}
-              actions={<PlanOverride company={company} />}
+              actions={<PlanOverride company={company} billedBy={subscription?.provider ?? null} />}
             />
             {accountSuspended ? <div className="alert bad">This company’s account is suspended. Nobody on it can sign in.</div> : null}
 

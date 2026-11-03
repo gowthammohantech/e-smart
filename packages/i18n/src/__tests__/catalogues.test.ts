@@ -46,6 +46,8 @@ const TA_LATIN_ALLOWLIST = new RegExp(
     'Android|iPhone|Go|Excel|xlsx|Tally|XML',
     // Keyboard keys, as printed on the key.
     'Enter|Esc',
+    // A word typed to confirm, exactly as the app checks it.
+    'DELETE',
     // The postal code, which Indian forms call a PIN in every language.
     'PIN',
   ].join('|')})$`,

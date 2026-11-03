@@ -148,6 +148,8 @@ export const platformHandlers = defineHandlers({
     ]);
     const statuses = await subscriptionStatuses(ctx.db, companies.map((c) => c.id));
     const [wire] = await accountsToPlatform(ctx.db, [account]);
+    // Reading a tenant's people is personal data: who looked, and when, is kept.
+    await recordPlatformAction(ctx.db, ctx.user, ctx.req, { action: 'account.viewed', target: { type: 'account', id: account.id, label: account.name }, reason: 'Viewed' });
     return {
       account: wire,
       companies: companies.map((c) => companyToPlatform(c, statuses.get(c.id))),
@@ -223,6 +225,7 @@ export const platformHandlers = defineHandlers({
       ctx.db.select({ kind: D.kind, count: sql<number>`count(*)::int` }).from(D).where(eq(D.companyId, company.id)).groupBy(D.kind).orderBy(asc(D.kind)),
       ctx.db.select({ n: count() }).from(schema.userCompanies).where(eq(schema.userCompanies.companyId, company.id)),
     ]);
+    await recordPlatformAction(ctx.db, ctx.user, ctx.req, { action: 'company.viewed', target: { type: 'company', id: company.id, label: company.name }, reason: 'Viewed' });
     return {
       company: companyToPlatform(company, subscription?.status),
       accountName: account.name,
@@ -320,6 +323,14 @@ export const platformHandlers = defineHandlers({
       .where(and(...filters, k.where))
       .orderBy(...k.orderBy)
       .limit(k.take);
+    // A search by name, email or phone, or one account's people, is a lookup of someone; the plain list isn't.
+    if (q?.trim() || accountId) {
+      await recordPlatformAction(ctx.db, ctx.user, ctx.req, {
+        action: 'users.searched',
+        target: accountId ? { type: 'account', id: accountId, label: accountId } : { type: 'user', id: '*', label: `"${q!.trim()}"` },
+        reason: q?.trim() ? `Searched "${q.trim()}"` : 'Listed the account\'s users',
+      });
+    }
     return k.page(
       rows.slice(0, k.take - 1).map((r) => userToPlatform(r.row, r.account)),
       rows.map((r) => ({ cursorAt: r.cursorAt, id: r.row.id })),

@@ -184,7 +184,9 @@
     "contact": "This contact may have been deleted.",
     "expense": "This expense may have been deleted.",
     "item": "This item may have been deleted.",
-    "payment": "This payment may have been deleted."
+    "payment": "This payment may have been deleted.",
+    "route": "There's nothing at this address. It may have moved, or the link may be wrong.",
+    "goHome": "Go to home"
   },
   "notifications": {
     "markAllRead": "Mark all read",
@@ -269,5 +271,13 @@
     "inactive": "{{status}} on the GST portal",
     "notFound": "The GST portal has no taxpayer with this GSTIN",
     "failed": "Couldn't reach the GST portal; fill the details in yourself"
+  },
+  "crash": {
+    "title": "Something went wrong",
+    "body": "This screen hit an error. Your data is safe: anything you saved is still here. Try again, or go back to the home screen.",
+    "retry": "Try again",
+    "home": "Go to home",
+    "misconfigured": "This build of the app doesn't know where its server is. Please update the app, or contact support.",
+    "cantOpen": "Couldn't open {{what}} on this device."
   }
 }

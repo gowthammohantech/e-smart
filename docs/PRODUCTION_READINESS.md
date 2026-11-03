@@ -56,10 +56,10 @@ nothing behind them yet.
 
 | Item | Where | Owner | Status |
 |---|---|---|---|
-| Public `/share/:token` page: view, download and pay a shared document | `apps/api/src/modules/documents/outbound.ts` builds the URL | Mobile/Web, Backend | ⬜ Todo |
-| Public `/pay/:id` page for payment links (or use the gateway's hosted page) | `apps/api/src/providers/payments.ts` | Mobile/Web, Backend | ⬜ Todo |
-| OAuth callback `/v1/oauth/google-drive/callback` (backup to Google Drive) | `apps/api/src/modules/integrations/handlers.ts` | Backend | ⬜ Todo |
-| OAuth callback `/v1/oauth/razorpay/callback` (Razorpay connect) | `apps/api/src/modules/integrations/handlers.ts` | Backend | ⬜ Todo |
+| Public `/share/:token` page: view, download and pay a shared document | `apps/api/src/modules/documents/share.ts` | Mobile/Web, Backend | ✅ Done |
+| Public `/pay/:id` page for payment links: production uses Razorpay's hosted `short_url`; `/pay/:id` is only the simulator's | `apps/api/src/providers/payments.ts` | Mobile/Web, Backend | ✅ Not needed |
+| OAuth callback `/v1/oauth/google-drive/callback` (backup to Google Drive). Hidden as "Coming soon" until built (`COMING_SOON`) | `apps/api/src/modules/integrations/handlers.ts` | Backend | ⏸ Phase 2 |
+| OAuth callback `/v1/oauth/razorpay/callback` (Razorpay connect). Hidden as "Coming soon"; keys sent directly still connect | `apps/api/src/modules/integrations/handlers.ts` | Backend | ⏸ Phase 2 |
 | Google sign-in: removed from the sign-in screen with the local mode; needs an API endpoint and the native/web OAuth flows | `packages/app/screens/(auth)/sign-in.tsx` | Backend, Mobile/Web | ⬜ Todo |
 | Plan limits (businesses, users) in `GET /subscription`, so Settings → Plan can show "3 of 6" again; it shows plain counts today | `packages/api-contract/openapi.yaml` (`Subscription`), `settings/plan.tsx`, `PlanBillingDesktop.tsx` | Backend, Mobile/Web | ⬜ Todo |
 
@@ -99,7 +99,7 @@ the devices light as books grow.
 | Observability: structured logs shipped somewhere searchable, traces, error tracking (API and apps), alerts on 5xx rate, latency and failed syncs | Ops | ⬜ Todo |
 | Database backups with point-in-time recovery, and a restore drill on a schedule | Ops | ⬜ Todo |
 | Secret rotation runbook (JWT, credentials key, webhook secrets, vendor keys) | Ops | ⬜ Todo |
-| Rate limits per route and per tenant, reviewed (`RATE_LIMIT_PER_MINUTE` is global today) | Backend, Ops | ⬜ Todo |
+| Rate limits per route and per tenant, reviewed. Auth routes now have per-IP limits (`AUTH_RATE_LIMIT_PER_MINUTE`); per-tenant limits remain | Backend, Ops | 🟨 Partly |
 | Load testing: sync push/pull, document finalise, exports, PDF rendering | QA, Backend | ⬜ Todo |
 | Deploy and migration rollback plan (migrations are forward-only; rehearse a down path) | Ops, Backend | ⬜ Todo |
 | A staging environment mirroring production, with sandbox vendor keys and the demo account (`SEED_DEMO_ACCOUNT=true`) | Ops | ⬜ Todo |
@@ -113,7 +113,8 @@ API will not start until the provider rows are real.
 **api**
 
 - [ ] `DATABASE_URL`, `JWT_SECRET` (32+ chars), `CREDENTIALS_KEY` (`openssl rand -base64 32`)
-- [ ] `PUBLIC_BASE_URL`, `APP_URL` (the deployed web app, not localhost)
+- [ ] `PUBLIC_BASE_URL`, `APP_URL` (https, not localhost: the API refuses to start otherwise; `APP_URL` is set in `.railway/railway.ts`)
+- [ ] `TRUST_PROXY_HOPS` (default 1, Railway's edge proxy): confirm against a real request's `X-Forwarded-For`
 - [ ] `CORS_ORIGINS`: the web and admin origins, comma-separated, no `*`
 - [ ] `SMS_PROVIDER`, `EMAIL_PROVIDER` + `EMAIL_FROM`, `WHATSAPP_PROVIDER`, `PUSH_PROVIDER`, with their credentials
 - [ ] `STORAGE_PROVIDER` (`azure` or `s3`) and its connection settings
@@ -126,6 +127,9 @@ API will not start until the provider rows are real.
 - [ ] `SEED_DEMO_ACCOUNT` unset in production (or `true` with a 12+ character `DEMO_ACCOUNT_PASSWORD` on a demo environment)
 
 **web / admin**
+
+- [ ] `STORAGE_ORIGIN` on web: the storage account uploads go to, for the Content-Security-Policy
+- [ ] `CSP_REPORT_ONLY=false` on web and admin once invoices, uploads, PDFs and printing were checked with the browser console open
 
 - [ ] `EXPO_PUBLIC_API_URL` / `VITE_API_URL`
 - [ ] `EXPO_PUBLIC_DEMO_LOGIN_*` / `VITE_DEMO_LOGIN_*` unset (they are compiled into the bundle)
@@ -143,6 +147,6 @@ API will not start until the provider rows are real.
 |---|---|---|
 | End-to-end tests of the API-backed flow on web and mobile: sign-up, onboarding, invoice to payment, offline edit and sync, conflict, OCR, e-invoice against the GSP sandbox | QA | ⬜ Todo |
 | Security review: auth and refresh tokens, tenant isolation, upload validation, webhook signatures, secrets handling, dependency audit | Backend, external | ⬜ Todo |
-| App store builds: EAS build profiles, signing, store listings, privacy labels, review submission | Mobile/Web | ⬜ Todo |
-| Legal pages: privacy policy, terms, refund policy (the About screen links to placeholders) | Product | ⬜ Todo |
-| Data privacy: DPDP Act consent and retention, data export and deletion on request, sub-processor list | Product, Backend | ⬜ Todo |
+| App store builds: profiles, signing and the privacy manifest are done (`apps/mobile/eas.json`, `app.json`); store listings, labels and submission follow `docs/STORE_SUBMISSION.md` | Mobile/Web | 🟨 Partly |
+| Legal pages: drafts at `/privacy`, `/terms`, `/refund`, `/delete-account`, `/support` on the site (`apps/site/content/legal.ts`); a lawyer must review them and a grievance officer be named | Product | 🟨 Drafted |
+| Data privacy: consent is recorded at sign-up (`users.terms_version`), deletion is self-serve (`POST /me/delete`), export exists, sub-processors are listed in the privacy page. Still open: the purge job for `accounts.purge_after` | Product, Backend | 🟨 Partly |

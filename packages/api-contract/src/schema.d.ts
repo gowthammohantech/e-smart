@@ -165,6 +165,23 @@ export interface paths {
         patch: operations["updateProfile"];
         trace?: never;
     };
+    "/me/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deletes the caller's account (app store rule). Their name, email, phone and logins are erased and every session ends. Refused while they are the only owner of a business other people use (transfer ownership first), and for platform operators. When nobody else is on the account it is closed: the subscription is cancelled and the books are kept, unreadable, for the 8 years GST law requires, then erased. */
+        post: operations["deleteMe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/complete": {
         parameters: {
             query?: never;
@@ -2215,6 +2232,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the operator has an authenticator set up, and whether this session has passed it */
+        get: operations["getMfaStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new authenticator secret to scan. Replaces one not yet confirmed; refused once set up (reset from the command line). */
+        post: operations["startMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turns the authenticator on with a code from it, verifies this session, and returns the recovery codes. They are shown this once. */
+        post: operations["confirmMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Passes this session with a code from the authenticator, or one unused recovery code */
+        post: operations["verifyMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/metrics/overview": {
         parameters: {
             query?: never;
@@ -3461,6 +3546,38 @@ export interface components {
                 count: number;
             }[];
         };
+        /** @description Proof it's really them, as at sign-in. The password if they have one, otherwise a fresh code sent to their verified phone. */
+        DeleteAccountRequest: {
+            /**
+             * @description Typed by the user
+             * @enum {string}
+             */
+            confirm: "DELETE";
+            /** Format: password */
+            password?: string;
+            otpRequestId?: string;
+            otpCode?: string;
+        };
+        MfaStatus: {
+            /** @description An authenticator is set up */
+            enrolled: boolean;
+            /** @description This session passed it */
+            verified: boolean;
+            recoveryCodesLeft: number;
+        };
+        MfaEnrollment: {
+            /** @description Base32, for typing into the app by hand */
+            secret: string;
+            /** @description What the QR code holds */
+            otpauthUri: string;
+        };
+        MfaCode: {
+            /** @description Six digits from the app, or a recovery code */
+            code: string;
+        };
+        MfaRecoveryCodes: {
+            recoveryCodes: string[];
+        };
         PlatformAuditEvent: {
             id: string;
             actorId: string;
@@ -3488,6 +3605,8 @@ export interface components {
             /** @enum {string} */
             category?: "payments" | "compliance" | "messaging" | "accounting" | "storage";
             connected?: boolean;
+            /** @description False while the integration is coming soon: connecting it is refused (409 INTEGRATION_COMING_SOON). */
+            available?: boolean;
             configRoute?: string;
         };
         ExportJob: {
@@ -3912,6 +4031,8 @@ export interface operations {
                     password: string;
                     /** @example en */
                     locale?: string;
+                    /** @description The terms and privacy policy version the person agreed to (the date on the pages, e.g. 2026-11-02); stored with when. */
+                    termsVersion?: string;
                 };
             };
         };
@@ -4143,6 +4264,32 @@ export interface operations {
                     "application/json": components["schemas"]["User"];
                 };
             };
+        };
+    };
+    deleteMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
     completeOnboarding: {
@@ -4695,6 +4842,8 @@ export interface operations {
             content: {
                 "application/json": {
                     password?: string;
+                    /** @description As in signUp */
+                    termsVersion?: string;
                 };
             };
         };
@@ -8281,6 +8430,108 @@ export interface operations {
             };
             502: components["responses"]["UpstreamError"];
             503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    getMfaStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    startMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollment"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    confirmMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaRecoveryCodes"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    verifyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
     getPlatformOverview: {

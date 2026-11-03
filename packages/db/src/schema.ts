@@ -133,6 +133,19 @@ export const users = pgTable("users", {
 	emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true, mode: 'date' }),
 	phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true, mode: 'date' }),
 	lastActiveAt: timestamp("last_active_at", { withTimezone: true, mode: 'date' }),
+	/** Wrong passwords since the last good sign-in; five lock the account (see `locked_until`). */
+	failedSignInCount: smallint("failed_sign_in_count").default(0).notNull(),
+	/** Password sign-in is refused until then. A password reset clears it. */
+	lockedUntil: timestamp("locked_until", { withTimezone: true, mode: 'date' }),
+	termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true, mode: 'date' }),
+	termsVersion: varchar("terms_version", { length: 20 }),
+	/** Operators' authenticator secret, AES-GCM with CREDENTIALS_KEY. Set while enrolling; live once `totp_enabled_at` is. */
+	totpSecretEncrypted: text("totp_secret_encrypted"),
+	totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true, mode: 'date' }),
+	/** The last 30-second step a code was accepted for, so a code can't be used twice. */
+	totpLastStep: bigint("totp_last_step", { mode: "number" }),
+	/** sha256 of each unused recovery code. */
+	recoveryCodeHashes: jsonb("recovery_code_hashes").$type<string[]>(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -272,6 +285,8 @@ export const deviceSessions = pgTable("device_sessions", {
 	refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true, mode: 'date' }).notNull(),
 	lastActiveAt: timestamp("last_active_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	revokedAt: timestamp("revoked_at", { withTimezone: true, mode: 'date' }),
+	/** When this session passed the authenticator check. Platform routes need it; tenant routes don't. */
+	mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true, mode: 'date' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	index("device_sessions_user_id_idx").using("btree", table.userId.asc().nullsLast()),
@@ -1566,6 +1581,11 @@ export const accounts = pgTable("accounts", {
 	suspendedAt: timestamp("suspended_at", { withTimezone: true, mode: 'date' }),
 	suspendedReason: varchar("suspended_reason", { length: 500 }),
 	suspendedBy: varchar("suspended_by", { length: 40 }),
+	/**
+	 * Set when the last person on the account deleted it. The books are kept until then because GST law
+	 * requires them (72 months from the annual return's due date, so 8 years is safe), then erased.
+	 */
+	purgeAfter: timestamp("purge_after", { withTimezone: true, mode: 'date' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [

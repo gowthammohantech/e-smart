@@ -28,8 +28,8 @@ export default defineRailway(() => {
       RAILPACK_DEPLOY_APT_PACKAGES: 'fonts-noto-core',
       PUBLIC_BASE_URL: 'https://api-production-4abd.up.railway.app',
       // The web app, for the links people open: password resets and invites.
-      // Point this at the deployed web app once it has a URL.
-      APP_URL: 'http://localhost:8081',
+      // The API refuses to start in production with a localhost or http:// value here.
+      APP_URL: 'https://smart.elixir-books.com',
       // Production refuses '*': list the web and admin origins in Railway.
       CORS_ORIGINS: preserve(),
       // Secrets stay in Railway: set once, never committed here.
@@ -94,24 +94,32 @@ export default defineRailway(() => {
       // Unset unless this is a demo deployment.
       EXPO_PUBLIC_DEMO_LOGIN_EMAIL: preserve(),
       EXPO_PUBLIC_DEMO_LOGIN_PASSWORD: preserve(),
+      // Read by serve.mjs at runtime for the Content-Security-Policy: where uploads go directly
+      // (https://<account>.blob.core.windows.net or the S3 endpoint).
+      STORAGE_ORIGIN: preserve(),
+      // `true` reports policy violations in the browser console without blocking. Start here; set
+      // it to `false` once invoices, uploads, PDFs and printing were checked on the deployed site.
+      CSP_REPORT_ONLY: 'true',
     },
   });
 
   /**
-   * The platform admin console: a static Vite build, served with an SPA
-   * fallback. VITE_API_URL is read at build time, so changing it needs a
+   * The platform admin console: a static Vite build, served by apps/admin/serve.mjs
+   * with an SPA fallback. VITE_API_URL is read at build time, so changing it needs a
    * rebuild, not just a restart.
    */
   const admin = service('admin', {
     build: 'npm run build -w @esmart/admin',
     start: 'npm run start -w @esmart/admin',
-    healthcheck: '/',
+    healthcheck: '/health',
     env: {
       NODE_ENV: 'production',
       VITE_API_URL: 'https://api-production-4abd.up.railway.app',
       // Sign-in prefill, compiled into the bundle. Unset unless this is a demo deployment.
       VITE_DEMO_LOGIN_EMAIL: preserve(),
       VITE_DEMO_LOGIN_PASSWORD: preserve(),
+      // See the web service: report first, enforce once checked.
+      CSP_REPORT_ONLY: 'true',
     },
   });
 

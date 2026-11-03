@@ -87,6 +87,8 @@ async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
     companyIds: [],
     branchIds: [],
     sessionId: '',
+    mfaEnrolled: false,
+    mfaVerified: false,
   };
 }
 

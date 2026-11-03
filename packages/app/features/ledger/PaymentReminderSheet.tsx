@@ -19,7 +19,7 @@ import { useBaseCurrency } from '../../store/selectors';
  */
 export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | undefined; rows: OutstandingDoc[]; onClose: () => void }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales']);
+  const { t: tr } = useTranslation(['sales', 'common']);
   const toast = useToast();
   const baseCurrency = useBaseCurrency();
 
@@ -51,9 +51,11 @@ export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | 
             style={{ flex: 1 }}
             onPress={() => {
               const phone = (party?.phone ?? '').replace(/[^0-9]/g, '');
-              Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`).catch(() => {});
               onClose();
-              toast.show(tr('sales:aging.openedWhatsapp'), 'success', { icon: 'whatsapp', detail: party?.name });
+              Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`).then(
+                () => toast.show(tr('sales:aging.openedWhatsapp'), 'success', { icon: 'whatsapp', detail: party?.name }),
+                () => toast.show(tr('common:crash.cantOpen', { what: 'WhatsApp' }), 'error', { icon: 'whatsapp' }),
+              );
             }}
           />
           <Button
@@ -62,9 +64,11 @@ export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | 
             icon="email-outline"
             style={{ flex: 1 }}
             onPress={() => {
-              Linking.openURL(`mailto:${party?.email ?? ''}?subject=${encodeURIComponent(tr('sales:aging.reminderSubject'))}&body=${encodeURIComponent(text)}`).catch(() => {});
               onClose();
-              toast.show(tr('sales:aging.openedEmail'), 'success', { icon: 'email-edit-outline', detail: party?.name });
+              Linking.openURL(`mailto:${party?.email ?? ''}?subject=${encodeURIComponent(tr('sales:aging.reminderSubject'))}&body=${encodeURIComponent(text)}`).then(
+                () => toast.show(tr('sales:aging.openedEmail'), 'success', { icon: 'email-edit-outline', detail: party?.name }),
+                () => toast.show(tr('common:crash.cantOpen', { what: tr('sales:aging.email') }), 'error', { icon: 'email-outline' }),
+              );
             }}
           />
         </View>

@@ -20,6 +20,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { DeleteAccountSheet } from '../../../features/session/DeleteAccountSheet';
 
 const ROLE_LABELS = {
   owner: 'auth:invite.roles.owner',
@@ -45,6 +46,7 @@ export default function Profile() {
   const [email, setEmail] = useState(user?.email ?? '');
   const phone = usePhoneInput(user?.phone);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone'>>({});
+  const [deleting, setDeleting] = useState(false);
 
   const save = () => {
     const next: Errors<'name' | 'email' | 'phone'> = {
@@ -102,7 +104,12 @@ export default function Profile() {
             />
           ))}
         </Card>
+
+        <Card padded={false}>
+          <ListRow title={tr('settings:deleteAccount.row')} icon="account-remove-outline" destructive divider={false} onPress={() => setDeleting(true)} />
+        </Card>
       </ScrollView>
+      <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 
       <FormActions>
         <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />

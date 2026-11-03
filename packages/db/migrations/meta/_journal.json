@@ -92,6 +92,27 @@
       "when": 1793587118008,
       "tag": "0012_payment_account_opening_balance_date",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793639565408,
+      "tag": "0013_auth_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793640191728,
+      "tag": "0014_operator_mfa",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793641349526,
+      "tag": "0015_account_deletion",
+      "breakpoints": true
     }
   ]
 }

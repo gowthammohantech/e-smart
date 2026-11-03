@@ -811,6 +811,8 @@ export type Integration = {
   icon: string;
   category: 'payments' | 'compliance' | 'messaging' | 'accounting' | 'storage';
   connected: boolean;
+  /** False while it's coming soon: it can't be switched on yet. Absent means available. */
+  available?: boolean;
   /** Where the row links for configuration, when it has any. */
   configRoute?: string;
 };

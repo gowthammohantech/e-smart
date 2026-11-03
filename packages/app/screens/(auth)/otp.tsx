@@ -44,7 +44,11 @@ export default function Otp() {
           // Only a resend is news; the first code is what the screen is already waiting for.
           if (resend) toast.show(tr('auth:otp.resent'), 'success', { icon: 'message-processing-outline', detail: String(phone ?? '') });
         })
-        .catch((err: unknown) => setError(describeError(err, tr)));
+        .catch((err: unknown) => {
+          setError(describeError(err, tr));
+          // No code is on its way, so don't make them wait to ask again.
+          setSeconds(0);
+        });
     },
     [phone, tr, toast],
   );
@@ -86,7 +90,12 @@ export default function Otp() {
       setError(tr('auth:otp.enterAllDigits'));
       return;
     }
-    if (!requestId) return;
+    if (!requestId) {
+      // The code was never sent (offline, throttled): say so rather than do nothing.
+      setError(tr('auth:otp.notSent'));
+      setSeconds(0);
+      return;
+    }
     setBusy(true);
     // The root layout routes on once the session and its data are in.
     remoteSession.verifyOtp(requestId, code).then(welcome, (err: unknown) => {

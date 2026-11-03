@@ -37,6 +37,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx turbo run typecheck lint test --continue
+      # The static server in front of the web app and the admin console: headers, compression, 404s.
+      - run: npm run test:tools
       # The server bundles and boots.
       - run: npm run build -w @esmart/api
 

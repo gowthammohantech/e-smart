@@ -103,6 +103,7 @@ paths:
                 phoneVerificationId: { type: string, description: 'The `requestId` of an OTP just verified for a phone with no account (`PHONE_NOT_REGISTERED`). The account takes that phone, marked verified.' }
                 password: { type: string, minLength: 8, writeOnly: true }
                 locale: { type: string, example: en }
+                termsVersion: { type: string, maxLength: 20, description: 'The terms and privacy policy version the person agreed to (the date on the pages, e.g. 2026-11-02); stored with when.' }
       responses:
         '201': { $ref: '#/components/responses/AuthSession' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -272,6 +273,26 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
+  /me/delete:
+    post:
+      tags: [Me]
+      operationId: deleteMe
+      summary: >-
+        Deletes the caller's account (app store rule). Their name, email, phone and logins are erased and every
+        session ends. Refused while they are the only owner of a business other people use (transfer ownership
+        first), and for platform operators. When nobody else is on the account it is closed: the subscription is
+        cancelled and the books are kept, unreadable, for the 8 years GST law requires, then erased.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteAccountRequest' }
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
   /me/onboarding/complete:
     post:
       tags: [Me]
@@ -591,6 +612,7 @@ paths:
               type: object
               properties:
                 password: { type: string, writeOnly: true }
+                termsVersion: { type: string, maxLength: 20, description: As in signUp }
       responses:
         '200': { $ref: '#/components/responses/AuthSession' }
 
@@ -3026,6 +3048,85 @@ paths:
   # Cross-tenant routes for platform operators (`users.platform_role`).
   # `x-platform-roles` replaces `x-roles` here: tenant roles never apply, and a
   # caller without a platform role gets 403 PLATFORM_FORBIDDEN.
+  # Operators prove a second factor (an authenticator app) once per session. Every other
+  # /admin route answers 403 MFA_ENROLLMENT_REQUIRED or MFA_REQUIRED until they have;
+  # `x-mfa-exempt` marks the four routes that get them there.
+  /admin/mfa:
+    get:
+      tags: [Platform]
+      operationId: getMfaStatus
+      summary: Whether the operator has an authenticator set up, and whether this session has passed it
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/mfa/enrollment:
+    post:
+      tags: [Platform]
+      operationId: startMfaEnrollment
+      summary: A new authenticator secret to scan. Replaces one not yet confirmed; refused once set up (reset from the command line).
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaEnrollment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/mfa/enrollment/confirm:
+    post:
+      tags: [Platform]
+      operationId: confirmMfaEnrollment
+      summary: Turns the authenticator on with a code from it, verifies this session, and returns the recovery codes. They are shown this once.
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryCodes' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /admin/mfa/verify:
+    post:
+      tags: [Platform]
+      operationId: verifyMfa
+      summary: Passes this session with a code from the authenticator, or one unused recovery code
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
   /admin/metrics/overview:
     get:
       tags: [Platform]
@@ -4307,6 +4408,38 @@ components:
             properties:
               date: { type: string, format: date }
               count: { type: integer }
+    DeleteAccountRequest:
+      type: object
+      required: [confirm]
+      description: Proof it's really them, as at sign-in. The password if they have one, otherwise a fresh code sent to their verified phone.
+      properties:
+        confirm: { type: string, enum: [DELETE], description: Typed by the user }
+        password: { type: string, format: password }
+        otpRequestId: { type: string }
+        otpCode: { type: string }
+    MfaStatus:
+      type: object
+      required: [enrolled, verified, recoveryCodesLeft]
+      properties:
+        enrolled: { type: boolean, description: An authenticator is set up }
+        verified: { type: boolean, description: This session passed it }
+        recoveryCodesLeft: { type: integer }
+    MfaEnrollment:
+      type: object
+      required: [secret, otpauthUri]
+      properties:
+        secret: { type: string, description: 'Base32, for typing into the app by hand' }
+        otpauthUri: { type: string, description: What the QR code holds }
+    MfaCode:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, minLength: 6, maxLength: 20, description: 'Six digits from the app, or a recovery code' }
+    MfaRecoveryCodes:
+      type: object
+      required: [recoveryCodes]
+      properties:
+        recoveryCodes: { type: array, items: { type: string } }
     PlatformAuditEvent:
       type: object
       required: [id, actorId, actorEmail, action, targetType, targetId, targetLabel, reason, createdAt]
@@ -4332,6 +4465,7 @@ components:
         icon: { type: string }
         category: { type: string, enum: [payments, compliance, messaging, accounting, storage] }
         connected: { type: boolean }
+        available: { type: boolean, description: 'False while the integration is coming soon: connecting it is refused (409 INTEGRATION_COMING_SOON).' }
         configRoute: { type: string }
     ExportJob:
       type: object

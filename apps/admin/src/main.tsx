@@ -3,7 +3,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthProvider';
-import { ApiError } from './lib/api';
+import { RootBoundary, Misconfigured } from './components/ErrorPage';
+import { API_CONFIGURED, ApiError } from './lib/api';
 import { applyTokens } from './theme/applyTokens';
 import './theme/theme.css';
 
@@ -20,12 +21,20 @@ const queryClient = new QueryClient({
   },
 });
 
+window.addEventListener('unhandledrejection', (e) => console.error('[admin]', e.reason));
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </QueryClientProvider>
+    <RootBoundary>
+      {API_CONFIGURED ? (
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </QueryClientProvider>
+      ) : (
+        <Misconfigured />
+      )}
+    </RootBoundary>
   </StrictMode>,
 );

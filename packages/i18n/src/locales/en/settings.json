@@ -413,6 +413,7 @@
   },
   "integrations": {
     "connected": "Connected",
+    "comingSoon": "Coming soon",
     "configure": "Configure",
     "group": {
       "payments": "Payments",
@@ -435,5 +436,29 @@
   },
   "eInvoicing": {
     "daysSuffix": "days"
+  },
+  "deleteAccount": {
+    "row": "Delete account",
+    "title": "Delete your account?",
+    "what": "Your name, email, phone and logins are erased, and you're signed out on every device. This can't be undone.",
+    "retention": "If you're the only person on your account, it closes too: the subscription is cancelled, and your invoices and records are kept locked for 8 years, as GST law requires, then erased. Download a backup first if you'll need them.",
+    "backupFirst": "Download a backup first",
+    "offline": "You're offline. Connect to the internet to delete your account.",
+    "unsent_one": "{{count}} change hasn't been sent yet. Send it first, or it will be lost.",
+    "unsent_other": "{{count}} changes haven't been sent yet. Send them first, or they will be lost.",
+    "syncNow": "Send now",
+    "mustTransfer": "Other people use {{names}}. Make one of them an owner under Users first, then delete your account.",
+    "openUsers": "Open Users",
+    "password": "Your password",
+    "usePhone": "Use a code sent to my phone instead",
+    "usePassword": "Use my password instead",
+    "sendCode": "Send a code to {{phone}}",
+    "code": "Code",
+    "typeDelete": "Type DELETE to confirm",
+    "confirm": "Delete my account",
+    "deleting": "Deleting…",
+    "wrongPassword": "That password isn't right.",
+    "wrongCode": "That code isn't right, or has expired. Ask for a new one.",
+    "done": "Your account was deleted."
   }
 }

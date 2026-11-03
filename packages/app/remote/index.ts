@@ -3,7 +3,7 @@
  * install.ts for how store actions become queued mutations, and sync.ts for
  * the engine that sends them.
  */
-export { API_BASE_URL, DEMO_LOGIN } from './config';
+export { API_BASE_URL, API_CONFIGURED, DEMO_LOGIN } from './config';
 export { installRemote } from './install';
 export { useRemoteSync } from './useRemoteSync';
 export { useRemoteMeta } from './meta';

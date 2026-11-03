@@ -12,6 +12,7 @@ import { useReceiptQueue } from './receiptQueue';
 import { isOpen } from './outbox';
 import { endSyncSession, loadSnapshot, reloadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
+import { LEGAL } from '../lib/legal';
 
 type AuthSession = Schema<'AuthSession'>;
 
@@ -52,7 +53,7 @@ export async function signIn(email: string, password: string) {
   await begin(data!);
 }
 
-export async function signUp(input: { name: string; email: string; phone?: string; phoneVerificationId?: string; password: string; locale?: string }) {
+export async function signUp(input: { name: string; email: string; phone?: string; phoneVerificationId?: string; password: string; locale?: string; termsVersion?: string }) {
   const { data } = await api.POST('/auth/sign-up', { body: { ...input, email: input.email.trim(), phone: input.phone || undefined } });
   await begin(data!);
 }
@@ -60,7 +61,8 @@ export async function signUp(input: { name: string; email: string; phone?: strin
 /** Sends a code; returns the request id that verifyOtp needs. */
 export async function requestOtp(phone: string): Promise<{ requestId: string; resendAfterSeconds: number }> {
   const { data } = await api.POST('/auth/otp/request', { body: { phone } });
-  return { requestId: data?.requestId ?? '', resendAfterSeconds: data?.resendAfterSeconds ?? 30 };
+  if (!data?.requestId) throw new RemoteError('incompleteSession', 'The server sent no OTP request id');
+  return { requestId: data.requestId, resendAfterSeconds: data.resendAfterSeconds ?? 30 };
 }
 
 export async function verifyOtp(requestId: string, code: string) {
@@ -122,6 +124,20 @@ export async function signOut() {
   } catch {
     // Signing out works offline too; the server session expires on its own.
   }
+  await setTokens(null);
+  await clearLocal();
+}
+
+/**
+ * Deletes the account on the server, then forgets everything here. Unlike signing out, changes still
+ * waiting to send are dropped rather than kept for a next sign-in that won't come. Throws (and
+ * changes nothing locally) when the server refuses.
+ */
+export async function deleteAccount(body: Schema<'DeleteAccountRequest'>) {
+  await api.POST('/me/delete', { body });
+  const { userId } = useAppStore.getState().session;
+  useAppStore.setState({ syncQueue: [] });
+  if (userId) await AsyncStorage.removeItem(unsyncedKey(userId)).catch(() => {});
   await setTokens(null);
   await clearLocal();
 }
@@ -188,6 +204,7 @@ export async function getInvite(token: string) {
  * lands in the business they just joined.
  */
 export async function acceptInvite(token: string, password?: string, joinedCompanyId?: string) {
-  const { data } = await api.POST('/invites/{token}/accept', { params: { path: { token } }, body: password ? { password } : {} });
+  // Accepting is agreeing to the terms the screen links to.
+  const { data } = await api.POST('/invites/{token}/accept', { params: { path: { token } }, body: { ...(password ? { password } : {}), termsVersion: LEGAL.termsVersion } });
   await begin(data as AuthSession, joinedCompanyId);
 }

@@ -7,6 +7,7 @@ import { MUTATIONS } from './mutations';
 import * as outbox from './outbox';
 import { signOut, watchSessionEnd } from './session';
 import { syncSoon } from './sync';
+import { reportError } from '../lib/reporter';
 
 let installed = false;
 
@@ -45,12 +46,13 @@ export function installRemote() {
   Object.assign(patch, {
     // The session lives on the server; signing out tells it so.
     signOut: () => void signOut(),
-    // Plans change through billing: checkout, then the webhook, then a pull.
+    // Plans change through billing: checkout, then the webhook, then a pull. Nothing calls this while
+    // the apps are Free-only (745f284); a failure is reported rather than lost when something does.
     setPlan: (companyId: string, plan: PlanTier) => {
       void api
         .POST('/companies/{companyId}/subscription/checkout', { params: { path: { companyId } }, body: { plan, cycle: 'yearly' } })
         .then(({ data }) => (data?.checkoutUrl ? Linking.openURL(data.checkoutUrl) : undefined))
-        .catch(() => {});
+        .catch((err: unknown) => reportError(err, { source: 'checkout' }));
     },
   } satisfies Partial<AppState>);
 

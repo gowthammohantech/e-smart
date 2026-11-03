@@ -11,6 +11,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:tools": "node --test tools/static-server.test.mjs",
     "mobile": "npm run start -w @esmart/mobile",
     "web": "npm run start -w @esmart/web",
     "admin": "npm run dev -w @esmart/admin",

@@ -34,6 +34,17 @@ export async function renderDocumentPdf(
   row: DocRow,
   opts: { now: Date; locale?: LanguageCode; copy?: keyof typeof COPY_LABEL },
 ): Promise<Buffer> {
+  return deps.providers.pdf.render(await renderDocumentHtml(db, deps, company, row, opts));
+}
+
+/** The printable page itself: what the PDF is made from, and what a share link shows. */
+export async function renderDocumentHtml(
+  db: DbOrTx,
+  deps: Deps,
+  company: CompanyRow,
+  row: DocRow,
+  opts: { now: Date; locale?: LanguageCode; copy?: keyof typeof COPY_LABEL },
+): Promise<string> {
   const [doc] = await documentsToWire(db, [row], opts.now, company.baseCurrency.trim());
   const [party] = await db.select().from(schema.parties).where(eq(schema.parties.id, row.partyId));
   const [branch] = await db.select().from(schema.branches).where(eq(schema.branches.id, row.branchId));
@@ -57,7 +68,7 @@ export async function renderDocumentPdf(
   });
   const copy = COPY_LABEL[opts.copy ?? 'original'];
   if (copy) html = html.replace('<div class="head">', `<div class="muted" style="text-align:right;font-weight:700">${copy}</div><div class="head">`);
-  return deps.providers.pdf.render(html);
+  return html;
 }
 
 /** Renders the PDF into object storage and returns a signed download link to that blob. */

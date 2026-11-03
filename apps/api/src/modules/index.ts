@@ -1,6 +1,7 @@
 import type { Handlers } from '../context';
 import { authHandlers } from './auth/handlers';
 import { meHandlers } from './me/handlers';
+import { deleteAccountHandlers } from './me/deleteAccount';
 import { companiesHandlers } from './companies/handlers';
 import { usersHandlers } from './users/handlers';
 import { billingHandlers } from './billing/handlers';
@@ -27,12 +28,14 @@ import { syncHandlers } from './sync/handlers';
 import { referenceHandlers } from './reference/handlers';
 import { lixiHandlers } from './lixi/handlers';
 import { platformHandlers } from './platform/handlers';
+import { mfaHandlers } from './platform/mfa';
 export { webhookHandlers } from './webhooks/handlers';
 
 /** Every module's handlers, keyed by operationId. */
 export const handlers: Handlers = {
   ...authHandlers,
   ...meHandlers,
+  ...deleteAccountHandlers,
   ...companiesHandlers,
   ...usersHandlers,
   ...billingHandlers,
@@ -59,4 +62,5 @@ export const handlers: Handlers = {
   ...referenceHandlers,
   ...lixiHandlers,
   ...platformHandlers,
+  ...mfaHandlers,
 };

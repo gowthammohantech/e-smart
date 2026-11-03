@@ -18,6 +18,7 @@ import { loadOperations } from './openapi/spec';
 import { MemoryStorage } from './providers';
 import { INTERNAL_HEADER, INTERNAL_TOKEN } from './lib/internal';
 import { registerMcp } from './lixi/mcp';
+import { registerSharePages } from './modules/documents/share';
 
 export type BuildOptions = {
   logger?: boolean | object;
@@ -40,7 +41,9 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
 
   const app = Fastify({
     logger: opts.logger ?? { level: deps.config.LOG_LEVEL },
-    trustProxy: true,
+    // Only Railway's edge proxy: a client-written X-Forwarded-For beyond it is ignored.
+    // The same as a hop count: address i counts from the socket outwards.
+    trustProxy: (_addr: string, i: number) => i < deps.config.TRUST_PROXY_HOPS,
     bodyLimit: 5 * 1024 * 1024,
     genReqId: () => crypto.randomUUID(),
     ajv: {
@@ -69,8 +72,19 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
     max: deps.config.RATE_LIMIT_PER_MINUTE,
     timeWindow: '1 minute',
     allowList: (req) => req.headers[INTERNAL_HEADER] === INTERNAL_TOKEN,
-    // Per user once signed in, per IP before.
-    keyGenerator: (req) => req.headers.authorization?.slice(-24) ?? req.ip,
+    // Per user once signed in, per IP before. Only a token this server signed names a user: anything
+    // else counts against the IP, so a made-up header can't buy a fresh bucket.
+    keyGenerator: (req) => {
+      const header = req.headers.authorization;
+      if (header?.startsWith('Bearer ')) {
+        try {
+          return `u:${app.jwt.verify<{ sub: string }>(header.slice(7)).sub}`;
+        } catch {
+          // Expired or forged.
+        }
+      }
+      return `ip:${req.ip}`;
+    },
     errorResponseBuilder: (_req, ctx) => ({
       statusCode: 429,
       code: 'RATE_LIMITED',
@@ -93,6 +107,8 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
 
   // Lixi's tools over MCP; outside the contract, like /health.
   registerMcp(app, deps);
+  // The pages behind the share links customers are sent.
+  registerSharePages(app, deps);
 
   const { operations } = await loadOperations();
   registerRoutes(app, deps, operations, opts.handlers ?? defaultHandlers, opts.webhooks ?? defaultWebhooks);
