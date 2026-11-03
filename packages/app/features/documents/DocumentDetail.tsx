@@ -54,7 +54,7 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
-import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
+import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
 import { useGoBack } from '../../navigation/useGoBack';
 
@@ -89,6 +89,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [complianceSheet, setComplianceSheet] = useState<'generate' | 'cancel' | null>(null);
@@ -193,20 +194,62 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     );
 
   /**
-   * Email / WhatsApp. A browser (or a party with no address on file) can't use
-   * the server's send, which only queues the message, so the person's own mail
-   * app or WhatsApp opens with the document's details and link filled in.
+   * The email a mail app opens with. A mailto link carries plain text only, so
+   * it is laid out as a letter: greeting, the document's dates and amount, its
+   * links (view, PDF, pay), and the business signing off.
+   */
+  const mailtoLink = async () => {
+    const owing = isPayable && doc.kind === 'invoice' && outstanding.minor > 0;
+    const [links, pay] = await Promise.all([
+      shareLinks(doc.companyId, doc.id),
+      // No gateway on this server: the email goes without a pay link.
+      owing ? paymentLink(doc.companyId, doc.id).catch(() => undefined) : undefined,
+    ]);
+    const business = company?.name ?? '';
+    const partPaid = owing && outstanding.minor < doc.totals.grandTotal.minor;
+    type Line = 'subject' | 'greeting' | 'intro' | 'date' | 'dueDate' | 'validUntil' | 'total' | 'amountDue' | 'view' | 'pdf' | 'pay' | 'thanks' | 'regards';
+    const e = (key: Line, values: Record<string, unknown> = {}) => tr(`common:documentEmail.${key}`, { kind: kindName, number: doc.number, business, ...values });
+    const body = [
+      e('greeting', { name: party?.name ?? '' }),
+      '',
+      e('intro'),
+      '',
+      e('date', { date: formatDate(doc.date) }),
+      doc.dueDate ? e('dueDate', { date: formatDate(doc.dueDate) }) : null,
+      doc.validUntil ? e('validUntil', { date: formatDate(doc.validUntil) }) : null,
+      e('total', { amount: formatMoney(doc.totals.grandTotal) }),
+      partPaid ? e('amountDue', { amount: formatMoney(outstanding) }) : null,
+      '',
+      e('view', { url: links.url }),
+      links.pdfUrl ? e('pdf', { url: links.pdfUrl }) : null,
+      pay ? e('pay', { url: pay.url }) : null,
+      '',
+      e('thanks'),
+      '',
+      e('regards'),
+      business,
+      [company?.phone, company?.email].filter(Boolean).join(' · ') || null,
+    ]
+      .filter((l) => l !== null)
+      .join('\n');
+    return `mailto:${party?.email ?? ''}?subject=${encodeURIComponent(e('subject'))}&body=${encodeURIComponent(body)}`;
+  };
+
+  /**
+   * Email / WhatsApp for a party with no address on file (and WhatsApp in a
+   * browser): the person's own mail app or WhatsApp opens with the document's
+   * details and link filled in.
    */
   const compose = (channel: 'email' | 'whatsapp') =>
     runRemote(async () => {
+      if (channel === 'email') {
+        await Linking.openURL(await mailtoLink());
+        return;
+      }
       const url = await shareLink(doc.companyId, doc.id);
       const text = `${tr('common:documentDetail.shareMessage', { kind: kindName, number: doc.number, amount: formatMoney(doc.totals.grandTotal) })}
 ${url}`;
-      const target =
-        channel === 'whatsapp'
-          ? `https://wa.me/${(party?.phone ?? '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`
-          : `mailto:${party?.email ?? ''}?subject=${encodeURIComponent(`${kindName} ${doc.number}`)}&body=${encodeURIComponent(text)}`;
-      await Linking.openURL(target);
+      await Linking.openURL(`https://wa.me/${(party?.phone ?? '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`);
     }, {
       loading: tr('sales:detail.preparingMessage'),
       success: tr(channel === 'whatsapp' ? 'sales:detail.openedWhatsapp' : 'sales:detail.openedEmail'),
@@ -215,7 +258,9 @@ ${url}`;
 
   const sendVia = (channel: 'email' | 'whatsapp') => {
     const hasContact = channel === 'email' ? !!party?.email : !!party?.phone;
-    if (Platform.OS === 'web' || !hasContact) compose(channel);
+    // Email goes from the server wherever it is sent from, so the customer gets the designed
+    // email with the PDF and payment links; a browser opening a mail app could only send text.
+    if (!hasContact || (Platform.OS === 'web' && channel === 'whatsapp')) compose(channel);
     else send(channel);
   };
 
@@ -258,6 +303,31 @@ ${url}`;
   const conversions = offered.filter((c) => !conversionBlock(doc, c.target, allDocuments));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
+  // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
+  const finaliseTo = isFinalized(doc.status) ? undefined : transitions.find(isFinalized);
+
+  const markAs = (s: DocStatus, message = tr('common:documentDetail.marked', { status: statusLabel(tr, s) })) => {
+    // Finalising from here must pass the same stock check as the editor.
+    const short = !isFinalized(doc.status) && isFinalized(s)
+      ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
+      : [];
+    if (short.length) {
+      toast.show(
+        tr('sales:editor.insufficientStock', {
+          date: formatDate(doc.date),
+          names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
+        }),
+        'warning',
+        { icon: 'package-variant-closed-remove' },
+      );
+      return;
+    }
+    setStatusOpen(false);
+    void serverSave(() => setDocumentStatus(doc.id, s), message, { icon: 'flag-checkered', detail: doc.number, varies: true });
+  };
+
+  // Finalise asks once, then finalises; the status list is for anything else.
+  const finalise = () => (finaliseTo ? setConfirmFinalize(true) : setStatusOpen(true));
 
   const headerCard = (
     <>
@@ -588,7 +658,7 @@ ${url}`;
       ) : null}
       <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
       {!isFinalized(doc.status) ? (
-        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={() => setStatusOpen(true)} />
+        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={finalise} />
       ) : (
         <Button title={tr('sales:print.savePdf')} icon="file-download-outline" onPress={shareDocument} loading={busy} />
       )}
@@ -679,7 +749,7 @@ ${url}`;
             <Button
               title={tr('sales:detail.finalise')}
               icon="check-decagram-outline"
-              onPress={() => setStatusOpen(true)}
+              onPress={finalise}
               style={{ flex: 1 }}
             />
           ) : (
@@ -806,25 +876,7 @@ ${url}`;
           transitions.map((s: DocStatus) => (
             <Pressable
               key={s}
-              onPress={() => {
-                // Finalising from here must pass the same stock check as the editor.
-                const short = !isFinalized(doc.status) && isFinalized(s)
-                  ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
-                  : [];
-                if (short.length) {
-                  toast.show(
-                    tr('sales:editor.insufficientStock', {
-                      date: formatDate(doc.date),
-                      names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
-                    }),
-                    'warning',
-                    { icon: 'package-variant-closed-remove' },
-                  );
-                  return;
-                }
-                setStatusOpen(false);
-                void serverSave(() => setDocumentStatus(doc.id, s), tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), { icon: 'flag-checkered', detail: doc.number, varies: true });
-              }}
+              onPress={() => markAs(s)}
               accessibilityRole="button"
               accessibilityLabel={tr('common:documentDetail.markAs', { status: statusLabel(tr, s) })}
               style={({ pressed }) => ({
@@ -843,6 +895,19 @@ ${url}`;
           ))
         )}
       </Sheet>
+
+      <ConfirmDialog
+        visible={confirmFinalize}
+        title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
+        message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
+        confirmLabel={tr('sales:detail.finalise')}
+        icon="check-decagram-outline"
+        onCancel={() => setConfirmFinalize(false)}
+        onConfirm={() => {
+          setConfirmFinalize(false);
+          if (finaliseTo) markAs(finaliseTo, tr('common:documentEditor.finalised', { kind: kindName }));
+        }}
+      />
 
       <ConfirmDialog
         visible={confirmDelete}

@@ -29,6 +29,8 @@ type Props = {
    * (useSaveShortcut).
    */
   shortcut?: string;
+  /** A line shown above the button while it is hovered in a desktop browser, e.g. why it is locked. */
+  tooltip?: string;
 };
 
 // A Mac's browser names the key ⌘; every other one, Ctrl.
@@ -47,6 +49,7 @@ export function Button({
   style,
   haptic = true,
   shortcut,
+  tooltip,
 }: Props) {
   const t = useTheme();
 
@@ -69,6 +72,7 @@ export function Button({
   const p = palette[variant];
   const isDisabled = disabled || loading;
   const keys = shortcut && desktop && Platform.OS === 'web' ? `${onMac ? '⌘' : 'Ctrl+'}${shortcut === 'Enter' ? 'Enter' : shortcut.toUpperCase()}` : null;
+  const tip = (tooltip && desktop && Platform.OS === 'web' ? tooltip : null) ?? keys;
 
   // The browser draws hover and press as colour, the way web buttons do; a
   // phone has no hover and keeps its opacity dip on press.
@@ -112,7 +116,7 @@ export function Button({
           opacity: isDisabled ? 0.45 : WEB ? (pressed && variant !== 'primary' && variant !== 'ghost' ? 0.85 : 1) : pressed ? 0.8 : hovered ? 0.9 : 1,
           alignSelf: fullWidth ? 'stretch' : 'auto',
           // Its tooltip sits over whatever is next to it.
-          zIndex: keys && hovered ? 10 : undefined,
+          zIndex: tip && hovered ? 10 : undefined,
         },
         focusRing(t, focused),
         style,
@@ -139,12 +143,14 @@ export function Button({
               {iconRight ? <Icon name={iconRight} size={WEB ? 16 : fonts[size] + 3} color={p.fg} /> : null}
             </View>
           )}
-          {/* The keyboard shortcut, in a tooltip above the button while it is hovered. */}
-          {keys && (state as WebPressState).hovered && !isDisabled ? (
-            <View pointerEvents="none" style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, alignItems: 'center', marginBottom: 6 }}>
-              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: t.c.text }}>
-                <Text numberOfLines={1} style={{ color: t.c.bg, fontSize: 11, fontWeight: '600' }}>
-                  {keys}
+          {/* The tooltip, or the keyboard shortcut, above the button while it is hovered. A
+              sentence can run wider than the button: it lines up with the button's right edge
+              and grows leftwards, so a page's action at the far right keeps it on screen. */}
+          {tip && (state as WebPressState).hovered && !isDisabled ? (
+            <View pointerEvents="none" style={{ position: 'absolute', bottom: '100%', left: tooltip ? -200 : 0, right: 0, alignItems: tooltip ? 'flex-end' : 'center', marginBottom: 6 }}>
+              <View style={{ paddingHorizontal: tooltip ? 10 : 8, paddingVertical: tooltip ? 6 : 4, borderRadius: 6, backgroundColor: t.c.text, maxWidth: 280 }}>
+                <Text numberOfLines={tooltip ? 3 : 1} style={{ color: t.c.bg, fontSize: tooltip ? 12 : 11, fontWeight: tooltip ? '500' : '600', textAlign: 'center' }}>
+                  {tip}
                 </Text>
               </View>
             </View>

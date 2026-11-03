@@ -17,6 +17,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
@@ -28,6 +29,7 @@ import { uid } from '@esmart/core/lib/id';
 import { isNetworkError } from '../../remote/api';
 import { uploadAttachment } from '../../remote/attachments';
 import { useReceiptQueue } from '../../remote/receiptQueue';
+import { keepQueued } from '../../remote/keptFiles';
 import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
 import {
@@ -116,6 +118,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState<string | undefined>();
+  // What the person has picked or typed, to tell an untouched form from one with changes to lose.
+  const entered = JSON.stringify([categoryId, amountText, date, method, pickedAccountId, supplierId, taxCategoryId, taxInclusive, reference, notes, recurrence, billable, receiptUri]);
+  const [untouched] = useState(entered);
+  const leaveGuard = useLeaveGuard(entered !== untouched);
 
   const addCategory = () => {
     const name = newCategoryName.trim();
@@ -231,8 +237,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     const id = res.id ?? res.result;
     if (receiptLater) {
       useReceiptQueue.getState().add(id, record.companyId, receiptLater);
+      // A browser's picked file lasts only as long as the page; keep it for a reload.
+      keepQueued(receiptLater, useReceiptQueue.getState().swapUri);
       toast.show(tr('purchases:form.receiptQueued'), 'success');
     }
+    await leaveGuard.release();
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };
@@ -591,6 +600,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           onSelect={(v) => setRecurrence(v as RecurrenceFrequency)}
           searchable={false}
         />
+        {leaveGuard.dialog}
       </FormContainer>
     </KeyboardAvoidingView>
   );

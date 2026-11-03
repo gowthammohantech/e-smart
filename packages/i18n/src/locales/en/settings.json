@@ -69,6 +69,7 @@
     "typeBank": "Bank",
     "typeCash": "Cash",
     "typeWallet": "Wallet",
+    "inUse": "This account has payments or expenses, so its type can’t change and it can’t be deleted.",
     "updated": "Account updated",
     "added": "Account added",
     "editTitle": "Edit account",
@@ -104,7 +105,10 @@
     "codeTaken": "Another branch already uses the code {{code}}. Pick a different code.",
     "intro": "Branches let you keep stock and documents separate by location. Every document records which branch it belongs to, and reports can be filtered by it.",
     "deleteTitle": "Delete {{name}}?",
-    "addressTaken": "Another branch ({{name}}) is already at this address."
+    "addressTaken": "Another branch ({{name}}) is already at this address.",
+    "oneOnPlan": "Your plan includes one branch. You can rename it here; its address, GSTIN and phone follow Business profile.",
+    "upgradeToAdd": "Your plan includes one branch. Upgrade to add more branches.",
+    "onlyName": "On your plan only the branch name can be changed here. The address, GSTIN and phone come from Business profile and update with it."
   },
   "taxes": {
     "none": "No tax rates",

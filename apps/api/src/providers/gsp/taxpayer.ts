@@ -1,5 +1,5 @@
 import type { Schema } from '@esmart/api-contract';
-import { stateNameOf } from '@esmart/core/domain/stateCodes';
+import { GST_STATE_CODES, stateByCode, stateNameOf } from '@esmart/core/domain/stateCodes';
 import type { GstinRecord } from '../gstin';
 
 type Rec = Record<string, unknown>;
@@ -57,7 +57,14 @@ export function toGstinRecord(raw: Rec, gstin: string): GstinRecord | null {
   const locality = text(addr.loc, raw.AddrLoc);
   const city = text(addr.city, addr.dst, locality);
   const postalCode = text(addr.pncd, raw.AddrPncd);
-  const stateCode = gstin.slice(0, 2);
+  // The state the address itself names (GSTN's `stcd` is a name, NIC's `StateCode` a code), so city,
+  // PIN and state stay one place; the GSTIN's own state only when the register gives none. They
+  // agree for a real registration, but a gateway sandbox answers every GSTIN with one sample address.
+  const named = text(addr.stcd)?.toLowerCase();
+  const stateCode =
+    GST_STATE_CODES.find((s) => s.name.toLowerCase() === named)?.code ??
+    stateByCode(text(raw.StateCode)?.padStart(2, '0'))?.code ??
+    gstin.slice(0, 2);
 
   const address =
     (line1 || street || locality) && city && postalCode

@@ -63,6 +63,7 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useSaveOnline } from '../../remote/save';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useLeaveGuard } from '../../components/useLeaveGuard';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -192,6 +193,15 @@ export function DocumentEditor({
     taxContext: draftTaxContext,
     initial: initialDraft ?? seed?.draft,
   });
+
+  // What the person has picked or typed, to tell an untouched form from one with changes to lose.
+  const entered = JSON.stringify([
+    draft.partyId, draft.date, draft.dueDate, draft.validUntil, draft.notes, draft.terms, draft.reference, draft.supplierDocNumber,
+    draft.charges, draft.documentDiscountMode, draft.documentDiscountValue, draft.attachmentIds,
+    draft.lines.map((l) => [l.itemId, l.name, l.description, l.quantity, l.unit, l.unitPrice.minor, l.discountMode, l.discountValue, l.taxCategoryId]),
+  ]);
+  const [untouched] = useState(entered);
+  const leaveGuard = useLeaveGuard(entered !== untouched);
 
   const [step, setStep] = useState(seed?.step ?? 0);
   const [partyOpen, setPartyOpen] = useState(false);
@@ -477,6 +487,8 @@ export function DocumentEditor({
           : undefined,
       },
     );
+    // Saved: leaving for the saved document isn't leaving changes behind.
+    await leaveGuard.release();
     if (onSaved) onSaved(id);
     else router.replace(detailRouteFor(kind, id) as never);
   };
@@ -1222,6 +1234,7 @@ export function DocumentEditor({
             void save(true);
           }}
         />
+        {leaveGuard.dialog}
       </FormContainer>
     </KeyboardAvoidingView>
   );

@@ -236,6 +236,43 @@ describe('resilience', () => {
     expect(actions().taxCategories.some((x) => x.id === localTax.id)).toBe(false);
   });
 
+  it('counts a new company as synced when its plan keeps a defaults list closed', async () => {
+    const companyId = actions().createCompany({ ...actions().companies[0], name: 'Free Co' } as never);
+    const { ApiError } = jest.requireActual('@esmart/api-client');
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/sync/pull') return { data: { changes: [], cursor: '1', hasMore: false } };
+      // Expenses need the pro plan: the server refuses the list on Free.
+      if (path === '/companies/{companyId}/expense-categories') throw new ApiError(403, { detail: 'The expenses module needs the pro plan' });
+      return { data: { data: [], nextCursor: null } };
+    });
+    POST.mockImplementation(async (_p: string, { body }: { body: { mutations: Sent[] } }) => ({
+      data: { results: body.mutations.map((m) => ({ id: m.id, status: 'applied', entity: { id: 'cmp_FREE', version: 1 } })) },
+    }));
+    await syncNow();
+
+    expect(queue().filter((e) => e.entityId === companyId || e.entityId === 'cmp_FREE')).toHaveLength(0);
+    expect(useRemoteMeta.getState().versions.cmp_FREE).toBe(1);
+  });
+
+  it('pulls a business again once its plan changes, for what the old plan could not read', async () => {
+    const id = BOOK.companyId;
+    useRemoteMeta.getState().patch({ plans: { [id]: 'free' } });
+    useAppStore.setState({ companies: actions().companies.map((c) => (c.id === id ? { ...c, plan: 'pro' } : c)) });
+    const category = { id: 'exc_SERVER', companyId: id, name: 'Rent', version: 1 };
+    GET.mockImplementation(async (path: string, opts?: { params?: { query?: { companyId?: string } } }) => {
+      if (path === '/sync/pull') {
+        // Only a pull of that business from the start brings what Free kept back.
+        const changes = opts?.params?.query?.companyId === id ? [{ op: 'upsert', entityType: 'expense_category', entityId: category.id, data: category }] : [];
+        return { data: { changes, cursor: '1', hasMore: false } };
+      }
+      return { data: { data: [], nextCursor: null } };
+    });
+    await syncNow();
+
+    expect(actions().expenseCategories.some((c) => c.id === category.id)).toBe(true);
+    expect(useRemoteMeta.getState().plans[id]).toBe('pro');
+  });
+
   it('B7: narrows down a refused batch, so one bad entry fails alone', async () => {
     actions().saveParty(party({ id: 'pty_good', name: 'Good' }));
     actions().saveParty(party({ id: 'pty_bad', name: 'Bad' }));

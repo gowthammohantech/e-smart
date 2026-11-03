@@ -59,6 +59,10 @@ export default function AccountSettings() {
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 
+  // Once money has gone through an account it stays, and so does its type: past
+  // payments used methods the type allows. The server refuses both too.
+  const inUse = !!editing?.id && (payments.some((p) => p.accountId === editing.id) || expenses.some((e) => e.accountId === editing.id));
+
   const open = (a?: PaymentAccount) => {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', type: 'bank', currency: baseCurrency, openingBalance: money(0, baseCurrency), isDefault: false } as PaymentAccount));
     setName(a?.name ?? '');
@@ -136,7 +140,7 @@ export default function AccountSettings() {
         title={editing?.id ? tr('settings:accounts.editTitle') : tr('settings:accounts.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id && accounts.length > 1 ? (
+            {editing?.id && accounts.length > 1 && !inUse ? (
               <Button
                 title={tr('settings:accounts.delete')}
                 variant="danger"
@@ -153,15 +157,19 @@ export default function AccountSettings() {
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <Segmented
-            options={[
-              { value: 'bank', label: typeLabels.bank },
-              { value: 'cash', label: typeLabels.cash },
-              { value: 'wallet', label: typeLabels.wallet },
-            ]}
-            value={type}
-            onChange={(v) => setType(v as PaymentAccount['type'])}
-          />
+          <View style={{ gap: t.spacing.xs }}>
+            <Segmented
+              options={[
+                { value: 'bank', label: typeLabels.bank },
+                { value: 'cash', label: typeLabels.cash },
+                { value: 'wallet', label: typeLabels.wallet },
+              ]}
+              value={type}
+              onChange={(v) => setType(v as PaymentAccount['type'])}
+              disabled={inUse}
+            />
+            {inUse ? <Text variant="caption" tone="muted">{tr('settings:accounts.inUse')}</Text> : null}
+          </View>
           <TextField label={tr('settings:accounts.name')} value={name} onChangeText={setName} placeholder={tr('settings:accounts.namePlaceholder')} icon="bank-outline" required />
           {type === 'bank' ? (
             <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />

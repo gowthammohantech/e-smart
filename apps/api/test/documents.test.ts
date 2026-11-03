@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '@esmart/db';
 import { sha256 } from '../src/lib/crypto';
 import { ownerWithCompany, setupApi } from './helpers';
@@ -410,5 +410,25 @@ describe('documents: output', () => {
     expect(t.providers.outbox.last('email', 'accounts@sunrise.example')?.subject).toBe('QT/26-27/0001 from Vertex Traders');
     const sentQuote = await t.get(`${m.c}/documents/${quote.body.id}`, { token: m.token });
     expect(sentQuote.body).toMatchObject({ status: 'sent', number: 'QT/26-27/0001' });
+  });
+
+  it('carries the business logo inside the email only when there is one, and signs off with Elixir Books', async () => {
+    const m = await moneySetup(t);
+    const inv = await issueInvoice(t, m);
+    await t.post(`${m.c}/documents/${inv.id}/send`, { channel: 'email' }, { token: m.token });
+    const plain = t.providers.outbox.last('email');
+    expect(plain?.html).not.toContain('cid:business-logo');
+    expect(plain?.inline ?? []).toHaveLength(0);
+    expect(plain?.html).toContain('cid:elixir-logo');
+  });
+
+  it('says so when the provider refuses the email, rather than reporting it sent', async () => {
+    const m = await moneySetup(t);
+    const inv = await issueInvoice(t, m);
+    vi.spyOn(t.providers.email, 'send').mockRejectedValueOnce(new Error('Resend 403: You can only send testing emails to your own email address'));
+    const res = await t.post(`${m.c}/documents/${inv.id}/send`, { channel: 'email' }, { token: m.token });
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({ code: 'SEND_FAILED' });
+    expect(res.body.detail).toContain('only send testing emails');
   });
 });

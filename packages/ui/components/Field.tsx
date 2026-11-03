@@ -119,6 +119,8 @@ export function TextField({
   // A password can be shown while typing, to check it.
   const [revealed, setRevealed] = useState(false);
   const desktop = useIsDesktop();
+  // Read-only: no focus ring or text cursor on a click, and the lock a locked picker shows.
+  const readOnly = rest.editable === false;
 
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
@@ -131,15 +133,15 @@ export function TextField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
+          borderColor: error ? t.c.bad : focused && !readOnly ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
           // Tamil's below-line vowel signs need a few more pixels. The extra
           // goes on the box rather than as `lineHeight` on the TextInput,
           // which mis-centres the caret on Android.
           minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48,
           // Read-only fields look it, rather than only refusing input.
-          opacity: rest.editable === false ? 0.6 : 1,
-          ...webFocusHalo(t, focused && !error),
+          opacity: readOnly ? 0.6 : 1,
+          ...webFocusHalo(t, focused && !error && !readOnly),
         }}
       >
         {icon ? <Icon name={icon} size={18} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null}
@@ -153,6 +155,7 @@ export function TextField({
               minHeight: multiline ? (t.script === 'tamil' ? 100 : 92) : undefined,
               textAlignVertical: multiline ? 'top' : 'center',
               ...WEB_INPUT_RESET,
+              ...(readOnly ? ({ cursor: 'default' } as object) : null),
             },
             style,
           ]}
@@ -182,7 +185,7 @@ export function TextField({
             {suffix}
           </Text>
         ) : (
-          suffix
+          (suffix ?? (readOnly ? <Icon name="lock-outline" size={16} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null))
         )}
       </View>
     </FieldShell>
@@ -245,14 +248,15 @@ export function PhoneField({
           flexDirection: 'row',
           alignItems: 'center',
           gap: t.spacing.sm,
-          backgroundColor: disabled ? t.c.line : desktop ? t.c.paper : t.c.card2,
+          // Disabled looks like any read-only field: faded, with a lock, and no focus ring on a click.
+          backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
+          borderColor: error ? t.c.bad : focused && !disabled ? t.c.primary : t.c.line,
           paddingHorizontal: t.spacing.md,
           minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48,
-          ...webFocusHalo(t, focused && !error),
-          ...(disabled ? { opacity: 0.65 } : null),
+          ...webFocusHalo(t, focused && !error && !disabled),
+          ...(disabled ? { opacity: 0.6 } : null),
         }}
       >
         {icon ? <Icon name={icon} size={18} color={t.c.muted} /> : null}
@@ -266,7 +270,7 @@ export function PhoneField({
           keyboardType="number-pad"
           maxLength={maxNationalDigits(dialCode)}
           placeholder={placeholder}
-          style={[input, { flex: 1 }, disabled && { color: t.c.muted }]}
+          style={[input, { flex: 1 }, disabled && { color: t.c.muted }, disabled && ({ cursor: 'default' } as object)]}
           placeholderTextColor={t.c.muted}
           editable={!disabled}
           onFocus={() => setFocused(true)}
@@ -277,6 +281,7 @@ export function PhoneField({
           autoComplete="tel-national"
           onSubmitEditing={onSubmitEditing}
         />
+        {disabled ? <Icon name="lock-outline" size={16} color={t.c.muted} /> : null}
       </View>
     </FieldShell>
   );
@@ -537,12 +542,15 @@ export function Segmented<T extends string>({
   onChange,
   style,
   size = 'md',
+  disabled,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
   style?: StyleProp<ViewStyle>;
   size?: 'sm' | 'md';
+  /** Locked: the chosen option stays as it is so it still reads; only the others fade. */
+  disabled?: boolean;
 }) {
   const t = useTheme();
   // A desktop shows the quieter web tab switch: the chosen option raised in
@@ -567,8 +575,9 @@ export function Segmented<T extends string>({
           <Pressable
             key={o.value}
             onPress={() => onChange(o.value)}
+            disabled={disabled}
             accessibilityRole="button"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled: !!disabled }}
             accessibilityLabel={o.label}
             style={{
               flex: 1,
@@ -578,6 +587,7 @@ export function Segmented<T extends string>({
               justifyContent: 'center',
               backgroundColor: active ? (desktop ? t.c.paper : t.c.primary) : 'transparent',
               ...(desktop && active ? t.shadow.card : null),
+              opacity: disabled && !active ? 0.4 : 1,
             }}
           >
             <Text

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { forgetFile } from './keptFiles';
 
 /** A logo chosen on this device that the server doesn't have yet. */
 export type PendingLogo = {
@@ -21,6 +22,8 @@ type LogoQueue = {
   fail: (companyId: string, message: string) => void;
   /** A company first saved under an id made on this device is renamed by the server. */
   remap: (ids: Map<string, string>) => void;
+  /** Points an entry at the kept copy of its file; false when no entry has it any more. */
+  swapUri: (from: string, to: string) => boolean;
   reset: () => void;
 };
 
@@ -34,8 +37,8 @@ export const useLogoQueue = create<LogoQueue>()(
       pending: {},
       set: (companyId, uri) => set({ pending: { ...get().pending, [companyId]: { uri, tries: 0 } } }),
       clear: (companyId) => {
-        const { [companyId]: _gone, ...rest } = get().pending;
-        void _gone;
+        const { [companyId]: gone, ...rest } = get().pending;
+        void forgetFile(gone?.uri);
         set({ pending: rest });
       },
       tried: (companyId) => {
@@ -51,7 +54,16 @@ export const useLogoQueue = create<LogoQueue>()(
         for (const [id, p] of Object.entries(get().pending)) next[ids.get(id) ?? id] = p;
         set({ pending: next });
       },
-      reset: () => set({ pending: {} }),
+      swapUri: (from, to) => {
+        const entry = Object.entries(get().pending).find(([, p]) => p.uri === from);
+        if (!entry) return false;
+        set({ pending: { ...get().pending, [entry[0]]: { ...entry[1], uri: to } } });
+        return true;
+      },
+      reset: () => {
+        for (const p of Object.values(get().pending)) void forgetFile(p.uri);
+        set({ pending: {} });
+      },
     }),
     {
       name: 'ebs.logo.queue.v1',

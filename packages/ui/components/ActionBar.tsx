@@ -52,16 +52,19 @@ export function PrimaryActionBar({
   icon,
   onPress,
   loading,
+  tooltip,
 }: {
   title: string;
   icon?: IconName;
   onPress: () => void;
   loading?: boolean;
+  /** Shown above the button on hover in a desktop browser, e.g. why it is locked. */
+  tooltip?: string;
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const hosted = usePageAction(desktop ? { label: title, icon, onPress } : null);
+  const hosted = usePageAction(desktop ? { label: title, icon, onPress, tooltip } : null);
   if (hosted) return null;
   return (
     <View
@@ -77,7 +80,7 @@ export function PrimaryActionBar({
         backgroundColor: t.c.paper,
       }}
     >
-      <Button title={title} icon={icon} onPress={onPress} loading={loading} fullWidth size="lg" />
+      <Button title={title} icon={icon} onPress={onPress} loading={loading} tooltip={tooltip} fullWidth size="lg" />
     </View>
   );
 }

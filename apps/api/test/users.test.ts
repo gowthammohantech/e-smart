@@ -76,6 +76,9 @@ describe('users', () => {
     const saved = await t.put(`/users/${member.user.id}`, { ...member.user, role: 'accountant' }, { token });
     expect(saved.status).toBe(200);
     expect(saved.body.role).toBe('accountant');
+    // The app sends an edit only for someone it has a version for; without one it sends an invite.
+    const listed = (await t.get('/users', { token })).body.data.find((u: { id: string }) => u.id === member.user.id);
+    expect(listed.version).toBe(saved.body.version);
     expect((await t.post(`${c}/parties`, party, { token: member.token })).status).toBe(201);
 
     // Disabling signs them out everywhere.

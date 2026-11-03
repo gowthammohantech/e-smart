@@ -149,7 +149,7 @@ const GATED_PATHS: [prefix: string, module: Module][] = [
   ['/settings/expense-categories', 'expenses'],
   ['/ocr', 'ocr'],
   ['/settings/currencies', 'fx'],
-  ['/settings/branches', 'branches'],
+  // Branches opens on every plan: Free has its one branch to name, and adding more is what is locked.
 ];
 
 /** The module a route belongs to, or null when every plan can open it. */

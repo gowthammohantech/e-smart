@@ -1633,6 +1633,7 @@ paths:
                 properties:
                   messageId: { type: string }
                   status: { type: string, enum: [queued] }
+        '502': { $ref: '#/components/responses/UpstreamError' }
   /companies/{companyId}/documents/{id}/payment-link:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -3489,19 +3490,21 @@ components:
             phone: { type: string }
             gstin: { type: string, description: 'The branch''s own GSTIN when it is registered separately; printed as the seller' }
     User:
-      type: object
-      properties:
-        id: { type: string, readOnly: true }
-        accountId: { type: string, readOnly: true }
-        name: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
-        role: { $ref: '#/components/schemas/UserRole' }
-        companyIds: { type: array, items: { type: string } }
-        branchIds: { type: array, items: { type: string }, description: Empty means all branches }
-        avatarColor: { type: string }
-        status: { type: string, enum: [active, invited, disabled] }
-        lastActiveAt: { type: string, format: date-time, readOnly: true }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          properties:
+            id: { type: string, readOnly: true }
+            accountId: { type: string, readOnly: true }
+            name: { type: string }
+            email: { type: string, format: email }
+            phone: { type: string }
+            role: { $ref: '#/components/schemas/UserRole' }
+            companyIds: { type: array, items: { type: string } }
+            branchIds: { type: array, items: { type: string }, description: Empty means all branches }
+            avatarColor: { type: string }
+            status: { type: string, enum: [active, invited, disabled] }
+            lastActiveAt: { type: string, format: date-time, readOnly: true }
     DeviceSession:
       type: object
       properties:
@@ -3534,51 +3537,59 @@ components:
 
     # ---------------------------------------------------------------- settings
     TaxCategory:
-      type: object
-      required: [name, rate, type, effectiveFrom]
-      properties:
-        id: { type: string, readOnly: true }
-        companyId: { type: string, readOnly: true }
-        name: { type: string, example: GST 18% }
-        rate: { type: number, description: 'Combined percentage, split at calculation time' }
-        type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
-        hsnCode: { type: string }
-        effectiveFrom: { type: string, format: date }
-        description: { type: string }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, rate, type, effectiveFrom]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, example: GST 18% }
+            rate: { type: number, description: 'Combined percentage, split at calculation time' }
+            type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
+            hsnCode: { type: string }
+            effectiveFrom: { type: string, format: date }
+            description: { type: string }
     ExpenseCategory:
-      type: object
-      required: [name]
-      properties:
-        id: { type: string, readOnly: true }
-        companyId: { type: string, readOnly: true }
-        name: { type: string }
-        icon: { type: string }
-        color: { type: string }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string }
+            icon: { type: string }
+            color: { type: string }
     PaymentAccount:
-      type: object
-      required: [name, type, currency, openingBalance]
-      properties:
-        id: { type: string, readOnly: true }
-        companyId: { type: string, readOnly: true }
-        name: { type: string }
-        type: { type: string, enum: [cash, bank, wallet] }
-        currency: { type: string }
-        accountNumber: { type: string }
-        openingBalance: { $ref: '#/components/schemas/Money' }
-        openingBalanceDate: { type: string, format: date, description: "The day the opening balance was counted; not after today." }
-        currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
-        isDefault: { type: boolean }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, type, currency, openingBalance]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string }
+            type: { type: string, enum: [cash, bank, wallet] }
+            currency: { type: string }
+            accountNumber: { type: string }
+            openingBalance: { $ref: '#/components/schemas/Money' }
+            openingBalanceDate: { type: string, format: date, description: "The day the opening balance was counted; not after today." }
+            currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            isDefault: { type: boolean }
     ExchangeRate:
-      type: object
-      required: [from, to, rate, effectiveFrom]
-      properties:
-        id: { type: string, readOnly: true }
-        companyId: { type: string, readOnly: true }
-        from: { type: string }
-        to: { type: string }
-        rate: { type: number }
-        effectiveFrom: { type: string, format: date }
-        source: { type: string, enum: [manual, provider] }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [from, to, rate, effectiveFrom]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            from: { type: string }
+            to: { type: string }
+            rate: { type: number }
+            effectiveFrom: { type: string, format: date }
+            source: { type: string, enum: [manual, provider] }
     NumberingSeries:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -3597,15 +3608,17 @@ components:
             includeBranchCode: { type: boolean }
             resetPolicy: { type: string, enum: [never, yearly, monthly] }
     Transporter:
-      type: object
-      required: [name, transporterId]
-      properties:
-        id: { type: string, readOnly: true }
-        companyId: { type: string, readOnly: true }
-        name: { type: string }
-        transporterId: { type: string, description: 15-character GSTIN or TRANSIN }
-        phone: { type: string }
-        status: { type: string, enum: [active, inactive] }
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, transporterId]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string }
+            transporterId: { type: string, description: 15-character GSTIN or TRANSIN }
+            phone: { type: string }
+            status: { type: string, enum: [active, inactive] }
     TransportMode: { type: string, enum: [road, rail, air, ship] }
     VehicleType: { type: string, enum: [regular, overDimensional] }
     ComplianceSettings:

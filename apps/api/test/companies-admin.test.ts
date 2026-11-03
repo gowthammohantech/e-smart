@@ -23,12 +23,13 @@ const branch = (over: Record<string, unknown> = {}) => ({ name: 'Bengaluru', cod
 describe('company profile', () => {
   it('saves with If-Match, ignores plan, and keeps the primary branch address in step', async () => {
     const { token, company, c } = await ownerWithCompany(t);
-    const next = { ...company, name: 'Vertex Traders LLP', plan: 'business', address: { ...MUMBAI, line1: '99 New Road' } };
+    const next = { ...company, name: 'Vertex Traders LLP', plan: 'business', phone: '+919876543210', address: { ...MUMBAI, line1: '99 New Road' } };
     const saved = await t.put(c, next, { token, headers: { 'if-match': '"v1"' } });
     expect(saved.status).toBe(200);
     expect(saved.body).toMatchObject({ name: 'Vertex Traders LLP', plan: 'free', version: 2 });
     const [primary] = await t.deps.db.select().from(schema.branches).where(eq(schema.branches.companyId, company.id!));
-    expect(primary.addressLine1).toBe('99 New Road');
+    // The head office follows the business: address, GSTIN and phone.
+    expect(primary).toMatchObject({ addressLine1: '99 New Road', gstin: company.taxRegistration!.identifier, phone: '+919876543210' });
 
     const stale = await t.put(c, { ...next, name: 'Lost' }, { token, headers: { 'if-match': '"v1"' } });
     expect(stale.status).toBe(412);
@@ -94,6 +95,15 @@ describe('branches', () => {
     const res = await t.post(`${free.c}/branches`, branch(), { token: free.token });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('PLAN_UPGRADE_REQUIRED');
+  });
+
+  it('lets a Free business rename its one branch, and keeps the rest from its profile', async () => {
+    const free = await ownerWithCompany(t);
+    const [head] = (await t.get(`${free.c}/branches`, { token: free.token })).body.data;
+    const res = await t.put(`${free.c}/branches/${head.id}`, { ...head, name: 'Main shop', code: 'XX', phone: '+911111111111', address: { ...head.address, line1: 'Elsewhere' } }, { token: free.token });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ name: 'Main shop', code: head.code, address: { line1: head.address.line1 } });
+    expect(res.body.phone).toBe(head.phone);
   });
 
   it('keeps exactly one primary branch', async () => {

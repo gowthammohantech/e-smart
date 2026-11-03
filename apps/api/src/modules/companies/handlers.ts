@@ -123,15 +123,18 @@ export const companiesHandlers = defineHandlers({
         .where(and(eq(schema.companies.id, current.id), eq(schema.companies.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
-      // The head office is the registered address: keep the primary branch in step.
+      // The head office is the registered business: keep the primary branch's address, GSTIN
+      // and phone in step (its name is the person's own), as the app does.
       const [primary] = await tx
         .select()
         .from(schema.branches)
         .where(and(eq(schema.branches.companyId, current.id), eq(schema.branches.isPrimary, true)));
-      if (primary && addressChanged(primary, updated)) {
+      const gstin = updated.taxRegistered && updated.taxIdentifier ? updated.taxIdentifier : primary?.gstin ?? null;
+      const phone = updated.phone ?? primary?.phone ?? null;
+      if (primary && (addressChanged(primary, updated) || gstin !== primary.gstin || phone !== primary.phone)) {
         const [branch] = await tx
           .update(schema.branches)
-          .set({ ...addressTo('address', body.address), version: primary.version + 1, updatedAt: ctx.now })
+          .set({ ...addressTo('address', body.address), gstin, phone, version: primary.version + 1, updatedAt: ctx.now })
           .where(eq(schema.branches.id, primary.id))
           .returning();
         await recordChange(tx, ctx.user, {

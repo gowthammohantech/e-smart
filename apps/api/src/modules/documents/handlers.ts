@@ -6,7 +6,7 @@ import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type AuthUser, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, invalid, notFound, preconditionFailed, unprocessable } from '../../http/errors';
+import { conflict, invalid, notFound, preconditionFailed, unprocessable, upstream } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -34,9 +34,29 @@ import {
 } from './engine';
 import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, assertNoLiveReturns, assertPeriodOpen, finalizeInTx, isReturn, reverseStock, syncPaymentState, today } from './lifecycle';
 import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
-import { companyLogoLink } from '../companies/logo';
+import { companyLogoFile } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
+import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 import { documentsToWire, summariesToWire, type DocumentWire, type SummaryRow } from './wire';
+
+/** How the email's HTML refers to the business logo it carries. */
+const BUSINESS_LOGO_CID = 'business-logo';
+/** A logo bigger than this stays out of the email rather than weigh it down; the name shows instead. */
+const LOGO_EMAIL_MAX_BYTES = 1024 * 1024;
+
+/** What a sent document calls itself in the email, as the app names it. */
+const EMAIL_TITLES: Record<DocumentKind, string> = {
+  quote: 'Quotation',
+  salesOrder: 'Sales order',
+  delivery: 'Delivery note',
+  invoice: 'Invoice',
+  salesReturn: 'Sales return',
+  purchaseOrder: 'Purchase order',
+  goodsReceipt: 'Goods receipt',
+  purchaseBill: 'Purchase bill',
+  purchaseReturn: 'Purchase return',
+};
 
 /** Sending a document to the same person again this soon is a retry, not a decision. */
 const RESEND_WINDOW_MS = 2 * 60_000;
@@ -487,28 +507,52 @@ export const documentsHandlers = defineHandlers({
     // A payment link only makes sense for an invoice that still has money owing.
     const payable = row.kind === 'invoice' && !['draft', 'cancelled', 'paid'].includes(effectiveStatus(row, today(ctx.now)));
 
-    const { messageId, queued, text, html, pdfUrl } = await ctx.db.transaction(async (tx) => {
+    const { messageId, queued, text, html, inline, pdfUrl } = await ctx.db.transaction(async (tx) => {
       const share = await createShareLinkFor(tx, ctx.deps, ctx.user, row, ctx.now);
       const pay = body.includePaymentLink && payable ? await paymentLinkFor(tx, ctx.deps, ctx.company, ctx.user, row, ctx.now) : null;
       let pdfUrl: string | undefined;
       if (body.attachPdf ?? true) {
         pdfUrl = (await storePdfLinkFor(tx, ctx.deps, ctx.company, row, ctx.now)).url;
       }
-      const total = `${row.currency.trim()} ${(row.grandTotalMinor / 100).toFixed(2)}`;
+      const total = formatMoney(money(row.grandTotalMinor, row.currency.trim()));
       const message = body.message ?? `Dear ${party.name}, please find ${row.number} for ${total} from ${ctx.company.name}.`;
       const text = [message, `View: ${share.url}`, pay ? `Pay: ${pay.url}` : ''].filter(Boolean).join('\n');
-      // The same email with the business's own logo and name on top; the text above stays for clients without HTML.
+      // The same email with the business's own logo and name on top and a summary of the document;
+      // the text above stays for clients without HTML.
+      const currency = row.currency.trim();
+      const due = row.grandTotalMinor - row.amountPaidMinor;
+      const partPaid = (row.kind === 'invoice' || row.kind === 'purchaseBill') && row.amountPaidMinor > 0 && due > 0;
+      const c = ctx.company;
+      // The logo rides inside the email (a link would need public storage, and mail apps block remote
+      // images); none on file, or one too big to carry, and only the name shows.
+      const logo = body.channel === 'email' ? await companyLogoFile(tx, ctx.deps, c, LOGO_EMAIL_MAX_BYTES) : undefined;
+      const inline = logo ? [{ cid: BUSINESS_LOGO_CID, name: `logo.${logo.mime === 'image/png' ? 'png' : 'jpg'}`, contentType: logo.mime, base64: logo.base64 }] : undefined;
       const html =
         body.channel === 'email'
           ? renderDocumentEmailHtml({
-              businessName: ctx.company.name,
+              businessName: c.name,
               // Lives as long as the share link, so the email still shows it when the customer comes back to it.
-              logoUrl: await companyLogoLink(tx, ctx.deps, ctx.company, SHARE_LINK_DAYS * 86_400),
+              logoCid: logo ? BUSINESS_LOGO_CID : undefined,
+              businessDetails: [
+                [c.addressLine1, c.addressLine2, c.addressCity, [c.addressState, c.addressPostalCode].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+                [c.phone, c.email].filter(Boolean).join(' · '),
+                c.taxIdentifier ? `${c.taxIdentifierLabel ?? 'Tax ID'}: ${c.taxIdentifier}` : '',
+              ].filter(Boolean),
+              title: EMAIL_TITLES[row.kind],
+              number: row.number,
+              amount: { label: partPaid ? 'Amount due' : 'Total', value: formatMoney(money(partPaid ? due : row.grandTotalMinor, currency)) },
+              facts: [
+                { label: 'Date', value: formatDate(row.date) },
+                ...(row.dueDate ? [{ label: 'Due date', value: formatDate(row.dueDate) }] : []),
+                ...(row.validUntil ? [{ label: 'Valid until', value: formatDate(row.validUntil) }] : []),
+                ...(partPaid ? [{ label: 'Total', value: formatMoney(money(row.grandTotalMinor, currency)) }, { label: 'Paid', value: formatMoney(money(row.amountPaidMinor, currency)) }] : []),
+              ],
               message,
+              // Paying is what an invoice with a payment link asks for, so that button leads.
               links: [
-                { label: `View ${row.number}`, url: share.url },
                 ...(pay ? [{ label: 'Pay now', url: pay.url }] : []),
-                ...(pdfUrl ? [{ label: 'Download the PDF', url: pdfUrl }] : []),
+                { label: `View ${EMAIL_TITLES[row.kind].toLowerCase()}`, url: share.url },
+                ...(pdfUrl ? [{ label: 'Download PDF', url: pdfUrl }] : []),
               ],
             })
           : undefined;
@@ -546,22 +590,29 @@ export const documentsHandlers = defineHandlers({
           createdAt: ctx.now,
         });
       }
-      return { messageId: first!, queued, text, html, pdfUrl };
+      return { messageId: first!, queued, text, html, inline, pdfUrl };
     });
 
     // After the commit: the links they carry exist by now, and a message can't be unsent by a rollback.
+    const failures: string[] = [];
     for (const { id, to } of queued) {
       try {
         const sent =
             body.channel === 'email'
-              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text, html })
+              ? await ctx.deps.providers.email.send({ to, subject: `${row.number} from ${ctx.company.name}`, text: pdfUrl ? `${text}\nPDF: ${pdfUrl}` : text, html, inline })
               : body.channel === 'whatsapp'
                 ? await ctx.deps.providers.whatsapp.send({ to, text, documentUrl: pdfUrl, filename: pdfFilename(row.number) })
                 : await ctx.deps.providers.sms.send(to, text);
         await ctx.db.update(schema.messageDeliveries).set({ status: 'sent', providerMessageId: sent.providerMessageId }).where(eq(schema.messageDeliveries.id, id));
       } catch (err) {
         await ctx.db.update(schema.messageDeliveries).set({ status: 'failed', error: (err as Error).message }).where(eq(schema.messageDeliveries.id, id));
+        failures.push((err as Error).message);
       }
+    }
+    // Nobody got it: say so, rather than "sent" for a message the provider refused
+    // (Resend's test sender, for one, only delivers to its own account's address).
+    if (queued.length && failures.length === queued.length) {
+      throw upstream('SEND_FAILED', `The ${body.channel} could not be sent: ${failures[0]}`);
     }
     if (queued.length) {
       await notify(ctx.db, ctx.deps, {

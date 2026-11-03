@@ -3,6 +3,7 @@ import { useAppStore } from '../store/appStore';
 import { api } from './api';
 import { RemoteError } from './errors';
 import { applyEntity } from './apply';
+import { fileBlob } from './keptFiles';
 
 type Mime = 'image/jpeg' | 'image/png' | 'image/heic' | 'application/pdf';
 const MIMES: Mime[] = ['image/jpeg', 'image/png', 'image/heic', 'application/pdf'];
@@ -22,7 +23,7 @@ function mimeOf(type: string | undefined, uri: string): Mime {
  * attachment is added to the store and returned.
  */
 export async function uploadAttachment(input: { companyId: string; uri: string; name: string; entityType?: string; entityId?: string }): Promise<Attachment> {
-  const blob = await (await fetch(input.uri)).blob();
+  const blob = await fileBlob(input.uri);
   const mimeType = mimeOf(blob.type, input.uri);
   const { data: reserved } = await api.POST('/companies/{companyId}/attachments', {
     params: { path: { companyId: input.companyId } },

@@ -53,6 +53,18 @@ export async function companyLogoDataUri(db: DbOrTx, deps: Deps, company: { id: 
   return bytes ? `data:${logo.mime};base64,${bytes.toString('base64')}` : undefined;
 }
 
+/**
+ * The logo's bytes, to send inside an email as an inline image: a link would
+ * have to be public and loaded, and mail apps block or proxy remote images.
+ * Undefined when there is none, storage can't return it, or it is too big to carry.
+ */
+export async function companyLogoFile(db: DbOrTx, deps: Deps, company: { id: string; logoAttachmentId: string | null }, maxBytes: number): Promise<{ mime: string; base64: string } | undefined> {
+  const logo = await logoAttachmentOf(db, company);
+  if (!logo) return undefined;
+  const bytes = await deps.providers.storage.get(logo.key).catch(() => null);
+  return bytes && bytes.length <= maxBytes ? { mime: logo.mime, base64: bytes.toString('base64') } : undefined;
+}
+
 /** A signed link to the logo, for messages that can't carry it inline. */
 export async function companyLogoLink(db: DbOrTx, deps: Deps, company: { id: string; logoAttachmentId: string | null }, ttlSeconds: number): Promise<string | undefined> {
   const logo = await logoAttachmentOf(db, company);

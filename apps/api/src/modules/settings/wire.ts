@@ -19,11 +19,12 @@ export function taxCategoryToWire(row: TaxRow): Schema<'TaxCategory'> {
     hsnCode: row.hsnCode,
     effectiveFrom: row.effectiveFrom,
     description: row.description,
+    ...versioned(row),
   });
 }
 
 export function expenseCategoryToWire(row: ExpenseCategoryRow): Schema<'ExpenseCategory'> {
-  return { id: row.id, companyId: row.companyId, name: row.name, icon: row.icon, color: row.color };
+  return { id: row.id, companyId: row.companyId, name: row.name, icon: row.icon, color: row.color, ...versioned(row) };
 }
 
 /** `balance` is the running balance in minor units; see `accountBalances` in core. */
@@ -40,6 +41,8 @@ export function paymentAccountToWire(row: AccountRow, balance: number): Schema<'
     openingBalanceDate: row.openingBalanceDate,
     currentBalance: money(balance, currency),
     isDefault: row.isDefault,
+    // Without it the app takes the account for one the server hasn't seen, and an edit creates a new one.
+    ...versioned(row),
   });
 }
 
@@ -52,11 +55,12 @@ export function exchangeRateToWire(row: RateRow): Schema<'ExchangeRate'> {
     rate: Number(row.rate),
     effectiveFrom: row.effectiveFrom,
     source: row.source,
+    ...versioned(row),
   };
 }
 
 export function transporterToWire(row: TransporterRow): Schema<'Transporter'> {
-  return compact({ id: row.id, companyId: row.companyId, name: row.name, transporterId: row.transporterId, phone: row.phone, status: row.status });
+  return compact({ id: row.id, companyId: row.companyId, name: row.name, transporterId: row.transporterId, phone: row.phone, status: row.status, ...versioned(row) });
 }
 
 export function seriesToWire(row: SeriesRow): Schema<'NumberingSeries'> {

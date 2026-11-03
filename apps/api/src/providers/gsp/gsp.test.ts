@@ -535,6 +535,13 @@ describe('taxpayer record', () => {
     });
   });
 
+  it('takes the state the address names, so a Thane address is never put in Tamil Nadu', () => {
+    // A sandbox answers every GSTIN with one sample address; the state must come with it, not from the GSTIN.
+    const sample = { lgnm: 'Sandbox Co', pradr: { addr: { bno: '252', bnm: 'Gold Hill Supreme', dst: 'Thane', pncd: '400123', stcd: 'Maharashtra' } } };
+    expect(toGstinRecord(sample, '33AAPFU0939F1Z2')?.address).toMatchObject({ city: 'Thane', state: 'Maharashtra', stateCode: '27', postalCode: '400123' });
+    expect(toGstinRecord({ LegalName: 'Nic Co', AddrBno: '1', AddrLoc: 'Chennai', AddrPncd: 600001, StateCode: 33 }, '27AAGCB1286Q1Z4')?.address).toMatchObject({ stateCode: '33' });
+  });
+
   it('reads NIC’s spelling, maps composition and cancelled, and gives up on a record with no name', () => {
     const record = toGstinRecord({ LegalName: 'Nic Co', Status: 'CANCELLED', dty: 'Composition', AddrBno: '1', AddrLoc: 'Pune', AddrPncd: 411001 }, '27AAGCB1286Q1Z4');
     expect(record).toMatchObject({ legalName: 'Nic Co', status: 'Cancelled', registrationType: 'composition', address: { line1: '1', city: 'Pune', postalCode: '411001' } });

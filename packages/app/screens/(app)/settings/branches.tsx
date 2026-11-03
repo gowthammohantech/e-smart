@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -19,7 +19,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Branch } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBranches, useDocuments } from '../../../store/selectors';
+import { useActiveCompany, useBranches, useDocuments, usePlan } from '../../../store/selectors';
+import { hasModule } from '@esmart/core/domain/plan';
 import { uid } from '@esmart/core/lib/id';
 import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
@@ -40,6 +41,10 @@ export default function BranchSettings() {
   const documents = useDocuments();
   const saveBranch = useAppStore((s) => s.saveBranch);
   const removeBranch = useAppStore((s) => s.removeBranch);
+  const router = useRouter();
+  // Below Pro a business has its one branch: it can be renamed, and the rest of
+  // it follows Business profile. Adding more is what upgrading opens.
+  const locked = !hasModule(usePlan(), 'branches');
 
   const [editing, setEditing] = useState<Branch | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Branch | null>(null);
@@ -99,13 +104,25 @@ export default function BranchSettings() {
     if (street) setLine1(street);
     const code = a.stateCode ?? gstin.slice(0, 2);
     if (INDIAN_STATES.some((st) => st.code === code)) setStateCode(code);
+    // A city left from another state goes, as when the state is picked by hand.
     if (a.city) setCity(a.city);
+    else if (city && !citiesForState(code).includes(city)) setCity('');
     if (a.postalCode) setPostalCode(a.postalCode);
   };
-  const gstinLookup = useGstinLookup({ gstin, opened: editing?.gstin, enabled: !!editing, fill: fillFromPortal });
+  const gstinLookup = useGstinLookup({ gstin, opened: editing?.gstin, enabled: !!editing && !locked, fill: fillFromPortal });
 
   const save = () => {
     if (!editing || !name.trim()) return;
+    if (locked) {
+      // Only the name is the person's to change here; the server keeps the rest as it is too.
+      const taken = branches.some((b) => b.id !== editing.id && b.name.trim().toLowerCase() === name.trim().toLowerCase());
+      setErrors(taken ? { name: tr('settings:branches.nameTaken', { name: name.trim() }) } : {});
+      if (taken) return;
+      saveBranch({ ...editing, name: name.trim() });
+      toast.show(tr('settings:branches.updated'), 'success', { icon: 'office-building-marker-outline' });
+      setEditing(null);
+      return;
+    }
     const cleanGstin = gstin ? normalizeGstin(gstin) : '';
     const nextCode = (code || name.slice(0, 3)).toUpperCase();
     // The same branch twice: a repeated name, code, or street and PIN is the same place (the server refuses them too).
@@ -169,6 +186,11 @@ export default function BranchSettings() {
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {tr('settings:branches.intro')}
           </Text>
+          {locked ? (
+            <Text variant="caption" weight="600" style={{ lineHeight: 18, marginTop: t.spacing.sm }}>
+              {tr('settings:branches.oneOnPlan')}
+            </Text>
+          ) : null}
         </Card>
 
         <Card padded={false}>
@@ -185,7 +207,7 @@ export default function BranchSettings() {
                 divider={i < branches.length - 1}
                 right={b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : undefined}
                 onPress={() => open(b)}
-                onLongPress={() => (b.isPrimary ? undefined : setConfirmDelete(b))}
+                onLongPress={() => (b.isPrimary || locked ? undefined : setConfirmDelete(b))}
                 chevron
               />
             ))
@@ -193,7 +215,12 @@ export default function BranchSettings() {
         </Card>
       </ScrollView>
 
-      <PrimaryActionBar title={tr('settings:branches.add')} icon="plus" onPress={() => open()} />
+      <PrimaryActionBar
+        title={tr('settings:branches.add')}
+        icon={locked ? 'lock-outline' : 'plus'}
+        tooltip={locked ? tr('settings:branches.upgradeToAdd') : undefined}
+        onPress={() => (locked ? router.push('/(app)/settings/plan') : open())}
+      />
 
       <Sheet
         visible={!!editing}
@@ -201,7 +228,7 @@ export default function BranchSettings() {
         title={editing?.id ? tr('settings:branches.editTitle') : tr('settings:branches.addTitle')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id && !editing.isPrimary ? (
+            {editing?.id && !editing.isPrimary && !locked ? (
               <Button
                 title={tr('settings:branches.delete')}
                 variant="danger"
@@ -219,15 +246,21 @@ export default function BranchSettings() {
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('settings:branches.name')} value={name} onChangeText={setName} placeholder={tr('settings:branches.namePlaceholder')} icon="warehouse" required error={errors.name} />
+          {locked ? (
+            <Card variant="flat">
+              <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('settings:branches.onlyName')}</Text>
+            </Card>
+          ) : null}
           <TextField
             label={tr('settings:branches.gstin')}
             value={gstin}
             onChangeText={changeGstin}
+            editable={!locked}
             placeholder="27AABCV1234F1ZO"
             autoCapitalize="characters"
             icon="card-account-details-outline"
             error={errors.gstin}
-            hint={gstinLookup.hint ?? tr('settings:branches.gstinHint')}
+            hint={locked ? undefined : (gstinLookup.hint ?? tr('settings:branches.gstinHint'))}
             suffix={gstinLookup.suffix}
           />
           <TextField
@@ -238,16 +271,18 @@ export default function BranchSettings() {
             icon="map-marker-outline"
             multiline
             error={errors.line1}
+            editable={!locked}
           />
           <PickerField
             label={tr('settings:branches.state')}
             value={stateCode ? stateName(stateCode) : undefined}
             onPress={() => setStateOpen(true)}
             icon="map-outline"
+            disabled={locked}
           />
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            <TextField label={tr('settings:branches.code')} value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" error={errors.code} containerStyle={{ flex: 1 }} />
-            <CityField label={tr('settings:branches.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
+            <TextField label={tr('settings:branches.code')} value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" error={errors.code} containerStyle={{ flex: 1 }} editable={!locked} />
+            <CityField label={tr('settings:branches.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} disabled={locked} />
           </View>
           <TextField
             label={tr('settings:branches.pin')}
@@ -257,9 +292,10 @@ export default function BranchSettings() {
             keyboardType="number-pad"
             icon="mailbox-outline"
             error={errors.postalCode}
+            editable={!locked}
           />
-          <PhoneField label={tr('settings:branches.phone')} {...phone.field} error={errors.phone} />
-          <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} />
+          <PhoneField label={tr('settings:branches.phone')} {...phone.field} error={errors.phone} disabled={locked} />
+          <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} disabled={locked} />
         </View>
       </Sheet>
 

@@ -515,7 +515,12 @@ export const useAppStore = create<AppState>()(
             // The head office is the registered address: keep its branch record in step.
             branches: s.branches.map((b) =>
               b.companyId === company.id && b.isPrimary
-                ? { ...b, address: { ...company.address }, gstin: company.taxRegistration?.registered ? company.taxRegistration.identifier : b.gstin }
+                ? {
+                    ...b,
+                    address: { ...company.address },
+                    gstin: company.taxRegistration?.registered ? company.taxRegistration.identifier : b.gstin,
+                    phone: company.phone ?? b.phone,
+                  }
                 : b,
             ),
           });

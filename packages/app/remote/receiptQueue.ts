@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { forgetFile } from './keptFiles';
 
 /** A receipt picked while offline, waiting for its expense to reach the server. */
 export type PendingReceipt = {
@@ -19,6 +20,8 @@ type ReceiptQueue = {
   tried: (expenseId: string) => void;
   /** An expense first saved under an id made on this device is renamed by the server. */
   remap: (ids: Map<string, string>) => void;
+  /** Points an entry at the kept copy of its file; false when no entry has it any more. */
+  swapUri: (from: string, to: string) => boolean;
   reset: () => void;
 };
 
@@ -29,8 +32,8 @@ export const useReceiptQueue = create<ReceiptQueue>()(
       pending: {},
       add: (expenseId, companyId, uri) => set({ pending: { ...get().pending, [expenseId]: { companyId, uri, tries: 0 } } }),
       clear: (expenseId) => {
-        const { [expenseId]: _gone, ...rest } = get().pending;
-        void _gone;
+        const { [expenseId]: gone, ...rest } = get().pending;
+        void forgetFile(gone?.uri);
         set({ pending: rest });
       },
       tried: (expenseId) => {
@@ -45,7 +48,16 @@ export const useReceiptQueue = create<ReceiptQueue>()(
         }
         set({ pending: next });
       },
-      reset: () => set({ pending: {} }),
+      swapUri: (from, to) => {
+        const entry = Object.entries(get().pending).find(([, p]) => p.uri === from);
+        if (!entry) return false;
+        set({ pending: { ...get().pending, [entry[0]]: { ...entry[1], uri: to } } });
+        return true;
+      },
+      reset: () => {
+        for (const p of Object.values(get().pending)) void forgetFile(p.uri);
+        set({ pending: {} });
+      },
     }),
     {
       name: 'ebs.receipt.queue.v1',
