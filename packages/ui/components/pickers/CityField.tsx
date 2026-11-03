@@ -20,6 +20,7 @@ export function CityField({
   error,
   hint,
   containerStyle,
+  disabled,
 }: {
   label?: string;
   value: string;
@@ -31,6 +32,8 @@ export function CityField({
   error?: string;
   hint?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Shown grayed out and can't be picked. */
+  disabled?: boolean;
 }) {
   const { t: tr } = useTranslation(['common']);
   const [open, setOpen] = useState(false);
@@ -62,6 +65,7 @@ export function CityField({
         error={error}
         hint={hint}
         containerStyle={containerStyle}
+        disabled={disabled}
       />
       <SelectSheet
         visible={open}

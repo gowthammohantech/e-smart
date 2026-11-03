@@ -7,7 +7,8 @@ import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, invalid, notFound, preconditionFailed } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { addressTo } from '../../lib/wire';
+import { addressTo, requiredAddressFrom } from '../../lib/wire';
+import { hasModule } from '@esmart/core/domain/plan';
 import { branchToWire } from './wire';
 
 const B = schema.branches;
@@ -111,8 +112,14 @@ export const branchHandlers = defineHandlers({
   async saveBranch(ctx) {
     const current = await findBranch(ctx.db, ctx.company.id, ctx.params.branchId);
     checkIfMatch(ctx.req, current.version);
-    const cols = branchColumns(ctx.body);
-    const isPrimary = ctx.body.isPrimary ?? current.isPrimary;
+    // Below Pro a business has its one branch: only its name is the person's to change; the
+    // rest follows the business profile. Anything else sent is kept as it is.
+    const full = hasModule(ctx.company.plan, 'branches');
+    const sent = branchColumns(ctx.body);
+    const cols = full
+      ? sent
+      : { name: sent.name, code: current.code, ...addressTo('address', requiredAddressFrom(current, 'address')), phone: current.phone, gstin: current.gstin };
+    const isPrimary = full ? (ctx.body.isPrimary ?? current.isPrimary) : current.isPrimary;
     if (current.isPrimary && !isPrimary) {
       throw conflict('PRIMARY_BRANCH_REQUIRED', 'Mark another branch as primary instead; a company always has one');
     }
