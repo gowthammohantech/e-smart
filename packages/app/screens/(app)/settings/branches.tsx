@@ -260,7 +260,7 @@ export default function BranchSettings() {
             autoCapitalize="characters"
             icon="card-account-details-outline"
             error={errors.gstin}
-            hint={gstinLookup.hint ?? tr('settings:branches.gstinHint')}
+            hint={locked ? undefined : (gstinLookup.hint ?? tr('settings:branches.gstinHint'))}
             suffix={gstinLookup.suffix}
           />
           <TextField
