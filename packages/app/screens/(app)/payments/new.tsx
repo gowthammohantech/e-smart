@@ -19,6 +19,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useLeaveGuard } from '../../../components/useLeaveGuard';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
 import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivables';
@@ -104,6 +105,10 @@ export default function NewPayment() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [methodOpen, setMethodOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  // What the person has picked or typed; an amount that only follows the allocations is not theirs.
+  const entered = JSON.stringify([partyId, date, amountFollows ? null : amountText, reference, notes]);
+  const [untouched] = useState(entered);
+  const leaveGuard = useLeaveGuard(entered !== untouched);
 
   const party = parties.find((p) => p.id === partyId);
 
@@ -309,6 +314,7 @@ export default function NewPayment() {
       toast.show(tr('sales:payment.noAccountForMethod'), 'error', { icon: 'bank-off-outline' });
       return;
     }
+    leaveGuard.release();
     router.replace(`/(app)/payments/${res.id ?? res.result}`);
   };
   useSaveShortcut(() => void save(), !saving && canSave);
@@ -780,6 +786,7 @@ export default function NewPayment() {
           onSelect={setAccountId}
           searchable={false}
         />
+        {leaveGuard.dialog}
       </FormContainer>
     </KeyboardAvoidingView>
   );

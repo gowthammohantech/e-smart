@@ -17,6 +17,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
@@ -116,6 +117,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState<string | undefined>();
+  // What the person has picked or typed, to tell an untouched form from one with changes to lose.
+  const entered = JSON.stringify([categoryId, amountText, date, method, pickedAccountId, supplierId, taxCategoryId, taxInclusive, reference, notes, recurrence, billable, receiptUri]);
+  const [untouched] = useState(entered);
+  const leaveGuard = useLeaveGuard(entered !== untouched);
 
   const addCategory = () => {
     const name = newCategoryName.trim();
@@ -233,6 +238,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       useReceiptQueue.getState().add(id, record.companyId, receiptLater);
       toast.show(tr('purchases:form.receiptQueued'), 'success');
     }
+    leaveGuard.release();
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };
@@ -591,6 +597,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           onSelect={(v) => setRecurrence(v as RecurrenceFrequency)}
           searchable={false}
         />
+        {leaveGuard.dialog}
       </FormContainer>
     </KeyboardAvoidingView>
   );

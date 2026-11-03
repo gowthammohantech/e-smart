@@ -269,5 +269,11 @@
     "inactive": "{{status}} on the GST portal",
     "notFound": "The GST portal has no taxpayer with this GSTIN",
     "failed": "Couldn't reach the GST portal; fill the details in yourself"
+  },
+  "leaveGuard": {
+    "title": "Leave without saving?",
+    "message": "You have changes that aren't saved. If you leave now, they'll be lost.",
+    "leave": "Leave",
+    "stay": "Stay"
   }
 }
