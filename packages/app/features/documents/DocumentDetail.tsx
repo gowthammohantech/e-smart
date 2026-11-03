@@ -54,7 +54,7 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
-import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
+import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
 import { useGoBack } from '../../navigation/useGoBack';
 
@@ -194,20 +194,62 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     );
 
   /**
+   * The email a mail app opens with. A mailto link carries plain text only, so
+   * it is laid out as a letter: greeting, the document's dates and amount, its
+   * links (view, PDF, pay), and the business signing off.
+   */
+  const mailtoLink = async () => {
+    const owing = isPayable && doc.kind === 'invoice' && outstanding.minor > 0;
+    const [links, pay] = await Promise.all([
+      shareLinks(doc.companyId, doc.id),
+      // No gateway on this server: the email goes without a pay link.
+      owing ? paymentLink(doc.companyId, doc.id).catch(() => undefined) : undefined,
+    ]);
+    const business = company?.name ?? '';
+    const partPaid = owing && outstanding.minor < doc.totals.grandTotal.minor;
+    type Line = 'subject' | 'greeting' | 'intro' | 'date' | 'dueDate' | 'validUntil' | 'total' | 'amountDue' | 'view' | 'pdf' | 'pay' | 'thanks' | 'regards';
+    const e = (key: Line, values: Record<string, unknown> = {}) => tr(`common:documentEmail.${key}`, { kind: kindName, number: doc.number, business, ...values });
+    const body = [
+      e('greeting', { name: party?.name ?? '' }),
+      '',
+      e('intro'),
+      '',
+      e('date', { date: formatDate(doc.date) }),
+      doc.dueDate ? e('dueDate', { date: formatDate(doc.dueDate) }) : null,
+      doc.validUntil ? e('validUntil', { date: formatDate(doc.validUntil) }) : null,
+      e('total', { amount: formatMoney(doc.totals.grandTotal) }),
+      partPaid ? e('amountDue', { amount: formatMoney(outstanding) }) : null,
+      '',
+      e('view', { url: links.url }),
+      links.pdfUrl ? e('pdf', { url: links.pdfUrl }) : null,
+      pay ? e('pay', { url: pay.url }) : null,
+      '',
+      e('thanks'),
+      '',
+      e('regards'),
+      business,
+      [company?.phone, company?.email].filter(Boolean).join(' · ') || null,
+    ]
+      .filter((l) => l !== null)
+      .join('\n');
+    return `mailto:${party?.email ?? ''}?subject=${encodeURIComponent(e('subject'))}&body=${encodeURIComponent(body)}`;
+  };
+
+  /**
    * Email / WhatsApp for a party with no address on file (and WhatsApp in a
    * browser): the person's own mail app or WhatsApp opens with the document's
    * details and link filled in.
    */
   const compose = (channel: 'email' | 'whatsapp') =>
     runRemote(async () => {
+      if (channel === 'email') {
+        await Linking.openURL(await mailtoLink());
+        return;
+      }
       const url = await shareLink(doc.companyId, doc.id);
       const text = `${tr('common:documentDetail.shareMessage', { kind: kindName, number: doc.number, amount: formatMoney(doc.totals.grandTotal) })}
 ${url}`;
-      const target =
-        channel === 'whatsapp'
-          ? `https://wa.me/${(party?.phone ?? '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`
-          : `mailto:${party?.email ?? ''}?subject=${encodeURIComponent(`${kindName} ${doc.number}`)}&body=${encodeURIComponent(text)}`;
-      await Linking.openURL(target);
+      await Linking.openURL(`https://wa.me/${(party?.phone ?? '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`);
     }, {
       loading: tr('sales:detail.preparingMessage'),
       success: tr(channel === 'whatsapp' ? 'sales:detail.openedWhatsapp' : 'sales:detail.openedEmail'),

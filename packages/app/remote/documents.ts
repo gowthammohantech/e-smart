@@ -22,6 +22,13 @@ export async function shareLink(companyId: string, id: string): Promise<string> 
   return data.url;
 }
 
+/** The view link and, where the server could render it, the PDF link, from one request. */
+export async function shareLinks(companyId: string, id: string): Promise<{ url: string; pdfUrl?: string }> {
+  const { data } = await api.POST('/companies/{companyId}/documents/{id}/share-link', { params: path(companyId, id) });
+  if (!data?.url) throw new RemoteError('noLink', 'The server returned no link');
+  return { url: data.url, pdfUrl: data.pdfUrl };
+}
+
 /** A signed, expiring link straight to the invoice PDF in blob storage. */
 export async function pdfLink(companyId: string, id: string): Promise<string> {
   const { data } = await api.POST('/companies/{companyId}/documents/{id}/share-link', { params: path(companyId, id) });

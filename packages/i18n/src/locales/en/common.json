@@ -98,6 +98,21 @@
     "issueFirst": "Issue it first; payment is recorded against an issued document.",
     "nothingDue": "Nothing is due on this document."
   },
+  "documentEmail": {
+    "subject": "{{kind}} {{number}} from {{business}}",
+    "greeting": "Dear {{name}},",
+    "intro": "Please find {{kind, lowercase}} {{number}} from {{business}}.",
+    "date": "Date: {{date}}",
+    "dueDate": "Due date: {{date}}",
+    "validUntil": "Valid until: {{date}}",
+    "total": "Total: {{amount}}",
+    "amountDue": "Amount due: {{amount}}",
+    "view": "View {{kind, lowercase}}: {{url}}",
+    "pdf": "Download PDF: {{url}}",
+    "pay": "Pay now: {{url}}",
+    "thanks": "Thank you for your business.",
+    "regards": "Regards,"
+  },
   "save": {
     "queued": "Saved on this device. It will sync when you are back online.",
     "refused": "The server refused this: {{reason}}"
