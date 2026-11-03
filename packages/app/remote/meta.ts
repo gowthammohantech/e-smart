@@ -52,6 +52,11 @@ export const useRemoteMeta = create<RemoteMeta>()(
     {
       name: 'ebs.remote.meta.v1',
       storage: createJSONStorage(() => AsyncStorage),
+      // 1: tax and expense categories, payment accounts, rates and transporters
+      // came without a version, so an edit of one went up as a new one. A full
+      // pull once picks up the versions of those already on the device.
+      version: 1,
+      migrate: (persisted, version) => (version < 1 ? { ...(persisted as RemoteMeta), cursor: null } : persisted) as RemoteMeta,
       // Connectivity and an in-flight sync are facts about this run, not state to restore.
       partialize: ({ cursor, versions, idAliases, lastSyncAt }) => ({ cursor, versions, idAliases, lastSyncAt }) as RemoteMeta,
     },

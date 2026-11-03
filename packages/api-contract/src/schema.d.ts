@@ -2668,7 +2668,7 @@ export interface components {
             /** @enum {string} */
             provider?: "razorpay" | "appStore" | "playStore";
         };
-        TaxCategory: {
+        TaxCategory: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             /** @example GST 18% */
@@ -2682,14 +2682,14 @@ export interface components {
             effectiveFrom: string;
             description?: string;
         };
-        ExpenseCategory: {
+        ExpenseCategory: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             name: string;
             icon?: string;
             color?: string;
         };
-        PaymentAccount: {
+        PaymentAccount: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             name: string;
@@ -2706,7 +2706,7 @@ export interface components {
             readonly currentBalance?: components["schemas"]["Money"];
             isDefault?: boolean;
         };
-        ExchangeRate: {
+        ExchangeRate: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             from: string;
@@ -2731,7 +2731,7 @@ export interface components {
             /** @enum {string} */
             resetPolicy?: "never" | "yearly" | "monthly";
         };
-        Transporter: {
+        Transporter: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             name: string;

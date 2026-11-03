@@ -132,6 +132,10 @@ describe('payment accounts', () => {
     const unset = await t.put(`${c}/payment-accounts/${bank.body.id}`, { ...bank.body, isDefault: false }, { token });
     expect(unset.status).toBe(422);
 
+    const retyped = await t.put(`${c}/payment-accounts/${bank.body.id}`, { ...bank.body, type: 'cash' }, { token });
+    expect(retyped.status).toBe(422);
+    expect(retyped.body.issues[0].field).toBe('type');
+
     const inUse = await t.del(`${c}/payment-accounts/${bank.body.id}`, { token });
     expect(inUse.status).toBe(409);
     expect(inUse.body.code).toBe('PAYMENT_ACCOUNT_IN_USE');
@@ -155,6 +159,11 @@ describe('payment accounts', () => {
     const [cash] = (await t.get(`${c}/payment-accounts`, { token })).body.data;
     const upi = await t.post(`${c}/payment-accounts`, { name: 'UPI', type: 'wallet', currency: 'INR', openingBalance: { minor: 0, currency: 'INR' } }, { token });
     expect(upi.body.isDefault).toBe(false);
+    // The app sends an edit only for an account it has a version for; without one it creates another.
+    expect(upi.body.version).toBe(1);
+    // Nothing has gone through it yet, so its type can still change.
+    const retyped = await t.put(`${c}/payment-accounts/${upi.body.id}`, { ...upi.body, type: 'bank' }, { token });
+    expect(retyped.body).toMatchObject({ id: upi.body.id, type: 'bank', version: 2 });
     expect((await t.del(`${c}/payment-accounts/${cash.id}`, { token })).status).toBe(204);
     const list = await t.get(`${c}/payment-accounts`, { token });
     expect(list.body.data).toEqual([expect.objectContaining({ id: upi.body.id, isDefault: true })]);

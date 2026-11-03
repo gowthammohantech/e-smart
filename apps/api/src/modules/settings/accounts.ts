@@ -114,13 +114,21 @@ export const accountHandlers = defineHandlers({
     const current = await findAccount(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
-    // Accounts with money through them keep their currency: past balances are in it.
-    if (ctx.body.currency !== current.currency.trim()) {
+    // Accounts with money through them keep their currency and type: past
+    // balances are in that currency, and past payments used methods the type allows.
+    const currencyChanged = ctx.body.currency !== current.currency.trim();
+    const typeChanged = ctx.body.type !== current.type;
+    if (currencyChanged || typeChanged) {
       const used = await firstUse(ctx.db, [
         ['payments', sql`select 1 from payments where account_id = ${current.id} limit 1`],
         ['expenses', sql`select 1 from expenses where account_id = ${current.id} limit 1`],
       ]);
-      if (used) throw unprocessable([{ field: 'currency', message: `This account has ${used}; its currency can't change`, severity: 'blocking' }]);
+      if (used) {
+        const issues: Issue[] = [];
+        if (currencyChanged) issues.push({ field: 'currency', message: `This account has ${used}; its currency can't change`, severity: 'blocking' });
+        if (typeChanged) issues.push({ field: 'type', message: `This account has ${used}; its type can't change`, severity: 'blocking' });
+        throw unprocessable(issues);
+      }
     }
     // The default moves by making another account the default, never by unsetting it.
     if (current.isDefault && ctx.body.isDefault === false) {

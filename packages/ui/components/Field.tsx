@@ -537,12 +537,15 @@ export function Segmented<T extends string>({
   onChange,
   style,
   size = 'md',
+  disabled,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
   style?: StyleProp<ViewStyle>;
   size?: 'sm' | 'md';
+  /** Locked: the chosen option stays as it is so it still reads; only the others fade. */
+  disabled?: boolean;
 }) {
   const t = useTheme();
   // A desktop shows the quieter web tab switch: the chosen option raised in
@@ -567,8 +570,9 @@ export function Segmented<T extends string>({
           <Pressable
             key={o.value}
             onPress={() => onChange(o.value)}
+            disabled={disabled}
             accessibilityRole="button"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled: !!disabled }}
             accessibilityLabel={o.label}
             style={{
               flex: 1,
@@ -578,6 +582,7 @@ export function Segmented<T extends string>({
               justifyContent: 'center',
               backgroundColor: active ? (desktop ? t.c.paper : t.c.primary) : 'transparent',
               ...(desktop && active ? t.shadow.card : null),
+              opacity: disabled && !active ? 0.4 : 1,
             }}
           >
             <Text
