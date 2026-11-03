@@ -59,8 +59,9 @@ export default function AccountSettings() {
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 
-  // Once money has gone through an account its type stays: past payments used methods it allows.
-  const typeLocked = !!editing?.id && (payments.some((p) => p.accountId === editing.id) || expenses.some((e) => e.accountId === editing.id));
+  // Once money has gone through an account it stays, and so does its type: past
+  // payments used methods the type allows. The server refuses both too.
+  const inUse = !!editing?.id && (payments.some((p) => p.accountId === editing.id) || expenses.some((e) => e.accountId === editing.id));
 
   const open = (a?: PaymentAccount) => {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', type: 'bank', currency: baseCurrency, openingBalance: money(0, baseCurrency), isDefault: false } as PaymentAccount));
@@ -139,7 +140,7 @@ export default function AccountSettings() {
         title={editing?.id ? tr('settings:accounts.editTitle') : tr('settings:accounts.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id && accounts.length > 1 ? (
+            {editing?.id && accounts.length > 1 && !inUse ? (
               <Button
                 title={tr('settings:accounts.delete')}
                 variant="danger"
@@ -165,9 +166,9 @@ export default function AccountSettings() {
               ]}
               value={type}
               onChange={(v) => setType(v as PaymentAccount['type'])}
-              disabled={typeLocked}
+              disabled={inUse}
             />
-            {typeLocked ? <Text variant="caption" tone="muted">{tr('settings:accounts.typeLocked')}</Text> : null}
+            {inUse ? <Text variant="caption" tone="muted">{tr('settings:accounts.inUse')}</Text> : null}
           </View>
           <TextField label={tr('settings:accounts.name')} value={name} onChangeText={setName} placeholder={tr('settings:accounts.namePlaceholder')} icon="bank-outline" required />
           {type === 'bank' ? (

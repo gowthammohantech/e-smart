@@ -69,7 +69,7 @@
     "typeBank": "Bank",
     "typeCash": "Cash",
     "typeWallet": "Wallet",
-    "typeLocked": "This account has payments or expenses, so its type can’t change.",
+    "inUse": "This account has payments or expenses, so its type can’t change and it can’t be deleted.",
     "updated": "Account updated",
     "added": "Account added",
     "editTitle": "Edit account",
