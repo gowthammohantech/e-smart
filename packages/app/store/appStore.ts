@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 
 import {
   Attachment,
@@ -51,6 +51,11 @@ import { allocateAdvances, statusForOutstanding } from '@esmart/core/domain/rece
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
+import { createBookStorage } from './bookStorage';
+import { bookBackend } from './bookBackend';
+import { reportError } from '../lib/reporter';
+import { i18nInstance } from '@esmart/i18n';
+import { useRemoteMeta } from '../remote/meta';
 
 export type AppData = {
   accountId: string;
@@ -307,8 +312,15 @@ function starterExpenseCategories(companyId: string): ExpenseCategory[] {
   return defaultExpenseCategories(companyId).map((c) => ({ ...c, id: uid('exc') }));
 }
 
-/** Where the store persists on the device. */
+/** Where the store persisted before it moved to per-collection storage; read once to move it over. */
 const PERSIST_KEY = 'ebs.remote.v1';
+
+/** Tells this browser's other tabs which collections changed (IndexedDB writes raise no `storage` event). */
+let channel: BroadcastChannel | null | undefined;
+export function bookChannel(): BroadcastChannel | null {
+  if (channel === undefined) channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('ebs.book');
+  return channel;
+}
 
 /**
  * Builds before the app went API-only kept a bundled demo dataset under its
@@ -1078,7 +1090,18 @@ export const useAppStore = create<AppState>()(
     {
       name: PERSIST_KEY,
       version: 5,
-      storage: createJSONStorage(() => AsyncStorage),
+      // One row per collection, encrypted on phones (bookStorage.ts); the old single entry moves over once.
+      storage: createBookStorage<AppState>({
+        backend: bookBackend,
+        legacy: AsyncStorage,
+        legacyKey: PERSIST_KEY,
+        onError: (err, during) => {
+          reportError(err, { source: `book.${during}` });
+          // Shown on the Sync screen: the change is still here in memory and in the queue.
+          if (during === 'write') useRemoteMeta.getState().patch({ lastError: i18nInstance.t('settings:sync.storageFull') });
+        },
+        onWritten: (keys) => bookChannel()?.postMessage({ keys }),
+      }),
       partialize: (s) => {
         const { hydrated, ...rest } = s;
         void hydrated;

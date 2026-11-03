@@ -14,6 +14,7 @@ import { API_CONFIGURED, installRemote, useRemoteSync } from '../remote';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import { ErrorFallback } from '../components/ErrorFallback';
 import { installGlobalErrorHandlers } from '../lib/reporter';
+import { usePushNotifications } from '../features/session/usePushNotifications';
 
 // Remote mode wraps the store's actions once, before anything renders.
 installRemote();
@@ -35,6 +36,7 @@ function RootNavigator() {
   const hydrated = dataHydrated && uiHydrated;
   const authenticated = useAppStore((s) => s.session.authenticated);
   const onboardingComplete = useAppStore((s) => s.session.onboardingComplete);
+  usePushNotifications(hydrated && authenticated && onboardingComplete);
 
   useEffect(() => {
     if (!hydrated) return;

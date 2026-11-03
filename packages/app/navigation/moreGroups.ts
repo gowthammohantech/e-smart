@@ -113,6 +113,7 @@ export function useMoreGroups(): MoreGroup[] {
       title: tr('nav:more.group.account'),
       entries: [
         { label: tr('nav:more.entry.devicesAndSessions'), icon: 'cellphone-link', route: '/(app)/settings/devices' },
+        { label: tr('nav:more.entry.notificationSettings'), icon: 'bell-outline', route: '/(app)/settings/notifications' },
         { label: tr('nav:more.entry.planAndBilling'), icon: 'credit-card-outline', route: '/(app)/settings/plan' },
         { label: tr('nav:more.entry.appearanceAndLanguage'), icon: 'theme-light-dark', route: '/(app)/settings/appearance' },
         { label: tr('nav:more.entry.about'), icon: 'information-outline', route: '/(app)/settings/about' },

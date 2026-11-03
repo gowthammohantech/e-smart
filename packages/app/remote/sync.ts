@@ -1,6 +1,7 @@
 import { ApiError } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
+import { reportError } from '../lib/reporter';
 import { applyChanges, applyEntity, purgeLocalDefaults, remapIds, replaceForCompany, unwrap, type Change } from './apply';
 import { flushPendingLogos, refreshLogoLinks } from './logo';
 import { uploadAttachment } from './attachments';
@@ -268,6 +269,9 @@ function nextBatch(tried: Set<string>, size: number): outbox.Entry[] {
       if (going.has(e.entityId)) continue;
       going.add(e.entityId);
     }
+    // A payment changes the invoices it pays (their paid amount, status and version): a change to one
+    // of them waits for the next batch, built on the version the payment leaves.
+    if (e.entityType === 'payment') for (const id of allocatedDocuments(e.body)) going.add(id);
     batch.push(e);
   }
   return batch;
@@ -307,6 +311,31 @@ async function adoptCompanyDefaults(companyId: string) {
   }
   remapIds(map);
   for (const { type, server } of sets) for (const row of server) applyEntity(type, row);
+}
+
+/** The documents a payment's body (or the server's copy of it) allocates to. */
+function allocatedDocuments(body: unknown): string[] {
+  const allocations = (body as { allocations?: { documentId?: string }[] } | null | undefined)?.allocations ?? [];
+  return allocations.map((a) => a.documentId).filter((id): id is string => typeof id === 'string');
+}
+
+/**
+ * A payment just applied moved its invoices on a version. Changes to them still queued here were made
+ * on the old one and would come back as conflicts with nobody's edit: give them the new version. Safe,
+ * because what the payment changed (paid amount, status) is the server's to compute, not the edit's.
+ */
+async function rebaseAllocatedDocuments(entry: outbox.Entry, entity: Record<string, unknown> | undefined) {
+  const ids = new Set([...allocatedDocuments(entry.body), ...allocatedDocuments(entity)]);
+  const companyId = /^\/companies\/([^/]+)\//.exec(entry.path)?.[1];
+  if (!companyId) return;
+  for (const id of ids) {
+    if (!outbox.hasQueuedAfter(id)) continue;
+    const { data } = await api.GET('/companies/{companyId}/documents/{id}', { params: { path: { companyId, id } } });
+    const version = (data as { version?: number } | undefined)?.version;
+    if (typeof version !== 'number') continue;
+    useRemoteMeta.getState().setVersion(id, version);
+    outbox.rebase(id, version);
+  }
 }
 
 /** Sends what's queued. True if the server asked for something to be sent again later. */
@@ -373,6 +402,10 @@ async function pushAll(session: number): Promise<boolean> {
         }
         // Something newer is queued for it: the local copy stays until that's answered too.
         if (entity && entry.method !== 'DELETE' && !outbox.hasQueuedAfter(entityId)) applyEntity(entry.entityType, entity);
+        if (entry.entityType === 'payment' && entry.method !== 'DELETE') {
+          await rebaseAllocatedDocuments(entry, entity as Record<string, unknown> | undefined);
+          assertSession(session);
+        }
       } else if (r.status === 'retry') {
         // Stays pending under the same id: the server may yet have an answer for it.
         again = true;
@@ -429,18 +462,30 @@ async function pullAll(started = session) {
   }
 }
 
-/** Pages a list endpoint to the end. */
-async function all<T>(fetchPage: (cursor?: string) => Promise<{ data?: T[]; nextCursor?: string | null } | undefined>): Promise<T[]> {
+/** Far beyond any real book (200 per page); only a server paging in a loop would reach it. */
+const MAX_PAGES = 1000;
+
+/**
+ * Pages a list endpoint to the end. A newest-first list can stop early: `keep` says whether a row is
+ * still wanted, and the first one that isn't ends the paging (notifications older than 90 days).
+ */
+export async function all<T>(fetchPage: (cursor?: string) => Promise<{ data?: T[]; nextCursor?: string | null } | undefined>, keep?: (row: T) => boolean): Promise<T[]> {
   const out: T[] = [];
   let cursor: string | undefined;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < MAX_PAGES; i++) {
     const page = await fetchPage(cursor);
-    out.push(...(page?.data ?? []));
-    if (!page?.nextCursor) break;
+    const rows = page?.data ?? [];
+    const cut = keep ? rows.findIndex((r) => !keep(r)) : -1;
+    out.push(...(cut >= 0 ? rows.slice(0, cut) : rows));
+    if (cut >= 0 || !page?.nextCursor) return out;
     cursor = page.nextCursor;
   }
+  reportError(new Error(`A list stopped after ${MAX_PAGES} pages`), { source: 'sync.all' });
   return out;
 }
+
+/** Notifications and the audit trail on the device: the last 90 days. The server keeps the rest. */
+const recent = (row: { createdAt?: string }) => !row.createdAt || Date.parse(row.createdAt) > Date.now() - 90 * 86_400_000;
 
 /** A list the plan or role doesn't allow is simply left empty. */
 async function allowed<T>(p: Promise<T>, fallback: T): Promise<T> {
@@ -457,8 +502,8 @@ async function refreshLists(started = session) {
   if (!companyId) return;
   const path = { companyId };
   const [notifications, audit, movements, devices, users] = await Promise.all([
-    all((cursor) => api.GET('/companies/{companyId}/notifications', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data)),
-    allowed(all((cursor) => api.GET('/companies/{companyId}/audit-events', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data)), []),
+    all((cursor) => api.GET('/companies/{companyId}/notifications', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data), recent),
+    allowed(all((cursor) => api.GET('/companies/{companyId}/audit-events', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data), recent), []),
     allowed(all((cursor) => api.GET('/companies/{companyId}/stock/movements', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data)), []),
     api.GET('/me/devices').then((r) => r.data?.data ?? []),
     // Team members aren't in the change log until someone edits them.

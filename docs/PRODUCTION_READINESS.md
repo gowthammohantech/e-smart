@@ -40,7 +40,7 @@ Railway (never committed). `apps/api/.env.example` names every variable.
 | MSG91 (SMS, OTP): DLT-registered sender and template | `SMS_PROVIDER=msg91`, `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID` | Product, Ops | ⬜ Todo |
 | Azure Communication Services or Amazon SES (email): verified sender domain, SPF/DKIM | `EMAIL_PROVIDER=acs` + `ACS_CONNECTION_STRING`, or `ses` + AWS keys; `EMAIL_FROM` | Ops | ⬜ Todo |
 | WhatsApp (Meta app): business verification, phone number, approved templates, webhook | `WHATSAPP_PROVIDER=meta`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_WEBHOOK_SECRET` | Product, Ops | ⬜ Todo |
-| Expo push: project credentials (APNs key, FCM) | `PUSH_PROVIDER=expo` | Mobile/Web, Ops | ⬜ Todo |
+| Expo push: an Expo project (its id in `app.json` `extra.eas.projectId`; the app registers no device without it), an APNs key (team 93XKQVM4YX) and FCM (`google-services.json`). Code is done (PR 5, `remote/push.ts`) | `PUSH_PROVIDER=expo` | Mobile/Web, Ops | ⬜ Todo |
 | GSP with IRP and EWB sandbox certification, then production access | `COMPLIANCE_PROVIDER=gsp`, `TAXATION_GSP_PROVIDER_CODE`, `TAXATION_ADAEQUARE_BASE_URL`, `TAXATION_ADAEQUARE_APP_ID`/`_SECRET`; the portal username and password are entered per company in the app | Product, Backend | ⬜ Todo |
 | Razorpay: live keys, webhook secret, plan IDs for subscriptions | `PAYMENTS_PROVIDER=razorpay`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Product, Ops | ⬜ Todo |
 | Open Exchange Rates | `FX_PROVIDER=openexchangerates`, `OPENEXCHANGERATES_APP_ID` | Ops | ⬜ Todo |
@@ -67,10 +67,10 @@ nothing behind them yet.
 
 | Item | Where | Owner | Status |
 |---|---|---|---|
-| A job queue for exports and OCR, which run inside the request today (an export of a large company can time out) | `apps/api/src/modules/exports/handlers.ts`, `apps/api/src/modules/ocr/handlers.ts` | Backend | ⬜ Todo |
+| A job queue for exports and OCR. Done: a Postgres queue (`jobs`, `apps/api/src/jobs/`); exports build in the background, OCR of an image by a network provider is queued (text read on the phone stays instant) | `apps/api/src/jobs/`, `modules/exports`, `modules/ocr` | Backend | ✅ Done |
 | Move the in-memory Lixi rate limiter to Postgres or Redis, so it holds across instances and restarts | `apps/api/src/modules/lixi/handlers.ts:51` | Backend | ⬜ Todo |
 | Move the messaging `Outbox` (log providers' sent messages) out of memory, or drop it in production | `apps/api/src/providers/messaging.ts` (`Outbox`) | Backend | ⬜ Todo |
-| Schedule recurring expenses (`materializeRecurringExpenses`), automatic backups and reminder runs | `apps/api/src/modules/expenses/engine.ts`, `modules/exports` | Backend, Ops | ⬜ Todo |
+| Schedule recurring expenses, automatic backups, overdue notices, export expiry and the closed-account purge. Done (`SCHEDULES` in `apps/api/src/jobs/registry.ts`); automatic payment *reminders* to customers are not built | `apps/api/src/jobs/registry.ts` | Backend, Ops | ✅ Done |
 
 ## 5. Client-computed views to move server-side
 
@@ -96,13 +96,13 @@ the devices light as books grow.
 
 | Item | Owner | Status |
 |---|---|---|
-| Observability: structured logs shipped somewhere searchable, traces, error tracking (API and apps), alerts on 5xx rate, latency and failed syncs | Ops | ⬜ Todo |
-| Database backups with point-in-time recovery, and a restore drill on a schedule | Ops | ⬜ Todo |
-| Secret rotation runbook (JWT, credentials key, webhook secrets, vendor keys) | Ops | ⬜ Todo |
+| Observability: request ids (`x-request-id`), redacted logs, `/health/worker` for the job queue are done; an error-tracking service, log shipping and alerts are not (`setErrorReporter` is the seam) | Ops | 🟨 Partly |
+| Database backups with point-in-time recovery (Railway dashboard), a nightly `pg_dump` (`db.backup` job, off until the worker has a matching `pg_dump`), and a quarterly restore drill (`docs/RUNBOOK.md`) | Ops | 🟨 Built, not switched on |
+| Secret rotation runbook: `docs/RUNBOOK.md`. `CREDENTIALS_KEY` still needs a re-encryption script to rotate without making businesses re-enter portal logins | Ops | 🟨 Partly |
 | Rate limits per route and per tenant, reviewed. Auth routes now have per-IP limits (`AUTH_RATE_LIMIT_PER_MINUTE`); per-tenant limits remain | Backend, Ops | 🟨 Partly |
-| Load testing: sync push/pull, document finalise, exports, PDF rendering | QA, Backend | ⬜ Todo |
-| Deploy and migration rollback plan (migrations are forward-only; rehearse a down path) | Ops, Backend | ⬜ Todo |
-| A staging environment mirroring production, with sandbox vendor keys and the demo account (`SEED_DEMO_ACCOUNT=true`) | Ops | ⬜ Todo |
+| Load testing: `tools/load/api.js` (k6) written; run it on staging and record the baseline in `docs/RUNBOOK.md` | QA, Backend | 🟨 Written, not run |
+| Deploy and migration rollback plan: expand-then-contract, enforced by `npm run check:migrations` in CI; rollback is redeploying the previous build (`docs/RUNBOOK.md`) | Ops, Backend | ✅ Done |
+| A staging environment mirroring production, with sandbox vendor keys and the demo account (`SEED_DEMO_ACCOUNT=true`). `.railway/railway.ts` now takes a non-production environment's URLs from Railway; the environment itself is still to create | Ops | 🟨 Config ready |
 | Railway env checklist, below, completed for production | Ops | ⬜ Todo |
 
 ### Railway env checklist (production)
@@ -145,7 +145,7 @@ API will not start until the provider rows are real.
 
 | Item | Owner | Status |
 |---|---|---|
-| End-to-end tests of the API-backed flow on web and mobile: sign-up, onboarding, invoice to payment, offline edit and sync, conflict, OCR, e-invoice against the GSP sandbox | QA | ⬜ Todo |
+| End-to-end tests of the API-backed flow on web and mobile. The web offline-first scenarios (online, offline and reload, killed tab, slow network, failing refresh, two tabs, two devices) run in CI (`e2e` job); sign-up, invoice to payment, OCR, the GSP sandbox and mobile (Maestro) are still to add | QA | 🟨 Partly |
 | Security review: auth and refresh tokens, tenant isolation, upload validation, webhook signatures, secrets handling, dependency audit | Backend, external | ⬜ Todo |
 | App store builds: profiles, signing and the privacy manifest are done (`apps/mobile/eas.json`, `app.json`); store listings, labels and submission follow `docs/STORE_SUBMISSION.md` | Mobile/Web | 🟨 Partly |
 | Legal pages: drafts at `/privacy`, `/terms`, `/refund`, `/delete-account`, `/support` on the site (`apps/site/content/legal.ts`); a lawyer must review them and a grievance officer be named | Product | 🟨 Drafted |

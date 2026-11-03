@@ -231,6 +231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which kinds of notification this person gets on their phone (all of them still show in the app) */
+        get: operations["getNotificationPreferences"];
+        put: operations["saveNotificationPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/push-tokens": {
         parameters: {
             query?: never;
@@ -3558,6 +3575,10 @@ export interface components {
             otpRequestId?: string;
             otpCode?: string;
         };
+        NotificationPreferences: {
+            /** @description Kinds not pushed to this person's devices */
+            pushMuted: ("invoiceSent" | "paymentReceived" | "invoiceOverdue" | "lowStock" | "compliance" | "syncFailure" | "system")[];
+        };
         MfaStatus: {
             /** @description An authenticator is set up */
             enrolled: boolean;
@@ -4351,6 +4372,51 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    getNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+        };
+    };
+    saveNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferences"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
         };
     };
     registerPushToken: {

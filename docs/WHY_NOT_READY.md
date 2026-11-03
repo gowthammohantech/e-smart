@@ -34,6 +34,23 @@ _Updated 2 Nov 2026 (Phase 1 launch blockers, not yet committed). Fixed, with te
 - _**Mobile release:** `eas.json`, privacy manifest, `usesNonExemptEncryption: false`, `allowBackup: false`, no microphone string, build 103 / versionCode 7, `bundleRelease` refuses the debug key, and the stray root `app.json` removed. See `docs/STORE_SUBMISSION.md`._
 - _**Legal:** draft privacy, terms and refund pages, plus delete-account and support pages, on the site; the apps link to them; sign-up records the terms version._
 
+_Updated 3 Nov 2026 (Phase 2, not yet committed):_
+- _Background jobs on a Postgres queue (`apps/api/src/jobs/`), with an optional `worker` service._
+- _Recurring expenses, automatic backups, overdue notices, export expiry and the 8-year purge (dry run until switched on) all scheduled._
+- _The e-invoice reconcile no longer double-sends with two instances._
+- _Exports and network OCR run in the background._
+- _Pushes go out after the change commits._
+- _Lost e-way bill and IRN-cancel answers are settled by asking the portal (Adaequare routes unconfirmed)._
+- _A partial refund shrinks the payment._
+- _Finalise carries its version._
+- _An invoice edit after a payment no longer conflicts._
+- _Lists aren't capped at 4,000 rows._
+- _Two tabs refresh tokens once._
+- _Push notifications are built end to end, needing an Expo project._
+- _Phones keep the book in encrypted SQLite; the web uses IndexedDB, and a full disk is reported._
+- _CI runs the web offline scenarios, the migration rule and a dependency audit; CodeQL and Dependabot are on._
+- _`docs/RUNBOOK.md` covers backups, restore, rotation and the job queue._
+
 _Still open from this audit: error tracking vendor, the purge job for closed accounts, encrypted local storage, httpOnly cookies on the web, the job scheduler, backups and PITR, e2e and load tests, the security review, device testing of offline sync, push notifications, and camera barcode scanning._
 
 ## Summary

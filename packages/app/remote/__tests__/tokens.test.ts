@@ -1,6 +1,8 @@
+import { getTokens, onTokensChange, setTokens, takeTokensFromOtherTab } from '../tokens';
+
+// Hoisted above the import by jest.
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(async () => null), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
 
-import { getTokens, onTokensChange, setTokens, takeTokensFromOtherTab } from '../tokens';
 
 describe('tokens from another tab', () => {
   it('takes a rotated pair, so this tab refreshes with the live token', async () => {

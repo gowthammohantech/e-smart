@@ -47,6 +47,20 @@ const Env = z.object({
     .default('')
     .transform((v) => v.split(',').map((p) => p.replace(/\D/g, '').slice(-10)).filter(Boolean)),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(300),
+  /**
+   * Where background jobs run. `inline`: in the API process (one service is enough). `only`: this
+   * process runs jobs and serves no HTTP (the Railway `worker` service). `off`: HTTP only, jobs are
+   * left to a worker.
+   */
+  WORKER: z.enum(['inline', 'only', 'off']).default('inline'),
+  WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
+  /**
+   * The daily purge of closed accounts past their 8 years only logs what it would erase while this is
+   * true. Set it to false once a dry run on staging looked right.
+   */
+  PURGE_DRY_RUN: bool.default(true),
+  /** A nightly pg_dump into object storage (src/jobs/dbBackup.ts). Needs pg_dump in the image. */
+  DB_BACKUP_ENABLED: bool.default(false),
   /** Sign-in, sign-up, OTP and password-reset calls per IP per minute, on top of the per-account limits. */
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(10),
   /**

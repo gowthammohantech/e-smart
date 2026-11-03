@@ -162,6 +162,12 @@
       "expo-splash-screen",
       "expo-web-browser",
       "expo-localization",
+      [
+        "expo-notifications",
+        {
+          "color": "#0E121A"
+        }
+      ],
       "./plugins/withSceneLifecycle",
       "./plugins/withAndroidSigning",
       "./plugins/withR8Optimize",
@@ -173,6 +179,12 @@
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true
           }
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
         }
       ]
     ],

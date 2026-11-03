@@ -1,8 +1,7 @@
 import { createDb, createPool } from '@esmart/db';
 import { buildApp } from './app';
 import { loadConfig } from './config';
-import { purgeIdempotencyKeys } from './http/idempotency';
-import { reconcileEInvoices } from './modules/compliance/einvoice';
+import { startBackground } from './jobs';
 import { createProviders } from './providers';
 import { reportError } from './lib/reporter';
 
@@ -13,14 +12,13 @@ const providers = createProviders(config, console, db);
 const deps = { db, pool, config, providers, now: () => new Date() };
 const app = await buildApp(deps);
 
-const purge = setInterval(() => void purgeIdempotencyKeys(deps).catch((err) => app.log.warn({ err }, 'idempotency purge failed')), 3_600_000);
-
-const reconcile = setInterval(() => void reconcileEInvoices(deps).catch((err) => app.log.warn({ err }, 'e-invoice reconcile failed')), 5 * 60_000);
+// Scheduled work and queued jobs (apps/api/src/jobs), unless a separate worker service does them.
+const stopBackground = config.WORKER === 'off' ? async () => {} : startBackground(deps, app.log, { concurrency: config.WORKER_CONCURRENCY });
 
 async function shutdown(signal: string) {
   app.log.info(`${signal}: shutting down`);
-  clearInterval(purge);
-  clearInterval(reconcile);
+  // Running jobs finish (or go back to the queue) before the database closes.
+  await stopBackground();
   await app.close();
   await pool.end();
   process.exit(0);
@@ -37,4 +35,17 @@ process.on('uncaughtException', (err) => {
 process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-await app.listen({ host: config.HOST, port: config.PORT });
+// A worker-only process still answers /health, so Railway can check it, but serves nothing else.
+if (config.WORKER === 'only') {
+  const { createServer } = await import('node:http');
+  createServer((req, res) => {
+    if (req.url !== '/health') return void res.writeHead(404).end();
+    pool.query('select 1').then(
+      () => res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true,"role":"worker"}'),
+      () => res.writeHead(503).end(),
+    );
+  }).listen(config.PORT, config.HOST);
+  app.log.info('worker only: serving /health, running jobs');
+} else {
+  await app.listen({ host: config.HOST, port: config.PORT });
+}

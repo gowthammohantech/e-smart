@@ -13,6 +13,7 @@ import { isOpen } from './outbox';
 import { endSyncSession, loadSnapshot, reloadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
 import { LEGAL } from '../lib/legal';
+import { unregisterPush } from './push';
 
 type AuthSession = Schema<'AuthSession'>;
 
@@ -119,6 +120,8 @@ function clearLocal(): Promise<void> {
 }
 
 export async function signOut() {
+  // While still signed in, so the server knows whose token it is.
+  await unregisterPush();
   try {
     await api.POST('/auth/sign-out', {});
   } catch {
@@ -135,6 +138,8 @@ export async function signOut() {
  */
 export async function deleteAccount(body: Schema<'DeleteAccountRequest'>) {
   await api.POST('/me/delete', { body });
+  // The server already dropped the token; forget it here too.
+  await AsyncStorage.removeItem('ebs.push.token').catch(() => {});
   const { userId } = useAppStore.getState().session;
   useAppStore.setState({ syncQueue: [] });
   if (userId) await AsyncStorage.removeItem(unsyncedKey(userId)).catch(() => {});

@@ -121,6 +121,13 @@ and the apps fall back to manual entry.
 - **NIC 9999 "invoice is not active" stays a refusal**, not a quiet success.
 - **No retry.** A filing that timed out may already be registered. Recovery is
   the by-document lookup (Adaequare also tries it after a transport failure).
+- **Lost answers are settled later, not retried.** An e-way bill generate or an
+  IRN cancel that gets `GSP_UNAVAILABLE` leaves a `compliance_attempts` row; the
+  `compliance.recover` job asks the portal (`findEwayBillByDocument`,
+  `getIrnStatus`) and records what it holds. On Adaequare those two routes,
+  `…/ewayapi/GetEwayBillGeneratedByConsigner` and `…/invoice/irn`, are by analogy
+  with NIC's API and **unconfirmed**: run both against the sandbox before relying
+  on them. Whitebooks has neither yet; its attempts go to a person after a day.
 - **Codes, never wording**, decide behaviour (`hasErrorCode` is word-bounded).
 - Reason codes: the IRN's `CnlRsn` is a string and its 2/3 are *data entry
   mistake / order cancelled*; the e-way bill's `cancelRsnCode` is a number and

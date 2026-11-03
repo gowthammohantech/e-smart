@@ -87,7 +87,8 @@
     "transporters": "Transporters",
     "usersAndRoles": "Users & roles",
     "yourProfile": "Your profile",
-    "editNamed": "Edit {{name}}"
+    "editNamed": "Edit {{name}}",
+    "notifications": "Notifications"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -136,7 +137,8 @@
       "devicesAndSessions": "Devices & sessions",
       "planAndBilling": "Plan & billing",
       "appearanceAndLanguage": "Appearance & language",
-      "about": "About"
+      "about": "About",
+      "notificationSettings": "Notifications"
     },
     "signOut": {
       "row": "Sign out",

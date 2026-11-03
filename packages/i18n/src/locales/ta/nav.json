@@ -87,7 +87,8 @@
     "transporters": "போக்குவரத்தாளர்கள்",
     "usersAndRoles": "பயனர்களும் பொறுப்புகளும்",
     "yourProfile": "உங்கள் விவரம்",
-    "editNamed": "திருத்து: {{name}}"
+    "editNamed": "திருத்து: {{name}}",
+    "notifications": "அறிவிப்புகள்"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {
@@ -136,7 +137,8 @@
       "devicesAndSessions": "சாதனங்களும் அமர்வுகளும்",
       "planAndBilling": "திட்டமும் கட்டணமும்",
       "appearanceAndLanguage": "தோற்றமும் மொழியும்",
-      "about": "பற்றி"
+      "about": "பற்றி",
+      "notificationSettings": "அறிவிப்புகள்"
     },
     "signOut": {
       "row": "வெளியேறு",

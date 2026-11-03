@@ -146,6 +146,8 @@ export const users = pgTable("users", {
 	totpLastStep: bigint("totp_last_step", { mode: "number" }),
 	/** sha256 of each unused recovery code. */
 	recoveryCodeHashes: jsonb("recovery_code_hashes").$type<string[]>(),
+	/** Notification kinds this person turned off for push (they still appear in the app). */
+	pushMuted: jsonb("push_muted").$type<string[]>().default([]).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -595,6 +597,8 @@ export const documents = pgTable("documents", {
 	grandTotalBaseMinor: bigint("grand_total_base_minor", { mode: "number" }).default(0).notNull(),
 	amountPaidMinor: bigint("amount_paid_minor", { mode: "number" }).default(0).notNull(),
 	currentEwayBillId: varchar("current_eway_bill_id", { length: 40 }),
+	/** When the team was told this invoice fell overdue, so they're told once. */
+	overdueNotifiedAt: timestamp("overdue_notified_at", { withTimezone: true, mode: 'date' }),
 	complianceLastMessage: text("compliance_last_message"),
 	complianceLastAttemptAt: timestamp("compliance_last_attempt_at", { withTimezone: true, mode: 'date' }),
 	finalizedAt: timestamp("finalized_at", { withTimezone: true, mode: 'date' }),
@@ -1917,4 +1921,76 @@ export const idempotencyKeys = pgTable("idempotency_keys", {
 			name: "idempotency_keys_user_id_fkey"
 		}),
 	primaryKey({ columns: [table.userId, table.key], name: "idempotency_keys_pkey"}),
+]);
+
+export const backgroundJobStatus = pgEnum("background_job_status", ['queued', 'running', 'done', 'dead'])
+
+/**
+ * Work the API does in the background (apps/api/src/jobs): scheduled tasks, slow exports, pushes.
+ * A worker claims a due row with SKIP LOCKED and holds it for `locked_until`; one that dies mid-job
+ * lets the lease run out and another picks it up. `unique_key` stops the same piece of work being
+ * queued twice while one is still waiting or running (a scheduled period, one company's backup).
+ */
+export const jobs = pgTable("jobs", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	kind: varchar({ length: 60 }).notNull(),
+	payload: jsonb().default({}).notNull(),
+	status: backgroundJobStatus().default('queued').notNull(),
+	runAt: timestamp("run_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	attempts: smallint().default(0).notNull(),
+	maxAttempts: smallint("max_attempts").default(5).notNull(),
+	lockedUntil: timestamp("locked_until", { withTimezone: true, mode: 'date' }),
+	lastError: text("last_error"),
+	uniqueKey: varchar("unique_key", { length: 200 }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	finishedAt: timestamp("finished_at", { withTimezone: true, mode: 'date' }),
+}, (table): PgTableExtraConfigValue[] => [
+	index("jobs_due_idx").using("btree", table.status.asc().nullsLast(), table.runAt.asc().nullsLast()),
+	uniqueIndex("jobs_unique_key_idx").using("btree", table.uniqueKey.asc().nullsLast()).where(sql`${table.uniqueKey} IS NOT NULL AND ${table.status} IN ('queued', 'running')`),
+]);
+
+/**
+ * One row per scheduled period that was queued ("recurring-expenses:2026-11-03"). The primary key is
+ * what makes every API instance's scheduler safe to run at once: only the first insert queues the job.
+ */
+export const jobScheduleRuns = pgTable("job_schedule_runs", {
+	key: varchar({ length: 200 }).primaryKey().notNull(),
+	jobId: varchar("job_id", { length: 40 }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+});
+
+export const complianceAttemptStatus = pgEnum("compliance_attempt_status", ['pending', 'settled', 'failed'])
+
+/**
+ * A portal call whose answer may have been lost: an e-way bill generate or an IRN cancel that got no
+ * reply. Written before the call, settled with its result; one still pending after a timeout is
+ * reconciled by asking the portal what it holds (apps/api/src/modules/compliance/recovery.ts).
+ */
+export const complianceAttempts = pgTable("compliance_attempts", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	documentId: varchar("document_id", { length: 40 }).notNull(),
+	operation: varchar({ length: 30 }).notNull(),
+	status: complianceAttemptStatus().default('pending').notNull(),
+	/** What the call was, so it can be settled without the request: the input, the payload, the IRN. */
+	request: jsonb().notNull(),
+	actorId: varchar("actor_id", { length: 40 }).notNull(),
+	startedAt: timestamp("started_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	lastCheckedAt: timestamp("last_checked_at", { withTimezone: true, mode: 'date' }),
+	settledAt: timestamp("settled_at", { withTimezone: true, mode: 'date' }),
+	lastError: text("last_error"),
+}, (table): PgTableExtraConfigValue[] => [
+	index("compliance_attempts_pending_idx").using("btree", table.status.asc().nullsLast(), table.startedAt.asc().nullsLast()),
+	// One open attempt per document and operation: a second generate waits for the first to settle.
+	uniqueIndex("compliance_attempts_open_idx").using("btree", table.documentId.asc().nullsLast(), table.operation.asc().nullsLast()).where(sql`${table.status} = 'pending'`),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "compliance_attempts_company_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.documentId],
+			foreignColumns: [documents.id],
+			name: "compliance_attempts_document_id_fkey"
+		}),
 ]);

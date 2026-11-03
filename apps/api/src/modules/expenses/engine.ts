@@ -100,12 +100,18 @@ async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
  * so two runners (or a rerun) never create the same occurrence twice. A
  * template that was missed for several periods catches up on all of them.
  */
-export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'>, today: string | Date): Promise<{ created: string[] }> {
+export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'> & Partial<Pick<Deps, 'now'>>, today: string | Date): Promise<{ created: string[] }> {
   const asOf = typeof today === 'string' ? today : businessDate(today);
+  // A suspended or closed account's books stay as they were.
+  const activeCompanies = deps.db
+    .select({ id: schema.companies.id })
+    .from(schema.companies)
+    .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
+    .where(isNull(schema.accounts.suspendedAt));
   const due = await deps.db
     .select({ id: E.id })
     .from(E)
-    .where(and(ne(E.recurrence, 'none'), lte(E.nextRecurrenceDate, asOf), isNull(E.recurringParentId)))
+    .where(and(ne(E.recurrence, 'none'), lte(E.nextRecurrenceDate, asOf), isNull(E.recurringParentId), inArray(E.companyId, activeCompanies)))
     .orderBy(E.nextRecurrenceDate, E.id);
   const created: string[] = [];
 
@@ -118,7 +124,7 @@ export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'>, today
         .for('update', { skipLocked: true });
       if (!template?.nextRecurrenceDate) return;
       const actor = await schedulerActor(tx, template.createdBy);
-      const now = new Date();
+      const now = deps.now?.() ?? new Date();
       let next: string | null = template.nextRecurrenceDate;
 
       while (next && next <= asOf) {

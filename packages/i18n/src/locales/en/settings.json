@@ -256,7 +256,8 @@
       "pending": "Pending",
       "failed": "Failed",
       "offline": "Offline"
-    }
+    },
+    "storageFull": "This device is out of storage space, so recent changes are only kept until the app closes. Free some space, then sync."
   },
   "transporters": {
     "none": "No transporters yet",
@@ -460,5 +461,23 @@
     "wrongPassword": "That password isn't right.",
     "wrongCode": "That code isn't right, or has expired. Ask for a new one.",
     "done": "Your account was deleted."
+  },
+  "notifications": {
+    "offTitle": "Notifications are off",
+    "off": "Turn them on to hear about payments, overdue invoices and e-way bills without opening the app.",
+    "denied": "Notifications are blocked for this app. Turn them on in your phone's settings.",
+    "unavailableTitle": "Not available here",
+    "unavailable": "This build of the app can't receive notifications.",
+    "web": "The web app doesn't send notifications. Use the phone app, or check the notification list here.",
+    "turnOn": "Turn on notifications",
+    "openSettings": "Open phone settings",
+    "inApp": "Everything still shows in the app's notification list, whatever you turn off here.",
+    "kind": {
+      "paymentReceived": "Payments received",
+      "invoiceOverdue": "Invoices overdue",
+      "compliance": "E-invoices and e-way bills",
+      "lowStock": "Low stock",
+      "system": "Exports, backups and everything else"
+    }
   }
 }

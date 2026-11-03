@@ -9,6 +9,8 @@ import type {
   ComplianceProvider,
   ConnectionResult,
   ExtendResult,
+  FindEwayBillResult,
+  IrnStatusResult,
   PortalCredentials,
   PortalLogins,
   SubmitEwayBillResult,
@@ -58,6 +60,10 @@ const PATHS = {
   generateEwayBillByIrn: '/enriched/ei/api/ewaybill',
   cancelEwayBill: '/enriched/ei/api/ewayapi',
   standaloneEwayBill: '/enriched/ewb/ewayapi',
+  // Recovery lookups, by analogy with NIC's `GetEwayBillGeneratedByConsigner` and `GetIRN`: unconfirmed
+  // until a run against Adaequare's sandbox, like the standalone routes above.
+  ewayBillByDocument: '/enriched/ewb/ewayapi/GetEwayBillGeneratedByConsigner',
+  irnDetails: '/enriched/ei/api/invoice/irn',
 } as const;
 
 type CancelRecord = { CancelDate?: string; cancelDate?: string };
@@ -258,6 +264,33 @@ export class AdaequareGateway implements GspGateway {
       if (!carriesField(record, 'cancelDate', 'CancelDate')) return incomplete('cancellation date');
       const cancelled = parsePortalDateAny(record?.cancelDate ?? record?.CancelDate) ?? new Date(req.now);
       return { ok: true as const, cancelledAt: cancelled.toISOString(), reason: EWAY_CANCEL_REASONS[req.reasonCode] };
+    });
+  }
+
+  /** The bill the portal raised for a document, after a generate whose answer was lost. NIC answers 604 when there is none. */
+  findEwayBillByDocument(creds: PortalCredentials | null, req: Parameters<NonNullable<ComplianceProvider['findEwayBillByDocument']>>[1]): Promise<FindEwayBillResult> {
+    return this.guard(async () => {
+      const login = requireLogin(creds);
+      try {
+        const envelope = await this.call<EwbRecord>('get', login, PATHS.ewayBillByDocument, { query: { docType: req.docType, docNo: req.docNo } });
+        return { ok: true as const, found: ewayBillResult(unwrapResult(envelope), { now: req.now }) };
+      } catch (error) {
+        if (error instanceof GspRequestError && hasErrorCode(error.envelope, '604')) return { ok: true as const, found: null };
+        throw error;
+      }
+    });
+  }
+
+  /** Whether an IRN is still active, after a cancel whose answer was lost. `Status` is ACT or CNL. */
+  getIrnStatus(creds: PortalCredentials | null, req: Parameters<NonNullable<ComplianceProvider['getIrnStatus']>>[1]): Promise<IrnStatusResult> {
+    return this.guard(async () => {
+      const login = requireLogin(creds);
+      const envelope = await this.call<{ Status?: string; status?: string; CancelDate?: string; cancelDate?: string }>('get', login, PATHS.irnDetails, { query: { irn: req.irn } });
+      const record = unwrapResult(envelope);
+      const status = String(record?.Status ?? record?.status ?? '').toUpperCase();
+      if (status !== 'ACT' && status !== 'CNL') return incomplete('IRN status');
+      const cancelled = parsePortalDateAny(record?.CancelDate ?? record?.cancelDate);
+      return status === 'CNL' ? { ok: true as const, status: 'cancelled' as const, cancelDate: toPortalDateTime(cancelled ?? new Date(req.now)) } : { ok: true as const, status: 'active' as const };
     });
   }
 

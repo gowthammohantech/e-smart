@@ -13,7 +13,7 @@ import type {
 } from '@esmart/core/types';
 import type { AppState } from '../store/appStore';
 import { companyPath as c } from './collections';
-import { knownToServer } from './meta';
+import { knownToServer, useRemoteMeta } from './meta';
 import * as outbox from './outbox';
 
 /**
@@ -107,6 +107,10 @@ function documentAction(path: (d: BusinessDocument) => string, body?: (call: Cal
       entityId: created ?? doc.id,
       label: doc.number,
       clientEntityId: created,
+      // A finalise or status change acts on the version this device saw: the server refuses it (a
+      // conflict, as for an edit) if another device changed the document since. A convert or duplicate
+      // makes something new and reads its source as it is.
+      baseVersion: created ? undefined : useRemoteMeta.getState().versions[doc.id],
     });
   };
 }

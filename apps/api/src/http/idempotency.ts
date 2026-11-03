@@ -90,7 +90,7 @@ export function registerIdempotency(app: FastifyInstance, deps: Deps) {
   });
 }
 
-/** Housekeeping: drop expired keys. Called on an interval by the server. */
+/** Housekeeping: drop expired keys. Run by the `idempotency.purge` job every hour. */
 export async function purgeIdempotencyKeys(deps: Deps) {
   await deps.db.delete(schema.idempotencyKeys).where(lt(schema.idempotencyKeys.expiresAt, deps.now()));
 }

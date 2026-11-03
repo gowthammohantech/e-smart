@@ -45,7 +45,7 @@ const MAIN_TABLES = [
   'stock_movements',
 ];
 
-type Scoped = { table: string; columns: string[]; hasDate: boolean; where: (companyId: string) => SQL };
+export type Scoped = { table: string; columns: string[]; hasDate: boolean; where: (companyId: string) => SQL };
 
 /**
  * Every table that belongs to one company, found from the catalogue: tables
@@ -53,7 +53,7 @@ type Scoped = { table: string; columns: string[]; hasDate: boolean; where: (comp
  * (document lines through documents, tax components through tax lines…).
  * Binary columns (encrypted secrets) are left out.
  */
-async function companyTables(db: DbOrTx): Promise<Map<string, Scoped>> {
+export async function companyTables(db: DbOrTx, excluded: Set<string> = EXCLUDED): Promise<Map<string, Scoped>> {
   const cols = await db.execute<{ table_name: string; column_name: string; data_type: string }>(sql`
     select table_name, column_name, data_type from information_schema.columns
     where table_schema = 'public' order by table_name, ordinal_position`);
@@ -78,13 +78,13 @@ async function companyTables(db: DbOrTx): Promise<Map<string, Scoped>> {
     scoped.set(table, { table, columns: list.filter((c) => c.type !== 'bytea').map((c) => c.name), hasDate: list.some((c) => c.name === 'date'), where });
   };
   for (const [table, list] of columns) {
-    if (EXCLUDED.has(table) || !list.some((c) => c.name === 'company_id')) continue;
+    if (excluded.has(table) || !list.some((c) => c.name === 'company_id')) continue;
     add(table, (id) => sql`${sql.identifier('company_id')} = ${id}`);
   }
   // Children of scoped tables, a few levels deep.
   for (let depth = 0; depth < 3; depth++) {
     for (const fk of fks.rows) {
-      if (scoped.has(fk.child) || EXCLUDED.has(fk.child) || fk.parent === 'companies') continue;
+      if (scoped.has(fk.child) || excluded.has(fk.child) || fk.parent === 'companies') continue;
       const parent = scoped.get(fk.parent);
       if (!parent || columns.get(fk.child)?.some((c) => c.name === 'company_id')) continue;
       add(fk.child, (id) => sql`${sql.identifier(fk.child_col)} in (select ${sql.identifier(fk.parent_col)} from ${sql.identifier(fk.parent)} where ${parent.where(id)})`);

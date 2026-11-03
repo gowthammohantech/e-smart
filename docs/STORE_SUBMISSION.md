@@ -26,6 +26,16 @@ Builds are made locally (Xcode and Gradle). `apps/mobile/eas.json` holds the sam
 4. iOS: archive in Xcode with team `93XKQVM4YX`, then export with `testFlightInternalTestingOnly=false` for the App Store.
    - In Organizer, **Generate Privacy Report** on the archive. It must list the data types below and no microphone use.
 
+## Push notifications
+
+The app asks for permission after the first invoice is sent, not at launch. It needs:
+- an Expo project, with its id in `apps/mobile/app.json` under `expo.extra.eas.projectId` (`npx eas init` creates one). Without it the app simply registers no device.
+- an APNs key for team 93XKQVM4YX, uploaded to that Expo project.
+- a Firebase project for Android: `google-services.json` at `apps/mobile/google-services.json`, referenced as `expo.android.googleServicesFile`, and its FCM key uploaded to Expo.
+- `PUSH_PROVIDER=expo` on the API and the worker.
+
+The privacy labels don't change: a push token is a device identifier used for app functionality, linked to the user, and not used for tracking.
+
 ## Data collected (App Store privacy labels, Play data safety)
 
 Everything is **linked to the user**, used **for app functionality only**, **not used for tracking**, and **not sold or shared** with third parties for their own use. Data is **encrypted in transit** (HTTPS). Users can **request deletion** in the app (Settings → Your profile → Delete account) and on the web (`/delete-account` on the site).

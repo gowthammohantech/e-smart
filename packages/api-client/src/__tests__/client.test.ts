@@ -161,3 +161,33 @@ describe('createApiClient', () => {
     });
   });
 });
+
+describe('two tabs sharing one session', () => {
+  it('rotates the tokens once: the second tab takes the pair the first one stored', async () => {
+    // One browser's storage and lock, two clients (two tabs).
+    let tokens: Tokens | null = { accessToken: 'old', refreshToken: 'r1' };
+    let held: Promise<unknown> = Promise.resolve();
+    const locks = { request: <T>(_name: string, fn: () => Promise<T>) => (held = held.then(fn, fn)) as Promise<T> };
+    vi.stubGlobal('navigator', { locks });
+    let refreshes = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(input, init);
+      if (req.url.endsWith('/auth/refresh')) {
+        refreshes++;
+        const body = (await req.json()) as { refreshToken: string };
+        // The server refuses a refresh token used twice.
+        return body.refreshToken === 'r1' ? json(200, { accessToken: 'new', refreshToken: 'r2' }) : json(401, { code: 'REFRESH_TOKEN_INVALID' }, 'application/problem+json');
+      }
+      return req.headers.get('Authorization') === 'Bearer new' ? json(200, { data: [] }) : json(401, { code: 'TOKEN_EXPIRED' }, 'application/problem+json');
+    });
+    const tab = () =>
+      createApiClient({ baseUrl: BASE, getTokens: () => tokens, setTokens: (t) => void (tokens = t), fetch: fetchMock as typeof fetch });
+    const [a, b] = [tab(), tab()];
+    const [ra, rb] = await Promise.all([a.GET('/me'), b.GET('/me')]);
+    expect(ra.response.status).toBe(200);
+    expect(rb.response.status).toBe(200);
+    expect(refreshes).toBe(1);
+    expect(tokens).toEqual({ accessToken: 'new', refreshToken: 'r2' });
+    vi.unstubAllGlobals();
+  });
+});

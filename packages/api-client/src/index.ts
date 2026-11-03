@@ -91,8 +91,22 @@ export function createApiClient(options: ApiClientOptions) {
   // A sent request's body is spent, so keep an unsent copy for the one retry.
   const unsent = new WeakMap<Request, Request>();
 
-  async function refresh(): Promise<Tokens | null> {
-    const current = await options.getTokens();
+  /**
+   * One rotation for every tab of a browser: under a shared lock, and only if the token the failed
+   * request carried is still the current one. Another tab that already rotated it has left the new
+   * pair in storage, and spending the old refresh token again would be refused as reuse.
+   */
+  function refresh(stale: string | undefined): Promise<Tokens | null> {
+    const locks = (globalThis as { navigator?: { locks?: { request: <T>(name: string, fn: () => Promise<T>) => Promise<T> } } }).navigator?.locks;
+    const run = async () => {
+      const current = await options.getTokens();
+      if (current && stale && current.accessToken !== stale) return current;
+      return rotate(current);
+    };
+    return locks ? locks.request('ebs.refresh', run) : run();
+  }
+
+  async function rotate(current: Tokens | null): Promise<Tokens | null> {
     if (!current) return null;
     const res = await fetchImpl(`${options.baseUrl}/auth/refresh`, {
       method: 'POST',
@@ -130,7 +144,7 @@ export function createApiClient(options: ApiClientOptions) {
     async onResponse({ request, response }) {
       let retried: Response | undefined;
       if (response.status === 401 && !isPublic(request.url, options.baseUrl)) {
-        refreshing ??= refresh().finally(() => {
+        refreshing ??= refresh(request.headers.get('Authorization')?.replace(/^Bearer /, '')).finally(() => {
           refreshing = null;
         });
         const tokens = await refreshing;

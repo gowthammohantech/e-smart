@@ -1,4 +1,5 @@
 import { reconcileEInvoices } from '../src/modules/compliance/einvoice';
+import { recoverComplianceAttempts } from '../src/modules/compliance/recovery';
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
@@ -428,10 +429,71 @@ describe('e-invoice portal calls', () => {
     expect(await reconcileEInvoices(t.deps)).toBe(0);
 
     t.setNow(new Date(t.deps.now().getTime() + 6 * 60_000));
+    spy.mockClear();
     spy.mockImplementation(real);
-    expect(await reconcileEInvoices(t.deps)).toBe(1);
+    // Two instances reconciling at once: only one sends the invoice again.
+    const runs = await Promise.all([reconcileEInvoices(t.deps), reconcileEInvoices(t.deps)]);
+    expect(runs.sort()).toEqual([0, 1]);
+    expect(spy).toHaveBeenCalledTimes(1);
     expect(await stored()).toMatchObject({ status: 'generated' });
     expect((await stored()).irn).toBeTruthy();
     spy.mockRestore();
+  });
+});
+
+describe('lost portal answers', () => {
+  const later = (min: number) => t.setNow(new Date(t.deps.now().getTime() + min * 60_000));
+
+  it('finds an e-way bill the portal raised but whose answer was lost, and refuses a second generate meanwhile', async () => {
+    const m = await moneySetup(t);
+    const inv = await goodsInvoice(m);
+    portal().loseNext('submitEwayBill');
+    const first = await t.post(`${m.c}/eway-bills`, ewayInput(inv.id), { token: m.token });
+    expect(first.status).toBe(502);
+    expect(first.body.code).toBe('EWB_PENDING');
+    const spy = vi.spyOn(t.deps.providers.compliance, 'submitEwayBill');
+    const again = await t.post(`${m.c}/eway-bills`, ewayInput(inv.id), { token: m.token });
+    expect(again.body.code).toBe('EWB_PENDING');
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+
+    // Too soon to ask.
+    expect((await recoverComplianceAttempts(t.deps)).settled).toBe(0);
+    later(3);
+    expect(await recoverComplianceAttempts(t.deps)).toMatchObject({ settled: 1 });
+    const bills = await t.deps.db.select().from(schema.ewayBills).where(eq(schema.ewayBills.documentId, inv.id));
+    expect(bills).toHaveLength(1);
+    const [doc] = await t.deps.db.select().from(schema.documents).where(eq(schema.documents.id, inv.id));
+    expect(doc.currentEwayBillId).toBe(bills[0].id);
+    const [attempt] = await t.deps.db.select().from(schema.complianceAttempts).where(eq(schema.complianceAttempts.documentId, inv.id));
+    expect(attempt.status).toBe('settled');
+  });
+
+  it('lets the person try again once the portal says it never got the request', async () => {
+    const m = await moneySetup(t);
+    const inv = await goodsInvoice(m);
+    const spy = vi.spyOn(t.deps.providers.compliance, 'submitEwayBill').mockResolvedValueOnce({ ok: false, errors: [{ code: 'GSP_UNAVAILABLE', field: 'document', message: 'timeout', severity: 'blocking' }] });
+    expect((await t.post(`${m.c}/eway-bills`, ewayInput(inv.id), { token: m.token })).body.code).toBe('EWB_PENDING');
+    spy.mockRestore();
+    later(3);
+    expect(await recoverComplianceAttempts(t.deps)).toMatchObject({ waiting: 1 });
+    later(31);
+    expect(await recoverComplianceAttempts(t.deps)).toMatchObject({ failed: 1 });
+    const retry = await t.post(`${m.c}/eway-bills`, ewayInput(inv.id), { token: m.token });
+    expect(retry.status).toBe(201);
+  });
+
+  it('settles an IRN cancel whose answer was lost', async () => {
+    const m = await ready(t);
+    const inv = await b2b(m);
+    await t.post(`${m.c}/documents/${inv.id}/e-invoice`, {}, { token: m.token });
+    portal().loseNext('cancelIrn');
+    const res = await t.post(`${m.c}/documents/${inv.id}/e-invoice/cancel`, { reasonCode: '2', remark: 'Wrong rate' }, { token: m.token });
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe('IRP_PENDING');
+    expect((await t.get(`${m.c}/documents/${inv.id}/e-invoice`, { token: m.token })).body.eInvoiceStatus).toBe('generated');
+    later(3);
+    expect(await recoverComplianceAttempts(t.deps)).toMatchObject({ settled: 1 });
+    expect((await t.get(`${m.c}/documents/${inv.id}/e-invoice`, { token: m.token })).body).toMatchObject({ eInvoiceStatus: 'cancelled', irnCancelReasonCode: '2' });
   });
 });

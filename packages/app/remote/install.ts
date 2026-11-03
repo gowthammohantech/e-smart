@@ -1,6 +1,6 @@
 import { Linking, Platform } from 'react-native';
 import type { PlanTier } from '@esmart/core/types';
-import { useAppStore, type AppState } from '../store/appStore';
+import { bookChannel, useAppStore, type AppState } from '../store/appStore';
 import { api } from './api';
 import { useRemoteMeta } from './meta';
 import { MUTATIONS } from './mutations';
@@ -67,8 +67,8 @@ export function installRemote() {
 /** On the web another tab may have changed the saved book: take its copy, or the next save here undoes its work. */
 function followOtherTabs() {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  bookChannel()?.addEventListener('message', () => void useAppStore.persist.rehydrate());
   window.addEventListener('storage', (e) => {
-    if (e.key === useAppStore.persist.getOptions().name) void useAppStore.persist.rehydrate();
     if (e.key === useRemoteMeta.persist.getOptions().name) void useRemoteMeta.persist.rehydrate();
   });
 }

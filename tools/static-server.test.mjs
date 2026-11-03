@@ -8,12 +8,14 @@ import { contentSecurityPolicy, createStaticServer, originOf, pickEncoding, secu
 
 let server;
 let base;
+let root;
 const bundle = 'console.log("hello");\n'.repeat(500);
 
 before(async () => {
-  const root = await mkdtemp(join(tmpdir(), 'static-'));
+  root = await mkdtemp(join(tmpdir(), 'static-'));
   await mkdir(join(root, '_expo'), { recursive: true });
-  await writeFile(join(root, 'index.html'), '<!doctype html><div id="root"></div>');
+  // Over 1 KB, so it is compressed and cached like a real index.html.
+  await writeFile(join(root, 'index.html'), `<!doctype html><div id="root"></div>${' '.repeat(2000)}`);
   await writeFile(join(root, '_expo', 'entry-abc.js'), bundle);
   const csp = contentSecurityPolicy({ connect: [originOf('https://api.example.in/v1')] });
   server = createStaticServer({ root, hashedPrefixes: ['/_expo/'], headers: securityHeaders({ csp }), log: () => {} });
@@ -55,6 +57,15 @@ describe('static server', () => {
   it('refuses to leave the folder', async () => {
     const res = await fetch(`${base}/..%2F..%2Fetc%2Fpasswd`);
     assert.match(await res.text(), /id="root"/);
+  });
+
+  it('compresses a rebuilt file afresh, not from the cache', async () => {
+    const first = await (await fetch(`${base}/`, { headers: { 'accept-encoding': 'gzip' } })).text();
+    await new Promise((r) => setTimeout(r, 20));
+    await writeFile(join(root, 'index.html'), `<!doctype html><div id="root"></div><script src="/_expo/entry-new.js"></script>${' '.repeat(2000)}`);
+    const second = await (await fetch(`${base}/`, { headers: { 'accept-encoding': 'gzip' } })).text();
+    assert.ok(!first.includes('entry-new'));
+    assert.ok(second.includes('entry-new'));
   });
 
   it('allows only GET and HEAD', async () => {

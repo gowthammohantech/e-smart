@@ -322,6 +322,32 @@ paths:
       responses:
         '204': { description: Revoked }
         '404': { $ref: '#/components/responses/NotFound' }
+  /me/notification-preferences:
+    get:
+      tags: [Me]
+      operationId: getNotificationPreferences
+      summary: Which kinds of notification this person gets on their phone (all of them still show in the app)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+    put:
+      tags: [Me]
+      operationId: saveNotificationPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPreferences' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /me/push-tokens:
     post:
       tags: [Me]
@@ -4417,6 +4443,14 @@ components:
         password: { type: string, format: password }
         otpRequestId: { type: string }
         otpCode: { type: string }
+    NotificationPreferences:
+      type: object
+      required: [pushMuted]
+      properties:
+        pushMuted:
+          type: array
+          description: Kinds not pushed to this person's devices
+          items: { type: string, enum: [invoiceSent, paymentReceived, invoiceOverdue, lowStock, compliance, syncFailure, system] }
     MfaStatus:
       type: object
       required: [enrolled, verified, recoveryCodesLeft]

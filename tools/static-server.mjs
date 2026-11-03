@@ -109,15 +109,17 @@ export function createStaticServer({ root, hashedPrefixes = [], headers, log = c
     if (path !== root && !path.startsWith(root + sep)) return null;
     try {
       const info = await stat(path);
-      if (info.isFile()) return { path, size: info.size };
+      if (info.isFile()) return { path, size: info.size, mtimeMs: info.mtimeMs };
     } catch {
       // Not a file.
     }
     return null;
   }
 
-  async function body(path, encoding) {
-    const key = `${encoding}:${path}`;
+  async function body(file, encoding) {
+    const { path } = file;
+    // Size and time in the key: a rebuilt file (index.html points at the new bundle) is compressed afresh.
+    const key = `${encoding}:${path}:${file.mtimeMs}:${file.size}`;
     let hit = compressed.get(key);
     if (!hit) {
       const raw = await readFile(path);
@@ -161,7 +163,7 @@ export function createStaticServer({ root, hashedPrefixes = [], headers, log = c
         ...headers,
       };
       if (encoding) {
-        const data = await body(file.path, encoding);
+        const data = await body(file, encoding);
         res.writeHead(200, { ...common, 'Content-Encoding': encoding, 'Content-Length': data.length });
         res.end(req.method === 'HEAD' ? undefined : data);
         return;

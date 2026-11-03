@@ -9,7 +9,73 @@ import { defineRailway, preserve, project, service } from 'railway/iac';
  * skips the corepack setup that root package.json's `packageManager` field
  * asks for, and the image export then fails on a missing /opt/corepack.
  */
-export default defineRailway(() => {
+export default defineRailway((ctx) => {
+  /**
+   * Production's addresses are fixed here. Any other environment (staging, demo) sets its own in
+   * Railway, so a staging deploy never points its links or its web build at production's API.
+   */
+  const production = !ctx.isEnvironment('staging') && !ctx.isEnvironment('demo');
+  const live = (value: string) => (production ? value : preserve());
+
+  /** The API's settings, shared by the worker: both run the same code against the same database. */
+  const apiEnv = {
+    NODE_ENV: 'production',
+    LOG_LEVEL: 'info',
+    // The slim runtime image has no fonts, so headless Chromium prints Tamil
+    // (labels, and names typed in Tamil on English documents) as empty boxes.
+    // fonts-noto-core carries Noto Sans Tamil alongside the Latin faces.
+    RAILPACK_DEPLOY_APT_PACKAGES: 'fonts-noto-core',
+    PUBLIC_BASE_URL: live('https://api-production-4abd.up.railway.app'),
+    // The web app, for the links people open: password resets and invites.
+    // The API refuses to start in production with a localhost or http:// value here.
+    APP_URL: live('https://smart.elixir-books.com'),
+    // Production refuses '*': list the web and admin origins in Railway.
+    CORS_ORIGINS: preserve(),
+    // Secrets stay in Railway: set once, never committed here.
+    DATABASE_URL: preserve(),
+    JWT_SECRET: preserve(),
+    CREDENTIALS_KEY: preserve(),
+    // Production refuses every simulator and log-only provider: each one is
+    // chosen, with its credentials, in Railway (see apps/api/.env.example
+    // and docs/PRODUCTION_READINESS.md for the checklist).
+    SMS_PROVIDER: preserve(),
+    EMAIL_PROVIDER: preserve(),
+    WHATSAPP_PROVIDER: preserve(),
+    PUSH_PROVIDER: preserve(),
+    STORAGE_PROVIDER: preserve(),
+    PDF_PROVIDER: preserve(),
+    COMPLIANCE_PROVIDER: preserve(),
+    GSTIN_PROVIDER: preserve(),
+    // The GSP gateway for COMPLIANCE_PROVIDER / GSTIN_PROVIDER = gsp. Production
+    // is Adaequare; the sandbox-only switches are refused there, so none is listed.
+    TAXATION_GSP_PROVIDER_CODE: preserve(),
+    TAXATION_ADAEQUARE_BASE_URL: preserve(),
+    TAXATION_ADAEQUARE_APP_ID: preserve(),
+    TAXATION_ADAEQUARE_APP_SECRET: preserve(),
+    // A staging deployment that files against NIC's sandbox through Whitebooks opts in with
+    // TAXATION_GSTIN_ALLOW_SANDBOX; the live deployment leaves all of these unset.
+    TAXATION_GSTIN_ALLOW_SANDBOX: preserve(),
+    TAXATION_SANDBOX_BUYER_GSTIN: preserve(),
+    TAXATION_WHITEBOOKS_BASE_URL: preserve(),
+    TAXATION_WHITEBOOKS_ACCOUNT_EMAIL: preserve(),
+    TAXATION_WHITEBOOKS_IP_ADDRESS: preserve(),
+    TAXATION_WHITEBOOKS_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_EINVOICE_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_EWAYBILL_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_EWAYBILL_APP_SECRET: preserve(),
+    OCR_PROVIDER: preserve(),
+    FX_PROVIDER: preserve(),
+    PAYMENTS_PROVIDER: preserve(),
+    ASSISTANT_PROVIDER: preserve(),
+    // The demo account (packages/db/src/seed.ts). Unset unless this
+    // environment is a demo: SEED_DEMO_ACCOUNT=true and a strong password.
+    SEED_DEMO_ACCOUNT: preserve(),
+    DEMO_ACCOUNT_EMAIL: preserve(),
+    DEMO_ACCOUNT_PASSWORD: preserve(),
+  };
+
   const api = service('api', {
     build: 'npm run build -w @esmart/api',
     start: 'npm run start -w @esmart/api',
@@ -20,61 +86,26 @@ export default defineRailway(() => {
     healthcheck: '/health',
     healthcheckTimeout: 120,
     env: {
-      NODE_ENV: 'production',
-      LOG_LEVEL: 'info',
-      // The slim runtime image has no fonts, so headless Chromium prints Tamil
-      // (labels, and names typed in Tamil on English documents) as empty boxes.
-      // fonts-noto-core carries Noto Sans Tamil alongside the Latin faces.
-      RAILPACK_DEPLOY_APT_PACKAGES: 'fonts-noto-core',
-      PUBLIC_BASE_URL: 'https://api-production-4abd.up.railway.app',
-      // The web app, for the links people open: password resets and invites.
-      // The API refuses to start in production with a localhost or http:// value here.
-      APP_URL: 'https://smart.elixir-books.com',
-      // Production refuses '*': list the web and admin origins in Railway.
-      CORS_ORIGINS: preserve(),
-      // Secrets stay in Railway: set once, never committed here.
-      DATABASE_URL: preserve(),
-      JWT_SECRET: preserve(),
-      CREDENTIALS_KEY: preserve(),
-      // Production refuses every simulator and log-only provider: each one is
-      // chosen, with its credentials, in Railway (see apps/api/.env.example
-      // and docs/PRODUCTION_READINESS.md for the checklist).
-      SMS_PROVIDER: preserve(),
-      EMAIL_PROVIDER: preserve(),
-      WHATSAPP_PROVIDER: preserve(),
-      PUSH_PROVIDER: preserve(),
-      STORAGE_PROVIDER: preserve(),
-      PDF_PROVIDER: preserve(),
-      COMPLIANCE_PROVIDER: preserve(),
-      GSTIN_PROVIDER: preserve(),
-      // The GSP gateway for COMPLIANCE_PROVIDER / GSTIN_PROVIDER = gsp. Production
-      // is Adaequare; the sandbox-only switches are refused there, so none is listed.
-      TAXATION_GSP_PROVIDER_CODE: preserve(),
-      TAXATION_ADAEQUARE_BASE_URL: preserve(),
-      TAXATION_ADAEQUARE_APP_ID: preserve(),
-      TAXATION_ADAEQUARE_APP_SECRET: preserve(),
-      // A staging deployment that files against NIC's sandbox through Whitebooks opts in with
-      // TAXATION_GSTIN_ALLOW_SANDBOX; the live deployment leaves all of these unset.
-      TAXATION_GSTIN_ALLOW_SANDBOX: preserve(),
-      TAXATION_SANDBOX_BUYER_GSTIN: preserve(),
-      TAXATION_WHITEBOOKS_BASE_URL: preserve(),
-      TAXATION_WHITEBOOKS_ACCOUNT_EMAIL: preserve(),
-      TAXATION_WHITEBOOKS_IP_ADDRESS: preserve(),
-      TAXATION_WHITEBOOKS_APP_ID: preserve(),
-      TAXATION_WHITEBOOKS_APP_SECRET: preserve(),
-      TAXATION_WHITEBOOKS_EINVOICE_APP_ID: preserve(),
-      TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: preserve(),
-      TAXATION_WHITEBOOKS_EWAYBILL_APP_ID: preserve(),
-      TAXATION_WHITEBOOKS_EWAYBILL_APP_SECRET: preserve(),
-      OCR_PROVIDER: preserve(),
-      FX_PROVIDER: preserve(),
-      PAYMENTS_PROVIDER: preserve(),
-      ASSISTANT_PROVIDER: preserve(),
-      // The demo account (packages/db/src/seed.ts). Unset unless this
-      // environment is a demo: SEED_DEMO_ACCOUNT=true and a strong password.
-      SEED_DEMO_ACCOUNT: preserve(),
-      DEMO_ACCOUNT_EMAIL: preserve(),
-      DEMO_ACCOUNT_PASSWORD: preserve(),
+      ...apiEnv,
+      // Jobs run here until the worker service below has its variables; then set this to 'off'
+      // in Railway so long exports and PDFs never compete with requests.
+      WORKER: preserve(),
+    },
+  });
+
+  /**
+   * Background jobs (apps/api/src/jobs): the same build with WORKER=only, so it serves only /health.
+   * Railway starts a new service without the API's secrets: copy them over (Shared Variables) before
+   * relying on it. Migrations stay with the API's preDeploy.
+   */
+  const worker = service('worker', {
+    build: 'npm run build -w @esmart/api',
+    start: 'npm run start -w @esmart/api',
+    healthcheck: '/health',
+    env: {
+      ...apiEnv,
+      WORKER: 'only',
+      WORKER_CONCURRENCY: '4',
     },
   });
 
@@ -89,7 +120,7 @@ export default defineRailway(() => {
     healthcheck: '/health',
     env: {
       NODE_ENV: 'production',
-      EXPO_PUBLIC_API_URL: 'https://api-production-4abd.up.railway.app',
+      EXPO_PUBLIC_API_URL: live('https://api-production-4abd.up.railway.app'),
       // Sign-in prefill, compiled into the bundle where anyone can read it.
       // Unset unless this is a demo deployment.
       EXPO_PUBLIC_DEMO_LOGIN_EMAIL: preserve(),
@@ -114,7 +145,7 @@ export default defineRailway(() => {
     healthcheck: '/health',
     env: {
       NODE_ENV: 'production',
-      VITE_API_URL: 'https://api-production-4abd.up.railway.app',
+      VITE_API_URL: live('https://api-production-4abd.up.railway.app'),
       // Sign-in prefill, compiled into the bundle. Unset unless this is a demo deployment.
       VITE_DEMO_LOGIN_EMAIL: preserve(),
       VITE_DEMO_LOGIN_PASSWORD: preserve(),
@@ -134,11 +165,11 @@ export default defineRailway(() => {
     healthcheck: '/',
     env: {
       NODE_ENV: 'production',
-      NEXT_PUBLIC_WEB_APP_URL: 'https://smart.elixir-books.com/sign-in',
+      NEXT_PUBLIC_WEB_APP_URL: live('https://smart.elixir-books.com/sign-in'),
       NEXT_PUBLIC_APP_STORE_URL: 'https://apps.apple.com/in/app/elixir-books-smart/id6822206449',
       NEXT_PUBLIC_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=com.elixir.bookssmart',
     },
   });
 
-  return project('e-smart', { resources: [api, web, admin, site] });
+  return project('e-smart', { resources: [api, worker, web, admin, site] });
 });

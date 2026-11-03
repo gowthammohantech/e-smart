@@ -40,11 +40,20 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   setSandboxGstinsAllowed(deps.config.TAXATION_GSTIN_ALLOW_SANDBOX);
 
   const app = Fastify({
-    logger: opts.logger ?? { level: deps.config.LOG_LEVEL },
+    logger: opts.logger ?? {
+      level: deps.config.LOG_LEVEL,
+      // Never in the logs: tokens, passwords, codes, portal logins.
+      redact: {
+        paths: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-esmart-internal"]', '*.password', '*.refreshToken', '*.accessToken', '*.otpCode', '*.token', '*.secret', 'err.config.headers'],
+        censor: '[redacted]',
+      },
+    },
     // Only Railway's edge proxy: a client-written X-Forwarded-For beyond it is ignored.
     // The same as a hop count: address i counts from the socket outwards.
     trustProxy: (_addr: string, i: number) => i < deps.config.TRUST_PROXY_HOPS,
     bodyLimit: 5 * 1024 * 1024,
+    // A caller's (or Railway's) request id is kept, so one id follows a request through every log.
+    requestIdHeader: 'x-request-id',
     genReqId: () => crypto.randomUUID(),
     ajv: {
       customOptions: { strict: false, coerceTypes: 'array', removeAdditional: false, allErrors: true },
@@ -100,9 +109,27 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
 
   if (deps.providers.storage instanceof MemoryStorage) deps.providers.storage.routes(app);
 
+  // Every answer names its request, so a person reporting a problem can quote it.
+  app.addHook('onSend', async (req, reply) => {
+    void reply.header('x-request-id', req.id);
+  });
+
   app.get('/health', async () => {
     await deps.pool.query('select 1');
     return { ok: true };
+  });
+
+  // How far behind the background jobs are: 503 when the oldest due job has waited over 15 minutes,
+  // which means no worker is taking them (for an alert on the worker, or on the API running inline).
+  app.get('/health/worker', async (_req, reply) => {
+    const { rows } = await deps.pool.query<{ waiting: number | null; dead: number }>(
+      `select extract(epoch from (now() - min(run_at)))::int as waiting,
+              (select count(*)::int from jobs where status = 'dead' and finished_at > now() - interval '1 day') as dead
+       from jobs where status = 'queued' and run_at <= now()`,
+    );
+    const waiting = rows[0]?.waiting ?? 0;
+    const dead = rows[0]?.dead ?? 0;
+    return reply.status(waiting > 900 ? 503 : 200).send({ ok: waiting <= 900, oldestDueSeconds: waiting, deadLastDay: dead });
   });
 
   // Lixi's tools over MCP; outside the contract, like /health.

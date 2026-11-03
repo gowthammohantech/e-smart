@@ -57,7 +57,7 @@ export function signAccess(app: FastifyInstance, deps: Deps, claims: AccessClaim
   return app.jwt.sign(claims, { expiresIn: deps.config.ACCESS_TOKEN_TTL_SECONDS });
 }
 
-/** Rotates a refresh token. Reusing an old one revokes the whole session. */
+/** Rotates a refresh token. An old one, used again, is refused: the caller must sign in again. */
 export async function rotateSession(app: FastifyInstance, deps: Deps, refreshToken: string) {
   const hash = sha256(refreshToken);
   const [session] = await deps.db

@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 
 /** What is known about where an error happened. */
-export type ErrorContext = { requestId?: string; userId?: string; companyId?: string; route?: string; fatal?: boolean };
+export type ErrorContext = { requestId?: string; userId?: string; companyId?: string; route?: string; fatal?: boolean; [key: string]: unknown };
 
 type Reporter = (err: unknown, ctx: ErrorContext) => void;
 

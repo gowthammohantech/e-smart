@@ -56,6 +56,7 @@ import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
+import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
@@ -188,7 +189,11 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const send = (channel: SendChannel) =>
     runRemote(
-      () => sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 }),
+      async () => {
+        await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
+        // The first invoice out is when "tell me when it's paid" makes sense: ask for notifications now.
+        if (doc.kind === 'invoice') void ensurePushRegistered({ ask: true });
+      },
       { loading: tr('sales:detail.sending'), success: tr('common:documentDetail.sent'), icon: channel === 'whatsapp' ? 'whatsapp' : 'email-fast-outline' },
     );
 
