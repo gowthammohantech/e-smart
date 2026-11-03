@@ -50,6 +50,12 @@ export const integrationCategory = pgEnum("integration_category", ['payments', '
 /** Which portal a stored login is for. The two logins can differ, so each has its own row. */
 export const compliancePortal = pgEnum("compliance_portal", ['einvoice', 'ewaybill'])
 export const itemType = pgEnum("item_type", ['goods', 'service'])
+/** How GST treats a supply: nil-rated, exempt and non-GST are each reported on their own. */
+export const supplyType = pgEnum("supply_type", ['taxable', 'nil', 'exempt', 'nonGst'])
+/** Whether GST on a purchase can be claimed; `blocked` is s.17(5). */
+export const itcEligibility = pgEnum("itc_eligibility", ['eligible', 'blocked', 'ineligible'])
+export const msmeType = pgEnum("msme_type", ['micro', 'small', 'medium'])
+export const returnFrequency = pgEnum("return_frequency", ['monthly', 'qrmp'])
 export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed', 'failed'])
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
 export const messageChannel = pgEnum("message_channel", ['whatsapp', 'sms', 'email'])
@@ -523,6 +529,13 @@ export const items = pgTable("items", {
 	hsnCode: varchar("hsn_code", { length: 8 }),
 	barcode: varchar({ length: 40 }),
 	trackInventory: boolean("track_inventory").default(false).notNull(),
+	// GST treatment, copied onto each document line when it is used.
+	supplyType: supplyType("supply_type").default('taxable').notNull(),
+	reimbursement: boolean().default(false).notNull(),
+	capitalGoods: boolean("capital_goods").default(false).notNull(),
+	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	cessRate: numeric("cess_rate", { precision: 6, scale:  3 }).default('0').notNull(),
 	openingStock: numeric("opening_stock", { precision: 18, scale:  3 }).default('0').notNull(),
 	openingStockDate: date("opening_stock_date"),
 	reorderLevel: numeric("reorder_level", { precision: 18, scale:  3 }).default('0').notNull(),
@@ -584,6 +597,11 @@ export const documents = pgTable("documents", {
 	// A round-off the user typed, overriding the automatic one.
 	roundOffManualMinor: bigint("round_off_manual_minor", { mode: "number" }),
 	placeOfSupplyStateCode: varchar("place_of_supply_state_code", { length: 2 }),
+	// The whole document is under reverse charge: the buyer pays the GST.
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	// The party's GSTIN and state as they were when the document was finalised.
+	partyGstin: varchar("party_gstin", { length: 15 }),
+	partyStateCode: varchar("party_state_code", { length: 2 }),
 	notes: text(),
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
@@ -592,6 +610,9 @@ export const documents = pgTable("documents", {
 	documentDiscountMinor: bigint("document_discount_minor", { mode: "number" }).default(0).notNull(),
 	taxableAmountMinor: bigint("taxable_amount_minor", { mode: "number" }).default(0).notNull(),
 	totalTaxMinor: bigint("total_tax_minor", { mode: "number" }).default(0).notNull(),
+	// Tax the buyer pays under reverse charge, and pure-agent reimbursements: neither is taxable value.
+	reverseChargeTaxMinor: bigint("reverse_charge_tax_minor", { mode: "number" }).default(0).notNull(),
+	reimbursementsMinor: bigint("reimbursements_minor", { mode: "number" }).default(0).notNull(),
 	roundOffMinor: bigint("round_off_minor", { mode: "number" }).default(0).notNull(),
 	grandTotalMinor: bigint("grand_total_minor", { mode: "number" }).default(0).notNull(),
 	grandTotalBaseMinor: bigint("grand_total_base_minor", { mode: "number" }).default(0).notNull(),
@@ -667,6 +688,13 @@ export const documentLines = pgTable("document_lines", {
 	taxCategoryId: varchar("tax_category_id", { length: 40 }).notNull(),
 	taxRate: numeric("tax_rate", { precision: 6, scale:  3 }).notNull(),
 	taxInclusive: boolean("tax_inclusive").default(false).notNull(),
+	// The item's GST treatment when the line was written.
+	supplyType: supplyType("supply_type").default('taxable').notNull(),
+	reimbursement: boolean().default(false).notNull(),
+	capitalGoods: boolean("capital_goods").default(false).notNull(),
+	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	cessRate: numeric("cess_rate", { precision: 6, scale:  3 }).default('0').notNull(),
 	lineTotalMinor: bigint("line_total_minor", { mode: "number" }).default(0).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	uniqueIndex("document_lines_document_id_position_idx").using("btree", table.documentId.asc().nullsLast(), table.position.asc().nullsLast()),
@@ -696,8 +724,10 @@ export const documentTaxLines = pgTable("document_tax_lines", {
 	rate: numeric({ precision: 6, scale:  3 }).notNull(),
 	taxableAmountMinor: bigint("taxable_amount_minor", { mode: "number" }).notNull(),
 	totalTaxMinor: bigint("total_tax_minor", { mode: "number" }).notNull(),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
-	uniqueIndex("document_tax_lines_document_id_tax_category_id_idx").using("btree", table.documentId.asc().nullsLast(), table.taxCategoryId.asc().nullsLast()),
+	// Not unique: one category can have a forward-charge and a reverse-charge row, or two cess rates.
+	index("document_tax_lines_document_id_idx").using("btree", table.documentId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.documentId],
 			foreignColumns: [documents.id],
@@ -764,6 +794,11 @@ export const parties = pgTable("parties", {
 	displayName: varchar("display_name", { length: 200 }),
 	taxId: varchar("tax_id", { length: 20 }),
 	gstRegistrationType: gstRegistrationType("gst_registration_type"),
+	pan: varchar({ length: 10 }),
+	msmeType: msmeType("msme_type"),
+	udyamNumber: varchar("udyam_number", { length: 19 }),
+	// Bills from this supplier are under reverse charge unless a line says otherwise.
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 	email: varchar({ length: 254 }),
 	phone: varchar({ length: 20 }),
 	currency: char({ length: 3 }).notNull(),
@@ -1184,6 +1219,11 @@ export const expenses = pgTable("expenses", {
 	taxCategoryId: varchar("tax_category_id", { length: 40 }),
 	taxAmountMinor: bigint("tax_amount_minor", { mode: "number" }).default(0).notNull(),
 	taxInclusive: boolean("tax_inclusive").default(true).notNull(),
+	placeOfSupplyStateCode: varchar("place_of_supply_state_code", { length: 2 }),
+	supplierGstin: varchar("supplier_gstin", { length: 15 }),
+	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
+	// The tax is paid by the business under reverse charge, not to the supplier.
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 	accountId: varchar("account_id", { length: 40 }).notNull(),
 	method: paymentMethod().notNull(),
 	reference: varchar({ length: 100 }),
@@ -1658,6 +1698,7 @@ export const companies = pgTable("companies", {
 	// Letter of Undertaking: exports and SEZ supplies are zero-rated while it is valid.
 	lutNumber: varchar("lut_number", { length: 40 }),
 	lutValidTill: date("lut_valid_till", { mode: 'string' }),
+	returnFrequency: returnFrequency("return_frequency").default('monthly').notNull(),
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
 	lockedThroughDate: date("locked_through_date"),
 	// Off by default: a sale cannot take a tracked item below zero at its branch.

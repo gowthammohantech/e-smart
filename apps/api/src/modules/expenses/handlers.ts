@@ -97,6 +97,7 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
   if (issues.length) throw unprocessable(issues);
 
   const taxInclusive = body.taxInclusive ?? current?.taxInclusive ?? true;
+  const reverseCharge = body.reverseCharge ?? current?.reverseCharge ?? false;
   const recurrence = body.recurrence ?? current?.recurrence ?? 'none';
   // A template keeps its place in the series unless its date or frequency changed.
   const keepSchedule = current && current.recurrence === recurrence && current.date === body.date && current.nextRecurrenceDate;
@@ -109,8 +110,12 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
     currency: body.currency,
     exchangeRate: String(exchangeRate),
     taxCategoryId: body.taxCategoryId ?? null,
-    taxAmountMinor: expenseTax(money(body.amount.minor, body.currency), rate, taxInclusive).minor,
+    taxAmountMinor: expenseTax(money(body.amount.minor, body.currency), rate, taxInclusive, reverseCharge).minor,
     taxInclusive,
+    placeOfSupplyStateCode: body.placeOfSupplyStateCode ?? null,
+    supplierGstin: body.supplierGstin?.trim().toUpperCase() || null,
+    itcEligibility: body.itcEligibility ?? 'eligible',
+    reverseCharge,
     accountId: body.accountId,
     method: body.method,
     reference: body.reference ?? null,

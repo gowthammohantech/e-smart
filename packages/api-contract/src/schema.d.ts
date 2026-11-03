@@ -2677,6 +2677,11 @@ export interface components {
              * @description Last day the LUT covers; absent means open-ended
              */
             lutValidTill?: string;
+            /**
+             * @description Unset reads as monthly. How GSTR-1 and GSTR-3B are filed. QRMP: quarterly returns with monthly payment.
+             * @enum {string}
+             */
+            returnFrequency?: "monthly" | "qrmp";
         };
         Company: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -2896,6 +2901,17 @@ export interface components {
             /** @description GSTIN */
             taxId?: string;
             gstRegistrationType?: components["schemas"]["GstRegistrationType"];
+            /** @description Income-tax PAN; read from the GSTIN when not given */
+            pan?: string;
+            /**
+             * @description The supplier's Udyam category; their bills fall due within 45 days (MSMED Act s.15)
+             * @enum {string}
+             */
+            msmeType?: "micro" | "small" | "medium";
+            /** @example UDYAM-MH-26-0012345 */
+            udyamNumber?: string;
+            /** @description Bills from this supplier are under reverse charge unless a line says otherwise */
+            reverseCharge?: boolean;
             /** Format: email */
             email?: string;
             phone?: string;
@@ -2947,6 +2963,7 @@ export interface components {
             hsnCode?: string;
             barcode?: string;
             trackInventory?: boolean;
+            gst?: components["schemas"]["GstFlags"];
             /** @description Used only on create */
             openingStock?: number;
             /**
@@ -2968,6 +2985,27 @@ export interface components {
         DocumentKind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn";
         /** @enum {string} */
         DocStatus: "draft" | "sent" | "accepted" | "rejected" | "expired" | "confirmed" | "fulfilled" | "cancelled" | "delivered" | "issued" | "partiallyPaid" | "paid" | "overdue" | "requested" | "approved" | "processed" | "received" | "billed";
+        /** @description How GST treats an item. Kept on each document line as it was when the line was written. */
+        GstFlags: {
+            /**
+             * @description Unset reads as taxable. Nil-rated, exempt and non-GST supplies carry no tax and are reported separately
+             * @enum {string}
+             */
+            supplyType?: "taxable" | "nil" | "exempt" | "nonGst";
+            /** @description Recovered at cost as the customer's pure agent (Rule 33): no tax, outside the taxable value */
+            reimbursement?: boolean;
+            /** @description An asset; its input tax credit is reported separately */
+            capitalGoods?: boolean;
+            /**
+             * @description Unset reads as eligible. Whether GST paid on it can be claimed; blocked is s.17(5)
+             * @enum {string}
+             */
+            itcEligibility?: "eligible" | "blocked" | "ineligible";
+            /** @description A notified reverse-charge supply; the buyer pays the GST */
+            reverseCharge?: boolean;
+            /** @description Compensation cess, percent of the taxable value */
+            cessRate?: number;
+        };
         DocumentLine: {
             id?: string;
             itemId?: string;
@@ -2989,6 +3027,8 @@ export interface components {
             readonly taxRate?: number;
             /** @default false */
             taxInclusive: boolean;
+            /** @description Defaults to the item's; kept as it was once the document is finalised */
+            gst?: components["schemas"]["GstFlags"];
         };
         TaxComponent: {
             /** @enum {string} */
@@ -3001,6 +3041,8 @@ export interface components {
             categoryId?: string;
             categoryName?: string;
             rate?: number;
+            /** @description Tax the buyer pays the government; not part of the total */
+            reverseCharge?: boolean;
             taxableAmount?: components["schemas"]["Money"];
             components?: components["schemas"]["TaxComponent"][];
             totalTax?: components["schemas"]["Money"];
@@ -3011,7 +3053,12 @@ export interface components {
             documentDiscount?: components["schemas"]["Money"];
             taxableAmount?: components["schemas"]["Money"];
             taxLines?: components["schemas"]["TaxLine"][];
+            /** @description Tax charged on the document, cess included; reverse-charge tax is not */
             totalTax?: components["schemas"]["Money"];
+            /** @description Tax the buyer owes under reverse charge; not in the grand total */
+            reverseChargeTax?: components["schemas"]["Money"];
+            /** @description Pure-agent reimbursements, added after tax */
+            reimbursements?: components["schemas"]["Money"];
             charges?: components["schemas"]["Money"];
             roundOff?: components["schemas"]["Money"];
             grandTotal?: components["schemas"]["Money"];
@@ -3044,6 +3091,8 @@ export interface components {
             reference?: string;
             supplierDocNumber?: string;
             placeOfSupplyStateCode?: string;
+            /** @description The whole document is under reverse charge; the buyer pays the GST */
+            reverseCharge?: boolean;
             attachmentIds?: string[];
             sourceDocumentId?: string;
             /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
@@ -3061,6 +3110,9 @@ export interface components {
             readonly number?: string;
             status?: components["schemas"]["DocStatus"];
             totals?: components["schemas"]["DocumentTotals"];
+            /** @description The party's GSTIN when the document was finalised */
+            readonly partyGstin?: string;
+            readonly partyStateCode?: string;
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
         };
@@ -3326,6 +3378,17 @@ export interface components {
             taxCategoryId?: string;
             taxAmount?: components["schemas"]["Money"];
             taxInclusive?: boolean;
+            /** @description Decides CGST+SGST or IGST; defaults to the company's state */
+            placeOfSupplyStateCode?: string;
+            /** @description The supplier's GSTIN on the bill, when there's no saved supplier */
+            supplierGstin?: string;
+            /**
+             * @description Unset reads as eligible
+             * @enum {string}
+             */
+            itcEligibility?: "eligible" | "blocked" | "ineligible";
+            /** @description The business pays this tax itself under reverse charge; amount is then the supplier's price without it */
+            reverseCharge?: boolean;
             accountId: string;
             method: components["schemas"]["PaymentMethod"];
             reference?: string;

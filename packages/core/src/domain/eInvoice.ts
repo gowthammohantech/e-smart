@@ -459,6 +459,8 @@ export type IrpItem = {
   IgstAmt: number;
   CgstAmt: number;
   SgstAmt: number;
+  CesRt: number;
+  CesAmt: number;
   TotItemVal: number;
 };
 
@@ -495,6 +497,7 @@ export type IrpInvoicePayload = {
     CgstVal: number;
     SgstVal: number;
     IgstVal: number;
+    CesVal: number;
     Discount: number;
     OthChrg: number;
     RndOffAmt: number;
@@ -532,6 +535,7 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
   const docType = eInvoiceDocTypeFor(doc.kind) ?? 'INV';
   const currency = doc.totals.grandTotal.currency;
   const itemType = new Map(items.map((i) => [i.id, i.type]));
+  const reverseCharge = !!doc.reverseCharge || doc.lines.some((l) => l.gst?.reverseCharge);
 
   const itemList: IrpItem[] = doc.lines.map((line, i) => {
     const gross = line.quantity * toMajor(line.unitPrice);
@@ -542,7 +546,15 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
     const assessable = Math.max(0, gross - discount);
     // Tax is computed per rate, not per line, so split each rate's tax across
     // the lines charged at it in proportion to their assessable value.
-    const taxLine = doc.totals.taxLines.find((t) => t.rate === line.taxRate);
+    const cessRate = line.gst?.cessRate ?? 0;
+    const reverse = !!doc.reverseCharge || !!line.gst?.reverseCharge;
+    const taxLine = doc.totals.taxLines.find(
+      (t) =>
+        t.categoryId === line.taxCategoryId &&
+        t.rate === line.taxRate &&
+        !!t.reverseCharge === reverse &&
+        (t.components.find((c) => c.type === 'CESS')?.rate ?? 0) === cessRate,
+    );
     const share =
       taxLine && taxLine.taxableAmount.minor > 0 ? assessable / toMajor(taxLine.taxableAmount) : 0;
 
@@ -557,11 +569,13 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
     const igst = amountOf('IGST');
     const cgst = amountOf('CGST');
     const sgst = amountOf('SGST');
+    const cess = amountOf('CESS');
 
     return {
       SlNo: String(i + 1),
       PrdDesc: line.name,
-      IsServc: itemType.get(line.itemId ?? '') === 'service' ? 'Y' : 'N',
+      // A SAC code (chapter 99) is a service whether or not the line came from an item.
+      IsServc: itemType.get(line.itemId ?? '') === 'service' || !!line.hsnCode?.startsWith('99') ? 'Y' : 'N',
       HsnCd: line.hsnCode ?? '',
       Qty: line.quantity,
       Unit: uqcFor(line.unit),
@@ -573,7 +587,9 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       IgstAmt: igst,
       CgstAmt: cgst,
       SgstAmt: sgst,
-      TotItemVal: round2(assessable + igst + cgst + sgst),
+      CesRt: cessRate,
+      CesAmt: cess,
+      TotItemVal: round2(assessable + igst + cgst + sgst + cess),
     };
   });
 
@@ -582,7 +598,7 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
 
   return {
     Version: '1.1',
-    TranDtls: { TaxSch: 'GST', SupTyp: supplyType, RegRev: 'N', IgstOnIntra: 'N' },
+    TranDtls: { TaxSch: 'GST', SupTyp: supplyType, RegRev: reverseCharge ? 'Y' : 'N', IgstOnIntra: 'N' },
     DocDtls: { Typ: docType, No: doc.number, Dt: portalDate(doc.date) },
     SellerDtls: {
       Gstin: company.taxRegistration?.identifier ?? '',
@@ -613,13 +629,16 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       CgstVal: round2(toMajor({ minor: componentTotal(doc, 'CGST'), currency })),
       SgstVal: round2(toMajor({ minor: componentTotal(doc, 'SGST'), currency })),
       IgstVal: round2(toMajor({ minor: componentTotal(doc, 'IGST'), currency })),
+      CesVal: round2(toMajor({ minor: componentTotal(doc, 'CESS'), currency })),
       // The portal only accepts OthChrg >= 0, so a negative charge travels as discount.
       Discount: round2(
         toMajor(doc.totals.documentDiscount) + Math.max(0, -toMajor(doc.totals.charges)),
       ),
       OthChrg: round2(Math.max(0, toMajor(doc.totals.charges))),
       RndOffAmt: round2(toMajor(doc.totals.roundOff)),
-      TotInvVal: round2(toMajor(doc.totals.grandTotal)),
+      // The portal checks the total against the item values, which carry reverse-charge tax too
+      // (unconfirmed in the sandbox; see providers/gsp/README.md).
+      TotInvVal: round2(toMajor(doc.totals.grandTotal) + (reverseCharge ? toMajor(doc.totals.reverseChargeTax ?? { minor: 0, currency }) : 0)),
     },
   };
 }

@@ -305,9 +305,14 @@ export async function finalizeInTx(
   if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
   const number = await assignNumber(tx, { companyId: row.companyId, kind: row.kind, branchId: row.branchId, date: row.date });
   const status = effectiveStatus({ ...row, status: target }, today(now));
+  // The returns report the party as registered when the document was issued, whatever changes later.
+  const [party] = await tx
+    .select({ taxId: schema.parties.taxId, stateCode: schema.parties.billingStateCode })
+    .from(schema.parties)
+    .where(eq(schema.parties.id, row.partyId));
   const [updated] = await tx
     .update(D)
-    .set({ number, status, finalizedAt: now, version: row.version + 1, updatedAt: now })
+    .set({ number, status, finalizedAt: now, partyGstin: party?.taxId ?? null, partyStateCode: party?.stateCode ?? null, version: row.version + 1, updatedAt: now })
     .where(and(eq(D.id, row.id), eq(D.version, row.version)))
     .returning();
   if (!updated) throw preconditionFailed();

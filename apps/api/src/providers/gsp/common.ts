@@ -86,6 +86,8 @@ function dropBlank<T>(value: T): T {
   return value;
 }
 
+const ZERO_CESS_TOTALS: Record<string, number> = { CesVal: 0, StCesVal: 0 };
+
 /**
  * The core payload (NIC schema 1.1) as the portal wants it on the wire:
  * blanks omitted, and **all four cess fields sent even at zero** — the portal
@@ -93,11 +95,11 @@ function dropBlank<T>(value: T): T {
  * error 2194 complains about.
  */
 export function prepareIrnPayload(payload: IrpInvoicePayload): Record<string, unknown> {
-  const zeroCess = { CesRt: 0, CesAmt: 0, CesNonAdvlAmt: 0, StateCesRt: 0, StateCesAmt: 0, StateCesNonAdvlAmt: 0, OthChrg: 0 };
+  const zeroCess: Record<string, number> = { CesRt: 0, CesAmt: 0, CesNonAdvlAmt: 0, StateCesRt: 0, StateCesAmt: 0, StateCesNonAdvlAmt: 0, OthChrg: 0 };
   return dropBlank({
     ...payload,
     ItemList: payload.ItemList.map((item) => ({ ...zeroCess, ...item })),
-    ValDtls: { CesVal: 0, StCesVal: 0, ...payload.ValDtls },
+    ValDtls: { ...ZERO_CESS_TOTALS, ...payload.ValDtls },
   });
 }
 

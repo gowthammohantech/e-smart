@@ -109,6 +109,11 @@ GSTIN details, public search and standalone `canewb`; Adaequare generate and
   maps GSTN's public-search field names (`lgnm`, `tradeNam`, `pradr.addr`, …).
 - Whitebooks' sandbox register knows four GSTINs; any other is searched as the
   first of them, so a sandbox lookup can answer for a different taxpayer.
+- **Reverse charge and cess on an IRN.** A reverse-charge invoice goes with
+  `RegRev: 'Y'`, each item's tax in its amounts, and `TotInvVal` including that
+  tax, so the totals add up the way the portal checks them, though the buyer, not
+  the seller, pays it. Cess goes as `CesRt`/`CesAmt` per item and `CesVal`. Both
+  follow NIC's schema notes; file one of each in the sandbox.
 
 PIN code lookup and the EWB portal's road distance have no route on either
 gateway here, so with `GSTIN_PROVIDER=gsp` they answer 503 FEATURE_UNAVAILABLE
@@ -133,8 +138,8 @@ and the apps fall back to manual entry.
   mistake / order cancelled*; the e-way bill's `cancelRsnCode` is a number and
   its 2/3 are the other way round. The app's two reason tables already follow
   that, so the codes go through untouched.
-- Cess fields are sent at zero (NIC 2194) and blank strings are dropped from
-  every payload.
+- Every cess field is sent, at zero when there's none (NIC 2194), and blank
+  strings are dropped from every payload.
 
 ## Tests
 

@@ -17,7 +17,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
-import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
+import { Expense, ItcEligibility, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
 import { paymentMethodLabel } from '@esmart/core/labels';
@@ -60,7 +60,7 @@ export type ExpenseInitial = {
 
 export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'purchases', 'common', 'settings']);
+  const { t: tr } = useTranslation(['domain', 'purchases', 'common', 'settings', 'inventory']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
@@ -100,6 +100,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [supplierId, setSupplierId] = useState<string | null>(expense?.supplierId ?? initial?.supplierId ?? null);
   const [taxCategoryId, setTaxCategoryId] = useState<string | null>(expense?.taxCategoryId ?? null);
   const [taxInclusive, setTaxInclusive] = useState(expense?.taxInclusive ?? true);
+  const [reverseCharge, setReverseCharge] = useState(!!expense?.reverseCharge);
+  const [itcEligibility, setItcEligibility] = useState<ItcEligibility>(expense?.itcEligibility ?? 'eligible');
+  const [supplierGstin, setSupplierGstin] = useState(expense?.supplierGstin ?? '');
+  const [itcOpen, setItcOpen] = useState(false);
   const [reference, setReference] = useState(expense?.reference ?? initial?.reference ?? '');
   const [notes, setNotes] = useState(expense?.notes ?? initial?.notes ?? '');
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(expense?.recurrence ?? 'none');
@@ -130,9 +134,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
 
   const amount = fromMajor(amountText || '0', baseCurrency);
   const taxRate = taxCategories.find((c) => c.id === taxCategoryId)?.rate ?? 0;
-  const taxAmount = taxRate > 0 ? (taxInclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);
-  const netAmount = taxInclusive ? subtract(amount, taxAmount) : amount;
-  const totalPaid = taxInclusive ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
+  // Under reverse charge the supplier's price has no GST in it: the business pays that tax to the government.
+  const inclusive = taxInclusive && !reverseCharge;
+  const taxAmount = taxRate > 0 ? (inclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);
+  const netAmount = inclusive ? subtract(amount, taxAmount) : amount;
+  const totalPaid = inclusive || reverseCharge ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
 
   // Cash in hand cannot pay out more than it holds (an edit gives back its own amount first).
   const account = accounts.find((a) => a.id === accountId);
@@ -207,6 +213,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       taxCategoryId: taxCategoryId ?? undefined,
       taxAmount,
       taxInclusive,
+      reverseCharge: taxRate > 0 && reverseCharge ? true : undefined,
+      itcEligibility: taxRate > 0 && itcEligibility !== 'eligible' ? itcEligibility : undefined,
+      supplierGstin: !supplierId && taxRate > 0 ? supplierGstin.trim().toUpperCase() || undefined : undefined,
       accountId,
       method,
       reference: reference.trim() || undefined,
@@ -298,7 +307,17 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       onClear={() => setTaxCategoryId(null)}
     />
   );
-  const inclusiveField = <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />;
+  const inclusiveField = reverseCharge ? null : <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />;
+  const reverseChargeField = (
+    <SwitchField label={tr('purchases:form.reverseCharge')} description={tr('purchases:form.reverseChargeHint')} value={reverseCharge} onValueChange={setReverseCharge} />
+  );
+  const itcField = (
+    <PickerField label={tr('inventory:gst.itc')} value={tr(`inventory:gst.itcOption.${itcEligibility}`)} onPress={() => setItcOpen(true)} icon="cash-refund" />
+  );
+  // Without a saved supplier, the GSTIN on the bill is what the GST returns match it by.
+  const gstinField = supplierId ? null : (
+    <TextField label={tr('purchases:form.supplierGstin')} value={supplierGstin} onChangeText={(v) => setSupplierGstin(v.toUpperCase().slice(0, 15))} placeholder="33AABCS1234K1ZP" autoCapitalize="characters" icon="card-account-details-outline" />
+  );
   const referenceField = (
     <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />
   );
@@ -359,6 +378,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       {taxRate > 0 ? (
         <>
           {inclusiveField}
+          {reverseChargeField}
+          {itcField}
+          {gstinField}
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             {[
               { label: tr('common:totals.netAmount'), value: formatMoney(netAmount) },
@@ -429,6 +451,15 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {/* The switch sits level with the picker's box rather than its label. */}
         {taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : <View />}
       </FieldRow>
+      {taxRate > 0 ? (
+        <>
+          {reverseChargeField}
+          <FieldRow>
+            {itcField}
+            {gstinField ?? <View />}
+          </FieldRow>
+        </>
+      ) : null}
     </FormSection>
   );
   const summary = (
@@ -504,6 +535,15 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         )}
 
         <SelectSheet
+          visible={itcOpen}
+          onClose={() => setItcOpen(false)}
+          title={tr('inventory:gst.itc')}
+          options={(['eligible', 'blocked', 'ineligible'] as const).map((k) => ({ value: k, label: tr(`inventory:gst.itcOption.${k}`), description: tr(`inventory:gst.itcOptionHint.${k}`) }))}
+          value={itcEligibility}
+          onSelect={(v) => setItcEligibility(v as ItcEligibility)}
+          searchable={false}
+        />
+        <SelectSheet
           visible={categoryOpen}
           onClose={() => setCategoryOpen(false)}
           title={tr('purchases:form.category')}
@@ -571,7 +611,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           title={tr('purchases:form.supplier')}
           options={suppliers.map((s) => ({ value: s.id, label: s.name, description: s.phone ?? s.code }))}
           value={supplierId}
-          onSelect={setSupplierId}
+          onSelect={(id) => {
+            setSupplierId(id);
+            // A supplier under reverse charge puts their bills under it.
+            setReverseCharge(!!suppliers.find((x) => x.id === id)?.reverseCharge);
+          }}
         />
         <SelectSheet
           visible={taxOpen}

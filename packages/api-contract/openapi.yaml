@@ -3578,6 +3578,7 @@ components:
         placeOfSupplyStateCode: { type: string }
         lutNumber: { type: string, description: 'Letter of Undertaking. While valid, exports and SEZ supplies are zero-rated instead of charged IGST.' }
         lutValidTill: { type: string, format: date, description: Last day the LUT covers; absent means open-ended }
+        returnFrequency: { type: string, enum: [monthly, qrmp], description: 'Unset reads as monthly. How GSTR-1 and GSTR-3B are filed. QRMP: quarterly returns with monthly payment.' }
     Company:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -3781,6 +3782,10 @@ components:
             displayName: { type: string }
             taxId: { type: string, description: GSTIN }
             gstRegistrationType: { $ref: '#/components/schemas/GstRegistrationType' }
+            pan: { type: string, pattern: '^[A-Z]{5}[0-9]{4}[A-Z]$', description: Income-tax PAN; read from the GSTIN when not given }
+            msmeType: { type: string, enum: [micro, small, medium], description: "The supplier's Udyam category; their bills fall due within 45 days (MSMED Act s.15)" }
+            udyamNumber: { type: string, example: UDYAM-MH-26-0012345 }
+            reverseCharge: { type: boolean, description: Bills from this supplier are under reverse charge unless a line says otherwise }
             email: { type: string, format: email }
             phone: { type: string }
             currency: { type: string }
@@ -3836,6 +3841,7 @@ components:
             hsnCode: { type: string }
             barcode: { type: string }
             trackInventory: { type: boolean }
+            gst: { $ref: '#/components/schemas/GstFlags' }
             openingStock: { type: number, description: Used only on create }
             openingStockDate: { type: string, format: date, description: "The day the opening stock was counted; not after today, and no document with this item can be dated before it. Used only on create, and only when trackInventory is set." }
             reorderLevel: { type: number }
@@ -3856,6 +3862,16 @@ components:
     DocStatus:
       type: string
       enum: [draft, sent, accepted, rejected, expired, confirmed, fulfilled, cancelled, delivered, issued, partiallyPaid, paid, overdue, requested, approved, processed, received, billed]
+    GstFlags:
+      type: object
+      description: How GST treats an item. Kept on each document line as it was when the line was written.
+      properties:
+        supplyType: { type: string, enum: [taxable, nil, exempt, nonGst], description: 'Unset reads as taxable. Nil-rated, exempt and non-GST supplies carry no tax and are reported separately' }
+        reimbursement: { type: boolean, description: "Recovered at cost as the customer's pure agent (Rule 33): no tax, outside the taxable value" }
+        capitalGoods: { type: boolean, description: An asset; its input tax credit is reported separately }
+        itcEligibility: { type: string, enum: [eligible, blocked, ineligible], description: 'Unset reads as eligible. Whether GST paid on it can be claimed; blocked is s.17(5)' }
+        reverseCharge: { type: boolean, description: A notified reverse-charge supply; the buyer pays the GST }
+        cessRate: { type: number, minimum: 0, maximum: 999, description: 'Compensation cess, percent of the taxable value' }
     DocumentLine:
       type: object
       required: [name, quantity, unit, unitPrice, taxCategoryId]
@@ -3873,6 +3889,7 @@ components:
         taxCategoryId: { type: string }
         taxRate: { type: number, readOnly: true, description: Snapshot of the rate applied }
         taxInclusive: { type: boolean, default: false }
+        gst: { allOf: [{ $ref: '#/components/schemas/GstFlags' }], description: "Defaults to the item's; kept as it was once the document is finalised" }
     TaxComponent:
       type: object
       properties:
@@ -3886,6 +3903,7 @@ components:
         categoryId: { type: string }
         categoryName: { type: string }
         rate: { type: number }
+        reverseCharge: { type: boolean, description: Tax the buyer pays the government; not part of the total }
         taxableAmount: { $ref: '#/components/schemas/Money' }
         components: { type: array, items: { $ref: '#/components/schemas/TaxComponent' } }
         totalTax: { $ref: '#/components/schemas/Money' }
@@ -3898,7 +3916,9 @@ components:
         documentDiscount: { $ref: '#/components/schemas/Money' }
         taxableAmount: { $ref: '#/components/schemas/Money' }
         taxLines: { type: array, items: { $ref: '#/components/schemas/TaxLine' } }
-        totalTax: { $ref: '#/components/schemas/Money' }
+        totalTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Tax charged on the document, cess included; reverse-charge tax is not' }
+        reverseChargeTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: Tax the buyer owes under reverse charge; not in the grand total }
+        reimbursements: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Pure-agent reimbursements, added after tax' }
         charges: { $ref: '#/components/schemas/Money' }
         roundOff: { $ref: '#/components/schemas/Money' }
         grandTotal: { $ref: '#/components/schemas/Money' }
@@ -3926,6 +3946,7 @@ components:
         reference: { type: string }
         supplierDocNumber: { type: string }
         placeOfSupplyStateCode: { type: string }
+        reverseCharge: { type: boolean, description: The whole document is under reverse charge; the buyer pays the GST }
         attachmentIds: { type: array, items: { type: string } }
         sourceDocumentId: { type: string }
         overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
@@ -3949,6 +3970,8 @@ components:
             number: { type: string, readOnly: true, example: INV/25-26/MUM/0042 }
             status: { $ref: '#/components/schemas/DocStatus' }
             totals: { $ref: '#/components/schemas/DocumentTotals' }
+            partyGstin: { type: string, readOnly: true, description: "The party's GSTIN when the document was finalised" }
+            partyStateCode: { type: string, readOnly: true }
             compliance: { $ref: '#/components/schemas/ComplianceInfo' }
             createdBy: { type: string, readOnly: true }
     DocumentSummary:
@@ -4195,6 +4218,10 @@ components:
             taxCategoryId: { type: string }
             taxAmount: { $ref: '#/components/schemas/Money' }
             taxInclusive: { type: boolean }
+            placeOfSupplyStateCode: { type: string, description: "Decides CGST+SGST or IGST; defaults to the company's state" }
+            supplierGstin: { type: string, description: "The supplier's GSTIN on the bill, when there's no saved supplier" }
+            itcEligibility: { type: string, enum: [eligible, blocked, ineligible], description: Unset reads as eligible }
+            reverseCharge: { type: boolean, description: "The business pays this tax itself under reverse charge; amount is then the supplier's price without it" }
             accountId: { type: string }
             method: { $ref: '#/components/schemas/PaymentMethod' }
             reference: { type: string }

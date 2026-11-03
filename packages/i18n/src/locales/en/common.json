@@ -156,6 +156,8 @@
     "taxableValue": "Taxable value",
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
+    "reimbursements": "Reimbursements at cost",
+    "reverseChargeTax": "Tax payable by the recipient (reverse charge)",
     "roundOff": "Round off",
     "fxNote": "≈ {{amount}} at 1 {{currency}} = {{rate}} {{baseCurrency}}",
     "total": "Total",

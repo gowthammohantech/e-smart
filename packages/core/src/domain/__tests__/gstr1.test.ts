@@ -230,3 +230,48 @@ describe('GSTR-1', () => {
     expect(s.hsn[0].taxableValue).toEqual(fromMajor('8300', 'INR'));
   });
 });
+
+describe('GSTR-1 and GST treatment', () => {
+  it('reports cess in its own column, apart from IGST', () => {
+    const s = summarize([doc('registered', { lines: [line({ gst: { cessRate: 12 } })] })]);
+    expect(s.b2b[0].igst.minor).toBe(180000);
+    expect(s.b2b[0].cess.minor).toBe(120000);
+    expect(s.totals.tax.minor).toBe(300000);
+    expect(s.hsn[0].igst.minor).toBe(180000);
+    expect(s.hsn[0].cess.minor).toBe(120000);
+  });
+
+  it('flags a reverse-charge sale and leaves its tax out of the seller’s liability', () => {
+    const s = summarize([doc('registered', { lines: [line({ gst: { reverseCharge: true } })] })]);
+    expect(s.b2b[0].reverseCharge).toBe(true);
+    expect(s.b2b[0].igst.minor).toBe(180000);
+    expect(s.totals.tax.minor).toBe(0);
+  });
+
+  it('splits table 8 into nil-rated, exempt and non-GST', () => {
+    const lines = [
+      line({ id: 'a', gst: { supplyType: 'nil' }, taxRate: 0 }),
+      line({ id: 'b', gst: { supplyType: 'exempt' }, taxRate: 0 }),
+      line({ id: 'c', gst: { supplyType: 'nonGst' }, taxRate: 0, unitPrice: fromMajor('500', 'INR') }),
+    ];
+    const s = summarize([doc('registered', { lines })]);
+    expect(s.b2b).toEqual([]);
+    expect(s.nil).toEqual([
+      expect.objectContaining({ supplyType: 'INTRB2B', nilRated: fromMajor('10000', 'INR'), exempt: fromMajor('10000', 'INR'), nonGst: fromMajor('5000', 'INR') }),
+    ]);
+  });
+
+  it('leaves a reimbursement out of every table and the HSN summary', () => {
+    const lines = [line(), line({ id: 'r', name: 'Port fees', hsnCode: '9967', gst: { reimbursement: true }, taxRate: 0 })];
+    const s = summarize([doc('registered', { lines })]);
+    expect(s.b2b.map((r) => r.rate)).toEqual([18]);
+    expect(s.b2b[0].taxableValue.minor).toBe(1000000);
+    expect(s.nil).toEqual([]);
+    expect(s.hsn.map((h) => h.hsnCode)).toEqual(['39211900']);
+  });
+
+  it('reports the buyer’s GSTIN as it was when the invoice was issued', () => {
+    const s = summarize([doc('registered', { partyGstin: '29AACFA1111P1ZH' })]);
+    expect(s.b2b[0].gstin).toBe('29AACFA1111P1ZH');
+  });
+});

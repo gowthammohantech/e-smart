@@ -77,6 +77,10 @@ export function TotalsPanel({
         <Row label={tr('common:totals.discountOnTotal')} value={`− ${formatMoney(totals.documentDiscount)}`} tone="good" />
       ) : null}
 
+      {totals.reimbursements && !isZero(totals.reimbursements) ? (
+        <Row label={tr('common:totals.reimbursements')} value={formatMoney(totals.reimbursements)} />
+      ) : null}
+
       {!isZero(totals.charges) ? <Row label={tr('common:totals.otherCharges')} value={formatMoney(totals.charges)} /> : null}
 
       {!isZero(totals.roundOff) ? (
@@ -86,6 +90,10 @@ export function TotalsPanel({
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 4 }} />
 
       <Row label={tr('common:totals.total')} value={formatMoney(totals.grandTotal)} bold />
+
+      {totals.reverseChargeTax && !isZero(totals.reverseChargeTax) ? (
+        <Row label={tr('common:totals.reverseChargeTax')} value={formatMoney(totals.reverseChargeTax)} />
+      ) : null}
 
       {showFx ? (
         <Text variant="micro" tone="muted" style={{ textAlign: 'right' }}>

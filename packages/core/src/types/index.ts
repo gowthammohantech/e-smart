@@ -51,7 +51,11 @@ export type TaxRegistration = {
   lutNumber?: string;
   /** ISO date the LUT runs to (a financial year). */
   lutValidTill?: string;
+  /** How often GSTR-1 and GSTR-3B are filed. QRMP: quarterly returns, monthly payment. */
+  returnFrequency?: ReturnFrequency;
 };
+
+export type ReturnFrequency = 'monthly' | 'qrmp';
 
 export type Branch = {
   id: string;
@@ -109,6 +113,9 @@ export type Transporter = {
 
 export type GstRegistrationType = 'regular' | 'composition' | 'unregistered' | 'sez' | 'overseas';
 
+/** Udyam category of an MSME supplier: their bills must be paid within 45 days (MSMED Act s.15). */
+export type MsmeType = 'micro' | 'small' | 'medium';
+
 export type Party = {
   id: string;
   companyId: string;
@@ -119,6 +126,13 @@ export type Party = {
   taxId?: string;
   /** How the buyer is registered for GST. Unset reads as regular when there is a GSTIN, else unregistered. */
   gstRegistrationType?: GstRegistrationType;
+  /** Income-tax PAN. Read from the GSTIN (characters 3 to 12) when not given. */
+  pan?: string;
+  /** Supplier's MSME (Udyam) category, if registered. */
+  msmeType?: MsmeType;
+  udyamNumber?: string;
+  /** Bills from this supplier are under reverse charge unless a line says otherwise. */
+  reverseCharge?: boolean;
   email?: string;
   phone?: string;
   currency: string;
@@ -139,6 +153,31 @@ export type Party = {
 
 export type ItemType = 'goods' | 'service';
 
+/**
+ * How GST treats a supply. Nil-rated (0% in the schedule), exempt (s.11 notification) and
+ * non-GST (outside the Act: petrol, alcohol for consumption) are each reported separately.
+ */
+export type SupplyType = 'taxable' | 'nil' | 'exempt' | 'nonGst';
+
+/** Whether GST paid on a purchase can be claimed as input tax credit. */
+export type ItcEligibility = 'eligible' | 'blocked' | 'ineligible';
+
+/** The GST treatment of an item, also kept on each document line as it was when used. */
+export type GstFlags = {
+  /** Unset reads as taxable. */
+  supplyType?: SupplyType;
+  /** Recovered from the customer at cost as their pure agent (Rule 33): outside the taxable value. */
+  reimbursement?: boolean;
+  /** Machinery and other assets: their credit is reported separately. */
+  capitalGoods?: boolean;
+  /** Unset reads as eligible. `blocked` is s.17(5): food, personal vehicles, works contracts and so on. */
+  itcEligibility?: ItcEligibility;
+  /** A notified reverse-charge supply (GTA, legal, security): the buyer pays the GST. */
+  reverseCharge?: boolean;
+  /** Compensation cess, percent of the taxable value. */
+  cessRate?: number;
+};
+
 export type Item = {
   id: string;
   companyId: string;
@@ -153,6 +192,8 @@ export type Item = {
   hsnCode?: string;
   barcode?: string;
   trackInventory: boolean;
+  /** GST treatment; see GstFlags. */
+  gst?: GstFlags;
   openingStock: number;
   /** The day the opening stock was counted (ISO date, not after today). No document with the item is dated before it. */
   openingStockDate?: string;
@@ -193,6 +234,8 @@ export type TaxLine = {
   categoryId: string;
   categoryName: string;
   rate: number;
+  /** Tax the buyer pays under reverse charge: shown, but not part of the total. */
+  reverseCharge?: boolean;
   taxableAmount: Money;
   components: TaxComponent[];
   totalTax: Money;
@@ -264,6 +307,8 @@ export type DocumentLine = {
   /** Snapshot of the rate applied, so historical docs stay reproducible. */
   taxRate: number;
   taxInclusive: boolean;
+  /** The item's GST treatment when the line was written; see GstFlags. */
+  gst?: GstFlags;
 };
 
 export type DocumentTotals = {
@@ -272,7 +317,12 @@ export type DocumentTotals = {
   documentDiscount: Money;
   taxableAmount: Money;
   taxLines: TaxLine[];
+  /** Tax charged on the document, cess included; reverse-charge tax is not. */
   totalTax: Money;
+  /** Tax the buyer owes the government under reverse charge. Not in the grand total. Absent on older documents. */
+  reverseChargeTax?: Money;
+  /** Pure-agent reimbursements, added after tax and outside the taxable value. Absent on older documents. */
+  reimbursements?: Money;
   charges: Money;
   roundOff: Money;
   grandTotal: Money;
@@ -307,6 +357,11 @@ export type BusinessDocument = {
    */
   roundOffManual?: Money;
   placeOfSupplyStateCode?: string;
+  /** The whole document is under reverse charge: the buyer pays the GST. */
+  reverseCharge?: boolean;
+  /** The party's GSTIN and state when the document was finalised, as the returns need them. */
+  partyGstin?: string;
+  partyStateCode?: string;
   notes?: string;
   terms?: string;
   attachmentIds: string[];
@@ -669,6 +724,14 @@ export type Expense = {
   taxCategoryId?: string;
   taxAmount: Money;
   taxInclusive: boolean;
+  /** Where the supply was received; decides CGST+SGST or IGST. Unset reads as the company's state. */
+  placeOfSupplyStateCode?: string;
+  /** The supplier's GSTIN on the bill, when there's no saved supplier. */
+  supplierGstin?: string;
+  /** Unset reads as eligible. */
+  itcEligibility?: ItcEligibility;
+  /** GST paid by the business itself under reverse charge; `taxAmount` is then not paid to the supplier. */
+  reverseCharge?: boolean;
   accountId: string;
   method: PaymentMethod;
   reference?: string;

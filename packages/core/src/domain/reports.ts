@@ -9,6 +9,7 @@ import {
   } from '../types';
 import { Money, add, money, subtract, sum, zero } from '../lib/money';
 import { DateRange, inRange, monthKey } from '../lib/date';
+import { expenseCost } from './expenseTax';
 import { stockOnHand, stockValue } from './stockLedger';
 
 export type ReportFilters = {
@@ -460,7 +461,7 @@ export function profitSnapshot(
   const costOfGoods = sum(invoices.map(costOf), baseCurrency);
   const grossProfit = subtract(revenue, costOfGoods);
   const expenseTotal = sum(
-    selectedExpenses.map((e) => inBase(subtract(e.amount, e.taxAmount), e.exchangeRate, baseCurrency)),
+    selectedExpenses.map((e) => inBase(expenseCost(e), e.exchangeRate, baseCurrency)),
     baseCurrency,
   );
   const netProfit = subtract(grossProfit, expenseTotal);
@@ -476,7 +477,7 @@ export function profitSnapshot(
   selectedExpenses.forEach((e) => {
     const k = monthKey(e.date);
     const cur = monthMap.get(k) ?? { revenue: zero(baseCurrency), cost: zero(baseCurrency), expenses: zero(baseCurrency) };
-    cur.expenses = add(cur.expenses, inBase(subtract(e.amount, e.taxAmount), e.exchangeRate, baseCurrency));
+    cur.expenses = add(cur.expenses, inBase(expenseCost(e), e.exchangeRate, baseCurrency));
     monthMap.set(k, cur);
   });
 

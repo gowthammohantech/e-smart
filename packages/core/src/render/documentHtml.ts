@@ -32,6 +32,8 @@ function bilingual(t: Translate, language: LanguageCode): (key: string) => strin
   };
 }
 
+const SUPPLY_NOTE = { nil: 'Nil-rated supply', exempt: 'Exempt supply', nonGst: 'Non-GST supply' } as const;
+
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
@@ -82,8 +84,10 @@ export function buildDocumentHtml({
   // A heading, so it takes the singular. Upper-casing is an English typographic
   // convention and a no-op on Tamil, so it is applied only where it means
   // something.
-  const kindName = documentKindLabel(t, doc.kind, 1);
-  const label = language === 'en' ? kindName.toUpperCase() : kindName;
+  // A composition dealer may not issue a tax invoice, only a bill of supply (Rule 49). Statutory, so English.
+  const billOfSupply = doc.kind === 'invoice' && !!company?.taxRegistration?.compositionScheme;
+  const kindName = billOfSupply ? 'Bill of Supply' : documentKindLabel(t, doc.kind, 1);
+  const label = language === 'en' || billOfSupply ? kindName.toUpperCase() : kindName;
 
   const bi = bilingual(t, language);
   const sellerTaxId = branch?.gstin ?? company?.taxRegistration?.identifier;
@@ -105,6 +109,8 @@ export function buildDocumentHtml({
         <td>
           <div class="item">${esc(line.name)}</div>
           ${line.hsnCode ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
+          ${line.gst?.reimbursement ? '<div class="sub">Reimbursement at cost (pure agent)</div>' : ''}
+          ${line.gst?.supplyType && line.gst.supplyType !== 'taxable' ? `<div class="sub">${SUPPLY_NOTE[line.gst.supplyType]}</div>` : ''}
         </td>
         <td class="num">${formatQty(line.quantity)} ${esc(line.unit)}</td>
         <td class="num">${formatMoney(line.unitPrice)}</td>
@@ -124,9 +130,12 @@ export function buildDocumentHtml({
     totalRow(bi('sales:pdf.taxableValue'), formatMoney(doc.totals.taxableAmount)),
     ...components.map((c) => totalRow(c.label, formatMoney(c.amount))),
     doc.totals.documentDiscount.minor > 0 ? totalRow('Discount on total', `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
+    doc.totals.reimbursements?.minor ? totalRow('Reimbursement of expenses', formatMoney(doc.totals.reimbursements)) : '',
     doc.totals.charges.minor > 0 ? totalRow('Other charges', formatMoney(doc.totals.charges)) : '',
     doc.totals.roundOff.minor !== 0 ? totalRow(bi('sales:pdf.roundOff'), formatMoney(doc.totals.roundOff, { signed: true })) : '',
     totalRow(bi('sales:pdf.total'), formatMoney(doc.totals.grandTotal), true),
+    // Rule 46(p): the invoice says whether tax is payable on reverse charge, and how much.
+    doc.totals.reverseChargeTax?.minor ? totalRow('Tax payable on reverse charge by the recipient', formatMoney(doc.totals.reverseChargeTax)) : '',
   ]
     .filter(Boolean)
     .join('');
@@ -214,6 +223,7 @@ export function buildDocumentHtml({
     </div>
     <div>
       <div class="doc-title">${label}</div>
+      ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}
       <div class="meta">
         <div><strong>${esc(doc.number)}</strong></div>
         <div class="muted">Date: ${formatDate(doc.date)}</div>

@@ -156,6 +156,8 @@
     "taxableValue": "வரி விதிக்கத்தக்க மதிப்பு",
     "discountOnTotal": "மொத்தத்தில் தள்ளுபடி",
     "otherCharges": "பிற கட்டணங்கள்",
+    "reimbursements": "அடக்க விலையில் திருப்பிச் செலுத்துதல்",
+    "reverseChargeTax": "பெறுநர் செலுத்த வேண்டிய வரி (தலைகீழ் கட்டணம்)",
     "roundOff": "முழுமையாக்கல்",
     "fxNote": "≈ {{amount}} (1 {{currency}} = {{rate}} {{baseCurrency}} விகிதத்தில்)",
     "total": "மொத்தம்",

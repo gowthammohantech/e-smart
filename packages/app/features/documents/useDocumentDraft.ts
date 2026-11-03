@@ -30,6 +30,8 @@ export type DraftState = {
   applyRoundOff: boolean;
   roundOffManual?: Money;
   placeOfSupplyStateCode?: string;
+  /** The whole document is under reverse charge: the buyer pays the GST. */
+  reverseCharge?: boolean;
   notes: string;
   terms: string;
   attachmentIds: string[];
@@ -77,6 +79,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     applyRoundOff: doc.applyRoundOff,
     roundOffManual: doc.roundOffManual,
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,
+    reverseCharge: doc.reverseCharge,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],
@@ -87,6 +90,8 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
 
 export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: TaxCategory[]): DocumentLine {
   const category = taxCategories.find((c) => c.id === item.taxCategoryId);
+  // Nil-rated, exempt and non-GST supplies, and reimbursements, are charged at 0% (as the server does).
+  const taxable = !item.gst?.reimbursement && (item.gst?.supplyType ?? 'taxable') === 'taxable';
   return {
     id: uid('ln'),
     itemId: item.id,
@@ -99,8 +104,9 @@ export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: Tax
     discountMode: 'amount',
     discountValue: 0,
     taxCategoryId: item.taxCategoryId,
-    taxRate: category?.rate ?? 0,
+    taxRate: taxable ? (category?.rate ?? 0) : 0,
     taxInclusive: false,
+    ...(item.gst && { gst: { ...item.gst } }),
   };
 }
 

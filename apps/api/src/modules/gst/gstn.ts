@@ -12,7 +12,7 @@ type Itm = { num: number; itm_det: { txval: number; rt: number; iamt: number; ca
 function itemsOf(rows: Gstr1Row[]): Itm[] {
   return rows.map((r, i) => ({
     num: i + 1,
-    itm_det: { txval: r2(r.taxableValue.minor), rt: r.rate, iamt: r2(r.igst.minor), camt: r2(r.cgst.minor), samt: r2(r.sgst.minor), csamt: 0 },
+    itm_det: { txval: r2(r.taxableValue.minor), rt: r.rate, iamt: r2(r.igst.minor), camt: r2(r.cgst.minor), samt: r2(r.sgst.minor), csamt: r2(r.cess.minor) },
   }));
 }
 
@@ -37,8 +37,9 @@ function byKey<T>(items: T[], key: (t: T) => string): Map<string, T[]> {
  */
 export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   const homeState = gstin.slice(0, 2);
-  const invoice = (rows: Gstr1Row[]) => ({ inum: rows[0].number, idt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: 'N', inv_typ: 'R', itms: itemsOf(rows) });
-  const note = (rows: Gstr1Row[]) => ({ ntty: 'C', nt_num: rows[0].number, nt_dt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: 'N', inv_typ: 'R', itms: itemsOf(rows) });
+  const rchrg = (rows: Gstr1Row[]) => (rows.some((r) => r.reverseCharge) ? 'Y' : 'N');
+  const invoice = (rows: Gstr1Row[]) => ({ inum: rows[0].number, idt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: 'R', itms: itemsOf(rows) });
+  const note = (rows: Gstr1Row[]) => ({ ntty: 'C', nt_num: rows[0].number, nt_dt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: 'R', itms: itemsOf(rows) });
 
   const b2b = [...byKey(byDocument(summary.b2b), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, inv: docs.map(invoice) }));
   const b2cl = [...byKey(byDocument(summary.b2cl), (d) => d[0].placeOfSupply).entries()].map(([pos, docs]) => ({
@@ -56,12 +57,12 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
       iamt: total((r) => r.igst.minor),
       camt: total((r) => r.cgst.minor),
       samt: total((r) => r.sgst.minor),
-      csamt: 0,
+      csamt: total((r) => r.cess.minor),
     };
   });
   const exp = [...byKey(byDocument(summary.exp), (d) => (d.some((r) => r.igst.minor > 0) ? 'WPAY' : 'WOPAY')).entries()].map(([exp_typ, docs]) => ({
     exp_typ,
-    inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: 0 })) })),
+    inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: i.itm_det.csamt })) })),
   }));
   const cdnr = [...byKey(byDocument(summary.cdnr), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, nt: docs.map(note) }));
   const cdnur = byDocument(summary.cdnur).map((d) => {
@@ -100,7 +101,7 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
       iamt: r2(h.igst.minor),
       camt: r2(h.cgst.minor),
       samt: r2(h.sgst.minor),
-      csamt: 0,
+      csamt: r2(h.cess.minor),
     })),
   };
   return { gstin, fp: period, version: 'GST3.1.6', hash: 'hash', b2b, b2cl, b2cs, exp, cdnr, cdnur, nil, hsn, doc_issue };

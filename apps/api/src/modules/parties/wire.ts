@@ -16,6 +16,10 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
     displayName: row.displayName,
     taxId: row.taxId,
     gstRegistrationType: row.gstRegistrationType,
+    pan: row.pan,
+    msmeType: row.msmeType,
+    udyamNumber: row.udyamNumber,
+    reverseCharge: row.reverseCharge || undefined,
     email: row.email,
     phone: row.phone,
     currency,
@@ -48,6 +52,10 @@ export function partyColumns(body: Schema<'Party'>) {
     displayName: body.displayName ?? null,
     taxId: body.taxId?.trim().toUpperCase() || null,
     gstRegistrationType: body.gstRegistrationType ?? (body.taxId ? 'regular' : null),
+    pan: body.pan?.trim().toUpperCase() || panFromGstin(body.taxId),
+    msmeType: body.msmeType ?? null,
+    udyamNumber: body.udyamNumber?.trim().toUpperCase() || null,
+    reverseCharge: body.reverseCharge ?? false,
     // Addresses aren't case-sensitive; one spelling keeps search and duplicates simple.
     email: body.email?.trim().toLowerCase() || null,
     phone: body.phone ?? null,
@@ -60,4 +68,10 @@ export function partyColumns(body: Schema<'Party'>) {
     notes: body.notes ?? null,
     status: body.status ?? 'active',
   };
+}
+
+/** A GSTIN carries the holder's PAN in characters 3 to 12. */
+export function panFromGstin(gstin: string | null | undefined): string | null {
+  const pan = gstin?.trim().toUpperCase().slice(2, 12);
+  return pan && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : null;
 }

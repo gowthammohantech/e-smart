@@ -400,6 +400,8 @@ export const useAppStore = create<AppState>()(
             party: s.parties.find((p) => p.id === doc.partyId),
             date: doc.date,
             purchase: ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'].includes(doc.kind),
+            branch: s.branches.find((b) => b.id === doc.branchId),
+            reverseCharge: doc.reverseCharge,
           }),
         });
       };

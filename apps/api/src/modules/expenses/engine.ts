@@ -21,8 +21,10 @@ const E = schema.expenses;
  * tax-exclusive expense the net is recovered as the one `n` with
  * `n + percent(n) = amount`. That keeps a re-save from adding tax twice.
  */
-export function expenseTax(amount: Money, rate: number, taxInclusive: boolean): Money {
+export function expenseTax(amount: Money, rate: number, taxInclusive: boolean, reverseCharge = false): Money {
   if (!(rate > 0)) return zero(amount.currency);
+  // Under reverse charge the supplier's price has no GST in it: the business pays the tax on top, to the government.
+  if (reverseCharge) return percent(amount, rate);
   if (taxInclusive) return inclusiveTax(amount, rate);
   const guess = Math.floor((amount.minor * 100) / (100 + rate));
   for (const n of [guess - 1, guess, guess + 1, guess + 2]) {
@@ -181,6 +183,10 @@ function copyable(t: ExpenseRow) {
     taxCategoryId: t.taxCategoryId,
     taxAmountMinor: t.taxAmountMinor,
     taxInclusive: t.taxInclusive,
+    placeOfSupplyStateCode: t.placeOfSupplyStateCode,
+    supplierGstin: t.supplierGstin,
+    itcEligibility: t.itcEligibility,
+    reverseCharge: t.reverseCharge,
     accountId: t.accountId,
     method: t.method,
     reference: t.reference,

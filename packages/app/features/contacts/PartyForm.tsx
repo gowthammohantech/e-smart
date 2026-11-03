@@ -12,7 +12,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
-import { GstRegistrationType, Party, PartyKind } from '@esmart/core/types';
+import { GstRegistrationType, MsmeType, Party, PartyKind } from '@esmart/core/types';
 import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
@@ -29,6 +29,7 @@ import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
+const MSME_OPTIONS = ['none', 'micro', 'small', 'medium'] as const;
 
 export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
@@ -78,6 +79,11 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [shipLine1, setShipLine1] = useState(party?.shippingAddress?.line1 ?? '');
   const [shipCity, setShipCity] = useState(party?.shippingAddress?.city ?? '');
   const [notes, setNotes] = useState(party?.notes ?? '');
+  const [pan, setPan] = useState(party?.pan ?? '');
+  const [msmeType, setMsmeType] = useState<MsmeType | undefined>(party?.msmeType);
+  const [udyam, setUdyam] = useState(party?.udyamNumber ?? '');
+  const [reverseCharge, setReverseCharge] = useState(!!party?.reverseCharge);
+  const [msmeOpen, setMsmeOpen] = useState(false);
   const [active, setActive] = useState((party?.status ?? 'active') === 'active');
 
   const [stateOpen, setStateOpen] = useState(false);
@@ -145,6 +151,11 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       displayName: contact.trim() || undefined,
       taxId: gstin || undefined,
       gstRegistrationType: registration,
+      // A GSTIN carries the PAN; the server reads it from there when this is blank.
+      pan: overseas ? undefined : pan.trim().toUpperCase() || undefined,
+      msmeType: kind === 'supplier' ? msmeType : undefined,
+      udyamNumber: kind === 'supplier' && msmeType ? udyam.trim().toUpperCase() || undefined : undefined,
+      reverseCharge: kind === 'supplier' && reverseCharge ? true : undefined,
       email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
@@ -221,6 +232,33 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       required
     />
   ) : null;
+  const panField = overseas ? null : (
+    <TextField
+      label="PAN"
+      value={pan}
+      onChangeText={(v) => setPan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+      placeholder={/^\d{2}[A-Z]{5}\d{4}[A-Z]/.test(taxId) ? taxId.slice(2, 12) : 'AABCV1234F'}
+      autoCapitalize="characters"
+      icon="card-text-outline"
+      hint={tr('contacts:form.panHint')}
+    />
+  );
+  const supplierTaxFields =
+    kind === 'supplier' ? (
+      <>
+        <PickerField
+          label={tr('contacts:form.msme')}
+          value={tr(`contacts:form.msmeType.${msmeType ?? 'none'}`)}
+          onPress={() => setMsmeOpen(true)}
+          icon="factory"
+          hint={tr('contacts:form.msmeHint')}
+        />
+        {msmeType ? (
+          <TextField label={tr('contacts:form.udyam')} value={udyam} onChangeText={(v) => setUdyam(v.toUpperCase())} placeholder="UDYAM-TN-02-0012345" autoCapitalize="characters" icon="numeric" />
+        ) : null}
+        <SwitchField label={tr('contacts:form.reverseCharge')} description={tr('contacts:form.reverseChargeHint')} value={reverseCharge} onValueChange={setReverseCharge} />
+      </>
+    ) : null;
   const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
   const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
 
@@ -338,6 +376,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       {termsField}
       {creditLimitField}
       {openingBalanceField}
+      {panField}
+      {supplierTaxFields}
 
       {notesField}
       {activeField}
@@ -397,6 +437,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       {termsField}
       {creditLimitField}
       {openingBalanceField}
+      {panField}
+      {supplierTaxFields}
     </FormSection>
   );
   const status = (
@@ -505,6 +547,15 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
           value={currency}
           onSelect={setCurrency}
+        />
+        <SelectSheet
+          visible={msmeOpen}
+          onClose={() => setMsmeOpen(false)}
+          title={tr('contacts:form.msme')}
+          options={MSME_OPTIONS.map((k) => ({ value: k, label: tr(`contacts:form.msmeType.${k}`) }))}
+          value={msmeType ?? 'none'}
+          onSelect={(v) => setMsmeType(v === 'none' ? undefined : (v as MsmeType))}
+          searchable={false}
         />
         <SelectSheet
           visible={termsOpen}

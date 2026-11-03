@@ -69,6 +69,9 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
 
+/** The documents GST is charged on, where reverse charge can apply. */
+const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'];
+
 export function DocumentEditor({
   kind,
   documentId,
@@ -141,6 +144,8 @@ export function DocumentEditor({
     currency: p.currency,
     exchangeRate: p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, date),
     dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(date, p.paymentTermsDays) : dueDate,
+    // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
+    ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
   });
 
   // A prefill seeds the draft and the opening step, as if the person had
@@ -181,8 +186,10 @@ export function DocumentEditor({
         party: parties.find((p) => p.id === d.partyId),
         date: d.date,
         purchase: isPurchase,
+        branch: branches.find((b) => b.id === (d.branchId ?? defaultBranchId)),
+        reverseCharge: d.reverseCharge,
       }),
-    [company, parties, isPurchase],
+    [company, parties, isPurchase, branches, defaultBranchId],
   );
 
   const { draft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
@@ -437,6 +444,7 @@ export function DocumentEditor({
       reference: draft.reference || undefined,
       supplierDocNumber: draft.supplierDocNumber || undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
+      reverseCharge: draft.reverseCharge || undefined,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -652,6 +660,15 @@ export function DocumentEditor({
         />
       ) : null}
       </FieldRow>
+
+      {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
+        <SwitchField
+          label={tr('sales:editor.reverseCharge')}
+          description={tr(isPurchase ? 'sales:editor.reverseChargeBillHint' : 'sales:editor.reverseChargeSaleHint')}
+          value={!!draft.reverseCharge}
+          onValueChange={(reverseCharge) => patch({ reverseCharge })}
+        />
+      ) : null}
 
       {draft.currency !== baseCurrency ? (
         <TextField

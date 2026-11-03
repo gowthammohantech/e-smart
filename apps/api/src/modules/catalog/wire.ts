@@ -2,7 +2,7 @@ import type { Schema } from '@esmart/api-contract';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
 import type { Item } from '@esmart/core/types';
 import type { schema } from '@esmart/db';
-import { compact, money, versioned } from '../../lib/wire';
+import { compact, gstColumns, gstFlagsFrom, money, versioned } from '../../lib/wire';
 
 type ItemRow = typeof schema.items.$inferSelect;
 
@@ -23,6 +23,7 @@ export function itemToWire(row: ItemRow, imageUri?: string): Schema<'Item'> {
     hsnCode: row.hsnCode,
     barcode: row.barcode,
     trackInventory: row.trackInventory,
+    gst: gstFlagsFrom(row),
     openingStock: Number(row.openingStock),
     openingStockDate: row.openingStockDate,
     reorderLevel: Number(row.reorderLevel),
@@ -52,6 +53,7 @@ export function itemColumns(body: Schema<'Item'>, currency: string) {
     taxCategoryId: body.taxCategoryId,
     barcode: body.barcode?.trim() || null,
     trackInventory: body.trackInventory ?? body.type === 'goods',
+    ...gstColumns(body.gst),
     reorderLevel: String(body.reorderLevel ?? 0),
     status: body.status ?? 'active',
   };

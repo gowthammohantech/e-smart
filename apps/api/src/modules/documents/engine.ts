@@ -6,14 +6,14 @@ import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
-import type { Company, DocumentKind, DocumentLine, DocumentTotals, Party, TaxCategory } from '@esmart/core/types';
+import type { Branch, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { CompanyRow } from '../../context';
 import { planUpgradeRequired, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { iso, requiredAddressFrom } from '../../lib/wire';
+import { gstColumns, gstFlagsFrom, iso, requiredAddressFrom } from '../../lib/wire';
 import { partyToWire } from '../parties/wire';
 
 export type DocRow = typeof schema.documents.$inferSelect;
@@ -56,6 +56,7 @@ export function companyCore(row: CompanyRow): Company {
       placeOfSupplyStateCode: row.placeOfSupplyStateCode ?? undefined,
       lutNumber: row.lutNumber ?? undefined,
       lutValidTill: row.lutValidTill ?? undefined,
+      returnFrequency: row.returnFrequency,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     allowNegativeStock: row.allowNegativeStock,
@@ -66,6 +67,10 @@ export function companyCore(row: CompanyRow): Company {
 
 export function partyCore(row: PartyRow): Party {
   return { ...(partyToWire(row) as unknown as Party), id: row.id, companyId: row.companyId, code: row.code, createdAt: iso(row.createdAt)! };
+}
+
+function branchCore(row: typeof schema.branches.$inferSelect): Branch {
+  return { id: row.id, companyId: row.companyId, name: row.name, code: row.code, address: requiredAddressFrom(row, 'address'), gstin: row.gstin ?? undefined, isPrimary: row.isPrimary };
 }
 
 function taxCategoryCore(row: typeof schema.taxCategories.$inferSelect): TaxCategory {
@@ -114,6 +119,8 @@ export type LineInput = {
   taxInclusive: boolean;
   /** Kept on finalised documents; recomputed from the category on drafts. */
   taxRate?: number;
+  /** Sent with the line, or kept from the stored one; else the item's. */
+  gst?: GstFlags;
 };
 
 /** The header of a document, after defaults are applied. */
@@ -136,6 +143,7 @@ export type DocFields = {
   /** A round-off the user typed, in minor units of the document currency. */
   roundOffManualMinor: number | null;
   placeOfSupplyStateCode: string | null;
+  reverseCharge: boolean | null;
   notes: string | null;
   terms: string | null;
   sourceDocumentId: string | null;
@@ -156,6 +164,7 @@ export function linesFromWire(lines: Schema<'DocumentLine'>[]): LineInput[] {
     discountValue: l.discountValue ?? 0,
     taxCategoryId: l.taxCategoryId,
     taxInclusive: l.taxInclusive ?? false,
+    gst: l.gst,
   }));
 }
 
@@ -176,6 +185,7 @@ export function linesFromRows(rows: LineRow[]): LineInput[] {
       taxCategoryId: l.taxCategoryId,
       taxInclusive: l.taxInclusive,
       taxRate: Number(l.taxRate),
+      gst: gstFlagsFrom(l) ?? {},
     }));
 }
 
@@ -200,6 +210,7 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     applyRoundOff: body.applyRoundOff ?? base?.applyRoundOff ?? null,
     roundOffManualMinor: body.roundOffManual !== undefined ? body.roundOffManual.minor : (base?.roundOffManualMinor ?? null),
     placeOfSupplyStateCode: keep(body.placeOfSupplyStateCode, base?.placeOfSupplyStateCode),
+    reverseCharge: keep(body.reverseCharge, base?.reverseCharge),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
     sourceDocumentId: keep(body.sourceDocumentId, base?.sourceDocumentId),
@@ -224,6 +235,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     applyRoundOff: row.applyRoundOff,
     roundOffManualMinor: row.roundOffManualMinor,
     placeOfSupplyStateCode: row.placeOfSupplyStateCode,
+    reverseCharge: row.reverseCharge,
     notes: row.notes,
     terms: row.terms,
     sourceDocumentId: row.sourceDocumentId,
@@ -269,12 +281,14 @@ export async function prepareDocument(
   }
 
   let branchId = f.branchId;
+  let branch: typeof schema.branches.$inferSelect | undefined;
   if (branchId) {
-    const [b] = await db.select({ id: schema.branches.id }).from(schema.branches).where(and(eq(schema.branches.companyId, company.id), eq(schema.branches.id, branchId)));
-    if (!b) blocking('branchId', 'No such branch in this company');
+    [branch] = await db.select().from(schema.branches).where(and(eq(schema.branches.companyId, company.id), eq(schema.branches.id, branchId)));
+    if (!branch) blocking('branchId', 'No such branch in this company');
   } else {
     const branches = await db.select().from(schema.branches).where(eq(schema.branches.companyId, company.id));
-    branchId = (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? null;
+    branch = branches.find((b) => b.isPrimary) ?? branches[0];
+    branchId = branch?.id ?? null;
     if (!branchId) blocking('branchId', 'The company has no branch');
   }
 
@@ -323,6 +337,9 @@ export async function prepareDocument(
     if (l.unitPriceCurrency && l.unitPriceCurrency !== f.currency) blocking(`lines[${i}].unitPrice.currency`, `Must be in the document's currency (${f.currency})`);
     if (!(l.quantity > 0)) blocking(`lines[${i}].quantity`, 'Must be more than zero');
     if (l.unitPriceMinor < 0) blocking(`lines[${i}].unitPrice`, 'Cannot be negative');
+    // The line's own treatment, else the item's. A non-taxable supply is charged at 0%.
+    const gst = l.gst ?? (item ? gstFlagsFrom(item) : undefined) ?? {};
+    const taxable = !gst.reimbursement && (gst.supplyType ?? 'taxable') === 'taxable';
     return {
       id: l.id ?? '',
       itemId: l.itemId ?? undefined,
@@ -335,8 +352,9 @@ export async function prepareDocument(
       discountMode: l.discountMode,
       discountValue: l.discountValue,
       taxCategoryId: l.taxCategoryId,
-      taxRate: returned.get(l.itemId ?? l.name) ?? (opts.snapshotRates || l.taxRate === undefined ? Number(category ? rateOn(category) : 0) : l.taxRate),
+      taxRate: !taxable ? 0 : (returned.get(l.itemId ?? l.name) ?? (opts.snapshotRates || l.taxRate === undefined ? Number(category ? rateOn(category) : 0) : l.taxRate)),
       taxInclusive: l.taxInclusive,
+      gst,
     };
   });
 
@@ -361,11 +379,15 @@ export async function prepareDocument(
       null);
 
   const coreCompany = companyCore(company);
+  // A supplier marked reverse charge puts the whole bill under it unless the document says otherwise.
+  const reverseCharge = f.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge);
   const taxContext = buildTaxContext(coreCompany, {
     placeOfSupply: placeOfSupply ?? undefined,
     party: partyCore(party!),
     date: f.date,
     purchase: isPurchaseKind(f.kind),
+    branch: branch ? branchCore(branch) : undefined,
+    reverseCharge,
   });
   const applyRoundOff = f.applyRoundOff ?? f.currency === 'INR';
   const totals = calculateDocument({
@@ -405,6 +427,7 @@ export async function prepareDocument(
       applyRoundOff,
       roundOffManualMinor: f.roundOffManualMinor,
       placeOfSupplyStateCode: placeOfSupply,
+      reverseCharge,
       notes: f.notes,
       terms: f.terms,
       sourceDocumentId: f.sourceDocumentId,
@@ -413,6 +436,8 @@ export async function prepareDocument(
       documentDiscountMinor: totals.documentDiscount.minor,
       taxableAmountMinor: totals.taxableAmount.minor,
       totalTaxMinor: totals.totalTax.minor,
+      reverseChargeTaxMinor: totals.reverseChargeTax?.minor ?? 0,
+      reimbursementsMinor: totals.reimbursements?.minor ?? 0,
       roundOffMinor: totals.roundOff.minor,
       grandTotalMinor: totals.grandTotal.minor,
       grandTotalBaseMinor: totals.grandTotalBase.minor,
@@ -432,6 +457,7 @@ export async function prepareDocument(
       taxCategoryId: l.taxCategoryId,
       taxRate: String(l.taxRate),
       taxInclusive: l.taxInclusive,
+      ...gstColumns(l.gst),
       lineTotalMinor: calculateLine(l, f.currency, taxContext).total.minor,
     })),
   };
@@ -464,6 +490,7 @@ export async function writeLines(tx: DbOrTx, documentId: string, prepared: Prepa
       rate: String(tl.rate),
       taxableAmountMinor: tl.taxableAmount.minor,
       totalTaxMinor: tl.totalTax.minor,
+      reverseCharge: !!tl.reverseCharge,
     });
     if (tl.components.length) {
       await tx.insert(schema.documentTaxComponents).values(

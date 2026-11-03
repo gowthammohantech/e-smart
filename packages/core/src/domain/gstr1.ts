@@ -18,7 +18,7 @@ import { Money, money, zero } from '../lib/money';
 import { DateRange, inRange } from '../lib/date';
 import { BusinessDocument, Company, Item, Party } from '../types';
 import { isCancelled } from './documentStates';
-import { calculateLine } from './lineCalc';
+import { calculateLine, lineTreatment } from './lineCalc';
 import { EXPORT_STATE_CODE } from './eInvoice';
 import { stateNameOf } from './stateCodes';
 
@@ -46,9 +46,12 @@ export type Gstr1Row = {
   cgst: Money;
   sgst: Money;
   igst: Money;
+  cess: Money;
   invoiceValue: Money;
   /** Set on an export, or a credit note against one. */
   exported?: boolean;
+  /** The buyer pays this tax under reverse charge; the seller reports it but doesn't pay it. */
+  reverseCharge?: boolean;
 };
 
 export type HsnRow = {
@@ -60,10 +63,11 @@ export type HsnRow = {
   cgst: Money;
   sgst: Money;
   igst: Money;
+  cess: Money;
   totalValue: Money;
 };
 
-/** Table 8 rows, one per supply type. GST has no exempt/non-GST flag on a line, so 0% goes to nil-rated. */
+/** Table 8 rows, one per supply type. A taxable line charged at 0% counts as nil-rated. */
 export type NilSupplyType = 'INTRB2B' | 'INTRAB2B' | 'INTRB2C' | 'INTRAB2C';
 
 export type NilRow = {
@@ -211,34 +215,48 @@ export function gstr1Summary(args: {
     const interState = !!homeState && placeOfSupply !== homeState;
     const invoiceValue = toBase(doc.totals.grandTotal, rate);
     const table = tableFor(doc, party, placeOfSupply, interState, invoiceValue);
+    // The buyer as registered when the document was issued.
+    const gstin = isRegistered(party) ? (doc.partyGstin ?? party.taxId) : undefined;
 
+    // Exempt and non-GST lines are reported apart from nil-rated ones. Reimbursements are no supply at all.
+    const apart = { exempt: 0, nonGst: 0 };
+    doc.lines.forEach((line) => {
+      const type = line.gst?.supplyType;
+      if (line.gst?.reimbursement || (type !== 'exempt' && type !== 'nonGst')) return;
+      apart[type] += calculateLine(line, doc.currency, { regime: 'GST', registered: false }).taxable.minor;
+    });
     // One row per rate, as the return itself is laid out. The calculator
     // keeps no tax line for 0% lines, so their value is whatever the taxed
     // slabs leave of the document's taxable amount.
     const untaxed =
       doc.totals.taxableAmount.minor - doc.totals.taxLines.reduce((a, l) => a + l.taxableAmount.minor, 0);
+    const nilRated = untaxed - apart.exempt - apart.nonGst;
     const slabs = [
       ...doc.totals.taxLines,
       ...(untaxed > 0 || !doc.totals.taxLines.length
-        ? [{ rate: 0, taxableAmount: money(untaxed, doc.currency), components: [] }]
+        ? [{ rate: 0, taxableAmount: money(untaxed, doc.currency), components: [], reverseCharge: false }]
         : []),
     ];
     slabs.forEach((slab) => {
-      if (slab.rate === 0 && doc.kind === 'invoice' && table !== 'exp') {
+      if (slab.rate === 0 && !slab.components.length && doc.kind === 'invoice' && table !== 'exp') {
         const supplyType = `${interState ? 'INTR' : 'INTRA'}${isRegistered(party) ? 'B2B' : 'B2C'}` as NilSupplyType;
         const nil = nilMap.get(supplyType) ?? { supplyType, nilRated: zero(baseCurrency), exempt: zero(baseCurrency), nonGst: zero(baseCurrency) };
-        nil.nilRated = money(nil.nilRated.minor + toBase(slab.taxableAmount, rate).minor, baseCurrency);
+        const add = (m: Money, minor: number) => money(m.minor + toBase(money(minor, doc.currency), rate).minor, baseCurrency);
+        nil.nilRated = add(nil.nilRated, nilRated);
+        nil.exempt = add(nil.exempt, apart.exempt);
+        nil.nonGst = add(nil.nonGst, apart.nonGst);
         nilMap.set(supplyType, nil);
         taxable += toBase(slab.taxableAmount, rate).minor;
         return;
       }
+      const reverseCharge = !!slab.reverseCharge || !!doc.reverseCharge;
       const part = (type: string) =>
         toBase(money(slab.components.filter((c) => c.type === type).reduce((a, c) => a + c.amount.minor, 0), doc.currency), rate);
       const row: Gstr1Row = {
         documentId: doc.id,
         kind: doc.kind,
         table,
-        gstin: isRegistered(party) ? party.taxId : undefined,
+        gstin,
         partyName: party.name,
         number: doc.number,
         date: doc.date,
@@ -249,27 +267,34 @@ export function gstr1Summary(args: {
         cgst: part('CGST'),
         sgst: part('SGST'),
         igst: part('IGST'),
+        cess: part('CESS'),
         invoiceValue,
         ...(isExport(party, placeOfSupply) && { exported: true }),
+        ...(reverseCharge && { reverseCharge: true }),
       };
       rows.push(row);
       taxable += sign * row.taxableValue.minor;
-      tax += sign * (row.cgst.minor + row.sgst.minor + row.igst.minor);
+      // Reverse-charge tax is the buyer's to pay, so it isn't in the seller's liability.
+      if (!reverseCharge) tax += sign * (row.cgst.minor + row.sgst.minor + row.igst.minor + row.cess.minor);
     });
     value += sign * invoiceValue.minor;
 
     // HSN: each line's own taxable value (after its discount) and tax, split
     // the way this document was split.
     const igstDoc = doc.totals.taxLines.some((l) => l.components.some((c) => c.type === 'IGST'));
+    const charged = doc.totals.totalTax.minor + (doc.totals.reverseChargeTax?.minor ?? 0) > 0;
     doc.lines.forEach((line) => {
+      if (line.gst?.reimbursement) return;
       const item = items.find((i) => i.id === line.itemId);
       const hsnCode = line.hsnCode ?? item?.hsnCode ?? 'Unclassified';
-      const b = calculateLine(line, doc.currency, {
-        regime: 'GST',
-        registered: doc.totals.totalTax.minor > 0,
-      });
+      const ctx = { regime: 'GST' as const, registered: charged, reverseCharge: doc.reverseCharge };
+      const b = calculateLine(line, doc.currency, ctx);
+      const { rate: gstRate, cessRate } = lineTreatment(line, ctx);
       const lineTaxable = sign * toBase(b.taxable, rate).minor;
-      const lineTax = sign * toBase(b.taxAmount, rate).minor;
+      const allTax = sign * toBase(b.taxAmount, rate).minor;
+      // The line's tax is GST and cess together; cess is reported in its own column.
+      const lineCess = gstRate + cessRate > 0 ? Math.round((allTax * cessRate) / (gstRate + cessRate)) : 0;
+      const lineTax = allTax - lineCess;
       const cgst = igstDoc ? 0 : Math.floor(lineTax / 2);
       const sgst = igstDoc ? 0 : lineTax - cgst;
       const igst = igstDoc ? lineTax : 0;
@@ -283,6 +308,7 @@ export function gstr1Summary(args: {
         cgst: zero(baseCurrency),
         sgst: zero(baseCurrency),
         igst: zero(baseCurrency),
+        cess: zero(baseCurrency),
         totalValue: zero(baseCurrency),
       };
       row.quantity += sign * line.quantity;
@@ -290,7 +316,8 @@ export function gstr1Summary(args: {
       row.cgst = money(row.cgst.minor + cgst, baseCurrency);
       row.sgst = money(row.sgst.minor + sgst, baseCurrency);
       row.igst = money(row.igst.minor + igst, baseCurrency);
-      row.totalValue = money(row.totalValue.minor + lineTaxable + lineTax, baseCurrency);
+      row.cess = money(row.cess.minor + lineCess, baseCurrency);
+      row.totalValue = money(row.totalValue.minor + lineTaxable + allTax, baseCurrency);
       hsnMap.set(hsnCode, row);
     });
   });

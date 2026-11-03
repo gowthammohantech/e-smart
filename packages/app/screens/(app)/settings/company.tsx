@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { PhoneField, PickerField, Segmented, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
@@ -53,6 +53,7 @@ export default function CompanySettings() {
   const [taxRegistered, setTaxRegistered] = useState(!!company?.taxRegistration?.registered);
   const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
   const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
+  const [returnFrequency, setReturnFrequency] = useState(company?.taxRegistration?.returnFrequency ?? 'monthly');
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
   const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
@@ -111,6 +112,7 @@ export default function CompanySettings() {
           placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
           lutNumber: taxRegistered && lutNumber.trim() ? lutNumber.trim().toUpperCase() : undefined,
           lutValidTill: taxRegistered && lutNumber.trim() && lutValidTill ? lutValidTill : undefined,
+          returnFrequency,
         },
       }),
       tr('settings:company.saved'),
@@ -186,6 +188,22 @@ export default function CompanySettings() {
             />
             {country?.regime === 'GST' ? (
               <>
+                <View style={{ gap: t.spacing.xs }}>
+                  <Text variant="small" tone="muted">
+                    {tr('settings:company.returnFrequency')}
+                  </Text>
+                  <Segmented
+                    options={[
+                      { value: 'monthly', label: tr('settings:company.returnMonthly') },
+                      { value: 'qrmp', label: tr('settings:company.returnQuarterly') },
+                    ]}
+                    value={returnFrequency}
+                    onChange={(v) => setReturnFrequency(v as 'monthly' | 'qrmp')}
+                  />
+                  <Text variant="micro" tone="muted">
+                    {tr('settings:company.returnFrequencyHint')}
+                  </Text>
+                </View>
                 <TextField
                   label={tr('settings:company.lutNumber')}
                   value={lutNumber}
