@@ -29,6 +29,7 @@ import { uid } from '@esmart/core/lib/id';
 import { isNetworkError } from '../../remote/api';
 import { uploadAttachment } from '../../remote/attachments';
 import { useReceiptQueue } from '../../remote/receiptQueue';
+import { keepQueued } from '../../remote/keptFiles';
 import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
 import {
@@ -236,6 +237,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     const id = res.id ?? res.result;
     if (receiptLater) {
       useReceiptQueue.getState().add(id, record.companyId, receiptLater);
+      // A browser's picked file lasts only as long as the page; keep it for a reload.
+      keepQueued(receiptLater, useReceiptQueue.getState().swapUri);
       toast.show(tr('purchases:form.receiptQueued'), 'success');
     }
     await leaveGuard.release();

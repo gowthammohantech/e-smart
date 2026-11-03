@@ -7,6 +7,7 @@ import { API_BASE_URL } from './config';
 import { useLogoQueue } from './logoQueue';
 import { knownToServer } from './meta';
 import { getTokens } from './tokens';
+import { fileBlob, keepQueued } from './keptFiles';
 
 /** The server refused the logo, or it can't be read. `status` also keeps it from being taken for a lost connection. */
 export class LogoError extends Error {
@@ -28,7 +29,7 @@ async function formFor(uri: string): Promise<FormData> {
   if (Platform.OS === 'web') {
     let blob: Blob;
     try {
-      blob = await (await fetch(uri)).blob();
+      blob = await fileBlob(uri);
     } catch {
       throw new LogoError('The picked image is no longer available. Please choose it again.', 0, 'FILE_GONE');
     }
@@ -96,6 +97,8 @@ export async function removeLogo(companyId: string): Promise<void> {
 export function queueLogo(companyId: string, uri: string) {
   useLogoQueue.getState().set(companyId, uri);
   setLocalLogo(companyId, uri);
+  // A browser's picked file lasts only as long as the page; keep it for a reload.
+  keepQueued(uri, useLogoQueue.getState().swapUri);
 }
 
 let flushing = false;
