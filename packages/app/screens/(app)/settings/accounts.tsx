@@ -45,7 +45,8 @@ export default function AccountSettings() {
   const [type, setType] = useState<PaymentAccount['type']>('bank');
   const [accountNumber, setAccountNumber] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
-  const [openingBalanceDate, setOpeningBalanceDate] = useState(today());
+  // Blank: the balance stands at the start of the books. A date: it stands on that day.
+  const [openingBalanceDate, setOpeningBalanceDate] = useState<string | undefined>(undefined);
   const [isDefault, setIsDefault] = useState(false);
   const typeLabels: Record<PaymentAccount['type'], string> = {
     bank: tr('settings:accounts.typeBank'),
@@ -72,7 +73,7 @@ export default function AccountSettings() {
     setType(a?.type ?? 'bank');
     setAccountNumber(a?.accountNumber ?? '');
     setOpeningBalance(a ? String(toMajor(a.openingBalance)) : '');
-    setOpeningBalanceDate(a?.openingBalanceDate ?? today());
+    setOpeningBalanceDate(a?.openingBalanceDate);
     setIsDefault(a?.isDefault ?? false);
   };
 
@@ -183,14 +184,22 @@ export default function AccountSettings() {
             <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
           ) : null}
           <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
-          {/* The day the balance was counted; never a future day. */}
-          <DateField
-            label={tr('settings:accounts.openingBalanceDate')}
-            value={openingBalanceDate}
-            onChange={setOpeningBalanceDate}
-            maximumDate={new Date()}
-            hint={tr('settings:accounts.openingBalanceDateHint')}
+          {/* The day the balance was counted; never a future day. Off, it stands at the start of the books. */}
+          <SwitchField
+            label={tr('settings:accounts.openingOnDate')}
+            description={tr('settings:accounts.openingOnDateHint')}
+            value={!!openingBalanceDate}
+            onValueChange={(on) => setOpeningBalanceDate(on ? today() : undefined)}
           />
+          {openingBalanceDate ? (
+            <DateField
+              label={tr('settings:accounts.openingBalanceDate')}
+              value={openingBalanceDate}
+              onChange={setOpeningBalanceDate}
+              maximumDate={new Date()}
+              hint={tr('settings:accounts.openingBalanceDateHint')}
+            />
+          ) : null}
           <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />
         </View>
       </Sheet>

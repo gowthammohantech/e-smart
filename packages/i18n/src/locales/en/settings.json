@@ -100,7 +100,9 @@
     "updated": "Account updated",
     "added": "Account added",
     "editTitle": "Edit account",
-    "deleteTitle": "Delete {{name}}?"
+    "deleteTitle": "Delete {{name}}?",
+    "openingOnDate": "Balance as on a date",
+    "openingOnDateHint": "Off: the balance stands at the start of the books. On: it stands on the day you pick."
   },
   "branches": {
     "none": "No branches yet",

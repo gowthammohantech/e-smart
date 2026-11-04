@@ -216,7 +216,7 @@ export const OPENING_DATE = '1900-01-01';
  */
 export function postOpenings(book: {
   parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate'>[];
-  paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate'>[];
+  paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate' | 'openingBalanceDate'>[];
   ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceDate'>[];
   openingStockMinor: number;
 }): Posting[] {
@@ -227,9 +227,8 @@ export function postOpenings(book: {
   };
   // A customer's positive opening balance is owed to us; a supplier's is owed by us.
   for (const p of book.parties) add(p.openingBalanceDate, [`party:${p.id}`, p.kind === 'supplier' ? -p.openingBalance.minor : p.openingBalance.minor]);
-  // A cash or bank account's openingBalanceDate only picks its FX rate: the form fills it with the
-  // day the account was added, so it isn't a books date.
-  for (const a of book.paymentAccounts) add(undefined, [`pay:${a.id}`, a.openingBalance.minor * (a.openingRate ?? 1)]);
+  // A cash or bank account's opening stands on its "as on" date too, like any other; undated, at the start of the books.
+  for (const a of book.paymentAccounts) add(a.openingBalanceDate, [`pay:${a.id}`, a.openingBalance.minor * (a.openingRate ?? 1)]);
   for (const a of book.ledgerAccounts) add(a.openingBalanceDate, [`acc:${a.id}`, a.openingBalance.minor]);
   add(undefined, ['sys:openingStock', book.openingStockMinor]);
   return [...byDate.entries()]
@@ -251,7 +250,7 @@ export function allPostings(book: {
   expenses: Expense[];
   vouchers: Voucher[];
   parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate'>[];
-  paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate'>[];
+  paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate' | 'openingBalanceDate'>[];
   ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceDate'>[];
   openingStockMinor: number;
 }): Posting[] {
