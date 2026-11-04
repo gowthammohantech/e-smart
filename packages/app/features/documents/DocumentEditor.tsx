@@ -55,7 +55,9 @@ import {
   DraftState,
   blankLine,
   emptyDraft,
+  inCurrency,
   lineFromItem,
+  reprice,
   useDocumentDraft,
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
@@ -134,15 +136,22 @@ export function DocumentEditor({
     [company],
   );
 
-  /** What choosing a party sets on the draft; shared by the picker and `prefill`. */
-  const partyFields = (p: Party, date: string, dueDate?: string): Partial<DraftState> => ({
-    partyId: p.id,
-    // A party synced from an older API can arrive without an address.
-    placeOfSupplyStateCode: p.billingAddress?.stateCode,
-    currency: p.currency,
-    exchangeRate: p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, date),
-    dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(date, p.paymentTermsDays) : dueDate,
-  });
+  /**
+   * What choosing a party sets on the draft; shared by the picker and
+   * `prefill`. The draft takes the party's currency with its prices converted.
+   */
+  const withParty = (d: DraftState, p: Party): DraftState =>
+    inCurrency(
+      {
+        ...d,
+        partyId: p.id,
+        // A party synced from an older API can arrive without an address.
+        placeOfSupplyStateCode: p.billingAddress?.stateCode,
+        dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(d.date, p.paymentTermsDays) : d.dueDate,
+      },
+      p.currency,
+      p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, d.date),
+    );
 
   // A prefill seeds the draft and the opening step, as if the person had
   // picked the party and item by hand. Read once, like `initialDraft`.
@@ -169,7 +178,7 @@ export function DocumentEditor({
     if (!p) return { missingParty: !!prefill.partyId, draft: { ...base, lines }, step: 0 };
     return {
       missingParty: false,
-      draft: { ...base, ...partyFields(p, base.date, base.dueDate), lines },
+      draft: withParty({ ...base, lines }, p),
       step: STEPS.indexOf(item ? 'review' : 'items'),
     };
   });
@@ -186,7 +195,7 @@ export function DocumentEditor({
     [company, parties, isPurchase],
   );
 
-  const { draft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
+  const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
@@ -312,7 +321,7 @@ export function DocumentEditor({
   const pickParty = (id: string) => {
     const p = parties.find((x) => x.id === id);
     if (!p) return;
-    patch(partyFields(p, draft.date, draft.dueDate));
+    setDraft((d) => withParty(d, p));
     // A new document keeps its party in the URL (replaced, not pushed), so a
     // refresh or a shared link reopens it with the same party.
     if (!documentId) setParams({ partyId: id });
@@ -1124,7 +1133,9 @@ export function DocumentEditor({
                 return;
               }
               const item = items.find((i) => i.id === id);
-              if (item) addLine(lineFromItem(item, isPurchase, taxCategories));
+              // An item is priced in base; the line takes the document's currency.
+              const line = item && lineFromItem(item, isPurchase, taxCategories);
+              if (line) addLine({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) });
             })
           }
           searchPlaceholder={tr('sales:editor.searchItems')}

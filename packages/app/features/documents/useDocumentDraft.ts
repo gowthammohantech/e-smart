@@ -8,7 +8,7 @@ import {
   Party,
   TaxCategory,
 } from '@esmart/core/types';
-import { Money, fromMajor, money, zero } from '@esmart/core/lib/money';
+import { Money, factorOf, fromMajor, money, zero } from '@esmart/core/lib/money';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
@@ -104,6 +104,46 @@ export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: Tax
   };
 }
 
+/**
+ * `amount` restated in `currency`, through the base currency: `fromRate` and
+ * `toRate` are each side's units of base per one (1 for the base itself).
+ */
+export function reprice(amount: Money, currency: string, fromRate: number, toRate: number): Money {
+  if (amount.currency === currency) return amount;
+  const major = ((amount.minor / factorOf(amount.currency)) * fromRate) / (toRate || 1);
+  return money(Math.round(major * factorOf(currency)), currency);
+}
+
+const roundTo = (v: number, currency: string) => Math.round(v * factorOf(currency)) / factorOf(currency);
+
+/**
+ * The draft moved to another currency. Every price, the charges and the fixed
+ * discounts are converted at the rates, so a ₹120 item reads $1.37 on a USD
+ * invoice rather than $120, and the server takes it: it wants every amount in
+ * the document's currency. An amount not in the draft's currency, such as an
+ * item's price, is taken as base.
+ */
+export function inCurrency(d: DraftState, currency: string, rate: number): DraftState {
+  const rateOf = (m: Money) => (m.currency === d.currency ? d.exchangeRate : 1);
+  const to = (m: Money) => reprice(m, currency, rateOf(m), rate);
+  const same = d.currency === currency;
+  const fixed = (v: number) => (same ? v : roundTo((v * d.exchangeRate) / (rate || 1), currency));
+  return {
+    ...d,
+    currency,
+    exchangeRate: rate,
+    charges: to(d.charges),
+    applyRoundOff: same ? d.applyRoundOff : currency === 'INR',
+    roundOffManual: same ? d.roundOffManual : undefined,
+    documentDiscountValue: d.documentDiscountMode === 'amount' ? fixed(d.documentDiscountValue) : d.documentDiscountValue,
+    lines: d.lines.map((l) => ({
+      ...l,
+      unitPrice: to(l.unitPrice),
+      discountValue: l.discountMode === 'amount' ? fixed(l.discountValue) : l.discountValue,
+    })),
+  };
+}
+
 export function blankLine(currency: string, taxCategories: TaxCategory[]): DocumentLine {
   const fallback = taxCategories.find((c) => c.rate === 18) ?? taxCategories[0];
   return {
@@ -157,15 +197,7 @@ export function useDocumentDraft(options: {
 
   const setCurrency = useCallback(
     (currency: string, rate: number) => {
-      setDraft((d) => ({
-        ...d,
-        currency,
-        exchangeRate: rate,
-        charges: money(d.charges.minor, currency),
-        applyRoundOff: currency === 'INR',
-        roundOffManual: undefined,
-        lines: d.lines.map((l) => ({ ...l, unitPrice: money(l.unitPrice.minor, currency) })),
-      }));
+      setDraft((d) => inCurrency(d, currency, rate));
     },
     [],
   );
