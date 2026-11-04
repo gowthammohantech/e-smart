@@ -63,6 +63,97 @@ function lastSixMonths(today: string): string[] {
  * `isLowStock`. Figures for a module outside the plan are left out.
  */
 export const dashboardHandlers = defineHandlers({
+  async getHomeHub(ctx) {
+    const plan = ctx.company.plan;
+    const base = ctx.company.baseCurrency.trim();
+    const today = ctx.now.toISOString().slice(0, 10);
+    const month = periodOf('month', today, ctx.company.fiscalYearStartMonth);
+    const months = lastSixMonths(today);
+    const branchId = ctx.query.branchId;
+    const branchScope = branchId ? [branchId] : ctx.user.branchIds;
+    const D = schema.documents;
+    const P = schema.payments;
+    const X = schema.expenses;
+    const inBranches = (col: typeof D.branchId | typeof P.branchId | typeof X.branchId) => (branchScope.length ? inArray(col, branchScope) : undefined);
+    const mine = and(eq(D.companyId, ctx.company.id), inBranches(D.branchId));
+    const invoices = and(mine, eq(D.kind, 'invoice'));
+    const billed = and(invoices, notInArray(D.status, ['draft', 'cancelled']));
+    const inBase = sql<number>`coalesce(sum(round(${D.grandTotalMinor} * ${D.exchangeRate})), 0)::bigint`;
+    const ownPayments = and(eq(P.companyId, ctx.company.id), inBranches(P.branchId));
+    const ownExpenses = and(eq(X.companyId, ctx.company.id), inBranches(X.branchId));
+    const withExpenses = hasModule(plan, 'expenses');
+    const thisMonth = <T extends typeof D.date | typeof P.date | typeof X.date>(col: T) => and(gte(col, month.from), lte(col, month.to));
+    const ym = sql<string>`to_char(${D.date}, 'YYYY-MM')`;
+
+    const [[sales], [invoiceCount], [collected], trend, kinds, [anyPayment], expenseFigures, recent, receivables, payables] = await Promise.all([
+      ctx.db.select({ v: inBase }).from(D).where(and(billed, thisMonth(D.date))),
+      ctx.db.select({ n: count() }).from(D).where(and(invoices, ne(D.status, 'draft'), thisMonth(D.date))),
+      ctx.db
+        .select({ v: sql<number>`coalesce(sum(round(${P.amountMinor} * ${P.exchangeRate})), 0)::bigint` })
+        .from(P)
+        .where(and(ownPayments, eq(P.direction, 'received'), thisMonth(P.date))),
+      ctx.db.select({ key: ym, v: inBase }).from(D).where(and(billed, gte(D.date, `${months[0]}-01`), lte(D.date, month.to))).groupBy(ym),
+      ctx.db
+        .select({ kind: D.kind, status: D.status, n: count() })
+        .from(D)
+        .where(and(mine, or(eq(D.kind, 'invoice'), and(eq(D.kind, 'quote'), eq(D.status, 'sent')))))
+        .groupBy(D.kind, D.status),
+      ctx.db.select({ n: count() }).from(P).where(ownPayments).limit(1),
+      Promise.all([
+        withExpenses
+          ? ctx.db.select({ v: sql<number>`coalesce(sum(round(${X.amountMinor} * ${X.exchangeRate})), 0)::bigint`, n: count() }).from(X).where(and(ownExpenses, thisMonth(X.date)))
+          : null,
+        ctx.db.select({ n: count() }).from(X).where(ownExpenses),
+      ]),
+      ctx.db
+        .select({ ...getTableColumns(D), partyName: schema.parties.name })
+        .from(D)
+        .innerJoin(schema.parties, eq(schema.parties.id, D.partyId))
+        .where(and(invoices, ne(D.status, 'cancelled')))
+        .orderBy(desc(D.date), desc(D.createdAt), desc(D.id))
+        .limit(5) as Promise<SummaryRow[]>,
+      aging(ctx, 'receivables', { asOf: today, branchId }),
+      hasModule(plan, 'payables') ? aging(ctx, 'payables', { asOf: today, branchId }) : null,
+    ]);
+
+    let lowStockCount: number | undefined;
+    if (hasModule(plan, 'inventory')) {
+      const I = schema.items;
+      const items = await ctx.db.select().from(I).where(and(eq(I.companyId, ctx.company.id), eq(I.trackInventory, true), eq(I.status, 'active'), gt(I.reorderLevel, '0')));
+      const onHand = await stockOnHand(ctx.db, ctx.company.id, items.map((i) => i.id), branchId);
+      lowStockCount = items.filter((i) => isLowStock(toCoreItem(i), onHand.get(i.id) ?? 0)).length;
+    }
+
+    const byMonth = new Map(trend.map((r) => [r.key, Number(r.v)]));
+    const invoicesInAnyStatus = kinds.filter((k) => k.kind === 'invoice').reduce((s, k) => s + Number(k.n), 0);
+    const [monthExpenses, [allExpenses]] = expenseFigures;
+    const open = receivables.documents ?? [];
+    const late = open.filter((d) => (d.daysOverdue ?? 0) > 0);
+    const zero = money(0, base);
+    return compact({
+      salesThisMonth: money(Number(sales.v), base),
+      invoicesThisMonth: Number(invoiceCount.n),
+      collectedThisMonth: money(Number(collected.v), base),
+      expensesThisMonth: monthExpenses ? money(Number(monthExpenses[0].v), base) : undefined,
+      expenseEntriesThisMonth: monthExpenses ? Number(monthExpenses[0].n) : undefined,
+      salesTrend: months.map((key) => ({ key, value: money(byMonth.get(key) ?? 0, base) })),
+      receivable: {
+        total: receivables.total ?? zero,
+        overdue: receivables.overdue ?? zero,
+        dueSoon: receivables.dueSoon ?? zero,
+        overdueCount: late.length,
+        buckets: (receivables.buckets ?? []).map((b) => ({ key: b.key!, amount: b.amount ?? zero, count: b.count ?? 0 })),
+      },
+      overdueInvoices: late.slice(0, 4).map((d) => ({ document: d.document!, daysOverdue: d.daysOverdue! })),
+      payable: payables ? { total: payables.total ?? zero, overdue: payables.overdue ?? zero, count: (payables.documents ?? []).length } : undefined,
+      lowStockCount,
+      draftInvoices: Number(kinds.find((k) => k.kind === 'invoice' && k.status === 'draft')?.n ?? 0),
+      openQuotes: Number(kinds.find((k) => k.kind === 'quote')?.n ?? 0),
+      recentInvoices: await summariesToWire(ctx.db, recent, ctx.now),
+      firstRun: invoicesInAnyStatus === 0 && Number(anyPayment.n) === 0 && Number(allExpenses.n) === 0,
+    });
+  },
+
   async getPurchasesHub(ctx) {
     const base = ctx.company.baseCurrency.trim();
     const today = ctx.now.toISOString().slice(0, 10);

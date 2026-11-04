@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
+import { and, eq, gte, ilike, inArray, lt, lte, or, type SQL } from 'drizzle-orm';
 import { mainHsnCodeOf, blockingIssues } from '@esmart/core/domain/eInvoice';
 import {
   EWAY_PART_B_REASONS,
@@ -485,6 +485,10 @@ export const ewayHandlers = defineHandlers({
     if (ctx.user.branchIds.length) filters.push(inArray(W.branchId, ctx.user.branchIds));
     if (q.branchId) filters.push(eq(W.branchId, q.branchId));
     if (q.documentId) filters.push(eq(W.documentId, q.documentId));
+    if (q.q?.trim()) {
+      const like = `%${q.q.trim()}%`;
+      filters.push(or(ilike(W.ewayBillNumber, like), ilike(W.documentNumber, like), ilike(W.toLegalName, like)));
+    }
     // `expired` is derived: active in the table, past its validity on the clock.
     if (q.status === 'cancelled') filters.push(eq(W.status, 'cancelled'));
     if (q.status === 'active') filters.push(eq(W.status, 'active'), gte(W.validUpto, ctx.now));

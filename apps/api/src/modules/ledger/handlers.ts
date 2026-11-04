@@ -71,6 +71,8 @@ async function agingReport(ctx: AgingCtx, kinds: DocumentKind[], q: { asOf?: str
   return {
     asOf,
     total: summary.total,
+    overdue: summary.overdue,
+    dueSoon: summary.dueSoon,
     buckets: summary.buckets.map((b) => ({ key: b.key, amount: b.amount, count: b.count })),
     byParty: [...parties.values()]
       .sort((a, b) => b.outstanding - a.outstanding || a.partyName.localeCompare(b.partyName))

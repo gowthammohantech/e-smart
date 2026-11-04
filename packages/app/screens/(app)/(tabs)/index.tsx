@@ -19,25 +19,15 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import {
-  useBaseCurrency,
-  useCanOpen,
-  useComplianceSummary,
-  useCurrentUser,
-  useModuleSet,
-  useDocuments,
-  useExpenses,
-  useItems,
-  useParties,
-  usePayables,
-  usePayments,
-  useReceivables,
-  useStockLevels,
-} from '../../../store/selectors';
-import { money, subtract, sum } from '@esmart/core/lib/money';
+import { useBaseCurrency, useCanOpen, useComplianceSummary, useCurrentUser, useModuleSet } from '../../../store/selectors';
+import { useAppStore } from '../../../store/appStore';
+import { useHomeHub } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
+import { money, subtract } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
-import { inRange, lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/core/lib/date';
-import { isLowStock } from '@esmart/core/domain/stockLedger';
+import { monthLabelNarrow } from '@esmart/core/lib/date';
+import { AGING_BUCKETS } from '@esmart/core/domain/receivables';
+import type { BusinessDocument } from '@esmart/core/types';
 import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
 import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
@@ -51,78 +41,26 @@ export default function Home() {
 
   const user = useCurrentUser();
   const baseCurrency = useBaseCurrency();
-  const invoices = useDocuments('invoice');
-  const quotes = useDocuments('quote');
-  const payments = usePayments();
-  const expenses = useExpenses();
-  const items = useItems({ activeOnly: true });
-  const stock = useStockLevels();
-  const customers = useParties('customer');
-  const receivables = useReceivables();
-  const payables = usePayables();
   const compliance = useComplianceSummary();
   const canOpen = useCanOpen();
   const full = useModuleSet() === 'full';
+  // Every figure comes from the server in one call, already in base currency.
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const hub = useHomeHub(branchId).data;
 
   const [actionsOpen, setActionsOpen] = useState(false);
   // Always false in the native apps.
   const desktop = useIsDesktop();
 
-  const thisMonth = resolveRange('thisMonth');
-
-  const monthSales = useMemo(() => {
-    const live = invoices.filter(
-      (d) => inRange(d.date, thisMonth) && !['draft', 'cancelled'].includes(d.status),
-    );
-    return sum(
-      live.map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
-      baseCurrency,
-    );
-  }, [invoices, thisMonth, baseCurrency]);
-
-  const monthExpenses = useMemo(() => {
-    const live = expenses.filter((e) => inRange(e.date, thisMonth));
-    return sum(
-      live.map((e) => money(Math.round(e.amount.minor * (e.exchangeRate || 1)), baseCurrency)),
-      baseCurrency,
-    );
-  }, [expenses, thisMonth, baseCurrency]);
-
-  const monthCollected = useMemo(() => {
-    const live = payments.filter((p) => p.direction === 'received' && inRange(p.date, thisMonth));
-    return sum(
-      live.map((p) => money(Math.round(p.amount.minor * (p.exchangeRate || 1)), baseCurrency)),
-      baseCurrency,
-    );
-  }, [payments, thisMonth, baseCurrency]);
-
-  const salesTrend = useMemo(() => {
-    const keys = lastNMonths(6);
-    return keys.map((key) => {
-      const total = invoices
-        .filter((d) => d.date.startsWith(key) && !['draft', 'cancelled'].includes(d.status))
-        .reduce((acc, d) => acc + Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), 0);
-      return { label: monthLabelNarrow(key), value: money(total, baseCurrency) };
-    });
-  }, [invoices, baseCurrency]);
-
-  const lowStockItems = useMemo(
-    () => items.filter((i) => isLowStock(i, stock[i.id] ?? 0)),
-    [items, stock],
-  );
-
-  const overdueInvoices = useMemo(
-    () =>
-      receivables.outstanding
-        .filter((o) => o.daysOverdue > 0)
-        .sort((a, b) => b.daysOverdue - a.daysOverdue)
-        .slice(0, 4),
-    [receivables.outstanding],
-  );
-
-  const openQuotes = quotes.filter((q) => q.status === 'sent');
-  const draftInvoices = invoices.filter((d) => d.status === 'draft');
-  const nameOf = (id: string) => customers.find((c) => c.id === id)?.name ?? tr('common:placeholder.unknown');
+  const zero = money(0, baseCurrency);
+  const monthSales = hub?.salesThisMonth ?? zero;
+  const monthExpenses = hub?.expensesThisMonth ?? zero;
+  const monthCollected = hub?.collectedThisMonth ?? zero;
+  const salesTrend = useMemo(() => (hub?.salesTrend ?? []).map((m) => ({ label: monthLabelNarrow(m.key!), value: m.value! })), [hub?.salesTrend]);
+  const overdueInvoices = hub?.overdueInvoices ?? [];
+  const recent = hub?.recentInvoices ?? [];
+  const receivable = hub?.receivable;
+  const nameOf = (d: { partyName?: string }) => d.partyName ?? tr('common:placeholder.unknown');
 
   type AttentionItem = {
     icon: IconName;
@@ -133,24 +71,28 @@ export default function Home() {
   };
 
   const attention: AttentionItem[] = ([
-    { icon: 'alert-circle-outline', label: tr('reports:home.attn.overdueInvoices'), count: receivables.outstanding.filter((o) => o.daysOverdue > 0).length, route: '/(app)/receivables', tone: 'danger' },
-    { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: draftInvoices.length, route: '/(app)/sales/invoices?status=draft', tone: 'warning' },
-    { icon: 'file-percent-outline', label: tr('reports:home.attn.openQuotes'), count: openQuotes.length, route: '/(app)/sales/quotes', tone: 'info' },
-    { icon: 'package-variant', label: tr('reports:home.attn.lowStock'), count: lowStockItems.length, route: '/(app)/inventory/low-stock', tone: 'warning' },
+    { icon: 'alert-circle-outline', label: tr('reports:home.attn.overdueInvoices'), count: receivable?.overdueCount ?? 0, route: '/(app)/receivables', tone: 'danger' },
+    { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: hub?.draftInvoices ?? 0, route: '/(app)/sales/invoices?status=draft', tone: 'warning' },
+    { icon: 'file-percent-outline', label: tr('reports:home.attn.openQuotes'), count: hub?.openQuotes ?? 0, route: '/(app)/sales/quotes', tone: 'info' },
+    { icon: 'package-variant', label: tr('reports:home.attn.lowStock'), count: hub?.lowStockCount ?? 0, route: '/(app)/inventory/low-stock', tone: 'warning' },
     { icon: 'shield-alert-outline', label: tr('reports:home.attn.eInvoiceRejected'), count: compliance.eInvoice.failed, route: '/(app)/compliance', tone: 'danger' },
     { icon: 'clock-alert-outline', label: tr('reports:home.attn.ewbExpiring'), count: compliance.expiringSoon, route: '/(app)/compliance?tab=eway', tone: 'warning' },
   ] as AttentionItem[]).filter((a) => a.count > 0 && canOpen(a.route));
-
-  const recent = useMemo(
-    () => invoices.filter((d) => d.status !== 'cancelled').slice(0, 5),
-    [invoices],
-  );
 
   const netThisMonth = subtract(monthSales, monthExpenses);
 
   // A business created moments ago has nothing to summarise — a wall of zeroes
   // and empty charts reads as broken, so show a first-run block instead.
-  const isFirstRun = invoices.length === 0 && payments.length === 0 && expenses.length === 0;
+  const isFirstRun = !!hub?.firstRun;
+
+  if (!hub) {
+    return (
+      <View style={{ flex: 1 }}>
+        <AppHeader />
+        <LoadingView />
+      </View>
+    );
+  }
 
   // A desktop browser has the room for its own first-run layout; a phone keeps the one below.
   if (isFirstRun && desktop) {
@@ -260,7 +202,7 @@ export default function Home() {
               label={tr('reports:home.sales')}
               value={monthSales}
               icon="trending-up"
-              caption={`${invoices.filter((d) => inRange(d.date, thisMonth) && d.status !== 'draft').length} invoices`}
+              caption={`${hub.invoicesThisMonth} invoices`}
               onPress={() => router.push('/(app)/reports/sales-summary')}
             />
             <StatTile
@@ -279,7 +221,7 @@ export default function Home() {
               value={monthExpenses}
               tone="warn"
               icon="receipt-text-outline"
-              caption={`${expenses.filter((e) => inRange(e.date, thisMonth)).length} entries`}
+              caption={`${hub.expenseEntriesThisMonth ?? 0} entries`}
               onPress={() => router.push('/(app)/expenses')}
             />
             <StatTile
@@ -328,18 +270,18 @@ export default function Home() {
                   <View style={{ gap: 3 }}>
                     <Text variant="caption" tone="muted">{tr('reports:home.totalReceivable')}</Text>
                     <Text variant="h2" weight="700">
-                      {formatMoney(receivables.summary.total)}
+                      {formatMoney(hub.receivable.total)}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 5 }}>
-                    <Badge label={tr('nav:home.amountOverdue', { amount: formatMoney(receivables.summary.overdue) })} tone="danger" size="sm" />
-                    <Badge label={tr('nav:home.amountDueSoon', { amount: formatMoney(receivables.summary.dueSoon) })} tone="warning" size="sm" />
+                    <Badge label={tr('nav:home.amountOverdue', { amount: formatMoney(hub.receivable.overdue) })} tone="danger" size="sm" />
+                    <Badge label={tr('nav:home.amountDueSoon', { amount: formatMoney(hub.receivable.dueSoon) })} tone="warning" size="sm" />
                   </View>
                 </View>
                 <AgingBars
-                  buckets={receivables.summary.buckets.map((b) => ({
+                  buckets={hub.receivable.buckets.map((b) => ({
                     key: b.key,
-                    label: b.label,
+                    label: AGING_BUCKETS.find((x) => x.key === b.key)?.label ?? b.key,
                     amount: b.amount,
                     count: b.count,
                   }))}
@@ -356,13 +298,13 @@ export default function Home() {
                 <View style={{ gap: 3 }}>
                   <Text variant="caption" tone="muted">{tr('reports:home.totalPayable')}</Text>
                   <Text variant="h3" weight="700">
-                    {formatMoney(payables.summary.total)}
+                    {formatMoney(hub.payable?.total ?? zero)}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Badge label={tr('nav:home.amountOverdue', { amount: formatMoney(payables.summary.overdue) })} tone="danger" size="sm" />
+                  <Badge label={tr('nav:home.amountOverdue', { amount: formatMoney(hub.payable?.overdue ?? zero) })} tone="danger" size="sm" />
                   <Text variant="micro" tone="muted">
-                    {tr('nav:home.openBills', { count: payables.outstanding.length })}
+                    {tr('nav:home.openBills', { count: hub.payable?.count ?? 0 })}
                   </Text>
                 </View>
               </Card>
@@ -415,8 +357,8 @@ export default function Home() {
                     {overdueInvoices.map((o, i) => (
                       <DocumentRow
                         key={o.document.id}
-                        document={o.document}
-                        partyName={nameOf(o.document.partyId)}
+                        document={o.document as unknown as BusinessDocument}
+                        partyName={nameOf(o.document)}
                         outstandingLabel={tr('nav:home.daysOverdue', { count: o.daysOverdue })}
                         divider={i < overdueInvoices.length - 1}
                         onPress={() => router.push(`/(app)/sales/invoices/${o.document.id}`)}
@@ -442,8 +384,8 @@ export default function Home() {
                   recent.map((d, i) => (
                     <DocumentRow
                       key={d.id}
-                      document={d}
-                      partyName={nameOf(d.partyId)}
+                      document={d as unknown as BusinessDocument}
+                      partyName={nameOf(d)}
                       divider={i < recent.length - 1}
                       onPress={() => router.push(`/(app)/sales/invoices/${d.id}`)}
                     />

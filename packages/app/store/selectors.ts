@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from './appStore';
 import { resolveId, useRemoteMeta } from '../remote/meta';
+import { useComplianceCounts, type ComplianceCounts } from '../remote/queries';
 import {
   BusinessDocument,
   Company,
@@ -468,46 +469,11 @@ export function useEInvoiceDocuments(status?: EInvoiceStatus): BusinessDocument[
   }, [documents, company, settings, parties, items, status]);
 }
 
-export type ComplianceSummary = {
-  eInvoice: Record<EInvoiceStatus, number>;
-  eway: Record<EwayBillStatus, number>;
-  expiringSoon: number;
-  /** Documents that need a bill and do not yet have a live one. */
-  ewayOutstanding: number;
-};
+export type ComplianceSummary = ComplianceCounts;
 
+/** E-invoice and e-way bill counts, from the server: the device no longer holds every document. */
 export function useComplianceSummary(): ComplianceSummary {
-  const documents = useEInvoiceDocuments();
-  const allDocuments = useDocuments();
-  const bills = useEwayBills();
-  const settings = useComplianceSettings();
-  const items = useAppStore((s) => s.items);
-
-  return useMemo(() => {
-    const now = nowISO();
-    const eInvoice: Record<EInvoiceStatus, number> = {
-      notApplicable: 0,
-      pending: 0,
-      generated: 0,
-      cancelled: 0,
-      failed: 0,
-    };
-    documents.forEach((d) => {
-      eInvoice[d.compliance?.eInvoiceStatus ?? 'pending'] += 1;
-    });
-
-    const eway: Record<EwayBillStatus, number> = { active: 0, expired: 0, cancelled: 0 };
-    let expiringSoon = 0;
-    bills.forEach((b) => {
-      const status = ewayBillStatusAt(b, now);
-      eway[status] += 1;
-      if (status === 'active' && hoursUntilExpiry(b, now) <= 24) expiringSoon += 1;
-    });
-
-    const ewayOutstanding = needingEwayBill(allDocuments, bills, items, settings, now).length;
-
-    return { eInvoice, eway, expiringSoon, ewayOutstanding };
-  }, [documents, allDocuments, bills, items, settings]);
+  return useComplianceCounts();
 }
 
 /** Documents that need an e-way bill and have no live one, newest first. */

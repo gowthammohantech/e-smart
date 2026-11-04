@@ -1885,6 +1885,71 @@ paths:
         '409': { description: 'Outside the 24-hour window, or an active e-way bill must be cancelled first' }
         '502': { $ref: '#/components/responses/UpstreamError' }
 
+  # ------------------------------------------------------------------ Compliance: summary
+  /companies/{companyId}/compliance/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Compliance]
+      operationId: getComplianceSummary
+      summary: E-invoice and e-way bill counts for badges and the compliance hub
+      description: |
+        E-invoices by status (a finalised invoice or credit note that must be reported and has no
+        attempt yet counts as pending), e-way bills by status as of now, live bills that run out
+        within 24 hours, and finalised documents that need an e-way bill and have no live one.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [eInvoice, eway, expiringSoon, ewayOutstanding]
+                properties:
+                  eInvoice:
+                    type: object
+                    required: [notApplicable, pending, generated, cancelled, failed]
+                    properties:
+                      notApplicable: { type: integer }
+                      pending: { type: integer }
+                      generated: { type: integer }
+                      cancelled: { type: integer }
+                      failed: { type: integer }
+                  eway:
+                    type: object
+                    required: [active, expired, cancelled]
+                    properties: { active: { type: integer }, expired: { type: integer }, cancelled: { type: integer } }
+                  expiringSoon: { type: integer }
+                  ewayOutstanding: { type: integer }
+
+  /companies/{companyId}/compliance/documents:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Compliance]
+      operationId: listComplianceDocuments
+      summary: The documents behind the compliance register, newest first
+      description: |
+        `need=eInvoice` lists invoices and credit notes that are or must be reported, by e-invoice
+        status (one that must be reported and has no attempt yet is pending). `need=ewayBill` lists
+        finalised documents that need an e-way bill and have no live one.
+      parameters:
+        - { name: need, in: query, required: true, schema: { type: string, enum: [eInvoice, ewayBill] } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/EInvoiceStatus' }, description: For `eInvoice` only }
+        - { name: q, in: query, schema: { type: string }, description: "Number, party or IRN" }
+        - { name: limit, in: query, schema: { type: integer, default: 100, minimum: 1, maximum: 500 } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+
   # ------------------------------------------------------------------ Compliance: e-way bills
   /companies/{companyId}/eway-bills:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
@@ -1895,6 +1960,7 @@ paths:
         - { name: status, in: query, description: '`expired` is derived from `validUpto`', schema: { $ref: '#/components/schemas/EwayBillStatus' } }
         - { name: documentId, in: query, schema: { type: string } }
         - { name: expiringWithinHours, in: query, schema: { type: integer } }
+        - { name: q, in: query, schema: { type: string }, description: "Bill number, document number or consignee" }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -3440,6 +3506,67 @@ paths:
                       required: [categoryId, name, total]
                       properties: { categoryId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
                   recentBills: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+  /companies/{companyId}/hubs/home:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getHomeHub
+      summary: Everything the Home tab shows, in one call
+      description: |
+        This month's sales, collections and expenses, the six-month sales trend, receivables (with the
+        four most overdue invoices) and payables as the aging works them out, counts that need
+        attention, and the five latest invoices. Amounts are in base currency. Expense, payable and
+        stock figures are left out on a plan without them.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salesThisMonth, invoicesThisMonth, collectedThisMonth, salesTrend, receivable, overdueInvoices, draftInvoices, openQuotes, recentInvoices, firstRun]
+                properties:
+                  salesThisMonth: { $ref: '#/components/schemas/Money' }
+                  invoicesThisMonth: { type: integer }
+                  collectedThisMonth: { $ref: '#/components/schemas/Money' }
+                  expensesThisMonth: { $ref: '#/components/schemas/Money' }
+                  expenseEntriesThisMonth: { type: integer }
+                  salesTrend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+                  receivable:
+                    type: object
+                    required: [total, overdue, dueSoon, overdueCount, buckets]
+                    properties:
+                      total: { $ref: '#/components/schemas/Money' }
+                      overdue: { $ref: '#/components/schemas/Money' }
+                      dueSoon: { $ref: '#/components/schemas/Money', description: Due within the next seven days }
+                      overdueCount: { type: integer }
+                      buckets:
+                        type: array
+                        items:
+                          type: object
+                          required: [key, amount, count]
+                          properties:
+                            key: { type: string, enum: [current, d1_30, d31_60, d61_90, d90plus] }
+                            amount: { $ref: '#/components/schemas/Money' }
+                            count: { type: integer }
+                  overdueInvoices:
+                    type: array
+                    description: The four most overdue
+                    items:
+                      type: object
+                      required: [document, daysOverdue]
+                      properties: { document: { $ref: '#/components/schemas/DocumentSummary' }, daysOverdue: { type: integer } }
+                  payable:
+                    type: object
+                    required: [total, overdue, count]
+                    properties: { total: { $ref: '#/components/schemas/Money' }, overdue: { $ref: '#/components/schemas/Money' }, count: { type: integer } }
+                  lowStockCount: { type: integer }
+                  draftInvoices: { type: integer }
+                  openQuotes: { type: integer, description: Quotes sent and not yet answered }
+                  recentInvoices: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+                  firstRun: { type: boolean, description: 'No invoices, payments or expenses yet' }
   /companies/{companyId}/search:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -5241,6 +5368,7 @@ components:
         totalTax: { $ref: '#/components/schemas/Money' }
         outstanding: { $ref: '#/components/schemas/Money' }
         eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }
+        irn: { type: string, description: The IRN once one is issued }
         ewayBillStatus: { type: string, enum: [notApplicable, notRequired, pending, generated, cancelled, expired] }
     DocumentDetail:
       allOf:
@@ -5855,6 +5983,8 @@ components:
       properties:
         asOf: { type: string, format: date }
         total: { $ref: '#/components/schemas/Money' }
+        overdue: { $ref: '#/components/schemas/Money' }
+        dueSoon: { $ref: '#/components/schemas/Money', description: Not yet overdue and due within seven days }
         buckets:
           type: array
           items:

@@ -202,6 +202,7 @@ export async function summariesToWire(db: DbOrTx, rows: SummaryRow[], now: Date)
       totalTax: money(row.totalTaxMinor, currency),
       outstanding: money(open ? Math.max(row.grandTotalMinor - row.amountPaidMinor, 0) : 0, currency),
       eInvoiceStatus: compliance.einv.get(row.id)?.status,
+      irn: compliance.einv.get(row.id)?.irn?.trim(),
       ewayBillStatus: ewayStatus(row.currentEwayBillId ? compliance.eway.get(row.currentEwayBillId) : undefined, now),
     });
   });

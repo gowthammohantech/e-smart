@@ -1352,6 +1352,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/compliance/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * E-invoice and e-way bill counts for badges and the compliance hub
+         * @description E-invoices by status (a finalised invoice or credit note that must be reported and has no
+         *     attempt yet counts as pending), e-way bills by status as of now, live bills that run out
+         *     within 24 hours, and finalised documents that need an e-way bill and have no live one.
+         */
+        get: operations["getComplianceSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/compliance/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The documents behind the compliance register, newest first
+         * @description `need=eInvoice` lists invoices and credit notes that are or must be reported, by e-invoice
+         *     status (one that must be reported and has no attempt yet is pending). `need=ewayBill` lists
+         *     finalised documents that need an e-way bill and have no live one.
+         */
+        get: operations["listComplianceDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/eway-bills": {
         parameters: {
             query?: never;
@@ -2453,6 +2501,31 @@ export interface paths {
          *     out on a plan without expenses.
          */
         get: operations["getPurchasesHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Home tab shows, in one call
+         * @description This month's sales, collections and expenses, the six-month sales trend, receivables (with the
+         *     four most overdue invoices) and payables as the aging works them out, counts that need
+         *     attention, and the five latest invoices. Amounts are in base currency. Expense, payable and
+         *     stock figures are left out on a plan without them.
+         */
+        get: operations["getHomeHub"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4132,6 +4205,8 @@ export interface components {
             totalTax?: components["schemas"]["Money"];
             outstanding?: components["schemas"]["Money"];
             eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
+            /** @description The IRN once one is issued */
+            irn?: string;
             /** @enum {string} */
             ewayBillStatus?: "notApplicable" | "notRequired" | "pending" | "generated" | "cancelled" | "expired";
         };
@@ -4777,6 +4852,9 @@ export interface components {
             /** Format: date */
             asOf?: string;
             total?: components["schemas"]["Money"];
+            overdue?: components["schemas"]["Money"];
+            /** @description Not yet overdue and due within seven days */
+            dueSoon?: components["schemas"]["Money"];
             buckets?: {
                 /** @enum {string} */
                 key?: "current" | "d1_30" | "d31_60" | "d61_90" | "d90plus";
@@ -7877,6 +7955,77 @@ export interface operations {
             502: components["responses"]["UpstreamError"];
         };
     };
+    getComplianceSummary: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        eInvoice: {
+                            notApplicable: number;
+                            pending: number;
+                            generated: number;
+                            cancelled: number;
+                            failed: number;
+                        };
+                        eway: {
+                            active: number;
+                            expired: number;
+                            cancelled: number;
+                        };
+                        expiringSoon: number;
+                        ewayOutstanding: number;
+                    };
+                };
+            };
+        };
+    };
+    listComplianceDocuments: {
+        parameters: {
+            query: {
+                need: "eInvoice" | "ewayBill";
+                /** @description For `eInvoice` only */
+                status?: components["schemas"]["EInvoiceStatus"];
+                /** @description Number, party or IRN */
+                q?: string;
+                limit?: number;
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DocumentSummary"][];
+                    };
+                };
+            };
+        };
+    };
     listEwayBills: {
         parameters: {
             query?: {
@@ -7884,6 +8033,8 @@ export interface operations {
                 status?: components["schemas"]["EwayBillStatus"];
                 documentId?: string;
                 expiringWithinHours?: number;
+                /** @description Bill number, document number or consignee */
+                q?: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
@@ -10041,6 +10192,67 @@ export interface operations {
                             total: components["schemas"]["Money"];
                         }[];
                         recentBills: components["schemas"]["DocumentSummary"][];
+                    };
+                };
+            };
+        };
+    };
+    getHomeHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        salesThisMonth: components["schemas"]["Money"];
+                        invoicesThisMonth: number;
+                        collectedThisMonth: components["schemas"]["Money"];
+                        expensesThisMonth?: components["schemas"]["Money"];
+                        expenseEntriesThisMonth?: number;
+                        salesTrend: components["schemas"]["MonthValue"][];
+                        receivable: {
+                            total: components["schemas"]["Money"];
+                            overdue: components["schemas"]["Money"];
+                            /** @description Due within the next seven days */
+                            dueSoon: components["schemas"]["Money"];
+                            overdueCount: number;
+                            buckets: {
+                                /** @enum {string} */
+                                key: "current" | "d1_30" | "d31_60" | "d61_90" | "d90plus";
+                                amount: components["schemas"]["Money"];
+                                count: number;
+                            }[];
+                        };
+                        /** @description The four most overdue */
+                        overdueInvoices: {
+                            document: components["schemas"]["DocumentSummary"];
+                            daysOverdue: number;
+                        }[];
+                        payable?: {
+                            total: components["schemas"]["Money"];
+                            overdue: components["schemas"]["Money"];
+                            count: number;
+                        };
+                        lowStockCount?: number;
+                        draftInvoices: number;
+                        /** @description Quotes sent and not yet answered */
+                        openQuotes: number;
+                        recentInvoices: components["schemas"]["DocumentSummary"][];
+                        /** @description No invoices, payments or expenses yet */
+                        firstRun: boolean;
                     };
                 };
             };

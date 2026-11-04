@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { QueryClient, keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { Schema } from '@esmart/api-client';
-import type { DocStatus, DocumentKind, Item, Voucher } from '@esmart/core/types';
+import type { DocStatus, DocumentKind, EInvoiceStatus, EwayBill, EwayBillStatus, Item, Voucher } from '@esmart/core/types';
 import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
 import { today } from '@esmart/core/lib/date';
 import { useAppStore } from '../store/appStore';
@@ -33,6 +33,8 @@ export const queryClient = new QueryClient({
 });
 
 export type DocumentSummary = Schema<'DocumentSummary'>;
+/** A summary as a list row: the server always sends these. */
+export type ListedDocument = DocumentSummary & Required<Pick<DocumentSummary, 'id' | 'kind' | 'number' | 'date' | 'partyId' | 'grandTotal'>>;
 
 /** A document list's filters, as the server takes them. */
 export type DocumentQuery = {
@@ -658,7 +660,55 @@ export const hubKeys = {
   all: (companyId: string) => ['hubs', companyId] as const,
   sales: (companyId: string, branchId?: string) => ['hubs', companyId, 'sales', branchId ?? ''] as const,
   purchases: (companyId: string, branchId?: string) => ['hubs', companyId, 'purchases', branchId ?? ''] as const,
+  home: (companyId: string, branchId?: string) => ['hubs', companyId, 'home', branchId ?? ''] as const,
+  compliance: (companyId: string, branchId?: string) => ['compliance', companyId, branchId ?? ''] as const,
 };
+
+/** The Home tab's figures: this month, the sales trend, what's owed both ways, what needs attention, latest invoices. */
+export function useHomeHub(branchId?: string) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: hubKeys.home(companyId, branchId),
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/hubs/home', { params: { path: { companyId }, query: { branchId } }, signal });
+      return data!;
+    },
+  });
+}
+
+export type ComplianceCounts = {
+  eInvoice: Record<EInvoiceStatus, number>;
+  eway: Record<EwayBillStatus, number>;
+  expiringSoon: number;
+  /** Documents that need a bill and do not yet have a live one. */
+  ewayOutstanding: number;
+};
+
+const NO_COMPLIANCE: ComplianceCounts = {
+  eInvoice: { notApplicable: 0, pending: 0, generated: 0, cancelled: 0, failed: 0 },
+  eway: { active: 0, expired: 0, cancelled: 0 },
+  expiringSoon: 0,
+  ewayOutstanding: 0,
+};
+
+/**
+ * E-invoice and e-way bill counts for badges, the GST tab and the compliance hub. Zero until the
+ * first answer, so a badge never shows a stale guess; the same query serves every caller.
+ */
+export function useComplianceCounts(enabled = true): ComplianceCounts {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const q = useQuery({
+    queryKey: hubKeys.compliance(companyId, branchId),
+    enabled: enabled && !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/compliance/summary', { params: { path: { companyId }, query: { branchId } }, signal });
+      return data!;
+    },
+  });
+  return q.data ?? NO_COMPLIANCE;
+}
 
 /** The Purchases tab's figures: this month's bills and expenses, what's owed, counts, latest bills. */
 export function usePurchasesHub(branchId?: string) {
@@ -686,6 +736,40 @@ export function useSalesHub(branchId?: string) {
   });
 }
 
+/** The compliance register's documents: by e-invoice status, or those still needing an e-way bill. */
+export function useComplianceDocuments(f: { need: 'eInvoice' | 'ewayBill'; status?: EInvoiceStatus; q?: string }, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const query = useQuery({
+    queryKey: [...hubKeys.compliance(companyId, branchId), 'documents', f],
+    enabled: enabled && !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/compliance/documents', { params: { path: { companyId }, query: { ...f, branchId, limit: 200 } }, signal });
+      return data!.data;
+    },
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: (query.data ?? []) as ListedDocument[] };
+}
+
+/** E-way bills, newest first, 50 at a time; status and search are filtered on the server. */
+export function useEwayBillPages(f: { status?: EwayBillStatus; q?: string }, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const query = useInfiniteQuery({
+    queryKey: [...hubKeys.compliance(companyId, branchId), 'eway', f],
+    enabled: enabled && !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/eway-bills', { params: { path: { companyId }, query: { ...f, branchId, limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as EwayBill[] };
+}
+
 /**
  * Marks server reads stale when what they show changes on the device: a save here (optimistic, then
  * confirmed) or a change pulled by sync. Batched, so a sync page of 500 changes refetches once.
@@ -700,6 +784,7 @@ export function watchStoreForQueries(): () => void {
     if (stale.has('stock')) {
       // Item lists, levels, ledgers and movements; searches and records are keyed apart and refetch on open.
       for (const part of ['pages', 'ledger', 'levels', 'movements', 'tracked']) void queryClient.invalidateQueries({ queryKey: [...itemKeys.all(companyId), part] });
+      void queryClient.invalidateQueries({ queryKey: ['hubs', companyId, 'home'] });
     }
     if (stale.has('vouchers')) {
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'pages'] });
@@ -717,6 +802,7 @@ export function watchStoreForQueries(): () => void {
       // The hubs add up documents and payments.
       void queryClient.invalidateQueries({ queryKey: hubKeys.all(companyId) });
     }
+    if (stale.has('documents') || stale.has('eway')) void queryClient.invalidateQueries({ queryKey: ['compliance', companyId] });
     stale.clear();
   };
   const mark = (what: string) => {
@@ -732,6 +818,7 @@ export function watchStoreForQueries(): () => void {
     if (s.documents !== prev.documents || s.payments !== prev.payments || s.expenses !== prev.expenses) mark('documents');
     if (s.stockMovements !== prev.stockMovements || s.documents !== prev.documents) mark('stock');
     if (s.vouchers !== prev.vouchers) mark('vouchers');
+    if (s.ewayBills !== prev.ewayBills) mark('eway');
   });
   return () => {
     unsubscribe();
