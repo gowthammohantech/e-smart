@@ -29,7 +29,7 @@ export default function ForgotPassword() {
 
   if (sent) {
     return (
-      <AuthShell title={tr('auth:forgot.sentTitle')} subtitle={tr('auth:forgot.sentSubtitle', { email })}>
+      <AuthShell title={tr('auth:forgot.sentTitle')} subtitle={tr('auth:forgot.sentSubtitle', { email })} illustration={null}>
         <EmptyState
           illustration="mail-sent" icon="email-check-outline"
           title={tr('auth:forgot.sentBadge')}

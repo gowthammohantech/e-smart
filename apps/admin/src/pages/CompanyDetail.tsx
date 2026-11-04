@@ -5,7 +5,7 @@ import { AuditList } from '../components/AuditList';
 import { PlanBadge, SubscriptionBadge } from '../components/Badges';
 import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
-import { PageHeader, QueryState } from '../components/ui';
+import { PageHeader, QueryState, EmptyState } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDateTime, fmtInt, PLAN_LABELS, PLANS } from '../lib/format';
 
@@ -194,7 +194,7 @@ export function CompanyDetail() {
                   <span className="muted num">{fmtInt(totalDocs)} total</span>
                 </div>
                 {documentCounts.length === 0 ? (
-                  <div className="empty">No documents yet.</div>
+                  <EmptyState title="No documents yet" />
                 ) : (
                   <table className="data">
                     <tbody>
@@ -215,7 +215,7 @@ export function CompanyDetail() {
                 <h2>Plan history</h2>
               </div>
               {planHistory.length === 0 ? (
-                <div className="empty">No plan changes yet.</div>
+                <EmptyState title="No plan changes yet" />
               ) : (
                 <div className="table-wrap">
                   <table className="data">

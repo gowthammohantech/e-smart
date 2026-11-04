@@ -2,6 +2,8 @@ import QRCode from 'qrcode';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { api, errorMessage, need, type Schema } from '../lib/api';
+import { Art } from '../components/Art';
+import { Skeleton } from '../components/ui';
 
 /**
  * The second step of signing in. With no authenticator yet: scan, confirm a code, keep the recovery
@@ -10,7 +12,7 @@ import { api, errorMessage, need, type Schema } from '../lib/api';
 export function MfaGate({ enrolled }: { enrolled: boolean }) {
   const { signOut } = useAuth();
   return (
-    <div className="auth">
+    <div className="auth backdrop">
       <div className="card">
         <div className="brand">
           <img src="/favicon.png" alt="" />
@@ -19,6 +21,7 @@ export function MfaGate({ enrolled }: { enrolled: boolean }) {
             <small>Platform admin</small>
           </div>
         </div>
+        <Art name="secure" height={96} />
         {enrolled ? <Verify /> : <Enroll />}
         <button className="btn" type="button" onClick={() => void signOut()}>
           Sign out
@@ -115,6 +118,7 @@ function Enroll() {
   if (codes) {
     return (
       <>
+        <Art name="success" height={96} />
         <p style={{ margin: 0 }}>
           <strong>Save these recovery codes.</strong> Each one signs you in once if you lose your phone. They won’t be shown again.
         </p>
@@ -162,7 +166,7 @@ function Enroll() {
           />
         </>
       ) : error ? null : (
-        <div className="empty">Preparing…</div>
+        <Skeleton rows={3} />
       )}
     </>
   );

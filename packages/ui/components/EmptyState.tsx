@@ -1,11 +1,12 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Animated, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Illustration } from './Illustration';
 import { IllustrationName } from '../illustrations/registry';
+import { useEntrance, usePulse } from '../illustrations/motion';
 
 export function EmptyState({
   icon = 'inbox-outline',
@@ -26,23 +27,13 @@ export function EmptyState({
   compact?: boolean;
 }) {
   const t = useTheme();
+  const enter = useEntrance();
   return (
-    <View style={{ alignItems: 'center', paddingVertical: compact ? t.spacing.xxl : t.spacing.xxxl * 1.2, gap: t.spacing.md }}>
+    <Animated.View style={[{ alignItems: 'center', paddingVertical: compact ? t.spacing.xxl : t.spacing.xxxl * 1.2, gap: t.spacing.md }, enter]}>
       {illustration ? (
         <Illustration name={illustration} size={compact ? 'compact' : 'full'} />
       ) : (
-        <View
-          style={{
-            width: compact ? 52 : 68,
-            height: compact ? 52 : 68,
-            borderRadius: compact ? 26 : 34,
-            backgroundColor: t.c.card2,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon name={icon} size={compact ? 24 : 32} color={t.c.muted} />
-        </View>
+        <IconDisc icon={icon} compact={compact} />
       )}
       <Text variant={compact ? 'body' : 'title'} weight="600" center>
         {title}
@@ -53,13 +44,32 @@ export function EmptyState({
         </Text>
       ) : null}
       {actionLabel && onAction ? <Button title={actionLabel} onPress={onAction} size="sm" variant="secondary" /> : null}
+    </Animated.View>
+  );
+}
+
+/** The icon on a tinted disc, with a soft halo that breathes around it. */
+function IconDisc({ icon, compact }: { icon: IconName; compact?: boolean }) {
+  const t = useTheme();
+  const halo = usePulse({ min: 0.35, duration: 2400 });
+  const d = compact ? 52 : 68;
+  const ring = d + (compact ? 16 : 22);
+  return (
+    <View style={{ width: ring, height: ring, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={{ position: 'absolute', width: ring, height: ring, borderRadius: ring / 2, backgroundColor: t.c.chip, opacity: halo }}
+      />
+      <View style={{ width: d, height: d, borderRadius: d / 2, backgroundColor: t.c.card2, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={compact ? 24 : 32} color={t.c.primary} />
+      </View>
     </View>
   );
 }
 
 export function Skeleton({ height = 16, width = '100%', radius = 8 }: { height?: number; width?: number | `${number}%`; radius?: number }) {
   const t = useTheme();
-  return <View style={{ height, width, borderRadius: radius, backgroundColor: t.c.card2 }} />;
+  const shimmer = usePulse({ min: 0.45, duration: 1300 });
+  return <Animated.View style={{ height, width, borderRadius: radius, backgroundColor: t.c.card2, opacity: shimmer }} />;
 }
 
 export function SkeletonList({ rows = 5 }: { rows?: number }) {

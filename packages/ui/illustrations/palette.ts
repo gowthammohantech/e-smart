@@ -1,10 +1,10 @@
-import { useTheme } from '../../theme/ThemeProvider';
-import { LIXI } from '../LixiOrb';
+import { useTheme } from '../theme/ThemeProvider';
+import { LIXI } from '../components/LixiOrb';
 
 /**
- * Colours for the Welcome scene. Surfaces and outlines follow the theme so the
+ * Colours for the illustrations. Surfaces and outlines follow the theme so the
  * scene sits on either page colour; the accents are fixed so it stays colourful
- * in both. Skin and hair match the placeholder art in tools/illustrations.
+ * in both.
  */
 export function useScenePalette() {
   const t = useTheme();
@@ -14,8 +14,12 @@ export function useScenePalette() {
     paper: t.c.card,
     paper2: t.c.card2,
     edge: t.c.line,
+    edgeStrong: t.c.lineStrong,
     ink: t.c.muted,
     inkSoft: t.c.mutedSoft,
+    /** Secondary strokes — text lines on a page, dashed outlines. */
+    inkFaint: dark ? 'rgba(142,152,172,0.5)' : 'rgba(90,100,120,0.32)',
+    primarySoft: '#7FB6FF',
     primary: t.c.primary,
     info: t.c.info,
     good: t.c.good,

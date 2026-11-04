@@ -5,7 +5,7 @@ import { AuditList } from '../components/AuditList';
 import { AccountStatusBadge, PlanBadge, RoleBadge, SubscriptionBadge, UserStatusBadge } from '../components/Badges';
 import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
-import { PageHeader, QueryState, RowLink } from '../components/ui';
+import { PageHeader, QueryState, RowLink, EmptyState } from '../components/ui';
 import { UserActions } from '../components/UserActions';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDateTime } from '../lib/format';
@@ -102,7 +102,7 @@ export function AccountDetail() {
                 <h2>Companies</h2>
               </div>
               {companies.length === 0 ? (
-                <div className="empty">This account hasn’t created a company yet.</div>
+                <EmptyState title="No company yet">This account hasn’t created a company yet.</EmptyState>
               ) : (
                 <div className="table-wrap">
                   <table className="data">

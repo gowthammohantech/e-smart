@@ -105,7 +105,7 @@ export default function AcceptInvite() {
 
   if (loading) {
     return (
-      <AuthShell title={tr('auth:invite.title')} hideBack>
+      <AuthShell illustration="loading" title={tr('auth:invite.title')} hideBack>
         <ActivityIndicator color={t.c.primary} />
       </AuthShell>
     );
@@ -113,7 +113,7 @@ export default function AcceptInvite() {
 
   if (failed || !invite) {
     return (
-      <AuthShell title={tr('auth:invite.invalidTitle')} subtitle={tr('auth:invite.invalid')} hideBack>
+      <AuthShell illustration="error" title={tr('auth:invite.invalidTitle')} subtitle={tr('auth:invite.invalid')} hideBack>
         <View />
       </AuthShell>
     );
@@ -123,7 +123,7 @@ export default function AcceptInvite() {
 
   if (step === 'confirm') {
     return (
-      <AuthShell title={tr('auth:invite.joinTitle', { business })} subtitle={tr('auth:invite.joinSubtitle', { inviter: invite.inviterName })} hideBack>
+      <AuthShell illustration="invite" title={tr('auth:invite.joinTitle', { business })} subtitle={tr('auth:invite.joinSubtitle', { inviter: invite.inviterName })} hideBack>
         <Card style={{ gap: t.spacing.sm }}>
           <Row label={tr('auth:invite.business')} value={business} />
           <Row label={tr('auth:invite.role')} value={tr(`auth:invite.roles.${invite.role}`)} />
@@ -149,7 +149,7 @@ export default function AcceptInvite() {
   }
 
   return (
-    <AuthShell title={tr('auth:invite.title')} subtitle={tr('auth:invite.subtitle')} hideBack>
+    <AuthShell illustration="invite" title={tr('auth:invite.title')} subtitle={tr('auth:invite.subtitle')} hideBack>
       <TextField
         label={tr('auth:invite.password')}
         value={password}

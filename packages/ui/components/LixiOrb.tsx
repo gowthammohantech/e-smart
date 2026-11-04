@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, View } from 'react-native';
+import { Animated, Easing, View } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { NATIVE_DRIVER } from '../theme/motion';
+import { useReducedMotion } from '../theme/useReducedMotion';
 
 const LOGO = require('../assets/lixi/lixi-orb.png');
 /** The orb as a turning head: a rendered sphere looking left and right, looping. */
@@ -21,15 +22,7 @@ export function LixiOrb({ size = 56, thinking = false, face = false }: { size?: 
   const [spin] = useState(() => new Animated.Value(0));
   const [breath] = useState(() => new Animated.Value(0));
   const [ringIn] = useState(() => new Animated.Value(thinking ? 1 : 0));
-  const [reduce, setReduce] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    AccessibilityInfo.isReduceMotionEnabled().then((r) => !cancelled && setReduce(r));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     if (reduce) return;

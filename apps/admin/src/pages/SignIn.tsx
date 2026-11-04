@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthProvider';
 import { errorMessage } from '../lib/api';
+import { Art } from '../components/Art';
 
 /**
  * Prefill for the form, from VITE_DEMO_LOGIN_EMAIL / VITE_DEMO_LOGIN_PASSWORD.
@@ -39,7 +40,7 @@ export function SignIn() {
 
   const notice = state.status === 'signedOut' ? state.notice : undefined;
   return (
-    <div className="auth">
+    <div className="auth backdrop">
       <div className="card">
         <form onSubmit={submit}>
           <div className="brand">
@@ -49,6 +50,7 @@ export function SignIn() {
               <small>Platform admin</small>
             </div>
           </div>
+          <Art name="secure" height={110} />
           <p className="muted" style={{ margin: 0 }}>
             For platform operators only. Sign in with your Elixir Books account.
           </p>

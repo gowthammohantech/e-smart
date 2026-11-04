@@ -10,6 +10,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Stagger } from '@esmart/ui/components/Stagger';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Button } from '@esmart/ui/components/Button';
 import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
@@ -398,13 +399,14 @@ export function DocumentListView({
             />
           ) : (
             filtered.map((d, i) => (
-              <DocumentRow
-                key={d.id}
-                document={d}
-                partyName={nameOf(d.partyId)}
-                divider={i < filtered.length - 1}
-                onPress={() => router.push(routeFor(d) as never)}
-              />
+              <Stagger key={d.id} index={i}>
+                <DocumentRow
+                  document={d}
+                  partyName={nameOf(d.partyId)}
+                  divider={i < filtered.length - 1}
+                  onPress={() => router.push(routeFor(d) as never)}
+                />
+              </Stagger>
             ))
           )}
         </Card>

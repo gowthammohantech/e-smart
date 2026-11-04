@@ -5,8 +5,8 @@ import Svg, { Circle, Ellipse, G, Path, Rect, Text as SvgText } from 'react-nati
 import { useTheme } from '../../theme/ThemeProvider';
 import { Text } from '../Text';
 import { LixiOrb } from '../LixiOrb';
-import { ScenePalette, useScenePalette } from './scenePalette';
-import { useLoopPhase } from './useLoopPhase';
+import { ScenePalette, useScenePalette } from '../../illustrations/palette';
+import { useLoopPhase } from '../../illustrations/motion';
 
 /** Scene coordinates. Every layer shares this box so they line up at any size. */
 const VW = 360;

@@ -115,6 +115,8 @@ export function Button({
           paddingHorizontal: size === 'sm' ? t.spacing.md : t.spacing.xl,
           opacity: isDisabled ? 0.45 : WEB ? (pressed && variant !== 'primary' && variant !== 'ghost' ? 0.85 : 1) : pressed ? 0.8 : hovered ? 0.9 : 1,
           alignSelf: fullWidth ? 'stretch' : 'auto',
+          // A slight give under the finger, so a press feels physical.
+          transform: [{ scale: pressed && !isDisabled ? 0.97 : 1 }],
           // Its tooltip sits over whatever is next to it.
           zIndex: tip && hovered ? 10 : undefined,
         },

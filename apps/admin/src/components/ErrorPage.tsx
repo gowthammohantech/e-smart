@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { isRouteErrorResponse, useRouteError } from 'react-router';
+import { Art } from './Art';
 
 function report(err: unknown) {
   // The seam for an error-tracking service, as in the API and the apps.
@@ -8,8 +9,9 @@ function report(err: unknown) {
 
 function Fallback({ detail }: { detail?: string }) {
   return (
-    <div className="auth">
+    <div className="auth backdrop">
       <div className="card" role="alert">
+        <Art name="error" height={110} />
         <h1 style={{ margin: 0, fontSize: 20 }}>Something went wrong</h1>
         <p className="muted" style={{ margin: 0 }}>
           This page hit an error. Nothing was changed. Reload to try again.

@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { PageBackdrop } from '@esmart/ui/components/PageBackdrop';
 import { FULL_PLAN, Module, planInfo } from '@esmart/core/domain/plan';
 import { moduleLabel } from '@esmart/core/labels';
 import { usePlan } from '../../store/selectors';
@@ -23,10 +24,11 @@ export default function Upgrade() {
   const label = module ? moduleLabel(tr, module) : tr('plan:upgrade.thisFeature');
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg, padding: t.spacing.lg }}>
+    <View style={{ flex: 1, backgroundColor: t.c.bg, padding: t.spacing.lg, justifyContent: 'center' }}>
+      <PageBackdrop />
       <Stack.Screen options={{ title: label }} />
       <EmptyState
-        icon="lock-outline"
+        illustration="locked"
         title={tr('plan:upgrade.lockedTitle', { module: label, plan: target.name })}
         message={tr('plan:upgrade.lockedMessage', { currentPlan: plan.name })}
         actionLabel={tr('plan:upgrade.seePlans')}
