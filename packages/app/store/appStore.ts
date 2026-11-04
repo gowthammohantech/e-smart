@@ -237,6 +237,8 @@ export type NewDocumentInput = {
   terms?: string;
   reference?: string;
   supplierDocNumber?: string;
+  billOfEntry?: BusinessDocument['billOfEntry'];
+  isdInvoice?: boolean;
   placeOfSupplyStateCode?: string;
   reverseCharge?: boolean;
   noteReason?: BusinessDocument['noteReason'];
@@ -794,6 +796,8 @@ export const useAppStore = create<AppState>()(
             validUntil: draft.validUntil,
             reference: draft.reference,
             supplierDocNumber: draft.supplierDocNumber,
+            billOfEntry: draft.billOfEntry,
+            isdInvoice: draft.isdInvoice,
             currency: draft.currency,
             exchangeRate: draft.exchangeRate,
             lines: draft.lines,

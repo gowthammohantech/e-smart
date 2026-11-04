@@ -66,6 +66,13 @@ async function complianceRows(db: DbOrTx, rows: DocRow[]) {
   return { einv: new Map(einv.map((e) => [e.documentId, e])), eway: new Map(eway.map((e) => [e.id, e])) };
 }
 
+/** A stored bill of entry on the wire: amounts in base currency, as customs assessed them. */
+function boeToWire(raw: unknown, base: string): Schema<'BusinessDocument'>['billOfEntry'] {
+  const b = raw as { number: string; date: string; portCode: string; assessableMinor: number; igstMinor: number; cessMinor: number } | null;
+  if (!b) return undefined;
+  return { number: b.number, date: b.date, portCode: b.portCode, assessableValue: money(b.assessableMinor, base), igst: money(b.igstMinor, base), cess: b.cessMinor ? money(b.cessMinor, base) : undefined };
+}
+
 /** Full documents: lines, tax breakdown, attachments and compliance, batched. */
 export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, baseCurrency: string): Promise<DocumentWire[]> {
   if (!rows.length) return [];
@@ -135,6 +142,8 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       attachmentIds: attachments.filter((a) => a.entityId === row.id).map((a) => a.id),
       sourceDocumentId: row.sourceDocumentId,
       noteReason: row.noteReason,
+      billOfEntry: boeToWire(row.billOfEntry, baseCurrency),
+      isdInvoice: row.isdInvoice || undefined,
       tds: row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: m(row.tdsAmountMinor) } : undefined,
       selfInvoiceNumber: row.selfInvoiceNumber,
       itcReversedOn: row.itcReversedOn,

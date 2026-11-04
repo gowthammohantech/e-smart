@@ -310,6 +310,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   const kindName = documentKindLabel(tr, kind, 1);
   const party = parties.find((p) => p.id === draft.partyId);
+  // An import bill: goods from an overseas supplier, with a bill of entry for the IGST paid at customs.
+  const imported = party?.gstRegistrationType === 'overseas' || draft.placeOfSupplyStateCode === '96';
+  const boe = draft.billOfEntry ?? { number: '', date: draft.date, portCode: '', assessableValue: zero(baseCurrency), igst: zero(baseCurrency) };
+  const patchBoe = (p: Partial<NonNullable<DraftState['billOfEntry']>>) => patch({ billOfEntry: { ...boe, ...p } });
+  const boeAmount = (m?: Money) => (m && m.minor ? String(toMajor(m)) : '');
   // The party's other open invoices, as the server counts what they still owe.
   const openInvoices = useOpenDocuments(kind === 'invoice' && party?.creditLimit?.minor ? draft.partyId : null, ['invoice']).data;
   /** Core's `checkCreditLimit`: what's owed on other invoices plus this one, in the limit's currency. */
@@ -543,6 +548,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       terms: draft.terms || undefined,
       reference: draft.reference || undefined,
       supplierDocNumber: draft.supplierDocNumber || undefined,
+      billOfEntry: imported ? draft.billOfEntry : undefined,
+      isdInvoice: kind === 'purchaseBill' && !imported ? !!draft.isdInvoice : undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
       reverseCharge: draft.reverseCharge || undefined,
       noteReason: isNote ? draft.noteReason : undefined,
@@ -717,6 +724,26 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           placeholder={tr('sales:editor.supplierDocPlaceholder')}
           icon="pound"
         />
+      ) : null}
+      {kind === 'purchaseBill' && imported ? (
+        <View style={{ gap: t.spacing.sm }}>
+          <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
+          <FieldRow>
+            <TextField label={tr('purchases:boe.number')} value={boe.number} onChangeText={(number) => patchBoe({ number })} icon="file-certificate-outline" />
+            <DateField label={tr('purchases:boe.date')} value={boe.date} onChange={(date) => patchBoe({ date })} maximumDate={new Date()} />
+          </FieldRow>
+          <FieldRow>
+            <TextField label={tr('purchases:boe.port')} value={boe.portCode} onChangeText={(portCode) => patchBoe({ portCode: portCode.toUpperCase() })} maxLength={6} autoCapitalize="characters" icon="ferry" />
+            <AmountField label={tr('purchases:boe.assessable')} value={boeAmount(boe.assessableValue)} onChangeValue={(v) => patchBoe({ assessableValue: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+          </FieldRow>
+          <FieldRow>
+            <AmountField label={tr('purchases:boe.igst')} value={boeAmount(boe.igst)} onChangeValue={(v) => patchBoe({ igst: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+            <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+          </FieldRow>
+        </View>
+      ) : null}
+      {kind === 'purchaseBill' && !imported && party?.taxId ? (
+        <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
       ) : null}
 
       <TextField

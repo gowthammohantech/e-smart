@@ -42,7 +42,7 @@ const TONE: Record<Status, 'success' | 'warning' | 'danger' | 'neutral'> = {
 };
 /** Rows a person can still link to a bill of their own. */
 const LINKABLE: Status[] = ['partial', 'probable', 'missingInBooks', 'matchedWithinTolerance'];
-const KIND_OF = { I: 'purchaseBill', BOE: 'purchaseBill', C: 'supplierCreditNote', D: 'supplierDebitNote' } as const;
+const KIND_OF = { I: 'purchaseBill', BOE: 'purchaseBill', ISD: 'purchaseBill', C: 'supplierCreditNote', D: 'supplierDebitNote' } as const;
 /** A filter chip: one status, or the bills 2B doesn't have. */
 type Filter = Status | 'missingIn2b' | 'all';
 

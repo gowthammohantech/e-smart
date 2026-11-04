@@ -22,8 +22,8 @@ export type Gstr2bEntry = {
   section: 'b2b' | 'b2ba' | 'cdnr' | 'cdnra' | 'impg' | 'isd';
   supplierGstin: string;
   supplierName?: string;
-  /** I invoice, C credit note, D debit note; bill of entry for imports. */
-  documentType: 'I' | 'C' | 'D' | 'BOE';
+  /** I invoice, C credit note, D debit note; bill of entry for imports; an ISD's invoice. */
+  documentType: 'I' | 'C' | 'D' | 'BOE' | 'ISD';
   number: string;
   date: string;
   placeOfSupply?: string;

@@ -164,6 +164,18 @@ describe('postings', () => {
     expect(net(ps, 'pay:cash')).toBe(-118000);
   });
 
+  it('books customs IGST on a bill of entry as input credit owed to customs', () => {
+    const ps = postDocument(
+      { id: 'imp', kind: 'purchaseBill', status: 'issued', number: 'BILL-9', date: '2026-06-10', partyId: 'sup', branchId: 'b', currency: 'INR', exchangeRate: 1, lines: [],
+        totals: { taxableAmount: inr('50000'), grandTotal: inr('50000'), documentDiscount: inr('0'), charges: inr('0'), roundOff: inr('0'), totalTax: inr('0'), taxLines: [] },
+        billOfEntry: { number: '1234567', date: '2026-06-08', portCode: 'INNSA1', assessableValue: inr('50000'), igst: inr('9000') } } as never,
+      'INR',
+    );
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:inputIgst')).toBe(900000);
+    expect(net(ps, 'sys:customsPayable')).toBe(-900000);
+  });
+
   it('keeps a billable expense out of P&L until the invoice recovers it (Rule 33)', () => {
     const e = { id: 'e', number: 'EXP-2', categoryId: 'travel', accountId: 'cash', branchId: 'b', date: '2026-06-05', amount: inr('2500'), taxAmount: inr('0'), exchangeRate: 1, billable: true } as Expense;
     const spent = postExpense(e, { company, branches: [], taxCategories: [] });
@@ -172,7 +184,7 @@ describe('postings', () => {
     expect(net(spent, 'exp:travel')).toBe(0);
     const inv = postDocument(
       { id: 'i', kind: 'invoice', status: 'issued', number: 'INV-9', date: '2026-06-10', partyId: 'cus', branchId: 'b', currency: 'INR', exchangeRate: 1, lines: [],
-        totals: { taxableAmount: inr('0'), grandTotal: inr('2500'), documentDiscount: inr('0'), charges: inr('0'), roundOff: inr('0'), reimbursements: inr('2500'), totalTax: inr('0') }, taxLines: [] } as never,
+        totals: { taxableAmount: inr('0'), grandTotal: inr('2500'), documentDiscount: inr('0'), charges: inr('0'), roundOff: inr('0'), reimbursements: inr('2500'), totalTax: inr('0'), taxLines: [] } } as never,
       'INR',
     );
     expect(balanced(inv)).toBe(0);

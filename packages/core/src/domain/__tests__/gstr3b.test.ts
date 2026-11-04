@@ -156,3 +156,16 @@ describe('late fee cap', () => {
     expect(lateFeeCap(undefined)).toBe(5_00_000);
   });
 });
+
+describe('imports and ISD credit', () => {
+  it('claims customs IGST from a bill of entry in 4A(1) and an ISD invoice in 4A(4)', () => {
+    const imp = { ...doc('purchaseBill', 'sup', [line('1000')], { itcClaimPeriod: '092026' }), lines: [], totals: { ...doc('purchaseBill', 'sup', []).totals }, billOfEntry: { number: '1234567', date: '2026-09-08', portCode: 'INNSA1', assessableValue: fromMajor('50000', 'INR'), igst: fromMajor('9000', 'INR') } } as BusinessDocument;
+    const isd = doc('purchaseBill', 'sup', [line('1000')], { itcClaimPeriod: '092026', isdInvoice: true });
+    const out = gstr3b({ period: '092026', company, gstin: GSTIN, baseCurrency: 'INR', documents: [imp, isd], expenses: [], parties, expenseSplit: new Map() });
+    expect(out.itc.importOfGoods.igst).toBe(900_000);
+    expect(out.itc.isd.cgst + out.itc.isd.sgst).toBe(18_000);
+    expect(out.itc.allOther.cgst).toBe(0);
+    expect(out.sources['4A1']).toEqual([expect.objectContaining({ igst: 900_000 })]);
+  });
+});
+

@@ -137,6 +137,8 @@ export type DocFields = {
   validUntil: string | null;
   reference: string | null;
   supplierDocNumber: string | null;
+  billOfEntry: { number: string; date: string; portCode: string; assessableMinor: number; igstMinor: number; cessMinor: number } | null;
+  isdInvoice: boolean;
   currency: string;
   exchangeRate: number | null;
   documentDiscountMode: 'percent' | 'amount';
@@ -211,6 +213,11 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     validUntil: keep(body.validUntil, base?.validUntil),
     reference: keep(body.reference, base?.reference),
     supplierDocNumber: keep(body.supplierDocNumber, base?.supplierDocNumber),
+    billOfEntry:
+      body.billOfEntry !== undefined
+        ? body.billOfEntry && { number: body.billOfEntry.number.trim(), date: body.billOfEntry.date, portCode: body.billOfEntry.portCode.trim().toUpperCase(), assessableMinor: body.billOfEntry.assessableValue.minor, igstMinor: body.billOfEntry.igst.minor, cessMinor: body.billOfEntry.cess?.minor ?? 0 }
+        : ((base?.billOfEntry as DocFields['billOfEntry'] | undefined) ?? null),
+    isdInvoice: body.isdInvoice ?? base?.isdInvoice ?? false,
     currency: body.currency,
     exchangeRate: body.exchangeRate ?? (base && base.currency.trim() === body.currency ? Number(base.exchangeRate) : null),
     documentDiscountMode: body.documentDiscountMode ?? base?.documentDiscountMode ?? 'percent',
@@ -241,6 +248,8 @@ export function fieldsFromRow(row: DocRow): DocFields {
     validUntil: row.validUntil,
     reference: row.reference,
     supplierDocNumber: row.supplierDocNumber,
+    billOfEntry: (row.billOfEntry as DocFields['billOfEntry']) ?? null,
+    isdInvoice: row.isdInvoice,
     currency: row.currency.trim(),
     exchangeRate: Number(row.exchangeRate),
     documentDiscountMode: row.documentDiscountMode,
@@ -356,6 +365,21 @@ export async function prepareDocument(
   // A document falls due, or a quote lapses, on or after the day it is dated.
   if (f.dueDate && f.dueDate < f.date) blocking('dueDate', `The due date cannot be before the document date (${f.date})`);
   if (f.validUntil && f.validUntil < f.date) blocking('validUntil', `Valid until cannot be before the document date (${f.date})`);
+
+  // A bill of entry belongs on an import bill; an ISD invoice comes from a registered distributor at home.
+  if (f.billOfEntry) {
+    const abroad = party?.gstRegistrationType === 'overseas' || f.placeOfSupplyStateCode === '96';
+    if (f.kind !== 'purchaseBill') blocking('billOfEntry', 'Only a purchase bill carries a bill of entry');
+    else if (!abroad) blocking('billOfEntry', 'A bill of entry is for goods imported from an overseas supplier');
+    if (!/^[A-Z0-9]{6}$/.test(f.billOfEntry.portCode)) blocking('billOfEntry.portCode', 'A six-character port code');
+    if (!f.billOfEntry.number) blocking('billOfEntry.number', 'The bill of entry number is required');
+    if (f.billOfEntry.igstMinor < 0 || f.billOfEntry.cessMinor < 0 || f.billOfEntry.assessableMinor < 0) blocking('billOfEntry', 'Amounts cannot be negative');
+  }
+  if (f.isdInvoice) {
+    if (f.kind !== 'purchaseBill') blocking('isdInvoice', 'Only a purchase bill can be an ISD invoice');
+    if (f.billOfEntry) blocking('isdInvoice', 'An ISD invoice is not an import');
+    if (!party?.taxId) blocking('isdInvoice', "An ISD invoice comes from the distributor's GSTIN; the supplier has none");
+  }
 
   if (f.sourceDocumentId) {
     const [src] = await db.select({ id: D.id }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
@@ -495,6 +519,8 @@ export async function prepareDocument(
       validUntil: f.validUntil,
       reference: f.reference,
       supplierDocNumber: f.supplierDocNumber,
+      billOfEntry: f.kind === 'purchaseBill' ? f.billOfEntry : null,
+      isdInvoice: f.kind === 'purchaseBill' && f.isdInvoice,
       currency: f.currency,
       exchangeRate: String(exchangeRate),
       documentDiscountMode: f.documentDiscountMode,

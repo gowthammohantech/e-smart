@@ -9,7 +9,7 @@
 export type TwoBLine = {
   id: string;
   supplierGstin: string;
-  documentType: 'I' | 'C' | 'D' | 'BOE';
+  documentType: 'I' | 'C' | 'D' | 'BOE' | 'ISD';
   number: string;
   date: string;
   taxableMinor: number;
@@ -95,7 +95,7 @@ export function normalizeNumber(n: string): string {
     .join('');
 }
 
-const KIND_OF: Record<TwoBLine['documentType'], BookBill['kind'] | null> = { I: 'purchaseBill', C: 'supplierCreditNote', D: 'supplierDebitNote', BOE: 'purchaseBill' };
+const KIND_OF: Record<TwoBLine['documentType'], BookBill['kind'] | null> = { I: 'purchaseBill', C: 'supplierCreditNote', D: 'supplierDebitNote', BOE: 'purchaseBill', ISD: 'purchaseBill' };
 const daysApart = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
 
 /**

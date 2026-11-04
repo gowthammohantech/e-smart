@@ -612,6 +612,10 @@ export const documents = pgTable("documents", {
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
 	noteReason: noteReason("note_reason"),
+	// An import bill's bill of entry: { number, date, portCode, assessableMinor, igstMinor, cessMinor }. IGST paid at customs.
+	billOfEntry: jsonb("bill_of_entry"),
+	// A bill from the business's Input Service Distributor: its credit goes to 3B 4A(4).
+	isdInvoice: boolean("isd_invoice").default(false).notNull(),
 	// TDS deducted on a supplier's bill; what's owed them is the grand total less this.
 	tdsSection: varchar("tds_section", { length: 8 }),
 	tdsRate: numeric("tds_rate", { precision: 6, scale:  3 }),

@@ -369,6 +369,10 @@ export type BusinessDocument = {
   reference?: string;
   /** Supplier's own bill number on purchase documents. */
   supplierDocNumber?: string;
+  /** An import bill's bill of entry, with the IGST and cess paid at customs (base currency). */
+  billOfEntry?: { number: string; date: string; portCode: string; assessableValue: Money; igst: Money; cess?: Money };
+  /** An Input Service Distributor's invoice: its credit is 3B 4A(4). */
+  isdInvoice?: boolean;
   currency: string;
   exchangeRate: number;
   lines: DocumentLine[];

@@ -141,6 +141,8 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 7.8 | A filing whose answer is lost is settled from the portal's return tracker | — | `gst/filing.ts` `recoverLostFilings` | api `gst-filing` › *settles a filing whose answer was lost…* |
 | 7.9 | Filing 3B closes the books through the period and posts the credit used as a GST journal (Dr output, Cr input) | — | `gst/filing.ts` `afterFiled3b` | api `gst-filing` › same test as 7.7 |
 | 7.10 | **New.** Every 3B table that the books fill breaks down to the documents, expenses and advances behind it, signed, adding up to the table | GSTR-3B | `gstr3b.ts` `sources` | core `gstr3b` › *breaks every table down…*; core `extras` › *shows each advance in the 3B breakup* |
+| 7.11 | **New.** An import bill records its bill of entry (number, date, port, assessable value, IGST and cess paid at customs). That IGST and cess is input credit (Dr input IGST/cess, Cr *Customs IGST payable*), matched to the 2B import line on the bill of entry number and port, and claimed in 3B 4A(1) | CGST s.16; IGST s.5 proviso | `ledger/postings.ts` `postDocument`; `gstr3b.ts`; `gst/gstr2b.ts` `billsFor` | core `books` › *books customs IGST on a bill of entry…*; core `gstr3b` › *claims customs IGST… in 4A(1)…* |
+| 7.12 | **New.** A purchase bill marked as an Input Service Distributor's invoice puts its credit in 3B 4A(4) instead of 4A(5); 2B's ISD section is read and matched to it | CGST s.20; Rule 39 | `gstr3b.ts`; `providers/gsp/returns.ts` `parseGstr2b` | core `gstr3b` › *…an ISD invoice in 4A(4)* |
 
 ## 8. Advances, reimbursements, MSME
 

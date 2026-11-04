@@ -13,6 +13,10 @@ export type DraftState = {
   validUntil?: string;
   reference: string;
   supplierDocNumber: string;
+  /** An import bill's bill of entry (customs IGST is its credit). */
+  billOfEntry?: BusinessDocument['billOfEntry'];
+  /** An Input Service Distributor's invoice: its credit is 3B 4A(4). */
+  isdInvoice?: boolean;
   currency: string;
   exchangeRate: number;
   lines: DocumentLine[];
@@ -67,6 +71,8 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     validUntil: doc.validUntil,
     reference: doc.reference ?? '',
     supplierDocNumber: doc.supplierDocNumber ?? '',
+    billOfEntry: doc.billOfEntry,
+    isdInvoice: doc.isdInvoice,
     currency: doc.currency,
     exchangeRate: doc.exchangeRate,
     lines: doc.lines.map((l) => ({ ...l })),

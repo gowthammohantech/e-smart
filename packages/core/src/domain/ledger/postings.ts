@@ -121,6 +121,13 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
     );
     // TDS kept back: the supplier is owed that much less, the government that much more.
     if (doc.tds?.amount.minor) entries.push([party, b(doc.tds.amount.minor)], [`sys:tdsPayable:${doc.tds.section}`, -b(doc.tds.amount.minor)]);
+    // An import: the IGST and cess paid at customs on its bill of entry is input credit, owed to customs
+    // until paid. Already in base currency.
+    const boe = doc.billOfEntry;
+    if (boe) {
+      const duty = boe.igst.minor + (boe.cess?.minor ?? 0);
+      entries.push(['sys:inputIgst', boe.igst.minor], ['sys:inputCess', boe.cess?.minor ?? 0], ['sys:customsPayable', -duty]);
+    }
   }
   return toPostings(
     entries.map(([a, v]) => [a, sign * v]),

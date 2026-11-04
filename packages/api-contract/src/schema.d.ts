@@ -3900,7 +3900,7 @@ export interface components {
                 supplierGstin?: string;
                 supplierName?: string;
                 /** @enum {string} */
-                documentType?: "I" | "C" | "D" | "BOE";
+                documentType?: "I" | "C" | "D" | "BOE" | "ISD";
                 number?: string;
                 /** Format: date */
                 date?: string;
@@ -3982,7 +3982,7 @@ export interface components {
             };
             /** @description This period's GSTR-1 and GSTR-3B as recorded */
             returns?: components["schemas"]["GstReturn"][];
-            /** @description What makes up each table, keyed as the portal numbers them (3.1a … 3.1e, 3.2, 4A2, 4A3, 4A5, 4B1, 4B2, 4D1, 5): one row per document, expense or advance, signed (a credit note takes away). */
+            /** @description What makes up each table, keyed as the portal numbers them (3.1a … 3.1e, 3.2, 4A1 … 4A5, 4B1, 4B2, 4D1, 5): one row per document, expense or advance, signed (a credit note takes away). */
             breakup?: {
                 [key: string]: (components["schemas"]["GstAmounts"] & {
                     /** @enum {string} */
@@ -4165,6 +4165,18 @@ export interface components {
             terms?: string;
             reference?: string;
             supplierDocNumber?: string;
+            /** @description On an import bill (a purchase bill from an overseas supplier): the bill of entry customs assessed it on, with the IGST and cess paid there. That IGST is input credit, claimed in 3B 4A(1) once 2B shows the bill of entry. */
+            billOfEntry?: {
+                number: string;
+                /** Format: date */
+                date: string;
+                portCode: string;
+                assessableValue: components["schemas"]["Money"];
+                igst: components["schemas"]["Money"];
+                cess?: components["schemas"]["Money"];
+            };
+            /** @description A purchase bill that is an Input Service Distributor's invoice: its credit goes to 3B 4A(4) */
+            isdInvoice?: boolean;
             placeOfSupplyStateCode?: string;
             /** @description The whole document is under reverse charge; the buyer pays the GST */
             reverseCharge?: boolean;

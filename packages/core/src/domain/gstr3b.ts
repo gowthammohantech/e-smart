@@ -52,7 +52,7 @@ export type Gstr3b = {
 };
 
 /** The portal's tables that the books fill. */
-export type Gstr3bTable = '3.1a' | '3.1b' | '3.1c' | '3.1d' | '3.1e' | '3.2' | '4A2' | '4A3' | '4A5' | '4B1' | '4B2' | '4D1' | '5';
+export type Gstr3bTable = '3.1a' | '3.1b' | '3.1c' | '3.1d' | '3.1e' | '3.2' | '4A1' | '4A2' | '4A3' | '4A4' | '4A5' | '4B1' | '4B2' | '4D1' | '5';
 /** One document, expense or advance and what it puts in a table (signed: a credit note takes away). */
 export type Gstr3bSource = { type: 'document' | 'expense' | 'advance'; id: string; kind?: string; number?: string; date: string; partyId?: string } & Amounts;
 type SourceRef = Omit<Gstr3bSource, keyof Amounts>;
@@ -181,10 +181,15 @@ export function gstr3b(input: Input): Gstr3b {
           put('5', null, src, { taxable: v });
         }
       }
-      // 4A(5): credit on bills 2B matched and the business claimed for this period.
+      // 4A(5): credit on bills 2B matched and the business claimed for this period. An import's IGST
+      // paid at customs is 4A(1), from its bill of entry; an ISD invoice's credit is 4A(4).
       if (doc.itcClaimPeriod === period) {
+        if (doc.billOfEntry) {
+          const boe = doc.billOfEntry;
+          put('4A1', out.itc.importOfGoods, src, { igst: sign * boe.igst.minor, cess: sign * (boe.cess?.minor ?? 0) });
+        }
         // All of it, as 2B shows it; what the law blocks comes back out in 4B(1). Reverse charge is 4A(3), above.
-        put('4A5', out.itc.allOther, src, fromSplit(sumSplits(itc.eligible, itc.capitalGoods, itc.blocked, itc.ineligible)));
+        put(doc.isdInvoice ? '4A4' : '4A5', doc.isdInvoice ? out.itc.isd : out.itc.allOther, src, fromSplit(sumSplits(itc.eligible, itc.capitalGoods, itc.blocked, itc.ineligible)));
         put('4B1', out.itc.reversedRules, src, fromSplit(sumSplits(itc.blocked, itc.ineligible)));
       }
       // 4B(2) and 4D(1): 180 days unpaid, reversed; paid since, claimed again.

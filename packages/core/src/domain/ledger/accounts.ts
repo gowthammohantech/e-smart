@@ -85,6 +85,8 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:tdsPayable': { name: 'TDS payable', group: 'dutiesTaxes' },
   // GST paid on advances for services, taken back as invoices adjust them.
   'sys:gstOnAdvances': { name: 'GST paid on advances', group: 'dutiesTaxes' },
+  // IGST and cess on imports, assessed on the bill of entry: owed to customs until paid (a payment voucher clears it).
+  'sys:customsPayable': { name: 'Customs IGST payable', group: 'dutiesTaxes' },
   ...Object.fromEntries(
     TAX.flatMap((t) => [
       [`sys:output${t}`, { name: `Output ${t.toUpperCase()}`, group: 'dutiesTaxes' as const }],

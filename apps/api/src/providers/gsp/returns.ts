@@ -59,7 +59,7 @@ const sumItems = (items: Item[] | undefined, single: Item) => {
 };
 
 /**
- * GSTR-2B as GSTN publishes it (`data.docdata.b2b`, `b2ba`, `cdnr`, `cdnra`, `impg`), flattened into
+ * GSTR-2B as GSTN publishes it (`data.docdata.b2b`, `b2ba`, `cdnr`, `cdnra`, `impg`, `isd`), flattened into
  * one entry per supplier document. Amounts are rupees there, paise here.
  */
 export function parseGstr2b(json: unknown): Gstr2bResult {
@@ -125,6 +125,29 @@ export function parseGstr2b(json: unknown): Gstr2bResult {
       cessMinor: r(boe.cess),
       itcAvailable: true,
     });
+  }
+  // Credit an Input Service Distributor passed on: invoices only (an ISD credit note reduces it).
+  type IsdSupplier = { ctin: string; trdnm?: string; supfildt?: string; doclist?: Record<string, unknown>[] };
+  for (const s of (d.isd ?? []) as IsdSupplier[]) {
+    for (const doc of s.doclist ?? []) {
+      const credit = doc.doctyp === 'C' ? -1 : 1;
+      entries.push({
+        section: 'isd',
+        supplierGstin: s.ctin,
+        supplierName: s.trdnm,
+        documentType: 'ISD',
+        number: String(doc.docnum),
+        date: iso(doc.docdt),
+        reverseCharge: false,
+        taxableMinor: 0,
+        igstMinor: credit * r(doc.igst),
+        cgstMinor: credit * r(doc.cgst),
+        sgstMinor: credit * r(doc.sgst),
+        cessMinor: credit * r(doc.cess),
+        itcAvailable: doc.itcelg !== 'N',
+        supplierFiledOn: s.supfildt ? iso(s.supfildt) : undefined,
+      });
+    }
   }
   return { status: 'generated', generatedAt: iso(data.gendt), entries };
 }

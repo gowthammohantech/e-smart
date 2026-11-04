@@ -140,5 +140,18 @@
     "colSure": "Sure",
     "createExpense": "Create expense",
     "createBill": "Create bill"
+  },
+  "boe": {
+    "hint": "Imported goods: the bill of entry customs assessed. The IGST paid there is your input credit (3B 4A(1)), matched to 2B on this number.",
+    "number": "Bill of entry number",
+    "date": "Bill of entry date",
+    "port": "Port code",
+    "assessable": "Assessable value",
+    "igst": "IGST paid at customs",
+    "cess": "Cess paid at customs"
+  },
+  "isd": {
+    "label": "Input Service Distributor invoice",
+    "hint": "A credit your ISD passed on. Its tax is claimed in 3B 4A(4) instead of 4A(5)."
   }
 }

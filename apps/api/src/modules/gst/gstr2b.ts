@@ -110,16 +110,22 @@ async function billsFor(db: DbOrTx, company: CompanyRow, gstin: string, period: 
         or(isNull(D.itcClaimPeriod), eq(D.itcClaimPeriod, period)),
       ),
     );
-  // A bill with no supplier GSTIN is an import: 2B has it only as a bill of entry, matched on its number.
+  // An import is in 2B only as its bill of entry: matched on the BoE number, with the IGST and cess
+  // customs assessed (already in base currency). A bill with no supplier GSTIN and no BoE still tries its own number.
   const bills: BookBill[] = rows.map(({ doc, partyGstin }) => {
       const rate = Number(doc.exchangeRate) || 1;
+      const boe = doc.billOfEntry as { number: string; date: string; portCode: string; assessableMinor: number; igstMinor: number; cessMinor: number } | null;
+      if (boe) {
+        return { id: doc.id, kind: 'purchaseBill', supplierGstin: boe.portCode, number: boe.number, date: boe.date, taxableMinor: boe.assessableMinor, taxMinor: boe.igstMinor + boe.cessMinor, claimedIn: doc.itcClaimPeriod ?? undefined };
+      }
       return {
         id: doc.id,
         kind: doc.kind as BookBill['kind'],
         supplierGstin: doc.partyGstin ?? partyGstin ?? '',
         number: doc.supplierDocNumber ?? doc.number,
         date: doc.date,
-        taxableMinor: Math.round(doc.taxableAmountMinor * rate),
+        // An ISD invoice passes on credit alone: 2B shows no taxable value for it.
+        taxableMinor: doc.isdInvoice ? 0 : Math.round(doc.taxableAmountMinor * rate),
         // 2B shows the tax on a reverse-charge supply too, though the buyer pays it.
         taxMinor: Math.round((doc.totalTaxMinor + doc.reverseChargeTaxMinor) * rate),
         claimedIn: doc.itcClaimPeriod ?? undefined,
@@ -168,7 +174,7 @@ export async function reconciliation(db: DbOrTx, company: CompanyRow, gstin: str
         section: e.section,
         supplierGstin: e.supplierGstin,
         supplierName: e.supplierName ?? undefined,
-        documentType: e.documentType as 'I' | 'C' | 'D' | 'BOE',
+        documentType: e.documentType as 'I' | 'C' | 'D' | 'BOE' | 'ISD',
         number: e.number,
         date: e.date,
         taxable: m(e.taxableMinor),
