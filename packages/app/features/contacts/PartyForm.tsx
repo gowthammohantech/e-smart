@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -12,7 +12,9 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
-import { GstRegistrationType, Party, PartyKind } from '@esmart/core/types';
+import { GstRegistrationType, MsmeType, Party, PartyKind } from '@esmart/core/types';
+import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
@@ -29,15 +31,18 @@ import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
+const MSME_OPTIONS = ['none', 'micro', 'small', 'medium'] as const;
 
 export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain']);
+  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
+  // Added from a document's party picker: back to the document, which picks the new party.
+  const { then } = useLocalSearchParams<{ then?: string }>();
   // Where Cancel and Save land when there is no screen to go back to.
   const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
@@ -78,6 +83,15 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [shipLine1, setShipLine1] = useState(party?.shippingAddress?.line1 ?? '');
   const [shipCity, setShipCity] = useState(party?.shippingAddress?.city ?? '');
   const [notes, setNotes] = useState(party?.notes ?? '');
+  const [pan, setPan] = useState(party?.pan ?? '');
+  const [msmeType, setMsmeType] = useState<MsmeType | undefined>(party?.msmeType);
+  const [udyam, setUdyam] = useState(party?.udyamNumber ?? '');
+  const [reverseCharge, setReverseCharge] = useState(!!party?.reverseCharge);
+  const [msmeOpen, setMsmeOpen] = useState(false);
+  const [tdsSectionCode, setTdsSectionCode] = useState(party?.tdsSection);
+  const [tdsOpen, setTdsOpen] = useState(false);
+  const [certRate, setCertRate] = useState(party?.lowerTdsCertificate ? String(party.lowerTdsCertificate.rate) : '');
+  const [certValidTill, setCertValidTill] = useState(party?.lowerTdsCertificate?.validTill ?? '');
   const [active, setActive] = useState((party?.status ?? 'active') === 'active');
 
   const [stateOpen, setStateOpen] = useState(false);
@@ -145,6 +159,13 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       displayName: contact.trim() || undefined,
       taxId: gstin || undefined,
       gstRegistrationType: registration,
+      // A GSTIN carries the PAN; the server reads it from there when this is blank.
+      pan: overseas ? undefined : pan.trim().toUpperCase() || undefined,
+      msmeType: kind === 'supplier' ? msmeType : undefined,
+      udyamNumber: kind === 'supplier' && msmeType ? udyam.trim().toUpperCase() || undefined : undefined,
+      reverseCharge: kind === 'supplier' && reverseCharge ? true : undefined,
+      tdsSection: kind === 'supplier' ? tdsSectionCode : undefined,
+      lowerTdsCertificate: kind === 'supplier' && tdsSectionCode && certRate && certValidTill ? { rate: Number(certRate), validTill: certValidTill } : undefined,
       email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
@@ -182,6 +203,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (!res) return;
     const id = res.id ?? record.id;
     if (party) goBack(backTo);
+    else if (then === 'back' && router.canGoBack()) router.back();
     else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`);
   };
   useSaveShortcut(() => void save(), !saving);
@@ -221,6 +243,56 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       required
     />
   ) : null;
+  const panField = overseas ? null : (
+    <TextField
+      label="PAN"
+      value={pan}
+      onChangeText={(v) => setPan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+      placeholder={/^\d{2}[A-Z]{5}\d{4}[A-Z]/.test(taxId) ? taxId.slice(2, 12) : 'AABCV1234F'}
+      autoCapitalize="characters"
+      icon="card-text-outline"
+      hint={tr('contacts:form.panHint')}
+    />
+  );
+  const supplierTaxFields =
+    kind === 'supplier' ? (
+      <>
+        <PickerField
+          label={tr('contacts:form.msme')}
+          value={tr(`contacts:form.msmeType.${msmeType ?? 'none'}`)}
+          onPress={() => setMsmeOpen(true)}
+          icon="factory"
+          hint={tr('contacts:form.msmeHint')}
+        />
+        {msmeType ? (
+          <TextField label={tr('contacts:form.udyam')} value={udyam} onChangeText={(v) => setUdyam(v.toUpperCase())} placeholder="UDYAM-TN-02-0012345" autoCapitalize="characters" icon="numeric" />
+        ) : null}
+        <SwitchField label={tr('contacts:form.reverseCharge')} description={tr('contacts:form.reverseChargeHint')} value={reverseCharge} onValueChange={setReverseCharge} />
+        <PickerField
+          label={tr('contacts:form.tdsSection')}
+          value={tdsSectionCode ? `${tdsSection(tdsSectionCode)?.label} · ${tdsSection(tdsSectionCode)?.nature}` : tr('purchases:tds.none')}
+          onPress={() => setTdsOpen(true)}
+          icon="bank-minus"
+          hint={tr('contacts:form.tdsSectionHint')}
+        />
+        {tdsSectionCode ? (
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <TextField
+              label={tr('contacts:form.lowerTdsRate')}
+              value={certRate}
+              onChangeText={(v) => setCertRate(v.replace(/[^0-9.]/g, ''))}
+              placeholder="—"
+              keyboardType="decimal-pad"
+              hint={tr('contacts:form.lowerTds')}
+              containerStyle={{ flex: 1 }}
+            />
+            <View style={{ flex: 1 }}>
+              <DateField label={tr('contacts:form.lowerTdsValidTill')} value={certValidTill} onChange={setCertValidTill} />
+            </View>
+          </View>
+        ) : null}
+      </>
+    ) : null;
   const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
   const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
 
@@ -338,6 +410,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       {termsField}
       {creditLimitField}
       {openingBalanceField}
+      {panField}
+      {supplierTaxFields}
 
       {notesField}
       {activeField}
@@ -397,6 +471,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       {termsField}
       {creditLimitField}
       {openingBalanceField}
+      {panField}
+      {supplierTaxFields}
     </FormSection>
   );
   const status = (
@@ -449,10 +525,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           {desktop ? (
             <>
               <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(backTo)} />
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} />
             </>
           ) : (
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
           )}
         </FormActions>
 
@@ -505,6 +581,24 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
           value={currency}
           onSelect={setCurrency}
+        />
+        <SelectSheet
+          visible={tdsOpen}
+          onClose={() => setTdsOpen(false)}
+          title={tr('contacts:form.tdsSection')}
+          options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature }))]}
+          value={tdsSectionCode ?? 'none'}
+          onSelect={(v) => setTdsSectionCode(v === 'none' ? undefined : v)}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={msmeOpen}
+          onClose={() => setMsmeOpen(false)}
+          title={tr('contacts:form.msme')}
+          options={MSME_OPTIONS.map((k) => ({ value: k, label: tr(`contacts:form.msmeType.${k}`) }))}
+          value={msmeType ?? 'none'}
+          onSelect={(v) => setMsmeType(v === 'none' ? undefined : (v as MsmeType))}
+          searchable={false}
         />
         <SelectSheet
           visible={termsOpen}

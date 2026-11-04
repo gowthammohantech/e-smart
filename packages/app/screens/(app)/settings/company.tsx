@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { PhoneField, PickerField, Segmented, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
@@ -22,7 +22,7 @@ import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/mast
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
-import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
@@ -32,7 +32,7 @@ export default function CompanySettings() {
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
   const months = monthNames();
   const goBack = useGoBack();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
 
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
@@ -53,8 +53,10 @@ export default function CompanySettings() {
   const [taxRegistered, setTaxRegistered] = useState(!!company?.taxRegistration?.registered);
   const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
   const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
+  const [returnFrequency, setReturnFrequency] = useState(company?.taxRegistration?.returnFrequency ?? 'monthly');
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
   const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
+  const [tan, setTan] = useState(company?.tan ?? '');
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
   const [lutValidTill, setLutValidTill] = useState(() => {
@@ -66,18 +68,19 @@ export default function CompanySettings() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = async () => {
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan'> = {
       name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       postalCode: validPostalCode(postalCode, company?.country, stateCode),
+      tan: taxRegistered ? validTan(tan) : undefined,
     };
     setErrors(next);
     if (hasErrors(next) || !company) return;
@@ -93,6 +96,8 @@ export default function CompanySettings() {
         website: website.trim() || undefined,
         fiscalYearStartMonth: fyMonth,
         allowNegativeStock,
+        // Blank clears it; the server takes an empty TAN as "none".
+        tan: tan.trim().toUpperCase(),
         address: {
           ...company.address,
           line1: line1.trim(),
@@ -111,6 +116,7 @@ export default function CompanySettings() {
           placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
           lutNumber: taxRegistered && lutNumber.trim() ? lutNumber.trim().toUpperCase() : undefined,
           lutValidTill: taxRegistered && lutNumber.trim() && lutValidTill ? lutValidTill : undefined,
+          returnFrequency,
         },
       }),
       tr('settings:company.saved'),
@@ -186,6 +192,32 @@ export default function CompanySettings() {
             />
             {country?.regime === 'GST' ? (
               <>
+                <View style={{ gap: t.spacing.xs }}>
+                  <Text variant="small" tone="muted">
+                    {tr('settings:company.returnFrequency')}
+                  </Text>
+                  <Segmented
+                    options={[
+                      { value: 'monthly', label: tr('settings:company.returnMonthly') },
+                      { value: 'qrmp', label: tr('settings:company.returnQuarterly') },
+                    ]}
+                    value={returnFrequency}
+                    onChange={(v) => setReturnFrequency(v as 'monthly' | 'qrmp')}
+                  />
+                  <Text variant="micro" tone="muted">
+                    {tr('settings:company.returnFrequencyHint')}
+                  </Text>
+                </View>
+                <TextField
+                  label={tr('settings:company.tan')}
+                  value={tan}
+                  onChangeText={(v) => setTan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                  autoCapitalize="characters"
+                  icon="bank-minus"
+                  placeholder="MUMA12345B"
+                  hint={tr('settings:company.tanHint')}
+                  error={errors.tan}
+                />
                 <TextField
                   label={tr('settings:company.lutNumber')}
                   value={lutNumber}
@@ -213,7 +245,7 @@ export default function CompanySettings() {
       </ScrollView>
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
       </FormActions>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />

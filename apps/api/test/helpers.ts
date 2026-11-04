@@ -11,6 +11,8 @@ import { loadConfig } from '../src/config';
 import type { Deps } from '../src/context';
 import { loadOperations, type Operation } from '../src/openapi/spec';
 import { createProviders, type Providers } from '../src/providers';
+import { JOB_HANDLERS } from '../src/jobs/registry';
+import { createWorker } from '../src/jobs/worker';
 
 /** Tables that hold reference data: loaded by the migration, never truncated. */
 const REFERENCE = new Set(['countries', 'currencies', 'states', 'cities', 'pincodes', 'units', 'hsn_codes', 'plans', 'plan_modules', 'integrations']);
@@ -42,6 +44,8 @@ export type TestContext = {
   put: <T = any>(url: string, body?: unknown, opts?: CallOptions) => Promise<Res<T>>;
   patch: <T = any>(url: string, body?: unknown, opts?: CallOptions) => Promise<Res<T>>;
   del: <T = any>(url: string, opts?: CallOptions) => Promise<Res<T>>;
+  /** Runs every queued job that is due, and any they queue, as the background worker would. */
+  runJobs: () => Promise<number>;
 };
 
 function matchOperation(operations: Operation[], method: string, path: string): Operation | undefined {
@@ -93,13 +97,14 @@ function validate(schema: object, body: unknown, where: string) {
  * A server on the test database, truncated before every test. Call once at
  * the top of a test file.
  */
-export function setupApi(): TestContext {
+export function setupApi(env: Record<string, string> = {}): TestContext {
   const url = process.env.TEST_DATABASE_URL!;
-  const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, LOG_LEVEL: 'silent', DEMO_OTP: 'false', RATE_LIMIT_PER_MINUTE: '100000' });
+  const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, LOG_LEVEL: 'silent', DEMO_OTP: 'false', RATE_LIMIT_PER_MINUTE: '100000', AUTH_RATE_LIMIT_PER_MINUTE: '100000', ...env });
   const pool = createPool(url, 5);
   const db = createDb(pool);
-  const providers = createProviders(config, { info: () => {} }, db);
   let now: Date | null = null;
+  // The simulators keep the test's clock, so a session opened "now" is the pinned now.
+  const providers = createProviders(config, { info: () => {} }, db, () => (now ? new Date(now) : new Date()));
   const deps: Deps = { db, pool, config, providers, now: () => (now ? new Date(now) : new Date()) };
   let app: FastifyInstance | null = null;
   let operations: Operation[] = [];
@@ -127,6 +132,8 @@ export function setupApi(): TestContext {
     }
     now = null;
     providers.outbox.clear();
+    (providers.compliance as { reset?: () => void }).reset?.();
+    (providers.returns as { reset?: () => void }).reset?.();
     await pool.query(`TRUNCATE ${tables.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`);
   });
 
@@ -151,6 +158,15 @@ export function setupApi(): TestContext {
     };
     if (!opts.unchecked) checkContract(matchOperation(operations, method, url), problem, out, method, url);
     return out;
+  };
+  ctx.runJobs = async () => {
+    const quiet = { info: () => {}, warn: () => {}, error: () => {}, fatal: () => {} };
+    // Jobs are queued at the real time; a test that pinned the clock in the past would never see them due.
+    const later = { ...deps, now: () => new Date(Math.max(deps.now().getTime(), Date.now())) };
+    const worker = createWorker(later, JOB_HANDLERS, { concurrency: 10, log: quiet });
+    let total = 0;
+    for (let n = await worker.drainOnce(); n > 0; n = await worker.drainOnce()) total += n;
+    return total;
   };
   ctx.get = (url, opts) => ctx.call('GET', url, opts);
   ctx.post = (url, body, opts) => ctx.call('POST', url, { ...opts, body: body ?? {} });

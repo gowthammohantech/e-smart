@@ -92,6 +92,104 @@
       "when": 1793587118008,
       "tag": "0012_payment_account_opening_balance_date",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793639565408,
+      "tag": "0013_auth_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793640191728,
+      "tag": "0014_operator_mfa",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793641349526,
+      "tag": "0015_account_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793671635137,
+      "tag": "0016_background_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793673064199,
+      "tag": "0017_compliance_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793673984928,
+      "tag": "0018_push_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793701909987,
+      "tag": "0019_gst_treatment",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793705974052,
+      "tag": "0020_credit_debit_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793709216335,
+      "tag": "0021_tds_rcm_itc",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793710999341,
+      "tag": "0022_books",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793714582819,
+      "tag": "0023_gst_returns",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793720070327,
+      "tag": "0024_gstr2b",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793755303923,
+      "tag": "0025_extras",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793757004884,
+      "tag": "0026_opening_rate",
+      "breakpoints": true
     }
   ]
 }

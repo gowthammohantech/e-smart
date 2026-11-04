@@ -1,12 +1,22 @@
+import { inArray } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
+import { isCancelled } from '@esmart/core/domain/documentStates';
 import { FULL_PLAN, hasModule, moduleForReport } from '@esmart/core/domain/plan';
+import { tdsRegister } from '@esmart/core/domain/tds';
+import type { BusinessDocument } from '@esmart/core/types';
+import { schema } from '@esmart/db';
 import { profitSnapshot, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
-import { invalid, planUpgradeRequired } from '../../http/errors';
+import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
+import { loadBook } from '../books/book';
+import { trialBalance } from '@esmart/core/domain/ledger/reports';
+import { money } from '../../lib/wire';
 import { expensesToWire } from '../expenses/wire';
 import { coreMovements } from '../inventory/ledger';
 import { ledgerHandlers } from '../ledger/handlers';
+import { msmeReport } from '../ledger/msme';
+import { companyCore } from '../documents/engine';
 import { accountNames, branchNames, loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadParties, loadPayments, type Scope } from './data';
 import { tableCsv, tableHtml, tableOf, type ReportBody, type ReportKey } from './table';
 
@@ -69,8 +79,9 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
       return { ...r, rows: r.rows.map((row) => ({ ...row, item: row.item as unknown as Schema<'Item'> })) };
     }
     case 'tax-summary': {
-      const { docs } = await loadDocuments(s, ['invoice', 'purchaseBill']);
-      return summarizeTax(docs, base, filters);
+      const { docs } = await loadDocuments(s, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote']);
+      const { expenses } = await loadExpenses(s);
+      return summarizeTax(docs, base, filters, expenses, companyCore(s.company));
     }
     case 'payments': {
       const { payments, wire } = await loadPayments(s);
@@ -78,9 +89,45 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
       return { ...r, payments: r.payments.map((p) => wire.get(p.id)!) };
     }
     case 'profit': {
-      const { docs } = await loadDocuments(s, ['invoice']);
+      // Bills give the average cost of what was sold.
+      const { docs } = await loadDocuments(s, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
       const { expenses } = await loadExpenses(s);
       return profitSnapshot(docs, expenses, await loadItems(s), base, filters);
+    }
+    case 'trial-balance': {
+      // The books are one set across branches; a user limited to some of them sees the branch reports instead.
+      if (s.user.branchIds.length) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
+      const { postings, book } = await loadBook(s);
+      const tb = trialBalance(postings, book, { from: s.from, to: s.to }, s.company.fiscalYearStartMonth);
+      return {
+        rows: tb.rows.map((r) => ({ account: r.account.key, name: r.account.name, group: r.account.group, opening: money(r.opening, base), debit: money(r.debit, base), credit: money(r.credit, base), closing: money(r.closing, base) })),
+        totalDebit: money(tb.totals.closingDebit, base),
+        totalCredit: money(tb.totals.closingCredit, base),
+      };
+    }
+    case 'msme-payables':
+      return msmeReport(s.db, s.company, s.to, s.user.branchIds);
+    case 'tds-register': {
+      const { docs } = await loadDocuments(s, ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote']);
+      const live = docs.filter((d) => !isCancelled(d.status) && (!q.partyId || d.partyId === q.partyId));
+      const partyIds = [...new Set(live.map((d) => d.partyId))];
+      const parties = partyIds.length ? await s.db.select({ id: schema.parties.id, name: schema.parties.name, pan: schema.parties.pan }).from(schema.parties).where(inArray(schema.parties.id, partyIds)) : [];
+      const toBase = (minor: number, d: BusinessDocument) => Math.round(minor * (d.currency === base ? 1 : d.exchangeRate));
+      const rows = tdsRegister(
+        live.map((d) => ({
+          partyId: d.partyId,
+          date: d.date,
+          tds: d.tds ? { section: d.tds.section, amount: { minor: toBase(d.tds.amount.minor, d) } } : undefined,
+          baseMinor: toBase(d.totals.taxableAmount.minor, d),
+          sign: d.kind === 'supplierCreditNote' ? -1 : 1,
+        })),
+        parties.map((p) => ({ id: p.id, name: p.name, pan: p.pan ?? undefined })),
+        { from: s.from, to: s.to },
+      );
+      return {
+        rows: rows.map((r) => ({ ...r, base: money(r.baseMinor, base), tds: money(r.tdsMinor, base), baseMinor: undefined, tdsMinor: undefined })),
+        total: money(rows.reduce((a, r) => a + r.tdsMinor, 0), base),
+      };
     }
   }
 }

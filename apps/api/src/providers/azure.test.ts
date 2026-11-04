@@ -13,6 +13,8 @@ const production = {
   JWT_SECRET: 'x'.repeat(32),
   CREDENTIALS_KEY: Buffer.alloc(32, 1).toString('base64'),
   CORS_ORIGINS: 'https://app.example.in',
+  APP_URL: 'https://app.example.in',
+  PUBLIC_BASE_URL: 'https://api.example.in',
   SMS_PROVIDER: 'msg91',
   MSG91_AUTH_KEY: 'k',
   MSG91_TEMPLATE_ID: 't',

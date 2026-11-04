@@ -32,6 +32,11 @@ function bilingual(t: Translate, language: LanguageCode): (key: string) => strin
   };
 }
 
+/** Statutory wording on the note, so English like the field names. */
+const NOTE_REASON = { discount: 'Discount after sale', priceChange: 'Price change', taxCorrection: 'Tax correction', deficiency: 'Short or faulty supply', other: 'Other' } as const;
+
+const SUPPLY_NOTE = { nil: 'Nil-rated supply', exempt: 'Exempt supply', nonGst: 'Non-GST supply' } as const;
+
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
@@ -63,6 +68,7 @@ export function buildDocumentHtml({
   branch,
   ewayBill,
   logoSrc,
+  source,
   t,
   language,
 }: {
@@ -73,6 +79,8 @@ export function buildDocumentHtml({
   /** The issuing branch: its own address and GSTIN win over the company's. */
   branch?: Branch;
   ewayBill?: EwayBill;
+  /** The invoice or bill a note or return is raised against: Rule 53 has the note name it. */
+  source?: Pick<BusinessDocument, 'number' | 'date'>;
   /** The business logo, when not `company.logoUri`: the server passes it inline, as a data URI, so a PDF never waits on a link. */
   logoSrc?: string;
   /** Translator for the descriptive labels. Statutory field names stay English. */
@@ -82,8 +90,10 @@ export function buildDocumentHtml({
   // A heading, so it takes the singular. Upper-casing is an English typographic
   // convention and a no-op on Tamil, so it is applied only where it means
   // something.
-  const kindName = documentKindLabel(t, doc.kind, 1);
-  const label = language === 'en' ? kindName.toUpperCase() : kindName;
+  // A composition dealer may not issue a tax invoice, only a bill of supply (Rule 49). Statutory, so English.
+  const billOfSupply = doc.kind === 'invoice' && !!company?.taxRegistration?.compositionScheme;
+  const kindName = billOfSupply ? 'Bill of Supply' : documentKindLabel(t, doc.kind, 1);
+  const label = language === 'en' || billOfSupply ? kindName.toUpperCase() : kindName;
 
   const bi = bilingual(t, language);
   const sellerTaxId = branch?.gstin ?? company?.taxRegistration?.identifier;
@@ -105,6 +115,8 @@ export function buildDocumentHtml({
         <td>
           <div class="item">${esc(line.name)}</div>
           ${line.hsnCode ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
+          ${line.gst?.reimbursement ? '<div class="sub">Reimbursement at cost (pure agent)</div>' : ''}
+          ${line.gst?.supplyType && line.gst.supplyType !== 'taxable' ? `<div class="sub">${SUPPLY_NOTE[line.gst.supplyType]}</div>` : ''}
         </td>
         <td class="num">${formatQty(line.quantity)} ${esc(line.unit)}</td>
         <td class="num">${formatMoney(line.unitPrice)}</td>
@@ -115,18 +127,22 @@ export function buildDocumentHtml({
     })
     .join('');
 
+  // `name` is markup: `bi()` labels come escaped already, plain ones go through `esc` here.
   const totalRow = (name: string, value: string, strong = false) =>
-    `<tr class="${strong ? 'grand' : ''}"><td>${esc(name)}</td><td class="num">${value}</td></tr>`;
+    `<tr class="${strong ? 'grand' : ''}"><td>${name}</td><td class="num">${value}</td></tr>`;
 
   const totalRows = [
     totalRow(bi('sales:pdf.subtotal'), formatMoney(doc.totals.subtotal)),
-    doc.totals.lineDiscount.minor > 0 ? totalRow('Line discounts', `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
+    doc.totals.lineDiscount.minor > 0 ? totalRow(esc('Line discounts'), `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
     totalRow(bi('sales:pdf.taxableValue'), formatMoney(doc.totals.taxableAmount)),
-    ...components.map((c) => totalRow(c.label, formatMoney(c.amount))),
-    doc.totals.documentDiscount.minor > 0 ? totalRow('Discount on total', `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
-    doc.totals.charges.minor > 0 ? totalRow('Other charges', formatMoney(doc.totals.charges)) : '',
+    ...components.map((c) => totalRow(esc(c.label), formatMoney(c.amount))),
+    doc.totals.documentDiscount.minor > 0 ? totalRow(esc('Discount on total'), `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
+    doc.totals.reimbursements?.minor ? totalRow(esc('Reimbursement of expenses'), formatMoney(doc.totals.reimbursements)) : '',
+    doc.totals.charges.minor > 0 ? totalRow(esc('Other charges'), formatMoney(doc.totals.charges)) : '',
     doc.totals.roundOff.minor !== 0 ? totalRow(bi('sales:pdf.roundOff'), formatMoney(doc.totals.roundOff, { signed: true })) : '',
     totalRow(bi('sales:pdf.total'), formatMoney(doc.totals.grandTotal), true),
+    // Rule 46(p): the invoice says whether tax is payable on reverse charge, and how much.
+    doc.totals.reverseChargeTax?.minor ? totalRow(esc('Tax payable on reverse charge by the recipient'), formatMoney(doc.totals.reverseChargeTax)) : '',
   ]
     .filter(Boolean)
     .join('');
@@ -214,11 +230,14 @@ export function buildDocumentHtml({
     </div>
     <div>
       <div class="doc-title">${label}</div>
+      ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}
       <div class="meta">
         <div><strong>${esc(doc.number)}</strong></div>
         <div class="muted">Date: ${formatDate(doc.date)}</div>
         ${doc.dueDate ? `<div class="muted">Due: ${formatDate(doc.dueDate)}</div>` : ''}
         ${doc.validUntil ? `<div class="muted">Valid until: ${formatDate(doc.validUntil)}</div>` : ''}
+        ${source ? `<div class="muted">Against ${esc(source.number)} of ${formatDate(source.date)}</div>` : ''}
+        ${doc.noteReason ? `<div class="muted">Reason: ${esc(NOTE_REASON[doc.noteReason])}</div>` : ''}
         ${branchLabel ? `<div class="muted">${esc(branchLabel)}</div>` : ''}
       </div>
     </div>

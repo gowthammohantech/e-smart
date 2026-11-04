@@ -59,6 +59,29 @@ export function validPostalCode(value: string | undefined, country = 'IN', state
   return undefined;
 }
 
+/**
+ * A tax rate as the server takes it: 0–100%, or up to 999.999% for cess
+ * (tobacco, aerated drinks), with at most three decimals.
+ */
+export function validTaxRate(value: string, type?: string): string | undefined {
+  const v = value.trim();
+  const max = type === 'CESS' ? 999.999 : 100;
+  const rate = Number(v);
+  if (!v || !Number.isFinite(rate)) return i18n.t('errors:validation.taxRateRange', { max });
+  if (rate < 0 || rate > max) return i18n.t('errors:validation.taxRateRange', { max });
+  if (!/^\d+(\.\d{1,3})?$/.test(v)) return i18n.t('errors:validation.taxRateDecimals');
+  return undefined;
+}
+
+/** Tax deduction account number: four letters, five digits, a letter (e.g. CHED12345A). */
+export const TAN_RE = /^[A-Z]{4}[0-9]{5}[A-Z]$/;
+
+export function validTan(value: string | undefined): string | undefined {
+  const v = (value ?? '').trim().toUpperCase();
+  if (!v) return undefined;
+  return TAN_RE.test(v) ? undefined : i18n.t('errors:validation.tanShape');
+}
+
 export const HSN_RE = /^\d{4}(\d{2})?(\d{2})?$/;
 
 /**

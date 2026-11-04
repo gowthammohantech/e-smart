@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router';
 import { useAuth, useOperator } from '../auth/AuthProvider';
+import { useThemeMode, type ThemeMode } from '../theme/themeMode';
 import { RoleBadge } from './Badges';
 
 const icon = (d: string) => (
@@ -18,6 +19,7 @@ const NAV = [
 export function AppShell() {
   const operator = useOperator();
   const { signOut } = useAuth();
+  const [themeMode, setThemeMode] = useThemeMode();
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -46,6 +48,16 @@ export function AppShell() {
               <RoleBadge role={operator.platformRole} />
             </div>
           </div>
+          <select
+            className="select theme-select"
+            aria-label="Theme"
+            value={themeMode}
+            onChange={(e) => setThemeMode(e.target.value as ThemeMode)}
+          >
+            <option value="system">System theme</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
           <button className="btn small" type="button" onClick={() => void signOut()}>
             Sign out
           </button>

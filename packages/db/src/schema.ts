@@ -32,7 +32,9 @@ export const cancelReasonCode = pgEnum("cancel_reason_code", ['1', '2', '3', '4'
 export const deliveryStatus = pgEnum("delivery_status", ['queued', 'sent', 'delivered', 'read', 'failed'])
 export const discountMode = pgEnum("discount_mode", ['percent', 'amount'])
 export const docStatus = pgEnum("doc_status", ['draft', 'sent', 'accepted', 'rejected', 'expired', 'confirmed', 'fulfilled', 'cancelled', 'delivered', 'issued', 'partiallyPaid', 'paid', 'overdue', 'requested', 'approved', 'processed', 'received', 'billed'])
-export const documentKind = pgEnum("document_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'])
+export const documentKind = pgEnum("document_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'])
+/** Why a credit or debit note was raised. */
+export const noteReason = pgEnum("note_reason", ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'])
 export const einvoiceDocType = pgEnum("einvoice_doc_type", ['INV', 'CRN', 'DBN'])
 export const einvoiceStatus = pgEnum("einvoice_status", ['notApplicable', 'pending', 'generated', 'cancelled', 'failed'])
 export const einvoiceSupplyType = pgEnum("einvoice_supply_type", ['B2B', 'SEZWP', 'SEZWOP', 'EXPWP', 'EXPWOP', 'DEXP'])
@@ -50,11 +52,17 @@ export const integrationCategory = pgEnum("integration_category", ['payments', '
 /** Which portal a stored login is for. The two logins can differ, so each has its own row. */
 export const compliancePortal = pgEnum("compliance_portal", ['einvoice', 'ewaybill'])
 export const itemType = pgEnum("item_type", ['goods', 'service'])
+/** How GST treats a supply: nil-rated, exempt and non-GST are each reported on their own. */
+export const supplyType = pgEnum("supply_type", ['taxable', 'nil', 'exempt', 'nonGst'])
+/** Whether GST on a purchase can be claimed; `blocked` is s.17(5). */
+export const itcEligibility = pgEnum("itc_eligibility", ['eligible', 'blocked', 'ineligible'])
+export const msmeType = pgEnum("msme_type", ['micro', 'small', 'medium'])
+export const returnFrequency = pgEnum("return_frequency", ['monthly', 'qrmp'])
 export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed', 'failed'])
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
 export const messageChannel = pgEnum("message_channel", ['whatsapp', 'sms', 'email'])
 export const notificationKind = pgEnum("notification_kind", ['invoiceSent', 'paymentReceived', 'invoiceOverdue', 'lowStock', 'compliance', 'syncFailure', 'system'])
-export const numberingKind = pgEnum("numbering_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense'])
+export const numberingKind = pgEnum("numbering_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan'])
 export const ocrFieldKey = pgEnum("ocr_field_key", ['vendor', 'gstin', 'date', 'amount', 'tax', 'reference', 'category'])
 export const ocrKind = pgEnum("ocr_kind", ['expense', 'purchaseBill'])
 export const ocrStatus = pgEnum("ocr_status", ['queued', 'processing', 'completed', 'failed'])
@@ -63,7 +71,9 @@ export const partyKind = pgEnum("party_kind", ['customer', 'supplier'])
 export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank', 'wallet'])
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
-export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables'])
+export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables', 'books'])
+export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan'])
+export const ledgerGroup = pgEnum("ledger_group", ['capital', 'reserves', 'loans', 'sundryCreditors', 'dutiesTaxes', 'provisions', 'currentLiabilities', 'fixedAssets', 'investments', 'sundryDebtors', 'cashInHand', 'bankAccounts', 'stockInHand', 'loansAdvances', 'currentAssets', 'salesAccounts', 'directIncomes', 'indirectIncomes', 'purchaseAccounts', 'directExpenses', 'indirectExpenses'])
 export const planTier = pgEnum("plan_tier", ['free', 'basic', 'pro', 'business'])
 export const platformRole = pgEnum("platform_role", ['superadmin', 'support'])
 export const pushProvider = pgEnum("push_provider", ['expo', 'fcm', 'apns'])
@@ -133,6 +143,21 @@ export const users = pgTable("users", {
 	emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true, mode: 'date' }),
 	phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true, mode: 'date' }),
 	lastActiveAt: timestamp("last_active_at", { withTimezone: true, mode: 'date' }),
+	/** Wrong passwords since the last good sign-in; five lock the account (see `locked_until`). */
+	failedSignInCount: smallint("failed_sign_in_count").default(0).notNull(),
+	/** Password sign-in is refused until then. A password reset clears it. */
+	lockedUntil: timestamp("locked_until", { withTimezone: true, mode: 'date' }),
+	termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true, mode: 'date' }),
+	termsVersion: varchar("terms_version", { length: 20 }),
+	/** Operators' authenticator secret, AES-GCM with CREDENTIALS_KEY. Set while enrolling; live once `totp_enabled_at` is. */
+	totpSecretEncrypted: text("totp_secret_encrypted"),
+	totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true, mode: 'date' }),
+	/** The last 30-second step a code was accepted for, so a code can't be used twice. */
+	totpLastStep: bigint("totp_last_step", { mode: "number" }),
+	/** sha256 of each unused recovery code. */
+	recoveryCodeHashes: jsonb("recovery_code_hashes").$type<string[]>(),
+	/** Notification kinds this person turned off for push (they still appear in the app). */
+	pushMuted: jsonb("push_muted").$type<string[]>().default([]).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -272,6 +297,8 @@ export const deviceSessions = pgTable("device_sessions", {
 	refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true, mode: 'date' }).notNull(),
 	lastActiveAt: timestamp("last_active_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	revokedAt: timestamp("revoked_at", { withTimezone: true, mode: 'date' }),
+	/** When this session passed the authenticator check. Platform routes need it; tenant routes don't. */
+	mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true, mode: 'date' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	index("device_sessions_user_id_idx").using("btree", table.userId.asc().nullsLast()),
@@ -303,6 +330,8 @@ export const paymentAccounts = pgTable("payment_accounts", {
 	accountNumber: varchar("account_number", { length: 40 }),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
 	openingBalanceDate: date("opening_balance_date"),
+	// A foreign-currency account: its opening balance's rate to base on that day, so totals in base agree everywhere.
+	openingRate: numeric("opening_rate", { precision: 18, scale:  8 }).default('1').notNull(),
 	isDefault: boolean("is_default").default(false).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -506,6 +535,13 @@ export const items = pgTable("items", {
 	hsnCode: varchar("hsn_code", { length: 8 }),
 	barcode: varchar({ length: 40 }),
 	trackInventory: boolean("track_inventory").default(false).notNull(),
+	// GST treatment, copied onto each document line when it is used.
+	supplyType: supplyType("supply_type").default('taxable').notNull(),
+	reimbursement: boolean().default(false).notNull(),
+	capitalGoods: boolean("capital_goods").default(false).notNull(),
+	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	cessRate: numeric("cess_rate", { precision: 6, scale:  3 }).default('0').notNull(),
 	openingStock: numeric("opening_stock", { precision: 18, scale:  3 }).default('0').notNull(),
 	openingStockDate: date("opening_stock_date"),
 	reorderLevel: numeric("reorder_level", { precision: 18, scale:  3 }).default('0').notNull(),
@@ -567,19 +603,43 @@ export const documents = pgTable("documents", {
 	// A round-off the user typed, overriding the automatic one.
 	roundOffManualMinor: bigint("round_off_manual_minor", { mode: "number" }),
 	placeOfSupplyStateCode: varchar("place_of_supply_state_code", { length: 2 }),
+	// The whole document is under reverse charge: the buyer pays the GST.
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	// The party's GSTIN and state as they were when the document was finalised.
+	partyGstin: varchar("party_gstin", { length: 15 }),
+	partyStateCode: varchar("party_state_code", { length: 2 }),
 	notes: text(),
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
+	noteReason: noteReason("note_reason"),
+	// TDS deducted on a supplier's bill; what's owed them is the grand total less this.
+	tdsSection: varchar("tds_section", { length: 8 }),
+	tdsRate: numeric("tds_rate", { precision: 6, scale:  3 }),
+	tdsAmountMinor: bigint("tds_amount_minor", { mode: "number" }).default(0).notNull(),
+	// Rule 46(f): a reverse-charge purchase from an unregistered supplier.
+	selfInvoiceNumber: varchar("self_invoice_number", { length: 40 }),
+	// Credit reversed after 180 days unpaid (Rule 37), and claimed again once paid.
+	// The GSTR-2B period (MMYYYY) whose line this bill was matched to: its credit is claimed then.
+	itcClaimPeriod: char("itc_claim_period", { length: 6 }),
+	// The project or department the document belongs to, for profit by cost centre.
+	costCentreId: varchar("cost_centre_id", { length: 40 }),
+	itcReversedOn: date("itc_reversed_on"),
+	itcReclaimedOn: date("itc_reclaimed_on"),
 	subtotalMinor: bigint("subtotal_minor", { mode: "number" }).default(0).notNull(),
 	lineDiscountMinor: bigint("line_discount_minor", { mode: "number" }).default(0).notNull(),
 	documentDiscountMinor: bigint("document_discount_minor", { mode: "number" }).default(0).notNull(),
 	taxableAmountMinor: bigint("taxable_amount_minor", { mode: "number" }).default(0).notNull(),
 	totalTaxMinor: bigint("total_tax_minor", { mode: "number" }).default(0).notNull(),
+	// Tax the buyer pays under reverse charge, and pure-agent reimbursements: neither is taxable value.
+	reverseChargeTaxMinor: bigint("reverse_charge_tax_minor", { mode: "number" }).default(0).notNull(),
+	reimbursementsMinor: bigint("reimbursements_minor", { mode: "number" }).default(0).notNull(),
 	roundOffMinor: bigint("round_off_minor", { mode: "number" }).default(0).notNull(),
 	grandTotalMinor: bigint("grand_total_minor", { mode: "number" }).default(0).notNull(),
 	grandTotalBaseMinor: bigint("grand_total_base_minor", { mode: "number" }).default(0).notNull(),
 	amountPaidMinor: bigint("amount_paid_minor", { mode: "number" }).default(0).notNull(),
 	currentEwayBillId: varchar("current_eway_bill_id", { length: 40 }),
+	/** When the team was told this invoice fell overdue, so they're told once. */
+	overdueNotifiedAt: timestamp("overdue_notified_at", { withTimezone: true, mode: 'date' }),
 	complianceLastMessage: text("compliance_last_message"),
 	complianceLastAttemptAt: timestamp("compliance_last_attempt_at", { withTimezone: true, mode: 'date' }),
 	finalizedAt: timestamp("finalized_at", { withTimezone: true, mode: 'date' }),
@@ -648,6 +708,15 @@ export const documentLines = pgTable("document_lines", {
 	taxCategoryId: varchar("tax_category_id", { length: 40 }).notNull(),
 	taxRate: numeric("tax_rate", { precision: 6, scale:  3 }).notNull(),
 	taxInclusive: boolean("tax_inclusive").default(false).notNull(),
+	// The item's GST treatment when the line was written.
+	supplyType: supplyType("supply_type").default('taxable').notNull(),
+	reimbursement: boolean().default(false).notNull(),
+	// A reimbursement line: the billable expense it recovers.
+	expenseId: varchar("expense_id", { length: 40 }),
+	capitalGoods: boolean("capital_goods").default(false).notNull(),
+	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	cessRate: numeric("cess_rate", { precision: 6, scale:  3 }).default('0').notNull(),
 	lineTotalMinor: bigint("line_total_minor", { mode: "number" }).default(0).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	uniqueIndex("document_lines_document_id_position_idx").using("btree", table.documentId.asc().nullsLast(), table.position.asc().nullsLast()),
@@ -677,8 +746,10 @@ export const documentTaxLines = pgTable("document_tax_lines", {
 	rate: numeric({ precision: 6, scale:  3 }).notNull(),
 	taxableAmountMinor: bigint("taxable_amount_minor", { mode: "number" }).notNull(),
 	totalTaxMinor: bigint("total_tax_minor", { mode: "number" }).notNull(),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
-	uniqueIndex("document_tax_lines_document_id_tax_category_id_idx").using("btree", table.documentId.asc().nullsLast(), table.taxCategoryId.asc().nullsLast()),
+	// Not unique: one category can have a forward-charge and a reverse-charge row, or two cess rates.
+	index("document_tax_lines_document_id_idx").using("btree", table.documentId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.documentId],
 			foreignColumns: [documents.id],
@@ -745,6 +816,15 @@ export const parties = pgTable("parties", {
 	displayName: varchar("display_name", { length: 200 }),
 	taxId: varchar("tax_id", { length: 20 }),
 	gstRegistrationType: gstRegistrationType("gst_registration_type"),
+	pan: varchar({ length: 10 }),
+	msmeType: msmeType("msme_type"),
+	udyamNumber: varchar("udyam_number", { length: 19 }),
+	// Bills from this supplier are under reverse charge unless a line says otherwise.
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	// The TDS section their bills fall under by default, and any lower deduction certificate (s.197).
+	tdsSection: varchar("tds_section", { length: 8 }),
+	lowerTdsRate: numeric("lower_tds_rate", { precision: 6, scale:  3 }),
+	lowerTdsValidTill: date("lower_tds_valid_till"),
 	email: varchar({ length: 254 }),
 	phone: varchar({ length: 20 }),
 	currency: char({ length: 3 }).notNull(),
@@ -1060,6 +1140,10 @@ export const payments = pgTable("payments", {
 	accountId: varchar("account_id", { length: 40 }).notNull(),
 	unallocatedMinor: bigint("unallocated_minor", { mode: "number" }).default(0).notNull(),
 	fxGainLossMinor: bigint("fx_gain_loss_minor", { mode: "number" }),
+	// An advance for services carries GST when received (s.13): its rate and place of supply.
+	advanceTaxCategoryId: varchar("advance_tax_category_id", { length: 40 }),
+	advanceTaxRate: numeric("advance_tax_rate", { precision: 6, scale:  3 }),
+	advancePlaceOfSupply: varchar("advance_place_of_supply", { length: 2 }),
 	notes: text(),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
@@ -1135,7 +1219,11 @@ export const paymentAllocations = pgTable("payment_allocations", {
 	paymentId: varchar("payment_id", { length: 40 }).notNull(),
 	documentId: varchar("document_id", { length: 40 }).notNull(),
 	documentNumber: varchar("document_number", { length: 40 }).notNull(),
+	// Cash: what the payment itself settles. The three below settle the document without money moving.
 	amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+	tdsMinor: bigint("tds_minor", { mode: "number" }).default(0).notNull(),
+	discountMinor: bigint("discount_minor", { mode: "number" }).default(0).notNull(),
+	writeOffMinor: bigint("write_off_minor", { mode: "number" }).default(0).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	index("payment_allocations_document_id_idx").using("btree", table.documentId.asc().nullsLast()),
 	uniqueIndex("payment_allocations_payment_id_document_id_idx").using("btree", table.paymentId.asc().nullsLast(), table.documentId.asc().nullsLast()),
@@ -1165,11 +1253,19 @@ export const expenses = pgTable("expenses", {
 	taxCategoryId: varchar("tax_category_id", { length: 40 }),
 	taxAmountMinor: bigint("tax_amount_minor", { mode: "number" }).default(0).notNull(),
 	taxInclusive: boolean("tax_inclusive").default(true).notNull(),
+	placeOfSupplyStateCode: varchar("place_of_supply_state_code", { length: 2 }),
+	supplierGstin: varchar("supplier_gstin", { length: 15 }),
+	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
+	// The tax is paid by the business under reverse charge, not to the supplier.
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 	accountId: varchar("account_id", { length: 40 }).notNull(),
 	method: paymentMethod().notNull(),
 	reference: varchar({ length: 100 }),
 	notes: text(),
 	billable: boolean().default(false).notNull(),
+	// Billable: the customer it is recovered from.
+	customerId: varchar("customer_id", { length: 40 }),
+	costCentreId: varchar("cost_centre_id", { length: 40 }),
 	recurrence: recurrenceFrequency().default('none').notNull(),
 	nextRecurrenceDate: date("next_recurrence_date"),
 	recurringParentId: varchar("recurring_parent_id", { length: 40 }),
@@ -1566,6 +1662,11 @@ export const accounts = pgTable("accounts", {
 	suspendedAt: timestamp("suspended_at", { withTimezone: true, mode: 'date' }),
 	suspendedReason: varchar("suspended_reason", { length: 500 }),
 	suspendedBy: varchar("suspended_by", { length: 40 }),
+	/**
+	 * Set when the last person on the account deleted it. The books are kept until then because GST law
+	 * requires them (72 months from the annual return's due date, so 8 years is safe), then erased.
+	 */
+	purgeAfter: timestamp("purge_after", { withTimezone: true, mode: 'date' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -1634,10 +1735,13 @@ export const companies = pgTable("companies", {
 	// Letter of Undertaking: exports and SEZ supplies are zero-rated while it is valid.
 	lutNumber: varchar("lut_number", { length: 40 }),
 	lutValidTill: date("lut_valid_till", { mode: 'string' }),
+	returnFrequency: returnFrequency("return_frequency").default('monthly').notNull(),
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
 	lockedThroughDate: date("locked_through_date"),
 	// Off by default: a sale cannot take a tracked item below zero at its branch.
 	allowNegativeStock: boolean("allow_negative_stock").default(false).notNull(),
+	// With a TAN the business deducts TDS on what it pays suppliers.
+	tan: varchar({ length: 10 }),
 	plan: planTier().default('free').notNull(),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),
 	version: integer().default(1).notNull(),
@@ -1897,4 +2001,278 @@ export const idempotencyKeys = pgTable("idempotency_keys", {
 			name: "idempotency_keys_user_id_fkey"
 		}),
 	primaryKey({ columns: [table.userId, table.key], name: "idempotency_keys_pkey"}),
+]);
+
+export const backgroundJobStatus = pgEnum("background_job_status", ['queued', 'running', 'done', 'dead'])
+
+/**
+ * Work the API does in the background (apps/api/src/jobs): scheduled tasks, slow exports, pushes.
+ * A worker claims a due row with SKIP LOCKED and holds it for `locked_until`; one that dies mid-job
+ * lets the lease run out and another picks it up. `unique_key` stops the same piece of work being
+ * queued twice while one is still waiting or running (a scheduled period, one company's backup).
+ */
+export const jobs = pgTable("jobs", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	kind: varchar({ length: 60 }).notNull(),
+	payload: jsonb().default({}).notNull(),
+	status: backgroundJobStatus().default('queued').notNull(),
+	runAt: timestamp("run_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	attempts: smallint().default(0).notNull(),
+	maxAttempts: smallint("max_attempts").default(5).notNull(),
+	lockedUntil: timestamp("locked_until", { withTimezone: true, mode: 'date' }),
+	lastError: text("last_error"),
+	uniqueKey: varchar("unique_key", { length: 200 }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	finishedAt: timestamp("finished_at", { withTimezone: true, mode: 'date' }),
+}, (table): PgTableExtraConfigValue[] => [
+	index("jobs_due_idx").using("btree", table.status.asc().nullsLast(), table.runAt.asc().nullsLast()),
+	uniqueIndex("jobs_unique_key_idx").using("btree", table.uniqueKey.asc().nullsLast()).where(sql`${table.uniqueKey} IS NOT NULL AND ${table.status} IN ('queued', 'running')`),
+]);
+
+/**
+ * One row per scheduled period that was queued ("recurring-expenses:2026-11-03"). The primary key is
+ * what makes every API instance's scheduler safe to run at once: only the first insert queues the job.
+ */
+export const jobScheduleRuns = pgTable("job_schedule_runs", {
+	key: varchar({ length: 200 }).primaryKey().notNull(),
+	jobId: varchar("job_id", { length: 40 }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+});
+
+export const complianceAttemptStatus = pgEnum("compliance_attempt_status", ['pending', 'settled', 'failed'])
+
+/**
+ * A portal call whose answer may have been lost: an e-way bill generate or an IRN cancel that got no
+ * reply. Written before the call, settled with its result; one still pending after a timeout is
+ * reconciled by asking the portal what it holds (apps/api/src/modules/compliance/recovery.ts).
+ */
+export const complianceAttempts = pgTable("compliance_attempts", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	documentId: varchar("document_id", { length: 40 }).notNull(),
+	operation: varchar({ length: 30 }).notNull(),
+	status: complianceAttemptStatus().default('pending').notNull(),
+	/** What the call was, so it can be settled without the request: the input, the payload, the IRN. */
+	request: jsonb().notNull(),
+	actorId: varchar("actor_id", { length: 40 }).notNull(),
+	startedAt: timestamp("started_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	lastCheckedAt: timestamp("last_checked_at", { withTimezone: true, mode: 'date' }),
+	settledAt: timestamp("settled_at", { withTimezone: true, mode: 'date' }),
+	lastError: text("last_error"),
+}, (table): PgTableExtraConfigValue[] => [
+	index("compliance_attempts_pending_idx").using("btree", table.status.asc().nullsLast(), table.startedAt.asc().nullsLast()),
+	// One open attempt per document and operation: a second generate waits for the first to settle.
+	uniqueIndex("compliance_attempts_open_idx").using("btree", table.documentId.asc().nullsLast(), table.operation.asc().nullsLast()).where(sql`${table.status} = 'pending'`),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "compliance_attempts_company_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.documentId],
+			foreignColumns: [documents.id],
+			name: "compliance_attempts_document_id_fkey"
+		}),
+]);
+
+/**
+ * Accounts a business adds itself (rent, a loan, a fixed asset). System accounts and the ones that
+ * mirror parties, cash and bank accounts and expense categories are derived, never stored
+ * (packages/core/src/domain/ledger/accounts.ts).
+ */
+export const ledgerAccounts = pgTable("ledger_accounts", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 200 }).notNull(),
+	group: ledgerGroup().notNull(),
+	// Debit positive, as of the day the books begin.
+	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
+	status: activeStatus().default('active').notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("ledger_accounts_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "ledger_accounts_company_id_fkey"
+		}),
+]);
+
+/** Projects, departments and the like: income and costs can be tagged with one, for profit by cost centre. */
+export const costCentres = pgTable("cost_centres", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 200 }).notNull(),
+	// What kind of centre: "Project", "Department"…
+	category: varchar({ length: 60 }),
+	parentId: varchar("parent_id", { length: 40 }),
+	status: activeStatus().default('active').notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("cost_centres_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "cost_centres_company_id_fkey"
+		}),
+]);
+
+/**
+ * Journal, contra, GST journal and TDS challan vouchers. Lines name accounts by key
+ * (`pay:<id>`, `sys:sales`…) and are base-currency paise: `[{ account, debitMinor, creditMinor, narration? }]`.
+ */
+export const vouchers = pgTable("vouchers", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	branchId: varchar("branch_id", { length: 40 }).notNull(),
+	kind: voucherKind().notNull(),
+	number: varchar({ length: 40 }).notNull(),
+	date: date().notNull(),
+	narration: text(),
+	reference: varchar({ length: 100 }),
+	lines: jsonb().notNull(),
+	createdBy: varchar("created_by", { length: 40 }).notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	index("vouchers_company_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.date.asc().nullsLast()),
+	uniqueIndex("vouchers_company_id_kind_number_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "vouchers_company_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.branchId],
+			foreignColumns: [branches.id],
+			name: "vouchers_branch_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [users.id],
+			name: "vouchers_created_by_fkey"
+		}),
+]);
+
+export const gstReturnType = pgEnum("gst_return_type", ['gstr1', 'gstr3b'])
+export const gstReturnStatus = pgEnum("gst_return_status", ['prepared', 'saved', 'submitted', 'filed', 'failed'])
+
+/**
+ * The taxpayer's own session on the GST portal, per GSTIN (a branch with its own GSTIN has its own):
+ * opened with their portal username and an OTP to their registered phone. The token is encrypted
+ * with CREDENTIALS_KEY; it lasts six hours and refreshes up to `refreshable_until`.
+ */
+export const gstPortalSessions = pgTable("gst_portal_sessions", {
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	username: varchar({ length: 100 }).notNull(),
+	authTokenEncrypted: bytea("auth_token_encrypted"),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'date' }),
+	refreshableUntil: timestamp("refreshable_until", { withTimezone: true, mode: 'date' }),
+	otpRequestedAt: timestamp("otp_requested_at", { withTimezone: true, mode: 'date' }),
+	connectedBy: varchar("connected_by", { length: 40 }),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	primaryKey({ columns: [table.companyId, table.gstin], name: "gst_portal_sessions_pkey" }),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gst_portal_sessions_company_id_fkey"
+		}),
+]);
+
+/**
+ * One GSTR-1 or GSTR-3B for a GSTIN and period (MMYYYY): what was prepared, saved and filed.
+ * Filing locks the period's books.
+ */
+export const gstReturns = pgTable("gst_returns", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	returnType: gstReturnType("return_type").notNull(),
+	period: char({ length: 6 }).notNull(),
+	status: gstReturnStatus().default('prepared').notNull(),
+	/** What was saved to the portal, and our totals of it. */
+	payload: jsonb(),
+	referenceId: varchar("reference_id", { length: 60 }),
+	summaryHash: varchar("summary_hash", { length: 200 }),
+	arn: varchar({ length: 40 }),
+	filedAt: timestamp("filed_at", { withTimezone: true, mode: 'date' }),
+	lastError: text("last_error"),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("gst_returns_company_gstin_type_period_idx").using("btree", table.companyId.asc().nullsLast(), table.gstin.asc().nullsLast(), table.returnType.asc().nullsLast(), table.period.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gst_returns_company_id_fkey"
+		}),
+]);
+
+export const gstr2bDecision = pgEnum("gstr2b_decision", ['accepted', 'notOurs', 'claimLater'])
+
+/** One GSTR-2B download per GSTIN and period (MMYYYY). */
+export const gstr2bPeriods = pgTable("gstr2b_periods", {
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	period: char({ length: 6 }).notNull(),
+	/** When GSTN generated it (the 14th, for most), and when it was last downloaded. */
+	generatedOn: date("generated_on"),
+	fetchedAt: timestamp("fetched_at", { withTimezone: true, mode: 'date' }).notNull(),
+	fetchedBy: varchar("fetched_by", { length: 40 }),
+}, (table): PgTableExtraConfigValue[] => [
+	primaryKey({ columns: [table.companyId, table.gstin, table.period], name: "gstr2b_periods_pkey" }),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gstr2b_periods_company_id_fkey"
+		}),
+]);
+
+/**
+ * The lines of a GSTR-2B: what each supplier reported. A download replaces the period's lines,
+ * but a person's decision on a line (keyed by supplier, kind and number) carries over.
+ */
+export const gstr2bEntries = pgTable("gstr2b_entries", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	period: char({ length: 6 }).notNull(),
+	section: varchar({ length: 8 }).notNull(),
+	supplierGstin: varchar("supplier_gstin", { length: 15 }).notNull(),
+	supplierName: varchar("supplier_name", { length: 200 }),
+	documentType: varchar("document_type", { length: 3 }).notNull(),
+	number: varchar({ length: 40 }).notNull(),
+	/** The number as matched: no case, separators, leading zeros or year. */
+	matchKey: varchar("match_key", { length: 40 }).notNull(),
+	date: date().notNull(),
+	placeOfSupply: varchar("place_of_supply", { length: 2 }),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	taxableMinor: bigint("taxable_minor", { mode: "number" }).notNull(),
+	igstMinor: bigint("igst_minor", { mode: "number" }).default(0).notNull(),
+	cgstMinor: bigint("cgst_minor", { mode: "number" }).default(0).notNull(),
+	sgstMinor: bigint("sgst_minor", { mode: "number" }).default(0).notNull(),
+	cessMinor: bigint("cess_minor", { mode: "number" }).default(0).notNull(),
+	itcAvailable: boolean("itc_available").default(true).notNull(),
+	itcReason: varchar("itc_reason", { length: 40 }),
+	supplierFiledOn: date("supplier_filed_on"),
+	originalNumber: varchar("original_number", { length: 40 }),
+	decision: gstr2bDecision(),
+	linkedDocumentId: varchar("linked_document_id", { length: 40 }),
+	decidedBy: varchar("decided_by", { length: 40 }),
+	decidedAt: timestamp("decided_at", { withTimezone: true, mode: 'date' }),
+}, (table): PgTableExtraConfigValue[] => [
+	index("gstr2b_entries_period_idx").using("btree", table.companyId.asc().nullsLast(), table.gstin.asc().nullsLast(), table.period.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gstr2b_entries_company_id_fkey"
+		}),
 ]);

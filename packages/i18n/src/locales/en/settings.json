@@ -42,12 +42,34 @@
     "lockedNotice": "Entries have been posted, so the legal name, state, financial year and GST registration are locked. An unregistered business can still register for GST.",
     "lutNumber": "LUT number (exports)",
     "lutHint": "With a valid Letter of Undertaking, export invoices are zero-rated: no IGST is charged.",
+    "returnFrequency": "GST returns",
+    "returnMonthly": "Monthly",
+    "returnQuarterly": "Quarterly (QRMP)",
+    "returnFrequencyHint": "QRMP files GSTR-1 and GSTR-3B every quarter and pays tax monthly. Open to turnover up to ₹5 crore.",
+    "tan": "TAN",
+    "tanHint": "Your tax deduction account number. With it, TDS is worked out on supplier bills under their section.",
     "inventory": "Inventory",
     "allowNegativeStock": "Allow negative stock",
     "allowNegativeStockHint": "Let invoices and deliveries sell more than the branch has in stock. When off, they cannot be finalised until the stock is added.",
     "lutValidTill": "LUT valid till",
     "logoRemoving": "Removing the logo…",
     "registeredFor": "Registered for {{regime}}"
+  },
+  "gstPortal": {
+    "howTitle": "Before you connect",
+    "how": "On the GST portal, open Profile → Manage API Access, switch it on and choose how long it lasts (up to 30 days). Then send an OTP here: it goes to the phone registered with GST.",
+    "noGstin": "Add your GSTIN in company settings first.",
+    "statusConnected": "Connected",
+    "statusOff": "Not connected",
+    "until": "As {{user}}, renews on its own until {{date}}.",
+    "username": "GST portal username",
+    "sendOtp": "Send OTP",
+    "otp": "OTP",
+    "otpHint": "The six digits sent to the phone registered with GST.",
+    "otpSent": "OTP sent to the registered phone",
+    "connect": "Connect",
+    "connected": "Connected to the GST portal",
+    "disconnect": "Disconnect"
   },
   "accounts": {
     "default": "Default",
@@ -174,7 +196,7 @@
     "formats": "Formats",
     "automatic": "Automatic backup",
     "tally": "Tally XML",
-    "tallyHint": "Vouchers to import into Tally",
+    "tallyHint": "Ledgers and vouchers to import into Tally",
     "weekly": "Weekly",
     "automaticSwitch": "Back up automatically",
     "lastBackup": "Last backup {{when}}.",
@@ -260,7 +282,8 @@
       "pending": "Pending",
       "failed": "Failed",
       "offline": "Offline"
-    }
+    },
+    "storageFull": "This device is out of storage space, so recent changes are only kept until the app closes. Free some space, then sync."
   },
   "transporters": {
     "none": "No transporters yet",
@@ -334,6 +357,7 @@
     "invitePending": "Invitation pending",
     "editTitle": "Edit user",
     "resend": "Resend invite",
+    "resendIn": "Resend in {{seconds}}s",
     "sendInvite": "Send invitation",
     "guestNote": "This person has their own Elixir Books account. To change their access, remove them and invite them again.",
     "removeTitle": "Remove {{name}}?"
@@ -417,6 +441,7 @@
   },
   "integrations": {
     "connected": "Connected",
+    "comingSoon": "Coming soon",
     "configure": "Configure",
     "group": {
       "payments": "Payments",
@@ -439,5 +464,47 @@
   },
   "eInvoicing": {
     "daysSuffix": "days"
+  },
+  "deleteAccount": {
+    "row": "Delete account",
+    "title": "Delete your account?",
+    "what": "Your name, email, phone and logins are erased, and you're signed out on every device. This can't be undone.",
+    "retention": "If you're the only person on your account, it closes too: the subscription is cancelled, and your invoices and records are kept locked for 8 years, as GST law requires, then erased. Download a backup first if you'll need them.",
+    "backupFirst": "Download a backup first",
+    "offline": "You're offline. Connect to the internet to delete your account.",
+    "unsent_one": "{{count}} change hasn't been sent yet. Send it first, or it will be lost.",
+    "unsent_other": "{{count}} changes haven't been sent yet. Send them first, or they will be lost.",
+    "syncNow": "Send now",
+    "mustTransfer": "Other people use {{names}}. Make one of them an owner under Users first, then delete your account.",
+    "openUsers": "Open Users",
+    "password": "Your password",
+    "usePhone": "Use a code sent to my phone instead",
+    "usePassword": "Use my password instead",
+    "sendCode": "Send a code to {{phone}}",
+    "code": "Code",
+    "typeDelete": "Type DELETE to confirm",
+    "confirm": "Delete my account",
+    "deleting": "Deleting…",
+    "wrongPassword": "That password isn't right.",
+    "wrongCode": "That code isn't right, or has expired. Ask for a new one.",
+    "done": "Your account was deleted."
+  },
+  "notifications": {
+    "offTitle": "Notifications are off",
+    "off": "Turn them on to hear about payments, overdue invoices and e-way bills without opening the app.",
+    "denied": "Notifications are blocked for this app. Turn them on in your phone's settings.",
+    "unavailableTitle": "Not available here",
+    "unavailable": "This build of the app can't receive notifications.",
+    "web": "The web app doesn't send notifications. Use the phone app, or check the notification list here.",
+    "turnOn": "Turn on notifications",
+    "openSettings": "Open phone settings",
+    "inApp": "Everything still shows in the app's notification list, whatever you turn off here.",
+    "kind": {
+      "paymentReceived": "Payments received",
+      "invoiceOverdue": "Invoices overdue",
+      "compliance": "E-invoices and e-way bills",
+      "lowStock": "Low stock",
+      "system": "Exports, backups and everything else"
+    }
   }
 }

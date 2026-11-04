@@ -30,6 +30,7 @@ const BY_CODE: Record<string, string> = {
   OTP_LOCKED: 'auth:remote.codeExpired',
   OTP_EXPIRED: 'auth:remote.codeExpired',
   RATE_LIMITED: 'auth:remote.tooMany',
+  ACCOUNT_LOCKED: 'auth:remote.accountLocked',
 };
 
 /**

@@ -76,6 +76,21 @@
     "salesOrders": "Sales orders",
     "salesReturn": "Sales return",
     "salesReturns": "Sales returns",
+    "gstPortal": "GST portal",
+    "gstr2b": "GSTR-2B",
+    "gstReturns": "GST returns",
+    "creditNotes": "Credit notes",
+    "newCreditNote": "New credit note",
+    "creditNoteOne": "Credit note",
+    "debitNotes": "Debit notes",
+    "newDebitNote": "New debit note",
+    "debitNoteOne": "Debit note",
+    "supplierCreditNotes": "Supplier credit notes",
+    "newSupplierCreditNote": "New supplier credit note",
+    "supplierCreditNoteOne": "Supplier credit note",
+    "supplierDebitNotes": "Supplier debit notes",
+    "newSupplierDebitNote": "New supplier debit note",
+    "supplierDebitNoteOne": "Supplier debit note",
     "scanABill": "Scan a bill",
     "scanBarcode": "Scan barcode",
     "search": "Search",
@@ -87,7 +102,8 @@
     "transporters": "Transporters",
     "usersAndRoles": "Users & roles",
     "yourProfile": "Your profile",
-    "editNamed": "Edit {{name}}"
+    "editNamed": "Edit {{name}}",
+    "notifications": "Notifications"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -136,7 +152,12 @@
       "devicesAndSessions": "Devices & sessions",
       "planAndBilling": "Plan & billing",
       "appearanceAndLanguage": "Appearance & language",
-      "about": "About"
+      "about": "About",
+      "notificationSettings": "Notifications",
+      "books": "Books",
+      "gstPortal": "GST portal connection",
+      "gstr2b": "GSTR-2B and purchase match",
+      "gstReturns": "GSTR-1 and 3B filing"
     },
     "signOut": {
       "row": "Sign out",

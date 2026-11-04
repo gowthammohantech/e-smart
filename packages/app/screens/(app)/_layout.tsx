@@ -1,9 +1,17 @@
-import { Stack } from 'expo-router';
+import React from 'react';
+import { Stack, useRouter, type ErrorBoundaryProps } from 'expo-router';
+import { ErrorFallback } from '../../components/ErrorFallback';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useAppStore } from '../../store/appStore';
 import { usePlanGuard } from '../../navigation/usePlanGuard';
 import { useIntentEntitySync } from '../../features/intents/useIntentEntitySync';
 import { useIntentHandoff } from '../../features/intents/useIntentHandoff';
+
+/** A crash inside the signed-in app keeps the way home. */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  const router = useRouter();
+  return <ErrorFallback {...props} home={() => router.replace('/(app)/(tabs)')} />;
+}
 
 export default function AppLayout() {
   // "/" resolves here, so every launch lands in this group before the root

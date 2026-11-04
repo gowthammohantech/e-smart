@@ -15,9 +15,11 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
+import { useBaseCurrency, useDocuments, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
+import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
+import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
@@ -32,6 +34,7 @@ export default function PaymentDetail() {
   const { run: serverSave } = useServerSave();
 
   const { id } = useLocalSearchParams<{ id: string }>();
+  const documents = useDocuments();
   const payment = usePayment(id);
   const party = useParty(payment?.partyId);
   const accounts = usePaymentAccounts();
@@ -86,6 +89,14 @@ export default function PaymentDetail() {
             { label: tr('common:table.method'), value: paymentMethodLabel(tr, payment.method) },
             { label: isIn ? tr('sales:payment.depositedInto') : tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
             ...(payment.reference ? [{ label: tr('common:table.reference'), value: payment.reference }] : []),
+            ...(payment.advanceTax
+              ? [
+                  {
+                    label: tr('sales:payment.serviceAdvance'),
+                    value: `GST ${payment.advanceTax.rate}% · ${INDIAN_STATES.find((st) => st.code === payment.advanceTax!.placeOfSupplyStateCode)?.name ?? payment.advanceTax.placeOfSupplyStateCode}`,
+                  },
+                ]
+              : []),
             ...(payment.currency !== baseCurrency
               ? [{ label: tr('common:totals.exchangeRate'), value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
               : []),
@@ -135,11 +146,11 @@ export default function PaymentDetail() {
             payment.allocations.map((a, i) => (
               <Pressable
                 key={a.documentId}
-                onPress={() =>
-                  router.push(
-                    isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`,
-                  )
-                }
+                onPress={() => {
+                  // A debit note opens as itself, not as an invoice or bill.
+                  const doc = documents.find((d) => d.id === a.documentId);
+                  router.push((doc ? detailRouteFor(doc.kind, doc.id) : isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`) as never);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={tr('sales:payment.openDocument', { number: a.documentNumber })}
                 style={({ pressed }) => ({
@@ -153,9 +164,18 @@ export default function PaymentDetail() {
                 })}
               >
                 <Icon name="file-document-outline" size={20} color={t.c.primary} />
-                <Text variant="body" weight="600" style={{ flex: 1 }}>
-                  {a.documentNumber}
-                </Text>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text variant="body" weight="600">
+                    {a.documentNumber}
+                  </Text>
+                  {(['tdsDeducted', 'discount', 'writeOff'] as const)
+                    .filter((k) => a[k]?.minor)
+                    .map((k) => (
+                      <Text key={k} variant="caption" tone="muted">
+                        {`${tr(`sales:payment.adjustment.${k}`)}: ${formatMoney(a[k]!)}`}
+                      </Text>
+                    ))}
+                </View>
                 <Text variant="body" weight="700">
                   {formatMoney(a.amount)}
                 </Text>

@@ -21,6 +21,8 @@ export type Operation = {
   roles: Role[] | null;
   /** Set on `/admin/*`: the platform roles allowed. Tenant roles never apply. */
   platformRoles: PlatformRole[] | null;
+  /** `x-mfa-exempt`: a platform route an operator may call before passing the authenticator check. */
+  mfaExempt: boolean;
   planModule: Module | null;
   /** False for `security: []` operations (auth, plans, most reference data). */
   secured: boolean;
@@ -107,6 +109,7 @@ export function loadOperations() {
           tag: op.tags?.[0] ?? (isWebhook ? 'Webhooks' : 'Other'),
           roles: op['x-roles'] ?? null,
           platformRoles: op['x-platform-roles'] ?? null,
+          mfaExempt: op['x-mfa-exempt'] === true,
           planModule: op['x-plan-module'] ?? null,
           secured: isWebhook ? false : !(Array.isArray(op.security) && op.security.length === 0),
           successStatus,

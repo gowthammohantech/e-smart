@@ -1,0 +1,281 @@
+import { and, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
+import type { Schema } from '@esmart/api-contract';
+import { USER_GROUPS, accountFor, type Book } from '@esmart/core/domain/ledger/accounts';
+import type { LedgerGroup } from '@esmart/core/types';
+import { schema } from '@esmart/db';
+import { defineHandlers, type Ctx } from '../../context';
+import { checkIfMatch, setEtag } from '../../http/etag';
+import { conflict, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { keyset } from '../../http/pagination';
+import { recordChange, type DbOrTx } from '../../lib/audit';
+import { newId } from '../../lib/ids';
+import { assignNumber } from '../../lib/numbering';
+import { compact, iso, money, versioned } from '../../lib/wire';
+import { assertPeriodOpen } from '../documents/lifecycle';
+import { accountBalanceMinor } from '../payments/engine';
+import { costCentreIssues } from './costCentres';
+
+const LA = schema.ledgerAccounts;
+const V = schema.vouchers;
+type AccountRow = typeof LA.$inferSelect;
+type VoucherRow = typeof V.$inferSelect;
+type StoredLine = { account: string; debitMinor: number; creditMinor: number; narration?: string; costCentreId?: string };
+type AnyCtx = Pick<Ctx<'getVoucher'>, 'company' | 'user' | 'db' | 'now'>;
+
+const blocking = (issues: Issue[]) => (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
+
+// ------------------------------------------------------------ wire
+
+function accountToWire(row: AccountRow, base: string): Schema<'LedgerAccount'> {
+  return compact({ id: row.id, companyId: row.companyId, name: row.name, group: row.group, openingBalance: money(row.openingBalanceMinor, base), status: row.status, ...versioned(row) });
+}
+
+function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> {
+  const lines = row.lines as StoredLine[];
+  return compact({
+    id: row.id,
+    companyId: row.companyId,
+    branchId: row.branchId,
+    kind: row.kind,
+    number: row.number,
+    date: row.date,
+    narration: row.narration,
+    reference: row.reference,
+    lines: lines.map((l) => compact({ account: l.account, debit: money(l.debitMinor, base), credit: money(l.creditMinor, base), narration: l.narration, costCentreId: l.costCentreId })),
+    createdBy: row.createdBy,
+    ...versioned(row),
+    createdAt: iso(row.createdAt),
+  });
+}
+
+// ------------------------------------------------------------ accounts
+
+/** The book the voucher's account keys are looked up in: only the records they name. */
+async function bookFor(db: DbOrTx, companyId: string, keys: string[]): Promise<Book> {
+  const ids = (prefix: string) => keys.filter((k) => k.startsWith(`${prefix}:`)).map((k) => k.slice(prefix.length + 1));
+  const some = async <T>(prefix: string, load: (ids: string[]) => Promise<T[]>) => (ids(prefix).length ? load(ids(prefix)) : []);
+  const P = schema.parties;
+  const A = schema.paymentAccounts;
+  const C = schema.expenseCategories;
+  return {
+    parties: await some('party', (x) => db.select({ id: P.id, name: P.name, kind: P.kind }).from(P).where(and(eq(P.companyId, companyId), inArray(P.id, x)))),
+    paymentAccounts: await some('pay', (x) => db.select({ id: A.id, name: A.name, type: A.type }).from(A).where(and(eq(A.companyId, companyId), inArray(A.id, x)))),
+    expenseCategories: await some('exp', (x) => db.select({ id: C.id, name: C.name }).from(C).where(and(eq(C.companyId, companyId), inArray(C.id, x)))),
+    ledgerAccounts: await some('acc', (x) => db.select({ id: LA.id, name: LA.name, group: LA.group }).from(LA).where(and(eq(LA.companyId, companyId), inArray(LA.id, x)))),
+  };
+}
+
+async function findAccount(ctx: AnyCtx, db: DbOrTx, id: string) {
+  const [row] = await db.select().from(LA).where(and(eq(LA.companyId, ctx.company.id), eq(LA.id, id)));
+  if (!row) throw notFound('Ledger account');
+  return row;
+}
+
+async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'LedgerAccount'>, exceptId?: string) {
+  const issues: Issue[] = [];
+  const block = blocking(issues);
+  const name = body.name.trim();
+  if (!name) block('name', 'Give the account a name');
+  if (!USER_GROUPS.includes(body.group as LedgerGroup)) block('group', 'Debtors, creditors and stock come from parties and the stock ledger, not an account of your own');
+  const [same] = await db.select({ id: LA.id }).from(LA).where(and(eq(LA.companyId, companyId), eq(LA.name, name), exceptId ? ne(LA.id, exceptId) : undefined));
+  if (same) block('name', `There is already an account called ${name}`);
+  if (issues.length) throw unprocessable(issues);
+  return { name, group: body.group as LedgerGroup, openingBalanceMinor: body.openingBalance.minor, status: body.status ?? ('active' as const) };
+}
+
+// ------------------------------------------------------------ vouchers
+
+/**
+ * A voucher's rules: at least two lines, each a debit or a credit, debits equal to credits, every
+ * account in this book, and what its kind allows: a contra only between cash and bank, a GST journal
+ * touching a GST ledger, a TDS challan clearing TDS payable from cash or bank.
+ */
+async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, exceptId?: string) {
+  const issues: Issue[] = [];
+  const block = blocking(issues);
+  const base = ctx.company.baseCurrency.trim();
+  const lines: StoredLine[] = body.lines.map((l) => ({ account: l.account.trim(), debitMinor: l.debit.minor, creditMinor: l.credit.minor, ...(l.narration?.trim() && { narration: l.narration.trim() }), ...(l.costCentreId && { costCentreId: l.costCentreId }) }));
+  issues.push(...(await costCentreIssues(db, ctx.company.id, body.lines.map((l, i) => ({ field: `lines[${i}].costCentreId`, id: l.costCentreId })))));
+  const book = await bookFor(db, ctx.company.id, lines.map((l) => l.account));
+  lines.forEach((l, i) => {
+    const field = `lines[${i}]`;
+    const line = body.lines[i];
+    if (line.debit.currency !== base || line.credit.currency !== base) block(field, `Vouchers are in ${base}`);
+    if (l.debitMinor < 0 || l.creditMinor < 0) block(field, 'Amounts cannot be negative');
+    if ((l.debitMinor > 0) === (l.creditMinor > 0)) block(field, 'Each line is a debit or a credit');
+    if (!accountFor(l.account, book)) block(`${field}.account`, `No account ${l.account} in this company`);
+  });
+  if (lines.length < 2) block('lines', 'A voucher needs at least two lines');
+  const debit = lines.reduce((a, l) => a + l.debitMinor, 0);
+  const credit = lines.reduce((a, l) => a + l.creditMinor, 0);
+  if (debit !== credit) block('lines', `Debits (${(debit / 100).toFixed(2)}) and credits (${(credit / 100).toFixed(2)}) must be equal`);
+  const groups = lines.map((l) => accountFor(l.account, book)?.group);
+  const isCash = (g: LedgerGroup | undefined) => g === 'cashInHand' || g === 'bankAccounts';
+  if (!issues.length) {
+    if (body.kind === 'contra' && !groups.every(isCash)) block('lines', 'A contra moves money between cash and bank accounts only');
+    if (body.kind === 'gstJournal' && !groups.some((g) => g === 'dutiesTaxes')) block('lines', 'A GST journal adjusts a GST ledger');
+    if (body.kind === 'tdsChallan') {
+      const ok = lines.every((l, i) => (l.debitMinor > 0 ? l.account.startsWith('sys:tdsPayable') : isCash(groups[i])));
+      if (!ok) block('lines', 'A TDS challan clears TDS payable from a cash or bank account');
+    }
+  }
+
+  let branchId = body.branchId ?? null;
+  if (branchId) {
+    const [b] = await db.select({ id: schema.branches.id }).from(schema.branches).where(and(eq(schema.branches.companyId, ctx.company.id), eq(schema.branches.id, branchId)));
+    if (!b) block('branchId', 'No such branch in this company');
+  } else {
+    const branches = await db.select().from(schema.branches).where(eq(schema.branches.companyId, ctx.company.id));
+    const mine = ctx.user.branchIds.length ? branches.filter((b) => ctx.user.branchIds.includes(b.id)) : branches;
+    branchId = (mine.find((b) => b.isPrimary) ?? mine[0])?.id ?? null;
+  }
+  if (branchId && ctx.user.branchIds.length && !ctx.user.branchIds.includes(branchId)) block('branchId', 'You cannot record vouchers in this branch');
+  if (issues.length) throw unprocessable(issues, debit !== credit ? 'VOUCHER_UNBALANCED' : 'VALIDATION_FAILED');
+  assertPeriodOpen(ctx.company, body.date);
+
+  // No account pays out more than it holds, as for payments.
+  const A = schema.paymentAccounts;
+  for (const [i, l] of lines.entries()) {
+    const out = l.creditMinor - l.debitMinor;
+    if (out <= 0 || !l.account.startsWith('pay:')) continue;
+    const [account] = await db.select().from(A).where(and(eq(A.companyId, ctx.company.id), eq(A.id, l.account.slice(4)))).for('update');
+    const balance = await accountBalanceMinor(db, account, undefined, exceptId);
+    if (out > balance) {
+      throw unprocessable([{ field: `lines[${i}]`, message: `${account.name} holds ${base} ${(Math.max(balance, 0) / 100).toFixed(2)}; this voucher takes ${base} ${(out / 100).toFixed(2)}`, severity: 'blocking' }], 'INSUFFICIENT_BALANCE');
+    }
+  }
+  return { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, lines };
+}
+
+async function findVoucher(ctx: AnyCtx, db: DbOrTx, id: string): Promise<VoucherRow> {
+  const [row] = await db.select().from(V).where(and(eq(V.companyId, ctx.company.id), eq(V.id, id)));
+  if (!row || (ctx.user.branchIds.length && !ctx.user.branchIds.includes(row.branchId))) throw notFound('Voucher');
+  return row;
+}
+
+/** Books: the accounts a business adds, and its vouchers. */
+export const booksHandlers = defineHandlers({
+  async listLedgerAccounts(ctx) {
+    const k = keyset({ cursor: ctx.query.cursor, limit: ctx.query.limit, sort: LA.name, id: LA.id, order: 'asc' });
+    const rows = await ctx.db.select().from(LA).where(and(eq(LA.companyId, ctx.company.id), k.where)).orderBy(...k.orderBy).limit(k.take);
+    const base = ctx.company.baseCurrency.trim();
+    return k.page(rows.slice(0, k.take - 1).map((r) => accountToWire(r, base)), rows);
+  },
+
+  async createLedgerAccount(ctx) {
+    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body);
+    const row = await ctx.db.transaction(async (tx) => {
+      const [created] = await tx.insert(LA).values({ id: newId('lac'), companyId: ctx.company.id, ...cols, createdAt: ctx.now, updatedAt: ctx.now }).returning();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'ledger_account', entityId: created.id, entityLabel: created.name, version: created.version });
+      return created;
+    });
+    setEtag(ctx.reply, row.version);
+    return accountToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async getLedgerAccount(ctx) {
+    const row = await findAccount(ctx, ctx.db, ctx.params.id);
+    setEtag(ctx.reply, row.version);
+    return accountToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async saveLedgerAccount(ctx) {
+    const current = await findAccount(ctx, ctx.db, ctx.params.id);
+    checkIfMatch(ctx.req, current.version);
+    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, current.id);
+    const row = await ctx.db.transaction(async (tx) => {
+      const [updated] = await tx.update(LA).set({ ...cols, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(LA.id, current.id), eq(LA.version, current.version))).returning();
+      if (!updated) throw preconditionFailed();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'updated', entityType: 'ledger_account', entityId: updated.id, entityLabel: updated.name, version: updated.version, before: { name: current.name, group: current.group }, after: { name: updated.name, group: updated.group } });
+      return updated;
+    });
+    setEtag(ctx.reply, row.version);
+    return accountToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async removeLedgerAccount(ctx) {
+    const current = await findAccount(ctx, ctx.db, ctx.params.id);
+    checkIfMatch(ctx.req, current.version);
+    const key = `acc:${current.id}`;
+    const [used] = await ctx.db
+      .select({ number: V.number })
+      .from(V)
+      .where(and(eq(V.companyId, ctx.company.id), sql`${V.lines} @> ${JSON.stringify([{ account: key }])}::jsonb`))
+      .limit(1);
+    if (used) throw conflict('ACCOUNT_IN_USE', `${current.name} is on voucher ${used.number}; mark it inactive instead`);
+    await ctx.db.transaction(async (tx) => {
+      const deleted = await tx.delete(LA).where(and(eq(LA.id, current.id), eq(LA.version, current.version))).returning({ id: LA.id });
+      if (!deleted.length) throw preconditionFailed();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'ledger_account', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true });
+    });
+    return undefined;
+  },
+
+  async listVouchers(ctx) {
+    const q = ctx.query;
+    const k = keyset({ cursor: q.cursor, limit: q.limit, sort: V.date, id: V.id, order: 'desc' });
+    const rows = await ctx.db
+      .select()
+      .from(V)
+      .where(
+        and(
+          eq(V.companyId, ctx.company.id),
+          ctx.user.branchIds.length ? inArray(V.branchId, ctx.user.branchIds) : undefined,
+          q.from ? gte(V.date, q.from) : undefined,
+          q.to ? lte(V.date, q.to) : undefined,
+          k.where,
+        ),
+      )
+      .orderBy(...k.orderBy)
+      .limit(k.take);
+    const base = ctx.company.baseCurrency.trim();
+    return k.page(rows.slice(0, k.take - 1).map((r) => voucherToWire(r, base)), rows);
+  },
+
+  async createVoucher(ctx) {
+    const cols = await voucherColumns(ctx, ctx.db, ctx.body);
+    const row = await ctx.db.transaction(async (tx) => {
+      const number = await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date });
+      const [created] = await tx.insert(V).values({ id: newId('vch'), companyId: ctx.company.id, number, createdBy: ctx.user.id, ...cols, createdAt: ctx.now, updatedAt: ctx.now }).returning();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'voucher', entityId: created.id, entityLabel: created.number, version: created.version });
+      return created;
+    });
+    setEtag(ctx.reply, row.version);
+    return voucherToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async getVoucher(ctx) {
+    const row = await findVoucher(ctx, ctx.db, ctx.params.id);
+    setEtag(ctx.reply, row.version);
+    return voucherToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async saveVoucher(ctx) {
+    const current = await findVoucher(ctx, ctx.db, ctx.params.id);
+    checkIfMatch(ctx.req, current.version);
+    assertPeriodOpen(ctx.company, current.date);
+    if (ctx.body.kind !== current.kind) throw unprocessable([{ field: 'kind', message: 'A voucher keeps its kind; delete it and make another', severity: 'blocking' }]);
+    const cols = await voucherColumns(ctx, ctx.db, ctx.body, current.id);
+    const row = await ctx.db.transaction(async (tx) => {
+      const [updated] = await tx.update(V).set({ ...cols, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning();
+      if (!updated) throw preconditionFailed();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'updated', entityType: 'voucher', entityId: updated.id, entityLabel: updated.number, version: updated.version, before: { date: current.date, lines: current.lines }, after: { date: updated.date, lines: updated.lines } });
+      return updated;
+    });
+    setEtag(ctx.reply, row.version);
+    return voucherToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async removeVoucher(ctx) {
+    const current = await findVoucher(ctx, ctx.db, ctx.params.id);
+    checkIfMatch(ctx.req, current.version);
+    assertPeriodOpen(ctx.company, current.date);
+    await ctx.db.transaction(async (tx) => {
+      const deleted = await tx.delete(V).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning({ id: V.id });
+      if (!deleted.length) throw preconditionFailed();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'voucher', entityId: current.id, entityLabel: current.number, version: current.version + 1, deleted: true });
+    });
+    return undefined;
+  },
+});
+

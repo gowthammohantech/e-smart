@@ -1,5 +1,5 @@
 import { Money, allocate, money, percent, zero } from '../lib/money';
-import { Company, Party, TaxCategory, TaxComponent, TaxType } from '../types';
+import { Branch, Company, Party, TaxCategory, TaxComponent, TaxType } from '../types';
 import { OTHER_COUNTRY_CODE } from './stateCodes';
 
 export type TaxContext = {
@@ -16,6 +16,10 @@ export type TaxContext = {
   crossBorder?: 'export' | 'sez' | 'import';
   /** No GST on the document: an export / SEZ supply under LUT, or an import bill. */
   zeroRated?: boolean;
+  /** A sale by a composition dealer: a bill of supply, which may not charge GST (s.10(4)). */
+  composition?: boolean;
+  /** The whole document is under reverse charge: the buyer pays the GST. */
+  reverseCharge?: boolean;
 };
 
 /** Is the company's Letter of Undertaking in force on `date`? */
@@ -31,10 +35,12 @@ export function lutActive(company: Company | undefined, date: string): boolean {
  */
 export function buildTaxContext(
   company: Company | undefined,
-  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean },
+  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean; branch?: Branch; reverseCharge?: boolean },
 ): TaxContext {
   const reg = company?.taxRegistration;
-  const pos = opts.placeOfSupply ?? reg?.placeOfSupplyStateCode;
+  // A branch with its own GSTIN supplies from that state; its first two digits are the state code.
+  const home = homeStateCode(company, opts.branch);
+  const pos = opts.placeOfSupply ?? home;
   const abroad = opts.party?.gstRegistrationType === 'overseas' || pos === OTHER_COUNTRY_CODE;
   const crossBorder: TaxContext['crossBorder'] = abroad
     ? opts.purchase
@@ -45,7 +51,7 @@ export function buildTaxContext(
       : undefined;
   return {
     regime: reg?.regime ?? 'NONE',
-    homeStateCode: reg?.placeOfSupplyStateCode,
+    homeStateCode: home,
     placeOfSupplyStateCode: pos,
     registered: !!reg?.registered,
     crossBorder,
@@ -53,7 +59,15 @@ export function buildTaxContext(
     zeroRated:
       crossBorder === 'import' ||
       (!!crossBorder && !opts.purchase && lutActive(company, opts.date)),
+    composition: !opts.purchase && !!reg?.compositionScheme,
+    reverseCharge: !!opts.reverseCharge,
   };
+}
+
+/** The state a document is supplied from: the branch's GSTIN state when it has one, else the company's. */
+export function homeStateCode(company: Company | undefined, branch?: Branch): string | undefined {
+  const fromGstin = branch?.gstin?.slice(0, 2);
+  return fromGstin && /^\d{2}$/.test(fromGstin) ? fromGstin : company?.taxRegistration?.placeOfSupplyStateCode;
 }
 
 /**
@@ -67,7 +81,7 @@ export function splitTax(
   rate: number,
   ctx: TaxContext,
 ): TaxComponent[] {
-  if (rate <= 0 || !ctx.registered || ctx.zeroRated) return [];
+  if (rate <= 0 || !ctx.registered || ctx.zeroRated || ctx.composition) return [];
 
   const total = percent(taxableAmount, rate);
 
@@ -95,6 +109,12 @@ export function splitTax(
   }
 
   return [];
+}
+
+/** Compensation cess on a taxable value, as its own component (never split between centre and state). */
+export function cessComponent(taxableAmount: Money, rate: number | undefined, ctx: TaxContext): TaxComponent[] {
+  if (!rate || rate <= 0 || !ctx.registered || ctx.zeroRated || ctx.composition) return [];
+  return [{ type: 'CESS', label: `Cess ${rate}%`, rate, amount: percent(taxableAmount, rate) }];
 }
 
 export function componentTotal(components: TaxComponent[], currency: string): Money {

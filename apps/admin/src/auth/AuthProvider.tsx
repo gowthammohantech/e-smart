@@ -12,12 +12,16 @@ export type Operator = {
 type AuthState =
   | { status: 'loading' }
   | { status: 'signedOut'; notice?: string }
+  /** Signed in, but this session hasn't passed the authenticator check (or has none set up yet). */
+  | { status: 'mfa'; operator: Operator; enrolled: boolean }
   | { status: 'signedIn'; operator: Operator };
 
 type AuthContextValue = {
   state: AuthState;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** The session passed the authenticator check. */
+  mfaPassed: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -38,7 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const finish = useCallback(
     async (operator: Operator | null) => {
       if (operator) {
-        setState({ status: 'signedIn', operator });
+        // Every /admin route but the MFA ones answers 403 until this session passes the check.
+        const { data: mfa } = await api.GET('/admin/mfa');
+        setState(mfa?.verified ? { status: 'signedIn', operator } : { status: 'mfa', operator, enrolled: !!mfa?.enrolled });
         return;
       }
       // Not an operator: end the session the sign-in just opened.
@@ -68,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const off = onTokensChange((tokens) => {
       if (!tokens) {
         queryClient.clear();
-        setState((s) => (s.status === 'signedIn' ? { status: 'signedOut', notice: 'Your session ended. Sign in again.' } : s));
+        setState((s) => (s.status === 'signedIn' || s.status === 'mfa' ? { status: 'signedOut', notice: 'Your session ended. Sign in again.' } : s));
       }
     });
     return () => {
@@ -88,6 +94,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [finish],
   );
 
+  const mfaPassed = useCallback(() => {
+    setState((s) => (s.status === 'mfa' ? { status: 'signedIn', operator: s.operator } : s));
+  }, []);
+
+  // A page that gets MFA_REQUIRED (an authenticator reset from the command line, say) goes back to the check.
+  useEffect(() => {
+    return queryClient.getQueryCache().subscribe((event) => {
+      const err = event.type === 'updated' ? event.query.state.error : null;
+      if (err instanceof ApiError && (err.code === 'MFA_REQUIRED' || err.code === 'MFA_ENROLLMENT_REQUIRED')) {
+        setState((s) => (s.status === 'signedIn' ? { status: 'mfa', operator: s.operator, enrolled: err.code === 'MFA_REQUIRED' } : s));
+      }
+    });
+  }, [queryClient]);
+
   const signOut = useCallback(async () => {
     await api.POST('/auth/sign-out').catch(() => {});
     tokenStore.set(null);
@@ -95,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'signedOut' });
   }, [queryClient]);
 
-  const value = useMemo(() => ({ state, signIn, signOut }), [state, signIn, signOut]);
+  const value = useMemo(() => ({ state, signIn, signOut, mfaPassed }), [state, signIn, signOut, mfaPassed]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

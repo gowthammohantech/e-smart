@@ -9,6 +9,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
+import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { documentKindLabel } from '@esmart/core/labels';
 import {
   useActiveCompany,
@@ -33,6 +34,7 @@ export default function DocumentPreview() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const doc = useDocument(id);
   const company = useActiveCompany();
+  const source = useDocument(doc && NOTE_SOURCE[doc.kind] ? doc.sourceDocumentId : undefined);
   const party = useParty(doc?.partyId);
   const branches = useBranches();
   const ewayBill = useActiveEwayBill(doc?.id);
@@ -50,9 +52,10 @@ export default function DocumentPreview() {
             party,
             branch: branches.find((b) => b.id === doc.branchId),
             ewayBill,
+            source,
           })
         : '',
-    [doc, company, party, branches, ewayBill, tr, language],
+    [doc, company, party, branches, ewayBill, source, tr, language],
   );
 
   if (!doc) {

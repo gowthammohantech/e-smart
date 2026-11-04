@@ -37,17 +37,20 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const pages = useAppPages(SETTINGS_GROUPS);
 
   const entries = useMemo<Entry[]>(() => {
+    const actions: Entry[] = quickActions(tr, t.c.primary)
+      .filter((a) => allowed(a.route))
+      .map((a) => ({ key: `action-${a.key}`, group: tr('nav:shell.quickActions'), title: a.label, icon: a.icon, route: a.route }));
     if (searching) {
+      // "new invoice" starts one: an action whose name has every word typed comes first.
+      const words = query.trim().toLowerCase().split(/\s+/);
+      const matchedActions = actions.filter((a) => words.every((w) => a.title.toLowerCase().includes(w)));
       const group = tr('nav:shell.pages');
       const matchedPages: Entry[] = matchPages(pages, query).map((p) => ({ ...p, key: `page-${p.key}`, group }));
       // Results arrive in date order across kinds; list each kind together.
       const byGroup = new Map<string, Entry[]>();
       results.slice(0, 40).forEach((r) => byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), { ...r, key: `${r.group}-${r.id}` }]));
-      return [...matchedPages, ...Array.from(byGroup.values()).flat()];
+      return [...matchedActions, ...matchedPages, ...Array.from(byGroup.values()).flat()];
     }
-    const actions: Entry[] = quickActions(tr, t.c.primary)
-      .filter((a) => allowed(a.route))
-      .map((a) => ({ key: `action-${a.key}`, group: tr('nav:shell.quickActions'), title: a.label, icon: a.icon, route: a.route }));
     const sections: Entry[] = TABS.filter((tab) => canOpen(plan, tabPath(tab.name))).map((tab) => ({
       key: `tab-${tab.name}`,
       group: tr('nav:shell.goTo'),

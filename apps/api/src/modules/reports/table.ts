@@ -3,7 +3,7 @@ import { toMajor } from '@esmart/core/lib/money';
 import type { CompanyRow } from '../../context';
 import { toCsv } from '../exports/build';
 
-export type ReportKey = 'sales-summary' | 'purchase-summary' | 'expense-summary' | 'receivables' | 'payables' | 'stock' | 'tax-summary' | 'payments' | 'profit';
+export type ReportKey = 'sales-summary' | 'purchase-summary' | 'expense-summary' | 'receivables' | 'payables' | 'stock' | 'tax-summary' | 'payments' | 'profit' | 'tds-register' | 'trial-balance' | 'msme-payables';
 
 export type ReportBody =
   | Schema<'TransactionSummary'>
@@ -12,7 +12,10 @@ export type ReportBody =
   | Schema<'StockReport'>
   | Schema<'TaxSummary'>
   | Schema<'PaymentSummary'>
-  | Schema<'ProfitSnapshot'>;
+  | Schema<'ProfitSnapshot'>
+  | Schema<'TdsRegister'>
+  | Schema<'TrialBalance'>
+  | Schema<'MsmePayables'>;
 
 type Cell = string | number | boolean | undefined;
 /** A report flattened for CSV and PDF: its detail rows plus a few headline figures. */
@@ -31,6 +34,9 @@ export const TITLES: Record<ReportKey, string> = {
   'tax-summary': 'Tax summary',
   payments: 'Payments',
   profit: 'Profit snapshot',
+  'tds-register': 'TDS deducted',
+  'trial-balance': 'Trial balance',
+  'msme-payables': 'MSME payables',
 };
 
 /** The detail rows each report exports; the JSON response stays the full schema. */
@@ -101,6 +107,33 @@ export function tableOf(key: ReportKey, body: ReportBody, names: { category: Rec
         columns: ['month', 'revenue', 'cost', 'expenses', 'profit'],
         rows: (r.byMonth ?? []).map((m) => [m.key, amt(m.revenue), amt(m.cost), amt(m.expenses), amt(m.profit)]),
         totals: [['Revenue', amt(r.revenue)], ['Cost of goods', amt(r.costOfGoods)], ['Gross profit', amt(r.grossProfit)], ['Expenses', amt(r.expenses)], ['Net profit', amt(r.netProfit)], ['Margin %', r.margin === undefined ? undefined : Math.round(r.margin * 100) / 100]],
+      };
+    }
+    case 'trial-balance': {
+      const r = body as Schema<'TrialBalance'>;
+      return {
+        title,
+        columns: ['account', 'group', 'opening', 'debit', 'credit', 'closing'],
+        rows: (r.rows ?? []).map((x) => [x.name, x.group, amt(x.opening), amt(x.debit), amt(x.credit), amt(x.closing)]),
+        totals: [['Debits', amt(r.totalDebit)], ['Credits', amt(r.totalCredit)]],
+      };
+    }
+    case 'msme-payables': {
+      const r = body as Schema<'MsmePayables'>;
+      return {
+        title,
+        columns: ['bill', 'supplier', 'type', 'date', 'due', 'days left', 'outstanding', 'interest'],
+        rows: (r.rows ?? []).map((x) => [x.number, x.partyName, x.msmeType, x.date, x.dueDate, x.daysLeft, amt(x.outstanding), amt(x.interest)]),
+        totals: [['Outstanding', amt(r.outstanding)], ['Overdue', amt(r.overdue)]],
+      };
+    }
+    case 'tds-register': {
+      const r = body as Schema<'TdsRegister'>;
+      return {
+        title,
+        columns: ['quarter', 'section', 'deductee', 'pan', 'base', 'tds', 'documents'],
+        rows: (r.rows ?? []).map((x) => [x.quarter, x.sectionLabel, x.partyName, x.pan, amt(x.base), amt(x.tds), x.documents]),
+        totals: [['TDS deducted', amt(r.total)]],
       };
     }
   }

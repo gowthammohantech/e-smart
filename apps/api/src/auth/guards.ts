@@ -8,7 +8,7 @@ import type { AccessClaims } from './sessions';
 
 async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | null> {
   const [row] = await deps.db
-    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, suspendedAt: schema.accounts.suspendedAt })
+    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, mfaVerifiedAt: schema.deviceSessions.mfaVerifiedAt, suspendedAt: schema.accounts.suspendedAt })
     .from(schema.users)
     .innerJoin(schema.deviceSessions, eq(schema.deviceSessions.userId, schema.users.id))
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
@@ -34,6 +34,8 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
     companyRoles: Object.fromEntries(companies.filter((c) => c.role).map((c) => [c.id, c.role!])),
     branchIds: branches.map((b) => b.id),
     sessionId: claims.sid,
+    mfaEnrolled: !!row.u.totpEnabledAt,
+    mfaVerified: !!row.mfaVerifiedAt,
   };
 }
 
@@ -97,6 +99,9 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
       if (!user.platformRole || !op.platformRoles.includes(user.platformRole)) {
         throw forbidden('PLATFORM_FORBIDDEN', `This needs platform role: ${op.platformRoles.join(', ')}`);
       }
+      // A password (or an SMS code) alone never opens another tenant's data.
+      if (!op.mfaExempt && !user.mfaEnrolled) throw forbidden('MFA_ENROLLMENT_REQUIRED', 'Set up an authenticator app to continue');
+      if (!op.mfaExempt && !user.mfaVerified) throw forbidden('MFA_REQUIRED', 'Enter the code from your authenticator app');
       return;
     }
 

@@ -20,6 +20,8 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
+import { DeleteAccountSheet } from '../../../features/session/DeleteAccountSheet';
 
 const ROLE_LABELS = {
   owner: 'auth:invite.roles.owner',
@@ -34,6 +36,7 @@ export default function Profile() {
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'onboarding']);
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const user = useCurrentUser();
   const companies = useCompanies();
@@ -45,8 +48,9 @@ export default function Profile() {
   const [email, setEmail] = useState(user?.email ?? '');
   const phone = usePhoneInput(user?.phone);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone'>>({});
+  const [deleting, setDeleting] = useState(false);
 
-  const save = () => {
+  const save = async () => {
     const next: Errors<'name' | 'email' | 'phone'> = {
       name: required(name, tr('settings:profile.name')),
       email: required(email, tr('settings:profile.email')) ?? validEmail(email),
@@ -54,9 +58,10 @@ export default function Profile() {
     };
     setErrors(next);
     if (hasErrors(next) || !user) return;
-    saveUser({ ...user, name: name.trim(), email: email.trim(), phone: phone.value || undefined });
-    toast.show(tr('settings:profile.saved'), 'success', { icon: 'account-check-outline' });
-    goBack('/(app)/(tabs)/more');
+    const updated = { ...user, name: name.trim(), email: email.trim(), phone: phone.value || undefined };
+    // Stay on the form until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(() => saveUser(updated), tr('settings:profile.saved'), { icon: 'account-check-outline' });
+    if (res) goBack('/(app)/(tabs)/more');
   };
 
   // Ctrl+S (⌘+S) does what Save does.
@@ -102,10 +107,15 @@ export default function Profile() {
             />
           ))}
         </Card>
+
+        <Card padded={false}>
+          <ListRow title={tr('settings:deleteAccount.row')} icon="account-remove-outline" destructive divider={false} onPress={() => setDeleting(true)} />
+        </Card>
       </ScrollView>
+      <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving} fullWidth size="lg" />
       </FormActions>
     </KeyboardAvoidingView>
   );

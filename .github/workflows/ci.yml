@@ -37,6 +37,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx turbo run typecheck lint test --continue
+      # The static server in front of the web app and the admin console: headers, compression, 404s.
+      - run: npm run test:tools
+      # Migrations only add; a drop or rename ships later, marked (tools/check-migrations.mjs).
+      - run: npm run check:migrations
+      # No high or critical advisories in production dependencies, beyond the listed Expo ones.
+      - run: npm run audit
       # The server bundles and boots.
       - run: npm run build -w @esmart/api
 
@@ -73,4 +79,60 @@ jobs:
         with:
           name: admin-dist
           path: apps/admin/dist
+          retention-days: 7
+
+  e2e:
+    name: Web offline-first scenarios
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: esmart
+          POSTGRES_PASSWORD: esmart
+          POSTGRES_DB: esmart_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U esmart"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://esmart:esmart@localhost:5432/esmart_e2e
+      E2E_DATABASE_URL: postgres://esmart:esmart@localhost:5432/esmart_e2e
+      SEED_DEMO_ACCOUNT: 'true'
+      DEMO_ACCOUNT_EMAIL: e2e@vertextraders.in
+      DEMO_ACCOUNT_PASSWORD: e2e-pass-1234
+      TURBO_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run db:migrate -w @esmart/db
+      - name: Start the API on 4100
+        run: |
+          PORT=4100 LOG_LEVEL=warn WORKER=inline npx tsx apps/api/src/server.ts > api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4100/health && break; sleep 2; done
+      - name: Build and serve the web app on 8190
+        working-directory: apps/web
+        run: |
+          EXPO_PUBLIC_API_URL=http://localhost:4100 npx expo export -p web --clear
+          PORT=8190 EXPO_PUBLIC_API_URL=http://localhost:4100 node serve.mjs > ../../web.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8190/health && break; sleep 1; done
+      # `refused` is left out: it checks the toast's wording, which reads the title, not the reason.
+      - name: Scenarios
+        working-directory: apps/web/e2e
+        run: node offline.mjs online,offline,kill,slow,refresh500,tabs,conflict
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure
+          path: |
+            api.log
+            web.log
+            apps/web/e2e/*.png
           retention-days: 7

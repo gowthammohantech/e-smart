@@ -30,10 +30,12 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
       placeOfSupplyStateCode: row.placeOfSupplyStateCode,
       lutNumber: row.lutNumber,
       lutValidTill: row.lutValidTill,
+      returnFrequency: row.returnFrequency,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     lockedThroughDate: row.lockedThroughDate,
     allowNegativeStock: row.allowNegativeStock,
+    tan: row.tan,
     plan: row.plan,
     ...versioned(row),
   });
@@ -60,9 +62,12 @@ export function companyColumns(body: Schema<'Company'>) {
     placeOfSupplyStateCode: tax?.placeOfSupplyStateCode ?? body.address.stateCode ?? null,
     lutNumber: tax?.lutNumber?.trim().toUpperCase() || null,
     lutValidTill: tax?.lutNumber?.trim() ? (tax.lutValidTill ?? null) : null,
+    // Left alone when a client that predates the setting saves the company.
+    ...(tax?.returnFrequency && { returnFrequency: tax.returnFrequency }),
     fiscalYearStartMonth: body.fiscalYearStartMonth,
     // Left alone when a client that predates the setting saves the company.
     ...(body.allowNegativeStock !== undefined && { allowNegativeStock: body.allowNegativeStock }),
+    ...(body.tan !== undefined && { tan: body.tan.trim().toUpperCase() || null }),
   };
 }
 

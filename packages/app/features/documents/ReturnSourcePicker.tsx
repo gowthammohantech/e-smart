@@ -11,22 +11,28 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { useDocuments, useParties } from '../../store/selectors';
+import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { detailRouteFor } from './DocumentEditor';
 
+/** Raised against one invoice or bill: returns, and credit and debit notes. */
+type AgainstSource = 'salesReturn' | 'purchaseReturn' | 'creditNote' | 'debitNote' | 'supplierCreditNote' | 'supplierDebitNote';
+
 /**
- * A return is always raised against one invoice (or bill): pick it first, then
+ * A return or note is always raised against one invoice (or bill): pick it first, then
  * edit the draft that carries its lines — never a free pick from the catalogue.
  */
-export function ReturnSourcePicker({ kind }: { kind: 'salesReturn' | 'purchaseReturn' }) {
+export function ReturnSourcePicker({ kind }: { kind: AgainstSource }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales']);
   const router = useRouter();
   const { run: serverSave } = useServerSave();
   const [query, setQuery] = useState('');
   const convertDocument = useAppStore((s) => s.convertDocument);
-  const sourceKind = kind === 'salesReturn' ? 'invoice' : 'purchaseBill';
+  const sourceKind = NOTE_SOURCE[kind] ?? 'invoice';
+  const purchase = sourceKind === 'purchaseBill';
   const sources = useDocuments(sourceKind);
   const parties = useParties();
+  const isReturn = kind === 'salesReturn' || kind === 'purchaseReturn';
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -38,7 +44,7 @@ export function ReturnSourcePicker({ kind }: { kind: 'salesReturn' | 'purchaseRe
   }, [sources, parties, query]);
 
   const pick = async (id: string) => {
-    const res = await serverSave(() => convertDocument(id, kind), tr('sales:returnPicker.created'), { icon: 'keyboard-return' });
+    const res = await serverSave(() => convertDocument(id, kind), tr(isReturn ? 'sales:returnPicker.created' : 'sales:notePicker.created'), { icon: isReturn ? 'keyboard-return' : 'file-document-edit-outline' });
     if (!res?.result) return;
     router.replace(`${detailRouteFor(kind, res.id ?? res.result)}/edit` as never);
   };
@@ -47,7 +53,7 @@ export function ReturnSourcePicker({ kind }: { kind: 'salesReturn' | 'purchaseRe
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="small" tone="muted">
-          {tr(kind === 'salesReturn' ? 'sales:returnPicker.salesHint' : 'sales:returnPicker.purchaseHint')}
+          {tr(isReturn ? (purchase ? 'sales:returnPicker.purchaseHint' : 'sales:returnPicker.salesHint') : `sales:notePicker.hint.${kind}`)}
         </Text>
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('sales:returnPicker.search')} />
       </View>

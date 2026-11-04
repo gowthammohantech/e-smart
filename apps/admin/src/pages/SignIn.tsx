@@ -19,7 +19,7 @@ export function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (state.status === 'signedIn') {
+  if (state.status === 'signedIn' || state.status === 'mfa') {
     const from = (location.state as { from?: string } | null)?.from;
     return <Navigate to={from && from !== '/sign-in' ? from : '/'} replace />;
   }

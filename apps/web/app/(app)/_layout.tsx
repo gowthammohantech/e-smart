@@ -94,3 +94,6 @@ export default function WebAppLayout() {
     </PageActionsProvider>
   );
 }
+
+/** A crash inside the signed-in app keeps the way home. */
+export { ErrorBoundary } from '@esmart/app/screens/(app)/_layout';

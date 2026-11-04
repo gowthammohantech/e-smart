@@ -41,6 +41,11 @@
     "otherChargesHint": "Freight, packing or installation added to the total.",
     "roundOff": "Round off the total",
     "roundOffHint": "Rounds the grand total to the nearest whole unit and shows the adjustment.",
+    "reverseCharge": "Reverse charge",
+    "reverseChargeBillHint": "You pay this GST to the government yourself, not to the supplier. Used for transport (GTA), legal services and other notified supplies.",
+    "reverseChargeSaleHint": "The buyer pays this GST to the government. The invoice shows it but doesn’t charge it.",
+    "noteReason": "Reason",
+    "noteReasonHint": "Printed on the note and reported with it.",
     "notes": "Notes",
     "notesHint": "Visible to the customer on the document",
     "terms": "Terms and conditions",
@@ -103,6 +108,13 @@
     "addSupplier": "Add new supplier",
     "searchItems": "Search by name or SKU"
   },
+  "reimburse": {
+    "title": "{{count}} billable expenses to recover",
+    "body": "Add them at cost as reimbursements: no GST, outside the taxable value (Rule 33).",
+    "add": "Add",
+    "expense": "Expense recovered",
+    "creditClaimed": "Credit of {{tax}} was claimed on this expense. A pure agent recovers a cost paid in the customer’s name, without claiming its credit."
+  },
   "detail": {
     "finalise": "Finalise",
     "share": "Share",
@@ -148,6 +160,10 @@
     "convertToInvoice": "Convert to invoice",
     "createDelivery": "Create delivery note",
     "createReturn": "Create a return",
+    "createCreditNote": "Raise a credit note",
+    "createDebitNote": "Raise a debit note",
+    "recordSupplierCreditNote": "Record their credit note",
+    "recordSupplierDebitNote": "Record their debit note",
     "createGoodsReceipt": "Create goods receipt",
     "convertToBill": "Convert to bill",
     "daysLate_one": "{{count}} day late",
@@ -217,8 +233,25 @@
     "nothingOutstanding": "Nothing outstanding",
     "advanceHint": "This payment will be held as an advance against the contact.",
     "applying": "Applying",
+    "adjustReceived": "Customer deducted TDS, or a discount or write-off",
+    "adjustPaid": "You deducted TDS, or got a discount",
+    "adjustment": {
+      "tdsDeducted": "TDS deducted",
+      "discount": "Discount",
+      "writeOff": "Write off"
+    },
+    "adjustmentHint": {
+      "tdsDeducted": "Settles the invoice with no money moving; claimed back against Form 26AS.",
+      "discount": "Settles the rest at a discount, such as for prompt payment.",
+      "writeOff": "What won’t be paid, booked as a bad debt."
+    },
+    "settledWithoutCash": "Settled without cash",
     "notes": "Notes",
     "notesPlaceholder": "Internal note",
+    "serviceAdvance": "Advance for services",
+    "serviceAdvanceHint": "GST is due on an advance for services when it is received; the invoice raised later takes it back. Advances for goods carry none.",
+    "advanceRate": "GST rate",
+    "advanceTaxIs": "GST on the advance: {{tax}}, inside the amount received",
     "applyTo": "Apply to",
     "summary": "Summary",
     "autoAllocateShort": "Auto-allocate",
@@ -349,5 +382,14 @@
     "search": "Search by number or party",
     "empty": "Nothing to return against yet",
     "created": "Return draft created"
+  },
+  "notePicker": {
+    "created": "Note draft created",
+    "hint": {
+      "creditNote": "Pick the invoice this credit note lowers. Its lines are copied in: change them to the amount being credited, such as the discount or the price difference.",
+      "debitNote": "Pick the invoice this debit note adds to. Its lines are copied in: change them to the extra amount being charged.",
+      "supplierCreditNote": "Pick the supplier’s bill their credit note is against, then enter it as they issued it.",
+      "supplierDebitNote": "Pick the supplier’s bill their debit note is against, then enter it as they issued it."
+    }
   }
 }

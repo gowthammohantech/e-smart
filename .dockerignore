@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/dist
+**/.expo
+**/.turbo
+**/*.tsbuildinfo
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/credentials
+apps/site/out
+apps/site/.next
+story
+# Secrets reach the containers at run time (docker-compose.yml), never the image.
+**/.env
+**/.env.*
+!**/.env.example

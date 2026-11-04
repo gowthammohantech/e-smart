@@ -32,7 +32,7 @@ export default function InventoryTab() {
 
   const baseCurrency = useBaseCurrency();
   const items = useItems();
-  const movements = useStockMovements();
+  const movements = useStockMovements(undefined, { branchScoped: true });
   const stock = useStockLevels();
 
   const [query, setQuery] = useState('');

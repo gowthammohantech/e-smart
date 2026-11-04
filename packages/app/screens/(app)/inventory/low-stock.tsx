@@ -26,7 +26,7 @@ export default function LowStock() {
 
   const items = useItems({ activeOnly: true });
   const stock = useStockLevels();
-  const movements = useStockMovements();
+  const movements = useStockMovements(undefined, { branchScoped: true });
   const baseCurrency = useBaseCurrency();
 
   const report = useMemo(() => summarizeStock(items, movements, baseCurrency), [items, movements, baseCurrency]);
@@ -125,7 +125,17 @@ export default function LowStock() {
       </ScrollView>
 
       {rows.length > 0 ? (
-        <PrimaryActionBar title={tr('inventory:lowStock.raisePo')} icon="cart-plus" onPress={() => router.push('/(app)/purchases/orders/new')} />
+        <PrimaryActionBar
+          title={tr('inventory:lowStock.raisePo')}
+          icon="cart-plus"
+          onPress={() => {
+            // Each short item at what brings it back to twice its reorder level, as suggested above.
+            const reorder = rows
+              .map((r) => `${r.item.id}:${Math.max(0, r.item.reorderLevel * 2 - r.onHand)}`)
+              .filter((pair) => !pair.endsWith(':0'));
+            router.push(`/(app)/purchases/orders/new${reorder.length ? `?items=${encodeURIComponent(reorder.join(','))}` : ''}` as never);
+          }}
+        />
       ) : null}
     </View>
   );

@@ -29,8 +29,10 @@ import {
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
-import { toMajor } from '@esmart/core/lib/money';
+import { formatDate, monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
+import { money, toMajor } from '@esmart/core/lib/money';
+import { tdsRegister } from '@esmart/core/domain/tds';
+import { BANK_RATE_PERCENT, msmePayables, sec43bh } from '@esmart/core/domain/msme';
 
 import {
   useBaseCurrency,
@@ -40,6 +42,7 @@ import {
   useExpenses,
   useItems,
   useParties,
+  useActiveCompany,
   usePayables,
   usePaymentAccounts,
   usePayments,
@@ -63,12 +66,14 @@ export default function Report() {
     payments: { title: tr('reports:report.payments.title') },
     advances: { title: tr('reports:report.advances.title'), subtitle: tr('reports:report.advances.basis') },
     profit: { title: tr('reports:report.profit.title'), subtitle: tr('reports:report.profit.basis') },
+    'tds-register': { title: tr('reports:report.tdsRegister.title'), subtitle: tr('reports:report.tdsRegister.basis') },
+    'msme-payables': { title: tr('reports:report.msmePayables.title'), subtitle: tr('reports:report.msmePayables.basis') },
   };
   const meta = titles[key];
   // Always false in the native apps, so the desktop layout only ever reaches a browser.
   const desktop = useIsDesktop();
 
-  const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' ? 'thisFY' : 'last90');
+  const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' || key === 'tds-register' ? 'thisFY' : 'last90');
 
   const baseCurrency = useBaseCurrency();
   const documents = useDocuments();
@@ -77,6 +82,7 @@ export default function Report() {
   const items = useItems();
   const movements = useStockMovements();
   const parties = useParties();
+  const company = useActiveCompany();
   const branches = useBranches();
   const payments = usePayments();
   const accounts = usePaymentAccounts();
@@ -104,7 +110,10 @@ export default function Report() {
     () => summarizeExpenses(expenses, expenseCategories, baseCurrency, scope.filters),
     [expenses, expenseCategories, baseCurrency, scope.filters],
   );
-  const tax = useMemo(() => summarizeTax(documents, baseCurrency, scope.filters), [documents, baseCurrency, scope.filters]);
+  const tax = useMemo(
+    () => summarizeTax(documents, baseCurrency, scope.filters, expenses, company),
+    [documents, baseCurrency, scope.filters, expenses, company],
+  );
   // The reports engine takes method names as data, so it stays free of the
   // translator. Rebuilt when the language changes, or the chart keeps the old
   // one's labels.
@@ -124,6 +133,29 @@ export default function Report() {
   const profit = useMemo(
     () => profitSnapshot(documents, expenses, items, baseCurrency, scope.filters),
     [documents, expenses, items, baseCurrency, scope.filters],
+  );
+
+  // TDS kept back on supplier bills, by section, deductee and quarter (the input for Form 26Q).
+  const tdsRows = useMemo(
+    () =>
+      tdsRegister(
+        documents
+          .filter((d) => ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote'].includes(d.kind) && !['draft', 'cancelled'].includes(d.status))
+          .filter((d) => (!scope.filters.branchId || d.branchId === scope.filters.branchId) && (!scope.filters.partyId || d.partyId === scope.filters.partyId))
+          .map((d) => {
+            const rate = d.currency === baseCurrency ? 1 : d.exchangeRate;
+            return {
+              partyId: d.partyId,
+              date: d.date,
+              tds: d.tds ? { section: d.tds.section, amount: { minor: Math.round(d.tds.amount.minor * rate) } } : undefined,
+              baseMinor: Math.round(d.totals.taxableAmount.minor * rate),
+              sign: d.kind === 'supplierCreditNote' ? -1 : 1,
+            };
+          }),
+        parties,
+        { from: scope.filters.range.from, to: scope.filters.range.to },
+      ),
+    [documents, parties, baseCurrency, scope.filters],
   );
 
   if (!meta) {
@@ -470,6 +502,79 @@ export default function Report() {
       reportTable(
         [tr('common:table.number'), tr('common:table.date'), tr('reports:column.direction'), tr('reports:shell.contact'), tr('common:table.amount'), tr('reports:column.toAdjust')],
         advances.rows.map((r) => [r.number, r.date, tr(`domain:status.${r.direction}`), partyName(r.partyId), toMajor(r.amount), toMajor(r.unallocated)]),
+      );
+  }
+
+  if (key === 'tds-register') {
+    const total = money(tdsRows.reduce((a, r) => a + r.tdsMinor, 0), baseCurrency);
+    body = tdsRows.length ? (
+      <>
+        <KeyFigures rows={[{ label: tr('reports:figure.tdsDeducted'), value: formatMoney(total), tone: 'warn' }]} />
+        <ReportSection title={tr('reports:detail.tdsByDeductee')}>
+          <DataTable
+            headers={[tr('reports:column.quarter'), tr('reports:column.section'), tr('reports:shell.contact'), tr('reports:column.tds')]}
+            rows={tdsRows.map((r) => [r.quarter.replace('FY ', ''), r.sectionLabel, r.partyName, formatMoney(money(r.tdsMinor, baseCurrency), { symbol: false })])}
+            widths={[1.2, 0.9, 1.6, 1.1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="bank-minus" title={tr('reports:detail.noTds')} message={tr('reports:detail.noTdsBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:column.quarter'), tr('reports:column.section'), tr('reports:shell.contact'), 'PAN', tr('reports:column.tdsBase'), tr('reports:column.tds'), tr('reports:column.documents')],
+        tdsRows.map((r) => [r.quarter, r.sectionLabel, r.partyName, r.pan ?? '', r.baseMinor / 100, r.tdsMinor / 100, r.documents]),
+      );
+  }
+
+  if (key === 'msme-payables') {
+    // As of the period's end: what micro and small suppliers are still owed, against the 45-day limit.
+    const asOf = scope.filters.range.to;
+    const bills = documents.filter((d) => !scope.filters.branchId || d.branchId === scope.filters.branchId);
+    const rows = msmePayables(asOf, bills, parties, payments);
+    const late = sec43bh(asOf, bills, parties, payments, company.fiscalYearStartMonth);
+    const nameOf = (id: string) => parties.find((x) => x.id === id)?.name ?? '';
+    const sum = (list: typeof rows) => money(list.reduce((a, r) => a + r.outstandingMinor, 0), baseCurrency);
+    const when = (days: number) => (days < 0 ? tr('reports:msme.overdue', { count: -days }) : tr('reports:msme.left', { count: days }));
+    body = rows.length || late.length ? (
+      <>
+        <KeyFigures
+          rows={[
+            { label: tr('reports:msme.owed'), value: formatMoney(sum(rows)) },
+            { label: tr('reports:msme.pastLimit'), value: formatMoney(sum(rows.filter((r) => r.daysLeft < 0))), tone: rows.some((r) => r.daysLeft < 0) ? 'bad' : undefined },
+          ]}
+        />
+        <ReportSection title={tr('reports:msme.unpaid')}>
+          <DataTable
+            headers={[tr('common:table.number'), tr('reports:shell.contact'), tr('reports:msme.due'), tr('common:table.amount'), tr('reports:msme.interest')]}
+            rows={rows.map((r) => [r.number, nameOf(r.partyId), `${formatDate(r.dueDate)} · ${when(r.daysLeft)}`, formatMoney(money(r.outstandingMinor, r.currency), { symbol: false }), formatMoney(money(r.interestMinor, r.currency), { symbol: false })])}
+            widths={[1, 1.4, 1.6, 1, 0.9]}
+          />
+          <Text variant="caption" tone="muted">
+            {tr('reports:msme.interestBasis', { rate: formatPercent(BANK_RATE_PERCENT * 3) })}
+          </Text>
+        </ReportSection>
+        {late.length ? (
+          <ReportSection title={tr('reports:msme.notInTime')}>
+            <DataTable
+              headers={[tr('common:table.number'), tr('reports:shell.contact'), tr('reports:msme.due'), tr('common:table.amount')]}
+              rows={late.map((r) => [r.number, nameOf(r.partyId), formatDate(r.dueDate), formatMoney(money(r.notPaidInTimeMinor, r.currency), { symbol: false })])}
+              widths={[1, 1.4, 1, 1]}
+            />
+            <Text variant="caption" tone="muted">
+              {tr('reports:msme.notInTimeBasis')}
+            </Text>
+          </ReportSection>
+        ) : null}
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="timer-sand" title={tr('reports:msme.none')} message={tr('reports:msme.noneBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('common:table.number'), tr('reports:shell.contact'), tr('common:table.date'), tr('reports:msme.due'), tr('reports:msme.daysLeft'), tr('common:table.amount'), tr('reports:msme.interest')],
+        rows.map((r) => [r.number, nameOf(r.partyId), r.date, r.dueDate, r.daysLeft, r.outstandingMinor / 100, r.interestMinor / 100]),
       );
   }
 

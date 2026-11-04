@@ -1,13 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  BusinessDocument,
-  DiscountMode,
-  DocumentKind,
-  DocumentLine,
-  Item,
-  Party,
-  TaxCategory,
-} from '@esmart/core/types';
+import { BusinessDocument, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, TaxCategory } from '@esmart/core/types';
 import { Money, factorOf, fromMajor, money, zero } from '@esmart/core/lib/money';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -30,6 +22,13 @@ export type DraftState = {
   applyRoundOff: boolean;
   roundOffManual?: Money;
   placeOfSupplyStateCode?: string;
+  /** The whole document is under reverse charge: the buyer pays the GST. */
+  reverseCharge?: boolean;
+  /** Why a credit or debit note was raised. */
+  noteReason?: NoteReason;
+  /** A TDS section, `none`, or unset for the supplier's own. */
+  tdsSection?: string;
+  costCentreId?: string;
   notes: string;
   terms: string;
   attachmentIds: string[];
@@ -77,6 +76,11 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     applyRoundOff: doc.applyRoundOff,
     roundOffManual: doc.roundOffManual,
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,
+    reverseCharge: doc.reverseCharge,
+    noteReason: doc.noteReason,
+    // A stored bill keeps what it was worked out with.
+    tdsSection: doc.tdsSection ?? doc.tds?.section ?? 'none',
+    costCentreId: doc.costCentreId,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],
@@ -87,6 +91,8 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
 
 export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: TaxCategory[]): DocumentLine {
   const category = taxCategories.find((c) => c.id === item.taxCategoryId);
+  // Nil-rated, exempt and non-GST supplies, and reimbursements, are charged at 0% (as the server does).
+  const taxable = !item.gst?.reimbursement && (item.gst?.supplyType ?? 'taxable') === 'taxable';
   return {
     id: uid('ln'),
     itemId: item.id,
@@ -99,8 +105,9 @@ export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: Tax
     discountMode: 'amount',
     discountValue: 0,
     taxCategoryId: item.taxCategoryId,
-    taxRate: category?.rate ?? 0,
+    taxRate: taxable ? (category?.rate ?? 0) : 0,
     taxInclusive: false,
+    ...(item.gst && { gst: { ...item.gst } }),
   };
 }
 
@@ -144,6 +151,21 @@ export function inCurrency(d: DraftState, currency: string, rate: number): Draft
   };
 }
 
+/**
+ * Puts every price on the draft in the draft's currency, which the server
+ * insists on. A price in the base currency (an item's own price) is converted
+ * at the draft's rate; any other mismatch is re-tagged, as picking a currency does.
+ */
+export function alignCurrency(d: DraftState, baseCurrency: string): DraftState {
+  const to = (m: Money): Money => {
+    if (m.currency === d.currency) return m;
+    if (m.currency === baseCurrency && d.exchangeRate > 0) return money(Math.round(m.minor / d.exchangeRate), d.currency);
+    return money(m.minor, d.currency);
+  };
+  if (d.charges.currency === d.currency && d.lines.every((l) => l.unitPrice.currency === d.currency)) return d;
+  return { ...d, charges: to(d.charges), lines: d.lines.map((l) => ({ ...l, unitPrice: to(l.unitPrice) })) };
+}
+
 export function blankLine(currency: string, taxCategories: TaxCategory[]): DocumentLine {
   const fallback = taxCategories.find((c) => c.rate === 18) ?? taxCategories[0];
   return {
@@ -169,9 +191,13 @@ export function useDocumentDraft(options: {
   initial?: DraftState;
 }) {
   const { kind, baseCurrency, taxCategories, taxContext, initial } = options;
-  const [draft, setDraft] = useState<DraftState>(() => initial ?? emptyDraft(baseCurrency, kind));
+  const [draft, setDraft] = useState<DraftState>(() => alignCurrency(initial ?? emptyDraft(baseCurrency, kind), baseCurrency));
 
-  const patch = useCallback((p: Partial<DraftState>) => setDraft((d) => ({ ...d, ...p })), []);
+  // A party in another currency moves the whole draft into it.
+  const patch = useCallback(
+    (p: Partial<DraftState>) => setDraft((d) => alignCurrency({ ...d, ...p }, baseCurrency)),
+    [baseCurrency],
+  );
 
   const addLine = useCallback((line: DocumentLine) => {
     setDraft((d) => {
@@ -183,9 +209,9 @@ export function useDocumentDraft(options: {
           lines: d.lines.map((l) => (l.id === existing.id ? { ...l, quantity: l.quantity + line.quantity } : l)),
         };
       }
-      return { ...d, lines: [...d.lines, line] };
+      return alignCurrency({ ...d, lines: [...d.lines, line] }, baseCurrency);
     });
-  }, []);
+  }, [baseCurrency]);
 
   const updateLine = useCallback((id: string, p: Partial<DocumentLine>) => {
     setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.id === id ? { ...l, ...p } : l)) }));

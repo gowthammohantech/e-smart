@@ -38,6 +38,8 @@ Below the snapshot, **All reports** lists every report your plan includes. Tap o
 | **Payables** | Supplier dues and aging | Outstanding = bill total less payments made | Last 90 days | Pro+ |
 | **Stock report** | On-hand quantity and valuation | Quantity from every stock movement; value at weighted average cost | Last 90 days | Pro+ |
 | **Profit snapshot** | Revenue less cost and expenses | Revenue is **taxable value**, so tax collected is not income | **This financial year** | Pro+ |
+| **TDS deducted** | TDS kept back on supplier bills, by quarter, section and deductee (for Form 26Q) | Supplier bills and notes dated in the period | **This financial year** | Pro+ |
+| **MSME payments due** | Micro and small suppliers' unpaid bills against the 45-day limit, and what wasn't paid in time this year (s.43B(h)) | Unpaid on the period's last day ([20](20-tds-rcm-itc.md#paying-micro-and-small-suppliers-on-time)) | Last 90 days | Pro+ |
 
 ---
 
@@ -104,3 +106,5 @@ On Free or Basic, opening **Purchase summary**, **Expense summary**, **Payables*
 ---
 
 **Related:** [07 Payments & aging](07-payments.md) · [11 GSTR-1](11-gst-compliance.md#gstr-1) · [09 Stock](09-items-and-stock.md) · [13 Backup & export](13-settings.md#backup--export)
+
+The books' own statements (trial balance, profit and loss, balance sheet, day book, profit by cost centre) are under **More › Books** ([19](19-books.md)).

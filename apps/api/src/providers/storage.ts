@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { BlobSASPermissions, BlobServiceClient, RestError, StorageSharedKeyCredential, type ContainerClient } from '@azure/storage-blob';
 import type { FastifyInstance } from 'fastify';
@@ -23,6 +23,8 @@ export interface StorageProvider {
   get(key: string): Promise<Buffer | null>;
   head(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
+  /** Every key under a prefix (`companies/cmp_1/`), for erasing a closed account's files. */
+  list(prefix: string): Promise<string[]>;
 }
 
 const DEFAULT_TTL = 900;
@@ -66,6 +68,10 @@ export class MemoryStorage implements StorageProvider {
     const o = this.objects.get(key);
     return o ? { size: o.body.length, contentType: o.contentType } : null;
   }
+  async list(prefix: string) {
+    return [...this.objects.keys()].filter((k) => k.startsWith(prefix));
+  }
+
   async delete(key: string) {
     this.objects.delete(key);
   }
@@ -131,6 +137,17 @@ export class S3Storage implements StorageProvider {
       return null;
     }
   }
+  async list(prefix: string) {
+    const keys: string[] = [];
+    let token: string | undefined;
+    do {
+      const out = await this.s3.send(new ListObjectsV2Command({ Bucket: this.config.S3_BUCKET, Prefix: prefix, ContinuationToken: token }));
+      for (const o of out.Contents ?? []) if (o.Key) keys.push(o.Key);
+      token = out.IsTruncated ? out.NextContinuationToken : undefined;
+    } while (token);
+    return keys;
+  }
+
   async delete(key: string) {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.config.S3_BUCKET, Key: key }));
   }
@@ -185,6 +202,12 @@ export class AzureBlobStorage implements StorageProvider {
       throw err;
     }
   }
+  async list(prefix: string) {
+    const keys: string[] = [];
+    for await (const blob of this.container.listBlobsFlat({ prefix })) keys.push(blob.name);
+    return keys;
+  }
+
   async delete(key: string) {
     await this.container.getBlobClient(key).deleteIfExists();
   }

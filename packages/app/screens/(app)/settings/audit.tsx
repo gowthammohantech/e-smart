@@ -34,7 +34,13 @@ function fieldLabel(path: string): string {
 
 export default function AuditTrail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'domain']);
+  // Statuses are stored as their codes ("partiallyPaid"); show them as the rest of the app names them.
+  const status = (code: string) => tr(`domain:status.${code}`, { defaultValue: code });
+  const actionText = (action: string) => {
+    const marked = /^marked (\w+)$/.exec(action);
+    return marked ? `marked ${status(marked[1]).toLowerCase()}` : action;
+  };
   const events = useAuditEvents();
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -87,7 +93,7 @@ export default function AuditTrail() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Icon name={iconFor(e.action)} size={14} color={t.c.muted} />
                         <Text variant="small" weight="600" style={{ flex: 1 }} numberOfLines={1}>
-                          {e.actorName} {e.action} {e.entityLabel}
+                          {e.actorName} {actionText(e.action)} {e.entityLabel}
                         </Text>
                       </View>
                       <Text variant="caption" tone="muted">
@@ -104,9 +110,9 @@ export default function AuditTrail() {
                         <View key={c.field} style={{ gap: 2 }}>
                           <Text variant="caption" weight="600">{c.field === 'value' ? tr('settings:audit.value') : fieldLabel(c.field)}</Text>
                           <Text variant="caption" tone="bad" style={{ textDecorationLine: c.from ? 'line-through' : 'none' }}>
-                            {c.from ?? tr('settings:audit.empty')}
+                            {c.from == null ? tr('settings:audit.empty') : c.field === 'status' ? status(c.from) : c.from}
                           </Text>
-                          <Text variant="caption" tone="good">{c.to ?? tr('settings:audit.empty')}</Text>
+                          <Text variant="caption" tone="good">{c.to == null ? tr('settings:audit.empty') : c.field === 'status' ? status(c.to) : c.to}</Text>
                         </View>
                       ))}
                     </View>

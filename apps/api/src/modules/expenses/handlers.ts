@@ -12,8 +12,10 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
 import { rateToBase } from '../documents/engine';
+import { assertPeriodOpen } from '../documents/lifecycle';
 import { expenseTax, linkExpenseAttachments, nextRecurrence } from './engine';
 import { expensesToWire, type ExpenseRow } from './wire';
+import { costCentreIssues } from '../books/costCentres';
 
 export { materializeRecurringExpenses } from './engine';
 
@@ -54,7 +56,7 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
 
   const [account] = await db.select().from(schema.paymentAccounts).where(and(eq(schema.paymentAccounts.companyId, companyId), eq(schema.paymentAccounts.id, body.accountId)));
   if (!account) blocking('accountId', 'No such payment account in this company');
-  else if (!accountFitsMethod(body.method, { ...account, currency: account.currency.trim(), accountNumber: account.accountNumber ?? undefined, openingBalance: money(account.openingBalanceMinor, account.currency.trim()), openingBalanceDate: account.openingBalanceDate ?? undefined })) {
+  else if (!accountFitsMethod(body.method, { ...account, currency: account.currency.trim(), accountNumber: account.accountNumber ?? undefined, openingBalance: money(account.openingBalanceMinor, account.currency.trim()), openingBalanceDate: account.openingBalanceDate ?? undefined, openingRate: Number(account.openingRate) })) {
     blocking('accountId', `A ${body.method} expense cannot be paid from a ${account.type} account`);
   }
 
@@ -94,9 +96,17 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
     const missing = body.attachmentIds.filter((id) => !found.some((f) => f.id === id));
     if (missing.length) blocking('attachmentIds', `No such attachment in this company: ${missing.join(', ')}`);
   }
+  if (body.customerId) {
+    const P = schema.parties;
+    const [customer] = await db.select({ kind: P.kind }).from(P).where(and(eq(P.companyId, companyId), eq(P.id, body.customerId)));
+    if (customer?.kind !== 'customer') blocking('customerId', 'No such customer in this company');
+    else if (!body.billable) blocking('customerId', 'Only a billable expense is recovered from a customer');
+  }
+  issues.push(...(await costCentreIssues(db, companyId, [{ field: 'costCentreId', id: body.costCentreId }])));
   if (issues.length) throw unprocessable(issues);
 
   const taxInclusive = body.taxInclusive ?? current?.taxInclusive ?? true;
+  const reverseCharge = body.reverseCharge ?? current?.reverseCharge ?? false;
   const recurrence = body.recurrence ?? current?.recurrence ?? 'none';
   // A template keeps its place in the series unless its date or frequency changed.
   const keepSchedule = current && current.recurrence === recurrence && current.date === body.date && current.nextRecurrenceDate;
@@ -109,13 +119,19 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
     currency: body.currency,
     exchangeRate: String(exchangeRate),
     taxCategoryId: body.taxCategoryId ?? null,
-    taxAmountMinor: expenseTax(money(body.amount.minor, body.currency), rate, taxInclusive).minor,
+    taxAmountMinor: expenseTax(money(body.amount.minor, body.currency), rate, taxInclusive, reverseCharge).minor,
     taxInclusive,
+    placeOfSupplyStateCode: body.placeOfSupplyStateCode ?? null,
+    supplierGstin: body.supplierGstin?.trim().toUpperCase() || null,
+    itcEligibility: body.itcEligibility ?? 'eligible',
+    reverseCharge,
     accountId: body.accountId,
     method: body.method,
     reference: body.reference ?? null,
     notes: body.notes ?? null,
     billable: body.billable ?? false,
+    customerId: body.billable ? (body.customerId ?? null) : null,
+    costCentreId: body.costCentreId ?? null,
     recurrence,
     nextRecurrenceDate: keepSchedule ? current.nextRecurrenceDate : nextRecurrence(body.date, recurrence),
   };
@@ -159,6 +175,7 @@ export const expensesHandlers = defineHandlers({
   },
 
   async createExpense(ctx) {
+    assertPeriodOpen(ctx.company, ctx.body.date);
     const cols = await prepare(ctx, ctx.db, ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
       const number = await assignNumber(tx, { companyId: ctx.company.id, kind: 'expense', branchId: cols.branchId, date: cols.date });
@@ -186,6 +203,8 @@ export const expensesHandlers = defineHandlers({
     if (!hasModule(ctx.company.plan, 'expenses')) throw planUpgradeRequired(FULL_PLAN, 'expenses');
     const current = await findExpense(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
+    assertPeriodOpen(ctx.company, current.date);
+    assertPeriodOpen(ctx.company, ctx.body.date);
     const cols = await prepare(ctx, ctx.db, ctx.body, current);
     const row = await ctx.db.transaction(async (tx) => {
       const before = await toWire(tx, current);
@@ -219,6 +238,7 @@ export const expensesHandlers = defineHandlers({
   async removeExpense(ctx) {
     const current = await findExpense(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
+    assertPeriodOpen(ctx.company, current.date);
     await ctx.db.transaction(async (tx) => {
       const before = await toWire(tx, current);
       await linkExpenseAttachments(tx, ctx.company.id, current.id, []);

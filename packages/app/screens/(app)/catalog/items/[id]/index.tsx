@@ -44,7 +44,7 @@ export default function ItemDetail() {
   const item = useItem(id);
   const baseCurrency = useBaseCurrency();
   // The item's own id: the route's may be the one it had before the server saved it.
-  const movements = useStockMovements(item?.id ?? id);
+  const movements = useStockMovements(item?.id ?? id, { branchScoped: true });
   const hasInventory = useHasModule('inventory');
   const hasPurchases = useHasModule('purchases');
   const taxCategories = useTaxCategories();

@@ -13,7 +13,7 @@ import type {
 } from '@esmart/core/types';
 import type { AppState } from '../store/appStore';
 import { companyPath as c } from './collections';
-import { knownToServer } from './meta';
+import { knownToServer, useRemoteMeta } from './meta';
 import * as outbox from './outbox';
 
 /**
@@ -107,6 +107,10 @@ function documentAction(path: (d: BusinessDocument) => string, body?: (call: Cal
       entityId: created ?? doc.id,
       label: doc.number,
       clientEntityId: created,
+      // A finalise or status change acts on the version this device saw: the server refuses it (a
+      // conflict, as for an edit) if another device changed the document since. A convert or duplicate
+      // makes something new and reads its source as it is.
+      baseVersion: created ? undefined : useRemoteMeta.getState().versions[doc.id],
     });
   };
 }
@@ -229,6 +233,14 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   },
   saveExpense: master('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
   removeExpense: removal('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
+
+  /* books */
+  saveLedgerAccount: master('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  removeLedgerAccount: removal('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  saveVoucher: master('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  removeVoucher: removal('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  saveCostCentre: master('cost_centre', 'costCentres', 'cost-centres', named),
+  removeCostCentre: removal('cost_centre', 'costCentres', 'cost-centres', named),
 
   /* stock */
   addStockMovement: ({ args }) => {

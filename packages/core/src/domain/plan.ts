@@ -15,7 +15,9 @@ export type Module =
   | 'ocr'
   | 'fx'
   | 'branches'
-  | 'payables';
+  | 'payables'
+  /** The general ledger: chart of accounts, vouchers, trial balance, P&L, balance sheet. */
+  | 'books';
 
 export type PlanInfo = {
   key: PlanTier;
@@ -119,6 +121,7 @@ export const MODULES: Module[] = [
   'fx',
   'branches',
   'payables',
+  'books',
 ];
 
 /** Reports that read the buying side of the books, and the module each needs. */
@@ -128,6 +131,9 @@ const FULL_PLAN_REPORTS: Record<string, Module> = {
   payables: 'payables',
   stock: 'inventory',
   profit: 'expenses',
+  'tds-register': 'payables',
+  'trial-balance': 'books',
+  'msme-payables': 'payables',
 };
 
 export function moduleForReport(key: string): Module | null {
@@ -150,6 +156,9 @@ const GATED_PATHS: [prefix: string, module: Module][] = [
   ['/ocr', 'ocr'],
   ['/settings/currencies', 'fx'],
   // Branches opens on every plan: Free has its one branch to name, and adding more is what is locked.
+  ['/books', 'books'],
+  // Matching 2B needs the purchase register.
+  ['/gst/gstr2b', 'purchases'],
 ];
 
 /** The module a route belongs to, or null when every plan can open it. */

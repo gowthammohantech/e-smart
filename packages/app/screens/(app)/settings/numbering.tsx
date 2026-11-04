@@ -11,7 +11,6 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
 import { NumberingSeries } from '@esmart/core/types';
 import { formatNumber } from '@esmart/core/domain/numbering';
 import { seriesLabel } from '@esmart/core/labels';
@@ -21,6 +20,7 @@ import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 const RESET_LABELS = {
   never: 'settings:numbering.reset.never',
@@ -31,7 +31,7 @@ const RESET_LABELS = {
 export default function NumberingSettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const series = useNumberingSeries();
   const branches = useBranches();
@@ -71,11 +71,15 @@ export default function NumberingSettings() {
       }
     : null;
 
-  const save = () => {
+  const save = async () => {
     if (!draft) return;
-    saveNumberingSeries(draft);
-    toast.show(tr('settings:numbering.updated', { series: seriesLabel(tr, draft.kind) }), 'success', { icon: 'pound', detail: `${draft.prefix}${draft.nextNumber}` });
-    setEditing(null);
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(
+      () => saveNumberingSeries(draft),
+      tr('settings:numbering.updated', { series: seriesLabel(tr, draft.kind) }),
+      { icon: 'pound', detail: `${draft.prefix}${draft.nextNumber}` },
+    );
+    if (res) setEditing(null);
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
@@ -113,7 +117,7 @@ export default function NumberingSettings() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing ? seriesLabel(tr, editing.kind) : ''}
-        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} fullWidth />}
+        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} loading={saving} disabled={saving} fullWidth />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>

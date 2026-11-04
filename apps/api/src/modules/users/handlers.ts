@@ -583,6 +583,8 @@ export const usersHandlers = defineHandlers({
    */
   async acceptInvite(ctx) {
     const { invite, user, inviter } = await openInvite(ctx.db, ctx.params.token, ctx.now);
+    // What they agreed to on the accept screen, when the app sends it.
+    const terms = ctx.body?.termsVersion ? { termsAcceptedAt: ctx.now, termsVersion: ctx.body.termsVersion } : {};
 
     if (invite.companyIds !== null) {
       const companies = await offeredCompanies(ctx.db, invite, inviter);
@@ -600,7 +602,7 @@ export const usersHandlers = defineHandlers({
         if (passwordHash) {
           const [activated] = await tx
             .update(U)
-            .set({ passwordHash, status: 'active', emailVerifiedAt: ctx.now, version: user.version + 1, updatedAt: ctx.now })
+            .set({ passwordHash, status: 'active', emailVerifiedAt: ctx.now, ...terms, version: user.version + 1, updatedAt: ctx.now })
             .where(and(eq(U.id, user.id), isNull(U.passwordHash)))
             .returning();
           if (!activated) throw badRequest('INVITE_INVALID', INVITE_INVALID);
@@ -623,7 +625,7 @@ export const usersHandlers = defineHandlers({
     const activated = await ctx.db.transaction(async (tx) => {
       const [row] = await tx
         .update(U)
-        .set({ passwordHash, status: 'active', emailVerifiedAt: ctx.now, version: user.version + 1, updatedAt: ctx.now })
+        .set({ passwordHash, status: 'active', emailVerifiedAt: ctx.now, ...terms, version: user.version + 1, updatedAt: ctx.now })
         .where(and(eq(U.id, user.id), eq(U.status, 'invited')))
         .returning();
       if (!row) throw badRequest('INVITE_INVALID', 'This invite link is invalid or has expired');

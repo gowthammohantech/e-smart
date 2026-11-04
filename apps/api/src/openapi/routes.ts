@@ -42,6 +42,15 @@ function splitCommaArrays(query: Record<string, unknown> | undefined, op: Operat
   }
 }
 
+/** Calls that guess at credentials or send messages: limited per IP, whatever token they carry. */
+const AUTH_OPS = new Set(['signIn', 'signUp', 'requestOtp', 'verifyOtp', 'forgotPassword', 'resetPassword', 'confirmMfaEnrollment', 'verifyMfa', 'deleteMe']);
+
+function rateLimitFor(deps: Deps, op: Operation) {
+  if (AUTH_OPS.has(op.id)) return { max: deps.config.AUTH_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute', keyGenerator: (req: { ip: string }) => `ip:${req.ip}` };
+  if (op.id === 'refreshToken') return { max: deps.config.AUTH_RATE_LIMIT_PER_MINUTE * 3, timeWindow: '1 minute', keyGenerator: (req: { ip: string }) => `ip:${req.ip}` };
+  return undefined;
+}
+
 /**
  * One Fastify route per contract operation, under /v1. The request schema
  * comes from the spec, so a request the contract rejects never reaches a
@@ -57,7 +66,7 @@ export function registerRoutes(app: FastifyInstance, deps: Deps, operations: Ope
       schema: isWebhook ? undefined : Object.fromEntries(Object.entries(op.schema).filter(([, v]) => v !== undefined)),
       exposeHeadRoute: false,
       preValidation: async (req) => splitCommaArrays(req.query as Record<string, unknown>, op),
-      config: { op, ...(isWebhook ? { rawBody: true } : {}) },
+      config: { op, ...(isWebhook ? { rawBody: true } : {}), ...(rateLimitFor(deps, op) ? { rateLimit: rateLimitFor(deps, op) } : {}) },
       handler: async (req, reply) => {
         if (isWebhook) {
           const handler = webhooks[op.id as keyof WebhookHandlers];

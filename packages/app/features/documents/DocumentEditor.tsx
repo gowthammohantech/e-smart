@@ -16,11 +16,14 @@ import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { AmountField, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { useDecimalText } from '../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { DocumentKind, DocumentLine, Party } from '@esmart/core/types';
+import { DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { NOTE_KINDS, PURCHASE_KINDS } from '@esmart/core/domain/documentStates';
+import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
@@ -63,14 +66,20 @@ import {
 import { LineEditorSheet } from './LineEditorSheet';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
+import { useCanWrite } from '../../remote/connectivity';
 import { useSaveOnline } from '../../remote/save';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
+import { tdsForDocument } from '../../store/tds';
+import { CostCentreField } from '../books/CostCentreField';
+import { BillableExpenses } from './BillableExpenses';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
-const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
+/** The documents GST is charged on, where reverse charge can apply. */
+const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
+const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
 
 export function DocumentEditor({
   kind,
@@ -91,14 +100,18 @@ export function DocumentEditor({
     date?: string;
     supplierDocNumber?: string;
     lines?: { name: string; quantity: number; unitPrice: number }[];
+    /** Several catalogue items at once, e.g. what Low stock says to reorder. */
+    items?: { itemId: string; quantity: number }[];
   };
   onSaved?: (id: string) => void;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'purchases']);
   const router = useRouter();
   const toast = useToast();
   const { save: saveOnline, saving } = useSaveOnline();
+  // View-only (no internet, offline not agreed to): the header's badge says so and offers offline mode.
+  const blocked = !useCanWrite();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
 
@@ -118,7 +131,8 @@ export function DocumentEditor({
   const hsnRequired = hsnMandatory(company?.taxRegistration);
   const isReturn = kind === 'salesReturn' || kind === 'purchaseReturn';
   // Tax documents carry HSN/SAC per line; quotes and orders do not have to.
-  const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn);
+  const isNote = NOTE_KINDS.includes(kind);
+  const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn || isNote);
 
   const createDocument = useAppStore((s) => s.createDocument);
   const updateDocument = useAppStore((s) => s.updateDocument);
@@ -148,6 +162,8 @@ export function DocumentEditor({
         // A party synced from an older API can arrive without an address.
         placeOfSupplyStateCode: p.billingAddress?.stateCode,
         dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(d.date, p.paymentTermsDays) : d.dueDate,
+        // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
+        ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
       },
       p.currency,
       p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, d.date),
@@ -171,9 +187,15 @@ export function DocumentEditor({
       quantity: l.quantity,
       unitPrice: fromMajor(String(l.unitPrice), p?.currency ?? baseCurrency),
     }));
+    const listed = (prefill.items ?? []).flatMap((x) => {
+      const it = items.find((i) => i.id === x.itemId);
+      return it ? [{ ...lineFromItem(it, isPurchase, taxCategories), quantity: x.quantity }] : [];
+    });
     const lines = item
       ? [{ ...lineFromItem(item, isPurchase, taxCategories), quantity: prefill.quantity ?? 1 }]
-      : scanned;
+      : listed.length
+        ? listed
+        : scanned;
     // Without a party (e.g. "Sell" from an item) the line is ready and the party step stays open.
     if (!p) return { missingParty: !!prefill.partyId, draft: { ...base, lines }, step: 0 };
     return {
@@ -191,8 +213,10 @@ export function DocumentEditor({
         party: parties.find((p) => p.id === d.partyId),
         date: d.date,
         purchase: isPurchase,
+        branch: branches.find((b) => b.id === (d.branchId ?? defaultBranchId)),
+        reverseCharge: d.reverseCharge,
       }),
-    [company, parties, isPurchase],
+    [company, parties, isPurchase, branches, defaultBranchId],
   );
 
   const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
@@ -212,11 +236,28 @@ export function DocumentEditor({
   const [untouched] = useState(entered);
   const leaveGuard = useLeaveGuard(entered !== untouched);
 
+  // TDS kept back on a supplier's bill or debit note, for a business with a TAN: worked out as the server will.
+  const takesTds = !!company?.tan && (kind === 'purchaseBill' || kind === 'supplierDebitNote');
+  const draftTds = useMemo(
+    () =>
+      takesTds && draft.partyId
+        ? tdsForDocument(
+            { id: documentId ?? '', kind, partyId: draft.partyId, date: draft.date, currency: draft.currency, exchangeRate: draft.exchangeRate, totals, tdsSection: draft.tdsSection, sourceDocumentId: draft.sourceDocumentId },
+            { company, parties, documents },
+          )
+        : undefined,
+    [takesTds, documentId, kind, draft.partyId, draft.date, draft.currency, draft.exchangeRate, draft.tdsSection, draft.sourceDocumentId, totals, company, parties, documents],
+  );
+  const tdsRow = draftTds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(draftTds.section)?.label ?? draftTds.section, rate: formatPercent(draftTds.rate) }), amount: draftTds.amount } : undefined;
+  const tdsSectionLabel = (code: string | undefined) => (!code || code === 'none' ? tr('purchases:tds.none') : `${tdsSection(code)?.label ?? code} · ${tdsSection(code)?.nature ?? ''}`);
+
   const [step, setStep] = useState(seed?.step ?? 0);
   const [partyOpen, setPartyOpen] = useState(false);
   const [itemOpen, setItemOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [tdsOpen, setTdsOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
@@ -317,6 +358,8 @@ export function DocumentEditor({
 
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
+  const rateText = useDecimalText(draft.exchangeRate, (exchangeRate) => patch({ exchangeRate }));
+
   const [, setParams] = useQueryParams();
   const pickParty = (id: string) => {
     const p = parties.find((x) => x.id === id);
@@ -326,6 +369,17 @@ export function DocumentEditor({
     // refresh or a shared link reopens it with the same party.
     if (!documentId) setParams({ partyId: id });
   };
+
+  // "Add customer" from the picker: the party saved there is the one this document is for.
+  const partiesBeforeAdd = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const before = partiesBeforeAdd.current;
+    const added = before && parties.find((p) => !before.has(p.id));
+    if (!added) return;
+    partiesBeforeAdd.current = null;
+    pickParty(added.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parties]);
 
   useEffect(() => {
     if (seed?.missingParty) toast.show(tr('common:documentEditor.prefillMissingParty'), 'warning', { icon: 'account-question-outline' });
@@ -456,12 +510,16 @@ export function DocumentEditor({
       reference: draft.reference || undefined,
       supplierDocNumber: draft.supplierDocNumber || undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
+      reverseCharge: draft.reverseCharge || undefined,
+      noteReason: isNote ? draft.noteReason : undefined,
+      tdsSection: takesTds ? draft.tdsSection : undefined,
+      costCentreId: draft.costCentreId,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
     };
 
-    // One save: online it waits for the server, which numbers and checks it; offline it stays here.
+    // One save: online it waits for the server, which numbers and checks it; in offline mode it stays here.
     const res = await saveOnline(() => {
       let saved = documentId;
       if (documentId) updateDocument(documentId, payload);
@@ -469,6 +527,10 @@ export function DocumentEditor({
       if (saved && finalize) finalizeLocal(saved);
       return saved;
     });
+    if (res.outcome === 'unreachable' || res.outcome === 'unconfirmed') {
+      toast.show(tr(`common:save.${res.outcome}`), 'error');
+      return;
+    }
     if (!res.result) return;
     if (res.outcome === 'refused') {
       toast.show(tr('common:save.refused', { reason: res.error }), 'error');
@@ -674,11 +736,41 @@ export function DocumentEditor({
       ) : null}
       </FieldRow>
 
+      {takesTds ? (
+        <PickerField
+          label={tr('purchases:tds.section')}
+          value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
+          onPress={() => setTdsOpen(true)}
+          icon="bank-minus"
+          hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
+        />
+      ) : null}
+
+      <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
+
+      {isNote ? (
+        <PickerField
+          label={tr('sales:editor.noteReason')}
+          value={draft.noteReason ? tr(`domain:noteReason.${draft.noteReason}`) : undefined}
+          onPress={() => setReasonOpen(true)}
+          icon="text-box-outline"
+          hint={tr('sales:editor.noteReasonHint')}
+        />
+      ) : null}
+
+      {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
+        <SwitchField
+          label={tr('sales:editor.reverseCharge')}
+          description={tr(isPurchase ? 'sales:editor.reverseChargeBillHint' : 'sales:editor.reverseChargeSaleHint')}
+          value={!!draft.reverseCharge}
+          onValueChange={(reverseCharge) => patch({ reverseCharge })}
+        />
+      ) : null}
+
       {draft.currency !== baseCurrency ? (
         <TextField
           label={`${tr('common:totals.exchangeRate')} (1 ${draft.currency} → ${baseCurrency})`}
-          value={String(draft.exchangeRate)}
-          onChangeText={(v) => patch({ exchangeRate: Number(v.replace(/[^0-9.]/g, '')) || 0 })}
+          {...rateText}
           keyboardType="decimal-pad"
           icon="swap-horizontal"
           hint={tr('sales:editor.rateStored')}
@@ -693,6 +785,8 @@ export function DocumentEditor({
       {draft.lines.length > 0 ? (
         <Button title={tr('sales:editor.addItem')} icon="plus" variant="secondary" onPress={() => setItemOpen(true)} fullWidth />
       ) : null}
+
+      {kind === 'invoice' ? <BillableExpenses partyId={draft.partyId ?? undefined} currency={draft.currency} documentId={documentId} lines={draft.lines} onAdd={addLine} /> : null}
 
       {draft.lines.length === 0 ? (
         <Card padded={false}>
@@ -784,6 +878,7 @@ export function DocumentEditor({
             baseCurrency={baseCurrency}
             exchangeRate={draft.exchangeRate}
             compact
+            tds={tdsRow}
           />
         </Card>
       ) : null}
@@ -899,6 +994,7 @@ export function DocumentEditor({
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
           compact
+          tds={tdsRow}
         />
       </Card>
     </View>
@@ -946,6 +1042,7 @@ export function DocumentEditor({
           currency={draft.currency}
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
+          tds={tdsRow}
         />
       </Card>
 
@@ -980,8 +1077,8 @@ export function DocumentEditor({
               options={{
                 headerRight: () => (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={!draft.partyId} />
-                    <Button shortcut="Enter" title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={!draft.partyId || draft.lines.length === 0} />
+                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
+                    <Button shortcut="Enter" title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={blocked || !draft.partyId || draft.lines.length === 0} />
                   </View>
                 ),
               }}
@@ -1062,8 +1159,8 @@ export function DocumentEditor({
                 />
               ) : (
                 <>
-                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} style={{ flex: 1 }} />
-                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} disabled={blocked} style={{ flex: 1 }} />
                 </>
               )}
             </View>
@@ -1073,6 +1170,24 @@ export function DocumentEditor({
 
         {/* ---------------- sheets ---------------- */}
 
+        <SelectSheet
+          visible={tdsOpen}
+          onClose={() => setTdsOpen(false)}
+          title={tr('purchases:tds.section')}
+          options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature, trailing: formatPercent(x.rateOther) }))]}
+          value={draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none'}
+          onSelect={(v) => patch({ tdsSection: v })}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={reasonOpen}
+          onClose={() => setReasonOpen(false)}
+          title={tr('sales:editor.noteReason')}
+          options={NOTE_REASONS.map((r) => ({ value: r, label: tr(`domain:noteReason.${r}`) }))}
+          value={draft.noteReason}
+          onSelect={(r) => patch({ noteReason: r as NoteReason })}
+          searchable={false}
+        />
         <SelectSheet
           visible={partyOpen}
           onClose={() => setPartyOpen(false)}
@@ -1094,7 +1209,8 @@ export function DocumentEditor({
               fullWidth
               onPress={() => {
                 setPartyOpen(false);
-                router.push(isPurchase ? '/(app)/contacts/suppliers/new' : '/(app)/contacts/customers/new');
+                partiesBeforeAdd.current = new Set(parties.map((p) => p.id));
+                router.push(isPurchase ? '/(app)/contacts/suppliers/new?then=back' : '/(app)/contacts/customers/new?then=back');
               }}
             />
           }
@@ -1262,6 +1378,10 @@ export function detailRouteFor(kind: DocumentKind, id: string): string {
     goodsReceipt: '/(app)/purchases/receipts',
     purchaseBill: '/(app)/purchases/bills',
     purchaseReturn: '/(app)/purchases/returns',
+    creditNote: '/(app)/sales/credit-notes',
+    debitNote: '/(app)/sales/debit-notes',
+    supplierCreditNote: '/(app)/purchases/credit-notes',
+    supplierDebitNote: '/(app)/purchases/debit-notes',
   };
   return `${map[kind]}/${id}`;
 }

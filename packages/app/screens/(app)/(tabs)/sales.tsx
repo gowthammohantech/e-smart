@@ -38,6 +38,8 @@ export default function SalesTab() {
   const orders = useDocuments('salesOrder');
   const deliveries = useDocuments('delivery');
   const returns = useDocuments('salesReturn');
+  const creditNotes = useDocuments('creditNote');
+  const debitNotes = useDocuments('debitNote');
   const payments = usePayments('received');
   const receivables = useReceivables();
   const customers = useParties('customer');
@@ -138,6 +140,8 @@ export default function SalesTab() {
             { key: 'orders', label: documentKindLabel(tr, 'salesOrder', 2), icon: 'clipboard-list-outline', route: '/(app)/sales/orders', count: orders.length },
             { key: 'deliveries', label: documentKindLabel(tr, 'delivery', 2), icon: 'truck-outline', route: '/(app)/sales/deliveries', count: deliveries.length },
             { key: 'returns', label: documentKindLabel(tr, 'salesReturn', 2), icon: 'keyboard-return', route: '/(app)/sales/returns', count: returns.length },
+            { key: 'creditNotes', label: documentKindLabel(tr, 'creditNote', 2), icon: 'file-document-minus-outline', route: '/(app)/sales/credit-notes', count: creditNotes.length },
+            { key: 'debitNotes', label: documentKindLabel(tr, 'debitNote', 2), icon: 'file-document-plus-outline', route: '/(app)/sales/debit-notes', count: debitNotes.length },
             { key: 'payments', label: tr('sales:hub.paymentsIn'), icon: 'cash-plus', route: '/(app)/payments/received', count: payments.length },
             { key: 'compliance', label: tr('reports:home.eInvoices'), icon: 'shield-check-outline', route: '/(app)/compliance', count: compliance.eInvoice.generated },
           ]}

@@ -13,7 +13,8 @@ import { Menu, MenuDivider, MenuItem, useMenuAnchor } from '@esmart/ui/component
 import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useRemoteMeta } from '@esmart/app/remote';
+import { carriesQueue, ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
+import { useConnectivity } from '@esmart/app/remote';
 import { useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
@@ -127,9 +128,10 @@ export function TopBar() {
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const signOut = useSignOut();
 
-  const offline = !useRemoteMeta((m) => m.online);
   const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
   const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
+  const mode = useConnectivity((s) => s.mode);
+  const showQueued = pendingSync > 0 && !carriesQueue(mode);
 
   const { setAnchor: bellAnchor, rect: bellRect, open: openBellMenu, close: closeBellMenu } = useMenuAnchor();
   const { setAnchor: accountAnchor, rect: accountRect, open: openAccountMenu, close: closeAccountMenu } = useMenuAnchor();
@@ -206,9 +208,9 @@ export function TopBar() {
 
       <View style={{ flex: 1 }} />
 
-      {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ alignSelf: 'center' }} /> : null}
+      <ConnectionBadge style={{ alignSelf: 'center' }} />
       {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
-      {failedSync > 0 || pendingSync > 0 ? (
+      {failedSync > 0 || showQueued ? (
         <Pressable
           onPress={() => router.push('/(app)/settings/sync')}
           accessibilityRole="button"
@@ -216,7 +218,7 @@ export function TopBar() {
           style={(state) => [{ flexDirection: 'row', gap: t.spacing.xs, alignSelf: 'center', borderRadius: 999, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
         >
           {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" /> : null}
-          {pendingSync > 0 ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" /> : null}
+          {showQueued ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" /> : null}
         </Pressable>
       ) : null}
 

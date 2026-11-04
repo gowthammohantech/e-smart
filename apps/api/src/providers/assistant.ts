@@ -77,14 +77,37 @@ const REPLY_SCHEMA = (routes: readonly string[]) => ({
 
 const FALLBACK: AssistantReply = { text: "I couldn't work that out just now. Please try asking another way.", stats: [], actions: [] };
 
-function parseReply(text: string): AssistantReply {
+/**
+ * The model answers in JSON, sometimes inside a code fence or after a
+ * sentence. Prose without JSON is shown as it is; JSON that won't parse is
+ * never shown to the person.
+ */
+export function parseReply(text: string): AssistantReply {
+  const body = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const start = body.indexOf('{');
+  const end = body.lastIndexOf('}');
+  const json = start >= 0 && end > start ? body.slice(start, end + 1) : body;
   try {
-    const r = JSON.parse(text) as Partial<AssistantReply>;
+    const r = JSON.parse(json) as Partial<AssistantReply>;
     if (typeof r.text !== 'string') return FALLBACK;
     return { text: r.text, stats: Array.isArray(r.stats) ? r.stats : [], actions: Array.isArray(r.actions) ? r.actions : [] };
   } catch {
-    return text.trim() ? { text: text.trim(), stats: [], actions: [] } : FALLBACK;
+    return body && !body.startsWith('{') && !body.startsWith('[') ? { text: body, stats: [], actions: [] } : FALLBACK;
   }
+}
+
+/** A tool's answer in words, for the simulator: its top-level figures, amounts in rupees. */
+function describeValue(value: unknown): string {
+  if (!value || typeof value !== 'object') return String(value ?? 'nothing');
+  const label = (k: string) => k.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  const parts = Object.entries(value as Record<string, unknown>).flatMap(([k, v]) => {
+    if (typeof v === 'number' || typeof v === 'string') return [`${label(k)} ${v}`];
+    if (Array.isArray(v)) return [`${v.length} ${label(k)}`];
+    const m = v as { minor?: unknown; currency?: unknown } | null;
+    if (m && typeof m.minor === 'number' && typeof m.currency === 'string') return [`${label(k)} ${m.currency} ${(m.minor / 100).toFixed(2)}`];
+    return [];
+  });
+  return parts.slice(0, 5).join(', ') || 'nothing to report';
 }
 
 /** Claude, with the tools as client tools in a manual loop. */
@@ -135,8 +158,10 @@ export class AnthropicAssistant implements AssistantProvider {
       }
       if (response.stop_reason !== 'tool_use') {
         if (response.stop_reason === 'max_tokens') return FALLBACK;
-        const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
-        return parseReply(text);
+        // The answer is the last text block; anything before it is the model thinking aloud.
+        const texts = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : []));
+        const last = parseReply(texts.at(-1) ?? '');
+        return last === FALLBACK ? parseReply(texts.join('')) : last;
       }
 
       const calls = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
@@ -184,7 +209,8 @@ export class SimulatorAssistant implements AssistantProvider {
 
     const outcome = await req.execute(tool, input);
     if (!outcome.ok) return this.failed(outcome.error);
-    return { text: `From ${tool}: ${JSON.stringify(outcome.value).slice(0, 400)}`, stats: [], actions: [] };
+    const looked = { get_stock_levels: 'stock levels', get_receivables: 'receivables', get_payables: 'payables', get_dashboard: 'dashboard' }[tool];
+    return { text: `From your ${looked}: ${describeValue(outcome.value)}.`, stats: [], actions: [] };
   }
 
   private async draft(req: AssistantRequest, kind: string, name: string): Promise<AssistantReply> {

@@ -20,7 +20,9 @@ describe('lixi chat', () => {
     const m = await moneySetup(t);
     const res = await ask(m, 'who owes me money?');
     expect(res.status).toBe(200);
-    expect(res.body.reply.text).toContain('get_receivables');
+    expect(res.body.reply.text).toContain('From your receivables');
+    // Words, not the tool's JSON.
+    expect(res.body.reply.text).not.toMatch(/[{}]/);
     expect(res.body.pendingAction).toBeUndefined();
   });
 
@@ -33,7 +35,7 @@ describe('lixi chat', () => {
 
     const pro = await moneySetup(t, 'pro');
     const ok = await ask(pro, 'what is low on stock?');
-    expect(ok.body.reply.text).toContain('get_stock_levels');
+    expect(ok.body.reply.text).toContain('From your stock levels');
   });
 
   it('prepares a write without writing, and runs it once on confirmation', async () => {

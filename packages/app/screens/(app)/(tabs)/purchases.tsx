@@ -36,6 +36,8 @@ export default function PurchasesTab() {
   const orders = useDocuments('purchaseOrder');
   const receipts = useDocuments('goodsReceipt');
   const returns = useDocuments('purchaseReturn');
+  const creditNotes = useDocuments('supplierCreditNote');
+  const debitNotes = useDocuments('supplierDebitNote');
   const expenses = useExpenses();
   const categories = useExpenseCategories();
   const payments = usePayments('paid');
@@ -131,6 +133,8 @@ export default function PurchasesTab() {
             { key: 'orders', label: tr('nav:title.purchaseOrders'), icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: orders.length },
             { key: 'receipts', label: tr('nav:title.goodsReceipts'), icon: 'package-down', route: '/(app)/purchases/receipts', count: receipts.length },
             { key: 'returns', label: tr('nav:title.purchaseReturns'), icon: 'package-up', route: '/(app)/purchases/returns', count: returns.length },
+            { key: 'creditNotes', label: tr('nav:title.supplierCreditNotes'), icon: 'file-document-minus-outline', route: '/(app)/purchases/credit-notes', count: creditNotes.length },
+            { key: 'debitNotes', label: tr('nav:title.supplierDebitNotes'), icon: 'file-document-plus-outline', route: '/(app)/purchases/debit-notes', count: debitNotes.length },
             { key: 'expenses', label: tr('purchases:hub.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses', count: expenses.length },
             { key: 'payments', label: tr('purchases:hub.paymentsOut'), icon: 'cash-minus', route: '/(app)/payments/made', count: payments.length },
           ]}

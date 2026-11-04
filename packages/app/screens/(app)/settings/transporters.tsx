@@ -14,19 +14,19 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
-import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { useTransporters } from '../../../store/selectors';
 import { Transporter } from '@esmart/core/types';
 import { formatGstin, isValidTransporterId } from '@esmart/core/domain/gstin';
 import { uid } from '@esmart/core/lib/id';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 /** The transporter master, used for Part-B of an e-way bill. */
 export default function TransportersSettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const transporters = useTransporters();
   const saveTransporter = useAppStore((s) => s.saveTransporter);
@@ -55,7 +55,7 @@ export default function TransportersSettings() {
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const save = () => {
+  const save = async () => {
     const id = transporterId.trim().toUpperCase();
     const badName = name.trim() ? undefined : tr('errors:validation.required', { field: tr('settings:transporters.name') });
     const badId = !isValidTransporterId(id)
@@ -68,16 +68,21 @@ export default function TransportersSettings() {
     setIdError(badId);
     setPhoneError(badPhone);
     if (badName || badId || badPhone) return;
-    saveTransporter({
+    const transporter: Transporter = {
       id: editing?.id ?? uid('trn'),
       companyId: editing?.companyId ?? activeCompanyId,
       name: name.trim(),
       transporterId: transporterId.trim().toUpperCase(),
       phone: phone.value || undefined,
       status: 'active',
-    });
-    toast.show(editing ? tr('settings:transporters.updated') : tr('settings:transporters.added'), 'success', { icon: 'truck-outline' });
-    setSheetOpen(false);
+    };
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(
+      () => saveTransporter(transporter),
+      editing ? tr('settings:transporters.updated') : tr('settings:transporters.added'),
+      { icon: 'truck-outline' },
+    );
+    if (res) setSheetOpen(false);
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
@@ -142,7 +147,7 @@ export default function TransportersSettings() {
         title={editing ? tr('settings:transporters.editTitle') : tr('settings:transporters.add')}
         footer={
           <View style={{ gap: t.spacing.sm }}>
-            <Button shortcut="S" title={tr('settings:transporters.save')} fullWidth onPress={save} />
+            <Button shortcut="S" title={tr('settings:transporters.save')} fullWidth onPress={save} loading={saving} disabled={saving} />
             {editing ? (
               <Button
                 title={tr('settings:transporters.delete')}
@@ -182,9 +187,9 @@ export default function TransportersSettings() {
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
-          if (confirmDelete) removeTransporter(confirmDelete.id);
+          const x = confirmDelete;
           setConfirmDelete(null);
-          toast.show(tr('settings:transporters.removed'), 'success', { icon: 'truck-remove-outline' });
+          if (x) void serverSave(() => removeTransporter(x.id), tr('settings:transporters.removed'), { icon: 'truck-remove-outline' });
         }}
       />
     </>

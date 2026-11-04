@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
 vi.mock('../lib/api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../lib/api')>()), api }));
+// jsdom has no canvas to draw the QR code on.
+vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn(async () => 'data:image/png;base64,') } }));
 
 const { AuthProvider, NOT_OPERATOR } = await import('./AuthProvider');
 const { RequireOperator } = await import('./RequireOperator');
@@ -58,11 +60,40 @@ describe('operator gating', () => {
     expect(screen.queryByText('Console')).toBeNull();
   });
 
-  it('lets a platform operator in', async () => {
+  it('lets a platform operator in once this session has passed the authenticator check', async () => {
     api.POST.mockResolvedValueOnce(session);
-    api.GET.mockResolvedValueOnce(me('support'));
+    api.GET.mockResolvedValueOnce(me('support')).mockResolvedValueOnce({ data: { enrolled: true, verified: true, recoveryCodesLeft: 10 } });
     renderApp('/');
     await signIn();
+    expect(await screen.findByText('Console')).toBeTruthy();
+  });
+
+  it('asks an enrolled operator for a code before the console', async () => {
+    api.POST.mockResolvedValueOnce(session).mockResolvedValueOnce({ data: { enrolled: true, verified: true, recoveryCodesLeft: 10 } });
+    api.GET.mockResolvedValueOnce(me('support')).mockResolvedValueOnce({ data: { enrolled: true, verified: false, recoveryCodesLeft: 10 } });
+    renderApp('/');
+    await signIn();
+    await userEvent.type(await screen.findByLabelText('Code'), '123456');
+    expect(screen.queryByText('Console')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText('Console')).toBeTruthy();
+    expect(api.POST).toHaveBeenLastCalledWith('/admin/mfa/verify', { body: { code: '123456' } });
+  });
+
+  it('walks a new operator through setting up the authenticator and keeping the recovery codes', async () => {
+    api.POST.mockResolvedValueOnce(session)
+      .mockResolvedValueOnce({ data: { secret: 'ABCDEFGHABCDEFGH', otpauthUri: 'otpauth://totp/x?secret=ABCDEFGHABCDEFGH' } })
+      .mockResolvedValueOnce({ data: { recoveryCodes: ['aaaa-bbbb-cccc', 'dddd-eeee-ffff'] } });
+    api.GET.mockResolvedValueOnce(me('superadmin')).mockResolvedValueOnce({ data: { enrolled: false, verified: false, recoveryCodesLeft: 0 } });
+    renderApp('/');
+    await signIn();
+    await userEvent.type(await screen.findByLabelText('Code from the app'), '654321');
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on' }));
+    expect((await screen.findByTestId('recovery-codes')).textContent).toContain('aaaa-bbbb-cccc');
+    const go = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
+    expect(go.disabled).toBe(true);
+    await userEvent.click(screen.getByLabelText('I’ve saved them somewhere safe'));
+    await userEvent.click(go);
     expect(await screen.findByText('Console')).toBeTruthy();
   });
 

@@ -23,7 +23,7 @@ The cookbook describes the app as it is built today, using the words that appear
 | 08 | [Customers & suppliers](part-a-user-guide/08-contacts.md) | Contacts, GST registration types, credit limits |
 | 09 | [Items & stock](part-a-user-guide/09-items-and-stock.md) | Products and services, opening stock, adjustments, transfers, low stock |
 | 10 | [Expenses & bill scanning](part-a-user-guide/10-expenses-and-ocr.md) | Expenses, recurring expenses, receipts, OCR |
-| 11 | [GST compliance](part-a-user-guide/11-gst-compliance.md) | E-invoice (IRN), e-way bill, compliance register, GSTR-1 |
+| 11 | [GST compliance](part-a-user-guide/11-gst-compliance.md) | E-invoice (IRN), e-way bill, compliance register, GSTR-1 (returns are in [21](part-a-user-guide/21-gst-returns.md)) |
 | 12 | [Reports](part-a-user-guide/12-reports.md) | The nine reports, filters, exports |
 | 13 | [Settings](part-a-user-guide/13-settings.md) | Business profile, branches, taxes, numbering, accounts, integrations, backup, audit, appearance |
 | 14 | [Team, roles & plans](part-a-user-guide/14-team-roles-plans.md) | Inviting people, roles, plan limits, upgrading |
@@ -31,6 +31,9 @@ The cookbook describes the app as it is built today, using the words that appear
 | 16 | [Lixi assistant](part-a-user-guide/16-lixi-assistant.md) | Asking Lixi about your books, confirming the actions it proposes |
 | 17 | [Admin console (operators)](part-a-user-guide/17-admin-console.md) | Platform operators: accounts, plan overrides, users, audit |
 | 18 | [Troubleshooting & FAQ](part-a-user-guide/18-troubleshooting-faq.md) | Error messages, limits, features not available yet |
+| 19 | [Books](part-a-user-guide/19-books.md) | Chart of accounts, vouchers, trial balance, P&L, balance sheet, cost centres, closing the books, Tally export |
+| 20 | [TDS, reverse charge, credit & adjustments](part-a-user-guide/20-tds-rcm-itc.md) | TDS, reverse charge, input credit, credit and debit notes, reimbursements, advances for services, MSME payments |
+| 21 | [GST returns](part-a-user-guide/21-gst-returns.md) | GST portal connection, GSTR-2B matching, GSTR-3B, saving and filing GSTR-1 and 3B |
 
 ## Part B — Test scenarios
 
@@ -50,6 +53,7 @@ The cookbook describes the app as it is built today, using the words that appear
 | 11 | [Language & theme](part-b-test-scenarios/11-localisation-theme.md) | `L10N-` |
 | 12 | [Web desktop](part-b-test-scenarios/12-web-desktop.md) | `WEB-` |
 | 13 | [Admin console](part-b-test-scenarios/13-admin-console.md) | `ADM-` |
+| 14 | [Accounting & GST returns](part-b-test-scenarios/14-accounting-gst-returns.md) | `BKS-`, `CC-`, `CLS-`, `TLY-`, `TDS-`, `RCM-`, `ITC-`, `NTE-`, `ADJ-`, `RMB-`, `ADV-`, `MSM-`, `G2B-`, `G3B-` |
 
 ---
 

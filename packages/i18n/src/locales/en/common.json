@@ -115,7 +115,10 @@
   },
   "save": {
     "queued": "Saved on this device. It will sync when you are back online.",
-    "refused": "The server refused this: {{reason}}"
+    "refused": "The server refused this: {{reason}}",
+    "refusedLater": "{{label}} wasn't saved: {{reason}}. It's waiting in Settings → Sync.",
+    "unreachable": "Couldn't reach the server, so this wasn't saved. Try again when you're connected.",
+    "unconfirmed": "Couldn't confirm with the server. If it went through, it will appear here shortly; check before entering it again."
   },
   "component": {
     "confirm": "Confirm",
@@ -163,7 +166,11 @@
     "other": "Other",
     "chartSlice": "{{label}}: {{amount}}, {{percent}} percent",
     "nothingToShow": "Nothing to show yet",
-    "noSearchMatch": "Nothing matches that search."
+    "noSearchMatch": "Nothing matches that search.",
+    "viewOnly": "No internet · view only",
+    "workOffline": "Work offline",
+    "offlineWaiting": "Offline · {{count}} waiting",
+    "draining": "Syncing {{count}}…"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -171,6 +178,10 @@
     "taxableValue": "Taxable value",
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
+    "tdsLabel": "TDS {{section}} at {{rate}}",
+    "payableToSupplier": "Payable to supplier",
+    "reimbursements": "Reimbursements at cost",
+    "reverseChargeTax": "Tax payable by the recipient (reverse charge)",
     "roundOff": "Round off",
     "fxNote": "≈ {{amount}} at 1 {{currency}} = {{rate}} {{baseCurrency}}",
     "total": "Total",
@@ -199,7 +210,9 @@
     "contact": "This contact may have been deleted.",
     "expense": "This expense may have been deleted.",
     "item": "This item may have been deleted.",
-    "payment": "This payment may have been deleted."
+    "payment": "This payment may have been deleted.",
+    "route": "There's nothing at this address. It may have moved, or the link may be wrong.",
+    "goHome": "Go to home"
   },
   "notifications": {
     "markAllRead": "Mark all read",
@@ -290,5 +303,19 @@
     "message": "You have changes that aren't saved. If you leave now, they'll be lost.",
     "leave": "Leave",
     "stay": "Stay"
+  },
+  "crash": {
+    "title": "Something went wrong",
+    "body": "This screen hit an error. Your data is safe: anything you saved is still here. Try again, or go back to the home screen.",
+    "retry": "Try again",
+    "home": "Go to home",
+    "misconfigured": "This build of the app doesn't know where its server is. Please update the app, or contact support.",
+    "cantOpen": "Couldn't open {{what}} on this device."
+  },
+  "offlineMode": {
+    "title": "No internet connection",
+    "message": "You can keep working on this device. Your changes will be saved here and sent to the server once the connection has been back for a few seconds.",
+    "accept": "Work offline",
+    "decline": "Not now"
   }
 }

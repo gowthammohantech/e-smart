@@ -37,7 +37,15 @@
     "purchaseBill_one": "Purchase bill",
     "purchaseBill_other": "Purchase bills",
     "purchaseReturn_one": "Purchase return",
-    "purchaseReturn_other": "Purchase returns"
+    "purchaseReturn_other": "Purchase returns",
+    "creditNote_one": "Credit note",
+    "creditNote_other": "Credit notes",
+    "debitNote_one": "Debit note",
+    "debitNote_other": "Debit notes",
+    "supplierCreditNote_one": "Supplier credit note",
+    "supplierCreditNote_other": "Supplier credit notes",
+    "supplierDebitNote_one": "Supplier debit note",
+    "supplierDebitNote_other": "Supplier debit notes"
   },
   "series": {
     "quote": "Quotation",
@@ -49,8 +57,24 @@
     "goodsReceipt": "Goods receipt",
     "purchaseBill": "Purchase bill",
     "purchaseReturn": "Purchase return",
+    "creditNote": "Credit note",
+    "debitNote": "Debit note",
+    "supplierCreditNote": "Supplier credit note",
+    "supplierDebitNote": "Supplier debit note",
+    "selfInvoice": "Self-invoice (reverse charge)",
+    "journal": "Journal voucher",
+    "contra": "Contra voucher",
+    "gstJournal": "GST journal",
+    "tdsChallan": "TDS challan",
     "payment": "Payment",
     "expense": "Expense"
+  },
+  "noteReason": {
+    "discount": "Discount after the sale",
+    "priceChange": "Price change",
+    "taxCorrection": "Tax charged wrongly",
+    "deficiency": "Short or faulty supply",
+    "other": "Other"
   },
   "module": {
     "purchases": "Purchases",
@@ -59,7 +83,8 @@
     "ocr": "Bill capture",
     "fx": "Multi-currency",
     "branches": "Branches",
-    "payables": "Payables"
+    "payables": "Payables",
+    "books": "Books"
   },
   "paymentMethod": {
     "cash": "Cash",

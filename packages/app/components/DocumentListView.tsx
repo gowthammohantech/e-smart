@@ -23,7 +23,7 @@ import { dateRangeLabel, documentKindLabel, statusLabel } from '@esmart/core/lab
 import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money, sum, zero } from '@esmart/core/lib/money';
-import { useBaseCurrency, useParties, usePayments } from '../store/selectors';
+import { useBaseCurrency, useDocuments, useParties, usePayments } from '../store/selectors';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { listParam, presetParam, useQueryParams } from '../navigation/queryParams';
 
@@ -93,6 +93,8 @@ export function DocumentListView({
   const [filterOpen, setFilterOpen] = useState(false);
   const desktop = useIsDesktop();
   const payments = usePayments();
+  // Returns and credit notes against a document lower what it still owes.
+  const allDocuments = useDocuments();
 
   const nameOf = useCallback(
     (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown',
@@ -124,7 +126,10 @@ export function DocumentListView({
     () =>
       filtered.length
         ? sum(
-            filtered.map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
+            // A cancelled document no longer counts towards what was billed.
+            filtered
+              .filter((d) => d.status !== 'cancelled' && d.status !== 'rejected')
+              .map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
             baseCurrency,
           )
         : zero(baseCurrency),
@@ -186,14 +191,14 @@ export function DocumentListView({
               align: 'right' as const,
               render: (d: BusinessDocument) => {
                 if (['draft', 'cancelled'].includes(d.status)) return <Cell tone="muted">—</Cell>;
-                const due = outstandingOf(d, payments);
+                const due = outstandingOf(d, payments, allDocuments);
                 return (
                   <Cell tone={due.minor > 0 ? 'default' : 'muted'} mono>
                     {formatMoney(due)}
                   </Cell>
                 );
               },
-              sortValue: (d: BusinessDocument) => outstandingOf(d, payments).minor,
+              sortValue: (d: BusinessDocument) => outstandingOf(d, payments, allDocuments).minor,
             },
           ]
         : []),

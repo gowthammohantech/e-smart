@@ -5,11 +5,14 @@ import { isPayableDocument } from '@esmart/core/domain/documentStates';
 import type { BusinessDocument } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from '../../lib/audit';
-import { compact, iso, money, versioned } from '../../lib/wire';
+import { compact, gstFlagsFrom, iso, money, versioned } from '../../lib/wire';
 import type { DocRow } from './engine';
 import { effectiveStatus } from './lifecycle';
 
 type Compliance = Schema<'ComplianceInfo'>;
+
+/** Tax components in the order an invoice prints them: centre and state, or integrated, then cess. */
+const TAX_ORDER: string[] = ['CGST', 'SGST', 'IGST', 'VAT', 'GST', 'CESS', 'NONE'];
 type EwayRow = Pick<typeof schema.ewayBills.$inferSelect, 'id' | 'ewayBillNumber' | 'validUpto' | 'status'>;
 type EInvoiceRow = typeof schema.eInvoices.$inferSelect;
 
@@ -115,6 +118,8 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
           taxCategoryId: l.taxCategoryId,
           taxRate: Number(l.taxRate),
           taxInclusive: l.taxInclusive,
+          gst: gstFlagsFrom(l),
+          expenseId: l.expenseId ?? undefined,
         })),
       documentDiscountMode: row.documentDiscountMode,
       documentDiscountValue: Number(row.documentDiscountValue),
@@ -122,10 +127,20 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       applyRoundOff: row.applyRoundOff,
       roundOffManual: row.roundOffManualMinor !== null ? m(row.roundOffManualMinor) : undefined,
       placeOfSupplyStateCode: row.placeOfSupplyStateCode,
+      reverseCharge: row.reverseCharge || undefined,
+      partyGstin: row.partyGstin,
+      partyStateCode: row.partyStateCode,
       notes: row.notes,
       terms: row.terms,
       attachmentIds: attachments.filter((a) => a.entityId === row.id).map((a) => a.id),
       sourceDocumentId: row.sourceDocumentId,
+      noteReason: row.noteReason,
+      tds: row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: m(row.tdsAmountMinor) } : undefined,
+      selfInvoiceNumber: row.selfInvoiceNumber,
+      itcReversedOn: row.itcReversedOn,
+      itcReclaimedOn: row.itcReclaimedOn,
+      itcClaimPeriod: row.itcClaimPeriod,
+      costCentreId: row.costCentreId,
       totals: {
         subtotal: m(row.subtotalMinor),
         lineDiscount: m(row.lineDiscountMinor),
@@ -137,13 +152,17 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
             categoryId: t.taxCategoryId,
             categoryName: t.categoryName,
             rate: Number(t.rate),
+            reverseCharge: t.reverseCharge || undefined,
             taxableAmount: m(t.taxableAmountMinor),
             components: components
               .filter((c) => c.taxLineId === t.id)
+              .sort((a, b) => TAX_ORDER.indexOf(a.type) - TAX_ORDER.indexOf(b.type))
               .map((c) => ({ type: c.type, label: c.label, rate: Number(c.rate), amount: m(c.amountMinor) })),
             totalTax: m(t.totalTaxMinor),
           })),
         totalTax: m(row.totalTaxMinor),
+        reverseChargeTax: m(row.reverseChargeTaxMinor),
+        reimbursements: m(row.reimbursementsMinor),
         charges: m(row.chargesMinor),
         roundOff: m(row.roundOffMinor),
         grandTotal: m(row.grandTotalMinor),

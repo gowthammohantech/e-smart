@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useVouchers } from '../../../store/books';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +16,6 @@ import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/compo
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { today } from '@esmart/core/lib/date';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
 import { PaymentAccount } from '@esmart/core/types';
 import { accountBalances } from '@esmart/core/domain/paymentAccounts';
 import { useAppStore } from '../../../store/appStore';
@@ -25,12 +25,13 @@ import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 export default function AccountSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -55,7 +56,8 @@ export default function AccountSettings() {
   };
 
   /** Running balance: opening + money in − money out − expenses paid from it. */
-  const balances = useMemo(() => accountBalances(accounts, payments, expenses), [accounts, payments, expenses]);
+  const vouchers = useVouchers();
+  const balances = useMemo(() => accountBalances(accounts, payments, expenses, vouchers), [accounts, payments, expenses, vouchers]);
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 
@@ -73,9 +75,9 @@ export default function AccountSettings() {
     setIsDefault(a?.isDefault ?? false);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!editing || !name.trim()) return;
-    savePaymentAccount({
+    const account = {
       ...editing,
       id: editing.id || uid('acc'),
       companyId: company.id,
@@ -86,9 +88,14 @@ export default function AccountSettings() {
       openingBalance: fromMajor(openingBalance || '0', baseCurrency),
       openingBalanceDate,
       isDefault,
-    });
-    toast.show(editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'), 'success', { icon: 'bank-check' });
-    setEditing(null);
+    };
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(
+      () => savePaymentAccount(account),
+      editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'),
+      { icon: 'bank-check' },
+    );
+    if (res) setEditing(null);
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
@@ -152,7 +159,7 @@ export default function AccountSettings() {
                 }}
               />
             ) : null}
-            <Button shortcut="S" title={tr('settings:accounts.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:accounts.save')} onPress={save} loading={saving} disabled={!name.trim() || saving} style={{ flex: 2 }} />
           </View>
         }
       >
@@ -195,9 +202,9 @@ export default function AccountSettings() {
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
-          if (confirmDelete) removePaymentAccount(confirmDelete.id);
+          const a = confirmDelete;
           setConfirmDelete(null);
-          toast.show(tr('settings:accounts.deleted'), 'success', { icon: 'bank-remove' });
+          if (a) void serverSave(() => removePaymentAccount(a.id), tr('settings:accounts.deleted'), { icon: 'bank-remove' });
         }}
       />
     </View>

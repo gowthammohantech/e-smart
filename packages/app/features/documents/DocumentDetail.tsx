@@ -22,7 +22,8 @@ import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
-import { STATUS_TONE, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { tdsSection } from '@esmart/core/data/tdsSections';
+import { NOTE_SOURCE, STATUS_TONE, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { stockShortfalls } from '@esmart/core/domain/stockLedger';
@@ -33,6 +34,7 @@ import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
+import { useCostCentres } from '../../store/books';
 import {
   useActiveCompany,
   useActiveEwayBill,
@@ -56,13 +58,15 @@ import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
+import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   useRefreshOnFocus();
   const t = useTheme();
+  const costCentre = useCostCentres(true).find((c) => c.id === doc.costCentreId);
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance', 'purchases']);
   const language = useResolvedLanguage();
   const router = useRouter();
   const goBack = useGoBack();
@@ -124,7 +128,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [allPayments, doc.id],
   );
 
-  const outstanding = useMemo(() => outstandingOf(doc, allPayments), [doc, allPayments]);
+  const outstanding = useMemo(() => outstandingOf(doc, allPayments, allDocuments), [doc, allPayments, allDocuments]);
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
@@ -137,6 +141,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       party,
       branch,
       ewayBill,
+      // Returns and notes name the invoice or bill they're against.
+      source: NOTE_SOURCE[doc.kind] ? allDocuments.find((d) => d.id === doc.sourceDocumentId) : undefined,
     });
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
@@ -189,7 +195,11 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const send = (channel: SendChannel) =>
     runRemote(
-      () => sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 }),
+      async () => {
+        await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
+        // The first invoice out is when "tell me when it's paid" makes sense: ask for notifications now.
+        if (doc.kind === 'invoice') void ensurePushRegistered({ ask: true });
+      },
       { loading: tr('sales:detail.sending'), success: tr('common:documentDetail.sent'), icon: channel === 'whatsapp' ? 'whatsapp' : 'email-fast-outline' },
     );
 
@@ -287,7 +297,11 @@ ${url}`;
         : doc.kind === 'delivery'
           ? [{ target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' }]
           : doc.kind === 'invoice'
-            ? [{ target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' }]
+            ? [
+                { target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' },
+                { target: 'creditNote', label: tr('sales:detail.createCreditNote'), icon: 'file-document-minus-outline' },
+                { target: 'debitNote', label: tr('sales:detail.createDebitNote'), icon: 'file-document-plus-outline' },
+              ]
             : doc.kind === 'purchaseOrder'
               ? [
                   { target: 'goodsReceipt', label: tr('sales:detail.createGoodsReceipt'), icon: 'package-down' },
@@ -296,7 +310,11 @@ ${url}`;
               : doc.kind === 'goodsReceipt'
                 ? [{ target: 'purchaseBill', label: tr('sales:detail.convertToBill'), icon: 'file-document-outline' }]
                 : doc.kind === 'purchaseBill'
-                  ? [{ target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' }]
+                  ? [
+                      { target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' },
+                      { target: 'supplierCreditNote', label: tr('sales:detail.recordSupplierCreditNote'), icon: 'file-document-minus-outline' },
+                      { target: 'supplierDebitNote', label: tr('sales:detail.recordSupplierDebitNote'), icon: 'file-document-plus-outline' },
+                    ]
                   : [];
   // Only what can be made now: nothing from a draft or a cancelled document,
   // and an order or quote carried forward once (conversionBlock).
@@ -406,6 +424,7 @@ ${url}`;
           ) : null}
           {doc.reference ? <Badge label={tr('sales:detail.referenceBadge', { reference: doc.reference })} tone="neutral" /> : null}
           {doc.supplierDocNumber ? <Badge label={tr('sales:detail.theirNumber', { number: doc.supplierDocNumber })} tone="neutral" /> : null}
+          {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
         </View>
       </Card>
     </>
@@ -413,7 +432,7 @@ ${url}`;
   const paymentCard = (
     <>
       {/* Payment status */}
-      {isPayable && isFinalized(doc.status) ? (
+      {isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' ? (
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
@@ -506,7 +525,18 @@ ${url}`;
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}
+          tds={doc.tds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount } : undefined}
         />
+        {doc.selfInvoiceNumber ? (
+          <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.selfInvoice', { number: doc.selfInvoiceNumber })}
+          </Text>
+        ) : null}
+        {doc.itcReversedOn && !doc.itcReclaimedOn ? (
+          <Text variant="caption" tone="warn" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.itcReversed', { date: formatDate(doc.itcReversedOn) })}
+          </Text>
+        ) : null}
       </Card>
     </>
   );
@@ -816,7 +846,8 @@ ${url}`;
             });
           } },
           ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
-          ...(doc.status !== 'cancelled' && isFinalized(doc.status)
+          // A draft quote can be withdrawn too, where its kind allows that.
+          ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
             ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => {
                 setActionsOpen(false);
                 // The server refuses while the e-way bill or the IRN is live (in that

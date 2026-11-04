@@ -22,19 +22,22 @@ import { useAppStore } from '../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { GstTreatmentFields } from './GstTreatmentFields';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'common']);
   const router = useRouter();
   const goBack = useGoBack();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
   const existing = useItems();
   // Read live, so a business that registers for GST gets the rule on its next edit.
-  const hsnRequired = hsnMandatory(useActiveCompany()?.taxRegistration);
+  const taxRegistration = useActiveCompany()?.taxRegistration;
+  const hsnRequired = hsnMandatory(taxRegistration);
+  const gstRegistered = taxRegistration?.regime === 'GST' && !!taxRegistration.registered;
   const saveItem = useAppStore((s) => s.saveItem);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   // Without the stock module a new item starts untracked; an existing item keeps its setting.
@@ -52,6 +55,7 @@ export function ItemForm({ item }: { item?: Item }) {
   const [purchasePrice, setPurchasePrice] = useState(item && item.purchasePrice.minor !== 0 ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
+  const [gst, setGst] = useState(item?.gst);
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
   const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
@@ -94,6 +98,8 @@ export function ItemForm({ item }: { item?: Item }) {
       hsnCode: hsnCode.trim() || undefined,
       barcode: barcode.trim() || undefined,
       trackInventory: type === 'goods' ? trackInventory : false,
+      // Capital goods are goods; a service never is one.
+      gst: gst && type === 'service' && gst.capitalGoods ? { ...gst, capitalGoods: undefined } : gst,
       openingStock: Number(openingStock) || 0,
       openingStockDate: takesOpeningStock ? openingStockDate : item?.openingStockDate,
       reorderLevel: Number(reorderLevel) || 0,
@@ -167,6 +173,7 @@ export function ItemForm({ item }: { item?: Item }) {
             error={errors.hsn}
             required={hsnRequired}
           />
+          {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
 
           {type === 'goods' ? (
             <>
@@ -221,7 +228,7 @@ export function ItemForm({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
         </FormActions>
 
         <SelectSheet

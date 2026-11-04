@@ -44,9 +44,17 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
       accountId: r.accountId,
       allocations: allocations
         .filter((a) => a.paymentId === r.id)
-        .map((a) => ({ documentId: a.documentId, documentNumber: a.documentNumber, amount: money(a.amountMinor, currency) })),
+        .map((a) => ({
+          documentId: a.documentId,
+          documentNumber: a.documentNumber,
+          amount: money(a.amountMinor, currency),
+          tdsDeducted: a.tdsMinor ? money(a.tdsMinor, currency) : undefined,
+          discount: a.discountMinor ? money(a.discountMinor, currency) : undefined,
+          writeOff: a.writeOffMinor ? money(a.writeOffMinor, currency) : undefined,
+        })),
       unallocated: money(r.unallocatedMinor, currency),
       fxGainLoss: maybeMoney(r.fxGainLossMinor, baseCurrency),
+      advanceTax: r.advanceTaxCategoryId ? { taxCategoryId: r.advanceTaxCategoryId, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply! } : undefined,
       source: gateway.has(r.id) ? ('gateway' as const) : ('manual' as const),
       notes: r.notes,
       attachmentIds: attachments.filter((a) => a.entityId === r.id).map((a) => a.id),

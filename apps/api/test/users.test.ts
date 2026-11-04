@@ -7,6 +7,16 @@ import { inviteTokenFor, joinTeam } from './team-helpers';
 const t = setupApi();
 
 describe('users', () => {
+  it('edits a pending invitation in place, by its version', async () => {
+    const { token, company } = await ownerWithCompany(t, { plan: 'business' });
+    const invited = await t.post('/users', { name: 'Meena', email: 'meena@example.com', role: 'sales', companyIds: [company.id] }, { token });
+    expect(invited.body.version).toEqual(expect.any(Number));
+    const saved = await t.put(`/users/${invited.body.id}`, { ...invited.body, role: 'admin' }, { token, headers: { 'if-match': `"v${invited.body.version}"` } });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toMatchObject({ role: 'admin', status: 'invited' });
+    expect(saved.body.version).toBeGreaterThan(invited.body.version);
+  });
+
   it('invites a member, stores only the token hash, and signs them in on accept', async () => {
     const { token, company, user: owner } = await ownerWithCompany(t, { plan: 'business' });
     const [branch] = await t.deps.db.select().from(schema.branches).where(eq(schema.branches.companyId, company.id!));

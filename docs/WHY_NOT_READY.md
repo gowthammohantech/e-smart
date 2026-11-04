@@ -4,6 +4,68 @@ _Audit date: 13 Oct 2026, branch `claude/monorepo` @ `31ffef3`. Read-only review
 
 _Updated 31 Oct 2026: the offline sync and data-loss items from this audit are fixed and removed below (commits `ac0a843` to `f971288`). Fixes were verified by automated tests only; no device run has been done. The GSP adapters are built but unverified: see `PRODUCTION_READINESS.md` §1. The rest of this audit still stands as of its date._
 
+_Updated 2 Nov 2026 (Phase 1 launch blockers, not yet committed). Fixed, with tests:_
+
+- _**API:**_
+  - _Rate-limit key: a forged `Authorization` header counts against the IP._
+  - _`trustProxy` is one hop._
+  - _Per-IP limits on the auth routes._
+  - _Sign-in lockout: 5 failures, 15 minutes doubling to a day._
+  - _Constant-time unknown-email check._
+  - _Atomic OTP attempts and reset-token claim._
+  - _Production refuses a localhost or http `APP_URL`/`PUBLIC_BASE_URL`, a short `CREDENTIALS_KEY`, and S3 without credentials._
+  - _Process crash handlers and an error-reporter seam._
+  - _`APP_URL` set in `.railway/railway.ts`._
+- _**Operators:** TOTP MFA required on every platform route (an SMS-OTP session can't reach them), 12-hour sessions, audited sign-ins, MFA events, tenant reads and CLI role grants, and `--reset-mfa`._
+- _**Dead links:**_
+  - _`/share/:token` and `/share/:token/pdf` are served by the API._
+  - _Google Drive and Razorpay OAuth show as "Coming soon" and refuse to connect._
+  - _`/pay/:id` is simulator-only; production uses Razorpay's hosted link._
+- _**Account deletion:** in the app (Settings → Your profile) and on the site. The sole owner of a shared business is blocked; a solo account closes and its books are kept 8 years._
+- _**Clients:**_
+  - _Error boundaries: expo-router root and app layouts, admin `errorElement` and root boundary._
+  - _Global error handlers._
+  - _No localhost fallback in release builds._
+  - _OTP dead end fixed._
+  - _Cross-tab token sync on the web._
+  - _Real app version in About._
+  - _No prices on iOS and Android._
+- _**Web and admin servers:** CSP (report-only until checked), HSTS, nosniff, frame denial, brotli/gzip, and real 404s for missing bundles._
+- _**Mobile release:** `eas.json`, privacy manifest, `usesNonExemptEncryption: false`, `allowBackup: false`, no microphone string, build 103 / versionCode 7, `bundleRelease` refuses the debug key, and the stray root `app.json` removed. See `docs/STORE_SUBMISSION.md`._
+- _**Legal:** draft privacy, terms and refund pages, plus delete-account and support pages, on the site; the apps link to them; sign-up records the terms version._
+
+_Updated 3 Nov 2026 (Phase 2, not yet committed):_
+- _Background jobs on a Postgres queue (`apps/api/src/jobs/`), with an optional `worker` service._
+- _Recurring expenses, automatic backups, overdue notices, export expiry and the 8-year purge (dry run until switched on) all scheduled._
+- _The e-invoice reconcile no longer double-sends with two instances._
+- _Exports and network OCR run in the background._
+- _Pushes go out after the change commits._
+- _Lost e-way bill and IRN-cancel answers are settled by asking the portal (Adaequare routes unconfirmed)._
+- _A partial refund shrinks the payment._
+- _Finalise carries its version._
+- _An invoice edit after a payment no longer conflicts._
+- _Lists aren't capped at 4,000 rows._
+- _Two tabs refresh tokens once._
+- _Push notifications are built end to end, needing an Expo project._
+- _Phones keep the book in encrypted SQLite; the web uses IndexedDB, and a full disk is reported._
+- _CI runs the web offline scenarios, the migration rule and a dependency audit; CodeQL and Dependabot are on._
+- _`docs/RUNBOOK.md` covers backups, restore, rotation and the job queue._
+
+_Updated 4 Nov 2026 (Phase 3, accounting, not yet committed):_
+- _A double-entry ledger worked out from every record, the same in the app and on the server:_
+  - _chart of accounts;_
+  - _journal, contra, GST journal and TDS challan vouchers;_
+  - _trial balance, P&L, balance sheet and day book;_
+  - _cost centres and closing the books;_
+  - _a Tally export of masters and every voucher._
+- _GST treatment per line (nil, exempt and non-GST, cess, composition, reimbursements, branch GSTINs), credit and debit notes without goods, and settling invoices by TDS, discount or write-off._
+- _TDS on supplier bills with thresholds, catch-up, s.206AA and s.197 certificates; reverse charge with self-invoices; input credit buckets and the 180-day reversal._
+- _GSTR-2B download and matching, GSTR-3B from the books with the rule 88A set-off, and saving and filing GSTR-1 and 3B through the GSP. A return is never filed twice, and lost answers are settled from the portal's tracker._
+- _GST on advances for services (GSTR-1 table 11), recovering billable expenses, and MSME 45-day tracking with reminders and the s.43B(h) list._
+- _Still open: CA sign-off of `docs/accounting/RULES.md` and the GSP returns sandbox run. `GST_FILING_ENABLED` stays off until both are done (`PRODUCTION_READINESS.md` §9)._
+
+_Still open from this audit: error tracking vendor, the purge job for closed accounts, encrypted local storage, httpOnly cookies on the web, the job scheduler, backups and PITR, e2e and load tests, the security review, device testing of offline sync, push notifications, and camera barcode scanning._
+
 ## Summary
 
 | App | Verdict | Typecheck | Lint | Tests |

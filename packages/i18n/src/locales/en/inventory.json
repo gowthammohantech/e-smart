@@ -64,6 +64,41 @@
     "type": "Type",
     "status": "Status"
   },
+  "gst": {
+    "supplyType": "GST treatment",
+    "supply": {
+      "taxable": "Taxable",
+      "nil": "Nil-rated",
+      "exempt": "Exempt",
+      "nonGst": "Non-GST"
+    },
+    "supplyHint": {
+      "taxable": "GST at the rate above.",
+      "nil": "Taxed at 0% by the schedule, such as fresh vegetables or salt.",
+      "exempt": "Exempt by notification, such as healthcare or education services.",
+      "nonGst": "Outside GST altogether, such as petrol or alcohol for drinking."
+    },
+    "reimbursement": "Reimbursement at cost",
+    "reimbursementHint": "You pay this for the customer and recover exactly what you paid (pure agent, Rule 33). No GST, and it stays out of the taxable value.",
+    "reverseCharge": "Reverse charge",
+    "reverseChargeHint": "A notified supply where the buyer pays the GST, such as transport by a GTA or legal services.",
+    "cessRate": "Cess (%)",
+    "cessHint": "Compensation cess on top of GST, for goods like tobacco, aerated drinks and cars. Leave blank if none.",
+    "capitalGoods": "Capital goods",
+    "capitalGoodsHint": "Machinery or equipment you keep and use. Its input tax credit is reported separately.",
+    "itc": "Input tax credit",
+    "itcHint": "Whether the GST you pay when buying this can be claimed back.",
+    "itcOption": {
+      "eligible": "Can be claimed",
+      "blocked": "Blocked, section 17(5)",
+      "ineligible": "Not claimable"
+    },
+    "itcOptionHint": {
+      "eligible": "Used in the business: the GST paid is credit.",
+      "blocked": "Food, personal vehicles, club fees, works contracts for buildings and the like.",
+      "ineligible": "Used for exempt supplies or personal purposes."
+    }
+  },
   "detail": {
     "inactive": "Inactive",
     "salePrice": "Sale price",
