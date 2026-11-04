@@ -100,7 +100,9 @@
   },
   "save": {
     "queued": "Saved on this device. It will sync when you are back online.",
-    "refused": "The server refused this: {{reason}}"
+    "refused": "The server refused this: {{reason}}",
+    "unreachable": "Couldn't reach the server, so this wasn't saved. Try again when you're connected.",
+    "unconfirmed": "Couldn't confirm with the server. If it went through, it will appear here shortly; check before entering it again."
   },
   "component": {
     "confirm": "Confirm",
@@ -148,7 +150,11 @@
     "other": "Other",
     "chartSlice": "{{label}}: {{amount}}, {{percent}} percent",
     "nothingToShow": "Nothing to show yet",
-    "noSearchMatch": "Nothing matches that search."
+    "noSearchMatch": "Nothing matches that search.",
+    "viewOnly": "No internet · view only",
+    "workOffline": "Work offline",
+    "offlineWaiting": "Offline · {{count}} waiting",
+    "draining": "Syncing {{count}}…"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -283,5 +289,11 @@
     "home": "Go to home",
     "misconfigured": "This build of the app doesn't know where its server is. Please update the app, or contact support.",
     "cantOpen": "Couldn't open {{what}} on this device."
+  },
+  "offlineMode": {
+    "title": "No internet connection",
+    "message": "You can keep working on this device. Your changes will be saved here and sent to the server once the connection has been back for a few seconds.",
+    "accept": "Work offline",
+    "decline": "Not now"
   }
 }

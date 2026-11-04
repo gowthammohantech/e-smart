@@ -13,6 +13,7 @@ import { useUiStore } from '../store/uiStore';
 import { API_CONFIGURED, installRemote, useRemoteSync } from '../remote';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import { ErrorFallback } from '../components/ErrorFallback';
+import { OfflinePrompt } from '../components/OfflinePrompt';
 import { installGlobalErrorHandlers } from '../lib/reporter';
 import { usePushNotifications } from '../features/session/usePushNotifications';
 
@@ -114,6 +115,7 @@ export default function RootLayout() {
           <AppThemeProvider>
             <ToastProvider>
               <RootNavigator />
+              <OfflinePrompt />
             </ToastProvider>
           </AppThemeProvider>
         </I18nProvider>

@@ -27,7 +27,7 @@ export default function CostCentres() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t: tr } = useTranslation(['books', 'common']);
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
   const centres = useCostCentres(true);
   const saveCostCentre = useAppStore((s) => s.saveCostCentre);
@@ -94,7 +94,7 @@ export default function CostCentres() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('books:costCentres.edit') : tr('books:costCentres.add')}
-        footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={!name.trim()} />}
+        footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('books:costCentres.name')} value={name} onChangeText={setName} placeholder={tr('books:costCentres.namePlaceholder')} required />

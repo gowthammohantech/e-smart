@@ -2,6 +2,7 @@ import { ApiError } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
 import { reportError } from '../lib/reporter';
+import { useConnectivity } from './connectivity';
 import { applyChanges, applyEntity, purgeLocalDefaults, remapIds, replaceForCompany, unwrap, type Change } from './apply';
 import { flushPendingLogos, refreshLogoLinks } from './logo';
 import { uploadAttachment } from './attachments';
@@ -150,8 +151,8 @@ function clearRetry() {
   retryIn = RETRY_MIN_MS;
 }
 
-/** Seen at most this often when screens are opened, so moving around the app stays light. */
-const FOCUS_REFRESH_MS = 15_000;
+/** Seen at most this often when screens are opened: fresh from the server, yet light when moving around quickly. */
+const FOCUS_REFRESH_MS = 3_000;
 let lastFocusRefresh = 0;
 
 /** A screen opened while online shows what the server has now, not what the last 60-second sync saw. */
@@ -216,7 +217,8 @@ async function runLocked() {
     let resend = false;
     let pushError: unknown;
     try {
-      resend = await pushAll(started);
+      // Offline mode holds the outbox until the connection has stayed back (connectivity.ts drains it).
+      if (useConnectivity.getState().mode !== 'offline') resend = await pushAll(started);
     } catch (err) {
       if (isNetworkError(err) || err instanceof SessionEnded) throw err;
       pushError = err;

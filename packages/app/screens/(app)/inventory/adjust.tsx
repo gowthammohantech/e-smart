@@ -23,7 +23,7 @@ export default function StockAdjust() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
@@ -170,7 +170,7 @@ export default function StockAdjust() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} fullWidth size="lg" />
       </View>
 
       <SelectSheet

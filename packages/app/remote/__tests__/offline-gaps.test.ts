@@ -3,6 +3,7 @@ import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
 import { installRemote } from '../install';
+import { useConnectivity } from '../connectivity';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
 import { retrySync, syncAll } from '../retry';
@@ -73,6 +74,8 @@ function acceptingServer() {
 const sentIn = (call: number) => POST.mock.calls[call][1].body.mutations as Sent[];
 
 beforeEach(() => {
+  // The outbox at work: changes are kept on the device and sent when the server can be reached.
+  useConnectivity.setState({ mode: 'draining', promptOpen: false });
   jest.useFakeTimers();
   POST.mockReset();
   GET.mockReset();

@@ -35,7 +35,7 @@ export default function ChartOfAccounts() {
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['books', 'common']);
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const { postings, book } = useBooks();
@@ -124,7 +124,7 @@ export default function ChartOfAccounts() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('books:accounts.edit') : tr('books:accounts.add')}
-        footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={!name.trim()} />}
+        footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('books:accounts.name')} value={name} onChangeText={setName} placeholder={tr('books:accounts.namePlaceholder')} required />

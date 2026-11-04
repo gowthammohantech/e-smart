@@ -2,19 +2,25 @@ import { Linking, Platform } from 'react-native';
 import type { PlanTier } from '@esmart/core/types';
 import { bookChannel, useAppStore, type AppState } from '../store/appStore';
 import { api } from './api';
+import { askToWorkOffline, canWrite } from './connectivity';
 import { useRemoteMeta } from './meta';
 import { MUTATIONS } from './mutations';
 import * as outbox from './outbox';
+import { confirm, onUnconfirmed, savingOnline } from './save';
 import { signOut, watchSessionEnd } from './session';
 import { syncSoon } from './sync';
 import { reportError } from '../lib/reporter';
 
 let installed = false;
 
+/** Marking notifications read is the person's own view, not the books: it may queue whatever the connection. */
+const ANYWHERE = new Set(['markNotificationRead', 'markAllNotificationsRead', 'clearNotifications']);
+
 /**
- * Turns the store into the local half of an offline-first client. Every
- * action still updates the store at once; the wrapper then queues what the
- * action means to the API, and the sync engine sends it when it can.
+ * Turns the store into a cache of the server's books. Every action still
+ * updates the store at once and queues what it means to the API; online, the
+ * change is then undone unless the server confirms it (see save.ts `confirm`).
+ * Only when the person has agreed to work offline does it wait in the outbox.
  *
  * Only the outermost action queues: `duplicateDocument` calls
  * `createDocument` internally, and the server has its own duplicate.
@@ -29,7 +35,14 @@ export function installRemote() {
 
   for (const [name, build] of Object.entries(MUTATIONS)) {
     const fn = original[name as keyof AppState] as (...args: unknown[]) => unknown;
+    const anywhere = ANYWHERE.has(name);
     (patch as Record<string, unknown>)[name] = (...args: unknown[]) => {
+      const outer = depth === 0;
+      // View-only: nothing changes until the connection is back or the person agrees to work offline.
+      if (outer && !anywhere && !canWrite()) {
+        askToWorkOffline();
+        return undefined;
+      }
       const before = store.getState();
       depth++;
       let result: unknown;
@@ -38,7 +51,18 @@ export function installRemote() {
       } finally {
         depth--;
       }
-      if (depth === 0) build!({ args, result, before, after: store.getState() });
+      if (outer) {
+        const after = store.getState();
+        const known = new Set(before.syncQueue.map((e) => e.id));
+        build!({ args, result, before, after });
+        // Online, a change made outside saveOnline (a toggle, a delete) still has to reach the server, or it's undone.
+        if (!anywhere && !savingOnline()) {
+          const fresh = outbox.entries().filter((e) => !known.has(e.id));
+          void confirm(result, before, after, fresh).then((r) => {
+            if (r.outcome === 'refused' || r.outcome === 'unreachable' || r.outcome === 'unconfirmed') onUnconfirmed.forEach((l) => l(r));
+          });
+        }
+      }
       return result;
     };
   }

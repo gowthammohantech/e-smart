@@ -63,6 +63,7 @@ import {
 import { LineEditorSheet } from './LineEditorSheet';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
+import { useCanWrite } from '../../remote/connectivity';
 import { useSaveOnline } from '../../remote/save';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { tdsForDocument } from '../../store/tds';
@@ -103,6 +104,8 @@ export function DocumentEditor({
   const router = useRouter();
   const toast = useToast();
   const { save: saveOnline, saving } = useSaveOnline();
+  // View-only (no internet, offline not agreed to): the header's badge says so and offers offline mode.
+  const blocked = !useCanWrite();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
 
@@ -475,7 +478,7 @@ export function DocumentEditor({
       sourceDocumentId: draft.sourceDocumentId,
     };
 
-    // One save: online it waits for the server, which numbers and checks it; offline it stays here.
+    // One save: online it waits for the server, which numbers and checks it; in offline mode it stays here.
     const res = await saveOnline(() => {
       let saved = documentId;
       if (documentId) updateDocument(documentId, payload);
@@ -483,6 +486,10 @@ export function DocumentEditor({
       if (saved && finalize) finalizeLocal(saved);
       return saved;
     });
+    if (res.outcome === 'unreachable' || res.outcome === 'unconfirmed') {
+      toast.show(tr(`common:save.${res.outcome}`), 'error');
+      return;
+    }
     if (!res.result) return;
     if (res.outcome === 'refused') {
       toast.show(tr('common:save.refused', { reason: res.error }), 'error');
@@ -1028,8 +1035,8 @@ export function DocumentEditor({
               options={{
                 headerRight: () => (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={!draft.partyId} />
-                    <Button shortcut="Enter" title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={!draft.partyId || draft.lines.length === 0} />
+                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
+                    <Button shortcut="Enter" title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={blocked || !draft.partyId || draft.lines.length === 0} />
                   </View>
                 ),
               }}
@@ -1110,8 +1117,8 @@ export function DocumentEditor({
                 />
               ) : (
                 <>
-                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} style={{ flex: 1 }} />
-                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} disabled={blocked} style={{ flex: 1 }} />
                 </>
               )}
             </View>

@@ -61,7 +61,7 @@ export default function NewPayment() {
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const insets = useSafeAreaInsets();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
@@ -814,7 +814,7 @@ export default function NewPayment() {
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made')} />
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={!canSave} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} />
           </FormActions>
         ) : (
           <View
@@ -829,7 +829,7 @@ export default function NewPayment() {
             <Button
               title={submitTitle}
               onPress={() => void save()} loading={saving}
-              disabled={!canSave}
+              disabled={blocked || !canSave}
               fullWidth
               size="lg"
             />

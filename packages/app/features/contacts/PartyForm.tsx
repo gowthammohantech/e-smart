@@ -40,7 +40,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const goBack = useGoBack();
   // Where Cancel and Save land when there is no screen to go back to.
   const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
@@ -522,10 +522,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           {desktop ? (
             <>
               <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(backTo)} />
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} />
             </>
           ) : (
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
           )}
         </FormActions>
 

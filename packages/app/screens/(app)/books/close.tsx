@@ -21,7 +21,7 @@ import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
 export default function CloseBooks() {
   const t = useTheme();
   const { t: tr } = useTranslation(['books']);
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
   const user = useCurrentUser();
   const saveCompany = useAppStore((s) => s.saveCompany);
@@ -50,13 +50,13 @@ export default function CloseBooks() {
         {owner ? (
           <>
             <DateField label={tr('books:close.through')} value={date} onChange={setDate} maximumDate={new Date()} hint={tr('books:close.throughHint')} />
-            <Button title={tr('books:close.close')} icon="lock-outline" onPress={() => void save(date)} loading={saving} disabled={date === company.lockedThroughDate} />
+            <Button title={tr('books:close.close')} icon="lock-outline" onPress={() => void save(date)} loading={saving} disabled={blocked || date === company.lockedThroughDate} />
             {company.lockedThroughDate ? (
               <View style={{ gap: t.spacing.sm }}>
                 <Text variant="caption" tone="muted">
                   {tr('books:close.reopenHint')}
                 </Text>
-                <Button title={tr('books:close.reopen')} icon="lock-open-variant-outline" variant="secondary" onPress={() => void save(null)} disabled={saving} />
+                <Button title={tr('books:close.reopen')} icon="lock-open-variant-outline" variant="secondary" onPress={() => void save(null)} disabled={blocked || saving} />
               </View>
             ) : null}
           </>

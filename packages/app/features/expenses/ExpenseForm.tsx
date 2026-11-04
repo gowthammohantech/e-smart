@@ -66,7 +66,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
@@ -541,11 +541,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} />
           </FormActions>
         ) : (
           <FormActions>
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} fullWidth size="lg" />
           </FormActions>
         )}
 

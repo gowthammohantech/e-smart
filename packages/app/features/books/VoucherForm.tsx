@@ -37,7 +37,7 @@ const blank = (): Line => ({ id: uid('vl'), account: '', debit: '', credit: '' }
 export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: (id: string) => void }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['books', 'common']);
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const defaultBranchId = useDefaultBranchId();
@@ -164,7 +164,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
           <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" />
         </ScrollView>
         <FormActions>
-          <Button title={tr('books:vouchers.save')} onPress={() => void save()} loading={saving} disabled={!!problem} fullWidth size="lg" shortcut="S" />
+          <Button title={tr('books:vouchers.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth size="lg" shortcut="S" />
         </FormActions>
       </FormContainer>
 
