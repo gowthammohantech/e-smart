@@ -199,7 +199,8 @@ export const reportsHandlers = defineHandlers({
         const { payments } = await loadPayments(all);
         const owed = inScope(docs.filter((d) => d.kind === (sales ? 'invoice' : 'purchaseBill')));
         const outstanding = buildOutstanding(owed, payments.filter((p) => p.direction === (sales ? 'received' : 'paid')), undefined, docs);
-        return { outstanding, summary: summarizeAging(outstanding, base) } as never;
+        const partyNames = Object.fromEntries((await partiesOf(outstanding.map((o) => o.document))).map((p) => [p.id, p.name]));
+        return { outstanding, summary: summarizeAging(outstanding, base), partyNames } as never;
       }
       case 'tds-register': {
         const { docs } = await loadDocuments(all, [...BUY_SIDE]);

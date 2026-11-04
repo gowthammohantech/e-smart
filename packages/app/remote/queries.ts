@@ -736,6 +736,35 @@ export function useSalesHub(branchId?: string) {
   });
 }
 
+/**
+ * Search across the business on the server: parties, items with stock, documents and payments from
+ * `search`, and expenses from the expense list's own search. Only for two characters or more.
+ */
+export function useServerSearch(query: string, withExpenses: boolean) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const q = query.trim();
+  const enabled = !!companyId && q.length >= 2;
+  const found = useQuery({
+    queryKey: ['search', companyId, q],
+    enabled,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/search', { params: { path: { companyId }, query: { q, limit: 10 } }, signal });
+      return data!;
+    },
+    placeholderData: keepPreviousData,
+  });
+  const expenses = useQuery({
+    queryKey: [...expenseKeys.all(companyId), 'search', q],
+    enabled: enabled && withExpenses,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/expenses', { params: { path: { companyId }, query: { q, limit: 10 } }, signal });
+      return data!.data ?? [];
+    },
+    placeholderData: keepPreviousData,
+  });
+  return { found: enabled ? found.data : undefined, expenses: enabled && withExpenses ? (expenses.data ?? []) : [], isFetching: found.isFetching || expenses.isFetching };
+}
+
 /** The compliance register's documents: by e-invoice status, or those still needing an e-way bill. */
 export function useComplianceDocuments(f: { need: 'eInvoice' | 'ewayBill'; status?: EInvoiceStatus; q?: string }, enabled = true) {
   const companyId = useAppStore((s) => s.activeCompanyId);

@@ -3585,7 +3585,7 @@ paths:
                 type: object
                 properties:
                   parties: { type: array, items: { $ref: '#/components/schemas/Party' } }
-                  items: { type: array, items: { $ref: '#/components/schemas/Item' } }
+                  items: { type: array, items: { $ref: '#/components/schemas/ItemWithStock' } }
                   documents: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
                   payments: { type: array, items: { $ref: '#/components/schemas/Payment' } }
 

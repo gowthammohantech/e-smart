@@ -10281,7 +10281,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         parties?: components["schemas"]["Party"][];
-                        items?: components["schemas"]["Item"][];
+                        items?: components["schemas"]["ItemWithStock"][];
                         documents?: components["schemas"]["DocumentSummary"][];
                         payments?: components["schemas"]["Payment"][];
                     };

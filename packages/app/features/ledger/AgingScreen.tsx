@@ -14,12 +14,15 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 
-import { AgingBucketKey } from '@esmart/core/domain/receivables';
+import { AgingBucketKey, summarizeAging, type OutstandingDoc } from '@esmart/core/domain/receivables';
+import type { Party } from '@esmart/core/types';
 import { formatMoney } from '@esmart/core/lib/format';
-import { formatDate } from '@esmart/core/lib/date';
+import { formatDate, today } from '@esmart/core/lib/date';
 import { Money, money, sum, zero } from '@esmart/core/lib/money';
 import { StatGrid, SplitPane } from '@esmart/ui/components/Layout';
-import { useBaseCurrency, useParties, usePayables, useReceivables } from '../../store/selectors';
+import { useBaseCurrency } from '../../store/selectors';
+import { usePartyRecord, useReportData } from '../../remote/queries';
+import { LoadingView } from '../../components/LoadingView';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { PaymentReminderSheet } from './PaymentReminderSheet';
@@ -35,17 +38,15 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const desktop = bp !== 'phone';
 
   const baseCurrency = useBaseCurrency();
-  const parties = useParties();
-  const receivables = useReceivables();
-  const payables = usePayables();
-  const data = kind === 'receivable' ? receivables : payables;
+  // Worked out on the server from every open document; names travel with it.
+  const remote = useReportData<Aging>(kind === 'receivable' ? 'receivables' : 'payables', { from: '2000-01-01', to: today() });
+  const data = remote.data ?? { outstanding: [], summary: summarizeAging([], baseCurrency), partyNames: {} };
 
   const [mode, setMode] = useState<Mode>('all');
   const [bucket, setBucket] = useState<AgingBucketKey | null>(null);
   const [reminderFor, setReminderFor] = useState<string | null>(null);
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? tr('common:placeholder.unknown');
-  const partyOf = (id: string) => parties.find((p) => p.id === id);
+  const nameOf = (id: string) => data.partyNames[id] ?? tr('common:placeholder.unknown');
 
   const rows = useMemo(() => {
     let list = data.outstanding;
@@ -83,7 +84,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   }, [rows]);
 
   const isReceivable = kind === 'receivable';
-  const reminderParty = reminderFor ? partyOf(reminderFor) : undefined;
+  const reminderParty = usePartyRecord(reminderFor ?? undefined).data as unknown as Party | undefined;
   const reminderRows = reminderFor ? rows.filter((o) => o.document.partyId === reminderFor) : [];
 
   const agingCard = (
@@ -129,6 +130,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${partyId}`);
 
   const reminderSheet = <PaymentReminderSheet party={reminderParty} rows={reminderRows} onClose={() => setReminderFor(null)} />;
+
+  if (!remote.data && remote.isLoading) return <LoadingView />;
 
   if (desktop) {
     const overdueCount = data.outstanding.filter((o) => o.daysOverdue > 0).length;
@@ -315,7 +318,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   );
 }
 
-type Outstanding = ReturnType<typeof useReceivables>['outstanding'][number];
+type Outstanding = OutstandingDoc;
+type Aging = { outstanding: OutstandingDoc[]; summary: ReturnType<typeof summarizeAging>; partyNames: Record<string, string> };
 
 /**
  * One contact's open documents on a desktop: who, how much and the actions in
