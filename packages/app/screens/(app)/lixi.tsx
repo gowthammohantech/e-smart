@@ -23,27 +23,13 @@ import { Text } from '@esmart/ui/components/Text';
 import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@esmart/ui/components/LixiOrb';
-import { greet, lixiSuggestions, LixiAction, LixiContext, LixiReply } from '../../features/lixi/brain';
+import { greetWith, lixiSuggestions, LixiAction, LixiReply } from '../../features/lixi/brain';
 import { askRemote, confirmRemote, remoteLixiAvailable, type PendingLixiAction } from '../../features/lixi/remote';
 import { detailRouteFor } from '../../features/documents/DocumentEditor';
 import { describeError } from '../../remote/errors';
-import {
-  useBaseCurrency,
-  useComplianceSummary,
-  useCurrentUser,
-  useDocuments,
-  useExpenses,
-  useItems,
-  useParties,
-  usePayables,
-  usePayments,
-  usePlan,
-  useReceivables,
-  useStockLevels,
-} from '../../store/selectors';
-import { summarizeTax } from '@esmart/core/domain/reports';
-import { isLowStock } from '@esmart/core/domain/stockLedger';
-import { resolveRange } from '@esmart/core/lib/date';
+import { useComplianceSummary, useCurrentUser, usePlan } from '../../store/selectors';
+import { useHomeHub } from '../../remote/queries';
+import { hasModule } from '@esmart/core/domain/plan';
 import { useGoBack } from '../../navigation/useGoBack';
 
 type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply };
@@ -66,46 +52,11 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   const ask = initialAsk ?? routeAsk;
   const insets = useSafeAreaInsets();
 
-  const currency = useBaseCurrency();
-  const documents = useDocuments();
-  const payments = usePayments();
-  const expenses = useExpenses();
-  const parties = useParties();
-  const receivables = useReceivables();
-  const payables = usePayables();
-  const items = useItems({ activeOnly: true });
-  const stock = useStockLevels();
   const compliance = useComplianceSummary();
   const user = useCurrentUser();
   const plan = usePlan();
-
-  const ctx: LixiContext = useMemo(
-    () => ({
-      currency,
-      documents,
-      payments,
-      expenses,
-      parties,
-      receivables,
-      payables,
-      lowStock: items
-        .filter((i) => isLowStock(i, stock[i.id] ?? 0))
-        .map((i) => ({ name: i.name, onHand: stock[i.id] ?? 0, unit: i.unit })),
-      compliance: {
-        failed: compliance.eInvoice.failed,
-        generated: compliance.eInvoice.generated,
-        pending: compliance.eInvoice.pending,
-        ewbActive: compliance.eway.active,
-        ewbExpiringSoon: compliance.expiringSoon,
-        ewbExpired: compliance.eway.expired,
-        ewbMissing: compliance.ewayOutstanding,
-      },
-      monthTax: summarizeTax(documents, currency, { range: resolveRange('thisMonth') }).outwardTotal,
-      userName: user?.name,
-      plan,
-    }),
-    [currency, documents, payments, expenses, parties, receivables, payables, items, stock, compliance, user?.name, plan],
-  );
+  // The greeting's heads-up comes from the same server figures as the Home tab.
+  const hub = useHomeHub().data;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -166,7 +117,16 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
     router.push((a.type === 'document' ? detailRouteFor(a.kind, a.id) : a.route) as never);
   };
 
-  const intro = useMemo(() => greet(ctx), [ctx]);
+  const intro = useMemo(
+    () =>
+      greetWith({
+        userName: user?.name,
+        overdue: hub?.receivable.overdueCount ?? 0,
+        gst: compliance.eInvoice.failed + compliance.expiringSoon,
+        lowStock: hasModule(plan ?? 'pro', 'inventory') ? (hub?.lowStockCount ?? 0) : 0,
+      }),
+    [user?.name, hub, compliance, plan],
+  );
 
   const asked = useRef(false);
   useEffect(() => {
