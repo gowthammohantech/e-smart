@@ -71,7 +71,10 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:openingStock': { name: 'Opening stock', group: 'stockInHand' },
   'sys:freightInward': { name: 'Freight and charges on purchases', group: 'directExpenses' },
   'sys:chargesRecovered': { name: 'Freight and charges recovered', group: 'indirectIncomes' },
+  // Kept for books posted before reimbursements went through the asset account below.
   'sys:reimbursements': { name: 'Reimbursements recovered', group: 'indirectIncomes' },
+  // A pure agent's costs (Rule 33): a billable expense waits here until the invoice that recovers it clears it.
+  'sys:reimbursementsRecoverable': { name: 'Reimbursements recoverable', group: 'loansAdvances' },
   'sys:discountAllowed': { name: 'Discount allowed', group: 'indirectExpenses' },
   'sys:discountReceived': { name: 'Discount received', group: 'indirectIncomes' },
   'sys:badDebts': { name: 'Bad debts written off', group: 'indirectExpenses' },

@@ -489,8 +489,9 @@ export function profitSnapshot(
     (d) => (d.kind === 'invoice' || d.kind === 'debitNote' || d.kind === 'salesReturn' || d.kind === 'creditNote') && isLive(d) && matches(d, filters),
   );
   const signOf = (d: BusinessDocument) => (d.kind === 'salesReturn' || d.kind === 'creditNote' ? -1 : 1);
+  // A billable expense is the customer's cost, recovered at cost on an invoice: it isn't the business's (Rule 33).
   const selectedExpenses = expenses.filter(
-    (e) => inRange(e.date, filters.range) && (!filters.branchId || e.branchId === filters.branchId),
+    (e) => !e.billable && inRange(e.date, filters.range) && (!filters.branchId || e.branchId === filters.branchId),
   );
 
   const revenueOf = (d: BusinessDocument): Money =>

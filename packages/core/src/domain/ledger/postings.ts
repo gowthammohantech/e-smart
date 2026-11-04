@@ -93,7 +93,8 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
       ['sys:sales', -b(t.taxableAmount.minor)],
       ...TAX_KINDS.map((k): Entry => [`sys:output${k}`, -b(tax[k])]),
       ['sys:discountAllowed', b(t.documentDiscount.minor)],
-      ['sys:reimbursements', -b(t.reimbursements?.minor ?? 0)],
+      // Recovering a billable expense clears what it put in Reimbursements recoverable: none of it is income.
+      ['sys:reimbursementsRecoverable', -b(t.reimbursements?.minor ?? 0)],
       ['sys:chargesRecovered', -b(t.charges.minor)],
       ['sys:roundOff', -b(t.roundOff.minor)],
     );
@@ -186,8 +187,9 @@ export function postExpense(e: Expense, ctx: { company?: Company; branches: Bran
   const components = expenseTaxComponents(e, taxRate, ctx.company, ctx.branches.find((x) => x.id === e.branchId));
   const claim = claimableTax(e).minor > 0;
   const byKind = (k: TaxKind) => components.filter((c) => TYPE_TO_KIND[c.type] === k).reduce((a, c) => a + c.amount.minor, 0);
+  // A billable expense is the customer's cost, paid as their agent: it waits in Reimbursements recoverable, out of P&L.
   const entries: Entry[] = [
-    [`exp:${e.categoryId}`, b(expenseCost(e).minor)],
+    [e.billable ? 'sys:reimbursementsRecoverable' : `exp:${e.categoryId}`, b(expenseCost(e).minor)],
     ...TAX_KINDS.map((k): Entry => [`sys:input${k}`, claim ? b(byKind(k)) : 0]),
     ...TAX_KINDS.map((k): Entry => [`sys:rcmPayable${k}`, e.reverseCharge ? -b(byKind(k)) : 0]),
     [`pay:${e.accountId}`, -b(e.amount.minor)],
