@@ -49,6 +49,7 @@
     "namePlaceholderFull": "What you're selling",
     "trackStockHintFull": "Sales and purchases will move this item's stock automatically.",
     "serviceUnitHint": "Services are always billed in Nos.",
+    "typeLocked": "Can't be changed once the item is saved.",
     "openingStockDate": "Opening stock date",
     "openingStockDateHint": "The day this stock was counted. No invoice or bill with this item can be dated before it.",
     "openingStockDateFuture": "Can't be a future date",

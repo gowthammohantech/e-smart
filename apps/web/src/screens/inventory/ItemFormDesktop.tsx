@@ -144,7 +144,8 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
               <Panel title="Item details" subtitle="What you sell and how it is identified" icon="tag-outline">
                 {/* What it is on the left, and whether it is offered on new documents on the right. */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: t.spacing.lg }}>
-                  <FieldShell label={tr('inventory:form.type')}>
+                  {/* A saved item stays a product or a service: its documents and stock were made as one. */}
+                  <FieldShell label={tr('inventory:form.type')} hint={item ? tr('inventory:form.typeLocked') : undefined}>
                     <Segmented
                       style={{ width: 280 }}
                       options={[
@@ -152,6 +153,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                         { value: 'service', label: 'Service' },
                       ]}
                       value={type}
+                      disabled={!!item}
                       onChange={(v) => {
                         setType(v as ItemType);
                         if (v === 'service') {

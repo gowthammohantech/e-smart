@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, FieldShell, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
@@ -123,20 +123,24 @@ export function ItemForm({ item }: { item?: Item }) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         >
-          <Segmented
-            options={[
-              { value: 'goods', label: tr('inventory:type.goods') },
-              { value: 'service', label: tr('inventory:type.service') },
-            ]}
-            value={type}
-            onChange={(v) => {
-              setType(v as ItemType);
-              if (v === 'service') {
-                setTrackInventory(false);
-                setUnit('NOS');
-              }
-            }}
-          />
+          {/* A saved item stays a product or a service: its documents and stock were made as one. */}
+          <FieldShell hint={item ? tr('inventory:form.typeLocked') : undefined}>
+            <Segmented
+              options={[
+                { value: 'goods', label: tr('inventory:type.goods') },
+                { value: 'service', label: tr('inventory:type.service') },
+              ]}
+              value={type}
+              disabled={!!item}
+              onChange={(v) => {
+                setType(v as ItemType);
+                if (v === 'service') {
+                  setTrackInventory(false);
+                  setUnit('NOS');
+                }
+              }}
+            />
+          </FieldShell>
 
           <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
           <TextField
