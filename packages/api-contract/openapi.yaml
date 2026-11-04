@@ -859,9 +859,10 @@ paths:
                 properties:
                   counts:
                     type: object
-                    required: [parties, items, documents, invoices, payments, expenses, stockMovements]
+                    required: [parties, customers, items, documents, invoices, payments, expenses, stockMovements]
                     properties:
                       parties: { type: integer }
+                      customers: { type: integer }
                       items: { type: integer }
                       documents: { type: integer }
                       invoices: { type: integer }

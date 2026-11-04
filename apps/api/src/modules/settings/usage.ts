@@ -21,8 +21,9 @@ export const usageHandlers = defineHandlers({
     const A = schema.paymentAccounts;
     const tally = (table: typeof schema.parties | typeof schema.items | typeof schema.stockMovements) => ctx.db.select({ n: count() }).from(table).where(eq(table.companyId, companyId));
 
-    const [[parties], [items], [movements], byBranch, [posted], [invoices], [payments], byCategory, itemTaxes, docTaxes, accounts, paidThrough, spentFrom] = await Promise.all([
+    const [[parties], [customers], [items], [movements], byBranch, [posted], [invoices], [payments], byCategory, itemTaxes, docTaxes, accounts, paidThrough, spentFrom] = await Promise.all([
       tally(schema.parties),
+      ctx.db.select({ n: count() }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), eq(schema.parties.kind, 'customer'))),
       tally(schema.items),
       tally(schema.stockMovements),
       ctx.db.select({ branchId: D.branchId, n: count() }).from(D).where(eq(D.companyId, companyId)).groupBy(D.branchId),
@@ -54,6 +55,7 @@ export const usageHandlers = defineHandlers({
     return {
       counts: {
         parties: Number(parties.n),
+        customers: Number(customers.n),
         items: Number(items.n),
         documents: byBranch.reduce((s, r) => s + Number(r.n), 0),
         invoices: Number(invoices.n),

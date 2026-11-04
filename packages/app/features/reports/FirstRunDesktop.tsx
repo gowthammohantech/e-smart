@@ -13,7 +13,8 @@ import { Illustration } from '@esmart/ui/components/Illustration';
 import { SectionHeader } from '@esmart/ui/components/Screen';
 import { quickActions } from '../../components/QuickActions';
 import type { Company } from '@esmart/core/types';
-import { useActiveCompany, useCanOpen, useCurrentUser, useDocuments, useItems, useParties } from '../../store/selectors';
+import { useActiveCompany, useCanOpen, useCurrentUser } from '../../store/selectors';
+import { useCompanyUsage } from '../../remote/queries';
 
 type Step = {
   key: string;
@@ -35,14 +36,13 @@ export function FirstRunDesktop() {
   const user = useCurrentUser();
   // Briefly undefined while signing out, before the router leaves this screen.
   const company = useActiveCompany() as Company | undefined;
-  const customers = useParties('customer');
-  const items = useItems({ activeOnly: true });
-  const invoices = useDocuments('invoice');
+  // What the business already has, from the server.
+  const counts = useCompanyUsage().data?.counts;
 
   const steps = ([
-    { key: 'customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new', done: customers.length > 0 },
-    { key: 'item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new', done: items.length > 0 },
-    { key: 'invoice', icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', done: invoices.length > 0 },
+    { key: 'customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new', done: (counts?.customers ?? 0) > 0 },
+    { key: 'item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new', done: (counts?.items ?? 0) > 0 },
+    { key: 'invoice', icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', done: (counts?.invoices ?? 0) > 0 },
   ] as Step[]).filter((s) => canOpen(s.route));
   const doneCount = steps.filter((s) => s.done).length;
 

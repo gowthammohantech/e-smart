@@ -6467,6 +6467,7 @@ export interface operations {
                     "application/json": {
                         counts: {
                             parties: number;
+                            customers: number;
                             items: number;
                             documents: number;
                             invoices: number;
