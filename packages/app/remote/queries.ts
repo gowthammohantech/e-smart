@@ -765,6 +765,20 @@ export function useServerSearch(query: string, withExpenses: boolean) {
   return { found: enabled ? found.data : undefined, expenses: enabled && withExpenses ? (expenses.data ?? []) : [], isFetching: found.isFetching || expenses.isFetching };
 }
 
+/** Record counts and what the setup is used by, for the settings screens. Refreshed on every visit. */
+export function useCompanyUsage() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['usage', companyId],
+    enabled: !!companyId,
+    staleTime: 0,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/usage', { params: { path: { companyId } }, signal });
+      return data!;
+    },
+  });
+}
+
 /** The compliance register's documents: by e-invoice status, or those still needing an e-way bill. */
 export function useComplianceDocuments(f: { need: 'eInvoice' | 'ewayBill'; status?: EInvoiceStatus; q?: string }, enabled = true) {
   const companyId = useAppStore((s) => s.activeCompanyId);

@@ -16,16 +16,8 @@ import { SwitchField } from '@esmart/ui/components/Field';
 import { exportCompany, getBackupSettings, saveBackupSettings, type BackupSettings, type ExportFormat } from '../../../remote/exports';
 import { describeError } from '../../../remote/errors';
 import { useAppStore } from '../../../store/appStore';
-import {
-  useActiveCompany,
-  useAuditEvents,
-  useDocuments,
-  useExpenses,
-  useItems,
-  useParties,
-  usePayments,
-  useStockMovements,
-} from '../../../store/selectors';
+import { useActiveCompany, useAuditEvents } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { formatDateTime } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
@@ -36,12 +28,7 @@ export default function BackupExport() {
   const toast = useToast();
 
   const company = useActiveCompany();
-  const parties = useParties();
-  const items = useItems();
-  const documents = useDocuments();
-  const payments = usePayments();
-  const expenses = useExpenses();
-  const movements = useStockMovements();
+  const usage = useCompanyUsage().data;
   const audit = useAuditEvents();
   const companies = useAppStore((s) => s.companies);
 
@@ -71,17 +58,18 @@ export default function BackupExport() {
       });
   };
 
+  // What the server holds, which is what the export contains.
   const counts = useMemo(
     () => [
-      { label: tr('settings:backup.count.parties'), value: parties.length, icon: 'account-group-outline' as const },
-      { label: tr('settings:backup.count.items'), value: items.length, icon: 'tag-outline' as const },
-      { label: tr('settings:backup.count.documents'), value: documents.length, icon: 'file-document-outline' as const },
-      { label: tr('settings:backup.count.payments'), value: payments.length, icon: 'cash' as const },
-      { label: tr('nav:title.expenses'), value: expenses.length, icon: 'receipt-text-outline' as const },
-      { label: tr('nav:title.stockMovements'), value: movements.length, icon: 'swap-vertical' as const },
+      { label: tr('settings:backup.count.parties'), value: usage?.counts.parties ?? 0, icon: 'account-group-outline' as const },
+      { label: tr('settings:backup.count.items'), value: usage?.counts.items ?? 0, icon: 'tag-outline' as const },
+      { label: tr('settings:backup.count.documents'), value: usage?.counts.documents ?? 0, icon: 'file-document-outline' as const },
+      { label: tr('settings:backup.count.payments'), value: usage?.counts.payments ?? 0, icon: 'cash' as const },
+      { label: tr('nav:title.expenses'), value: usage?.counts.expenses ?? 0, icon: 'receipt-text-outline' as const },
+      { label: tr('nav:title.stockMovements'), value: usage?.counts.stockMovements ?? 0, icon: 'swap-vertical' as const },
       { label: tr('settings:backup.count.auditEvents'), value: audit.length, icon: 'history' as const },
     ],
-    [parties, items, documents, payments, expenses, movements, audit, tr],
+    [usage, audit, tr],
   );
 
   /** The server builds the package (every record of this business) and hands back a signed download link. */

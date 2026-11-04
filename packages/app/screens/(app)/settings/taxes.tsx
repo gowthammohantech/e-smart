@@ -17,7 +17,8 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { TaxCategory } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useDocuments, useItems, useTaxCategories } from '../../../store/selectors';
+import { useActiveCompany, useTaxCategories } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { formatPercent } from '@esmart/core/lib/format';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -34,8 +35,7 @@ export default function TaxSettings() {
 
   const company = useActiveCompany();
   const categories = useTaxCategories();
-  const items = useItems();
-  const documents = useDocuments();
+  const usage = useCompanyUsage().data;
   const saveTaxCategory = useAppStore((s) => s.saveTaxCategory);
   const removeTaxCategory = useAppStore((s) => s.removeTaxCategory);
 
@@ -58,9 +58,7 @@ export default function TaxSettings() {
     setRateError(undefined);
   };
 
-  const usageOf = (id: string) =>
-    items.filter((i) => i.taxCategoryId === id).length +
-    documents.filter((d) => d.lines.some((l) => l.taxCategoryId === id)).length;
+  const usageOf = (id: string) => usage?.taxCategoryUse[id] ?? 0;
 
   const save = async () => {
     if (!editing || !name.trim()) return;

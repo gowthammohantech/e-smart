@@ -10,7 +10,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useDocuments } from '../../../store/selectors';
+import { useActiveCompany } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '../../../features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
@@ -33,7 +34,7 @@ export default function PlanBilling() {
   // Only people who have accepted count; a pending invitation is not a user yet.
   const teamSize = useAppStore((s) => s.users.filter((u) => u.status === 'active' && u.companyIds.includes(s.activeCompanyId)).length);
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
-  const invoices = useDocuments('invoice');
+  const usage = useCompanyUsage().data;
   const company = useActiveCompany();
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
@@ -63,7 +64,7 @@ export default function PlanBilling() {
           {[
             // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md).
             { label: tr('plan:billing.usageBusinesses'), value: String(companies.length) },
-            { label: tr('plan:billing.usageInvoices'), value: String(invoices.length) },
+            { label: tr('plan:billing.usageInvoices'), value: usage ? String(usage.counts.invoices) : '…' },
             { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }) },
             ...(pendingInvites > 0 ? [{ label: tr('plan:billing.usagePending'), value: String(pendingInvites) }] : []),
           ].map((r) => (

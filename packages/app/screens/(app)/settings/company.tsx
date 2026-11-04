@@ -12,9 +12,9 @@ import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useDocuments } from '../../../store/selectors';
+import { useActiveCompany } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
-import { isFinalized } from '@esmart/core/domain/documentStates';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Card } from '@esmart/ui/components/Card';
 import { Icon } from '@esmart/ui/components/Icon';
@@ -37,7 +37,9 @@ export default function CompanySettings() {
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
   // After the first posted entry, the fields those entries depend on are frozen.
-  const posted = useDocuments().some((d) => isFinalized(d.status));
+  // Locked until the server says otherwise; it refuses the change either way.
+  const usage = useCompanyUsage().data;
+  const posted = !usage || usage.postedDocuments > 0;
   const locks = profileLocks(company, posted);
 
   const [name, setName] = useState(company?.name ?? '');

@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { accountBalances } from '@esmart/core/domain/paymentAccounts';
-import type { Expense, Payment, PaymentAccount } from '@esmart/core/types';
+import type { Expense, Payment, PaymentAccount, Voucher } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import { defineHandlers, type AuthUser, type CompanyRow } from '../../context';
 import { rateToBase } from '../documents/engine';
@@ -23,14 +23,16 @@ async function findAccount(db: DbOrTx, companyId: string, id: string) {
 
 /**
  * Current balances through core's `accountBalances`: opening + received −
- * paid − expenses. SQL sums each account's movements (rounding each row to
- * base minor units first, as core does), and core applies the signs.
+ * paid − expenses ± contra and journal lines on the account. SQL sums each
+ * account's movements (rounding each row to base minor units first, as core
+ * does), and core applies the signs.
  */
 export async function paymentAccountBalances(db: DbOrTx, companyId: string, accounts: AccountRow[]): Promise<Record<string, number>> {
   if (!accounts.length) return {};
   const p = schema.payments;
   const e = schema.expenses;
-  const [pays, exps] = await Promise.all([
+  const V = schema.vouchers;
+  const [pays, exps, moved] = await Promise.all([
     db
       .select({ accountId: p.accountId, direction: p.direction, total: sql<string>`coalesce(sum(round(${p.amountMinor} * ${p.exchangeRate})), 0)` })
       .from(p)
@@ -41,11 +43,17 @@ export async function paymentAccountBalances(db: DbOrTx, companyId: string, acco
       .from(e)
       .where(eq(e.companyId, companyId))
       .groupBy(e.accountId),
+    db
+      .select({ account: sql<string>`l->>'account'`, debit: sql<string>`coalesce(sum((l->>'debitMinor')::bigint), 0)`, credit: sql<string>`coalesce(sum((l->>'creditMinor')::bigint), 0)` })
+      .from(sql`${V}, jsonb_array_elements(${V.lines}) as l`)
+      .where(and(eq(V.companyId, companyId), sql`l->>'account' like 'pay:%'`))
+      .groupBy(sql`l->>'account'`),
   ]);
   const coreAccounts = accounts.map((a) => ({ id: a.id, openingBalance: { minor: a.openingBalanceMinor, currency: a.currency.trim() }, openingRate: Number(a.openingRate) }) as PaymentAccount);
   const corePayments = pays.map((r) => ({ accountId: r.accountId, direction: r.direction, amount: { minor: Number(r.total) }, exchangeRate: 1 }) as Payment);
   const coreExpenses = exps.map((r) => ({ accountId: r.accountId, amount: { minor: Number(r.total) }, exchangeRate: 1 }) as Expense);
-  return accountBalances(coreAccounts, corePayments, coreExpenses);
+  const coreVouchers = [{ lines: moved.map((r) => ({ account: r.account, debit: { minor: Number(r.debit) }, credit: { minor: Number(r.credit) } })) } as Pick<Voucher, 'lines'>];
+  return accountBalances(coreAccounts, corePayments, coreExpenses, coreVouchers);
 }
 
 async function toWire(db: DbOrTx, row: AccountRow, base: string) {

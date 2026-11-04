@@ -10,7 +10,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useActiveCompany, useDocuments } from '@esmart/app/store/selectors';
+import { useActiveCompany } from '@esmart/app/store/selectors';
+import { useCompanyUsage } from '@esmart/app/remote/queries';
 import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '@esmart/app/features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
@@ -28,7 +29,7 @@ export function PlanBillingDesktop() {
 
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const companies = useAppStore((s) => s.companies);
-  const invoices = useDocuments('invoice');
+  const companyUsage = useCompanyUsage().data;
   const company = useActiveCompany();
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
@@ -40,7 +41,7 @@ export function PlanBillingDesktop() {
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
   const usage: { label: string; value: string; ratio: number | null }[] = [
     { label: tr('plan:billing.usageBusinesses'), value: String(companies.length), ratio: null },
-    { label: tr('plan:billing.usageInvoices'), value: String(invoices.length), ratio: null },
+    { label: tr('plan:billing.usageInvoices'), value: companyUsage ? String(companyUsage.counts.invoices) : '…', ratio: null },
     { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }), ratio: seatLimit === null ? null : teamSize / seatLimit },
   ];
   if (pendingInvites > 0) usage.push({ label: tr('plan:billing.usagePending'), value: String(pendingInvites), ratio: null });

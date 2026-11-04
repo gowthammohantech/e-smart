@@ -613,6 +613,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How much the business holds and what its setup is used by
+         * @description Record counts for backup and plan usage, whether anything has been posted, documents per
+         *     branch, how many items and documents use each tax category, expenses per category, and each
+         *     payment account's balance (in base currency) and whether money has gone through it.
+         */
+        get: operations["getCompanyUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payment-accounts": {
         parameters: {
             query?: never;
@@ -6412,6 +6436,59 @@ export interface operations {
                 content?: never;
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    getCompanyUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        counts: {
+                            parties: number;
+                            items: number;
+                            documents: number;
+                            invoices: number;
+                            payments: number;
+                            expenses: number;
+                            stockMovements: number;
+                        };
+                        /** @description Documents past draft */
+                        postedDocuments: number;
+                        documentsByBranch: {
+                            [key: string]: number;
+                        };
+                        /** @description Items plus documents with a line in each category */
+                        taxCategoryUse: {
+                            [key: string]: number;
+                        };
+                        expenseCategories: {
+                            [key: string]: {
+                                count: number;
+                                total: components["schemas"]["Money"];
+                            };
+                        };
+                        paymentAccounts: {
+                            [key: string]: {
+                                balance: components["schemas"]["Money"];
+                                inUse: boolean;
+                            };
+                        };
+                    };
+                };
+            };
         };
     };
     listPaymentAccounts: {

@@ -18,7 +18,8 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Branch } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBranches, useDocuments, usePlan } from '../../../store/selectors';
+import { useActiveCompany, useBranches, usePlan } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { hasModule } from '@esmart/core/domain/plan';
 import { uid } from '@esmart/core/lib/id';
 import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
@@ -38,7 +39,7 @@ export default function BranchSettings() {
 
   const company = useActiveCompany();
   const branches = useBranches();
-  const documents = useDocuments();
+  const usage = useCompanyUsage().data;
   const saveBranch = useAppStore((s) => s.saveBranch);
   const removeBranch = useAppStore((s) => s.removeBranch);
   const router = useRouter();
@@ -178,7 +179,7 @@ export default function BranchSettings() {
     if (res) setEditing(null);
   };
 
-  const docCount = (branchId: string) => documents.filter((d) => d.branchId === branchId).length;
+  const docCount = (branchId: string) => usage?.documentsByBranch[branchId] ?? 0;
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
   useSaveShortcut(save, !!editing && !!name.trim());

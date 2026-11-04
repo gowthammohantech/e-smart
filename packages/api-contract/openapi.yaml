@@ -838,6 +838,51 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/usage:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: getCompanyUsage
+      summary: How much the business holds and what its setup is used by
+      description: |
+        Record counts for backup and plan usage, whether anything has been posted, documents per
+        branch, how many items and documents use each tax category, expenses per category, and each
+        payment account's balance (in base currency) and whether money has gone through it.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts, postedDocuments, documentsByBranch, taxCategoryUse, expenseCategories, paymentAccounts]
+                properties:
+                  counts:
+                    type: object
+                    required: [parties, items, documents, invoices, payments, expenses, stockMovements]
+                    properties:
+                      parties: { type: integer }
+                      items: { type: integer }
+                      documents: { type: integer }
+                      invoices: { type: integer }
+                      payments: { type: integer }
+                      expenses: { type: integer }
+                      stockMovements: { type: integer }
+                  postedDocuments: { type: integer, description: Documents past draft }
+                  documentsByBranch: { type: object, additionalProperties: { type: integer } }
+                  taxCategoryUse: { type: object, description: Items plus documents with a line in each category, additionalProperties: { type: integer } }
+                  expenseCategories:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      required: [count, total]
+                      properties: { count: { type: integer }, total: { $ref: '#/components/schemas/Money' } }
+                  paymentAccounts:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      required: [balance, inUse]
+                      properties: { balance: { $ref: '#/components/schemas/Money' }, inUse: { type: boolean } }
   /companies/{companyId}/payment-accounts:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:

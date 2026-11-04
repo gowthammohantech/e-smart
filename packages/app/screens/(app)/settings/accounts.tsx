@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useVouchers } from '../../../store/books';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,9 +16,9 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { today } from '@esmart/core/lib/date';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { PaymentAccount } from '@esmart/core/types';
-import { accountBalances } from '@esmart/core/domain/paymentAccounts';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBaseCurrency, useExpenses, usePaymentAccounts, usePayments } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, usePaymentAccounts } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
@@ -36,8 +35,7 @@ export default function AccountSettings() {
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const accounts = usePaymentAccounts();
-  const payments = usePayments();
-  const expenses = useExpenses();
+  const usage = useCompanyUsage().data;
   const savePaymentAccount = useAppStore((s) => s.savePaymentAccount);
   const removePaymentAccount = useAppStore((s) => s.removePaymentAccount);
 
@@ -56,14 +54,17 @@ export default function AccountSettings() {
   };
 
   /** Running balance: opening + money in − money out − expenses paid from it. */
-  const vouchers = useVouchers();
-  const balances = useMemo(() => accountBalances(accounts, payments, expenses, vouchers), [accounts, payments, expenses, vouchers]);
+  // From the server, which has every payment, expense and voucher; a new account starts at its opening.
+  const balances = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, usage?.paymentAccounts[a.id]?.balance.minor ?? Math.round(a.openingBalance.minor * (a.openingRate ?? 1))])) as Record<string, number>,
+    [accounts, usage],
+  );
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 
   // Once money has gone through an account it stays, and so does its type: past
   // payments used methods the type allows. The server refuses both too.
-  const inUse = !!editing?.id && (payments.some((p) => p.accountId === editing.id) || expenses.some((e) => e.accountId === editing.id));
+  const inUse = !!editing?.id && (usage?.paymentAccounts[editing.id]?.inUse ?? true);
 
   const open = (a?: PaymentAccount) => {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', type: 'bank', currency: baseCurrency, openingBalance: money(0, baseCurrency), isDefault: false } as PaymentAccount));

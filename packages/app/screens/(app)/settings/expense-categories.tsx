@@ -14,7 +14,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Text } from '@esmart/ui/components/Text';
 import { ExpenseCategory } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBaseCurrency, useExpenseCategories, useExpenses } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useExpenseCategories } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
@@ -30,7 +31,7 @@ export default function ExpenseCategorySettings() {
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const categories = useExpenseCategories();
-  const expenses = useExpenses();
+  const usage = useCompanyUsage().data;
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
   const removeExpenseCategory = useAppStore((s) => s.removeExpenseCategory);
 
@@ -38,14 +39,10 @@ export default function ExpenseCategorySettings() {
   const [confirmDelete, setConfirmDelete] = useState<ExpenseCategory | null>(null);
   const [name, setName] = useState('');
 
-  const totals = useMemo(() => {
-    const map: Record<string, { total: number; count: number }> = {};
-    expenses.forEach((e) => {
-      const cur = map[e.categoryId] ?? { total: 0, count: 0 };
-      map[e.categoryId] = { total: cur.total + Math.round(e.amount.minor * (e.exchangeRate || 1)), count: cur.count + 1 };
-    });
-    return map;
-  }, [expenses]);
+  const totals = useMemo(
+    () => Object.fromEntries(Object.entries(usage?.expenseCategories ?? {}).map(([id, v]) => [id, { total: v.total.minor, count: v.count }])) as Record<string, { total: number; count: number }>,
+    [usage],
+  );
 
   const open = (c?: ExpenseCategory) => {
     setEditing(c ?? ({ id: '', companyId: company.id, name: '', icon: 'shape-outline', color: '#8E98AC' } as ExpenseCategory));
