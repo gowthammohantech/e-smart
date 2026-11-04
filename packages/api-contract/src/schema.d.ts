@@ -865,6 +865,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/parties/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many parties a list's filters match, and what they owe or are owed, in base currency
+         * @description Takes the filters of `listParties`. A party in another currency is counted at its latest rate.
+         */
+        get: operations["summarizePartyList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/parties": {
         parameters: {
             query?: never;
@@ -6767,6 +6789,38 @@ export interface operations {
             };
         };
     };
+    summarizePartyList: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["PartyKind"];
+                status?: "active" | "inactive";
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        outstanding: components["schemas"]["Money"];
+                        overdue: components["schemas"]["Money"];
+                        advance: components["schemas"]["Money"];
+                    };
+                };
+            };
+        };
+    };
     listParties: {
         parameters: {
             query?: {
@@ -7214,6 +7268,8 @@ export interface operations {
                         byStatus: {
                             status: components["schemas"]["DocStatus"];
                             count: number;
+                            /** @description In base currency */
+                            total: components["schemas"]["Money"];
                         }[];
                     };
                 };

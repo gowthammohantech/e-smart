@@ -5,12 +5,17 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { PartyForm } from '../../../../../features/contacts/PartyForm';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useParty } from '../../../../../store/selectors';
+import { usePartyRecord } from '../../../../../remote/queries';
+import { LoadingView } from '../../../../../components/LoadingView';
 
 export default function EditCustomer() {
   const { t: tr } = useTranslation(['common', 'nav']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const party = useParty(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = usePartyRecord(id);
 
+  if (!party && remote.isLoading) return <LoadingView />;
   if (!party) {
     return (
       <View style={{ flex: 1 }}>

@@ -1163,6 +1163,30 @@ paths:
                   ewb: { type: object, properties: { ok: { type: boolean }, message: { type: string } } }
 
   # ------------------------------------------------------------------ Parties
+  /companies/{companyId}/parties/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Parties]
+      operationId: summarizePartyList
+      summary: How many parties a list's filters match, and what they owe or are owed, in base currency
+      description: Takes the filters of `listParties`. A party in another currency is counted at its latest rate.
+      parameters:
+        - { name: kind, in: query, schema: { $ref: '#/components/schemas/PartyKind' } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, outstanding, overdue, advance]
+                properties:
+                  count: { type: integer }
+                  outstanding: { $ref: '#/components/schemas/Money' }
+                  overdue: { $ref: '#/components/schemas/Money' }
+                  advance: { $ref: '#/components/schemas/Money' }
   /companies/{companyId}/parties:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -1474,10 +1498,11 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [status, count]
+                      required: [status, count, total]
                       properties:
                         status: { $ref: '#/components/schemas/DocStatus' }
                         count: { type: integer }
+                        total: { allOf: [{ $ref: '#/components/schemas/Money' }], description: In base currency }
   /companies/{companyId}/tds/preview:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:

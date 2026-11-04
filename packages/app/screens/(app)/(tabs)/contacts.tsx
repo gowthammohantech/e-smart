@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, SectionList, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, SectionList, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Button } from '@esmart/ui/components/Button';
 import { AppHeader } from '../../../components/AppHeader';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -14,9 +15,11 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Badge } from '@esmart/ui/components/Badge';
-import { openingOwedInBase, useBaseCurrency, useDocuments, useExchangeRates, useHasModule, useParties, usePayments } from '../../../store/selectors';
-import { buildOutstanding } from '@esmart/core/domain/receivables';
-import { money } from '@esmart/core/lib/money';
+import { useBaseCurrency, useHasModule } from '../../../store/selectors';
+import { usePartyPages, usePartySummary } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
+import type { Party } from '@esmart/core/types';
+import { zero, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
@@ -35,39 +38,22 @@ export default function ContactsTab() {
   const [query, setQuery] = useState('');
   const desktop = useIsDesktop();
 
-  const parties = useParties(tab);
-  const allDocuments = useDocuments();
-  const documents = useMemo(
-    () => allDocuments.filter((d) => d.kind === (tab === 'customer' ? 'invoice' : 'purchaseBill')),
-    [allDocuments, tab],
-  );
-  const rates = useExchangeRates();
-  const payments = usePayments(tab === 'customer' ? 'received' : 'paid');
-
-  const outstandingByParty = useMemo(() => {
-    const rows = buildOutstanding(documents, payments, undefined, allDocuments);
-    const map: Record<string, number> = {};
-    rows.forEach((r) => {
-      map[r.document.partyId] =
-        (map[r.document.partyId] ?? 0) + Math.round(r.outstanding.minor * (r.document.exchangeRate || 1));
-    });
-    // What is left of each opening balance once the party's advances settle it.
-    parties.forEach((p) => {
-      const opening = openingOwedInBase(p, payments.filter((x) => x.partyId === p.id), rates, baseCurrency);
-      if (opening) map[p.id] = (map[p.id] ?? 0) + opening;
-    });
-    return map;
-  }, [documents, allDocuments, payments, parties, rates, baseCurrency]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return parties;
-    return parties.filter((p) =>
-      `${p.name} ${p.displayName ?? ''} ${p.code} ${p.phone ?? ''} ${p.email ?? ''} ${p.taxId ?? ''}`
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [parties, query]);
+  // Read from the server by name, 50 at a time, each with its balance; the count and total cover every page.
+  const search = useDebounced(query);
+  const pages = usePartyPages({ kind: tab, q: search });
+  const summary = usePartySummary({ kind: tab, q: search }).data;
+  const filtered = pages.rows as unknown as (Party & { outstanding?: Money })[];
+  /** What a party owes (a customer) or is owed (a supplier), in its own currency. */
+  const owed = (p: { outstanding?: Money }) => p.outstanding?.minor ?? 0;
+  const count = summary?.count ?? filtered.length;
+  const loadMore = () => {
+    if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+  };
+  const moreFooter = pages.hasNextPage ? (
+    <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
+      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+    </View>
+  ) : null;
 
   const sections = useMemo(() => {
     const map = new Map<string, typeof filtered>();
@@ -80,18 +66,16 @@ export default function ContactsTab() {
       .map(([title, data]) => ({ title, data }));
   }, [filtered]);
 
-  const totalOutstanding = useMemo(
-    () => money(Object.values(outstandingByParty).reduce((a, b) => a + b, 0), baseCurrency),
-    [outstandingByParty, baseCurrency],
-  );
+  const totalOutstanding = (summary?.outstanding as Money | undefined) ?? zero(baseCurrency);
+  const noneAtAll = !search && summary?.count === 0;
 
   const emptyTitle =
-    parties.length > 0
+    !noneAtAll
       ? tr('common:component.noMatches')
       : tab === 'customer'
         ? tr('contacts:hub.noCustomers')
         : tr('contacts:hub.noSuppliers');
-  const emptyMessage = parties.length === 0 ? tr('contacts:hub.emptyBody') : tr('contacts:hub.noMatchesBody');
+  const emptyMessage = noneAtAll ? tr('contacts:hub.emptyBody') : tr('contacts:hub.noMatchesBody');
 
   return (
     <View style={{ flex: 1 }}>
@@ -124,7 +108,7 @@ export default function ContactsTab() {
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
           <Text variant="caption" tone="muted">
-            {tab === 'customer' ? tr('contacts:hub.customerCount', { count: filtered.length }) : tr('contacts:hub.supplierCount', { count: filtered.length })}
+            {tab === 'customer' ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count })}
           </Text>
           <Text variant="caption" weight="600" tone={tab === 'customer' ? 'warn' : 'bad'}>
             {tab === 'customer'
@@ -137,7 +121,6 @@ export default function ContactsTab() {
       {desktop ? (
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg }}>
           <DataTable
-            pageSize={TABLE_PAGE_SIZE}
             columns={[
               {
                 key: 'name',
@@ -151,9 +134,8 @@ export default function ContactsTab() {
                     {p.currency !== baseCurrency ? <Badge label={p.currency} tone="info" size="sm" /> : null}
                   </View>
                 ),
-                sortValue: (p) => p.name,
               },
-              { key: 'code', header: tr('common:table.code'), width: 110, render: (p) => <Cell tone="muted">{p.code}</Cell>, sortValue: (p) => p.code },
+              { key: 'code', header: tr('common:table.code'), width: 110, render: (p) => <Cell tone="muted">{p.code}</Cell> },
               { key: 'taxId', secondary: true, header: tr('common:table.taxId'), width: 180, render: (p) => <Cell tone="muted">{p.taxId || '—'}</Cell> },
               { key: 'phone', header: tr('common:table.phone'), width: 150, render: (p) => <Cell tone="muted">{p.phone || '—'}</Cell> },
               { key: 'email', secondary: true, header: tr('common:table.email'), flex: 1.5, render: (p) => <Cell tone="muted">{p.email || '—'}</Cell> },
@@ -162,37 +144,34 @@ export default function ContactsTab() {
                 header: tr('common:table.outstanding'),
                 width: 150,
                 align: 'right',
-                render: (p) => {
-                  const due = outstandingByParty[p.id] ?? 0;
-                  return due > 0 ? (
+                render: (p) =>
+                  owed(p) > 0 ? (
                     <Cell weight="700" tone={tab === 'customer' ? 'warn' : 'bad'} mono>
-                      {formatMoney(money(due, baseCurrency))}
+                      {formatMoney(p.outstanding!)}
                     </Cell>
                   ) : (
                     <Cell tone="muted">{tr('contacts:hub.settled')}</Cell>
-                  );
-                },
-                sortValue: (p) => outstandingByParty[p.id] ?? 0,
+                  ),
               },
             ]}
             rows={filtered}
             rowKey={(p) => p.id}
-            initialSort={{ key: 'name', dir: 'asc' }}
             onRowPress={(p) =>
               router.push(tab === 'customer' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`)
             }
             rowLabel={(p) => p.name}
             empty={
-              <EmptyState
-                illustration="no-contacts"
-                icon="account-group-outline"
-                title={emptyTitle}
-                message={emptyMessage}
-                compact
-              />
+              pages.isLoading ? (
+                <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+              ) : (
+                <EmptyState illustration="no-contacts" icon="account-group-outline" title={emptyTitle} message={emptyMessage} compact />
+              )
             }
           />
+          {moreFooter}
         </View>
+      ) : pages.isLoading && !filtered.length ? (
+        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
       ) : sections.length === 0 ? (
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>
           <Card padded={false}>
@@ -200,9 +179,9 @@ export default function ContactsTab() {
               illustration="no-contacts" icon="account-group-outline"
               title={emptyTitle}
               message={emptyMessage}
-              actionLabel={parties.length === 0 ? tr('contacts:hub.addContact') : undefined}
+              actionLabel={noneAtAll ? tr('contacts:hub.addContact') : undefined}
               onAction={
-                parties.length === 0
+                noneAtAll
                   ? () => router.push(tab === 'customer' ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
                   : undefined
               }
@@ -216,6 +195,9 @@ export default function ContactsTab() {
           keyExtractor={(p) => p.id}
           contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
           stickySectionHeadersEnabled={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={moreFooter}
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
           renderSectionHeader={({ section }) => (
             <Text variant="caption" tone="muted" weight="700" style={{ paddingVertical: t.spacing.sm }}>
@@ -223,7 +205,7 @@ export default function ContactsTab() {
             </Text>
           )}
           renderItem={({ item: p }) => {
-            const outstanding = outstandingByParty[p.id] ?? 0;
+            const outstanding = owed(p);
             return (
               <Pressable
                 onPress={() =>
@@ -264,7 +246,7 @@ export default function ContactsTab() {
                   {outstanding > 0 ? (
                     <>
                       <Text variant="small" weight="700" tone={tab === 'customer' ? 'warn' : 'bad'}>
-                        {formatMoney(money(outstanding, baseCurrency))}
+                        {formatMoney(p.outstanding!)}
                       </Text>
                       <Text variant="micro" tone="muted">
                         {tab === 'customer' ? tr('contacts:hub.owesYou') : tr('contacts:hub.youOwe')}

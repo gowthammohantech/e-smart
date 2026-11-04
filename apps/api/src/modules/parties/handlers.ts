@@ -12,6 +12,8 @@ import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
 import { partyStatement, statementHtml } from './statement';
 import { partyColumns, partyToWire, partyWithBalance } from './wire';
+import { money } from '../../lib/wire';
+import { rateToBase } from '../documents/engine';
 
 const P = schema.parties;
 type PartyRow = typeof P.$inferSelect;
@@ -85,17 +87,34 @@ async function usage(db: DbOrTx, companyId: string, partyId: string): Promise<st
  * Parties: listParties, createParty, getParty, saveParty, removeParty,
  * getPartyStatement.
  */
+/** The WHERE of a party list, shared by the list and its summary. */
+function partyFilters(companyId: string, q: { kind?: 'customer' | 'supplier'; status?: 'active' | 'inactive'; q?: string }): SQL[] {
+  const filters: SQL[] = [eq(P.companyId, companyId)];
+  if (q.kind) filters.push(eq(P.kind, q.kind));
+  if (q.status) filters.push(eq(P.status, q.status));
+  if (q.q) {
+    const like = `%${q.q.trim()}%`;
+    filters.push(or(ilike(P.name, like), ilike(P.code, like), ilike(P.displayName, like), ilike(P.email, like), ilike(P.phone, like), ilike(P.taxId, like))!);
+  }
+  return filters;
+}
+
 export const partiesHandlers = defineHandlers({
+  async summarizePartyList(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const rows = await ctx.db.select().from(P).where(and(...partyFilters(ctx.company.id, ctx.query)));
+    const balances = await partyBalances(ctx.db, ctx.company.id, rows, today(ctx.now));
+    const day = today(ctx.now);
+    const rates = new Map<string, number>();
+    for (const c of new Set(rows.map((r) => r.currency.trim()))) rates.set(c, (await rateToBase(ctx.db, ctx.company.id, c, base, day)) ?? 1);
+    const sum = (k: 'outstanding' | 'overdue' | 'advance') => money(Math.round(rows.reduce((a, r) => a + (balances.get(r.id)?.[k] ?? 0) * rates.get(r.currency.trim())!, 0)), base);
+    return { count: rows.length, outstanding: sum('outstanding'), overdue: sum('overdue'), advance: sum('advance') };
+  },
+
   async listParties(ctx) {
-    const { kind, status, q, limit, cursor } = ctx.query;
+    const { limit, cursor } = ctx.query;
     const k = keyset({ cursor, limit, sort: P.name, id: P.id, order: 'asc' });
-    const filters = [eq(P.companyId, ctx.company.id)];
-    if (kind) filters.push(eq(P.kind, kind));
-    if (status) filters.push(eq(P.status, status));
-    if (q) {
-      const like = `%${q.trim()}%`;
-      filters.push(or(ilike(P.name, like), ilike(P.code, like), ilike(P.displayName, like), ilike(P.email, like), ilike(P.phone, like), ilike(P.taxId, like))!);
-    }
+    const filters = partyFilters(ctx.company.id, ctx.query);
     const rows = await ctx.db
       .select()
       .from(P)

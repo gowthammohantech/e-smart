@@ -330,6 +330,77 @@ export function useExpenseRecord(id: string | undefined) {
   });
 }
 
+export type PartyQuery = { kind: 'customer' | 'supplier'; q?: string };
+const partyKeys = {
+  all: (companyId: string) => ['parties', companyId] as const,
+};
+
+/** Customers or suppliers by name, 50 at a time, each with what it owes or is owed. */
+export function usePartyPages(f: PartyQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...partyKeys.all(companyId), 'pages', f],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind: f.kind, q: f.q?.trim() || undefined, limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
+}
+
+/** How many parties match, and what they owe or are owed, in base currency. */
+export function usePartySummary(f: PartyQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...partyKeys.all(companyId), 'summary', f],
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/parties/summary', { params: { path: { companyId }, query: { kind: f.kind, q: f.q?.trim() || undefined } }, signal });
+      return data!;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Opens a customer or supplier from the server, with its balance, kept in the store. */
+export function usePartyRecord(id: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const aliases = useRemoteMeta((m) => m.idAliases);
+  const current = id ? resolveId(id, aliases) : undefined;
+  return useQuery({
+    queryKey: ['party', companyId, current],
+    enabled: !!companyId && !!current,
+    staleTime: 0,
+    retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/parties/{id}', { params: { path: { companyId, id: current! } }, signal });
+      keep('party', companyId, [data]);
+      return data!;
+    },
+  });
+}
+
+/**
+ * What's still open with one party, oldest first, as the receivables (or payables) aging works it out:
+ * the documents a reminder lists and the party screen shows.
+ */
+export function usePartyAging(partyId: string | undefined, kind: 'customer' | 'supplier') {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['documents', companyId, 'aging', kind, partyId],
+    enabled: !!companyId && !!partyId,
+    queryFn: async ({ signal }) => {
+      const params = { path: { companyId }, query: { partyId } };
+      const { data } = kind === 'customer' ? await api.GET('/companies/{companyId}/receivables', { params, signal }) : await api.GET('/companies/{companyId}/payables', { params, signal });
+      return data!;
+    },
+  });
+}
+
 export const hubKeys = {
   all: (companyId: string) => ['hubs', companyId] as const,
   sales: (companyId: string, branchId?: string) => ['hubs', companyId, 'sales', branchId ?? ''] as const,
@@ -377,6 +448,8 @@ export function watchStoreForQueries(): () => void {
       void queryClient.invalidateQueries({ queryKey: documentKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: paymentKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: expenseKeys.all(companyId) });
+      void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'pages'] });
+      void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'summary'] });
       // The hubs add up documents and payments.
       void queryClient.invalidateQueries({ queryKey: hubKeys.all(companyId) });
     }

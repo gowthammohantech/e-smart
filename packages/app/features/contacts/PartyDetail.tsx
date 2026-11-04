@@ -19,15 +19,16 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { useServerSave } from '../../components/useServerSave';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 
-import { Party } from '@esmart/core/types';
-import { buildOutstanding } from '@esmart/core/domain/receivables';
+import type { BusinessDocument, DocStatus, DocumentKind, Party, Payment } from '@esmart/core/types';
+import type { OutstandingDoc } from '@esmart/core/domain/receivables';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
-import { money, sum, zero } from '@esmart/core/lib/money';
+import { money, type Money } from '@esmart/core/lib/money';
 import { paymentMethodLabel } from '@esmart/core/labels';
 
 import { useAppStore } from '../../store/appStore';
-import { useBaseCurrency, usePartyHistory, usePartyOutstanding, usePayments } from '../../store/selectors';
+import { useBaseCurrency, usePartyOutstanding } from '../../store/selectors';
+import { useDocumentPages, useDocumentSummary, usePartyAging, usePaymentPages, usePartyRecord, type DocumentSummary } from '../../remote/queries';
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
@@ -46,8 +47,6 @@ export function PartyDetail({ party }: { party: Party }) {
   const { run: serverSave } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
-  const history = usePartyHistory(party.id);
-  const allPayments = usePayments();
   const removeParty = useAppStore((s) => s.removeParty);
 
   const [tab, setTab] = useState<Tab>('activity');
@@ -60,33 +59,44 @@ export function PartyDetail({ party }: { party: Party }) {
 
   const isCustomer = party.kind === 'customer';
 
-  const partyPayments = useMemo(
-    () => allPayments.filter((p) => p.partyId === party.id),
-    [allPayments, party.id],
-  );
-
+  // Everything below comes from the server, so the party's whole history needn't be on the device.
+  const record = usePartyRecord(party.id).data;
+  const aging = usePartyAging(party.id, party.kind).data;
   const outstanding = useMemo(
-    () => buildOutstanding(history.invoices, partyPayments, undefined, history.all),
-    [history.invoices, history.all, partyPayments],
-  );
-
-  // Open documents plus what is left of the opening balance.
-  const totalOutstanding = usePartyOutstanding(party.id);
-
-  const lifetimeValue = useMemo(
     () =>
-      history.invoices.length
-        ? sum(
-            history.invoices
-              .filter((d) => !['draft', 'cancelled'].includes(d.status))
-              .map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
-            baseCurrency,
-          )
-        : zero(baseCurrency),
-    [history.invoices, baseCurrency],
+      (aging?.documents ?? []).map((o) => ({
+        document: { ...o.document, totals: { grandTotal: o.document?.grandTotal } } as unknown as BusinessDocument,
+        allocated: o.allocated as Money,
+        outstanding: o.outstanding as Money,
+        daysOverdue: o.daysOverdue ?? 0,
+        bucket: o.bucket,
+      })) as OutstandingDoc[],
+    [aging],
   );
+
+  // Open documents plus what is left of the opening balance: the server's figure, the device's until it answers.
+  const deviceOutstanding = usePartyOutstanding(party.id);
+  const totalOutstanding = (record?.outstanding as Money | undefined) ?? deviceOutstanding;
+
+  const billKind: DocumentKind = isCustomer ? 'invoice' : 'purchaseBill';
+  const billed = useDocumentSummary({ kinds: [billKind], partyId: party.id }).data;
+  // Drafts and cancelled documents don't count towards what was billed.
+  const lifetimeValue = money(
+    (billed?.byStatus ?? []).filter((b) => !['draft', 'cancelled', 'rejected'].includes(b.status)).reduce((a, b) => a + (b.total?.minor ?? 0), 0),
+    baseCurrency,
+  );
+  const billCount = billed?.count ?? 0;
 
   const overdueCount = outstanding.filter((o) => o.daysOverdue > 0).length;
+
+  // The first page of each kind; "See all" opens the list filtered to this party.
+  const pagesOf = (kinds: DocumentKind[]) => ({ kinds, partyId: party.id });
+  const quotes = useDocumentPages(pagesOf([isCustomer ? 'quote' : 'purchaseOrder']));
+  const orders = useDocumentPages(pagesOf([isCustomer ? 'salesOrder' : 'goodsReceipt']));
+  const bills = useDocumentPages(pagesOf([billKind]));
+  const returns = useDocumentPages(pagesOf([isCustomer ? 'salesReturn' : 'purchaseReturn']));
+  const payments = usePaymentPages({ direction: isCustomer ? 'received' : 'paid', partyId: party.id });
+  const partyPayments = payments.rows as unknown as Payment[];
 
   const contactAction = (icon: IconName, label: string, onPress: () => void, disabled?: boolean) => (
     <Pressable
@@ -120,20 +130,30 @@ export function PartyDetail({ party }: { party: Party }) {
     </Pressable>
   );
 
-  const renderDocuments = (docs: typeof history.all, emptyTitle: string) =>
+  const renderDocuments = (docs: DocumentSummary[], emptyTitle: string) =>
     docs.length === 0 ? (
       <EmptyState icon="file-outline" title={emptyTitle} compact />
     ) : (
       docs.map((d, i) => (
         <DocumentRow
           key={d.id}
-          document={d}
+          document={{ number: d.number ?? '', date: d.date!, status: d.status as DocStatus, totals: { grandTotal: d.grandTotal as Money } }}
           partyName={party.name}
           divider={i < docs.length - 1}
-          onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
+          onPress={() => router.push(detailRouteFor(d.kind as DocumentKind, d.id!) as never)}
         />
       ))
     );
+  const listRoute: Partial<Record<DocumentKind, string>> = {
+    quote: '/(app)/sales/quotes',
+    salesOrder: '/(app)/sales/orders',
+    invoice: '/(app)/sales/invoices',
+    salesReturn: '/(app)/sales/returns',
+    purchaseOrder: '/(app)/purchases/orders',
+    goodsReceipt: '/(app)/purchases/receipts',
+    purchaseBill: '/(app)/purchases/bills',
+    purchaseReturn: '/(app)/purchases/returns',
+  };
 
   const headerCard = (
     <>
@@ -188,7 +208,7 @@ export function PartyDetail({ party }: { party: Party }) {
         label={isCustomer ? tr('contacts:detail.totalInvoiced') : tr('contacts:detail.totalPurchased')}
         value={lifetimeValue}
         icon="chart-line"
-        caption={tr('contacts:detail.documentCount', { count: history.invoices.length })}
+        caption={tr('contacts:detail.documentCount', { count: billCount })}
       />
     </StatRow>
     </>
@@ -221,21 +241,24 @@ export function PartyDetail({ party }: { party: Party }) {
     {shownTab === 'documents' ? (
       <View style={{ gap: t.spacing.lg }}>
         {[
-          { title: isCustomer ? tr('nav:title.quotations') : tr('nav:title.purchaseOrders'), docs: isCustomer ? history.quotes : history.orders },
-          { title: isCustomer ? tr('nav:title.salesOrders') : tr('nav:title.goodsReceipts'), docs: isCustomer ? history.orders : history.deliveries },
-          { title: isCustomer ? tr('nav:title.invoices') : tr('contacts:detail.bills'), docs: history.invoices },
-          { title: tr('contacts:detail.returns'), docs: history.returns },
+          { title: isCustomer ? tr('nav:title.quotations') : tr('nav:title.purchaseOrders'), pages: quotes, kind: (isCustomer ? 'quote' : 'purchaseOrder') as DocumentKind },
+          { title: isCustomer ? tr('nav:title.salesOrders') : tr('nav:title.goodsReceipts'), pages: orders, kind: (isCustomer ? 'salesOrder' : 'goodsReceipt') as DocumentKind },
+          { title: isCustomer ? tr('nav:title.invoices') : tr('contacts:detail.bills'), pages: bills, kind: billKind },
+          { title: tr('contacts:detail.returns'), pages: returns, kind: (isCustomer ? 'salesReturn' : 'purchaseReturn') as DocumentKind },
         ]
-          .filter((g) => g.docs.length > 0)
+          .filter((g) => g.pages.rows.length > 0)
           .map((g) => (
             <View key={g.title}>
               <Text variant="caption" tone="muted" weight="600" style={{ marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                 {g.title}
               </Text>
-              <Card padded={false}>{renderDocuments(g.docs, tr('contacts:detail.noneYet'))}</Card>
+              <Card padded={false}>{renderDocuments(g.pages.rows, tr('contacts:detail.noneYet'))}</Card>
+              {g.pages.hasNextPage && listRoute[g.kind] ? (
+                <Button title={tr('common:action.seeAll')} variant="ghost" size="sm" onPress={() => router.push(`${listRoute[g.kind]}?party=${party.id}` as never)} />
+              ) : null}
             </View>
           ))}
-        {history.all.length === 0 ? (
+        {[quotes, orders, bills, returns].every((g) => !g.isLoading && g.rows.length === 0) ? (
           <Card padded={false}>
             <EmptyState illustration="no-documents" icon="file-outline" title={tr('contacts:detail.noDocuments')} compact />
           </Card>

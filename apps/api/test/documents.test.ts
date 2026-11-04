@@ -246,7 +246,7 @@ describe('documents: numbering and lifecycle', () => {
     expect(all.status).toBe(200);
     // A cancelled invoice is counted but adds nothing to the total.
     expect(all.body).toMatchObject({ count: 3, total: { minor: 236000 * 2, currency: 'INR' } });
-    expect(all.body.byStatus).toEqual(expect.arrayContaining([{ status: 'overdue', count: 1 }, { status: 'cancelled', count: 1 }]));
+    expect(all.body.byStatus).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'overdue', count: 1, total: { minor: 236000, currency: 'INR' } }), expect.objectContaining({ status: 'cancelled', count: 1 })]));
     // A status filter narrows the count and total, never the chips.
     const overdue = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice', status: 'overdue' } });
     expect(overdue.body).toMatchObject({ count: 1, total: { minor: 236000 } });

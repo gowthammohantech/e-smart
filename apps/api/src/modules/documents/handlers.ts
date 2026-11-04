@@ -313,7 +313,7 @@ export const documentsHandlers = defineHandlers({
       count: counted.reduce((a, r) => a + r.count, 0),
       // A cancelled or rejected document no longer counts towards what was billed.
       total: money(counted.filter((r) => r.status !== 'cancelled' && r.status !== 'rejected').reduce((a, r) => a + Number(r.total), 0), base),
-      byStatus: rows.map((r) => ({ status: r.status, count: r.count })).sort((a, b) => a.status.localeCompare(b.status)),
+      byStatus: rows.map((r) => ({ status: r.status, count: r.count, total: money(Number(r.total), base) })).sort((a, b) => a.status.localeCompare(b.status)),
     };
   },
 
