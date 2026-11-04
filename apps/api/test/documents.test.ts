@@ -210,6 +210,20 @@ describe('documents: numbering and lifecycle', () => {
     expect(dup.body.sourceDocumentId).toBeUndefined();
   });
 
+  it('refuses a document dated before the one it was made from', async () => {
+    const m = await moneySetup(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    const quote = await t.post(`${m.c}/documents`, invoiceBody(m, { kind: 'quote', status: 'sent' }), { token: m.token });
+    const order = await t.post(`${m.c}/documents/${quote.body.id}/convert`, { targetKind: 'salesOrder' }, { token: m.token });
+    expect(order.status).toBe(201);
+    const url = `${m.c}/documents/${order.body.id}`;
+    const earlier = await t.patch(url, invoiceBody(m, { kind: 'salesOrder', date: '2026-09-28' }), { token: m.token });
+    expect(earlier.status).toBe(422);
+    expect(earlier.body.issues).toEqual([expect.objectContaining({ field: 'date', message: expect.stringContaining('2026-09-29') })]);
+    const sameDay = await t.patch(url, invoiceBody(m, { kind: 'salesOrder', date: '2026-09-29' }), { token: m.token });
+    expect(sameDay.status).toBe(200);
+  });
+
   it('lists with filters, derived statuses and a cursor', async () => {
     const m = await moneySetup(t);
     t.setNow('2026-09-29T10:00:00Z');

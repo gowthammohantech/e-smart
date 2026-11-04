@@ -287,8 +287,10 @@ export async function prepareDocument(
   if (f.validUntil && f.validUntil < f.date) blocking('validUntil', `Valid until cannot be before the document date (${f.date})`);
 
   if (f.sourceDocumentId) {
-    const [src] = await db.select({ id: D.id }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
+    const [src] = await db.select({ id: D.id, date: D.date, number: D.number }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
+    // What a document is made from (the quote behind an order, the invoice behind a return) came first.
+    else if (f.date < src.date) blocking('date', `Can't be before ${src.date}, the date of ${src.number.trim()} it was made from`);
   }
 
   const categories = (await db.select().from(schema.taxCategories).where(eq(schema.taxCategories.companyId, company.id))).map(taxCategoryCore);
