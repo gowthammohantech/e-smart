@@ -1,9 +1,11 @@
 # The API, web app and admin console for local Docker runs (docker-compose.yml).
-# One install of the workspace, then a target per app:
+# One install of the workspace, then a target per app. It lives here, not at the
+# repository root, because Railway builds any root Dockerfile it finds in place of
+# Railpack. Build from the root:
 #
-#   docker build --target api .
-#   docker build --target web --build-arg EXPO_PUBLIC_API_URL=http://localhost:4000 .
-#   docker build --target admin --build-arg VITE_API_URL=http://localhost:4000 .
+#   docker build -f docker/Dockerfile --target api .
+#   docker build -f docker/Dockerfile --target web --build-arg EXPO_PUBLIC_API_URL=http://localhost:4000 .
+#   docker build -f docker/Dockerfile --target admin --build-arg VITE_API_URL=http://localhost:4000 .
 #
 # The web and admin builds compile the API address into the bundle, so it is a
 # build argument: the address the browser uses, not one inside the Docker network.

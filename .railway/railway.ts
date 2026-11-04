@@ -10,9 +10,9 @@ import { defineRailway, preserve, project, service } from 'railway/iac';
  * asks for, and the image export then fails on a missing /opt/corepack.
  */
 /**
- * Every service builds with Railpack. The root Dockerfile is for local Docker
- * runs (docker-compose.yml); left to detect, Railway would build that instead,
- * and its last stage (the admin static server) has no package.json to start from.
+ * Every service builds with Railpack. The Dockerfile for local Docker runs stays
+ * in docker/: at the repository root Railway builds it whatever this says, and its
+ * last stage (the admin static server) has no package.json to start from.
  */
 const railpack = (buildCommand: string) => ({ builder: 'RAILPACK' as const, buildCommand });
 

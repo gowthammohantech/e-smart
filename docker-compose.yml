@@ -44,13 +44,13 @@ services:
     image: axllent/mailpit:latest
     ports: ['1025:1025', '8025:8025']
 
-  # The apps themselves (Dockerfile). `docker compose --profile apps up -d --build`
+  # The apps themselves (docker/Dockerfile). `docker compose --profile apps up -d --build`
   # runs everything; without the profile only the services above start, for running
   # the apps on the host as before. They read apps/api/.env, with the database
   # reached over the Docker network.
   migrate:
     profiles: [apps]
-    build: { context: ., target: api }
+    build: { context: ., dockerfile: docker/Dockerfile, target: api }
     env_file: apps/api/.env
     environment:
       DATABASE_URL: postgres://esmart:esmart@postgres:5432/${API_DB_NAME:-esmart_site}
@@ -60,7 +60,7 @@ services:
 
   api:
     profiles: [apps]
-    build: { context: ., target: api }
+    build: { context: ., dockerfile: docker/Dockerfile, target: api }
     env_file: apps/api/.env
     environment:
       DATABASE_URL: postgres://esmart:esmart@postgres:5432/${API_DB_NAME:-esmart_site}
@@ -78,6 +78,7 @@ services:
     profiles: [apps]
     build:
       context: .
+      dockerfile: docker/Dockerfile
       target: web
       args: { EXPO_PUBLIC_API_URL: 'http://localhost:4000' }
     ports: ['8081:8081']
@@ -87,6 +88,7 @@ services:
     profiles: [apps]
     build:
       context: .
+      dockerfile: docker/Dockerfile
       target: admin
       args: { VITE_API_URL: 'http://localhost:4000' }
     ports: ['5174:5174']
