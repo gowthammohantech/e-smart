@@ -1,4 +1,5 @@
 import { consolidateB2cs, type Gstr1Row, type Gstr1Summary } from '@esmart/core/domain/gstr1';
+import type { AmendedRow } from '@esmart/core/domain/gstr1Amend';
 import { uqcFor } from '@esmart/core/domain/eInvoice';
 
 /** The portal's amounts are rupees with two decimals. */
@@ -31,7 +32,8 @@ function byKey<T>(items: T[], key: (t: T) => string): Map<string, T[]> {
 
 /**
  * GSTR-1 in the JSON the GST portal's offline tool imports (`b2b`, `b2cl`,
- * `b2cs`, `exp`, `cdnr`, `cdnur`, `nil`, `hsn`, `doc_issue`), from core's
+ * `b2cs`, `exp`, `cdnr`, `cdnur`, `nil`, `hsn`, `doc_issue`, and the amendment
+ * tables `b2ba`, `b2cla`, `b2csa`, `expa`, `cdnra`, `cdnura`), from core's
  * summary. B2CS is consolidated by place of supply and rate (`consolidateB2cs`).
  */
 export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
@@ -110,5 +112,42 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
     }));
   const at = advanceTable(summary.advances.received);
   const txpd = advanceTable(summary.advances.adjusted);
-  return { gstin, fp: period, version: 'GST3.1.6', hash: 'hash', b2b, b2cl, b2cs, exp, cdnr, cdnur, nil, hsn, doc_issue, ...(at.length && { at }), ...(txpd.length && { txpd }) };
+
+  // Amendments: each changed document with its original number and date, as now revised.
+  const a = summary.amendments;
+  const orig = (d: Gstr1Row[]) => d[0] as AmendedRow;
+  const b2ba = a ? [...byKey(byDocument(a.b2ba), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, inv: docs.map((d) => ({ oinum: orig(d).originalNumber, oidt: dmy(orig(d).originalDate), ...invoice(d) })) })) : [];
+  const b2cla = a
+    ? [...byKey(byDocument(a.b2cla), (d) => d[0].placeOfSupply).entries()].map(([pos, docs]) => ({
+        pos,
+        inv: docs.map((d) => ({ oinum: orig(d).originalNumber, oidt: dmy(orig(d).originalDate), inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d) })),
+      }))
+    : [];
+  const expa = a
+    ? [...byKey(byDocument(a.expa), (d) => (d.some((r) => r.igst.minor > 0) ? 'WPAY' : 'WOPAY')).entries()].map(([exp_typ, docs]) => ({
+        exp_typ,
+        inv: docs.map((d) => ({ oinum: orig(d).originalNumber, oidt: dmy(orig(d).originalDate), inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: i.itm_det.csamt })) })),
+      }))
+    : [];
+  const cdnra = a ? [...byKey(byDocument(a.cdnra), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, nt: docs.map((d) => ({ ont_num: orig(d).originalNumber, ont_dt: dmy(orig(d).originalDate), ...note(d) })) })) : [];
+  const cdnura = a
+    ? byDocument(a.cdnura).map((d) => {
+        const exported = !!d[0].exported;
+        const typ = exported ? (d.some((r) => r.igst.minor > 0) ? 'EXPWP' : 'EXPWOP') : 'B2CL';
+        const { pos, ...rest } = note(d);
+        return { ont_num: orig(d).originalNumber, ont_dt: dmy(orig(d).originalDate), typ, ...rest, ...(exported ? {} : { pos }) };
+      })
+    : [];
+  // B2CSA restates each original month's consumer supplies by place of supply and rate.
+  const b2csa = (a?.b2csa ?? []).flatMap((m) =>
+    consolidateB2cs(m.rows, homeState, 'INR').map((l) => ({
+      omon: m.originalPeriod,
+      sply_ty: l.supplyType,
+      pos: l.placeOfSupply,
+      typ: 'OE',
+      itms: [{ rt: l.rate, txval: r2(l.taxableValue.minor), iamt: r2(l.igst.minor), camt: r2(l.cgst.minor), samt: r2(l.sgst.minor), csamt: r2(l.cess.minor) }],
+    })),
+  );
+  const amended = { ...(b2ba.length && { b2ba }), ...(b2cla.length && { b2cla }), ...(b2csa.length && { b2csa }), ...(expa.length && { expa }), ...(cdnra.length && { cdnra }), ...(cdnura.length && { cdnura }) };
+  return { gstin, fp: period, version: 'GST3.1.6', hash: 'hash', b2b, b2cl, b2cs, exp, cdnr, cdnur, nil, hsn, doc_issue, ...(at.length && { at }), ...(txpd.length && { txpd }), ...amended };
 }

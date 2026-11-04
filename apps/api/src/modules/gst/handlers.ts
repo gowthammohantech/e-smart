@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { and, eq, gte, inArray, lte, ne } from 'drizzle-orm';
-import { gstr1Summary, GSTR1_KINDS, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Summary } from '@esmart/core/domain/gstr1';
+import { gstr1Summary, GSTR1_KINDS, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Row, type Gstr1Summary } from '@esmart/core/domain/gstr1';
+import { gstr1Amendments, type Gstr1Amendments, type ReportedRow } from '@esmart/core/domain/gstr1Amend';
 import type { Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
@@ -36,14 +37,41 @@ export function periodRange(period: string): { from: string; to: string } {
  * state. Without it, the whole company, as the GSTR-1 screen shows it.
  */
 export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date, gstin?: string): Promise<Gstr1Summary> {
-  return gstr1ForRange(db, company, periodRange(period), now, { gstin });
+  const summary = await gstr1ForRange(db, company, periodRange(period), now, { gstin });
+  if (!gstin) return summary;
+  const amendments = await amendmentsFor(db, company, gstin, period, now);
+  return amendments ? { ...summary, amendments } : summary;
+}
+
+/**
+ * The amendment tables for a GSTIN's return: what its earlier filed GSTR-1s reported (kept with each
+ * return as `reported`), against those documents worked out again today. Undefined when nothing changed.
+ */
+export async function amendmentsFor(db: DbOrTx, company: CompanyRow, gstin: string, period: string, now: Date): Promise<Gstr1Amendments | undefined> {
+  const R = schema.gstReturns;
+  const filed = await db
+    .select({ period: R.period, payload: R.payload })
+    .from(R)
+    .where(and(eq(R.companyId, company.id), eq(R.gstin, gstin), eq(R.returnType, 'gstr1'), eq(R.status, 'filed')));
+  const reported: ReportedRow[] = filed.flatMap((f) => ((f.payload as { reported?: Gstr1Row[] } | null)?.reported ?? []).map((r) => ({ ...r, period: f.period })));
+  if (!reported.length) return undefined;
+  const documentIds = [...new Set(reported.map((r) => r.documentId))];
+  const current = await gstr1ForRange(db, company, { from: '1900-01-01', to: '2999-12-31' }, now, { gstin, documentIds });
+  const rows = GSTR1_TABLES.flatMap((t) => current[t]);
+  const out = gstr1Amendments(reported, rows, period);
+  return out.rows.length || out.b2csa.length ? out : undefined;
+}
+
+/** Every row a return reports, ordinary and amended, to keep with it once filed. */
+export function reportedRows(summary: Gstr1Summary): Gstr1Row[] {
+  return [...GSTR1_TABLES.flatMap((t) => summary[t]), ...(summary.amendments?.rows ?? [])];
 }
 
 /**
  * GSTR-1 over any date range, for one GSTIN's branches or a list of branches (the app's GSTR-1
  * screen picks a range and a branch), as `@esmart/core` gstr1Summary works it out.
  */
-export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { from: string; to: string }, now: Date, opts: { gstin?: string; branchIds?: string[] } = {}): Promise<Gstr1Summary> {
+export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { from: string; to: string }, now: Date, opts: { gstin?: string; branchIds?: string[]; documentIds?: string[] } = {}): Promise<Gstr1Summary> {
   const { gstin } = opts;
   const branchIds = gstin ? await branchesOf(db, company, gstin) : opts.branchIds?.length ? opts.branchIds : undefined;
   const rows =
@@ -52,7 +80,7 @@ export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { fr
       : await db
           .select()
           .from(D)
-          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined))
+          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined, opts.documentIds ? inArray(D.id, opts.documentIds) : undefined))
           .orderBy(D.date, D.number);
   // A note's invoice may be from an earlier period; its value decides the note's table.
   const sourceIds = [...new Set(rows.map((r) => r.sourceDocumentId).filter((id): id is string => !!id && !rows.some((x) => x.id === id)))];
@@ -72,7 +100,8 @@ export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { fr
     items: items.map((i) => ({ id: i.id, name: i.name, type: i.type, unit: i.unit, hsnCode: i.hsnCode ?? undefined }) as Item),
     baseCurrency,
     period: range,
-    advances: await loadAdvanceEvents(db, company, range.to, branchIds),
+    // Reworking given documents (for amendments) needs no advances.
+    advances: opts.documentIds ? [] : await loadAdvanceEvents(db, company, range.to, branchIds),
   });
 }
 

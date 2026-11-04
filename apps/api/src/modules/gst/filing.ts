@@ -12,7 +12,7 @@ import { ReturnsError, type ReturnType } from '../../providers/returns';
 import { periodBounds } from './gstr2b';
 import { build3b, branchesOf } from './gstr3bBuild';
 import { gstnJson } from './gstn';
-import { buildGstr1 } from './handlers';
+import { buildGstr1, reportedRows } from './handlers';
 import { assertCompanyGstin, portalContext, returnsFailure } from './portal';
 
 const R = schema.gstReturns;
@@ -53,10 +53,10 @@ async function upsertReturn(db: DbOrTx, companyId: string, gstin: string, return
 async function payloadFor(db: DbOrTx, company: CompanyRow, gstin: string, returnType: ReturnType, period: string, now: Date) {
   if (returnType === 'gstr1') {
     const summary = await buildGstr1(db, company, period, now, gstin);
-    return { json: { ...gstnJson(summary, gstin, period), totals: { taxableMinor: summary.totals.taxableValue.minor, taxMinor: summary.totals.tax.minor } }, utilization: undefined };
+    return { json: { ...gstnJson(summary, gstin, period), totals: { taxableMinor: summary.totals.taxableValue.minor, taxMinor: summary.totals.tax.minor } }, utilization: undefined, reported: reportedRows(summary) };
   }
   const built = await build3b(db, company, gstin, period, now);
-  return { json: gstr3bJson(built.tables, gstin, built.utilization), utilization: built.utilization };
+  return { json: gstr3bJson(built.tables, gstin, built.utilization), utilization: built.utilization, reported: undefined };
 }
 
 type Filing = { arn: string | null; filedAt: Date; summaryHash?: string };
@@ -201,7 +201,7 @@ export const gstFilingHandlers = defineHandlers({
     const { gstin, period } = ctx.body;
     await assertCompanyGstin(ctx.db, ctx.company, gstin);
     assertNotFiled(await findReturn(ctx.db, ctx.company.id, gstin, returnType, period));
-    const { json, utilization } = await payloadFor(ctx.db, ctx.company, gstin, returnType, period, ctx.now);
+    const { json, utilization, reported } = await payloadFor(ctx.db, ctx.company, gstin, returnType, period, ctx.now);
     const pctx = await portalContext(ctx.db, ctx.deps, ctx.company, gstin);
     // Saving replaces what was saved, so a save whose answer was lost is simply saved again.
     const { referenceId } = await call(() => ctx.deps.providers.returns.save(pctx, returnType, period, json));
@@ -212,7 +212,7 @@ export const gstFilingHandlers = defineHandlers({
       gstin,
       returnType,
       period,
-      { status: status.status === 'error' ? 'failed' : 'saved', payload: { ...json, utilization }, referenceId, lastError: status.errors?.join('; ') || null },
+      { status: status.status === 'error' ? 'failed' : 'saved', payload: { ...json, utilization, reported }, referenceId, lastError: status.errors?.join('; ') || null },
       ctx.now,
     );
     await recordChange(ctx.db, ctx.user, { companyId: ctx.company.id, action: `saved ${returnType.toUpperCase()} for ${period}`, entityType: 'company', entityId: ctx.company.id, entityLabel: gstin, version: ctx.company.version });

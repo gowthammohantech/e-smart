@@ -11,6 +11,7 @@ import { documentsToWire, toCoreDocument } from '../documents/wire';
 import { toCoreExpense } from '../expenses/wire';
 import { loadAdvanceEvents } from './advances';
 import { periodBounds } from './gstr2b';
+import { amendmentsFor } from './handlers';
 
 const D = schema.documents;
 const R = schema.gstReturns;
@@ -83,6 +84,16 @@ export async function build3b(db: DbOrTx, company: CompanyRow, gstin: string, pe
 
   const advances = await loadAdvanceEvents(db, company, to, branchIds);
   const tables = gstr3b({ period, company: core, gstin, baseCurrency: base, documents, expenses, parties, expenseSplit, advances });
+  // GSTR-1 amendments of earlier months change this month's liability: each one's difference is in 3.1(a).
+  for (const c of (await amendmentsFor(db, company, gstin, period, now))?.changes ?? []) {
+    const o = tables.outward.taxable;
+    o.taxable += c.taxable;
+    o.igst += c.igst;
+    o.cgst += c.cgst;
+    o.sgst += c.sgst;
+    o.cess += c.cess;
+    (tables.sources['3.1a'] ??= []).push({ type: 'document', id: c.documentId, kind: c.kind, number: c.number, date: c.date, taxable: c.taxable, igst: c.igst, cgst: c.cgst, sgst: c.sgst, cess: c.cess });
+  }
 
   // What the last return left unused carries into this one's set-off.
   const [prev] = await db.select({ payload: R.payload }).from(R).where(and(eq(R.companyId, company.id), eq(R.gstin, gstin), eq(R.returnType, 'gstr3b'), eq(R.period, previousPeriod(period))));

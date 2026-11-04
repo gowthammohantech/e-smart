@@ -18,6 +18,7 @@ import { Money, money, zero } from '../lib/money';
 import { DateRange, inRange } from '../lib/date';
 import { BusinessDocument, Company, Item, Party } from '../types';
 import { AdvanceEvent, AdvanceRow, advancesForPeriod } from './advanceTax';
+import type { Gstr1Amendments } from './gstr1Amend';
 import { NOTE_KINDS, isCancelled } from './documentStates';
 import { calculateLine, lineTreatment } from './lineCalc';
 import { EXPORT_STATE_CODE } from './eInvoice';
@@ -97,6 +98,8 @@ export type Gstr1Summary = Record<Gstr1Table, Gstr1Row[]> & {
   /** Table 11: tax on advances for services received (11A) and adjusted against invoices (11B). */
   advances: { received: AdvanceRow[]; adjusted: AdvanceRow[] };
   totals: { taxableValue: Money; tax: Money; invoiceValue: Money; documents: number };
+  /** Documents of earlier filed returns changed since: the amendment tables (gstr1Amendments). */
+  amendments?: Gstr1Amendments;
 };
 
 export const GSTR1_TABLES: Gstr1Table[] = ['b2b', 'b2cl', 'b2cs', 'exp', 'cdnr', 'cdnur'];
