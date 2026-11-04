@@ -46,9 +46,18 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
   const [pending, setPending] = useState<{ go: () => void; fromBack?: boolean } | null>(null);
 
   // The extra history entry: whether it is there, and a step back we took ourselves.
-  const history = useRef<{ armed: boolean; ownStep: (() => void) | null }>({ armed: false, ownStep: null });
+  const history = useRef<{ armed: boolean; ownStep: (() => void) | null; waiting: boolean }>({ armed: false, ownStep: null, waiting: false });
+  // The form's own page. Coming back from a page opened on top of it (New item),
+  // the form can have changes before the browser has stepped back to it.
+  const [home] = useState(() => (WEB ? window.location.pathname : ''));
   const arm = () => {
     if (!WEB || history.current.armed) return;
+    if (window.location.pathname !== home) {
+      // Added once the browser is back here, not to the page being left.
+      history.current.waiting = true;
+      return;
+    }
+    history.current.waiting = false;
     // A step back taken while no listener was there to see it has long happened.
     history.current.ownStep = null;
     window.history.pushState({ ...window.history.state, [TRAP]: true }, '', window.location.href);
@@ -86,6 +95,10 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
     if (!WEB || !dirty) return undefined;
     arm();
     const onPop = () => {
+      if (history.current.waiting) {
+        if (window.location.pathname === home) arm();
+        return;
+      }
       const own = history.current.ownStep;
       if (own) {
         history.current.ownStep = null;
