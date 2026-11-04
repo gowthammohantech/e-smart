@@ -12,8 +12,8 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBranches, useDefaultBranchId, useItems, useStockMovements } from '@esmart/app/store/selectors';
-import { stockMapOn, stockOnHand } from '@esmart/core/domain/stockLedger';
+import { useBranches, useDefaultBranchId } from '@esmart/app/store/selectors';
+import { useServerStockLevels, useTrackedItems } from '@esmart/app/remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
@@ -32,11 +32,11 @@ export function StockTransferDesktop() {
   const { run: serverSave } = useServerSave();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
-  const items = useItems().filter((i) => i.trackInventory);
+  // Every tracked item, from the server.
+  const { items } = useTrackedItems();
   const branches = useBranches();
   // From the branch picked in the switcher, to the first other one.
   const defaultBranchId = useDefaultBranchId();
-  const movements = useStockMovements();
   const transferStock = useAppStore((s) => s.transferStock);
 
   const [itemId, setItemId] = useState<string | null>(params.itemId ?? null);
@@ -52,8 +52,11 @@ export function StockTransferDesktop() {
 
   const item = items.find((i) => i.id === itemId);
   // What the source branch holds on the transfer date, not today.
-  const available = item ? (stockMapOn(movements, date, fromBranchId)[item.id] ?? 0) : 0;
-  const atDestination = item && toBranchId ? stockOnHand(item.id, movements, toBranchId) : 0;
+  // On hand at each branch now, from the server, which checks the transfer again on saving.
+  const fromLevels = useServerStockLevels(fromBranchId, !!fromBranchId).data;
+  const toLevels = useServerStockLevels(toBranchId, !!toBranchId).data;
+  const available = item ? (fromLevels?.[item.id] ?? 0) : 0;
+  const atDestination = item && toBranchId ? (toLevels?.[item.id] ?? 0) : 0;
   const qty = Number(quantity) || 0;
   const exceeds = qty > available;
   const canSave = !!itemId && qty > 0 && fromBranchId !== toBranchId && !!toBranchId && !exceeds;

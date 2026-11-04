@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -15,10 +15,15 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Segmented } from '@esmart/ui/components/Field';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '../../../store/selectors';
-import { summarizeStock } from '@esmart/core/domain/reports';
+import { useBaseCurrency } from '../../../store/selectors';
+import { useAppStore } from '../../../store/appStore';
+import { useItemPages, useServerReport } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
+import { today } from '@esmart/core/lib/date';
+import { zero, type Money } from '@esmart/core/lib/money';
+import type { Item } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../../navigation/queryParams';
 
@@ -31,9 +36,8 @@ export default function InventoryTab() {
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  const items = useItems();
-  const movements = useStockMovements(undefined, { branchScoped: true });
-  const stock = useStockLevels();
+  // The branch picked in the header, as the device's figures were.
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
 
   const [query, setQuery] = useState('');
   // The stock filter lives in the URL (`?filter=low`); search stays local.
@@ -42,19 +46,23 @@ export default function InventoryTab() {
   const setFilter = (f: Filter) => setParams({ filter: f === 'all' ? undefined : f });
   const [actionsOpen, setActionsOpen] = useState(false);
 
-  const report = useMemo(() => summarizeStock(items, movements, baseCurrency), [items, movements, baseCurrency]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items.filter((i) => {
-      const onHand = stock[i.id] ?? 0;
-      if (filter === 'low' && !(i.trackInventory && isLowStock(i, onHand) && onHand > 0)) return false;
-      if (filter === 'out' && !(i.trackInventory && onHand <= 0)) return false;
-      if (filter === 'services' && i.trackInventory) return false;
-      if (q && !`${i.name} ${i.sku} ${i.barcode ?? ''}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [items, stock, filter, query]);
+  // Worked out by the server: the figures from its stock report, the list a page at a time.
+  const day = today();
+  const stockReport = useServerReport<{ totalValue?: Money; lowCount?: number; outCount?: number; trackedCount?: number }>('stock', { from: day, to: day, branchId }).data;
+  const report = {
+    totalValue: stockReport?.totalValue ?? zero(baseCurrency),
+    lowCount: stockReport?.lowCount ?? 0,
+    outCount: stockReport?.outCount ?? 0,
+    trackedCount: stockReport?.trackedCount ?? 0,
+  };
+  const search = useDebounced(query);
+  const pages = useItemPages({ q: search, branchId, stock: filter === 'low' ? 'low' : filter === 'out' ? 'out' : filter === 'services' ? 'untracked' : undefined });
+  const filtered = pages.rows as unknown as (Item & { stockOnHand?: number })[];
+  const stock: Record<string, number> = Object.fromEntries(filtered.map((i) => [i.id, i.stockOnHand ?? 0]));
+  const noneAtAll = filter === 'all' && !search && !pages.isLoading && !filtered.length;
+  const loadMore = () => {
+    if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -63,6 +71,11 @@ export default function InventoryTab() {
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        // The next page loads before the end is reached, so scrolling rarely waits.
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600) loadMore();
+        }}
+        scrollEventThrottle={200}
       >
         <StatRow>
           <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={tr('inventory:hub.trackedItems', { count: report.trackedCount })} />
@@ -108,14 +121,16 @@ export default function InventoryTab() {
         <SectionHeader title={tr('inventory:hub.itemCount', { count: filtered.length })} action={tr('inventory:hub.movements')} onAction={() => router.push('/(app)/inventory/movements')} />
 
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {pages.isLoading && !filtered.length ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-items"
               icon="package-variant"
               title={tr('inventory:hub.nothingHere')}
-              message={items.length === 0 ? tr('inventory:hub.emptyFirst') : tr('inventory:hub.emptyFilter')}
-              actionLabel={items.length === 0 ? tr('common:quickAction.addItem') : undefined}
-              onAction={items.length === 0 ? () => router.push('/(app)/catalog/items/new') : undefined}
+              message={noneAtAll ? tr('inventory:hub.emptyFirst') : tr('inventory:hub.emptyFilter')}
+              actionLabel={noneAtAll ? tr('common:quickAction.addItem') : undefined}
+              onAction={noneAtAll ? () => router.push('/(app)/catalog/items/new') : undefined}
               compact
             />
           ) : (
@@ -198,6 +213,7 @@ export default function InventoryTab() {
             })
           )}
         </Card>
+        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
       </ScrollView>
 
       <Fab icon="plus" onPress={() => setActionsOpen(true)} />

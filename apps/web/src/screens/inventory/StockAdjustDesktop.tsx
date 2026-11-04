@@ -11,7 +11,8 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
+import { useBranches, useDefaultBranchId } from '@esmart/app/store/selectors';
+import { useTrackedItems } from '@esmart/app/remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
@@ -29,9 +30,9 @@ export function StockAdjustDesktop() {
   const { run: serverSave, saving } = useServerSave();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
-  const items = useItems().filter((i) => i.trackInventory);
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const branches = useBranches();
-  const stock = useStockLevels();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const defaultBranchId = useDefaultBranchId();

@@ -14,7 +14,8 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
+import { useBaseCurrency, useDefaultBranchId } from '../../../store/selectors';
+import { useTrackedItems } from '../../../remote/queries';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
@@ -28,8 +29,8 @@ export default function OpeningStock() {
   const { run: serverSave, saving, blocked } = useServerSave();
   const insets = useSafeAreaInsets();
 
-  const items = useItems().filter((i) => i.trackInventory);
-  const stock = useStockLevels();
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);

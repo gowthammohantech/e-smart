@@ -14,7 +14,8 @@ import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import type { Item } from '@esmart/core/types';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
+import { useBaseCurrency, useDefaultBranchId } from '@esmart/app/store/selectors';
+import { useTrackedItems } from '@esmart/app/remote/queries';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
@@ -32,8 +33,8 @@ export function OpeningStockDesktop() {
   const goBack = useGoBack();
   const { run: serverSave, saving } = useServerSave();
 
-  const items = useItems().filter((i) => i.trackInventory);
-  const stock = useStockLevels();
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);

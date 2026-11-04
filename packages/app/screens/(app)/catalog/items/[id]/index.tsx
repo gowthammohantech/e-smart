@@ -23,7 +23,10 @@ import {
   useStockMovements,
   useTaxCategories,
 } from '../../../../../store/selectors';
+import { useItemLedger, useItemRecord } from '../../../../../remote/queries';
+import { LoadingView } from '../../../../../components/LoadingView';
 import { isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
+import type { Money } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { multiply } from '@esmart/core/lib/money';
@@ -42,6 +45,8 @@ export default function ItemDetail() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = useItem(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = useItemRecord(id);
   const baseCurrency = useBaseCurrency();
   // The item's own id: the route's may be the one it had before the server saved it.
   const movements = useStockMovements(item?.id ?? id, { branchScoped: true });
@@ -54,7 +59,11 @@ export default function ItemDetail() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const ledger = useMemo(() => (item ? ledgerFor(item.id, movements).reverse() : []), [item, movements]);
+  // Stock, value, quantity sold and the movements come from the server; the device's figures until it answers.
+  const activeBranchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const server = useItemLedger(item?.id, activeBranchId, hasInventory && !!item?.trackInventory).data;
+  const deviceLedger = useMemo(() => (item ? ledgerFor(item.id, movements).reverse() : []), [item, movements]);
+  const ledger = (server?.rows as typeof deviceLedger | undefined) ?? deviceLedger;
 
   const soldQty = useMemo(() => {
     if (!item) return 0;
@@ -65,6 +74,7 @@ export default function ItemDetail() {
       .reduce((a, l) => a + l.quantity, 0);
   }, [invoices, item]);
 
+  if (!item && remote.isLoading) return <LoadingView />;
   if (!item) {
     return (
       <View style={{ flex: 1 }}>
@@ -74,9 +84,9 @@ export default function ItemDetail() {
     );
   }
 
-  const onHand = stockOnHand(item.id, movements);
-  const value = stockValue(item, movements, baseCurrency);
-  const low = isLowStock(item, onHand);
+  const onHand = server?.onHand ?? stockOnHand(item.id, movements);
+  const value = (server?.value as Money | undefined) ?? stockValue(item, movements, baseCurrency);
+  const low = server?.low ?? isLowStock(item, onHand);
   const category = taxCategories.find((c) => c.id === item.taxCategoryId);
   // The share of the sale price that's profit, as the item form shows it.
   const hasMargin = item.salePrice.minor > 0 && item.purchasePrice.minor > 0;
@@ -153,7 +163,7 @@ export default function ItemDetail() {
             icon="warehouse"
             caption={item.reorderLevel > 0 ? tr('inventory:detail.reorderAt', { qty: formatQty(item.reorderLevel) }) : undefined}
           />
-          <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={tr('inventory:detail.soldAllTime', { qty: formatQty(soldQty) })} />
+          <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={tr('inventory:detail.soldAllTime', { qty: formatQty(server?.soldQuantity ?? soldQty) })} />
         </StatRow>
       </>
     ) : null}

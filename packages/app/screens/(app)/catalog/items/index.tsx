@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
@@ -9,9 +9,12 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Badge } from '@esmart/ui/components/Badge';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
-import { Cell, Column, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
+import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
+import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
-import { useItems, useStockLevels } from '../../../../store/selectors';
+import { useItemPages } from '../../../../remote/queries';
+import { useDebounced } from '../../../../components/useDebounced';
+import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
@@ -23,18 +26,25 @@ export default function ItemList() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const router = useRouter();
-  const items = useItems();
   const [query, setQuery] = useState('');
   // Goods and services in their own tabs, the way Contacts splits customers and suppliers.
   const [tab, setTab] = useState<'goods' | 'service'>('goods');
   const desktop = useIsDesktop();
-  const stock = useStockLevels();
-
-  const inTab = useMemo(() => items.filter((i) => i.type === tab), [items, tab]);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? inTab.filter((i) => `${i.name} ${i.sku} ${i.hsnCode ?? ''}`.toLowerCase().includes(q)) : inTab;
-  }, [inTab, query]);
+  // Read from the server by name, 50 at a time, each with what's on hand; search runs there too.
+  const search = useDebounced(query);
+  const pages = useItemPages({ type: tab, q: search });
+  const filtered = pages.rows as unknown as (Item & { stockOnHand?: number })[];
+  const stock: Record<string, number> = Object.fromEntries(filtered.map((i) => [i.id, i.stockOnHand ?? 0]));
+  // Nothing in this tab at all, as against nothing matching the search.
+  const inTab = search || pages.isLoading ? [true] : filtered;
+  const loadMore = () => {
+    if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+  };
+  const moreFooter = pages.hasNextPage ? (
+    <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
+      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+    </View>
+  ) : null;
 
   const tabs = (
     <Segmented
@@ -66,10 +76,9 @@ export default function ItemList() {
             </View>
           </View>
           <DataTable
-            pageSize={TABLE_PAGE_SIZE}
             columns={([
-              { key: 'name', header: tr('common:table.name'), flex: 2, render: (i) => <Cell weight="600">{i.name}</Cell>, sortValue: (i) => i.name },
-              { key: 'sku', header: tr('common:table.sku'), width: 130, render: (i) => <Cell tone="muted">{i.sku}</Cell>, sortValue: (i) => i.sku },
+              { key: 'name', header: tr('common:table.name'), flex: 2, render: (i) => <Cell weight="600">{i.name}</Cell> },
+              { key: 'sku', header: tr('common:table.sku'), width: 130, render: (i) => <Cell tone="muted">{i.sku}</Cell> },
               { key: 'hsn', secondary: true, header: tr('common:table.hsn'), width: 120, render: (i) => <Cell tone="muted">{i.hsnCode || '—'}</Cell> },
               {
                 key: 'type',
@@ -78,7 +87,6 @@ export default function ItemList() {
                 width: 120,
                 render: (i) =>
                   i.type === 'service' ? <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" /> : <Cell tone="muted">{i.unit}</Cell>,
-                sortValue: (i) => i.type,
               },
               {
                 key: 'onHand',
@@ -90,7 +98,6 @@ export default function ItemList() {
                     {i.trackInventory ? `${formatQty(stock[i.id] ?? 0)} ${i.unit}` : '—'}
                   </Cell>
                 ),
-                sortValue: (i) => (i.trackInventory ? stock[i.id] ?? 0 : -1),
               },
               {
                 key: 'price',
@@ -98,27 +105,33 @@ export default function ItemList() {
                 width: 150,
                 align: 'right',
                 render: (i) => <Cell weight="600" mono>{formatMoney(i.salePrice)}</Cell>,
-                sortValue: (i) => i.salePrice.minor,
               },
               // A service carries no stock (nor a goods unit to show as its type), so its tab leaves those out.
-            ] satisfies Column<(typeof items)[number]>[]).filter((c) => tab === 'goods' || (c.key !== 'onHand' && c.key !== 'type'))}
+            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => tab === 'goods' || (c.key !== 'onHand' && c.key !== 'type'))}
             rows={filtered}
             rowKey={(i) => i.id}
-            initialSort={{ key: 'name', dir: 'asc' }}
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
             rowLabel={(i) => i.name}
-            empty={<EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
+            empty={pages.isLoading ? <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} /> : <EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
           />
+          {moreFooter}
         </View>
       ) : (
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120, gap: t.spacing.md }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         keyboardShouldPersistTaps="handled"
+        // The next page loads before the end is reached, so scrolling rarely waits.
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600) loadMore();
+        }}
+        scrollEventThrottle={200}
       >
         {tabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
-        {filtered.length === 0 ? (
+        {pages.isLoading && !filtered.length ? (
+          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+        ) : filtered.length === 0 ? (
           <EmptyState
             illustration="no-items"
             title={emptyTitle}
@@ -141,6 +154,7 @@ export default function ItemList() {
             ))}
           </Card>
         )}
+        {moreFooter}
       </ScrollView>
       )}
       {/* A new one starts on the tab it was added from. */}

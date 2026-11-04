@@ -1298,6 +1298,7 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
         - { name: barcode, in: query, description: 'Exact match, used by the scanner', schema: { type: string } }
         - { name: lowStock, in: query, schema: { type: boolean } }
+        - { name: stock, in: query, description: 'low: in stock but at or under its reorder level; out: tracked and none on hand; tracked: every item that keeps stock; untracked: services and items without stock', schema: { type: string, enum: [low, out, tracked, untracked] } }
         - { name: branchId, in: query, description: Branch for `stockOnHand`, schema: { type: string } }
         - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
@@ -2543,6 +2544,38 @@ paths:
                         reorderLevel: { type: number }
                         low: { type: boolean }
                         value: { $ref: '#/components/schemas/Money' }
+  /companies/{companyId}/items/{id}/ledger:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }, { $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Inventory]
+      operationId: getItemLedger
+      x-plan-module: inventory
+      summary: One item's stock on hand, value and movements with a running balance
+      description: The movements come newest first, at most 200; the balance after each is counted from the first.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [onHand, value, low, soldQuantity, rows]
+                properties:
+                  onHand: { type: number }
+                  value: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "Weighted-average value of what is on hand, in base currency" }
+                  low: { type: boolean }
+                  soldQuantity: { type: number, description: "Sold on finalised invoices, all time" }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      required: [movement, delta, balance]
+                      properties:
+                        movement: { $ref: '#/components/schemas/StockMovement' }
+                        delta: { type: number }
+                        balance: { type: number }
   /companies/{companyId}/stock/movements:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -2557,6 +2590,7 @@ paths:
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
@@ -5410,6 +5444,8 @@ components:
         companyId: { type: string }
         branchId: { type: string }
         itemId: { type: string }
+        itemName: { type: string, description: "On lists: the item's name, so a list needn't look each one up" }
+        itemSku: { type: string, description: "On lists: the item's SKU" }
         type: { $ref: '#/components/schemas/StockMovementType' }
         quantity: { type: number }
         unitCost: { $ref: '#/components/schemas/Money' }

@@ -100,7 +100,7 @@ async function usage(db: DbOrTx, companyId: string, itemId: string): Promise<str
  */
 export const catalogHandlers = defineHandlers({
   async listItems(ctx) {
-    const { type, status, barcode, lowStock, branchId, q, limit, cursor } = ctx.query;
+    const { type, status, barcode, lowStock, stock, branchId, q, limit, cursor } = ctx.query;
     const onHand = onHandSql(ctx.company.id, I.id, branchId);
     const k = keyset({ cursor, limit, sort: I.name, id: I.id, order: 'asc' });
     const filters = [eq(I.companyId, ctx.company.id)];
@@ -111,6 +111,11 @@ export const catalogHandlers = defineHandlers({
       const low = and(eq(I.trackInventory, true), gt(I.reorderLevel, '0'), lte(onHand, I.reorderLevel))!;
       filters.push(lowStock ? low : not(low));
     }
+    // As the inventory tab's filters read: low is still in stock, out has none.
+    if (stock === 'low') filters.push(and(eq(I.trackInventory, true), gt(I.reorderLevel, '0'), lte(onHand, I.reorderLevel), gt(onHand, '0'))!);
+    if (stock === 'out') filters.push(and(eq(I.trackInventory, true), lte(onHand, '0'))!);
+    if (stock === 'tracked') filters.push(eq(I.trackInventory, true));
+    if (stock === 'untracked') filters.push(eq(I.trackInventory, false));
     if (q) {
       const like = `%${q.trim()}%`;
       filters.push(or(ilike(I.name, like), ilike(I.sku, like), ilike(I.barcode, like), ilike(I.hsnCode, like), ilike(I.description, like))!);

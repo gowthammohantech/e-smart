@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -8,14 +8,18 @@ import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Button } from '@esmart/ui/components/Button';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import type { StockMovement, StockMovementType } from '@esmart/core/types';
 import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger';
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
-import { useBranches, useItems, useStockMovements } from '@esmart/app/store/selectors';
+import { useBranches } from '@esmart/app/store/selectors';
+import { useAppStore } from '@esmart/app/store/appStore';
+import { useMovementPages } from '@esmart/app/remote/queries';
+import { useDebounced } from '@esmart/app/components/useDebounced';
 import { useQueryParams } from '@esmart/app/navigation/queryParams';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
@@ -27,11 +31,9 @@ const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIs
  */
 export function StockMovementsDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const router = useRouter();
 
-  const movements = useStockMovements(undefined, { branchScoped: true });
-  const items = useItems();
   const branches = useBranches();
 
   const [query, setQuery] = useState('');
@@ -40,19 +42,14 @@ export function StockMovementsDesktop() {
   const type = (params.type ?? 'all') as StockMovementType | 'all';
   const setType = (ty: StockMovementType | 'all') => setParams({ type: ty === 'all' ? undefined : ty });
 
-  const itemOf = useCallback((id: string) => items.find((i) => i.id === id), [items]);
+  // Read from the server 50 at a time, newest first; type and search are filtered there, and each row names its item.
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const search = useDebounced(query);
+  const pages = useMovementPages({ branchId, type: type === 'all' ? undefined : type, q: search });
+  const filtered = pages.rows as unknown as (StockMovement & { itemName?: string; itemSku?: string })[];
+  const names = useMemo(() => new Map(filtered.map((m) => [m.itemId, { name: m.itemName ?? '', sku: m.itemSku ?? '' }])), [filtered]);
+  const itemOf = useCallback((id: string) => (names.has(id) ? { id, ...names.get(id)! } : undefined), [names]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return movements
-      .filter((m) => {
-        if (type !== 'all' && m.type !== type) return false;
-        if (!q) return true;
-        const item = itemOf(m.itemId);
-        return `${item?.name ?? ''} ${item?.sku ?? ''} ${m.referenceNumber ?? ''} ${m.notes ?? ''}`.toLowerCase().includes(q);
-      })
-      .sort((a, b) => (b.date === a.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
-  }, [movements, query, type, itemOf]);
 
   const showBranch = branches.length > 1;
 
@@ -101,27 +98,26 @@ export function StockMovementsDesktop() {
           </View>
         </View>
 
-        {filtered.length === 0 ? (
+        {pages.isLoading && !filtered.length ? (
+          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+        ) : filtered.length === 0 ? (
           <Card padded={false}>
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />
           </Card>
         ) : (
           <DataTable<StockMovement>
-            pageSize={TABLE_PAGE_SIZE}
             scroll={false}
             columns={[
               {
                 key: 'date',
                 header: 'Date',
                 width: 110,
-                sortValue: (m) => m.date,
                 render: (m) => <Cell tone="muted">{formatDate(m.date, 'dd MMM yyyy')}</Cell>,
               },
               {
                 key: 'item',
                 header: 'Item',
                 flex: 3,
-                sortValue: (m) => itemOf(m.itemId)?.name ?? '',
                 render: (m) => {
                   const item = itemOf(m.itemId);
                   return (
@@ -136,7 +132,6 @@ export function StockMovementsDesktop() {
                 key: 'type',
                 header: 'Type',
                 flex: 1.6,
-                sortValue: (m) => MOVEMENT_LABELS[m.type],
                 render: (m) => {
                   const delta = signedQuantity(m);
                   return (
@@ -177,7 +172,6 @@ export function StockMovementsDesktop() {
                 header: 'Quantity',
                 width: 120,
                 align: 'right' as const,
-                sortValue: (m) => signedQuantity(m),
                 render: (m) => {
                   const delta = signedQuantity(m);
                   return (
@@ -197,6 +191,11 @@ export function StockMovementsDesktop() {
             rowLabel={(m) => `${itemOf(m.itemId)?.name ?? 'Item'}, ${MOVEMENT_LABELS[m.type]}, ${signedQuantity(m)}`}
           />
         )}
+        {pages.hasNextPage ? (
+          <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
+            {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void pages.fetchNextPage()} />}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );

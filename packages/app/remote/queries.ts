@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { QueryClient, keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { Schema } from '@esmart/api-client';
-import type { DocStatus, DocumentKind } from '@esmart/core/types';
+import type { DocStatus, DocumentKind, Item } from '@esmart/core/types';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
 import { applyChanges } from './apply';
@@ -108,7 +108,7 @@ export function useDocumentSummary(f: Omit<DocumentQuery, 'sort'>) {
  * Records a picker found on the server, kept in the store as sync would keep them: the editor then
  * looks a picked party or item up there for its tax, prices and stock like any other.
  */
-function keep(entityType: keyof typeof COLLECTIONS, companyId: string, rows: ({ id?: string; version?: number } | undefined)[]) {
+export function keep(entityType: keyof typeof COLLECTIONS, companyId: string, rows: ({ id?: string; version?: number } | undefined)[]) {
   const { versions } = useRemoteMeta.getState();
   const { collection } = COLLECTIONS[entityType];
   const have = new Set((useAppStore.getState()[collection] as { id: string }[]).map((r) => r.id));
@@ -401,6 +401,148 @@ export function usePartyAging(partyId: string | undefined, kind: 'customer' | 's
   });
 }
 
+type ReportKey = 'sales-summary' | 'purchase-summary' | 'expense-summary' | 'receivables' | 'payables' | 'stock' | 'tax-summary' | 'payments' | 'profit' | 'tds-register' | 'trial-balance' | 'msme-payables';
+
+/**
+ * One of the server's reports, built from its whole book with the same core functions the app used
+ * to run on the device. The shape depends on the key (see getReport in the contract).
+ */
+export function useServerReport<T = unknown>(key: ReportKey, scope: { from: string; to: string; branchId?: string; partyId?: string }, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['reports', companyId, key, scope],
+    enabled: enabled && !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/reports/{reportKey}', {
+        params: { path: { companyId, reportKey: key }, query: { from: scope.from, to: scope.to, branchId: scope.branchId || undefined, partyId: scope.partyId || undefined } },
+        signal,
+      });
+      return data as T;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type ItemQuery = { q?: string; type?: 'goods' | 'service'; stock?: 'low' | 'out' | 'tracked' | 'untracked'; branchId?: string; status?: 'active' | 'inactive'; barcode?: string };
+const itemKeys = {
+  all: (companyId: string) => ['items', companyId] as const,
+};
+
+/** Items by name, 50 at a time, each with what's on hand (at a branch, when given). */
+export function useItemPages(f: ItemQuery, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...itemKeys.all(companyId), 'pages', f],
+    enabled: enabled && !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/items', {
+        params: { path: { companyId }, query: { q: f.q?.trim() || undefined, type: f.type, stock: f.stock, branchId: f.branchId || undefined, status: f.status, barcode: f.barcode || undefined, limit: PAGE, cursor: pageParam } },
+        signal,
+      });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
+}
+
+/**
+ * Every item that keeps stock, with what's on hand at the active branch: the stock screens (adjust,
+ * opening stock, transfer) list them all. Kept in the store, where the stock actions look them up.
+ */
+export function useTrackedItems() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const query = useQuery({
+    queryKey: [...itemKeys.all(companyId), 'tracked', branchId ?? ''],
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const rows: (Item & { stockOnHand?: number })[] = [];
+      let cursor: string | undefined;
+      // Far past any real catalogue at 200 a page; only a server paging in a loop reaches it.
+      for (let page = 0; page < 100; page++) {
+        const { data } = await api.GET('/companies/{companyId}/items', { params: { path: { companyId }, query: { stock: 'tracked', branchId, limit: 200, cursor } }, signal });
+        rows.push(...((data?.data ?? []) as unknown as (Item & { stockOnHand?: number })[]));
+        cursor = data?.nextCursor ?? undefined;
+        if (!cursor) break;
+      }
+      keep('item', companyId, rows);
+      return rows;
+    },
+  });
+  const items = useMemo(() => (query.data ?? []) as Item[], [query.data]);
+  const stock = useMemo(() => Object.fromEntries((query.data ?? []).map((i) => [i.id, i.stockOnHand ?? 0])) as Record<string, number>, [query.data]);
+  return { ...query, items, stock };
+}
+
+/** Opens an item from the server, kept in the store. */
+export function useItemRecord(id: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const aliases = useRemoteMeta((m) => m.idAliases);
+  const current = id ? resolveId(id, aliases) : undefined;
+  return useQuery({
+    queryKey: ['item', companyId, current],
+    enabled: !!companyId && !!current,
+    staleTime: 0,
+    retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/items/{id}', { params: { path: { companyId, id: current! } }, signal });
+      keep('item', companyId, [data]);
+      return data!;
+    },
+  });
+}
+
+/** One item's on hand, value, quantity sold and movements with a running balance. */
+export function useItemLedger(id: string | undefined, branchId?: string, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...itemKeys.all(companyId), 'ledger', id, branchId ?? ''],
+    enabled: enabled && !!companyId && !!id,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/items/{id}/ledger', { params: { path: { companyId, id: id! }, query: { branchId: branchId || undefined } }, signal });
+      return data!;
+    },
+  });
+}
+
+/** What's on hand of every tracked item at a branch (or across the ones the user sees): item id → quantity. */
+export function useServerStockLevels(branchId?: string, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...itemKeys.all(companyId), 'levels', branchId ?? ''],
+    enabled: enabled && !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/stock/levels', { params: { path: { companyId }, query: { branchId: branchId || undefined } }, signal });
+      const out: Record<string, number> = {};
+      for (const l of data?.data ?? []) if (l.itemId) out[l.itemId] = (out[l.itemId] ?? 0) + (l.onHand ?? 0);
+      return out;
+    },
+  });
+}
+
+/** Stock movements, newest first, 50 at a time; each names its item. */
+export function useMovementPages(f: { branchId?: string; itemId?: string; type?: string; from?: string; to?: string; q?: string }) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...itemKeys.all(companyId), 'movements', f],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/stock/movements', {
+        params: { path: { companyId }, query: { branchId: f.branchId || undefined, itemId: f.itemId, type: f.type as never, from: f.from, to: f.to, q: f.q?.trim() || undefined, limit: PAGE, cursor: pageParam } },
+        signal,
+      });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
+}
+
 export const hubKeys = {
   all: (companyId: string) => ['hubs', companyId] as const,
   sales: (companyId: string, branchId?: string) => ['hubs', companyId, 'sales', branchId ?? ''] as const,
@@ -444,11 +586,16 @@ export function watchStoreForQueries(): () => void {
   const flush = () => {
     timer = undefined;
     const companyId = useAppStore.getState().activeCompanyId;
+    if (stale.has('stock')) {
+      // Item lists, levels, ledgers and movements; searches and records are keyed apart and refetch on open.
+      for (const part of ['pages', 'ledger', 'levels', 'movements', 'tracked']) void queryClient.invalidateQueries({ queryKey: [...itemKeys.all(companyId), part] });
+    }
     if (stale.has('documents')) {
       void queryClient.invalidateQueries({ queryKey: documentKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: paymentKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: expenseKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'pages'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports', companyId] });
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'summary'] });
       // The hubs add up documents and payments.
       void queryClient.invalidateQueries({ queryKey: hubKeys.all(companyId) });
@@ -466,6 +613,7 @@ export function watchStoreForQueries(): () => void {
     }
     // A payment changes what an invoice still owes, and so its status.
     if (s.documents !== prev.documents || s.payments !== prev.payments || s.expenses !== prev.expenses) mark('documents');
+    if (s.stockMovements !== prev.stockMovements || s.documents !== prev.documents) mark('stock');
   });
   return () => {
     unsubscribe();

@@ -1748,6 +1748,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/items/{id}/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One item's stock on hand, value and movements with a running balance
+         * @description The movements come newest first, at most 200; the balance after each is counted from the first.
+         */
+        get: operations["getItemLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/stock/movements": {
         parameters: {
             query?: never;
@@ -4346,6 +4369,10 @@ export interface components {
             companyId?: string;
             branchId?: string;
             itemId?: string;
+            /** @description On lists: the item's name, so a list needn't look each one up */
+            itemName?: string;
+            /** @description On lists: the item's SKU */
+            itemSku?: string;
             type?: components["schemas"]["StockMovementType"];
             quantity?: number;
             unitCost?: components["schemas"]["Money"];
@@ -6995,6 +7022,8 @@ export interface operations {
                 /** @description Exact match, used by the scanner */
                 barcode?: string;
                 lowStock?: boolean;
+                /** @description low: in stock but at or under its reorder level; out: tracked and none on hand; tracked: every item that keeps stock; untracked: services and items without stock */
+                stock?: "low" | "out" | "tracked" | "untracked";
                 /** @description Branch for `stockOnHand` */
                 branchId?: string;
                 /** @description Free-text search */
@@ -8817,6 +8846,43 @@ export interface operations {
             };
         };
     };
+    getItemLedger: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        onHand: number;
+                        /** @description Weighted-average value of what is on hand, in base currency */
+                        value: components["schemas"]["Money"];
+                        low: boolean;
+                        /** @description Sold on finalised invoices, all time */
+                        soldQuantity: number;
+                        rows: {
+                            movement: components["schemas"]["StockMovement"];
+                            delta: number;
+                            balance: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listStockMovements: {
         parameters: {
             query?: {
@@ -8826,6 +8892,8 @@ export interface operations {
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
