@@ -77,8 +77,6 @@ function settleWaiting(all: boolean) {
 export function endSyncSession() {
   session += 1;
 }
-/** Set while a new session loads its first snapshot, before `session` flips. */
-let bootstrapping = false;
 
 /**
  * Replaces the book with the server's; `replace` empties it. Everything is fetched
@@ -99,20 +97,6 @@ export async function reloadSnapshot(replace: () => void) {
   useRemoteMeta.getState().patch({ cursor: cursor ?? null });
   await refreshLists();
   useRemoteMeta.getState().patch({ online: true, lastSyncAt: new Date().toISOString() });
-}
-
-/** Loads everything for a fresh session: a full pull and the owned lists. */
-export async function loadSnapshot() {
-  await running?.catch(() => undefined);
-  bootstrapping = true;
-  try {
-    useRemoteMeta.getState().patch({ cursor: null });
-    await pullAll();
-    await refreshLists();
-    useRemoteMeta.getState().patch({ online: true, lastSyncAt: new Date().toISOString() });
-  } finally {
-    bootstrapping = false;
-  }
 }
 
 export function syncNow(): Promise<void> {
@@ -219,7 +203,7 @@ async function flushPendingReceipts(started: number) {
 async function runLocked() {
   const meta = useRemoteMeta.getState();
   const started = session;
-  if (!useAppStore.getState().session.authenticated && !bootstrapping) return;
+  if (!useAppStore.getState().session.authenticated) return;
   meta.patch({ syncing: true });
   try {
     // A failed push still lets this device see what changed; only a lost connection ends the run.
@@ -243,6 +227,13 @@ async function runLocked() {
     // Best effort: a logo link that can't refresh now is retried on the next run.
     await refreshLogoLinks().catch(() => undefined);
     meta.patch({ online: true, lastSyncAt: new Date().toISOString(), lastError: undefined });
+    // Signing in waits only for the open business's branches; if that read failed, pick one now.
+    const s = useAppStore.getState();
+    if (s.activeCompanyId && !s.activeBranchId) {
+      const branches = s.branches.filter((b) => b.companyId === s.activeCompanyId);
+      const branch = branches.find((b) => b.isPrimary) ?? branches[0];
+      if (branch) useAppStore.setState({ activeBranchId: branch.id });
+    }
     if (resend) scheduleRetry();
     else clearRetry();
     settleWaiting(false);

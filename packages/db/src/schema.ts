@@ -1609,6 +1609,8 @@ export const changeLog = pgTable("change_log", {
 }, (table): PgTableExtraConfigValue[] => [
 	index("change_log_tx_id_seq_idx").using("btree", table.txId.asc().nullsLast(), table.seq.asc().nullsLast()),
 	index("change_log_company_id_seq_idx").using("btree", table.companyId.asc().nullsLast(), table.seq.asc().nullsLast()),
+	// A first sync takes each entity's latest change (DISTINCT ON, newest first): read straight off this, no sort.
+	index("change_log_company_entity_latest_idx").using("btree", table.companyId.asc().nullsLast(), table.entityType.asc().nullsLast(), table.entityId.asc().nullsLast(), table.txId.desc().nullsFirst(), table.seq.desc().nullsFirst()),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],

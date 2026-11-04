@@ -33,17 +33,34 @@ export async function partyBalances(
   const ids = parties.map((p) => p.id);
   const d = schema.documents;
   const open = sql`greatest(${d.grandTotalMinor} - ${d.amountPaidMinor}, 0)`;
-  const docs = await db
-    .select({
-      partyId: d.partyId,
-      kind: d.kind,
-      outstanding: sql<number>`coalesce(sum(${open}), 0)::bigint`,
-      overdue: sql<number>`coalesce(sum(case when ${d.dueDate} < ${today} then ${open} else 0 end), 0)::bigint`,
-    })
-    .from(d)
-    .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, PAYABLE_KINDS), notInArray(d.status, [...CLOSED])))
-    .groupBy(d.partyId, d.kind);
-  const kindOf = new Map(parties.map((p) => [p.id, p.kind]));
+  const p = schema.payments;
+  // The four reads don't depend on each other: one round trip's wait instead of four.
+  const [docs, pays, notes, openings] = await Promise.all([
+    db
+      .select({
+        partyId: d.partyId,
+        kind: d.kind,
+        outstanding: sql<number>`coalesce(sum(${open}), 0)::bigint`,
+        overdue: sql<number>`coalesce(sum(case when ${d.dueDate} < ${today} then ${open} else 0 end), 0)::bigint`,
+      })
+      .from(d)
+      .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, PAYABLE_KINDS), notInArray(d.status, [...CLOSED])))
+      .groupBy(d.partyId, d.kind),
+    db
+      .select({ partyId: p.partyId, direction: p.direction, advance: sql<number>`coalesce(sum(${p.unallocatedMinor}), 0)::bigint` })
+      .from(p)
+      .where(and(eq(p.companyId, companyId), inArray(p.partyId, ids)))
+      .groupBy(p.partyId, p.direction),
+    // A direct credit note, against no one invoice or bill, is credit the party holds until it is
+    // applied: counted with their advances. TDS a supplier credit note gives back was never theirs.
+    db
+      .select({ partyId: d.partyId, kind: d.kind, total: sql<number>`coalesce(sum(${d.grandTotalMinor} - coalesce(${d.tdsAmountMinor}, 0)), 0)::bigint` })
+      .from(d)
+      .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, ['creditNote', 'supplierCreditNote']), isNull(d.sourceDocumentId), notInArray(d.status, [...CLOSED, 'requested'])))
+      .groupBy(d.partyId, d.kind),
+    db.select({ id: schema.parties.id, opening: schema.parties.openingBalanceMinor }).from(schema.parties).where(inArray(schema.parties.id, ids)),
+  ]);
+  const kindOf = new Map(parties.map((x) => [x.id, x.kind]));
   for (const r of docs) {
     // A customer owes on invoices and debit notes; the company owes a supplier on bills and their debit notes.
     if (RECEIVABLE_KINDS.includes(r.kind) === (kindOf.get(r.partyId) === 'supplier')) continue;
@@ -51,33 +68,14 @@ export async function partyBalances(
     b.outstanding += Number(r.outstanding);
     b.overdue += Number(r.overdue);
   }
-
-  const p = schema.payments;
-  const pays = await db
-    .select({ partyId: p.partyId, direction: p.direction, advance: sql<number>`coalesce(sum(${p.unallocatedMinor}), 0)::bigint` })
-    .from(p)
-    .where(and(eq(p.companyId, companyId), inArray(p.partyId, ids)))
-    .groupBy(p.partyId, p.direction);
   for (const r of pays) {
     const wanted = kindOf.get(r.partyId) === 'supplier' ? 'paid' : 'received';
     if (r.direction === wanted) out.get(r.partyId)!.advance += Number(r.advance);
   }
-
-  // A direct credit note, against no one invoice or bill, is credit the party holds until it is
-  // applied: counted with their advances. TDS a supplier credit note gives back was never theirs.
-  const notes = await db
-    .select({ partyId: d.partyId, kind: d.kind, total: sql<number>`coalesce(sum(${d.grandTotalMinor} - coalesce(${d.tdsAmountMinor}, 0)), 0)::bigint` })
-    .from(d)
-    .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, ['creditNote', 'supplierCreditNote']), isNull(d.sourceDocumentId), notInArray(d.status, [...CLOSED, 'requested'])))
-    .groupBy(d.partyId, d.kind);
   for (const r of notes) {
     if ((r.kind === 'supplierCreditNote') === (kindOf.get(r.partyId) === 'supplier')) out.get(r.partyId)!.advance += Number(r.total);
   }
-
-  const openings = await db
-    .select({ id: schema.parties.id, opening: schema.parties.openingBalanceMinor })
-    .from(schema.parties)
-    .where(inArray(schema.parties.id, ids));
+  // Last: the opening balance is settled first from the advances counted above.
   for (const r of openings) {
     const b = out.get(r.id)!;
     const { opening, advance } = applyOpening(Number(r.opening ?? 0), b.advance);

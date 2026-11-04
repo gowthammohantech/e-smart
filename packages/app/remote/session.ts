@@ -4,13 +4,14 @@ import type { Schema } from '@esmart/api-client';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { emptyData, useAppStore, type AppData } from '../store/appStore';
 import { COLLECTIONS } from './collections';
+import { applyChanges } from './apply';
 import { api, isNetworkError } from './api';
 import { RemoteError } from './errors';
 import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
 import { useReceiptQueue } from './receiptQueue';
 import { isOpen } from './outbox';
-import { endSyncSession, loadSnapshot, reloadSnapshot, syncSoon } from './sync';
+import { endSyncSession, reloadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
 import { LEGAL } from '../lib/legal';
 import { unregisterPush } from './push';
@@ -20,9 +21,11 @@ type AuthSession = Schema<'AuthSession'>;
 const device = () => ({ label: Platform.OS === 'web' ? 'Web browser' : `${Platform.OS} app`, platform: `${Platform.OS} ${String(Platform.Version ?? '')}`.trim() });
 
 /**
- * Starts a session from the API's AuthSession: stores the tokens, loads the
- * account's data into an empty store, then marks the session signed in, so
- * the first screen the router shows already has data.
+ * Starts a session from the API's AuthSession: stores the tokens, reads who
+ * the user is and the branches of the business they open, then marks the
+ * session signed in. The rest of the books download in the background: the
+ * sync that starts on sign-in finds no cursor and pulls everything
+ * (useRemoteSync), so signing in doesn't wait on the size of the books.
  */
 async function begin(auth: AuthSession, preferCompanyId?: string) {
   if (!auth.accessToken || !auth.refreshToken || !auth.user?.id) throw new RemoteError('incompleteSession', 'The server returned an incomplete session');
@@ -31,16 +34,22 @@ async function begin(auth: AuthSession, preferCompanyId?: string) {
   useAppStore.setState({ ...emptyData(), activeCompanyId: '', activeBranchId: '' });
 
   const { data: me } = await api.GET('/me');
+  const companies = me?.companies ?? [];
+  const companyId = (preferCompanyId && companies.some((c) => c.id === preferCompanyId) ? preferCompanyId : undefined) ?? me?.defaultCompanyId ?? companies[0]?.id ?? '';
+  // The first screen opens on a branch: only the open business's branches are waited for.
+  const branches = companyId
+    ? await api
+        .GET('/companies/{companyId}/branches', { params: { path: { companyId } } })
+        .then((r) => r.data?.data ?? [])
+        .catch(() => [])
+    : [];
   useAppStore.setState({
     accountId: me?.accountId ?? '',
     users: me?.user ? [me.user as never] : [],
-    companies: (me?.companies ?? []) as never,
+    companies: companies as never,
   });
-  await loadSnapshot();
-
-  const s = useAppStore.getState();
-  const companyId = (preferCompanyId && s.companies.some((c) => c.id === preferCompanyId) ? preferCompanyId : undefined) ?? me?.defaultCompanyId ?? s.companies[0]?.id ?? '';
-  const branches = s.branches.filter((b) => b.companyId === companyId);
+  // As the sync would store them, versions included, so an edit before it finishes still matches.
+  applyChanges(branches.map((b) => ({ companyId, entityType: 'branch', entityId: b.id, op: 'upsert', data: b })));
   useAppStore.setState({
     activeCompanyId: companyId,
     activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '',

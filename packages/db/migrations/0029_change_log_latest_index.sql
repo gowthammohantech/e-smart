@@ -1,0 +1,1 @@
+CREATE INDEX "change_log_company_entity_latest_idx" ON "change_log" USING btree ("company_id","entity_type","entity_id","tx_id" DESC NULLS FIRST,"seq" DESC NULLS FIRST);

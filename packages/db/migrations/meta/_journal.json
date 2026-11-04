@@ -204,6 +204,13 @@
       "when": 1793799742272,
       "tag": "0028_receipt_vouchers_challan",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793805009343,
+      "tag": "0029_change_log_latest_index",
+      "breakpoints": true
     }
   ]
 }

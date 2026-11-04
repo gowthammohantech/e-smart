@@ -170,7 +170,8 @@
     "viewOnly": "No internet · view only",
     "workOffline": "Work offline",
     "offlineWaiting": "Offline · {{count}} waiting",
-    "draining": "Syncing {{count}}…"
+    "draining": "Syncing {{count}}…",
+    "loadingBooks": "Loading your books…"
   },
   "totals": {
     "subtotal": "Subtotal",
