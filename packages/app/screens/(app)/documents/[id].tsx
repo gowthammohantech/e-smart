@@ -23,6 +23,8 @@ import { HtmlPreview, printHtml } from '../../../features/documents/HtmlPreview'
 import { deliverFile } from '../../../features/reports/exportFiles';
 import { documentPdf, pdfFileName } from '../../../remote/documents';
 import { describeError } from '../../../remote/errors';
+import { useDocumentRecord } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
 
 export default function DocumentPreview() {
   const t = useTheme();
@@ -33,8 +35,12 @@ export default function DocumentPreview() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const doc = useDocument(id);
+  const remote = useDocumentRecord(id);
   const company = useActiveCompany();
-  const source = useDocument(doc && NOTE_SOURCE[doc.kind] ? doc.sourceDocumentId : undefined);
+  const sourceId = doc && NOTE_SOURCE[doc.kind] ? doc.sourceDocumentId : undefined;
+  // A note prints the invoice or bill it is against: fetched too, in case the device doesn't hold it.
+  useDocumentRecord(sourceId);
+  const source = useDocument(sourceId);
   const party = useParty(doc?.partyId);
   const branches = useBranches();
   const ewayBill = useActiveEwayBill(doc?.id);
@@ -58,6 +64,7 @@ export default function DocumentPreview() {
     [doc, company, party, branches, ewayBill, source, tr, language],
   );
 
+  if (!doc && remote.isLoading) return <LoadingView title={tr('nav:title.preview')} />;
   if (!doc) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>

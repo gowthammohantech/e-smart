@@ -45,6 +45,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
+import { useDocumentRecord } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
@@ -78,6 +79,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const branches = useBranches();
   const party = useParty(doc.partyId);
   // The order, receipt or invoice this one was made from, e.g. the PO behind a goods receipt.
+  useDocumentRecord(doc.sourceDocumentId);
   const sourceDoc = useDocument(doc.sourceDocumentId);
   const allPayments = usePayments();
   const ewayBill = useActiveEwayBill(doc.id);

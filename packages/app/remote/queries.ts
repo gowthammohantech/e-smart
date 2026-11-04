@@ -5,6 +5,9 @@ import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
 import { applyChanges } from './apply';
+import { COLLECTIONS } from './collections';
+import { resolveId, useRemoteMeta } from './meta';
+import { ApiError } from '@esmart/api-client';
 import { useDebounced } from '../components/useDebounced';
 
 /**
@@ -105,8 +108,14 @@ export function useDocumentSummary(f: Omit<DocumentQuery, 'sort'>) {
  * Records a picker found on the server, kept in the store as sync would keep them: the editor then
  * looks a picked party or item up there for its tax, prices and stock like any other.
  */
-function keep(entityType: 'party' | 'item', companyId: string, rows: { id?: string }[]) {
-  applyChanges(rows.filter((r) => r.id).map((r) => ({ companyId, entityType, entityId: r.id!, op: 'upsert', data: r })));
+function keep(entityType: keyof typeof COLLECTIONS, companyId: string, rows: ({ id?: string; version?: number } | undefined)[]) {
+  const { versions } = useRemoteMeta.getState();
+  const { collection } = COLLECTIONS[entityType];
+  const have = new Set((useAppStore.getState()[collection] as { id: string }[]).map((r) => r.id));
+  // A record the store already holds at this version is left alone: rewriting it would mark every
+  // read of that collection stale, and a detail read would then fetch itself again, for ever.
+  const changed = rows.filter((r): r is { id: string; version?: number } => !!r?.id && !(have.has(r.id) && r.version !== undefined && versions[r.id] === r.version));
+  applyChanges(changed.map((r) => ({ companyId, entityType, entityId: r.id, op: 'upsert', data: r })));
 }
 
 /** Customers or suppliers matching what's typed (name, code, GSTIN, phone, email), 50 at most. */
@@ -170,6 +179,36 @@ export function useTdsPreview(input: { partyId?: string; date: string; taxableMi
     },
     placeholderData: keepPreviousData,
   });
+}
+
+/**
+ * Opens a document from the server: it, its payments and its party are kept in the store as sync
+ * would keep them, so the detail and edit screens find them there even when the book on the device
+ * doesn't hold them. Asked again on every opening, so what someone else changed shows. A document
+ * made on this device and not yet sent isn't on the server; the store already has it.
+ */
+export function useDocumentRecord(id: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const aliases = useRemoteMeta((m) => m.idAliases);
+  const current = id ? resolveId(id, aliases) : undefined;
+  return useQuery({
+    // Not under documentKeys.all: keeping the document in the store marks those stale, not this.
+    queryKey: ['document', companyId, current],
+    enabled: !!companyId && !!current,
+    staleTime: 0,
+    retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
+    queryFn: ({ signal }) => fetchDocumentRecord(companyId, current!, signal),
+  });
+}
+
+/** One document from the server, kept in the store with its payments and party (see useDocumentRecord). */
+export async function fetchDocumentRecord(companyId: string, id: string, signal?: AbortSignal) {
+  const { data } = await api.GET('/companies/{companyId}/documents/{id}', { params: { path: { companyId, id } }, signal });
+  const doc = data!;
+  keep('party', companyId, [doc.party]);
+  keep('payment', companyId, doc.payments ?? []);
+  keep('document', companyId, [doc]);
+  return doc;
 }
 
 export const hubKeys = {
