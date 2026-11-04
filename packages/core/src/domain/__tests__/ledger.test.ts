@@ -1,4 +1,5 @@
-import { allocateAdvances, availableAdvance, buildOutstanding, bucketFor, checkCreditLimit, outstandingOf, summarizeAging } from '../receivables';
+import { allocateAdvances, applyOpening, availableAdvance, buildOutstanding, bucketFor, checkCreditLimit, outstandingOf, summarizeAging } from '../receivables';
+import { canTransition } from '../documentStates';
 import { ledgerFor, signedQuantity, stockMapOn, stockOnHand, stockShortfalls } from '../stockLedger';
 import { resolveRate, settlementGainLoss } from '../fx';
 import { BusinessDocument, DocumentLine, ExchangeRate, Item, Payment, StockMovement } from '../../types';
@@ -78,6 +79,41 @@ describe('receivables (FRD 18)', () => {
 
   it('never reports a negative outstanding on an overpayment', () => {
     expect(outstandingOf(invoice(), [payment('inv1', '1500')]).minor).toBe(0);
+  });
+
+  it('takes live returns and credit notes off what is owed, as the server does', () => {
+    const inv = invoice();
+    const credit = (id: string, kind: BusinessDocument['kind'], status: BusinessDocument['status'], amount: string) =>
+      invoice({ id, kind, status, sourceDocumentId: 'inv1', totals: { grandTotal: fromMajor(amount, 'INR') } as BusinessDocument['totals'] });
+    const docs = [
+      inv,
+      credit('ret1', 'salesReturn', 'processed', '283'),
+      credit('cn1', 'creditNote', 'issued', '100'),
+      // Not yet live, or voided: these change nothing.
+      credit('ret2', 'salesReturn', 'requested', '50'),
+      credit('cn2', 'creditNote', 'cancelled', '50'),
+    ];
+    expect(outstandingOf(inv, [], docs).minor).toBe(61700);
+    expect(outstandingOf(inv, [payment('inv1', '617')], docs).minor).toBe(0);
+    expect(buildOutstanding([inv], [payment('inv1', '617')], undefined, docs)).toHaveLength(0);
+  });
+
+  it('owes nothing on a cancelled document', () => {
+    const inv = invoice({ status: 'cancelled' });
+    expect(outstandingOf(inv, []).minor).toBe(0);
+  });
+
+  it('lets an overdue invoice or bill be cancelled', () => {
+    expect(canTransition('invoice', 'overdue', 'cancelled')).toBe(true);
+    expect(canTransition('purchaseBill', 'overdue', 'cancelled')).toBe(true);
+  });
+
+  it('settles an opening balance first from advances', () => {
+    expect(applyOpening(50000, 0)).toEqual({ opening: 50000, advance: 0 });
+    expect(applyOpening(50000, 20000)).toEqual({ opening: 30000, advance: 0 });
+    expect(applyOpening(50000, 80000)).toEqual({ opening: 0, advance: 30000 });
+    // A negative opening balance is money the party has paid ahead.
+    expect(applyOpening(-10000, 5000)).toEqual({ opening: 0, advance: 15000 });
   });
 
   it('ignores drafts and cancelled documents', () => {

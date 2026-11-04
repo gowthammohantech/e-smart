@@ -3107,7 +3107,7 @@ export interface components {
              * @description Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.
              */
             lockedThroughDate?: string | null;
-            /** @description Tax deduction account number. With it, TDS is worked out on supplier bills under their section. */
+            /** @description Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it. */
             tan?: string;
             /**
              * @description When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.
@@ -3145,6 +3145,8 @@ export interface components {
             status?: "active" | "invited" | "disabled";
             /** Format: date-time */
             readonly lastActiveAt?: string;
+            /** @description Sent back as If-Match on an update, so an invitee can be edited before they accept */
+            readonly version?: number;
         };
         DeviceSession: {
             id?: string;
@@ -3183,7 +3185,7 @@ export interface components {
             readonly companyId?: string;
             /** @example GST 18% */
             name: string;
-            /** @description Combined percentage, split at calculation time */
+            /** @description Combined percentage, split at calculation time. Up to 100, or 999.999 for CESS */
             rate: number;
             /** @enum {string} */
             type: "GST" | "CGST" | "SGST" | "IGST" | "VAT" | "CESS" | "NONE";

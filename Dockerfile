@@ -22,6 +22,8 @@ CMD ["node", "apps/api/dist/server.js"]
 
 FROM workspace AS web-build
 ARG EXPO_PUBLIC_API_URL=http://localhost:4000
+# Shown in Settings → About next to the version, e.g. the commit being deployed.
+ARG EXPO_PUBLIC_BUILD=
 RUN cd apps/web && npx expo export -p web
 
 FROM workspace AS admin-build

@@ -22,7 +22,7 @@ import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/mast
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
-import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
@@ -68,18 +68,19 @@ export default function CompanySettings() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = async () => {
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan'> = {
       name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       postalCode: validPostalCode(postalCode, company?.country, stateCode),
+      tan: taxRegistered ? validTan(tan) : undefined,
     };
     setErrors(next);
     if (hasErrors(next) || !company) return;
@@ -95,6 +96,7 @@ export default function CompanySettings() {
         website: website.trim() || undefined,
         fiscalYearStartMonth: fyMonth,
         allowNegativeStock,
+        // Blank clears it; the server takes an empty TAN as "none".
         tan: tan.trim().toUpperCase(),
         address: {
           ...company.address,
@@ -214,6 +216,7 @@ export default function CompanySettings() {
                   icon="bank-minus"
                   placeholder="MUMA12345B"
                   hint={tr('settings:company.tanHint')}
+                  error={errors.tan}
                 />
                 <TextField
                   label={tr('settings:company.lutNumber')}

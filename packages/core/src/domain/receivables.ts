@@ -1,6 +1,7 @@
 import { Money, add, money, subtract, sum, zero } from '../lib/money';
 import { BusinessDocument, Payment, PaymentAllocation } from '../types';
 import { daysBetween, today } from '../lib/date';
+import { CREDIT_KINDS } from './documentStates';
 
 export type AgingBucketKey = 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90plus';
 
@@ -42,10 +43,28 @@ export function allocatedTo(documentId: string, payments: Payment[]): Money | nu
   return currency ? money(total, currency) : null;
 }
 
-export function outstandingOf(doc: BusinessDocument, payments: Payment[]): Money {
+/** A return or note that counts: neither waiting on approval nor voided. */
+const LIVE_CREDIT = (d: BusinessDocument) => !['draft', 'requested', 'cancelled', 'rejected'].includes(d.status);
+
+/**
+ * What live returns and credit notes against a document take off it, net of
+ * the TDS a supplier credit note gives back, which was never owed to the supplier.
+ */
+export function creditedTo(documentId: string, documents: BusinessDocument[]): number {
+  return documents
+    .filter((d) => d.sourceDocumentId === documentId && CREDIT_KINDS.includes(d.kind) && LIVE_CREDIT(d))
+    .reduce((acc, d) => acc + d.totals.grandTotal.minor - (d.tds?.amount.minor ?? 0), 0);
+}
+
+/**
+ * Pass `documents` (any superset of the company's documents) so returns and
+ * credit notes raised against `doc` count, as the server's settlement does.
+ */
+export function outstandingOf(doc: BusinessDocument, payments: Payment[], documents: BusinessDocument[] = []): Money {
+  if (doc.status === 'cancelled' || doc.status === 'rejected') return zero(doc.currency);
   const allocated = allocatedTo(doc.id, payments) ?? zero(doc.currency);
   // TDS the business deducted is paid to the government, not the supplier.
-  const paid = money(allocated.minor + (doc.tds?.amount.minor ?? 0), doc.currency);
+  const paid = money(allocated.minor + (doc.tds?.amount.minor ?? 0) + creditedTo(doc.id, documents), doc.currency);
   const remaining = subtract(doc.totals.grandTotal, paid);
   return remaining.minor < 0 ? zero(doc.currency) : remaining;
 }
@@ -59,12 +78,13 @@ export function buildOutstanding(
   docs: BusinessDocument[],
   payments: Payment[],
   asOf: string = today(),
+  documents: BusinessDocument[] = [],
 ): OutstandingDoc[] {
   return docs
     .filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status))
     .map((document) => {
       const allocated = allocatedTo(document.id, payments) ?? zero(document.currency);
-      const outstanding = outstandingOf(document, payments);
+      const outstanding = outstandingOf(document, payments, documents);
       const daysOverdue = document.dueDate ? daysBetween(document.dueDate, asOf) : 0;
       return {
         document,
@@ -180,6 +200,16 @@ export function allocateAdvances(docs: BusinessDocument[], payments: Payment[]):
     });
 
   return changed;
+}
+
+/**
+ * A party's opening balance is its oldest debt, so its advances settle that
+ * first. A positive opening is owed in the party's direction (a customer owes
+ * the business, the business owes a supplier); a negative one is an advance.
+ */
+export function applyOpening(openingMinor: number, advanceMinor: number): { opening: number; advance: number } {
+  if (openingMinor <= 0) return { opening: 0, advance: advanceMinor - openingMinor };
+  return { opening: Math.max(openingMinor - advanceMinor, 0), advance: Math.max(advanceMinor - openingMinor, 0) };
 }
 
 /** Total advance a party holds, in one currency. */

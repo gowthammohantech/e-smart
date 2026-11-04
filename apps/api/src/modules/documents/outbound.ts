@@ -117,7 +117,7 @@ export async function paymentLinkFor(
   const outstanding = row.grandTotalMinor - row.amountPaidMinor;
   const amount = amountMinor ?? outstanding;
   if (!(amount > 0)) throw invalid('amount.minor', 'Must be more than zero');
-  if (amount > outstanding) throw invalid('amount.minor', `Cannot exceed the outstanding ${outstanding}`, 'AMOUNT_EXCEEDS_OUTSTANDING');
+  if (amount > outstanding) throw invalid('amount.minor', `Cannot exceed the outstanding ${row.currency.trim()} ${(outstanding / 100).toFixed(2)}`, 'AMOUNT_EXCEEDS_OUTSTANDING');
 
   const L = schema.paymentLinks;
   const [reuse] = await db

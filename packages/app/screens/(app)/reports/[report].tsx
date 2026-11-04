@@ -110,7 +110,10 @@ export default function Report() {
     () => summarizeExpenses(expenses, expenseCategories, baseCurrency, scope.filters),
     [expenses, expenseCategories, baseCurrency, scope.filters],
   );
-  const tax = useMemo(() => summarizeTax(documents, baseCurrency, scope.filters), [documents, baseCurrency, scope.filters]);
+  const tax = useMemo(
+    () => summarizeTax(documents, baseCurrency, scope.filters, expenses, company),
+    [documents, baseCurrency, scope.filters, expenses, company],
+  );
   // The reports engine takes method names as data, so it stays free of the
   // translator. Rebuilt when the language changes, or the chart keeps the old
   // one's labels.

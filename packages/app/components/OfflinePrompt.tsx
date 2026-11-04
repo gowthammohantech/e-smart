@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
-import { acceptOffline, declineOffline, onUnconfirmed, useConnectivity } from '../remote';
+import { acceptOffline, declineOffline, onRefusedLater, onUnconfirmed, useConnectivity } from '../remote';
 
 /**
  * Asks, once the connection has been gone a while, whether to keep working on
@@ -17,9 +17,14 @@ export function OfflinePrompt() {
   useEffect(() => {
     const show = (r: { outcome: string; error?: string }) =>
       toast.show(r.outcome === 'refused' ? tr('common:save.refused', { reason: r.error }) : tr(r.outcome === 'unconfirmed' ? 'common:save.unconfirmed' : 'common:save.unreachable'), 'error');
+    // A change kept on this device and refused once sent: it waits in Settings → Sync to be fixed or discarded.
+    const refusedLater = (label: string, reason: string) =>
+      toast.show(tr('common:save.refusedLater', { label, reason }), 'error', { icon: 'cloud-alert-outline' });
     onUnconfirmed.add(show);
+    onRefusedLater.add(refusedLater);
     return () => {
       onUnconfirmed.delete(show);
+      onRefusedLater.delete(refusedLater);
     };
   }, [toast, tr]);
 

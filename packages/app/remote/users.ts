@@ -2,6 +2,7 @@ import { ApiError } from '@esmart/api-client';
 import type { Schema } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
+import { useRemoteMeta } from './meta';
 import { syncNow } from './sync';
 
 type User = Schema<'User'>;
@@ -17,6 +18,8 @@ export async function inviteUser(input: { name: string; email: string; role: Non
     const { data } = await api.POST('/users', { body: { ...input, email: input.email.trim(), name: input.name.trim() } });
     const created = data as User;
     useAppStore.setState((s) => ({ users: [...s.users.filter((u) => u.id !== created.id), created as never] }));
+    // The server has it now: changing the invitee's role is an update, not a second invitation.
+    if (created.id) useRemoteMeta.getState().setVersion(created.id, created.version);
     return created;
   } catch (err) {
     // The invitation is saved even when the email couldn't be sent: bring it in so it can be resent.

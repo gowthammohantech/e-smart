@@ -178,12 +178,12 @@ export async function writePayment(
     const owed = doc.grandTotalMinor - doc.amountPaidMinor + mine;
     if (settles(a) > owed) {
       overOutstanding = true;
-      blocking(`${field}.amount.minor`, `${doc.number} has ${Math.max(owed, 0)} outstanding`);
+      blocking(`${field}.amount.minor`, `${doc.number} has ${input.currency} ${(Math.max(owed, 0) / 100).toFixed(2)} outstanding`);
     }
   });
   // Only cash comes out of the payment; adjustments settle on top of it.
   const allocated = input.allocations.reduce((s, a) => s + a.amountMinor, 0);
-  if (allocated > input.amountMinor) blocking('allocations', `Allocations (${allocated}) exceed the payment (${input.amountMinor})`);
+  if (allocated > input.amountMinor) blocking('allocations', `Allocations (${input.currency} ${(allocated / 100).toFixed(2)}) exceed the payment (${input.currency} ${(input.amountMinor / 100).toFixed(2)})`);
 
   // No account pays out more than it holds: cash, bank or wallet.
   let shortOfCash = false;

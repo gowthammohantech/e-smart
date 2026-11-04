@@ -35,7 +35,7 @@ describe('static server', () => {
     assert.match(res.headers.get('strict-transport-security'), /max-age=31536000/);
     const csp = res.headers.get('content-security-policy');
     assert.match(csp, /script-src 'self';/);
-    assert.match(csp, /connect-src 'self' https:\/\/api\.example\.in/);
+    assert.match(csp, /connect-src 'self' blob: data: https:\/\/api\.example\.in/);
     assert.match(csp, /frame-ancestors 'none'/);
     assert.equal(res.headers.get('cache-control'), 'no-cache');
   });

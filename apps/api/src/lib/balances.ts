@@ -1,5 +1,6 @@
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
+import { applyOpening } from '@esmart/core/domain/receivables';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from './audit';
 
@@ -15,6 +16,7 @@ import type { DbOrTx } from './audit';
  * allocated payments, never below zero, over documents that are neither
  * drafts nor cancelled or rejected. Customers owe on invoices and debit
  * notes; the company owes suppliers on purchase bills and their debit notes.
+ * The party's opening balance counts too, settled first by its advances.
  */
 export type PartyBalance = { outstanding: number; overdue: number; advance: number };
 
@@ -59,6 +61,17 @@ export async function partyBalances(
   for (const r of pays) {
     const wanted = kindOf.get(r.partyId) === 'supplier' ? 'paid' : 'received';
     if (r.direction === wanted) out.get(r.partyId)!.advance += Number(r.advance);
+  }
+
+  const openings = await db
+    .select({ id: schema.parties.id, opening: schema.parties.openingBalanceMinor })
+    .from(schema.parties)
+    .where(inArray(schema.parties.id, ids));
+  for (const r of openings) {
+    const b = out.get(r.id)!;
+    const { opening, advance } = applyOpening(Number(r.opening ?? 0), b.advance);
+    b.outstanding += opening;
+    b.advance = advance;
   }
   return out;
 }

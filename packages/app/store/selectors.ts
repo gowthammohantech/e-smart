@@ -9,6 +9,7 @@ import {
   EInvoiceStatus,
   EwayBill,
   EwayBillStatus,
+  ExchangeRate,
   Expense,
   Item,
   Party,
@@ -18,13 +19,14 @@ import {
   Transporter,
 } from '@esmart/core/types';
 import { Money, money, sum, zero } from '@esmart/core/lib/money';
-import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
+import { applyOpening, availableAdvance, buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
 import { stockMap } from '@esmart/core/domain/stockLedger';
 import { PURCHASE_KINDS, SALES_KINDS } from '@esmart/core/domain/documentStates';
 import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
-import { nowISO } from '@esmart/core/lib/date';
+import { nowISO, today } from '@esmart/core/lib/date';
+import { resolveRate } from '@esmart/core/domain/fx';
 import { Module, ModuleSet, canOpen, hasModule, moduleSetFor } from '@esmart/core/domain/plan';
 
 /**
@@ -208,17 +210,32 @@ export function useExpense(id: string | undefined): Expense | undefined {
   return useAppStore((s) => s.expenses.find((e) => e.id === current));
 }
 
-export function useStockMovements(itemId?: string): StockMovement[] {
+/** The branch picked in the header's switcher, or undefined when all branches are showing. */
+export function useSwitcherBranchId(): string | undefined {
+  const branches = useBranches();
+  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  return activeBranchId && branches.some((b) => b.id === activeBranchId) ? activeBranchId : undefined;
+}
+
+/**
+ * Stock movements of the active company. `branchScoped` keeps only the branch
+ * picked in the switcher, for views of what is on hand; posting, transfers and
+ * the books need every branch's.
+ */
+export function useStockMovements(itemId?: string, opts: { branchScoped?: boolean } = {}): StockMovement[] {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const movements = useAppStore((s) => s.stockMovements);
+  const switcherBranchId = useSwitcherBranchId();
+  const branchId = opts.branchScoped ? switcherBranchId : undefined;
   return useMemo(
-    () => movements.filter((m) => m.companyId === companyId && (!itemId || m.itemId === itemId)),
-    [movements, companyId, itemId],
+    () => movements.filter((m) => m.companyId === companyId && (!itemId || m.itemId === itemId) && (!branchId || m.branchId === branchId)),
+    [movements, companyId, itemId, branchId],
   );
 }
 
+/** On hand per item, at the branch picked in the switcher (all branches when none is). */
 export function useStockLevels(): Record<string, number> {
-  const movements = useStockMovements();
+  const movements = useStockMovements(undefined, { branchScoped: true });
   return useMemo(() => stockMap(movements), [movements]);
 }
 
@@ -258,29 +275,48 @@ export function useAttachments(entityId?: string) {
 /* ------------------------------------------------------------------ */
 
 export function useReceivables() {
-  const invoices = useDocuments('invoice');
+  const documents = useDocuments();
   const payments = usePayments('received');
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
-    const outstanding = buildOutstanding(invoices, payments);
+    const invoices = documents.filter((d) => d.kind === 'invoice');
+    const outstanding = buildOutstanding(invoices, payments, undefined, documents);
     return { outstanding, summary: summarizeAging(outstanding, baseCurrency) };
-  }, [invoices, payments, baseCurrency]);
+  }, [documents, payments, baseCurrency]);
 }
 
 export function usePayables() {
-  const bills = useDocuments('purchaseBill');
+  const documents = useDocuments();
   const payments = usePayments('paid');
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
-    const outstanding = buildOutstanding(bills, payments);
+    const bills = documents.filter((d) => d.kind === 'purchaseBill');
+    const outstanding = buildOutstanding(bills, payments, undefined, documents);
     return { outstanding, summary: summarizeAging(outstanding, baseCurrency) };
-  }, [bills, payments, baseCurrency]);
+  }, [documents, payments, baseCurrency]);
 }
 
-/** Outstanding amount for one party, in the company base currency. */
+/**
+ * What is left of a party's opening balance once its advances settle it, in
+ * the base currency. `partyPayments` are the party's payments in its direction.
+ */
+export function openingOwedInBase(
+  party: Party,
+  partyPayments: Payment[],
+  rates: ExchangeRate[],
+  baseCurrency: string,
+): number {
+  const { currency } = party.openingBalance;
+  const { opening } = applyOpening(party.openingBalance.minor, availableAdvance(partyPayments, currency).minor);
+  return Math.round(opening * resolveRate(rates, currency, baseCurrency, today()));
+}
+
+/** Outstanding amount for one party, in the company base currency, opening balance included. */
 export function usePartyOutstanding(partyId: string | undefined) {
   const documents = useDocuments();
   const payments = usePayments();
+  const party = useParty(partyId);
+  const rates = useExchangeRates();
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
     if (!partyId) return zero(baseCurrency);
@@ -288,12 +324,18 @@ export function usePartyOutstanding(partyId: string | undefined) {
       (d) => d.partyId === partyId && (d.kind === 'invoice' || d.kind === 'purchaseBill'),
     );
     const partyPayments = payments.filter((p) => p.partyId === partyId);
-    const rows = buildOutstanding(docs, partyPayments);
+    const rows = buildOutstanding(docs, partyPayments, undefined, documents);
+    const opening = party
+      ? openingOwedInBase(party, partyPayments.filter((p) => p.direction === (party.kind === 'supplier' ? 'paid' : 'received')), rates, baseCurrency)
+      : 0;
     return sum(
-      rows.map((r) => money(Math.round(r.outstanding.minor * (r.document.exchangeRate || 1)), baseCurrency)),
+      [
+        ...rows.map((r) => money(Math.round(r.outstanding.minor * (r.document.exchangeRate || 1)), baseCurrency)),
+        money(opening, baseCurrency),
+      ],
       baseCurrency,
     );
-  }, [documents, payments, partyId, baseCurrency]);
+  }, [documents, payments, party, rates, partyId, baseCurrency]);
 }
 
 export function usePartyHistory(partyId: string | undefined) {

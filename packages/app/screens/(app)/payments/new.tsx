@@ -15,6 +15,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { useDecimalText } from '../../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -82,6 +83,8 @@ export default function NewPayment() {
   const mainDocs = useDocuments(direction === 'received' ? 'invoice' : 'purchaseBill');
   const debitNotes = useDocuments(direction === 'received' ? 'debitNote' : 'supplierDebitNote');
   const openDocs = useMemo(() => [...mainDocs, ...debitNotes], [mainDocs, debitNotes]);
+  // Returns and credit notes against them lower what they still owe.
+  const allDocs = useDocuments();
   const user = useCurrentUser();
   // The server lets only these roles write off what a party owes.
   const canWriteOff = ['owner', 'admin', 'accountant'].includes(user?.role ?? '');
@@ -139,14 +142,15 @@ export default function NewPayment() {
   const outstanding = useMemo(() => {
     if (!partyId) return [];
     const docs = openDocs.filter((d) => d.partyId === partyId && d.currency === currency);
-    return buildOutstanding(docs, existingPayments).sort((a, b) => a.document.date.localeCompare(b.document.date));
-  }, [openDocs, existingPayments, partyId, currency]);
+    return buildOutstanding(docs, existingPayments, undefined, allDocs).sort((a, b) => a.document.date.localeCompare(b.document.date));
+  }, [openDocs, allDocs, existingPayments, partyId, currency]);
 
   const resolvedRate = useMemo(
     () => (currency === baseCurrency ? 1 : resolveRate(exchangeRates, currency, baseCurrency, date)),
     [currency, baseCurrency, exchangeRates, date],
   );
   const exchangeRate = rateOverride ?? resolvedRate;
+  const rateText = useDecimalText(exchangeRate, setRateOverride);
 
   // Seed the allocation from the invoice we were opened from, on the first
   // render where that invoice is actually in the outstanding list.
@@ -499,8 +503,7 @@ export default function NewPayment() {
     currency !== baseCurrency ? (
       <TextField
         label={`${tr('sales:payment.settlementRate')} (1 ${currency} → ${baseCurrency})`}
-        value={String(exchangeRate)}
-        onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
+        {...rateText}
         keyboardType="decimal-pad"
         icon="swap-horizontal"
         hint={tr('sales:payment.fxHint')}

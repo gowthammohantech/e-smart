@@ -11,7 +11,6 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { TextField } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
 import { ExpenseCategory } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
@@ -20,12 +19,13 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useServerSave } from '../../../components/useServerSave';
 
 export default function ExpenseCategorySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -105,13 +105,15 @@ export default function ExpenseCategorySettings() {
             ) : null}
             <Button
               title={tr('settings:categories.save')}
-              onPress={() => {
+              onPress={async () => {
                 if (!editing || !name.trim()) return;
-                saveExpenseCategory({ ...editing, id: editing.id || uid('cat'), companyId: company.id, name: name.trim() });
-                toast.show(tr('settings:categories.saved'), 'success', { icon: 'shape-outline' });
-                setEditing(null);
+                const category = { ...editing, id: editing.id || uid('cat'), companyId: company.id, name: name.trim() };
+                // The sheet stays open until the server has it, so a refusal can be fixed here.
+                const res = await serverSave(() => saveExpenseCategory(category), tr('settings:categories.saved'), { icon: 'shape-outline' });
+                if (res) setEditing(null);
               }}
-              disabled={!name.trim()}
+              loading={saving}
+              disabled={!name.trim() || saving}
               style={{ flex: 2 }}
             />
           </View>
@@ -130,9 +132,9 @@ export default function ExpenseCategorySettings() {
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
-          if (confirmDelete) removeExpenseCategory(confirmDelete.id);
+          const c = confirmDelete;
           setConfirmDelete(null);
-          toast.show(tr('settings:categories.deleted'), 'success', { icon: 'shape-outline' });
+          if (c) void serverSave(() => removeExpenseCategory(c.id), tr('settings:categories.deleted'), { icon: 'shape-outline' });
         }}
       />
     </View>

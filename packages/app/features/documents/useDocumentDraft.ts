@@ -111,6 +111,21 @@ export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: Tax
   };
 }
 
+/**
+ * Puts every price on the draft in the draft's currency, which the server
+ * insists on. A price in the base currency (an item's own price) is converted
+ * at the draft's rate; any other mismatch is re-tagged, as picking a currency does.
+ */
+export function alignCurrency(d: DraftState, baseCurrency: string): DraftState {
+  const to = (m: Money): Money => {
+    if (m.currency === d.currency) return m;
+    if (m.currency === baseCurrency && d.exchangeRate > 0) return money(Math.round(m.minor / d.exchangeRate), d.currency);
+    return money(m.minor, d.currency);
+  };
+  if (d.charges.currency === d.currency && d.lines.every((l) => l.unitPrice.currency === d.currency)) return d;
+  return { ...d, charges: to(d.charges), lines: d.lines.map((l) => ({ ...l, unitPrice: to(l.unitPrice) })) };
+}
+
 export function blankLine(currency: string, taxCategories: TaxCategory[]): DocumentLine {
   const fallback = taxCategories.find((c) => c.rate === 18) ?? taxCategories[0];
   return {
@@ -136,9 +151,13 @@ export function useDocumentDraft(options: {
   initial?: DraftState;
 }) {
   const { kind, baseCurrency, taxCategories, taxContext, initial } = options;
-  const [draft, setDraft] = useState<DraftState>(() => initial ?? emptyDraft(baseCurrency, kind));
+  const [draft, setDraft] = useState<DraftState>(() => alignCurrency(initial ?? emptyDraft(baseCurrency, kind), baseCurrency));
 
-  const patch = useCallback((p: Partial<DraftState>) => setDraft((d) => ({ ...d, ...p })), []);
+  // A party in another currency moves the whole draft into it.
+  const patch = useCallback(
+    (p: Partial<DraftState>) => setDraft((d) => alignCurrency({ ...d, ...p }, baseCurrency)),
+    [baseCurrency],
+  );
 
   const addLine = useCallback((line: DocumentLine) => {
     setDraft((d) => {
@@ -150,9 +169,9 @@ export function useDocumentDraft(options: {
           lines: d.lines.map((l) => (l.id === existing.id ? { ...l, quantity: l.quantity + line.quantity } : l)),
         };
       }
-      return { ...d, lines: [...d.lines, line] };
+      return alignCurrency({ ...d, lines: [...d.lines, line] }, baseCurrency);
     });
-  }, []);
+  }, [baseCurrency]);
 
   const updateLine = useCallback((id: string, p: Partial<DocumentLine>) => {
     setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.id === id ? { ...l, ...p } : l)) }));

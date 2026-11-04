@@ -7,7 +7,7 @@ export { API_BASE_URL, API_CONFIGURED, DEMO_LOGIN } from './config';
 export { installRemote } from './install';
 export { useRemoteSync } from './useRemoteSync';
 export { useRemoteMeta } from './meta';
-export { syncNow } from './sync';
+export { onRefusedLater, syncNow } from './sync';
 export { acceptOffline, askToWorkOffline, declineOffline, useCanWrite, useConnectivity, type Mode } from './connectivity';
 export { onUnconfirmed, saveOnline, useSaveOnline, type SaveResult } from './save';
 export { retrySync, retryFailed, syncAll } from './retry';

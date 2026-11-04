@@ -55,6 +55,7 @@
     "receiptQueued": "Receipt will upload when you are back online. Expense saved.",
     "noTax": "No tax",
     "receiptAttached": "Receipt attached",
+    "receiptFor": "The receipt for {{number}}",
     "withReceipt": "Receipt attached",
     "attachAReceipt": "Attach a receipt",
     "tapToReplace": "Tap to replace",

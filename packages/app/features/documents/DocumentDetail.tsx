@@ -23,7 +23,7 @@ import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
-import { NOTE_SOURCE, STATUS_TONE, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { NOTE_SOURCE, STATUS_TONE, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { stockShortfalls } from '@esmart/core/domain/stockLedger';
@@ -127,7 +127,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [allPayments, doc.id],
   );
 
-  const outstanding = useMemo(() => outstandingOf(doc, allPayments), [doc, allPayments]);
+  const outstanding = useMemo(() => outstandingOf(doc, allPayments, allDocuments), [doc, allPayments, allDocuments]);
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
@@ -362,7 +362,7 @@ ${url}`;
   const paymentCard = (
     <>
       {/* Payment status */}
-      {isPayable && isFinalized(doc.status) ? (
+      {isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' ? (
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
@@ -776,7 +776,8 @@ ${url}`;
             });
           } },
           ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
-          ...(doc.status !== 'cancelled' && isFinalized(doc.status)
+          // A draft quote can be withdrawn too, where its kind allows that.
+          ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
             ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => {
                 setActionsOpen(false);
                 // The server refuses while the e-way bill or the IRN is live (in that

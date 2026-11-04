@@ -29,6 +29,7 @@ import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } fro
 import { uid } from '@esmart/core/lib/id';
 import { isNetworkError } from '../../remote/api';
 import { uploadAttachment } from '../../remote/attachments';
+import { knownToServer } from '../../remote/meta';
 import { useReceiptQueue } from '../../remote/receiptQueue';
 import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
@@ -87,7 +88,12 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
 
   // No silent default: the person recording the expense chooses its category.
   const [categoryId, setCategoryId] = useState(expense?.categoryId ?? initial?.categoryId ?? '');
-  const [amountText, setAmountText] = useState(expense ? String(toMajor(expense.amount)) : (initial?.amount ?? ''));
+  // A saved expense holds what was paid; a tax-exclusive one is typed without its tax, which is added again below.
+  const [amountText, setAmountText] = useState(() => {
+    if (!expense) return initial?.amount ?? '';
+    const typed = !expense.taxInclusive && !expense.reverseCharge ? subtract(expense.amount, expense.taxAmount) : expense.amount;
+    return String(toMajor(typed));
+  });
   const [date, setDate] = useState(expense?.date ?? initial?.date ?? today());
   const [method, setMethod] = useState<PaymentMethod>(
     () => expense?.method ?? (defaultAccountFor('upi', accounts) ? 'upi' : 'cash'),
@@ -186,7 +192,13 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         setUploading(true);
         try {
           const uploaded = await toast.promise(
-            uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id }),
+            uploadAttachment({
+              companyId: activeCompanyId,
+              uri: receiptUri,
+              name: 'Receipt',
+              // A new expense isn't on the server yet: the receipt is linked through its attachmentIds when it's saved.
+              ...(expense && knownToServer(expense.id) && { entityType: 'expense', entityId: expense.id }),
+            }),
             {
               loading: tr('purchases:form.receiptUploading'),
               success: tr('purchases:form.receiptAttached'),

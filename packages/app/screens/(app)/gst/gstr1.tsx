@@ -8,11 +8,14 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import { deliverFile } from '../../../features/reports/exportFiles';
+import { gstr1Json } from '../../../remote/exports';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import {
   NIL_SUPPLY_LABELS,
   Gstr1Row,
   Gstr1Table,
+  consolidateB2cs,
   gstr1Summary,
 } from '@esmart/core/domain/gstr1';
 import { useActiveCompany, useBaseCurrency, useBranches, useDocuments, useItems, useParties, usePayments } from '../../../store/selectors';
@@ -82,10 +85,11 @@ export default function Gstr1Report() {
   );
 
   const rowsFor = (table: Gstr1Table): Gstr1Row[] => summary[table];
-
-  // Credit notes filed under B2CS reduce it, so they show as negatives.
-  const signed = (r: Gstr1Row, m: { minor: number }) =>
-    formatMoney({ minor: (r.kind === 'salesReturn' && view === 'b2cs' ? -1 : 1) * m.minor, currency: baseCurrency });
+  // Table 7 is filed per place of supply and rate, net of the credit notes against it.
+  const b2cs = useMemo(
+    () => consolidateB2cs(summary.b2cs, company.taxRegistration?.placeOfSupplyStateCode, baseCurrency),
+    [summary.b2cs, company, baseCurrency],
+  );
 
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const advanceRows = [
@@ -95,6 +99,8 @@ export default function Gstr1Report() {
   const tableRows =
     view === 'at'
       ? advanceRows.map((r) => [r.table, r.placeOfSupply, formatPercent(r.rate), m(r.taxable), m(r.igst + r.cgst + r.sgst + r.cess)])
+      : view === 'b2cs'
+      ? b2cs.map((l) => [l.placeOfSupplyName, l.supplyType, formatPercent(l.rate), formatMoney(l.taxableValue), m(l.cgst.minor + l.sgst.minor + l.igst.minor + l.cess.minor)])
       : view === 'hsn'
       ? summary.hsn.map((h) => [
           h.hsnCode,
@@ -110,13 +116,15 @@ export default function Gstr1Report() {
               r.number,
               r.gstin ? r.gstin.slice(0, 2) + '…' + r.gstin.slice(-4) : r.placeOfSupply,
               formatPercent(r.rate),
-              signed(r, r.taxableValue),
-              signed(r, { minor: r.cgst.minor + r.sgst.minor + r.igst.minor }),
+              formatMoney(r.taxableValue),
+              m(r.cgst.minor + r.sgst.minor + r.igst.minor),
             ]);
 
   const headers =
     view === 'at'
       ? [tr('compliance:gstr1.col.table'), tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), tr('common:table.tax')]
+      : view === 'b2cs'
+      ? [tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), tr('common:table.tax')]
       : view === 'hsn'
       ? ['HSN', tr('compliance:gstr1.col.qty'), tr('compliance:gstr1.col.taxable'), tr('common:table.total')]
       : view === 'nil'
@@ -142,6 +150,12 @@ export default function Gstr1Report() {
       return reportTable(
         ['Table', 'Place of supply', 'Rate', 'Gross advance', 'IGST', 'CGST', 'SGST', 'Cess'],
         advanceRows.map((r) => [r.table, r.placeOfSupply, r.rate, r.taxable / 100, r.igst / 100, r.cgst / 100, r.sgst / 100, r.cess / 100]),
+      );
+    }
+    if (view === 'b2cs') {
+      return reportTable(
+        ['Type', 'Place of supply', 'Rate', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess'],
+        b2cs.map((l) => ['OE', l.placeOfSupplyName, l.rate, toMajor(l.taxableValue), toMajor(l.igst), toMajor(l.cgst), toMajor(l.sgst), toMajor(l.cess)]),
       );
     }
     if (view === 'nil') {
@@ -190,8 +204,15 @@ export default function Gstr1Report() {
     );
   };
 
+  // The portal's file is a month's return, so the month the range starts in.
+  const exportJson = async () => {
+    const [y, mo] = scope.filters.range.from.split('-');
+    const period = `${mo}${y}`;
+    await deliverFile(`GSTR1_${company.taxRegistration?.identifier ?? company.id}_${period}.json`, await gstr1Json(company.id, period), 'application/json');
+  };
+
   const count =
-    view === 'at' ? advanceRows.length : view === 'hsn' ? summary.hsn.length : view === 'nil' ? summary.nil.length : view === 'docs' ? summary.docs.length : rowsFor(view).length;
+    view === 'at' ? advanceRows.length : view === 'hsn' ? summary.hsn.length : view === 'nil' ? summary.nil.length : view === 'docs' ? summary.docs.length : view === 'b2cs' ? b2cs.length : rowsFor(view).length;
 
   return (
     <>
@@ -202,6 +223,7 @@ export default function Gstr1Report() {
         scope={scope}
         onScopeChange={setScope}
         exportRows={exportRows}
+        extraExports={[{ key: 'gstn-json', icon: 'code-json', label: tr('compliance:gstr1.exportJson'), run: exportJson }]}
       >
         <KeyFigures
           rows={[

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
@@ -37,6 +37,7 @@ export function ReportShell({
   showPartyFilter,
   children,
   exportRows,
+  extraExports = [],
 }: {
   title: string;
   subtitle?: string;
@@ -45,6 +46,8 @@ export function ReportShell({
   showPartyFilter?: boolean;
   children: React.ReactNode;
   exportRows?: () => ReportTable;
+  /** Files only this report offers, e.g. GSTR-1 for the portal; listed after the standard formats. */
+  extraExports?: { key: string; icon: IconName; label: string; run: () => Promise<void> }[];
 }) {
   const t = useTheme();
   const { t: tr, i18n } = useTranslation(['common', 'reports']);
@@ -88,7 +91,7 @@ export function ReportShell({
     try {
       if (format === 'pdf') await deliverPdf(`${name}.pdf`, tableHtml(title, basisLine(), table, i18n.language));
       else if (format === 'xlsx') await deliverFile(`${name}.xlsx`, xlsxBytes(title, table), XLSX_MIME);
-      else await Share.share({ message: toCsv(table), title: tr('reports:shell.exportTitle', { title }) });
+      else await deliverFile(`${name}.csv`, new TextEncoder().encode(toCsv(table)), 'text/csv');
     } catch {
       toast.show(tr('reports:shell.exportCancelled'), 'info', { icon: 'file-cancel-outline' });
     }
@@ -204,10 +207,21 @@ export function ReportShell({
       ) : null}
 
       <Sheet visible={exportOpen} onClose={() => setExportOpen(false)} title={tr('reports:shell.export')}>
-        {EXPORTS.map((e) => (
+        {[
+          ...EXPORTS.map((e) => ({ key: e.format, icon: e.icon, label: e.label, onPress: () => doExport(e.format) })),
+          ...extraExports.map((e) => ({
+            key: e.key,
+            icon: e.icon,
+            label: e.label,
+            onPress: () => {
+              setExportOpen(false);
+              e.run().catch(() => toast.show(tr('reports:shell.exportFailed'), 'error', { icon: 'file-alert-outline' }));
+            },
+          })),
+        ].map((e) => (
           <Pressable
-            key={e.format}
-            onPress={() => doExport(e.format)}
+            key={e.key}
+            onPress={e.onPress}
             accessibilityRole="button"
             style={({ pressed }) => ({
               flexDirection: 'row',

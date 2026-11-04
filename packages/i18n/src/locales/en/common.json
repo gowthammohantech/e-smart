@@ -101,6 +101,7 @@
   "save": {
     "queued": "Saved on this device. It will sync when you are back online.",
     "refused": "The server refused this: {{reason}}",
+    "refusedLater": "{{label}} wasn't saved: {{reason}}. It's waiting in Settings → Sync.",
     "unreachable": "Couldn't reach the server, so this wasn't saved. Try again when you're connected.",
     "unconfirmed": "Couldn't confirm with the server. If it went through, it will appear here shortly; check before entering it again."
   },

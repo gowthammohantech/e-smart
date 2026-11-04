@@ -28,10 +28,14 @@ export const useConnectivity = create<Connectivity>()(() => ({ mode: 'online', p
 export const canWrite = (mode: Mode = useConnectivity.getState().mode) => mode !== 'readonly';
 export const useCanWrite = () => useConnectivity((s) => canWrite(s.mode));
 
-/** Something still to send. One held back by a failed change can't go until the person sorts that out, so it doesn't count. */
+/**
+ * Something still to send. One held back by a failed change can't go until the
+ * person sorts that out, and one the server asked to have sent again later goes
+ * out with every sync, so neither holds the app back from being online.
+ */
 const hasPending = () => {
   const all = outbox.entries();
-  return all.some((e) => e.status === 'pending' && !outbox.blockerOf(e, all));
+  return all.some((e) => e.status === 'pending' && !e.attempts && !outbox.blockerOf(e, all));
 };
 const set = (p: Partial<Connectivity>) => useConnectivity.setState(p);
 

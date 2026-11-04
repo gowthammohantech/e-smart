@@ -14,7 +14,7 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Badge } from '@esmart/ui/components/Badge';
-import { useBaseCurrency, useDocuments, useHasModule, useParties, usePayments } from '../../../store/selectors';
+import { openingOwedInBase, useBaseCurrency, useDocuments, useExchangeRates, useHasModule, useParties, usePayments } from '../../../store/selectors';
 import { buildOutstanding } from '@esmart/core/domain/receivables';
 import { money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -36,18 +36,28 @@ export default function ContactsTab() {
   const desktop = useIsDesktop();
 
   const parties = useParties(tab);
-  const documents = useDocuments(tab === 'customer' ? 'invoice' : 'purchaseBill');
+  const allDocuments = useDocuments();
+  const documents = useMemo(
+    () => allDocuments.filter((d) => d.kind === (tab === 'customer' ? 'invoice' : 'purchaseBill')),
+    [allDocuments, tab],
+  );
+  const rates = useExchangeRates();
   const payments = usePayments(tab === 'customer' ? 'received' : 'paid');
 
   const outstandingByParty = useMemo(() => {
-    const rows = buildOutstanding(documents, payments);
+    const rows = buildOutstanding(documents, payments, undefined, allDocuments);
     const map: Record<string, number> = {};
     rows.forEach((r) => {
       map[r.document.partyId] =
         (map[r.document.partyId] ?? 0) + Math.round(r.outstanding.minor * (r.document.exchangeRate || 1));
     });
+    // What is left of each opening balance once the party's advances settle it.
+    parties.forEach((p) => {
+      const opening = openingOwedInBase(p, payments.filter((x) => x.partyId === p.id), rates, baseCurrency);
+      if (opening) map[p.id] = (map[p.id] ?? 0) + opening;
+    });
     return map;
-  }, [documents, payments]);
+  }, [documents, allDocuments, payments, parties, rates, baseCurrency]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

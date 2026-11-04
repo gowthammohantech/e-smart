@@ -9,6 +9,7 @@ import { uploadAttachment } from './attachments';
 import { knownToServer, useRemoteMeta } from './meta';
 import * as outbox from './outbox';
 import { useReceiptQueue } from './receiptQueue';
+import i18n from '@esmart/i18n';
 
 const BATCH = 200;
 /** After this many failed attempts with the server reachable, a picked receipt is given up on. */
@@ -32,9 +33,13 @@ function assertSession(started: number) {
 /** What became of a queue entry the user is waiting on. */
 export type Outcome = { kind: 'applied'; serverId?: string } | { kind: 'rejected' | 'conflict'; error: string } | { kind: 'queued' };
 const waiting = new Map<string, (o: Outcome) => void>();
-function report(id: string, o: Outcome) {
-  waiting.get(id)?.(o);
+/** Told when the server refuses a change no screen is waiting on (one kept while offline), with its label. */
+export const onRefusedLater = new Set<(label: string, error: string) => void>();
+function report(id: string, o: Outcome, label?: string) {
+  const listener = waiting.get(id);
   waiting.delete(id);
+  if (listener) listener(o);
+  else if ((o.kind === 'rejected' || o.kind === 'conflict') && label) onRefusedLater.forEach((l) => l(label, o.error));
 }
 
 /**
@@ -195,7 +200,11 @@ async function flushPendingReceipts(started: number) {
       if (isNetworkError(err) && !useRemoteMeta.getState().online) throw err;
       if (p.tries + 1 >= MAX_RECEIPT_TRIES) {
         queue.clear(expenseId);
-        useRemoteMeta.getState().patch({ lastError: err instanceof Error ? err.message : String(err) });
+        const reason = err instanceof Error ? err.message : String(err);
+        useRemoteMeta.getState().patch({ lastError: reason });
+        // Given up on: say so, rather than the receipt silently never arriving.
+        const expense = useAppStore.getState().expenses.find((e) => e.id === expenseId);
+        onRefusedLater.forEach((l) => l(i18n.t('purchases:form.receiptFor', { number: expense?.number ?? '' }), reason));
       } else queue.tried(expenseId);
       continue;
     }
@@ -374,7 +383,7 @@ async function pushAll(session: number): Promise<boolean> {
       assertSession(session);
       tried.add(batch[0].id);
       outbox.update(batch[0].id, { status: 'failed', attempts: batch[0].attempts + 1, lastError: err.message });
-      report(batch[0].id, { kind: 'rejected', error: err.message });
+      report(batch[0].id, { kind: 'rejected', error: err.message }, batch[0].label);
       continue;
     }
     assertSession(session);
@@ -420,11 +429,11 @@ async function pushAll(session: number): Promise<boolean> {
           conflict: entity,
           lastError: r.error?.detail ?? 'Changed on another device since you edited it',
         });
-        report(entry.id, { kind: 'conflict', error: r.error?.detail ?? 'Changed on another device since you edited it' });
+        report(entry.id, { kind: 'conflict', error: r.error?.detail ?? 'Changed on another device since you edited it' }, entry.label);
       } else {
         const error = r.error?.detail ?? r.error?.title ?? 'The server refused this change';
         outbox.update(entry.id, { status: 'failed', attempts: entry.attempts + 1, lastError: error });
-        report(entry.id, { kind: 'rejected', error });
+        report(entry.id, { kind: 'rejected', error }, entry.label);
       }
     }
   }
@@ -503,19 +512,21 @@ async function refreshLists(started = session) {
   const companyId = useAppStore.getState().activeCompanyId;
   if (!companyId) return;
   const path = { companyId };
-  const [notifications, audit, movements, devices, users] = await Promise.all([
+  const [notifications, audit, movements, devices, users, integrations] = await Promise.all([
     all((cursor) => api.GET('/companies/{companyId}/notifications', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data), recent),
     allowed(all((cursor) => api.GET('/companies/{companyId}/audit-events', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data), recent), []),
     allowed(all((cursor) => api.GET('/companies/{companyId}/stock/movements', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data)), []),
     api.GET('/me/devices').then((r) => r.data?.data ?? []),
     // Team members aren't in the change log until someone edits them.
     api.GET('/users').then((r) => r.data?.data ?? []),
+    // The catalogue of providers: a business that has connected none has nothing in the change log.
+    allowed(api.GET('/companies/{companyId}/integrations', { params: { path } }).then((r) => r.data?.data ?? []), []),
   ]);
   assertSession(started);
   replaceForCompany('notifications', companyId, notifications as never);
   replaceForCompany('auditEvents', companyId, audit as never);
   replaceForCompany('stockMovements', companyId, movements as never);
-  useAppStore.setState({ devices: devices as never, users: users as never });
+  useAppStore.setState({ devices: devices as never, users: users as never, integrations: integrations as never });
   // Team members may not be in the change log, yet the server knows them: an edit is an update.
   const { setVersion } = useRemoteMeta.getState();
   for (const u of users as { id?: string; version?: number }[]) if (u.id && typeof u.version === 'number') setVersion(u.id, u.version);

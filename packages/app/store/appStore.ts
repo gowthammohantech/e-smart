@@ -47,10 +47,10 @@ import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { DEFAULT_PREFIXES, SERIES_KINDS, formatNumber } from '@esmart/core/domain/numbering';
-import { PURCHASE_KINDS, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
+import { CREDIT_KINDS, PURCHASE_KINDS, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import { LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
-import { allocateAdvances, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
+import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { tdsForDocument } from './tds';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
@@ -441,12 +441,14 @@ export const useAppStore = create<AppState>()(
       const refreshPaymentStatuses = (affected: Set<string>) => {
         if (!affected.size) return;
         const allocations = get().payments.flatMap((p) => p.allocations);
+        const documents = get().documents;
         set({
-          documents: get().documents.map((d) => {
-            if (!affected.has(d.id)) return d;
+          documents: documents.map((d) => {
+            if (!affected.has(d.id) || !isFinalized(d.status) || d.status === 'cancelled' || d.status === 'rejected') return d;
+            // Returns and credit notes against it settle it too, as on the server.
             const allocated = allocations
               .filter((a) => a.documentId === d.id)
-              .reduce((acc, a) => acc + settledBy(a), 0);
+              .reduce((acc, a) => acc + settledBy(a), 0) + creditedTo(d.id, documents);
             const outstanding = d.totals.grandTotal.minor - allocated;
             const status: DocStatus =
               outstanding <= 0
@@ -808,6 +810,9 @@ export const useAppStore = create<AppState>()(
 
           set({ documents: [doc, ...get().documents] });
           if (finalized) postStockFor(doc);
+          if (finalized && doc.sourceDocumentId && CREDIT_KINDS.includes(doc.kind)) {
+            refreshPaymentStatuses(new Set([doc.sourceDocumentId]));
+          }
           audit(finalized ? 'finalized' : 'created', draft.kind, doc.id, doc.number);
           return doc.id;
         },
@@ -837,13 +842,18 @@ export const useAppStore = create<AppState>()(
           const existing = get().documents.find((d) => d.id === id);
           if (!existing) return;
           let number = existing.number;
-          if (!isFinalized(existing.status) && isFinalized(status)) {
+          // A draft withdrawn never takes a number from the series.
+          if (!isFinalized(existing.status) && isFinalized(status) && status !== 'cancelled') {
             number = consumeSeriesNumber(existing.kind, existing.date);
           }
           const updated = { ...existing, status, number, updatedAt: nowISO() };
           set({ documents: get().documents.map((d) => (d.id === id ? updated : d)) });
           if (isFinalized(status)) postStockFor(updated);
           audit(`marked ${status}`, existing.kind, id, number);
+          // A return or credit note going live (or void) changes what its source owes.
+          if (existing.sourceDocumentId && CREDIT_KINDS.includes(existing.kind)) {
+            refreshPaymentStatuses(new Set([existing.sourceDocumentId]));
+          }
 
           if (existing.kind === 'invoice' && status === 'sent') {
             notify('invoiceSent', 'Invoice sent', `${number} was shared with the customer.`, 'invoice', id);

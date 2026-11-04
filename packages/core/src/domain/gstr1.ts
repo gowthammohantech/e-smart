@@ -196,6 +196,52 @@ function tableFor(doc: BusinessDocument, party: Party, placeOfSupply: string, in
   return 'b2cs';
 }
 
+/** One line of table 7: B2C small supplies for a place of supply and rate. */
+export type B2csLine = {
+  placeOfSupply: string;
+  placeOfSupplyName: string;
+  rate: number;
+  supplyType: 'INTRA' | 'INTER';
+  taxableValue: Money;
+  cgst: Money;
+  sgst: Money;
+  igst: Money;
+  cess: Money;
+};
+
+/**
+ * B2CS consolidated by place of supply and rate, as the return lays it out,
+ * net of the credit notes (and returns) filed against it. First-seen order.
+ */
+export function consolidateB2cs(rows: Gstr1Row[], homeState: string | undefined, currency: string): B2csLine[] {
+  const out = new Map<string, B2csLine>();
+  for (const r of rows) {
+    const key = `${r.placeOfSupply}|${r.rate}`;
+    const line =
+      out.get(key) ??
+      {
+        placeOfSupply: r.placeOfSupply,
+        placeOfSupplyName: r.placeOfSupplyName,
+        rate: r.rate,
+        supplyType: r.placeOfSupply === homeState ? 'INTRA' : 'INTER',
+        taxableValue: zero(currency),
+        cgst: zero(currency),
+        sgst: zero(currency),
+        igst: zero(currency),
+        cess: zero(currency),
+      };
+    const sign = r.noteType === 'C' ? -1 : 1;
+    const plus = (a: Money, b: Money) => money(a.minor + sign * b.minor, currency);
+    line.taxableValue = plus(line.taxableValue, r.taxableValue);
+    line.cgst = plus(line.cgst, r.cgst);
+    line.sgst = plus(line.sgst, r.sgst);
+    line.igst = plus(line.igst, r.igst);
+    line.cess = plus(line.cess, r.cess);
+    out.set(key, line);
+  }
+  return [...out.values()];
+}
+
 export function gstr1Summary(args: {
   company: Company;
   documents: BusinessDocument[];

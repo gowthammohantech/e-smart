@@ -27,7 +27,10 @@ export const STATUS_TONE: Record<DocStatus, StatusTone> = {
   billed: 'success',
 };
 
-/** Legal transitions per FRD 9. */
+/**
+ * Legal transitions per FRD 9. An overdue document can be cancelled like an
+ * issued one; the server still refuses one with payments or live returns.
+ */
 const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>> = {
   quote: {
     draft: ['sent', 'cancelled'],
@@ -49,7 +52,7 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     draft: ['issued', 'cancelled'],
     issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
     partiallyPaid: ['paid', 'overdue'],
-    overdue: ['partiallyPaid', 'paid'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
     paid: [],
   },
   salesReturn: {
@@ -70,7 +73,7 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     draft: ['issued', 'cancelled'],
     issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
     partiallyPaid: ['paid', 'overdue'],
-    overdue: ['partiallyPaid', 'paid'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
     paid: [],
   },
   purchaseReturn: {
@@ -90,14 +93,14 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     draft: ['issued', 'cancelled'],
     issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
     partiallyPaid: ['paid', 'overdue'],
-    overdue: ['partiallyPaid', 'paid'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
     paid: [],
   },
   supplierDebitNote: {
     draft: ['issued', 'cancelled'],
     issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
     partiallyPaid: ['paid', 'overdue'],
-    overdue: ['partiallyPaid', 'paid'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
     paid: [],
   },
 };

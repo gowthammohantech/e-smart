@@ -24,7 +24,7 @@ export default function StockMovements() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
-  const movements = useStockMovements();
+  const movements = useStockMovements(undefined, { branchScoped: true });
   const items = useItems();
   const branches = useBranches();
 

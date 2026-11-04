@@ -97,6 +97,18 @@ describe('coming back after working offline', () => {
     expect(mode()).toBe('online');
   });
 
+  it('goes online once only changes the server asked to have sent again are left', async () => {
+    // The server answered "retry": the entry stays pending, tried once, and goes out with the next sync.
+    send.mockImplementation(async () => {
+      const [e] = outbox.entries();
+      outbox.update(e.id, { attempts: 1 });
+    });
+    online(true);
+    await jest.advanceTimersByTimeAsync(STABLE_FOR_MS);
+    expect(outbox.entries()).toHaveLength(1);
+    expect(mode()).toBe('online');
+  });
+
   it('falls back to offline, without asking again, if the connection drops while sending', async () => {
     send.mockImplementation(async () => undefined);
     online(true);

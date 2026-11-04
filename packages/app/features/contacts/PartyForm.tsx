@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -38,6 +38,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
+  // Added from a document's party picker: back to the document, which picks the new party.
+  const { then } = useLocalSearchParams<{ then?: string }>();
   // Where Cancel and Save land when there is no screen to go back to.
   const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
   const { run: serverSave, saving, blocked } = useServerSave();
@@ -201,6 +203,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (!res) return;
     const id = res.id ?? record.id;
     if (party) goBack(backTo);
+    else if (then === 'back' && router.canGoBack()) router.back();
     else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`);
   };
   useSaveShortcut(() => void save(), !saving);

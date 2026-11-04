@@ -50,7 +50,8 @@ export function originOf(url) {
 /**
  * The page's Content-Security-Policy. Scripts only from this origin; styles may be inline because
  * react-native-web and the chart library write style tags at runtime. `connect` lists the API and,
- * for direct uploads, the storage account.
+ * for direct uploads, the storage account; `blob:` and `data:` let an upload read the file the
+ * image picker handed over (a logo, a receipt) before sending it.
  */
 export function contentSecurityPolicy({ connect = [], images = [] } = {}) {
   const extra = (list) => list.filter(Boolean).join(' ');
@@ -60,7 +61,7 @@ export function contentSecurityPolicy({ connect = [], images = [] } = {}) {
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob: ${extra([...connect, ...images])}`.trim(),
     "font-src 'self' data:",
-    `connect-src 'self' ${extra(connect)}`.trim(),
+    `connect-src 'self' blob: data: ${extra(connect)}`.trim(),
     "frame-src 'self' blob:",
     "worker-src 'self' blob:",
     "manifest-src 'self'",

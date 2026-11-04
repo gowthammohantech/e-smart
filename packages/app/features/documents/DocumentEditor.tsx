@@ -16,6 +16,7 @@ import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { AmountField, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { useDecimalText } from '../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
@@ -96,6 +97,8 @@ export function DocumentEditor({
     date?: string;
     supplierDocNumber?: string;
     lines?: { name: string; quantity: number; unitPrice: number }[];
+    /** Several catalogue items at once, e.g. what Low stock says to reorder. */
+    items?: { itemId: string; quantity: number }[];
   };
   onSaved?: (id: string) => void;
 }) {
@@ -174,9 +177,15 @@ export function DocumentEditor({
       quantity: l.quantity,
       unitPrice: fromMajor(String(l.unitPrice), p?.currency ?? baseCurrency),
     }));
+    const listed = (prefill.items ?? []).flatMap((x) => {
+      const it = items.find((i) => i.id === x.itemId);
+      return it ? [{ ...lineFromItem(it, isPurchase, taxCategories), quantity: x.quantity }] : [];
+    });
     const lines = item
       ? [{ ...lineFromItem(item, isPurchase, taxCategories), quantity: prefill.quantity ?? 1 }]
-      : scanned;
+      : listed.length
+        ? listed
+        : scanned;
     // Without a party (e.g. "Sell" from an item) the line is ready and the party step stays open.
     if (!p) return { missingParty: !!prefill.partyId, draft: { ...base, lines }, step: 0 };
     return {
@@ -330,6 +339,8 @@ export function DocumentEditor({
 
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
+  const rateText = useDecimalText(draft.exchangeRate, (exchangeRate) => patch({ exchangeRate }));
+
   const [, setParams] = useQueryParams();
   const pickParty = (id: string) => {
     const p = parties.find((x) => x.id === id);
@@ -339,6 +350,17 @@ export function DocumentEditor({
     // refresh or a shared link reopens it with the same party.
     if (!documentId) setParams({ partyId: id });
   };
+
+  // "Add customer" from the picker: the party saved there is the one this document is for.
+  const partiesBeforeAdd = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const before = partiesBeforeAdd.current;
+    const added = before && parties.find((p) => !before.has(p.id));
+    if (!added) return;
+    partiesBeforeAdd.current = null;
+    pickParty(added.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parties]);
 
   useEffect(() => {
     if (seed?.missingParty) toast.show(tr('common:documentEditor.prefillMissingParty'), 'warning', { icon: 'account-question-outline' });
@@ -727,8 +749,7 @@ export function DocumentEditor({
       {draft.currency !== baseCurrency ? (
         <TextField
           label={`${tr('common:totals.exchangeRate')} (1 ${draft.currency} → ${baseCurrency})`}
-          value={String(draft.exchangeRate)}
-          onChangeText={(v) => patch({ exchangeRate: Number(v.replace(/[^0-9.]/g, '')) || 0 })}
+          {...rateText}
           keyboardType="decimal-pad"
           icon="swap-horizontal"
           hint={tr('sales:editor.rateStored')}
@@ -1167,7 +1188,8 @@ export function DocumentEditor({
               fullWidth
               onPress={() => {
                 setPartyOpen(false);
-                router.push(isPurchase ? '/(app)/contacts/suppliers/new' : '/(app)/contacts/customers/new');
+                partiesBeforeAdd.current = new Set(parties.map((p) => p.id));
+                router.push(isPurchase ? '/(app)/contacts/suppliers/new?then=back' : '/(app)/contacts/customers/new?then=back');
               }}
             />
           }

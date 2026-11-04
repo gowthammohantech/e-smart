@@ -37,22 +37,24 @@ describe('reports', () => {
 
     const tax = await report('tax-summary');
     expect(tax.outward).toEqual([{ rate: 18, taxable: INR(300000), cgst: INR(18000), sgst: INR(18000), igst: INR(18000), total: INR(54000) }]);
-    expect(tax.inward).toEqual([{ rate: 18, taxable: INR(275000), cgst: INR(24750), sgst: INR(24750), igst: INR(0), total: INR(49500) }]);
-    expect(tax.netPayable).toEqual(INR(4500));
+    // Input tax is the bill's plus the expense's claimable 18 (on 100).
+    expect(tax.inward).toEqual([{ rate: 18, taxable: INR(285000), cgst: INR(25650), sgst: INR(25650), igst: INR(0), total: INR(51300) }]);
+    expect(tax.netPayable).toEqual(INR(2700));
 
     const payments = await report('payments');
     expect(payments).toMatchObject({ received: INR(100000), paid: INR(0), net: INR(100000), byMethod: [{ label: 'Cash', value: INR(100000), count: 1 }], byAccount: [{ label: 'Cash', value: INR(100000), count: 1 }] });
     expect(payments.payments[0].id).toBe(k.payment.id);
 
     // Core's profit: revenue is taxable sales, less cost of goods sold at the
-    // items' purchase price (3 × 600), less expenses net of their input tax.
+    // average the bills paid (3 × 550, weighted average as RULES 6.2), not the
+    // item's list purchase price of 600, less expenses net of their input tax.
     const profit = await report('profit');
-    expect(profit).toMatchObject({ revenue: INR(300000), costOfGoods: INR(180000), grossProfit: INR(120000), expenses: INR(10000), netProfit: INR(110000) });
-    expect(profit.netProfit.minor).toBe(sales.taxable.minor - 3 * 60000 - (expenses.total.minor - expenses.tax.minor));
-    expect(profit.margin).toBeCloseTo((110000 / 300000) * 100, 6);
+    expect(profit).toMatchObject({ revenue: INR(300000), costOfGoods: INR(165000), grossProfit: INR(135000), expenses: INR(10000), netProfit: INR(125000) });
+    expect(profit.netProfit.minor).toBe(sales.taxable.minor - 3 * 55000 - (expenses.total.minor - expenses.tax.minor));
+    expect(profit.margin).toBeCloseTo((125000 / 300000) * 100, 6);
     expect(profit.byMonth).toEqual([
-      { key: '2026-08', revenue: INR(100000), cost: INR(60000), expenses: INR(0), profit: INR(40000) },
-      { key: '2026-09', revenue: INR(200000), cost: INR(120000), expenses: INR(10000), profit: INR(70000) },
+      { key: '2026-08', revenue: INR(100000), cost: INR(55000), expenses: INR(0), profit: INR(45000) },
+      { key: '2026-09', revenue: INR(200000), cost: INR(110000), expenses: INR(10000), profit: INR(80000) },
     ]);
 
     // As of the end of the range: A is part paid and not yet due, B is 16 days overdue.
@@ -86,7 +88,7 @@ describe('reports', () => {
     expect(pdf.raw.startsWith('%PDF')).toBe(true);
     const text = pdfText(pdf.raw);
     expect(text).toContain('Profit snapshot');
-    expect(text).toContain('Net profit 1100');
+    expect(text).toContain('Net profit 1250');
   });
 
   it('gates the buying-side reports by plan', async () => {

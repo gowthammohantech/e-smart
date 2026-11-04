@@ -21,6 +21,17 @@ function multipart(name: string, filename: string, type: string, bytes: Buffer) 
 const branch = (over: Record<string, unknown> = {}) => ({ name: 'Bengaluru', code: 'blr', address: BENGALURU, ...over });
 
 describe('company profile', () => {
+  it('saves with a blank TAN, which clears it, and refuses a malformed one', async () => {
+    const { token, company, c } = await ownerWithCompany(t);
+    const withTan = await t.put(c, { ...company, tan: 'CHED12345A' }, { token });
+    expect(withTan.status).toBe(200);
+    expect(withTan.body.tan).toBe('CHED12345A');
+    const cleared = await t.put(c, { ...withTan.body, tan: '' }, { token });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.tan).toBeUndefined();
+    expect((await t.put(c, { ...company, tan: 'CHED123' }, { token })).status).toBe(422);
+  });
+
   it('saves with If-Match, ignores plan, and keeps the primary branch address in step', async () => {
     const { token, company, c } = await ownerWithCompany(t);
     const next = { ...company, name: 'Vertex Traders LLP', plan: 'business', address: { ...MUMBAI, line1: '99 New Road' } };

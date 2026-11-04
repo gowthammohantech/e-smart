@@ -55,6 +55,7 @@
     "receiptQueued": "இணைப்பு வந்ததும் ரசீது பதிவேற்றப்படும். செலவு சேமிக்கப்பட்டது.",
     "noTax": "வரி இல்லை",
     "receiptAttached": "ரசீது இணைக்கப்பட்டது",
+    "receiptFor": "{{number}} க்கான ரசீது",
     "withReceipt": "ரசீதுடன்",
     "attachAReceipt": "ஒரு ரசீதை இணை",
     "tapToReplace": "மாற்ற தட்டவும்",

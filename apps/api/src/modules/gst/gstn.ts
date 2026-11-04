@@ -1,4 +1,4 @@
-import type { Gstr1Row, Gstr1Summary } from '@esmart/core/domain/gstr1';
+import { consolidateB2cs, type Gstr1Row, type Gstr1Summary } from '@esmart/core/domain/gstr1';
 import { uqcFor } from '@esmart/core/domain/eInvoice';
 
 /** The portal's amounts are rupees with two decimals. */
@@ -32,8 +32,7 @@ function byKey<T>(items: T[], key: (t: T) => string): Map<string, T[]> {
 /**
  * GSTR-1 in the JSON the GST portal's offline tool imports (`b2b`, `b2cl`,
  * `b2cs`, `exp`, `cdnr`, `cdnur`, `nil`, `hsn`, `doc_issue`), from core's
- * summary. B2CS is consolidated by place of supply and rate, as the return
- * requires, net of the credit notes filed against it.
+ * summary. B2CS is consolidated by place of supply and rate (`consolidateB2cs`).
  */
 export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   const homeState = gstin.slice(0, 2);
@@ -46,20 +45,17 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
     pos,
     inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d) })),
   }));
-  const b2cs = [...byKey(summary.b2cs, (r) => `${r.placeOfSupply}|${r.rate}`).values()].map((rows) => {
-    const total = (pick: (r: Gstr1Row) => number) => r2(rows.reduce((a, r) => a + (r.noteType === 'C' ? -1 : 1) * pick(r), 0));
-    return {
-      sply_ty: rows[0].placeOfSupply === homeState ? 'INTRA' : 'INTER',
-      pos: rows[0].placeOfSupply,
-      typ: 'OE',
-      rt: rows[0].rate,
-      txval: total((r) => r.taxableValue.minor),
-      iamt: total((r) => r.igst.minor),
-      camt: total((r) => r.cgst.minor),
-      samt: total((r) => r.sgst.minor),
-      csamt: total((r) => r.cess.minor),
-    };
-  });
+  const b2cs = consolidateB2cs(summary.b2cs, homeState, 'INR').map((l) => ({
+    sply_ty: l.supplyType,
+    pos: l.placeOfSupply,
+    typ: 'OE',
+    rt: l.rate,
+    txval: r2(l.taxableValue.minor),
+    iamt: r2(l.igst.minor),
+    camt: r2(l.cgst.minor),
+    samt: r2(l.sgst.minor),
+    csamt: r2(l.cess.minor),
+  }));
   const exp = [...byKey(byDocument(summary.exp), (d) => (d.some((r) => r.igst.minor > 0) ? 'WPAY' : 'WOPAY')).entries()].map(([exp_typ, docs]) => ({
     exp_typ,
     inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: i.itm_det.csamt })) })),

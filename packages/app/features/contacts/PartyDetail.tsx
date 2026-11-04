@@ -27,7 +27,7 @@ import { money, sum, zero } from '@esmart/core/lib/money';
 import { paymentMethodLabel } from '@esmart/core/labels';
 
 import { useAppStore } from '../../store/appStore';
-import { useBaseCurrency, usePartyHistory, usePayments } from '../../store/selectors';
+import { useBaseCurrency, usePartyHistory, usePartyOutstanding, usePayments } from '../../store/selectors';
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
@@ -66,20 +66,12 @@ export function PartyDetail({ party }: { party: Party }) {
   );
 
   const outstanding = useMemo(
-    () => buildOutstanding(history.invoices, partyPayments),
-    [history.invoices, partyPayments],
+    () => buildOutstanding(history.invoices, partyPayments, undefined, history.all),
+    [history.invoices, history.all, partyPayments],
   );
 
-  const totalOutstanding = useMemo(
-    () =>
-      outstanding.length
-        ? sum(
-            outstanding.map((o) => money(Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), baseCurrency)),
-            baseCurrency,
-          )
-        : zero(baseCurrency),
-    [outstanding, baseCurrency],
-  );
+  // Open documents plus what is left of the opening balance.
+  const totalOutstanding = usePartyOutstanding(party.id);
 
   const lifetimeValue = useMemo(
     () =>

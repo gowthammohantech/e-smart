@@ -175,6 +175,7 @@
   },
   "gstr1": {
     "outwardSupplies": "Outward supplies",
+    "exportJson": "GSTN JSON (for the portal)",
     "emptyTable": "Nothing in this table",
     "emptyTableBody": "No document in the selected period falls into it.",
     "documents": "Documents",

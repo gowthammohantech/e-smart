@@ -33,6 +33,7 @@ export async function userToWire(db: DbOrTx, row: UserRow): Promise<Schema<'User
     avatarColor: row.avatarColor,
     status: row.status,
     lastActiveAt: iso(row.lastActiveAt),
+    version: row.version,
   });
 }
 

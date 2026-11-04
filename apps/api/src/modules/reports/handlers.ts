@@ -16,6 +16,7 @@ import { expensesToWire } from '../expenses/wire';
 import { coreMovements } from '../inventory/ledger';
 import { ledgerHandlers } from '../ledger/handlers';
 import { msmeReport } from '../ledger/msme';
+import { companyCore } from '../documents/engine';
 import { accountNames, branchNames, loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadParties, loadPayments, type Scope } from './data';
 import { tableCsv, tableHtml, tableOf, type ReportBody, type ReportKey } from './table';
 
@@ -78,8 +79,9 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
       return { ...r, rows: r.rows.map((row) => ({ ...row, item: row.item as unknown as Schema<'Item'> })) };
     }
     case 'tax-summary': {
-      const { docs } = await loadDocuments(s, ['invoice', 'purchaseBill']);
-      return summarizeTax(docs, base, filters);
+      const { docs } = await loadDocuments(s, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote']);
+      const { expenses } = await loadExpenses(s);
+      return summarizeTax(docs, base, filters, expenses, companyCore(s.company));
     }
     case 'payments': {
       const { payments, wire } = await loadPayments(s);
@@ -87,7 +89,8 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
       return { ...r, payments: r.payments.map((p) => wire.get(p.id)!) };
     }
     case 'profit': {
-      const { docs } = await loadDocuments(s, ['invoice']);
+      // Bills give the average cost of what was sold.
+      const { docs } = await loadDocuments(s, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
       const { expenses } = await loadExpenses(s);
       return profitSnapshot(docs, expenses, await loadItems(s), base, filters);
     }

@@ -127,21 +127,22 @@ export function buildDocumentHtml({
     })
     .join('');
 
+  // `name` is markup: `bi()` labels come escaped already, plain ones go through `esc` here.
   const totalRow = (name: string, value: string, strong = false) =>
-    `<tr class="${strong ? 'grand' : ''}"><td>${esc(name)}</td><td class="num">${value}</td></tr>`;
+    `<tr class="${strong ? 'grand' : ''}"><td>${name}</td><td class="num">${value}</td></tr>`;
 
   const totalRows = [
     totalRow(bi('sales:pdf.subtotal'), formatMoney(doc.totals.subtotal)),
-    doc.totals.lineDiscount.minor > 0 ? totalRow('Line discounts', `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
+    doc.totals.lineDiscount.minor > 0 ? totalRow(esc('Line discounts'), `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
     totalRow(bi('sales:pdf.taxableValue'), formatMoney(doc.totals.taxableAmount)),
-    ...components.map((c) => totalRow(c.label, formatMoney(c.amount))),
-    doc.totals.documentDiscount.minor > 0 ? totalRow('Discount on total', `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
-    doc.totals.reimbursements?.minor ? totalRow('Reimbursement of expenses', formatMoney(doc.totals.reimbursements)) : '',
-    doc.totals.charges.minor > 0 ? totalRow('Other charges', formatMoney(doc.totals.charges)) : '',
+    ...components.map((c) => totalRow(esc(c.label), formatMoney(c.amount))),
+    doc.totals.documentDiscount.minor > 0 ? totalRow(esc('Discount on total'), `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
+    doc.totals.reimbursements?.minor ? totalRow(esc('Reimbursement of expenses'), formatMoney(doc.totals.reimbursements)) : '',
+    doc.totals.charges.minor > 0 ? totalRow(esc('Other charges'), formatMoney(doc.totals.charges)) : '',
     doc.totals.roundOff.minor !== 0 ? totalRow(bi('sales:pdf.roundOff'), formatMoney(doc.totals.roundOff, { signed: true })) : '',
     totalRow(bi('sales:pdf.total'), formatMoney(doc.totals.grandTotal), true),
     // Rule 46(p): the invoice says whether tax is payable on reverse charge, and how much.
-    doc.totals.reverseChargeTax?.minor ? totalRow('Tax payable on reverse charge by the recipient', formatMoney(doc.totals.reverseChargeTax)) : '',
+    doc.totals.reverseChargeTax?.minor ? totalRow(esc('Tax payable on reverse charge by the recipient'), formatMoney(doc.totals.reverseChargeTax)) : '',
   ]
     .filter(Boolean)
     .join('');

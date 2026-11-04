@@ -17,7 +17,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 export default function About() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const { version, label } = appVersion();
+  const { label } = appVersion();
   const toast = useToast();
   // A phone with no browser or mail app set up can't open these: say so instead of doing nothing.
   const open = (url: string) => () => Linking.openURL(url).catch(() => toast.show(url.replace(/^mailto:/, ''), 'info', { icon: 'link-variant' }));
@@ -30,7 +30,7 @@ export default function About() {
         <Card style={{ alignItems: 'center', gap: t.spacing.md, paddingVertical: t.spacing.xxl }}>
           <BrandLogo height={64} />
           <Text variant="h3" weight="700">{tr('settings:about.appName')}</Text>
-          <Badge label={tr('settings:about.build', { version })} tone="info" />
+          <Badge label={tr('settings:about.build', { version: label })} tone="info" />
           <Text variant="caption" tone="muted" center style={{ maxWidth: 280, lineHeight: 18 }}>{tr('settings:about.pitch')}</Text>
         </Card>
 

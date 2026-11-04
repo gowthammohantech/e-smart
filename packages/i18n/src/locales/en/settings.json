@@ -353,6 +353,7 @@
     "invitePending": "Invitation pending",
     "editTitle": "Edit user",
     "resend": "Resend invite",
+    "resendIn": "Resend in {{seconds}}s",
     "sendInvite": "Send invitation",
     "guestNote": "This person has their own Elixir Books account. To change their access, remove them and invite them again.",
     "removeTitle": "Remove {{name}}?"

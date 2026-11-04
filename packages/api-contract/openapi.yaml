@@ -4165,7 +4165,7 @@ components:
             taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
             fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
             lockedThroughDate: { type: [string, 'null'], format: date, description: 'Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.' }
-            tan: { type: string, pattern: '^[A-Z]{4}[0-9]{5}[A-Z]$', description: 'Tax deduction account number. With it, TDS is worked out on supplier bills under their section.' }
+            tan: { type: string, pattern: '^([A-Z]{4}[0-9]{5}[A-Z])?$', description: 'Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it.' }
             allowNegativeStock: { type: boolean, default: false, description: 'When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.' }
             plan: { allOf: [{ $ref: '#/components/schemas/PlanTier' }], readOnly: true, description: Changed only through billing }
     Branch:
@@ -4196,6 +4196,7 @@ components:
         avatarColor: { type: string }
         status: { type: string, enum: [active, invited, disabled] }
         lastActiveAt: { type: string, format: date-time, readOnly: true }
+        version: { type: integer, readOnly: true, description: 'Sent back as If-Match on an update, so an invitee can be edited before they accept' }
     DeviceSession:
       type: object
       properties:
@@ -4234,7 +4235,7 @@ components:
         id: { type: string, readOnly: true }
         companyId: { type: string, readOnly: true }
         name: { type: string, example: GST 18% }
-        rate: { type: number, description: 'Combined percentage, split at calculation time' }
+        rate: { type: number, minimum: 0, maximum: 999.999, description: 'Combined percentage, split at calculation time. Up to 100, or 999.999 for CESS' }
         type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
         hsnCode: { type: string }
         effectiveFrom: { type: string, format: date }
