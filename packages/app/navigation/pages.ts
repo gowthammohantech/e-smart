@@ -46,6 +46,8 @@ export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
     { href: '/gst/gstr2b', labelKey: 'nav:title.gstr2b' },
     { href: '/gst/returns', labelKey: 'nav:title.gstReturns' },
   ],
+  // Books sits in More's Money group, which the desktop's settings navigation doesn't show.
+  reports: [{ href: '/books', labelKey: 'nav:more.entry.books' }],
 };
 
 /** Where the desktop sidebar's Settings entry opens. */
