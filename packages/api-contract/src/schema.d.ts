@@ -1691,6 +1691,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/books/{view}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts";
+            };
+            cookie?: never;
+        };
+        /**
+         * One of the books' statements, worked out from the whole book
+         * @description The same `@esmart/core` ledger functions the app ran on the device, on the server's book:
+         *     `trial-balance` (core trialBalance over from–to), `profit-loss` (ProfitAndLoss over from–to), `balance-sheet` (BalanceSheet as of `to`), `ledger`
+         *     (one account's LedgerStatement over from–to; needs `account`), `day-book` (DayBookEntry[] over
+         *     from–to), `cost-centres` (CostCentreRow[] over from–to) and `accounts` (the chart of accounts,
+         *     the book it names accounts from, and each account's balance as of `to`). Amounts are base-currency
+         *     paise, as core gives them. The books cover every branch, so a user limited to some is refused.
+         */
+        get: operations["getBooksView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/vouchers": {
         parameters: {
             query?: never;
@@ -8679,9 +8707,40 @@ export interface operations {
             };
         };
     };
+    getBooksView: {
+        parameters: {
+            query: {
+                from?: string;
+                to: string;
+                /** @description The account key, for `ledger` */
+                account?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     listVouchers: {
         parameters: {
             query?: {
+                kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
                 limit?: components["parameters"]["Limit"];

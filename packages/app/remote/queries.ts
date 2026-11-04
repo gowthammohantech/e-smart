@@ -1,7 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { QueryClient, keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { Schema } from '@esmart/api-client';
-import type { DocStatus, DocumentKind, Item } from '@esmart/core/types';
+import type { DocStatus, DocumentKind, Item, Voucher } from '@esmart/core/types';
+import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
+import { today } from '@esmart/core/lib/date';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
 import { applyChanges } from './apply';
@@ -543,6 +545,94 @@ export function useMovementPages(f: { branchId?: string; itemId?: string; type?:
   return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
 }
 
+type BooksView = 'trial-balance' | 'profit-loss' | 'balance-sheet' | 'ledger' | 'day-book' | 'cost-centres' | 'accounts';
+
+/**
+ * One of the books' statements from the server: the same core ledger functions, run on its whole
+ * book, so the device needn't hold every posting. Shaped as core returns them (amounts in paise).
+ */
+export function useBooksView<T>(view: BooksView, scope: { from?: string; to: string; account?: string }, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['books', companyId, view, scope],
+    enabled: enabled && !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/books/{view}', { params: { path: { companyId, view }, query: { from: scope.from, to: scope.to, account: scope.account } }, signal });
+      return data as T;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+const EMPTY_BOOK: Book = { parties: [], paymentAccounts: [], expenseCategories: [], ledgerAccounts: [] };
+
+/** The chart of accounts as the server names it, and each account's balance today. */
+export function useServerBook() {
+  const data = useBooksView<{ book: Book; accounts: Account[]; balances: Record<string, number> }>('accounts', { to: today() }).data;
+  return { book: data?.book ?? EMPTY_BOOK, accounts: data?.accounts ?? [], balances: data?.balances ?? {}, loaded: !!data };
+}
+
+export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt'; from?: string; to?: string };
+const voucherKeys = {
+  all: (companyId: string) => ['vouchers', companyId] as const,
+};
+
+/** Vouchers, newest first, 50 at a time. */
+export function useVoucherPages(f: VoucherQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...voucherKeys.all(companyId), 'pages', f],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/vouchers', { params: { path: { companyId }, query: { kind: f.kind, from: f.from, to: f.to, limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as Voucher[] };
+}
+
+/** Every voucher of a kind in a range, for screens that total them (Receipts, the TDS reports). */
+export function useAllVouchers(f: VoucherQuery, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...voucherKeys.all(companyId), 'all', f],
+    enabled: enabled && !!companyId,
+    queryFn: async ({ signal }) => {
+      const rows: Voucher[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 100; page++) {
+        const { data } = await api.GET('/companies/{companyId}/vouchers', { params: { path: { companyId }, query: { kind: f.kind, from: f.from, to: f.to, limit: 200, cursor } }, signal });
+        rows.push(...((data?.data ?? []) as unknown as Voucher[]));
+        cursor = data?.nextCursor ?? undefined;
+        if (!cursor) break;
+      }
+      return rows;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Opens a voucher from the server, kept in the store. */
+export function useVoucherRecord(id: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const aliases = useRemoteMeta((m) => m.idAliases);
+  const current = id ? resolveId(id, aliases) : undefined;
+  return useQuery({
+    queryKey: ['voucher', companyId, current],
+    enabled: !!companyId && !!current,
+    staleTime: 0,
+    retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/vouchers/{id}', { params: { path: { companyId, id: current! } }, signal });
+      keep('voucher', companyId, [data]);
+      return data!;
+    },
+  });
+}
+
 export const hubKeys = {
   all: (companyId: string) => ['hubs', companyId] as const,
   sales: (companyId: string, branchId?: string) => ['hubs', companyId, 'sales', branchId ?? ''] as const,
@@ -590,12 +680,18 @@ export function watchStoreForQueries(): () => void {
       // Item lists, levels, ledgers and movements; searches and records are keyed apart and refetch on open.
       for (const part of ['pages', 'ledger', 'levels', 'movements', 'tracked']) void queryClient.invalidateQueries({ queryKey: [...itemKeys.all(companyId), part] });
     }
+    if (stale.has('vouchers')) {
+      void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'pages'] });
+      void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'all'] });
+      void queryClient.invalidateQueries({ queryKey: ['books', companyId] });
+    }
     if (stale.has('documents')) {
       void queryClient.invalidateQueries({ queryKey: documentKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: paymentKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: expenseKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'pages'] });
       void queryClient.invalidateQueries({ queryKey: ['reports', companyId] });
+      void queryClient.invalidateQueries({ queryKey: ['books', companyId] });
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'summary'] });
       // The hubs add up documents and payments.
       void queryClient.invalidateQueries({ queryKey: hubKeys.all(companyId) });
@@ -614,6 +710,7 @@ export function watchStoreForQueries(): () => void {
     // A payment changes what an invoice still owes, and so its status.
     if (s.documents !== prev.documents || s.payments !== prev.payments || s.expenses !== prev.expenses) mark('documents');
     if (s.stockMovements !== prev.stockMovements || s.documents !== prev.documents) mark('stock');
+    if (s.vouchers !== prev.vouchers) mark('vouchers');
   });
   return () => {
     unsubscribe();

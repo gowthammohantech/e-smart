@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { costCentreProfit } from '@esmart/core/domain/ledger/reports';
@@ -7,7 +7,9 @@ import { money } from '@esmart/core/lib/money';
 import { Text } from '@esmart/ui/components/Text';
 import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
 import { DataTable, ReportSection } from '../../../../features/reports/reportParts';
-import { useBooks, useCostCentres } from '../../../../store/books';
+import { useCostCentres } from '../../../../store/books';
+import { useBooksView } from '../../../../remote/queries';
+import { LoadingView } from '../../../../components/LoadingView';
 import { useBaseCurrency } from '../../../../store/selectors';
 import { useAccountName } from '../../../../features/books/names';
 
@@ -16,12 +18,13 @@ export default function CostCentreProfitScreen() {
   const { t: tr } = useTranslation(['books']);
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
-  const { postings, book } = useBooks();
   const centres = useCostCentres(true);
   const nameOf = useAccountName();
-  const rows = useMemo(() => costCentreProfit(postings, book, scope.filters.range), [postings, book, scope.filters.range]);
+  const rows = useBooksView<{ rows: ReturnType<typeof costCentreProfit> }>('cost-centres', scope.filters.range).data?.rows;
+  if (!rows) return <LoadingView />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const centreName = (id?: string) => (id ? (centres.find((c) => c.id === id)?.name ?? id) : tr('books:costCentres.none'));
+
 
   return (
     <>

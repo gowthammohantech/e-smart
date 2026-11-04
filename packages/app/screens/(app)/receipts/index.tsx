@@ -11,12 +11,12 @@ import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { Text } from '@esmart/ui/components/Text';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@esmart/core/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { dateRangeLabel } from '@esmart/core/labels';
 import type { Voucher } from '@esmart/core/types';
-import { useBooks, useVouchers } from '../../../store/books';
+import { useAllVouchers, useServerBook } from '../../../remote/queries';
 import { useBaseCurrency } from '../../../store/selectors';
 import { presetParam, useQueryParams } from '../../../navigation/queryParams';
 import { useAccountName } from '../../../features/books/names';
@@ -33,16 +33,17 @@ export default function ReceiptsList() {
   const router = useRouter();
   const { t: tr } = useTranslation(['books', 'common']);
   const baseCurrency = useBaseCurrency();
-  const vouchers = useVouchers();
-  const { book } = useBooks();
+
+  // The chart the server names accounts from: the device needn't hold every party.
+  const { book } = useServerBook();
   const nameOf = useAccountName();
   const [params, setParams] = useQueryParams();
   const range = presetParam(params.range, DEFAULT_RANGE);
 
-  const receipts = useMemo(() => {
-    const r = resolveRange(range);
-    return vouchers.filter((v) => v.kind === 'receipt' && (range === 'all' || inRange(v.date, r)));
-  }, [vouchers, range]);
+  // Every receipt voucher in the range, from the server: the screen totals them by account.
+  const r = range === 'all' ? undefined : resolveRange(range);
+  const fetched = useAllVouchers({ kind: 'receipt', from: r?.from, to: r?.to }).data;
+  const receipts = useMemo(() => fetched ?? [], [fetched]);
   const label = (key?: string) => {
     const a = key ? accountFor(key, book) : undefined;
     return a ? nameOf(a) : '—';

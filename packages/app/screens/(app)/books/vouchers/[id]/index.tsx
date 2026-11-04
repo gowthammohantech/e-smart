@@ -14,7 +14,9 @@ import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useServerSave } from '../../../../../components/useServerSave';
 import { useAppStore } from '../../../../../store/appStore';
-import { useBooks, useCostCentres, useVouchers } from '../../../../../store/books';
+import { useCostCentres, useVouchers } from '../../../../../store/books';
+import { useServerBook, useVoucherRecord } from '../../../../../remote/queries';
+import { LoadingView } from '../../../../../components/LoadingView';
 import { useAccountName } from '../../../../../features/books/names';
 
 export default function VoucherDetail() {
@@ -24,12 +26,16 @@ export default function VoucherDetail() {
   const { run: serverSave } = useServerSave();
   const { id } = useLocalSearchParams<{ id: string }>();
   const voucher = useVouchers().find((v) => v.id === id);
-  const { book } = useBooks();
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = useVoucherRecord(id);
+  // The chart the server names accounts from: the device needn't hold every party.
+  const { book } = useServerBook();
   const nameOf = useAccountName();
   const removeVoucher = useAppStore((s) => s.removeVoucher);
   const [confirm, setConfirm] = useState(false);
   const costCentres = useCostCentres(true);
 
+  if (!voucher && remote.isLoading) return <LoadingView />;
   if (!voucher) {
     return (
       <View style={{ flex: 1 }}>

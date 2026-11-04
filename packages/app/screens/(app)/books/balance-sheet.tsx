@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { balanceSheet, type BalanceSheetSide } from '@esmart/core/domain/ledger/reports';
@@ -6,22 +6,23 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
-import { useBooks } from '../../../store/books';
-import { useActiveCompany, useBaseCurrency } from '../../../store/selectors';
+import { useBooksView } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
+import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName } from '../../../features/books/names';
 
 /** What the business owns against what it owes and its capital, on the period's last day. */
 export default function BalanceSheetScreen() {
   const { t: tr } = useTranslation(['books']);
   const { scope, setScope } = useReportScope('thisFY');
-  const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
-  const { postings, book, stock } = useBooks();
   const nameOf = useAccountName();
-  const bs = useMemo(() => balanceSheet(postings, book, scope.filters.range.to, stock, company.fiscalYearStartMonth), [postings, book, scope.filters.range.to, stock, company.fiscalYearStartMonth]);
+  const bs = useBooksView<ReturnType<typeof balanceSheet>>('balance-sheet', { to: scope.filters.range.to }).data;
+  if (!bs) return <LoadingView />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const rows = (side: BalanceSheetSide) => side.flatMap((s) => [[tr(`books:bs.heading.${s.heading}`).toUpperCase(), m(s.total)], ...s.lines.map((l) => [`   ${nameOf(l.account)}`, m(l.amount)])]);
   const off = bs.totalAssets - bs.totalLiabilities;
+
 
   return (
     <>

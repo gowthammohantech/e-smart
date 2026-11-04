@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -7,7 +7,8 @@ import { ledgerStatement } from '@esmart/core/domain/ledger/reports';
 import { formatDate } from '@esmart/core/lib/date';
 import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../../features/reports/reportParts';
-import { useBooks } from '../../../../store/books';
+import { useBooksView, useServerBook } from '../../../../remote/queries';
+import { LoadingView } from '../../../../components/LoadingView';
 import { useBaseCurrency } from '../../../../store/selectors';
 import { useAccountName, useDrCr } from '../../../../features/books/names';
 
@@ -18,11 +19,12 @@ export default function AccountStatement() {
   const key = decodeURIComponent(raw ?? '');
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
-  const { postings, book } = useBooks();
+  const { book } = useServerBook();
   const nameOf = useAccountName();
   const drCr = useDrCr();
   const account = accountFor(key, book) ?? (key.startsWith('sys:tdsPayable:') ? { key, name: key, group: 'dutiesTaxes' as const, kind: 'system' as const } : undefined);
-  const s = useMemo(() => ledgerStatement(postings, key, scope.filters.range), [postings, key, scope.filters.range]);
+  const s = useBooksView<ReturnType<typeof ledgerStatement>>('ledger', { ...scope.filters.range, account: key }).data;
+  if (!s) return <LoadingView />;
   const title = account ? nameOf(account) : key;
 
   const exportRows = () =>
@@ -30,6 +32,7 @@ export default function AccountStatement() {
       [tr('common:table.date'), tr('common:table.number'), tr('books:vouchers.debit'), tr('books:vouchers.credit'), tr('books:accounts.balance')],
       s.rows.map((r) => [r.date, r.source.number, r.debit / 100, r.credit / 100, r.balance / 100]),
     );
+
 
   return (
     <>

@@ -4,6 +4,8 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { VoucherForm } from '../../../../../features/books/VoucherForm';
 import { useVouchers } from '../../../../../store/books';
+import { useVoucherRecord } from '../../../../../remote/queries';
+import { LoadingView } from '../../../../../components/LoadingView';
 import { useGoBack } from '../../../../../navigation/useGoBack';
 
 export default function EditVoucher() {
@@ -11,6 +13,8 @@ export default function EditVoucher() {
   const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const voucher = useVouchers().find((v) => v.id === id);
+  const remote = useVoucherRecord(id);
+  if (!voucher && remote.isLoading) return <LoadingView />;
   if (!voucher) return <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} />;
   return (
     <>

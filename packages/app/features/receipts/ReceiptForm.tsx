@@ -16,7 +16,7 @@ import { uid } from '@esmart/core/lib/id';
 import type { LedgerGroup, Voucher } from '@esmart/core/types';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
-import { useBooks } from '../../store/books';
+import { useServerBook } from '../../remote/queries';
 import { useActiveCompany, useBaseCurrency, useDefaultBranchId } from '../../store/selectors';
 import { useAccountName, useGroupName } from '../books/names';
 
@@ -37,7 +37,8 @@ export function ReceiptForm({ onSaved }: { onSaved: (id: string) => void }) {
   const defaultBranchId = useDefaultBranchId();
   const saveVoucher = useAppStore((s) => s.saveVoucher);
   const saveLedgerAccount = useAppStore((s) => s.saveLedgerAccount);
-  const { book } = useBooks();
+  // The chart the server names accounts from, rather than every posting worked out on the device.
+  const { book } = useServerBook();
   const nameOf = useAccountName();
   const groupName = useGroupName();
 

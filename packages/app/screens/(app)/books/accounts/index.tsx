@@ -24,7 +24,8 @@ import { nowISO, today } from '@esmart/core/lib/date';
 import type { LedgerAccount, LedgerGroup } from '@esmart/core/types';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
-import { useBooks, useLedgerAccounts } from '../../../../store/books';
+import { useLedgerAccounts } from '../../../../store/books';
+import { useServerBook } from '../../../../remote/queries';
 import { useActiveCompany, useBaseCurrency } from '../../../../store/selectors';
 import { useAccountName, useDrCr, useGroupName } from '../../../../features/books/names';
 
@@ -40,7 +41,7 @@ export default function ChartOfAccounts() {
   const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
-  const { postings, book } = useBooks();
+  const { book, balances: serverBalances } = useServerBook();
   const ledgerAccounts = useLedgerAccounts();
   const saveLedgerAccount = useAppStore((s) => s.saveLedgerAccount);
   const nameOf = useAccountName();
@@ -56,11 +57,8 @@ export default function ChartOfAccounts() {
   const [openingDate, setOpeningDate] = useState<string | undefined>();
   const [groupOpen, setGroupOpen] = useState(false);
 
-  const balances = useMemo(() => {
-    const out = new Map<string, number>();
-    for (const p of postings) out.set(p.account, (out.get(p.account) ?? 0) + p.debit - p.credit);
-    return out;
-  }, [postings]);
+  // Every account's balance today, worked out by the server from the whole book.
+  const balances = useMemo(() => new Map(Object.entries(serverBalances)), [serverBalances]);
 
   const sections = useMemo(() => {
     const q = query.trim().toLowerCase();

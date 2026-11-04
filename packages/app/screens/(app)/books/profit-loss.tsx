@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { profitAndLoss, type StatementLine } from '@esmart/core/domain/ledger/reports';
@@ -6,7 +6,8 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
 import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
-import { useBooks } from '../../../store/books';
+import { useBooksView } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName } from '../../../features/books/names';
 
@@ -15,11 +16,12 @@ export default function ProfitAndLossScreen() {
   const { t: tr } = useTranslation(['books']);
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
-  const { postings, book, stock } = useBooks();
   const nameOf = useAccountName();
-  const pl = useMemo(() => profitAndLoss(postings, book, scope.filters.range, stock), [postings, book, scope.filters.range, stock]);
+  const pl = useBooksView<ReturnType<typeof profitAndLoss>>('profit-loss', scope.filters.range).data;
+  if (!pl) return <LoadingView />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const rows = (lines: StatementLine[]) => lines.map((l) => [nameOf(l.account), m(l.amount)]);
+
 
   return (
     <>

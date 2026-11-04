@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { trialBalance } from '@esmart/core/domain/ledger/reports';
@@ -6,21 +6,22 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
-import { useBooks } from '../../../store/books';
-import { useActiveCompany, useBaseCurrency } from '../../../store/selectors';
+import { useBooksView } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
+import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName, useDrCr } from '../../../features/books/names';
 
 export default function TrialBalanceScreen() {
   const { t: tr } = useTranslation(['books']);
   const { scope, setScope } = useReportScope('thisFY');
-  const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
-  const { postings, book } = useBooks();
   const nameOf = useAccountName();
   const drCr = useDrCr();
-  const tb = useMemo(() => trialBalance(postings, book, scope.filters.range, company.fiscalYearStartMonth), [postings, book, scope.filters.range, company.fiscalYearStartMonth]);
+  const tb = useBooksView<ReturnType<typeof trialBalance>>('trial-balance', scope.filters.range).data;
+  if (!tb) return <LoadingView />;
   const off = tb.totals.closingDebit - tb.totals.closingCredit;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
+
 
   return (
     <>

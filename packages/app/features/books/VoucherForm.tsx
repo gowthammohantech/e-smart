@@ -18,7 +18,7 @@ import { uid } from '@esmart/core/lib/id';
 import type { Voucher, VoucherKind } from '@esmart/core/types';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
-import { useBooks } from '../../store/books';
+import { useServerBook } from '../../remote/queries';
 import { useActiveCompany, useBaseCurrency, useDefaultBranchId } from '../../store/selectors';
 import { useAccountName, useGroupName } from './names';
 import { VoucherGrid, gridLine, type GridLine } from './VoucherGrid';
@@ -37,7 +37,8 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const baseCurrency = useBaseCurrency();
   const defaultBranchId = useDefaultBranchId();
   const saveVoucher = useAppStore((s) => s.saveVoucher);
-  const { book } = useBooks();
+  // The chart the server names accounts from, rather than every posting worked out on the device.
+  const { book } = useServerBook();
   const nameOf = useAccountName();
   const groupName = useGroupName();
 

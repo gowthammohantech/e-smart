@@ -2435,6 +2435,35 @@ paths:
       responses:
         '204': { description: Removed }
 
+  /companies/{companyId}/books/{view}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - name: view
+        in: path
+        required: true
+        schema: { type: string, enum: [trial-balance, profit-loss, balance-sheet, ledger, day-book, cost-centres, accounts] }
+    get:
+      tags: [Books]
+      operationId: getBooksView
+      x-plan-module: books
+      summary: One of the books' statements, worked out from the whole book
+      description: |
+        The same `@esmart/core` ledger functions the app ran on the device, on the server's book:
+        `trial-balance` (core trialBalance over from–to), `profit-loss` (ProfitAndLoss over from–to), `balance-sheet` (BalanceSheet as of `to`), `ledger`
+        (one account's LedgerStatement over from–to; needs `account`), `day-book` (DayBookEntry[] over
+        from–to), `cost-centres` (CostCentreRow[] over from–to) and `accounts` (the chart of accounts,
+        the book it names accounts from, and each account's balance as of `to`). Amounts are base-currency
+        paise, as core gives them. The books cover every branch, so a user limited to some is refused.
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: account, in: query, description: "The account key, for `ledger`", schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
   /companies/{companyId}/vouchers:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -2442,6 +2471,7 @@ paths:
       operationId: listVouchers
       x-plan-module: books
       parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] } }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
         - { $ref: '#/components/parameters/Limit' }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
@@ -12,20 +12,30 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { useVouchers } from '../../../../store/books';
+import { useVoucherPages } from '../../../../remote/queries';
 import { useBaseCurrency } from '../../../../store/selectors';
 
 export default function VoucherList() {
   const t = useTheme();
   const router = useRouter();
   const { t: tr } = useTranslation(['books']);
-  const vouchers = useVouchers();
+  // From the server, newest first, 50 at a time.
+  const pages = useVoucherPages({});
+  const vouchers = pages.rows;
   const baseCurrency = useBaseCurrency();
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.vouchers') }} />
       {vouchers.length ? (
-        <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        <ScrollView
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }}
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+          // The next page loads before the end is reached, so scrolling rarely waits.
+          onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+            if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600 && pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+          }}
+          scrollEventThrottle={200}
+        >
           <Card padded={false}>
             {vouchers.map((v, i) => (
               <ListRow
@@ -43,7 +53,10 @@ export default function VoucherList() {
               />
             ))}
           </Card>
+          {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
         </ScrollView>
+      ) : pages.isLoading ? (
+        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
       ) : (
         <EmptyState icon="swap-horizontal" title={tr('books:vouchers.empty')} message={tr('books:vouchers.emptyBody')} actionLabel={tr('books:vouchers.new')} onAction={() => router.push('/(app)/books/vouchers/new')} />
       )}

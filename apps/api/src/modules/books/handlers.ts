@@ -1,11 +1,12 @@
 import { and, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
-import { USER_GROUPS, accountFor, type Book } from '@esmart/core/domain/ledger/accounts';
+import { USER_GROUPS, accountFor, chartOfAccounts, type Book } from '@esmart/core/domain/ledger/accounts';
+import { balanceSheet, costCentreProfit, dayBook, ledgerStatement, profitAndLoss, trialBalance } from '@esmart/core/domain/ledger/reports';
 import type { LedgerGroup } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { conflict, forbidden, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -14,6 +15,7 @@ import { compact, iso, money, versioned } from '../../lib/wire';
 import { assertPeriodOpen } from '../documents/lifecycle';
 import { accountBalanceMinor } from '../payments/engine';
 import { costCentreIssues } from './costCentres';
+import { loadBook } from './book';
 
 const LA = schema.ledgerAccounts;
 const V = schema.vouchers;
@@ -164,6 +166,35 @@ async function findVoucher(ctx: AnyCtx, db: DbOrTx, id: string): Promise<Voucher
 
 /** Books: the accounts a business adds, and its vouchers. */
 export const booksHandlers = defineHandlers({
+  async getBooksView(ctx) {
+    // The books are one set across branches; a user limited to some of them sees the branch reports instead.
+    if (ctx.user.branchIds.length) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
+    const { from = '1900-01-01', to, account } = ctx.query;
+    const { postings, book, stock } = await loadBook({ db: ctx.db, company: ctx.company, user: ctx.user, now: ctx.now, from, to });
+    const range = { from, to };
+    const fy = ctx.company.fiscalYearStartMonth;
+    switch (ctx.params.view) {
+      case 'trial-balance':
+        return trialBalance(postings, book, range, fy) as never;
+      case 'profit-loss':
+        return profitAndLoss(postings, book, range, stock) as never;
+      case 'balance-sheet':
+        return balanceSheet(postings, book, to, stock, fy) as never;
+      case 'ledger':
+        if (!account) throw invalid('account', 'Which account?');
+        return { account: accountFor(account, book) ?? null, ...ledgerStatement(postings, account, range) } as never;
+      case 'day-book':
+        return { entries: dayBook(postings, range) } as never;
+      case 'cost-centres':
+        return { rows: costCentreProfit(postings, book, range) } as never;
+      case 'accounts': {
+        const balances: Record<string, number> = {};
+        for (const p of postings) if (p.date <= to) balances[p.account] = (balances[p.account] ?? 0) + p.debit - p.credit;
+        return { book, accounts: chartOfAccounts(book), balances } as never;
+      }
+    }
+  },
+
   async listLedgerAccounts(ctx) {
     const k = keyset({ cursor: ctx.query.cursor, limit: ctx.query.limit, sort: LA.name, id: LA.id, order: 'asc' });
     const rows = await ctx.db.select().from(LA).where(and(eq(LA.companyId, ctx.company.id), k.where)).orderBy(...k.orderBy).limit(k.take);
@@ -235,6 +266,7 @@ export const booksHandlers = defineHandlers({
         and(
           eq(V.companyId, ctx.company.id),
           ctx.user.branchIds.length ? inArray(V.branchId, ctx.user.branchIds) : undefined,
+          q.kind ? eq(V.kind, q.kind) : undefined,
           q.from ? gte(V.date, q.from) : undefined,
           q.to ? lte(V.date, q.to) : undefined,
           k.where,

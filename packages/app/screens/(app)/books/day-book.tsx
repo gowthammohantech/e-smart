@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -7,20 +7,23 @@ import { dayBook } from '@esmart/core/domain/ledger/reports';
 import { formatDate } from '@esmart/core/lib/date';
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
 import { DataTable, ReportSection } from '../../../features/reports/reportParts';
-import { useBooks } from '../../../store/books';
+import { useBooksView, useServerBook } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
 import { useAccountName } from '../../../features/books/names';
 
 /** Every entry in a period, voucher by voucher, with its debits and credits. */
 export default function DayBookScreen() {
   const { t: tr } = useTranslation(['books', 'common']);
   const { scope, setScope } = useReportScope('thisMonth');
-  const { postings, book } = useBooks();
+  const { book } = useServerBook();
   const nameOf = useAccountName();
-  const entries = useMemo(() => dayBook(postings, scope.filters.range), [postings, scope.filters.range]);
+  const entries = useBooksView<{ entries: ReturnType<typeof dayBook> }>('day-book', scope.filters.range).data?.entries;
+  if (!entries) return <LoadingView />;
   const label = (key: string) => {
     const a = accountFor(key, book);
     return a ? nameOf(a) : nameOf({ key, name: key, kind: 'system' });
   };
+
 
   return (
     <>
