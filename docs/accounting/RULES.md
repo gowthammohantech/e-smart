@@ -162,17 +162,30 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 
 ## Open questions for the reviewer
 
+Each has the product owner's answer below it. The CA confirms or changes each one at sign-off.
+
 1. **Late fee cap (7.6).** The code caps the late fee at ₹5,000 CGST + ₹5,000 SGST, the slab for turnover above ₹5 crore. Since notification 19/2021-CT the cap is lower for smaller businesses (₹1,000 + ₹1,000 up to ₹1.5 crore, ₹2,500 + ₹2,500 up to ₹5 crore). Should it follow the company's aggregate turnover?
+   - **Answer (product owner, 5 Nov 2026):** Follow the company's aggregate turnover: ₹1,000 + ₹1,000 up to ₹1.5 crore, ₹2,500 + ₹2,500 up to ₹5 crore, ₹5,000 + ₹5,000 above.
 2. **Bank rate (8.8).** `BANK_RATE_PERCENT` is 5.5%. Please confirm RBI's current bank rate.
+   - **Answer (product owner, 5 Nov 2026):** A company setting, defaulting to 5.5%, that an admin changes when RBI revises the rate.
 3. **Agreed day (8.7).** With no due date on a bill, the supplier's payment terms are taken as the written agreement. Is that acceptable, or should such bills get 15 days?
+   - **Answer (product owner, 5 Nov 2026):** A bill with no due date of its own falls due 15 days after the bill date; payment terms are not taken as the agreement.
 4. **Reimbursements (8.6).** The expense stays in its category, and the recovery goes to *Reimbursements recovered* (indirect income), so they net off in P&L. Would you rather they go through a *Reimbursements recoverable* asset account, keeping both out of P&L?
+   - **Answer (product owner, 5 Nov 2026):** Through a *Reimbursements recoverable* asset account: the billable expense debits it and the invoice's reimbursement line clears it, so neither reaches P&L. This applies to invoices for services and goods alike.
 5. **Cost centres (6.7).** A document goes to one cost centre as a whole; only voucher lines can split. Is that enough for your clients?
+   - **Answer (product owner, 5 Nov 2026):** One cost centre per document is enough; a split is made with a voucher.
 6. **Opening balances (6.4).** An opening with no date stands at the start of the books, as in Tally; one with an "as on" date posts the day before it. Please confirm both, and whether cash and bank openings should take their date too (today the form fills it with the day the account was added, so it isn't used).
+   - **Answer (product owner, 5 Nov 2026):** Both confirmed. Cash and bank openings take their "as on" date too, and the form leaves it blank (start of the books) instead of filling in today.
 7. **Advance refunds (8.11).** Refunds are now built as above: the tax comes back in the month of the refund, reported with the 11B adjustments. Please confirm that reporting, and that a refund of an advance for goods (no tax) needs only the voucher.
+   - **Answer (product owner, 5 Nov 2026):** Agreed as built.
 8. **ISD and imports of goods.** 3B 4A(1) imports of goods and 4A(4) ISD are always zero today. Bills of entry and ISD invoices aren't recorded.
+   - **Answer (product owner, 5 Nov 2026):** Build both: bills of entry (filling 4A(1) and matched to 2B) and ISD invoices (filling 4A(4)).
 9. **Amendments.** Corrections after filing go in a later period's ordinary tables. B2BA/CDNRA amendment tables aren't produced.
+   - **Answer (product owner, 5 Nov 2026):** Build the GSTR-1 amendment tables: a document already reported in a filed return and changed afterwards goes into the matching amendment table of the next return, with its original number and date.
 10. **2B tolerance (3, GSTR-2B matching).** A line whose amounts agree but whose date is up to 3 days off is now claimable without a person accepting it. Is 3 days right, or should any date difference wait for a person?
+   - **Answer (product owner, 5 Nov 2026):** A company setting, defaulting to 3 days; 0 means only an exact date is claimable without a person.
 11. **TDS on payments (4.12).** TDS kept back on a payment (rather than on its bill) is posted with no section, so it can't go into 26Q. Should the payment screen ask for the section?
+   - **Answer (product owner, 5 Nov 2026):** Ask for the section on the payment, defaulting to the supplier's; the TDS posts to that section and goes into 26Q and the TDS payable report.
 
 ## Interim acceptance by the product owner
 
