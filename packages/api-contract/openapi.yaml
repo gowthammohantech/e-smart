@@ -2666,6 +2666,7 @@ paths:
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { name: itemId, in: query, schema: { type: string } }
         - { name: lowStock, in: query, description: Only items at or below `reorderLevel`, schema: { type: boolean } }
+        - { name: asOf, in: query, description: "What a document dated this day can take out: stock by the end of it, never more than the lowest on a later day", schema: { type: string, format: date } }
       responses:
         '200':
           description: OK

@@ -26,10 +26,10 @@ import { tdsSection } from '@esmart/core/data/tdsSections';
 import { NOTE_SOURCE, STATUS_TONE, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
-import { stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
-import { money } from '@esmart/core/lib/money';
+import { money, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
@@ -42,10 +42,11 @@ import {
   useBranches,
   useComplianceSettings,
   useDocument,
+  useHasModule,
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { useDocumentRecord } from '../../remote/queries';
+import { useDocumentRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
@@ -81,11 +82,16 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // The order, receipt or invoice this one was made from, e.g. the PO behind a goods receipt.
   useDocumentRecord(doc.sourceDocumentId);
   const sourceDoc = useDocument(doc.sourceDocumentId);
+  // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
+  const record = useDocumentRecord(doc.id).data;
   const allPayments = usePayments();
   const ewayBill = useActiveEwayBill(doc.id);
   const complianceSettings = useComplianceSettings();
+  const hasInventory = useHasModule('inventory');
   const storeItems = useAppStore((s) => s.items);
-  const stockMovements = useAppStore((s) => s.stockMovements);
+  // Finalising from here checks stock as the editor does: what the server says is there on the date.
+  const sourceMoved = useStockMovedBy(doc.sourceDocumentId).data ?? false;
+  const available = useStockAvailable(doc.branchId, doc.date, !isFinalized(doc.status) && OUTBOUND_KINDS.includes(doc.kind) && !sourceMoved && hasInventory).data;
 
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
   const removeDocument = useAppStore((s) => s.removeDocument);
@@ -130,7 +136,10 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [allPayments, doc.id],
   );
 
-  const outstanding = useMemo(() => outstandingOf(doc, allPayments, allDocuments), [doc, allPayments, allDocuments]);
+  const outstanding = useMemo(
+    () => (record?.outstanding as Money | undefined) ?? outstandingOf(doc, allPayments, allDocuments),
+    [record?.outstanding, doc, allPayments, allDocuments],
+  );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
@@ -144,7 +153,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       branch,
       ewayBill,
       // Returns and notes name the invoice or bill they're against.
-      source: NOTE_SOURCE[doc.kind] ? allDocuments.find((d) => d.id === doc.sourceDocumentId) : undefined,
+      source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
     });
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
@@ -320,7 +329,11 @@ ${url}`;
                   : [];
   // Only what can be made now: nothing from a draft or a cancelled document,
   // and an order or quote carried forward once (conversionBlock).
-  const conversions = offered.filter((c) => !conversionBlock(doc, c.target, allDocuments));
+  // What was made from it, as the server knows; the store's copy until that lands.
+  const made = record?.linkedDocuments
+    ? record.linkedDocuments.map((d) => ({ kind: d.kind!, status: d.status!, sourceDocumentId: doc.id }))
+    : allDocuments;
+  const conversions = offered.filter((c) => !conversionBlock(doc, c.target, made));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
   // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
@@ -329,7 +342,8 @@ ${url}`;
   const markAs = (s: DocStatus, message = tr('common:documentDetail.marked', { status: statusLabel(tr, s) })) => {
     // Finalising from here must pass the same stock check as the editor.
     const short = !isFinalized(doc.status) && isFinalized(s)
-      ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
+      && available && !company?.allowNegativeStock
+      ? shortfallsAgainst(available, doc.lines, storeItems)
       : [];
     if (short.length) {
       toast.show(

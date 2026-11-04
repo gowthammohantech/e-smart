@@ -9136,6 +9136,8 @@ export interface operations {
                 itemId?: string;
                 /** @description Only items at or below `reorderLevel` */
                 lowStock?: boolean;
+                /** @description What a document dated this day can take out: stock by the end of it, never more than the lowest on a later day */
+                asOf?: string;
             };
             header?: never;
             path: {

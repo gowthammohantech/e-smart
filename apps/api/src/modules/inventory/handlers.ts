@@ -124,7 +124,12 @@ export const inventoryHandlers = defineHandlers({
     const items = (await ctx.db.select().from(I).where(and(...filters)).orderBy(I.name, I.id)).map(toCoreItem);
     if (!items.length || !branches.length) return { data: [] };
     const movements = await coreMovements(ctx.db, ctx.company.id, { itemIds: items.map((i) => i.id), branchIds: branches.map((b) => b.id) });
-    const data = items.flatMap((item) => branches.map((b) => levelAt(item, b.id, movements, base)));
+    let data = items.flatMap((item) => branches.map((b) => levelAt(item, b.id, movements, base)));
+    if (q.asOf) {
+      // The same figure finalising checks a document against.
+      const on = new Map(branches.map((b) => [b.id, stockMapOn(movements, q.asOf!, b.id)]));
+      data = data.map((l) => ({ ...l, onHand: on.get(l.branchId!)?.[l.itemId!] ?? 0 }));
+    }
     return { data: q.lowStock === undefined ? data : data.filter((l) => l.low === q.lowStock) };
   },
 

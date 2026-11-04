@@ -1,4 +1,4 @@
-import { BusinessDocument, DocumentKind, Item, StockMovement, StockMovementType } from '../types';
+import { BusinessDocument, DocumentKind, DocumentLine, Item, StockMovement, StockMovementType } from '../types';
 import { Money, money, multiply, sum, zero } from '../lib/money';
 
 /** Direction each movement type applies to on-hand quantity (FRD 13). */
@@ -55,18 +55,32 @@ export function stockShortfalls(args: {
   const { doc, items, movements } = args;
   if (args.allowNegativeStock || !OUTBOUND_KINDS.includes(doc.kind)) return [];
   if (doc.sourceDocumentId && movements.some((m) => m.referenceId === doc.sourceDocumentId)) return [];
-  const needed = new Map<string, number>();
-  doc.lines.forEach((l) => {
-    if (l.itemId) needed.set(l.itemId, (needed.get(l.itemId) ?? 0) + Math.abs(l.quantity));
-  });
   // Dated, a document can only use stock that was there on its date.
-  const available = doc.date ? stockMapOn(movements, doc.date, doc.branchId) : undefined;
+  const available = doc.date ? stockMapOn(movements, doc.date, doc.branchId) : stockMap(movements, doc.branchId);
+  return shortfallsAgainst(available, doc.lines, items);
+}
+
+/**
+ * The lines' tracked goods that need more than `available` holds (item id to
+ * quantity, e.g. the server's stock on the document's date). Items not in
+ * `items` count as tracked goods when `available` names them, and take their
+ * name and unit from the line.
+ */
+export function shortfallsAgainst(
+  available: Record<string, number>,
+  lines: Pick<DocumentLine, 'itemId' | 'quantity' | 'name' | 'unit'>[],
+  items: Pick<Item, 'id' | 'name' | 'unit' | 'trackInventory' | 'type'>[],
+): StockShortfall[] {
+  const needed = new Map<string, { qty: number; line: (typeof lines)[number] }>();
+  lines.forEach((l) => {
+    if (l.itemId) needed.set(l.itemId, { qty: (needed.get(l.itemId)?.qty ?? 0) + Math.abs(l.quantity), line: l });
+  });
   const out: StockShortfall[] = [];
-  needed.forEach((qty, itemId) => {
+  needed.forEach(({ qty, line }, itemId) => {
     const item = items.find((i) => i.id === itemId);
-    if (!item || !item.trackInventory || item.type !== 'goods') return;
-    const onHand = available ? (available[itemId] ?? 0) : stockOnHand(itemId, movements, doc.branchId);
-    if (onHand < qty) out.push({ itemId, name: item.name, unit: item.unit, onHand, needed: qty });
+    if (item ? !item.trackInventory || item.type !== 'goods' : !(itemId in available)) return;
+    const onHand = available[itemId] ?? 0;
+    if (onHand < qty) out.push({ itemId, name: item?.name ?? line.name, unit: item?.unit ?? line.unit, onHand, needed: qty });
   });
   return out;
 }

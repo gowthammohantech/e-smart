@@ -584,6 +584,35 @@ export function useServerStockLevels(branchId?: string, enabled = true) {
   });
 }
 
+/** What a document dated `asOf` at a branch can take out of each item, as finalising will check it. */
+export function useStockAvailable(branchId: string | undefined, asOf: string, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...itemKeys.all(companyId), 'levels', branchId ?? '', asOf],
+    enabled: enabled && !!companyId && !!branchId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/stock/levels', { params: { path: { companyId }, query: { branchId, asOf } }, signal });
+      const out: Record<string, number> = {};
+      for (const l of data?.data ?? []) if (l.itemId) out[l.itemId] = l.onHand ?? 0;
+      return out;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Whether a document has already moved stock (an invoice made from a delivery, say). */
+export function useStockMovedBy(referenceId: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...itemKeys.all(companyId), 'movements', 'by', referenceId],
+    enabled: !!companyId && !!referenceId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/stock/movements', { params: { path: { companyId }, query: { referenceId, limit: 1 } }, signal });
+      return (data?.data ?? []).length > 0;
+    },
+  });
+}
+
 /** Stock movements, newest first, 50 at a time; each names its item. */
 export function useMovementPages(f: { branchId?: string; itemId?: string; type?: string; from?: string; to?: string; q?: string }) {
   const companyId = useAppStore((s) => s.activeCompanyId);

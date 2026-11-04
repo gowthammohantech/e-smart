@@ -32,10 +32,9 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate, parseDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import { factorOf, fromMajor, money, subtract, toMajor } from '@esmart/core/lib/money';
+import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
-import { checkCreditLimit } from '@esmart/core/domain/receivables';
-import { OUTBOUND_KINDS, isLowStock, stockMapOn, stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
@@ -49,9 +48,7 @@ import {
   useHasModule,
   useItems,
   useParties,
-  usePayments,
   useDefaultBranchId,
-  useStockMovements,
   useTaxCategories,
 } from '../../store/selectors';
 import {
@@ -68,7 +65,8 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useCanWrite } from '../../remote/connectivity';
 import { useSaveOnline } from '../../remote/save';
-import { useItemSearch, usePartySearch, useTdsPreview } from '../../remote/queries';
+import { useDocumentRecord, useItemRecord, useItemSearch, useOpenDocuments, usePartyRecord, usePartySearch, useStockAvailable, useStockMovedBy, useTdsPreview } from '../../remote/queries';
+import { LoadingView } from '../../components/LoadingView';
 import { useDebounced } from '../../components/useDebounced';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
@@ -83,13 +81,7 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
 const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
 
-export function DocumentEditor({
-  kind,
-  documentId,
-  initialDraft,
-  prefill,
-  onSaved,
-}: {
+type EditorProps = {
   kind: DocumentKind;
   documentId?: string;
   initialDraft?: DraftState;
@@ -106,7 +98,22 @@ export function DocumentEditor({
     items?: { itemId: string; quantity: number }[];
   };
   onSaved?: (id: string) => void;
-}) {
+};
+
+/**
+ * Loads what the editor starts from before it opens: the prefilled party and
+ * item, and the document this one is made from. The form reads them from the
+ * store, which no longer holds every record.
+ */
+export function DocumentEditor(props: EditorProps) {
+  const party = usePartyRecord(props.prefill?.partyId);
+  const item = useItemRecord(props.prefill?.itemId);
+  const source = useDocumentRecord(props.initialDraft?.sourceDocumentId);
+  if (party.isLoading || item.isLoading || source.isLoading) return <LoadingView />;
+  return <DocumentEditorForm {...props} />;
+}
+
+function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }: EditorProps) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'domain', 'sales', 'purchases']);
   const router = useRouter();
@@ -120,6 +127,7 @@ export function DocumentEditor({
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const hasFx = useHasModule('fx');
+  const hasInventory = useHasModule('inventory');
   const branches = useBranches();
   const taxCategories = useTaxCategories();
   const exchangeRates = useExchangeRates();
@@ -127,9 +135,8 @@ export function DocumentEditor({
   const parties = useParties(isPurchase ? 'supplier' : 'customer');
   const items = useItems({ activeOnly: true });
   const allItems = useItems();
-  const movements = useStockMovements();
+  // Only the device's TDS fallback reads these; everything else asks the server.
   const documents = useDocuments();
-  const payments = usePayments();
   const hsnRequired = hsnMandatory(company?.taxRegistration);
   const isReturn = kind === 'salesReturn' || kind === 'purchaseReturn';
   // Tax documents carry HSN/SAC per line; quotes and orders do not have to.
@@ -303,6 +310,17 @@ export function DocumentEditor({
 
   const kindName = documentKindLabel(tr, kind, 1);
   const party = parties.find((p) => p.id === draft.partyId);
+  // The party's other open invoices, as the server counts what they still owe.
+  const openInvoices = useOpenDocuments(kind === 'invoice' && party?.creditLimit?.minor ? draft.partyId : null, ['invoice']).data;
+  /** Core's `checkCreditLimit`: what's owed on other invoices plus this one, in the limit's currency. */
+  const creditCheck = (limit: Money) => {
+    const rateToBase = (c: string) => (c === baseCurrency ? 1 : c === draft.currency ? draft.exchangeRate : resolveRate(exchangeRates, c, baseCurrency, draft.date));
+    const limitRate = rateToBase(limit.currency) || 1;
+    const inLimit = (m: Money) => (m.currency === limit.currency ? m.minor : Math.round((m.minor * (rateToBase(m.currency) || 1)) / limitRate));
+    const owed = (openInvoices ?? []).filter((d) => d.id !== documentId).reduce((acc, d) => acc + inLimit((d.outstanding ?? zero(d.grandTotal.currency)) as Money), 0);
+    const exposureMinor = owed + inLimit(totals.grandTotal);
+    return { exposure: money(exposureMinor, limit.currency), limit, exceeds: limit.minor > 0 && exposureMinor > limit.minor };
+  };
   const branchId = draft.branchId ?? defaultBranchId ?? undefined;
   const branch = branches.find((b) => b.id === branchId);
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
@@ -340,11 +358,15 @@ export function DocumentEditor({
   // The item list shows stock at this branch when finalising this document moves
   // stock: not for a quote or an order, nor an invoice whose stock already left
   // with the delivery it came from.
-  const movesStock =
-    ['invoice', 'delivery', 'goodsReceipt', 'purchaseBill', 'salesReturn', 'purchaseReturn'].includes(kind) &&
-    !(draft.sourceDocumentId && movements.some((m) => m.referenceId === draft.sourceDocumentId));
-  // What the branch holds on the document date, not today.
-  const stockByItem = itemOpen && movesStock ? stockMapOn(movements, draft.date, branchId) : undefined;
+  useDocumentRecord(draft.sourceDocumentId);
+  const sourceMoved = useStockMovedBy(draft.sourceDocumentId).data ?? false;
+  const movesStock = ['invoice', 'delivery', 'goodsReceipt', 'purchaseBill', 'salesReturn', 'purchaseReturn'].includes(kind) && !sourceMoved;
+  // What the branch can give on the document date, not today, as finalising will check it.
+  const available = useStockAvailable(branchId, draft.date, movesStock && hasInventory).data;
+  const stockByItem = itemOpen && movesStock ? available : undefined;
+  /** Tracked goods going out beyond what the server says is there; it refuses them on finalising too. */
+  const shortfalls = () =>
+    available && movesStock && !company?.allowNegativeStock && OUTBOUND_KINDS.includes(kind) ? shortfallsAgainst(available, draft.lines, allItems) : [];
   const stockNote = (item: (typeof items)[number]) => {
     if (!stockByItem || !item.trackInventory || item.type !== 'goods') return undefined;
     const qty = stockByItem[item.id] ?? 0;
@@ -430,12 +452,7 @@ export function DocumentEditor({
       const missing = draft.lines.filter((l) => validHsn(l.hsnCode, { required: true }));
       if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });
     }
-    const short = stockShortfalls({
-      doc: { kind, branchId: branchId ?? '', lines: draft.lines, sourceDocumentId: draft.sourceDocumentId, date: draft.date },
-      items: allItems,
-      movements,
-      allowNegativeStock: company?.allowNegativeStock,
-    });
+    const short = shortfalls();
     if (short.length) {
       return tr('sales:editor.insufficientStock', {
         date: formatDate(draft.date),
@@ -447,16 +464,7 @@ export function DocumentEditor({
 
   const creditLimitWarning = (): string | null => {
     if (kind !== 'invoice' || !party?.creditLimit || party.creditLimit.minor <= 0) return null;
-    const check = checkCreditLimit({
-      limit: party.creditLimit,
-      partyId: party.id,
-      documents,
-      payments,
-      newTotal: totals.grandTotal,
-      excludeDocumentId: documentId,
-      rateToBase: (c) =>
-        c === baseCurrency ? 1 : c === draft.currency ? draft.exchangeRate : resolveRate(exchangeRates, c, baseCurrency, draft.date),
-    });
+    const check = creditCheck(party.creditLimit);
     return check.exceeds
       ? tr('sales:editor.creditLimitExceeded', {
           party: party.name,
