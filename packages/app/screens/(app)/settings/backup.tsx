@@ -16,7 +16,7 @@ import { SwitchField } from '@esmart/ui/components/Field';
 import { exportCompany, getBackupSettings, saveBackupSettings, type BackupSettings, type ExportFormat } from '../../../remote/exports';
 import { describeError } from '../../../remote/errors';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useAuditEvents } from '../../../store/selectors';
+import { useActiveCompany } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { formatDateTime } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -29,7 +29,6 @@ export default function BackupExport() {
 
   const company = useActiveCompany();
   const usage = useCompanyUsage().data;
-  const audit = useAuditEvents();
   const companies = useAppStore((s) => s.companies);
 
   const [busy, setBusy] = useState(false);
@@ -67,9 +66,9 @@ export default function BackupExport() {
       { label: tr('settings:backup.count.payments'), value: usage?.counts.payments ?? 0, icon: 'cash' as const },
       { label: tr('nav:title.expenses'), value: usage?.counts.expenses ?? 0, icon: 'receipt-text-outline' as const },
       { label: tr('nav:title.stockMovements'), value: usage?.counts.stockMovements ?? 0, icon: 'swap-vertical' as const },
-      { label: tr('settings:backup.count.auditEvents'), value: audit.length, icon: 'history' as const },
+      { label: tr('settings:backup.count.auditEvents'), value: usage?.counts.auditEvents ?? 0, icon: 'history' as const },
     ],
-    [usage, audit, tr],
+    [usage, tr],
   );
 
   /** The server builds the package (every record of this business) and hands back a signed download link. */

@@ -32,6 +32,28 @@ export const COLLECTIONS: Record<string, { collection: CollectionKey; key: 'id' 
   compliance_settings: { collection: 'complianceSettings', key: 'companyId' },
 };
 
+/**
+ * What a device needs to work at all: the business, its people and its setup. A first sync brings
+ * these in full; everything else only if it changed in the last `RECENT_DAYS` (screens read the
+ * rest from the server, and keep what they open).
+ */
+export const SETUP_ENTITY_TYPES = [
+  'company',
+  'branch',
+  'user',
+  'tax_category',
+  'expense_category',
+  'payment_account',
+  'exchange_rate',
+  'numbering_series',
+  'transporter',
+  'ledger_account',
+  'cost_centre',
+  'integration',
+  'compliance_settings',
+];
+export const RECENT_DAYS = 30;
+
 /** Collections every new company starts with; the server creates its own copies. */
 export const COMPANY_DEFAULTS: CollectionKey[] = ['branches', 'numberingSeries', 'taxCategories', 'expenseCategories', 'paymentAccounts', 'complianceSettings'];
 

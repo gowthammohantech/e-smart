@@ -1,5 +1,6 @@
 import { ApiError } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
+import { RECENT_DAYS, SETUP_ENTITY_TYPES } from './collections';
 import { api, isNetworkError } from './api';
 import { reportError } from '../lib/reporter';
 import { useConnectivity } from './connectivity';
@@ -87,7 +88,7 @@ export async function reloadSnapshot(replace: () => void) {
   const changes: Change[] = [];
   let cursor: string | undefined;
   for (;;) {
-    const { data } = await api.GET('/sync/pull', { params: { query: { ...(cursor ? { since: cursor } : {}), limit: 500 } } });
+    const { data } = await api.GET('/sync/pull', { params: { query: { ...(cursor ? { since: cursor } : {}), ...narrowed(cursor), limit: 500 } } });
     changes.push(...((data?.changes ?? []) as Change[]));
     cursor = data?.cursor ?? cursor;
     if (!data?.hasMore) break;
@@ -97,6 +98,15 @@ export async function reloadSnapshot(replace: () => void) {
   useRemoteMeta.getState().patch({ cursor: cursor ?? null });
   await refreshLists();
   useRemoteMeta.getState().patch({ online: true, lastSyncAt: new Date().toISOString() });
+}
+
+/**
+ * A snapshot (no cursor yet, or one of its later pages) brings the setup in full and anything else
+ * only if it changed lately; changes after a cursor always come in full.
+ */
+function narrowed(cursor: string | null | undefined) {
+  if (cursor && !cursor.startsWith('s:')) return {};
+  return { entityTypes: SETUP_ENTITY_TYPES, changedSince: new Date(Date.now() - RECENT_DAYS * 86_400_000).toISOString() };
 }
 
 export function syncNow(): Promise<void> {
@@ -451,7 +461,7 @@ async function pullNewCompanies(started: number) {
 async function pullCompany(companyId: string, started: number) {
   let since: string | undefined;
   for (;;) {
-    const { data } = await api.GET('/sync/pull', { params: { query: { companyId, ...(since ? { since } : {}), limit: 500 } } });
+    const { data } = await api.GET('/sync/pull', { params: { query: { companyId, ...(since ? { since } : {}), ...narrowed(since), limit: 500 } } });
     assertSession(started);
     applyChanges(data?.changes ?? []);
     since = data?.cursor ?? since;
@@ -478,7 +488,7 @@ async function pullAll(started = session) {
   const meta = useRemoteMeta.getState();
   let cursor = meta.cursor;
   for (;;) {
-    const { data } = await api.GET('/sync/pull', { params: { query: { ...(cursor ? { since: cursor } : {}), limit: 500 } } });
+    const { data } = await api.GET('/sync/pull', { params: { query: { ...(cursor ? { since: cursor } : {}), ...narrowed(cursor), limit: 500 } } });
     assertSession(started);
     applyChanges(data?.changes ?? []);
     cursor = data?.cursor ?? cursor;
@@ -509,7 +519,7 @@ export async function all<T>(fetchPage: (cursor?: string) => Promise<{ data?: T[
   return out;
 }
 
-/** Notifications and the audit trail on the device: the last 90 days. The server keeps the rest. */
+/** Notifications on the device: the last 90 days. The server keeps the rest. */
 const recent = (row: { createdAt?: string }) => !row.createdAt || Date.parse(row.createdAt) > Date.now() - 90 * 86_400_000;
 
 /** A list the plan or role doesn't allow is simply left empty. */
@@ -526,10 +536,12 @@ async function refreshLists(started = session) {
   const companyId = useAppStore.getState().activeCompanyId;
   if (!companyId) return;
   const path = { companyId };
-  const [notifications, audit, movements, devices, users, integrations] = await Promise.all([
+  // Stock movements of the last weeks only: screens read the ledger from the server. The audit trail
+  // isn't kept on the device at all; its screen pages it from the server.
+  const since = new Date(Date.now() - RECENT_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const [notifications, movements, devices, users, integrations] = await Promise.all([
     all((cursor) => api.GET('/companies/{companyId}/notifications', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data), recent),
-    allowed(all((cursor) => api.GET('/companies/{companyId}/audit-events', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data), recent), []),
-    allowed(all((cursor) => api.GET('/companies/{companyId}/stock/movements', { params: { path, query: { limit: 200, cursor } } }).then((r) => r.data)), []),
+    allowed(all((cursor) => api.GET('/companies/{companyId}/stock/movements', { params: { path, query: { from: since, limit: 200, cursor } } }).then((r) => r.data)), []),
     api.GET('/me/devices').then((r) => r.data?.data ?? []),
     // Team members aren't in the change log until someone edits them.
     api.GET('/users').then((r) => r.data?.data ?? []),
@@ -538,7 +550,6 @@ async function refreshLists(started = session) {
   ]);
   assertSession(started);
   replaceForCompany('notifications', companyId, notifications as never);
-  replaceForCompany('auditEvents', companyId, audit as never);
   replaceForCompany('stockMovements', companyId, movements as never);
   // A person with a change still to send (an invite, an edit) keeps it on screen until it is answered.
   const s = useAppStore.getState();

@@ -19,13 +19,14 @@ export const usageHandlers = defineHandlers({
     const X = schema.expenses;
     const PAY = schema.payments;
     const A = schema.paymentAccounts;
-    const tally = (table: typeof schema.parties | typeof schema.items | typeof schema.stockMovements) => ctx.db.select({ n: count() }).from(table).where(eq(table.companyId, companyId));
+    const tally = (table: typeof schema.parties | typeof schema.items | typeof schema.stockMovements | typeof schema.auditEvents) => ctx.db.select({ n: count() }).from(table).where(eq(table.companyId, companyId));
 
-    const [[parties], [customers], [items], [movements], byBranch, [posted], [invoices], [payments], byCategory, itemTaxes, docTaxes, accounts, paidThrough, spentFrom] = await Promise.all([
+    const [[parties], [customers], [items], [movements], [audit], byBranch, [posted], [invoices], [payments], byCategory, itemTaxes, docTaxes, accounts, paidThrough, spentFrom] = await Promise.all([
       tally(schema.parties),
       ctx.db.select({ n: count() }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), eq(schema.parties.kind, 'customer'))),
       tally(schema.items),
       tally(schema.stockMovements),
+      tally(schema.auditEvents),
       ctx.db.select({ branchId: D.branchId, n: count() }).from(D).where(eq(D.companyId, companyId)).groupBy(D.branchId),
       ctx.db.select({ n: count() }).from(D).where(and(eq(D.companyId, companyId), notInArray(D.status, ['draft', 'requested']))),
       ctx.db.select({ n: count() }).from(D).where(and(eq(D.companyId, companyId), eq(D.kind, 'invoice'))),
@@ -62,6 +63,7 @@ export const usageHandlers = defineHandlers({
         payments: Number(payments.n),
         expenses: byCategory.reduce((s, r) => s + Number(r.n), 0),
         stockMovements: Number(movements.n),
+        auditEvents: Number(audit.n),
       },
       postedDocuments: Number(posted.n),
       documentsByBranch: Object.fromEntries(byBranch.map((r) => [r.branchId, Number(r.n)])),

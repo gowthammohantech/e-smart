@@ -859,8 +859,9 @@ paths:
                 properties:
                   counts:
                     type: object
-                    required: [parties, customers, items, documents, invoices, payments, expenses, stockMovements]
+                    required: [parties, customers, items, documents, invoices, payments, expenses, stockMovements, auditEvents]
                     properties:
+                      auditEvents: { type: integer }
                       parties: { type: integer }
                       customers: { type: integer }
                       items: { type: integer }
@@ -3757,6 +3758,7 @@ paths:
         - { name: entityType, in: query, schema: { type: string } }
         - { name: entityId, in: query, schema: { type: string } }
         - { name: actorId, in: query, schema: { type: string } }
+        - { name: q, in: query, description: "Action, record or who did it", schema: { type: string } }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
         - { $ref: '#/components/parameters/Limit' }
@@ -3960,6 +3962,13 @@ paths:
         - { name: since, in: query, description: Cursor from the previous pull; omit for a full snapshot, schema: { type: string } }
         - { name: companyId, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer, default: 500, maximum: 2000 } }
+        - name: entityTypes
+          in: query
+          description: "Snapshot only: these entity types in full (e.g. the setup a device needs to work). With neither this nor `changedSince`, every type is sent in full; changes after a cursor always cover every type."
+          style: form
+          explode: false
+          schema: { type: array, items: { type: string } }
+        - { name: changedSince, in: query, description: "Snapshot only: other entity types too, but only those whose latest change is at or after this", schema: { type: string, format: date-time } }
       responses:
         '200':
           description: OK

@@ -6466,6 +6466,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         counts: {
+                            auditEvents: number;
                             parties: number;
                             customers: number;
                             items: number;
@@ -10552,6 +10553,8 @@ export interface operations {
                 entityType?: string;
                 entityId?: string;
                 actorId?: string;
+                /** @description Action, record or who did it */
+                q?: string;
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
                 limit?: components["parameters"]["Limit"];
@@ -10838,6 +10841,10 @@ export interface operations {
                 since?: string;
                 companyId?: string;
                 limit?: number;
+                /** @description Snapshot only: these entity types in full (e.g. the setup a device needs to work). With neither this nor `changedSince`, every type is sent in full; changes after a cursor always cover every type. */
+                entityTypes?: string[];
+                /** @description Snapshot only: other entity types too, but only those whose latest change is at or after this */
+                changedSince?: string;
             };
             header?: never;
             path?: never;

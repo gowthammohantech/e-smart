@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { QueryClient, keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { Schema } from '@esmart/api-client';
-import type { DocStatus, DocumentKind, EInvoiceStatus, EwayBill, EwayBillStatus, Expense, Item, Voucher } from '@esmart/core/types';
+import type { AuditEvent, DocStatus, DocumentKind, EInvoiceStatus, EwayBill, EwayBillStatus, Expense, Item, Voucher } from '@esmart/core/types';
 import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
 import { today } from '@esmart/core/lib/date';
 import { useAppStore } from '../store/appStore';
@@ -899,6 +899,23 @@ export function useEwayBillRecord(id: string | undefined) {
       return data!;
     },
   });
+}
+
+/** The audit trail, newest first, 50 at a time, searched on the server. */
+export function useAuditPages(q: string) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: ['audit', companyId, q.trim()],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/audit-events', { params: { path: { companyId }, query: { q: q.trim() || undefined, limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as AuditEvent[] };
 }
 
 /** The compliance register's documents: by e-invoice status, or those still needing an e-way bill. */

@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -10,7 +10,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Avatar } from '@esmart/ui/components/Avatar';
-import { useAuditEvents } from '../../../store/selectors';
+import { useAuditPages } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { formatDateTime } from '@esmart/core/lib/date';
 import { auditChanges } from '@esmart/core/domain/auditDiff';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -41,15 +42,11 @@ export default function AuditTrail() {
     const marked = /^marked (\w+)$/.exec(action);
     return marked ? `marked ${status(marked[1]).toLowerCase()}` : action;
   };
-  const events = useAuditEvents();
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return events;
-    return events.filter((e) => `${e.action} ${e.entityType} ${e.entityLabel} ${e.actorName}`.toLowerCase().includes(q));
-  }, [events, query]);
+  // Read from the server 50 at a time, newest first, and searched there.
+  const pages = useAuditPages(useDebounced(query));
+  const filtered = pages.rows;
 
   const iconFor = (action: string) =>
     ICONS[action] ?? (action.startsWith('marked') ? 'flag-outline' : action.includes('payment') ? 'cash' : 'circle-small');
@@ -65,12 +62,21 @@ export default function AuditTrail() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600 && pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+        }}
+        scrollEventThrottle={200}
+      >
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {pages.isLoading && !filtered.length ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : filtered.length === 0 ? (
             <EmptyState icon="history" title={tr('settings:audit.none')} message={tr('settings:audit.noneBody')} compact />
           ) : (
-            filtered.slice(0, 150).map((e, i) => {
+            filtered.map((e, i) => {
               const changes = auditChanges(e.before, e.after);
               const open = openId === e.id && changes.length > 0;
               return (
@@ -122,6 +128,7 @@ export default function AuditTrail() {
             })
           )}
         </Card>
+        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
           <Icon name="lock-outline" size={19} color={t.c.muted} />
