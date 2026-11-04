@@ -175,9 +175,11 @@ describe('payment accounts', () => {
 });
 
 describe('exchange rates', () => {
-  it('manages manual rates on the full plan', async () => {
+  it('manages manual rates on every plan', async () => {
+    // A Free business can bill a customer in their currency, so it keeps rates too.
     const free = await ownerWithCompany(t);
-    expect((await t.get(`${free.c}/exchange-rates`, { token: free.token })).status).toBe(403);
+    expect((await t.get(`${free.c}/exchange-rates`, { token: free.token })).status).toBe(200);
+    expect((await t.post(`${free.c}/exchange-rates`, { from: 'USD', to: 'INR', rate: 94.7, effectiveFrom: '2026-09-01' }, { token: free.token })).status).toBe(201);
 
     const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
     const created = await t.post(`${c}/exchange-rates`, { from: 'USD', to: 'INR', rate: 83.1, effectiveFrom: '2026-09-01' }, { token });
