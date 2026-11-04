@@ -2322,6 +2322,9 @@ paths:
         - { name: supplierId, in: query, schema: { type: string } }
         - { name: billable, in: query, schema: { type: boolean } }
         - { name: recurring, in: query, schema: { type: boolean } }
+        - { name: unrecovered, in: query, description: Only billable expenses no live invoice has recovered yet, schema: { type: boolean } }
+        - { name: forCustomer, in: query, description: Billable to this customer or to no one in particular, schema: { type: string } }
+        - { name: exceptDocumentId, in: query, description: "With `unrecovered`: this document's own lines don't count as recovering", schema: { type: string } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -5644,6 +5647,11 @@ components:
           required: [categoryId, date, amount, currency, accountId, method]
           properties:
             id: { type: string, readOnly: true }
+            recoveredBy:
+              type: object
+              readOnly: true
+              description: The live invoice that recovered it as a reimbursement line
+              properties: { documentId: { type: string }, number: { type: string } }
             companyId: { type: string, readOnly: true }
             branchId: { type: string }
             number: { type: string, readOnly: true }

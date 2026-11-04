@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import type { Expense } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -16,10 +16,22 @@ export async function expensesToWire(db: DbOrTx, rows: ExpenseRow[]): Promise<Sc
     .from(A)
     .where(and(eq(A.entityType, 'expense'), inArray(A.entityId, rows.map((r) => r.id))))
     .orderBy(A.uploadedAt);
-  return rows.map((r) => expenseToWire(r, attachments.filter((a) => a.entityId === r.id).map((a) => a.id)));
+  // The live invoice each billable one was recovered on, as a reimbursement line.
+  const billable = rows.filter((r) => r.billable).map((r) => r.id);
+  const L = schema.documentLines;
+  const D = schema.documents;
+  const recovered = billable.length
+    ? await db
+        .select({ expenseId: L.expenseId, documentId: D.id, number: D.number })
+        .from(L)
+        .innerJoin(D, eq(D.id, L.documentId))
+        .where(and(inArray(L.expenseId, billable), notInArray(D.status, ['draft', 'cancelled', 'rejected'])))
+    : [];
+  const by = new Map(recovered.map((r) => [r.expenseId!, { documentId: r.documentId, number: r.number }]));
+  return rows.map((r) => expenseToWire(r, attachments.filter((a) => a.entityId === r.id).map((a) => a.id), by.get(r.id)));
 }
 
-export function expenseToWire(r: ExpenseRow, attachmentIds: string[]): Schema<'Expense'> {
+export function expenseToWire(r: ExpenseRow, attachmentIds: string[], recoveredBy?: { documentId: string; number: string }): Schema<'Expense'> {
   const currency = r.currency.trim();
   return compact({
     id: r.id,
@@ -49,6 +61,7 @@ export function expenseToWire(r: ExpenseRow, attachmentIds: string[]): Schema<'E
     recurrence: r.recurrence,
     nextRecurrenceDate: r.nextRecurrenceDate,
     attachmentIds,
+    recoveredBy,
     createdBy: r.createdBy,
     ...versioned(r),
   });

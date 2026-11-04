@@ -10,9 +10,8 @@ import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { uid } from '@esmart/core/lib/id';
 import type { DocumentLine, Expense } from '@esmart/core/types';
-import { useDocuments, useExpenseCategories, useExpenses, useTaxCategories } from '../../store/selectors';
-
-const OFF = ['draft', 'cancelled', 'rejected'];
+import { useExpenseCategories, useHasModule, useTaxCategories } from '../../store/selectors';
+import { useBillableExpenses } from '../../remote/queries';
 
 /**
  * The customer's billable expenses not yet recovered, to add to an invoice as reimbursement lines at
@@ -22,18 +21,15 @@ const OFF = ['draft', 'cancelled', 'rejected'];
 export function BillableExpenses({ partyId, currency, documentId, lines, onAdd }: { partyId?: string; currency: string; documentId?: string; lines: DocumentLine[]; onAdd: (line: DocumentLine) => void }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales']);
-  const expenses = useExpenses();
-  const documents = useDocuments();
+  // The server knows which are already on a live invoice; lines added here count too.
+  const billable = useBillableExpenses(useHasModule('expenses') ? partyId : undefined, currency, documentId).data;
   const categories = useExpenseCategories();
   const taxCategories = useTaxCategories();
 
   const open = useMemo(() => {
-    if (!partyId) return [];
-    const recovered = new Set<string>();
-    for (const d of documents) if (d.id !== documentId && !OFF.includes(d.status)) for (const l of d.lines) if (l.expenseId) recovered.add(l.expenseId);
-    for (const l of lines) if (l.expenseId) recovered.add(l.expenseId);
-    return expenses.filter((e) => e.billable && (!e.customerId || e.customerId === partyId) && e.currency === currency && !recovered.has(e.id));
-  }, [partyId, documents, documentId, lines, expenses, currency]);
+    const added = new Set(lines.map((l) => l.expenseId).filter(Boolean));
+    return (billable ?? []).filter((e) => !added.has(e.id));
+  }, [billable, lines]);
 
   if (!open.length) return null;
   const nil = taxCategories.find((c) => c.rate === 0) ?? taxCategories[0];

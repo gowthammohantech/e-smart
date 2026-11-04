@@ -13,7 +13,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
-import { useDocuments, useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
+import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
 import { useExpenseRecord } from '../../../../remote/queries';
 import { LoadingView } from '../../../../components/LoadingView';
 import { useCostCentres } from '../../../../store/books';
@@ -45,7 +45,7 @@ export default function ExpenseDetail() {
   const costCentre = useCostCentres(true).find((c) => c.id === expense?.costCentreId);
   const billTo = useParty(expense?.customerId);
   // The invoice that recovered it, when one has.
-  const recoveredOn = useDocuments().find((d) => !['draft', 'cancelled', 'rejected'].includes(d.status) && d.lines.some((l) => !!l.expenseId && l.expenseId === expense?.id));
+  const recoveredOn = remote.data?.recoveredBy;
   const extraBadges = (
     <>
       {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}

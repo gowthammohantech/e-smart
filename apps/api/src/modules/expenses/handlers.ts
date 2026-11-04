@@ -1,4 +1,4 @@
-import { and, eq, exists, gte, ilike, inArray, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, exists, gte, ilike, inArray, isNull, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
@@ -138,7 +138,8 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
 }
 
 /** Expenses: listExpenses, createExpense, getExpense, saveExpense, removeExpense. */
-type ExpenseQuery = Pick<Ctx<'listExpenses'>['query'], 'categoryId' | 'supplierId' | 'billable' | 'recurring' | 'branchId' | 'from' | 'to' | 'q'>;
+type ExpenseQuery = Pick<Ctx<'listExpenses'>['query'], 'categoryId' | 'supplierId' | 'billable' | 'recurring' | 'branchId' | 'from' | 'to' | 'q'> &
+  Partial<Pick<Ctx<'listExpenses'>['query'], 'unrecovered' | 'forCustomer' | 'exceptDocumentId'>>;
 
 /** The WHERE of an expense list, shared by the list and its summary so the two never disagree. */
 function expenseFilters(ctx: Pick<Ctx<'listExpenses'>, 'company' | 'user' | 'db'>, q: ExpenseQuery): (SQL | undefined)[] {
@@ -147,6 +148,22 @@ function expenseFilters(ctx: Pick<Ctx<'listExpenses'>, 'company' | 'user' | 'db'
   if (q.supplierId) filters.push(eq(E.supplierId, q.supplierId));
   if (q.billable !== undefined) filters.push(eq(E.billable, q.billable));
   if (q.recurring !== undefined) filters.push(q.recurring ? ne(E.recurrence, 'none') : eq(E.recurrence, 'none'));
+  if (q.forCustomer) filters.push(or(isNull(E.customerId), eq(E.customerId, q.forCustomer)));
+  if (q.unrecovered) {
+    // Billable, and on no live invoice yet (this one's own lines aside, while it is being edited).
+    const L = schema.documentLines;
+    const D = schema.documents;
+    filters.push(eq(E.billable, true));
+    filters.push(
+      notExists(
+        ctx.db
+          .select({ one: sql`1` })
+          .from(L)
+          .innerJoin(D, eq(D.id, L.documentId))
+          .where(and(eq(L.expenseId, E.id), notInArray(D.status, ['draft', 'cancelled', 'rejected']), q.exceptDocumentId ? ne(D.id, q.exceptDocumentId) : undefined)),
+      ),
+    );
+  }
   if (q.branchId) filters.push(eq(E.branchId, q.branchId));
   if (ctx.user.branchIds.length) filters.push(inArray(E.branchId, ctx.user.branchIds));
   if (q.from) filters.push(gte(E.date, q.from));

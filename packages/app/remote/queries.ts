@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { QueryClient, keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { Schema } from '@esmart/api-client';
-import type { DocStatus, DocumentKind, EInvoiceStatus, EwayBill, EwayBillStatus, Item, Voucher } from '@esmart/core/types';
+import type { DocStatus, DocumentKind, EInvoiceStatus, EwayBill, EwayBillStatus, Expense, Item, Voucher } from '@esmart/core/types';
 import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
 import { today } from '@esmart/core/lib/date';
 import { useAppStore } from '../store/appStore';
@@ -862,6 +862,26 @@ export function useCompanyUsage() {
       const { data } = await api.GET('/companies/{companyId}/usage', { params: { path: { companyId } }, signal });
       return data!;
     },
+  });
+}
+
+/**
+ * A customer's billable expenses that no live invoice has recovered yet, in `currency`; the
+ * document being edited (`documentId`) doesn't count as recovering its own.
+ */
+export function useBillableExpenses(partyId: string | undefined, currency: string, documentId?: string) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...expenseKeys.all(companyId), 'billable', partyId, documentId],
+    enabled: !!companyId && !!partyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/expenses', {
+        params: { path: { companyId }, query: { unrecovered: true, forCustomer: partyId, exceptDocumentId: documentId, limit: 200 } },
+        signal,
+      });
+      return (data?.data ?? []) as unknown as Expense[];
+    },
+    select: (rows) => rows.filter((e) => e.currency === currency),
   });
 }
 

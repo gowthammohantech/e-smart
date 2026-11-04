@@ -4482,6 +4482,11 @@ export interface components {
         };
         Expense: components["schemas"]["Versioned"] & {
             readonly id?: string;
+            /** @description The live invoice that recovered it as a reimbursement line */
+            readonly recoveredBy?: {
+                documentId?: string;
+                number?: string;
+            };
             readonly companyId?: string;
             branchId?: string;
             readonly number?: string;
@@ -8576,6 +8581,12 @@ export interface operations {
                 supplierId?: string;
                 billable?: boolean;
                 recurring?: boolean;
+                /** @description Only billable expenses no live invoice has recovered yet */
+                unrecovered?: boolean;
+                /** @description Billable to this customer or to no one in particular */
+                forCustomer?: string;
+                /** @description With `unrecovered`: this document's own lines don't count as recovering */
+                exceptDocumentId?: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];

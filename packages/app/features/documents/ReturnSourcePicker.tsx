@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, View } from 'react-native';
+import { ActivityIndicator, FlatList, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -11,7 +11,9 @@ import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
-import { useDocuments, useParties } from '../../store/selectors';
+import { fetchDocumentRecord, useDocumentPages, type ListedDocument } from '../../remote/queries';
+import { useDebounced } from '../../components/useDebounced';
+import type { BusinessDocument } from '@esmart/core/types';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { DocumentEditor, detailRouteFor } from './DocumentEditor';
 
@@ -38,20 +40,18 @@ function SourceList({ kind }: { kind: AgainstSource }) {
   const convertDocument = useAppStore((s) => s.convertDocument);
   const sourceKind = NOTE_SOURCE[kind] ?? 'invoice';
   const purchase = sourceKind === 'purchaseBill';
-  const sources = useDocuments(sourceKind);
-  const parties = useParties();
+  const companyId = useAppStore((s) => s.activeCompanyId);
   const isReturn = kind === 'salesReturn' || kind === 'purchaseReturn';
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return sources
-      .filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status))
-      .map((d) => ({ doc: d, partyName: parties.find((p) => p.id === d.partyId)?.name ?? '—' }))
-      .filter((r) => !q || r.doc.number.toLowerCase().includes(q) || r.partyName.toLowerCase().includes(q))
-      .sort((a, b) => b.doc.date.localeCompare(a.doc.date));
-  }, [sources, parties, query]);
+  // Newest first from the server, searched there by number or party; drafts and cancelled ones can't take a return.
+  const pages = useDocumentPages({ kinds: [sourceKind], q: useDebounced(query) });
+  const rows = (pages.rows as ListedDocument[])
+    .filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status ?? ''))
+    .map((d) => ({ doc: d, partyName: d.partyName ?? '—' }));
 
   const pick = async (id: string) => {
+    // Converting copies the source's lines on the device, so it needs the whole document.
+    await fetchDocumentRecord(companyId, id);
     const res = await serverSave(() => convertDocument(id, kind), tr(isReturn ? 'sales:returnPicker.created' : 'sales:notePicker.created'), { icon: isReturn ? 'keyboard-return' : 'file-document-edit-outline' });
     if (!res?.result) return;
     router.replace(`${detailRouteFor(kind, res.id ?? res.result)}/edit` as never);
@@ -76,15 +76,21 @@ function SourceList({ kind }: { kind: AgainstSource }) {
       <FlatList
         data={rows}
         keyExtractor={(r) => r.doc.id}
+        onEndReached={() => pages.hasNextPage && !pages.isFetchingNextPage && void pages.fetchNextPage()}
+        ListFooterComponent={pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
         ListEmptyComponent={
-          <Card padded={false}>
-            <EmptyState icon="file-search-outline" title={tr('sales:returnPicker.empty')} compact />
-          </Card>
+          pages.isLoading ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : (
+            <Card padded={false}>
+              <EmptyState icon="file-search-outline" title={tr('sales:returnPicker.empty')} compact />
+            </Card>
+          )
         }
         renderItem={({ item, index }) => (
           <Card padded={false} style={{ marginBottom: index === rows.length - 1 ? 0 : t.spacing.sm }}>
-            <DocumentRow document={item.doc} partyName={item.partyName} onPress={() => pick(item.doc.id)} divider={false} />
+            <DocumentRow document={item.doc as unknown as BusinessDocument} partyName={item.partyName} onPress={() => pick(item.doc.id)} divider={false} />
           </Card>
         )}
       />
