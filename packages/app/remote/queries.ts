@@ -211,6 +211,68 @@ export async function fetchDocumentRecord(companyId: string, id: string, signal?
   return doc;
 }
 
+export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string };
+const paymentKeys = {
+  all: (companyId: string) => ['payments', companyId] as const,
+};
+function paymentParams(f: PaymentQuery) {
+  return { direction: f.direction, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined };
+}
+
+/** Payments one way, newest first, 50 at a time. Each row carries its party's name. */
+export function usePaymentPages(f: PaymentQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...paymentKeys.all(companyId), 'pages', f],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments', { params: { path: { companyId }, query: { ...paymentParams(f), limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
+}
+
+/** How many payments the filters match, and their total in base currency. */
+export function usePaymentSummary(f: PaymentQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...paymentKeys.all(companyId), 'summary', f],
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments/summary', { params: { path: { companyId }, query: paymentParams(f) }, signal });
+      return data!;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Opens a payment from the server, kept in the store with its party (see useDocumentRecord). */
+export function usePaymentRecord(id: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const aliases = useRemoteMeta((m) => m.idAliases);
+  const current = id ? resolveId(id, aliases) : undefined;
+  return useQuery({
+    queryKey: ['payment', companyId, current],
+    enabled: !!companyId && !!current,
+    staleTime: 0,
+    retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments/{id}', { params: { path: { companyId, id: current! } }, signal });
+      const payment = data!;
+      if (payment.partyId && !useAppStore.getState().parties.some((p) => p.id === payment.partyId)) {
+        const party = await api.GET('/companies/{companyId}/parties/{id}', { params: { path: { companyId, id: payment.partyId } }, signal });
+        keep('party', companyId, [party.data]);
+      }
+      keep('payment', companyId, [payment]);
+      return payment;
+    },
+  });
+}
+
 export const hubKeys = {
   all: (companyId: string) => ['hubs', companyId] as const,
   sales: (companyId: string, branchId?: string) => ['hubs', companyId, 'sales', branchId ?? ''] as const,
@@ -256,6 +318,7 @@ export function watchStoreForQueries(): () => void {
     const companyId = useAppStore.getState().activeCompanyId;
     if (stale.has('documents')) {
       void queryClient.invalidateQueries({ queryKey: documentKeys.all(companyId) });
+      void queryClient.invalidateQueries({ queryKey: paymentKeys.all(companyId) });
       // The hubs add up documents and payments.
       void queryClient.invalidateQueries({ queryKey: hubKeys.all(companyId) });
     }

@@ -1447,6 +1447,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/payments/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many payments a list's filters match, and what they add up to in base currency
+         * @description Takes the filters of `listPayments`, so a paged list can show its count and total without loading every page.
+         */
+        get: operations["summarizePaymentList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payments": {
         parameters: {
             query?: never;
@@ -4206,6 +4228,8 @@ export interface components {
             readonly number?: string;
             direction: components["schemas"]["PaymentDirection"];
             partyId: string;
+            /** @description The customer's or supplier's name, so a list needn't look each one up */
+            readonly partyName?: string;
             /** Format: date */
             date: string;
             amount: components["schemas"]["Money"];
@@ -7909,6 +7933,41 @@ export interface operations {
                 content?: never;
             };
             502: components["responses"]["UpstreamError"];
+        };
+    };
+    summarizePaymentList: {
+        parameters: {
+            query?: {
+                direction?: components["schemas"]["PaymentDirection"];
+                partyId?: string;
+                method?: components["schemas"]["PaymentMethod"];
+                accountId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                    };
+                };
+            };
         };
     };
     listPayments: {

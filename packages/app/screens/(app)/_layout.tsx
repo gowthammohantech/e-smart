@@ -6,6 +6,7 @@ import { useAppStore } from '../../store/appStore';
 import { usePlanGuard } from '../../navigation/usePlanGuard';
 import { useIntentEntitySync } from '../../features/intents/useIntentEntitySync';
 import { useIntentHandoff } from '../../features/intents/useIntentHandoff';
+import { PageSurface } from '@esmart/ui/components/Doodles';
 
 /** A crash inside the signed-in app keeps the way home. */
 export function ErrorBoundary(props: ErrorBoundaryProps) {
@@ -30,6 +31,10 @@ function AppStack() {
   useIntentHandoff();
   return (
     <Stack
+      screenLayout={({ children, route }) =>
+        // The tabs draw a surface per tab themselves.
+        route.name === '(tabs)' ? children : <PageSurface>{children}</PageSurface>
+      }
       screenOptions={{
         headerShown: true,
         headerStyle: { backgroundColor: t.c.bg },

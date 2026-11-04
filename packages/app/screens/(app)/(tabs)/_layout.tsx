@@ -17,6 +17,7 @@ import { TabBar } from '@esmart/ui/components/TabBar';
 import { TabSwipe } from '../../../components/TabSwipe';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS } from '../../../navigation/tabs';
+import { PageSurface } from '@esmart/ui/components/Doodles';
 
 /** Which tabs each plan shows, in bar order. The rest stay routable but unlisted. */
 const VISIBLE = {
@@ -107,7 +108,7 @@ export default function TabsLayout() {
         }}
         screenLayout={({ children, route, navigation }) => (
           <TabSwipe tabs={swipeTabs} current={route.name} navigation={navigation}>
-            {children}
+            <PageSurface>{children}</PageSurface>
           </TabSwipe>
         )}
         screenListeners={({ route }) => ({

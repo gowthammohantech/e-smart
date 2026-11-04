@@ -26,6 +26,8 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
     .from(schema.paymentLinks)
     .where(and(isNotNull(schema.paymentLinks.paymentId), inArray(schema.paymentLinks.paymentId, ids)));
   const gateway = new Set(links.map((l) => l.paymentId));
+  const partyIds = [...new Set(rows.map((r) => r.partyId))];
+  const names = new Map((await db.select({ id: schema.parties.id, name: schema.parties.name }).from(schema.parties).where(inArray(schema.parties.id, partyIds))).map((p) => [p.id, p.name]));
   return rows.map((r) => {
     const currency = r.currency.trim();
     return compact({
@@ -35,6 +37,7 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
       number: r.number,
       direction: r.direction,
       partyId: r.partyId,
+      partyName: names.get(r.partyId),
       date: r.date,
       amount: money(r.amountMinor, currency),
       currency,

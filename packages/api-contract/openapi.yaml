@@ -2011,6 +2011,33 @@ paths:
         '502': { $ref: '#/components/responses/UpstreamError' }
 
   # ------------------------------------------------------------------ Payments
+  /companies/{companyId}/payments/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: summarizePaymentList
+      summary: How many payments a list's filters match, and what they add up to in base currency
+      description: Takes the filters of `listPayments`, so a paged list can show its count and total without loading every page.
+      parameters:
+        - { name: direction, in: query, schema: { $ref: '#/components/schemas/PaymentDirection' } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { name: method, in: query, schema: { $ref: '#/components/schemas/PaymentMethod' } }
+        - { name: accountId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
   /companies/{companyId}/payments:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -5257,6 +5284,7 @@ components:
             number: { type: string, readOnly: true }
             direction: { $ref: '#/components/schemas/PaymentDirection' }
             partyId: { type: string }
+            partyName: { type: string, readOnly: true, description: "The customer's or supplier's name, so a list needn't look each one up" }
             date: { type: string, format: date }
             amount: { $ref: '#/components/schemas/Money' }
             currency: { type: string }

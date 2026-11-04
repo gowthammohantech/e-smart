@@ -2,6 +2,7 @@ import { and, eq, exists, gte, ilike, inArray, lte, or, sql, type SQL } from 'dr
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
+import { money } from '../../lib/wire';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { notFound } from '../../http/errors';
 import { keyset } from '../../http/pagination';
@@ -57,28 +58,36 @@ function inputOf(body: Schema<'Payment'>): PaymentInput {
  * Payments: listPayments, createPayment, getPayment, savePayment,
  * removePayment, getPaymentReceiptPdf.
  */
+type PaymentQuery = Pick<Ctx<'listPayments'>['query'], 'direction' | 'partyId' | 'method' | 'accountId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listPayments'>['query'], 'documentId'>>;
+
+/** The WHERE of a payment list, shared by the list and its summary so the two never disagree. */
+function paymentFilters(ctx: Pick<Ctx<'listPayments'>, 'company' | 'user' | 'db'>, q: PaymentQuery): (SQL | undefined)[] {
+  if (q.direction) assertDirectionAllowed(ctx.company, q.direction);
+  const filters: (SQL | undefined)[] = [eq(PAY.companyId, ctx.company.id)];
+  if (q.direction) filters.push(eq(PAY.direction, q.direction));
+  if (q.partyId) filters.push(eq(PAY.partyId, q.partyId));
+  if (q.method) filters.push(eq(PAY.method, q.method));
+  if (q.accountId) filters.push(eq(PAY.accountId, q.accountId));
+  if (q.branchId) filters.push(eq(PAY.branchId, q.branchId));
+  if (ctx.user.branchIds.length) filters.push(inArray(PAY.branchId, ctx.user.branchIds));
+  if (q.from) filters.push(gte(PAY.date, q.from));
+  if (q.to) filters.push(lte(PAY.date, q.to));
+  if (q.documentId) {
+    const A = schema.paymentAllocations;
+    filters.push(exists(ctx.db.select({ one: sql`1` }).from(A).where(and(eq(A.paymentId, PAY.id), eq(A.documentId, q.documentId)))));
+  }
+  if (q.q) {
+    const like = `%${q.q.trim()}%`;
+    const P = schema.parties;
+    filters.push(or(ilike(PAY.number, like), ilike(PAY.reference, like), exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, PAY.partyId), ilike(P.name, like))))));
+  }
+  return filters;
+}
+
 export const paymentsHandlers = defineHandlers({
   async listPayments(ctx) {
     const q = ctx.query;
-    if (q.direction) assertDirectionAllowed(ctx.company, q.direction);
-    const filters: (SQL | undefined)[] = [eq(PAY.companyId, ctx.company.id)];
-    if (q.direction) filters.push(eq(PAY.direction, q.direction));
-    if (q.partyId) filters.push(eq(PAY.partyId, q.partyId));
-    if (q.method) filters.push(eq(PAY.method, q.method));
-    if (q.accountId) filters.push(eq(PAY.accountId, q.accountId));
-    if (q.branchId) filters.push(eq(PAY.branchId, q.branchId));
-    if (ctx.user.branchIds.length) filters.push(inArray(PAY.branchId, ctx.user.branchIds));
-    if (q.from) filters.push(gte(PAY.date, q.from));
-    if (q.to) filters.push(lte(PAY.date, q.to));
-    if (q.documentId) {
-      const A = schema.paymentAllocations;
-      filters.push(exists(ctx.db.select({ one: sql`1` }).from(A).where(and(eq(A.paymentId, PAY.id), eq(A.documentId, q.documentId)))));
-    }
-    if (q.q) {
-      const like = `%${q.q.trim()}%`;
-      const P = schema.parties;
-      filters.push(or(ilike(PAY.number, like), ilike(PAY.reference, like), exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, PAY.partyId), ilike(P.name, like))))));
-    }
+    const filters = paymentFilters(ctx, q);
     const k = keyset({ cursor: q.cursor, limit: q.limit, sort: PAY.date, id: PAY.id, order: 'desc' });
     const rows = await ctx.db
       .select()
@@ -87,6 +96,14 @@ export const paymentsHandlers = defineHandlers({
       .orderBy(...k.orderBy)
       .limit(k.take);
     return k.page(await paymentsToWire(ctx.db, rows.slice(0, k.take - 1), ctx.company.baseCurrency.trim()), rows);
+  },
+
+  async summarizePaymentList(ctx) {
+    const [row] = await ctx.db
+      .select({ count: sql<number>`count(*)::int`, total: sql<number>`coalesce(sum(round(${PAY.amountMinor} * ${PAY.exchangeRate})), 0)::bigint` })
+      .from(PAY)
+      .where(and(...paymentFilters(ctx, ctx.query)));
+    return { count: row.count, total: money(Number(row.total), ctx.company.baseCurrency.trim()) };
   },
 
   async createPayment(ctx) {

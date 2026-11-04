@@ -205,6 +205,12 @@ describe('payments', () => {
     expect((await t.get(`${m.c}/payments`, { token: m.token, query: { documentId: inv.id } })).body.data.map((x: { id: string }) => x.id)).toEqual([p.body.id]);
     expect((await t.get(`${m.c}/payments`, { token: m.token, query: { q: 'UTR-77' } })).body.data).toHaveLength(1);
     expect((await t.get(`${m.c}/payments`, { token: m.token, query: { q: 'Anand' } })).body.data).toHaveLength(1);
+    // Each row names its party, and the summary adds up what the filters match without paging.
+    const list = await t.get(`${m.c}/payments`, { token: m.token });
+    expect(list.body.data.every((x: { partyName?: string }) => !!x.partyName)).toBe(true);
+    const summary = await t.get(`${m.c}/payments/summary`, { token: m.token, query: { direction: 'received' } });
+    expect(summary.body).toEqual({ count: 2, total: { minor: list.body.data.reduce((a: number, x: { amount: { minor: number } }) => a + x.amount.minor, 0), currency: 'INR' } });
+    expect((await t.get(`${m.c}/payments/summary`, { token: m.token, query: { q: 'UTR-77' } })).body.count).toBe(1);
 
     const basic = await moneySetup(t, 'basic');
     const made = await t.post(`${basic.c}/payments`, payment(basic, { direction: 'paid' }), { token: basic.token });

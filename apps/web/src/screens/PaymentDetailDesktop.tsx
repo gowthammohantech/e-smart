@@ -17,6 +17,8 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '@esmart/app/store/selectors';
+import { usePaymentRecord } from '@esmart/app/remote/queries';
+import { LoadingView } from '@esmart/app/components/LoadingView';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
@@ -63,6 +65,8 @@ export function PaymentDetailDesktop() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const payment = usePayment(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = usePaymentRecord(id);
   const party = useParty(payment?.partyId);
   const accounts = usePaymentAccounts();
   const baseCurrency = useBaseCurrency();
@@ -71,6 +75,7 @@ export function PaymentDetailDesktop() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  if (!payment && remote.isLoading) return <LoadingView />;
   if (!payment) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>

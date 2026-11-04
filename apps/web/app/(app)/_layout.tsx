@@ -9,6 +9,7 @@ import { TopBar } from '../../src/shell/TopBar';
 import { LixiPanel } from '../../src/shell/LixiPanel';
 import { SettingsNav } from '../../src/shell/SettingsNav';
 import { CONTENT_MAX_WIDTH, useBreakpoint, useIsDesktop } from '../../src/layout';
+import { PageSurface } from '@esmart/ui/components/Doodles';
 
 /**
  * The signed-in shell for the browser. On a desktop: the sidebar on the
@@ -30,6 +31,10 @@ export default function WebAppLayout() {
 
   const stack = (
     <Stack
+      screenLayout={({ children, route }) =>
+        // The tabs draw a surface per tab themselves.
+        route.name === '(tabs)' ? children : <PageSurface>{children}</PageSurface>
+      }
       screenOptions={{
         headerShown: true,
         headerStyle: { backgroundColor: t.c.bg },
