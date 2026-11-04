@@ -5,6 +5,7 @@ import { expenseCost, claimableTax, expenseTaxComponents } from '../expenseTax';
 import { ItcBuckets, TaxSplit, itcOfDocument } from '../itc';
 import { calculateLine } from '../lineCalc';
 import { homeStateCode } from '../taxEngine';
+import { addDaysISO } from '../../lib/date';
 import { TAX_KINDS, TaxKind } from './accounts';
 
 /**
@@ -210,23 +211,33 @@ export const OPENING_DATE = '1900-01-01';
 /**
  * Opening balances: what parties owed or were owed, cash and bank, the business's own accounts, and
  * stock counted at the start. Whatever doesn't balance is the owner's (Opening balances, in capital).
+ * A balance given a date stands at the start of that day, so it posts the day before: a report from
+ * that day on reads it as opening, one before it doesn't see it. Undated ones sit at OPENING_DATE.
  */
 export function postOpenings(book: {
-  parties: Pick<Party, 'id' | 'kind' | 'openingBalance'>[];
+  parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate'>[];
   paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate'>[];
-  ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance'>[];
+  ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceDate'>[];
   openingStockMinor: number;
 }): Posting[] {
-  const entries: Entry[] = [
-    // A customer's positive opening balance is owed to us; a supplier's is owed by us.
-    ...book.parties.map((p): Entry => [`party:${p.id}`, p.kind === 'supplier' ? -p.openingBalance.minor : p.openingBalance.minor]),
-    ...book.paymentAccounts.map((a): Entry => [`pay:${a.id}`, a.openingBalance.minor * (a.openingRate ?? 1)]),
-    ...book.ledgerAccounts.map((a): Entry => [`acc:${a.id}`, a.openingBalance.minor]),
-    ['sys:openingStock', book.openingStockMinor],
-  ];
-  const rest = entries.reduce((a, [, v]) => a + v, 0);
-  entries.push(['sys:openingDifference', -rest]);
-  return toPostings(entries, { type: 'opening', id: 'opening', number: 'Opening balances' }, OPENING_DATE, {});
+  const byDate = new Map<string, Entry[]>();
+  const add = (date: string | undefined, entry: Entry) => {
+    const day = date ? addDaysISO(date, -1) : OPENING_DATE;
+    byDate.set(day, [...(byDate.get(day) ?? []), entry]);
+  };
+  // A customer's positive opening balance is owed to us; a supplier's is owed by us.
+  for (const p of book.parties) add(p.openingBalanceDate, [`party:${p.id}`, p.kind === 'supplier' ? -p.openingBalance.minor : p.openingBalance.minor]);
+  // A cash or bank account's openingBalanceDate only picks its FX rate: the form fills it with the
+  // day the account was added, so it isn't a books date.
+  for (const a of book.paymentAccounts) add(undefined, [`pay:${a.id}`, a.openingBalance.minor * (a.openingRate ?? 1)]);
+  for (const a of book.ledgerAccounts) add(a.openingBalanceDate, [`acc:${a.id}`, a.openingBalance.minor]);
+  add(undefined, ['sys:openingStock', book.openingStockMinor]);
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .flatMap(([date, entries]) => {
+      const rest = entries.reduce((a, [, v]) => a + v, 0);
+      return toPostings([...entries, ['sys:openingDifference', -rest]], { type: 'opening', id: 'opening', number: 'Opening balances' }, date, {});
+    });
 }
 
 /** Everything on the books, in date order. */
@@ -239,9 +250,9 @@ export function allPostings(book: {
   payments: Payment[];
   expenses: Expense[];
   vouchers: Voucher[];
-  parties: Pick<Party, 'id' | 'kind' | 'openingBalance'>[];
-  paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance'>[];
-  ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance'>[];
+  parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate'>[];
+  paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate'>[];
+  ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceDate'>[];
   openingStockMinor: number;
 }): Posting[] {
   const dates = new Map(book.documents.map((d) => [d.id, d.date]));

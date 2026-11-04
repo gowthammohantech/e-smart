@@ -67,7 +67,8 @@
     "gstJournal": "GST journal",
     "tdsChallan": "TDS challan",
     "payment": "Payment",
-    "expense": "Expense"
+    "expense": "Expense",
+    "receipt": "Receipt voucher"
   },
   "noteReason": {
     "discount": "Discount after the sale",

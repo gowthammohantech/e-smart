@@ -416,12 +416,14 @@ async function checkReturnWithinSource(tx: DbOrTx, row: DocRow) {
 /**
  * A note or return must stand against a finalised invoice or bill of the same party and currency.
  * Credit (returns and credit notes) can't add up to more than the source charged plus its debit
- * notes, and the business's own credit notes have a deadline (s.34(2)).
+ * notes, and the business's own credit notes have a deadline (s.34(2)). A direct note, raised
+ * against no one invoice or bill, has nothing to check here; the draft required its reason.
  */
 async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
   const blocking = (field: string, message: string, code = 'VALIDATION_FAILED') => {
     throw unprocessable([{ field, message, severity: 'blocking' }], code);
   };
+  if (!row.sourceDocumentId && NOTE_KINDS.includes(row.kind)) return;
   if (!row.sourceDocumentId) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');
   const [source] = await tx.select().from(D).where(and(eq(D.companyId, row.companyId), eq(D.id, row.sourceDocumentId))).for('update');
   if (!source || source.kind !== NOTE_SOURCE[row.kind]) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');

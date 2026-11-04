@@ -159,7 +159,7 @@
       "description": "Spend by category over time"
     },
     "receivables": {
-      "title": "Receivables",
+      "title": "Receivable report",
       "description": "Who owes you, and for how long",
       "basis": "Outstanding = document total less allocated payments."
     },
@@ -201,6 +201,26 @@
       "title": "MSME payments due",
       "description": "Micro and small suppliers’ bills against the 45-day limit",
       "basis": "Unpaid on the period’s last day. Due on the agreed day, never more than 45 days after the bill, or in 15 days if nothing was agreed (MSMED Act s.15)."
+    },
+    "tdsPayable": {
+      "title": "TDS payable",
+      "description": "TDS deducted, deposited and still to deposit, by section and month",
+      "basis": "Deducted on bills and payments, against the TDS challans. A challan settles its section's oldest month first; each month is due by the 7th of the next (30 April for March)."
+    },
+    "tdsReceivable": {
+      "title": "TDS receivable",
+      "description": "TDS your customers kept back, to check against Form 26AS",
+      "basis": "Receipts dated in the period where the customer deducted TDS, by customer and quarter"
+    },
+    "tds26q": {
+      "title": "Form 26Q deductees",
+      "description": "Deductee-wise TDS with PAN and challan, ready for the return",
+      "basis": "Supplier bills and notes with TDS, dated in the period. Export it for the return preparation utility. TDS kept back on a payment names no section, so deduct it on the bill to report it here."
+    },
+    "tdsChallans": {
+      "title": "TDS challans",
+      "description": "Challans deposited, with BSR code and serial",
+      "basis": "TDS challan vouchers deposited in the period, and how many deductions each settles"
     }
   },
   "figure": {
@@ -302,5 +322,31 @@
     "agingA11y_other": "{{label}}: {{amount}} across {{count}} invoices",
     "outward": "Outward",
     "inward": "Inward"
+  },
+  "tds": {
+    "noSection": "No section",
+    "deducted": "Deducted",
+    "deposited": "Deposited",
+    "toDeposit": "To deposit",
+    "overdue": "Overdue",
+    "balance": "Balance",
+    "dueBy": "Due by",
+    "bySectionMonth": "By section and month",
+    "keptBack": "Kept back by customers",
+    "byCustomer": "By customer",
+    "receipts": "Receipts",
+    "noneKept": "No TDS kept back by customers",
+    "noneKeptBody": "When a customer deducts TDS, record it on their payment as TDS deducted.",
+    "deductees": "Deductees",
+    "notDeposited": "Not yet deposited",
+    "withoutPan": "Without a PAN",
+    "deducteeRows": "Deductee rows",
+    "challan": "Challan",
+    "challans": "Challans",
+    "depositedOn": "Deposited on",
+    "bsr": "BSR code",
+    "serial": "Serial",
+    "noChallans": "No TDS challans in this period",
+    "noChallansBody": "Record each deposit as a TDS challan voucher in Books, with its BSR code and serial."
   }
 }

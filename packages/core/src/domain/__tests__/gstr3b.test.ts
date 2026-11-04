@@ -69,6 +69,20 @@ describe('GSTR-3B', () => {
     expect(r.itc.net).toMatchObject({ igst: 0, cgst: 27_000 + 36_000, sgst: 27_000 + 36_000 });
   });
 
+  it('breaks every table down to the documents behind it, adding up to the figure', () => {
+    const total = (rows: { taxable: number; igst: number; cgst: number; sgst: number; cess: number }[] = []) =>
+      rows.reduce((a, x) => ({ taxable: a.taxable + x.taxable, igst: a.igst + x.igst, cgst: a.cgst + x.cgst, sgst: a.sgst + x.sgst, cess: a.cess + x.cess }), { taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 });
+    expect(total(r.sources['3.1a'])).toEqual(r.outward.taxable);
+    expect(total(r.sources['3.1c'])).toEqual(r.outward.nilExempt);
+    expect(total(r.sources['3.1d'])).toEqual(r.outward.reverseCharge);
+    expect(total(r.sources['4A3'])).toEqual(r.itc.reverseCharge);
+    expect(total(r.sources['4A5'])).toEqual(r.itc.allOther);
+    expect(total(r.sources['4B1'])).toEqual(r.itc.reversedRules);
+    expect(total(r.sources['3.2']).igst).toBe(r.interStateUnregistered.reduce((a, x) => a + x.igst, 0));
+    // A credit note shows as a negative line of 3.1(a).
+    expect(r.sources['3.1a']?.some((x) => x.kind === 'creditNote' && x.taxable < 0)).toBe(true);
+  });
+
   it('builds GSTN’s JSON in rupees', () => {
     const { forward, reverseCharge } = liabilityOf(r);
     const json = gstr3bJson(r, GSTIN, utilizeItc(forward, reverseCharge, r.itc.net));

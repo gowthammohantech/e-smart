@@ -1,9 +1,10 @@
 import { advanceTaxEvents, advancesForPeriod } from '../advanceTax';
+import { gstr3b } from '../gstr3b';
 import { postDocument, postPayment, postVoucher, Posting } from '../ledger/postings';
 import { costCentreProfit } from '../ledger/reports';
 import { Book } from '../ledger/accounts';
 import { msmeDueDate, msmeInterest, msmePayables, sec43bh } from '../msme';
-import { BusinessDocument, Party, Payment, Voucher } from '../../types';
+import { BusinessDocument, Company, Party, Payment, Voucher } from '../../types';
 import { fromMajor } from '../../lib/money';
 
 const inr = (major: string) => fromMajor(major, 'INR');
@@ -62,6 +63,16 @@ describe('GST on advances for services', () => {
     expect(net(ps, 'sys:gstOnAdvances')).toBe(0);
     expect(net(ps.filter((x) => x.date === '2026-09-10'), 'sys:outputCgst')).toBe(-90_000);
     expect(net(ps, 'pay:bank')).toBe(1_180_000);
+  });
+
+  it('shows each advance in the 3B breakup of 3.1(a), net of what was invoiced the same month', () => {
+    const p = advance({ allocations: [{ documentId: 'sep', documentNumber: 'INV-2', amount: inr('5900') }, { documentId: 'oct', documentNumber: 'INV-3', amount: inr('5900') }] });
+    const events = advanceTaxEvents(p, '27', dateOf);
+    const run = (period: string) => gstr3b({ period, company: { id: 'c', baseCurrency: 'INR' } as Company, gstin: '27AABCV1234F1ZO', baseCurrency: 'INR', documents: [], expenses: [], parties: [], expenseSplit: new Map(), advances: events });
+    const sep = run('092026');
+    expect(sep.sources['3.1a']).toEqual([expect.objectContaining({ type: 'advance', id: 'adv', taxable: 500_000, cgst: 45_000 })]);
+    expect(sep.outward.taxable).toMatchObject({ taxable: 500_000, cgst: 45_000, sgst: 45_000 });
+    expect(run('102026').sources['3.1a']).toEqual([expect.objectContaining({ type: 'advance', taxable: -500_000 })]);
   });
 });
 

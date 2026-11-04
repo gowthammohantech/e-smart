@@ -29,7 +29,7 @@ function assertKindAllowed(ctx: { company: { plan: Schema<'PlanTier'> } }, kind:
   if (kind === 'supplier' && !hasModule(ctx.company.plan, 'purchases')) throw planUpgradeRequired(FULL_PLAN, 'purchases');
 }
 
-async function validate(db: DbOrTx, body: Schema<'Party'>) {
+async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
   const issues: Issue[] = [];
   if (body.taxId && body.billingAddress.country === 'IN' && !isValidGstin(body.taxId)) {
     issues.push({ field: 'taxId', message: 'This GSTIN is not valid (check digit mismatch)', severity: 'blocking' });
@@ -42,6 +42,9 @@ async function validate(db: DbOrTx, body: Schema<'Party'>) {
     ['creditLimit', body.creditLimit],
   ] as const) {
     if (m && m.currency !== body.currency) issues.push({ field: `${field}.currency`, message: `Must be in the party's currency (${body.currency})`, severity: 'blocking' });
+  }
+  if (body.openingBalanceDate && body.openingBalanceDate > today) {
+    issues.push({ field: 'openingBalanceDate', message: 'The opening balance date cannot be in the future', severity: 'blocking' });
   }
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.currency));
   if (!cur) issues.push({ field: 'currency', message: `Unknown currency ${body.currency}`, severity: 'blocking' });
@@ -109,7 +112,7 @@ export const partiesHandlers = defineHandlers({
 
   async createParty(ctx) {
     assertKindAllowed(ctx, ctx.body.kind);
-    await validate(ctx.db, ctx.body);
+    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
     const row = await ctx.db.transaction(async (tx) => {
       const code = ctx.body.code?.trim() || (await nextCode(tx, ctx.company.id, ctx.body.kind));
       const [dupe] = await tx.select({ id: P.id }).from(P).where(and(eq(P.companyId, ctx.company.id), eq(P.code, code)));
@@ -135,7 +138,7 @@ export const partiesHandlers = defineHandlers({
     const current = await findParty(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     assertKindAllowed(ctx, ctx.body.kind);
-    await validate(ctx.db, ctx.body);
+    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
     if (ctx.body.kind !== current.kind && (await usage(ctx.db, ctx.company.id, current.id))) {
       throw conflict('PARTY_KIND_LOCKED', 'A party with transactions cannot switch between customer and supplier');
     }

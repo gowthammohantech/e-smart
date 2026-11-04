@@ -360,8 +360,9 @@ export async function prepareDocument(
   if (f.sourceDocumentId) {
     const [src] = await db.select({ id: D.id }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
-  } else if (NOTE_KINDS.includes(f.kind)) {
-    blocking('sourceDocumentId', `A ${f.kind} is raised against the ${isPurchaseKind(f.kind) ? 'purchase bill' : 'invoice'} it changes`);
+  } else if (NOTE_KINDS.includes(f.kind) && !f.noteReason) {
+    // A direct note (a discount over several invoices, a rate revision) needn't name one invoice or bill, but must say why.
+    blocking('noteReason', `A ${f.kind} not raised against a ${isPurchaseKind(f.kind) ? 'purchase bill' : 'invoice'} needs a reason`);
   }
 
   const categories = (await db.select().from(schema.taxCategories).where(eq(schema.taxCategories.companyId, company.id))).map(taxCategoryCore);

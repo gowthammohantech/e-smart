@@ -221,6 +221,28 @@ describe('books', () => {
     expect(s.closing).toBe(5000000);
   });
 
+  it('stands a dated opening balance at the start of its day, still balanced', () => {
+    const dated = allPostings({
+      baseCurrency: 'INR',
+      company,
+      branches: [],
+      taxCategories: [],
+      documents: [],
+      payments: [],
+      expenses: [],
+      vouchers: [],
+      parties: [],
+      paymentAccounts: [],
+      ledgerAccounts: [{ id: 'loan', openingBalance: inr('-20000'), openingBalanceDate: '2026-07-01' }],
+      openingStockMinor: 0,
+    });
+    expect(balanced(dated)).toBe(0);
+    expect(dated.filter((p) => p.account === 'acc:loan').map((p) => p.date)).toEqual(['2026-06-30']);
+    // From that day on it reads as opening; a statement for June doesn't see it.
+    expect(ledgerStatement(dated, 'acc:loan', { from: '2026-07-01', to: '2026-07-31' }).opening).toBe(-2000000);
+    expect(ledgerStatement(dated, 'acc:loan', { from: '2026-06-01', to: '2026-06-29' }).closing).toBe(0);
+  });
+
   it('names every account in the chart', () => {
     const keys = chartOfAccounts(book).map((a) => a.key);
     expect(keys).toEqual(expect.arrayContaining(['sys:sales', 'party:cus', 'pay:bank', 'exp:rent', 'acc:loan', 'sys:inputIgst']));

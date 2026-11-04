@@ -36,6 +36,7 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 1.6 | A tax-inclusive price is grossed down by GST and cess together | — | `lineCalc.ts` | core `gstTreatment` › *strips cess and GST together* |
 | 1.7 | A pure-agent reimbursement is outside the taxable value and the discount, but in the total; it is shown separately and left out of every GSTR-1 table | CGST Rule 33 | `lineCalc.ts`; `gstr1.ts` | core `gstTreatment` › *keeps a reimbursement out of the taxable value*; `gstr1` › *leaves a reimbursement out of every table* |
 | 1.8 | The buyer's GSTIN and state are fixed on the document when it is issued | — | `documents/engine.ts` | api `gst-treatment` › *snapshots the buyer's GSTIN* |
+| 1.9 | **New.** On the printed invoice, reimbursements sit in their own table after the items, so the items add up to the subtotal. On the e-invoice they are not items: they travel in `OthChrg`, and need no HSN | Rule 33; e-invoice schema 1.1 | `render/documentHtml.ts`; `eInvoice.ts` `buildIrpPayload` | core `compliance` › *sends a pure-agent reimbursement as other charges* |
 
 ## 2. Reverse charge
 
@@ -60,11 +61,17 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 3.7 | A supplier credit note lowers the credit | CGST s.34 | `itc.ts` | core `itc` › *counts a supplier credit note against the credit* |
 | 3.8 | Expense GST is split CGST/SGST or IGST by place of supply; blocked or ineligible expense GST is a cost | CGST s.16, 17 | `expenseTax.ts` | core `gstTreatment` › *expense GST* |
 
-**GSTR-2B matching** (`reconcile2b.ts`; core `reconcile2b`, api `gstr2b`):
-- **Supplier numbers** are compared ignoring case, separators, leading zeros and year prefixes.
-- **Matched:** same supplier GSTIN, number and date, with tax within ₹1.
-- **Partial:** same GSTIN and number, but the amount or date differs.
-- **Probable:** same GSTIN and tax within 3 days, under another number. It is only suggested, never matched automatically.
+**GSTR-2B matching** (`reconcile2b.ts`; core `reconcile2b`, api `gstr2b`). **Changed: please review.**
+- **Supplier numbers** are compared ignoring case, separators and leading zeros. A financial-year segment (24-25, 2024/25) is dropped, but only when its second year follows the first, so "A/12/34" stays distinct.
+- **Matched:** same supplier GSTIN, number and date, with taxable value and tax within ₹1.
+- **Matched, dates differ (new):** the same, but dated up to 3 days apart (a bill entered on the day it arrived). It is claimable like a match.
+- **Mismatch (was "partial"):** same GSTIN and number, but the amount, or a date more than 3 days off, differs. The screen says which: taxable value, tax, date.
+- **Probable:** same GSTIN and tax within 3 days, under another number. It is only suggested, never claimed until a person accepts it.
+- **Linked by you (new):** a person accepted a suggestion or linked the line to any of the supplier's unclaimed bills. It is claimable.
+- **Claimed (new):** matched to a bill already claimed for this period.
+- **Reverse charge (changed):** a reverse-charge bill is compared on its reverse-charge tax, which 2B shows.
+- **Bills entered after the period (changed):** they can match the period's 2B, but only bills dated in or before the period are chased as "not in 2B".
+- **Bills of entry (changed):** matched on the bill-of-entry number, whatever the supplier. Imports are never chased.
 - **Decisions** survive a fresh download.
 
 ## 4. TDS
@@ -80,6 +87,10 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 4.7 | The supplier is owed the bill less TDS; TDS goes to *TDS payable* by section; a supplier credit note gives it back at the bill's rate | — | `postings.ts`; `lib/tds.ts` | api `tds` › *gives TDS back on a supplier credit note* |
 | 4.8 | The register is by section, deductee and 26Q quarter, net of credit notes | Form 26Q | `tds.ts` `tdsRegister` | core `tds` › *registers deductions by section, deductee and quarter* |
 | 4.9 | TDS a customer deducts settles the invoice and goes to *TDS receivable* | s.199, Form 26AS | `postings.ts` `postPayment` | api `notes` › *settles with cash plus TDS the customer deducted* |
+| 4.10 | **New.** TDS payable report: deducted by section and month, from the *TDS payable* ledgers; each challan settles its section's oldest month first; due by the 7th of the next month, 30 April for March | Rule 30 | `tdsReports.ts` `tdsPayableSummary` | core `tdsReports` › *settles the oldest first from challans* |
+| 4.11 | **New.** TDS receivable report: what customers kept back, by customer and quarter, to check against 26AS | Form 26AS | `tdsReports.ts` `tdsReceivable` | core `tdsReports` › *adds up what each customer kept back* |
+| 4.12 | **New.** Form 26Q deductee rows: one per bill, with PAN, section, amount, rate and TDS, and the challan that deposited it (oldest deduction first). TDS kept back on a payment names no section, so it is in 4.10 but not in 26Q | Form 26Q annexure | `tdsReports.ts` `tdsReturnRows` | core `tdsReports` › *names the challan that deposited each deduction* |
+| 4.13 | **New.** A TDS challan voucher may carry its BSR code (7 digits), serial (up to 5) and deposit date; only a TDS challan may | ITNS 281 | `books/handlers.ts` | api `books` › *takes other income in with a receipt…* |
 
 | Section | Nature | Rate (individual / other) | Threshold |
 |---|---|---|---|
@@ -101,6 +112,7 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 5.3 | No credit note after 30 November following the year of the supply | CGST s.34(2) | `lifecycle.ts`; `gstr1.ts` | core `gstr1` › *is 30 November after the end of the financial year*; api `notes` › *refuses a credit note after 30 November…* |
 | 5.4 | Notes go to CDNR (registered buyer) or CDNUR (unregistered, when the invoice was B2CL); a small note to a consumer nets against B2CS | GSTR-1 tables 9B, 7 | `gstr1.ts` | core `gstr1` › *GSTR-1 credit and debit notes* |
 | 5.5 | Discount allowed and write-off settle the invoice with no money moving; write-off is owner, admin or accountant only | — | `payments/engine.ts` | api `notes` › *writes off the rest with no money moving* |
+| 5.6 | **New.** A direct note, raised against no one invoice or bill (a discount across several, a rate revision), must give its reason. Its credit waits on the party like an advance. 5.2 and 5.3 can't be checked on it. It is reported by the buyer it is issued to: CDNR if registered, otherwise netted in B2CS | CGST s.34 | `documents/engine.ts`; `lifecycle.ts` `checkAgainstSource`; `lib/balances.ts` | api `notes` › *takes a direct note with a reason*; core `gstr1` › *reports a direct note…* |
 
 ## 6. Books (double entry)
 
@@ -109,8 +121,8 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 6.1 | Postings are worked out from the records, never stored; drafts are off the books; every source balances to the paisa | `ledger/postings.ts` | core `books` › *leaves drafts off the books and balances to the paisa* |
 | 6.2 | Periodic stock, as Tally: gross profit = sales − (opening stock + purchases + direct costs − closing stock); closing stock at weighted-average cost on the day | `ledger/reports.ts` `profitAndLoss` | core `books` › *works out gross profit from sales, purchases and the change in stock* |
 | 6.3 | Trial balance debits equal credits; balance-sheet sides agree; last year's profit moves to *Profit and loss of earlier years* | `ledger/reports.ts` | core `books` › *has a trial balance…*, *has a balance sheet…*, *carries last year's profit…*; api `books` › *balances over sales, purchases with TDS…* |
-| 6.4 | Opening balances sit at the start of the books; the difference goes to *Opening balances* (capital). A foreign-currency account's opening is in base at the rate on its opening date. | `postOpenings`; `settings/accounts.ts` | api `settings` › *counts its opening balance in base at the rate on its opening day* |
-| 6.5 | Vouchers balance; a contra moves money only between cash and bank; a GST journal touches a GST ledger; a TDS challan clears TDS payable from cash or bank | `books/handlers.ts` | api `books` › *refuses an unbalanced voucher, a contra through a non-cash account…* |
+| 6.4 | Opening balances sit at the start of the books; the difference goes to *Opening balances* (capital). A foreign-currency account's opening is in base at the rate on its opening date. **Changed:** an account or party may give its opening an "as on" date. It then stands at the start of that day, so reports from that day show it as opening and earlier ones don't. Changing a dated opening in a closed period is refused. Cash and bank openings stay at the start of the books (their date only picks the FX rate) | `postOpenings`; `settings/accounts.ts`; `books/handlers.ts` | api `settings` › *counts its opening balance in base…*; core `books` › *stands a dated opening balance at the start of its day*; api `books` › *dates an opening balance…* |
+| 6.5 | Vouchers balance and may have any number of lines; a contra moves money only between cash and bank; a GST journal touches a GST ledger; a TDS challan clears TDS payable from cash or bank. **New:** a receipt (the Receipts menu: interest, rent, a refund) debits only cash or bank and credits only accounts that aren't; taxable income belongs on an invoice | `books/handlers.ts` | api `books` › *refuses an unbalanced voucher…*, *splits one contra across more than two…*, *takes other income in with a receipt…* |
 | 6.6 | Closing the books (owner only) refuses any document, payment, expense or voucher dated on or before the close (`PERIOD_LOCKED`) | `documents/lifecycle.ts` `assertPeriodOpen` | api `books` › *closes payments and expenses with the books too* |
 | 6.7 | Cost centres: a document's and an expense's postings carry their centre; a voucher splits by line; profit by centre excludes the change in stock | `ledger/reports.ts` `costCentreProfit` | core `extras` › *tags a document's postings and splits a voucher by centre* |
 | 6.8 | Tally export: every account as a ledger under Tally's reserved group with its opening; every voucher balanced | `exports/tally.ts` | api `exports` › *writes the whole book for Tally* |
@@ -128,6 +140,7 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 7.7 | GSTR-1 is filed before the period's 3B; a filed return is never filed or saved again; the portal is asked before every filing | — | `gst/filing.ts` | api `gst-filing` › *files GSTR-1 then 3B, never twice…* |
 | 7.8 | A filing whose answer is lost is settled from the portal's return tracker | — | `gst/filing.ts` `recoverLostFilings` | api `gst-filing` › *settles a filing whose answer was lost…* |
 | 7.9 | Filing 3B closes the books through the period and posts the credit used as a GST journal (Dr output, Cr input) | — | `gst/filing.ts` `afterFiled3b` | api `gst-filing` › same test as 7.7 |
+| 7.10 | **New.** Every 3B table that the books fill breaks down to the documents, expenses and advances behind it, signed, adding up to the table | GSTR-3B | `gstr3b.ts` `sources` | core `gstr3b` › *breaks every table down…*; core `extras` › *shows each advance in the 3B breakup* |
 
 ## 8. Advances, reimbursements, MSME
 
@@ -142,6 +155,7 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 8.7 | Micro and small suppliers are paid by the agreed day, at most 45 days after the bill, or 15 days with no agreement; medium are outside it | MSMED Act s.15 | `msme.ts` `msmeDueDate` | core `extras` › *is due on the agreed day…* |
 | 8.8 | Late interest at three times the bank rate, compounded monthly (shown for information) | MSMED Act s.16 | `msme.ts` `msmeInterest` | core `extras` › *lists covered suppliers' unpaid bills…* |
 | 8.9 | What wasn't paid within the limit is listed as not deductible this year | Income-tax Act s.43B(h) | `msme.ts` `sec43bh` | core `extras` › *lists for the CA what wasn't paid in time* |
+| 8.10 | **New.** The receipt for a service advance is also its receipt voucher: recipient and GSTIN, place of supply, value of the advance, rate and CGST/SGST or IGST | CGST s.31(3)(d), Rule 50 | `payments/receipt.ts` | api `extras` › *reports the advance in table 11A…* |
 
 ---
 
@@ -152,10 +166,12 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 3. **Agreed day (8.7).** With no due date on a bill, the supplier's payment terms are taken as the written agreement. Is that acceptable, or should such bills get 15 days?
 4. **Reimbursements (8.6).** The expense stays in its category, and the recovery goes to *Reimbursements recovered* (indirect income), so they net off in P&L. Would you rather they go through a *Reimbursements recoverable* asset account, keeping both out of P&L?
 5. **Cost centres (6.7).** A document goes to one cost centre as a whole; only voucher lines can split. Is that enough for your clients?
-6. **Opening balances (6.4).** Openings are always at the start of the books, whatever date the account was opened. Tally does the same, but please confirm.
+6. **Opening balances (6.4).** An opening with no date stands at the start of the books, as in Tally; one with an "as on" date posts the day before it. Please confirm both, and whether cash and bank openings should take their date too (today the form fills it with the day the account was added, so it isn't used).
 7. **Advance refunds (8.1).** Refunding an advance is not built. Editing the receipt adjusts its tax. Is that acceptable for now?
 8. **ISD and imports of goods.** 3B 4A(1) imports of goods and 4A(4) ISD are always zero today. Bills of entry and ISD invoices aren't recorded.
 9. **Amendments.** Corrections after filing go in a later period's ordinary tables. B2BA/CDNRA amendment tables aren't produced.
+10. **2B tolerance (3, GSTR-2B matching).** A line whose amounts agree but whose date is up to 3 days off is now claimable without a person accepting it. Is 3 days right, or should any date difference wait for a person?
+11. **TDS on payments (4.12).** TDS kept back on a payment (rather than on its bill) is posted with no section, so it can't go into 26Q. Should the payment screen ask for the section?
 
 ## Sign-off
 

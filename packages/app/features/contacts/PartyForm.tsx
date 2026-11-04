@@ -22,7 +22,7 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { nowISO } from '@esmart/core/lib/date';
+import { nowISO, today } from '@esmart/core/lib/date';
 import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
@@ -35,7 +35,7 @@ const MSME_OPTIONS = ['none', 'micro', 'small', 'medium'] as const;
 
 export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases']);
+  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases', 'books']);
   const router = useRouter();
   const goBack = useGoBack();
   // Added from a document's party picker: back to the document, which picks the new party.
@@ -75,6 +75,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [openingBalance, setOpeningBalance] = useState(
     party?.openingBalance && party.openingBalance.minor !== 0 ? String(toMajor(party.openingBalance)) : '',
   );
+  const [openingDate, setOpeningDate] = useState<string | undefined>(party?.openingBalanceDate);
   const [line1, setLine1] = useState(billing?.line1 ?? '');
   const [city, setCity] = useState(billing?.city ?? '');
   const [stateCode, setStateCode] = useState(billing?.stateCode ?? '');
@@ -189,6 +190,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           },
       creditLimit: creditLimit ? fromMajor(creditLimit, currency) : undefined,
       openingBalance: openingBalance ? fromMajor(openingBalance, currency) : zero(currency),
+      openingBalanceDate: openingBalance ? openingDate : undefined,
       paymentTermsDays: terms,
       notes: notes.trim() || undefined,
       status: active ? 'active' : 'inactive',
@@ -342,13 +344,19 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
     ) : null;
   const openingBalanceField = (
-    <AmountField
-      label={tr('contacts:form.openingBalance')}
-      value={openingBalance}
-      onChangeValue={setOpeningBalance}
-      currency={currency}
-      hint={kind === 'customer' ? tr('contacts:form.openingBalanceHintCustomer') : tr('contacts:form.openingBalanceHintSupplier')}
-    />
+    <>
+      <AmountField
+        label={tr('contacts:form.openingBalance')}
+        value={openingBalance}
+        onChangeValue={setOpeningBalance}
+        currency={currency}
+        hint={kind === 'customer' ? tr('contacts:form.openingBalanceHintCustomer') : tr('contacts:form.openingBalanceHintSupplier')}
+      />
+      {openingBalance ? (
+        <SwitchField label={tr('books:accounts.openingOnDate')} description={tr('books:accounts.openingOnDateHint')} value={!!openingDate} onValueChange={(on) => setOpeningDate(on ? today() : undefined)} />
+      ) : null}
+      {openingBalance && openingDate ? <DateField label={tr('books:accounts.openingDate')} value={openingDate} onChange={setOpeningDate} maximumDate={new Date()} /> : null}
+    </>
   );
   const notesField = <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />;
   const activeField = <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />;

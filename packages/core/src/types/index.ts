@@ -147,6 +147,8 @@ export type Party = {
   creditLimit?: Money;
   openingBalance: Money;
   /** Positive opening balance means the party owes us (customer) / we owe them (supplier). */
+  /** The day the opening balance stands at (ISO date). Unset reads as the start of the books. */
+  openingBalanceDate?: string;
   paymentTermsDays: number;
   notes?: string;
   status: 'active' | 'inactive';
@@ -967,6 +969,8 @@ export type LedgerAccount = {
   group: LedgerGroup;
   /** Opening balance, debit positive, as of the day the books start. */
   openingBalance: Money;
+  /** The day the opening balance stands at (ISO date). Unset reads as the start of the books. */
+  openingBalanceDate?: string;
   status: 'active' | 'inactive';
   createdAt: string;
 };
@@ -984,7 +988,11 @@ export type CostCentre = {
 };
 
 /** Journal: any adjustment. Contra: money between cash and bank. GST journal: adjustments to the GST ledgers. TDS challan: TDS paid to the government. */
-export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan';
+/** `receipt`: money in that isn't from a customer's invoice: interest, rent, a refund, capital brought in. */
+export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt';
+
+/** Where a TDS challan was deposited, as printed on it (ITNS 281). */
+export type TdsChallan = { bsrCode: string; serial: string; depositedOn: string };
 
 export type VoucherLine = {
   /** An account key: `sys:sales`, `party:<id>`, `pay:<id>`, `exp:<id>`, `acc:<id>`, `sys:tdsPayable:194C`. */
@@ -1005,6 +1013,8 @@ export type Voucher = {
   narration?: string;
   /** TDS challan: the challan's number and BSR code. */
   reference?: string;
+  /** A TDS challan's deposit details. */
+  challan?: TdsChallan;
   lines: VoucherLine[];
   createdBy: string;
   createdAt: string;

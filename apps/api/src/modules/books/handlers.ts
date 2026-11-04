@@ -27,7 +27,7 @@ const blocking = (issues: Issue[]) => (field: string, message: string) => issues
 // ------------------------------------------------------------ wire
 
 function accountToWire(row: AccountRow, base: string): Schema<'LedgerAccount'> {
-  return compact({ id: row.id, companyId: row.companyId, name: row.name, group: row.group, openingBalance: money(row.openingBalanceMinor, base), status: row.status, ...versioned(row) });
+  return compact({ id: row.id, companyId: row.companyId, name: row.name, group: row.group, openingBalance: money(row.openingBalanceMinor, base), openingBalanceDate: row.openingBalanceDate, status: row.status, ...versioned(row) });
 }
 
 function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> {
@@ -41,6 +41,7 @@ function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> {
     date: row.date,
     narration: row.narration,
     reference: row.reference,
+    challan: row.challan as Schema<'Voucher'>['challan'],
     lines: lines.map((l) => compact({ account: l.account, debit: money(l.debitMinor, base), credit: money(l.creditMinor, base), narration: l.narration, costCentreId: l.costCentreId })),
     createdBy: row.createdBy,
     ...versioned(row),
@@ -71,7 +72,7 @@ async function findAccount(ctx: AnyCtx, db: DbOrTx, id: string) {
   return row;
 }
 
-async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'LedgerAccount'>, exceptId?: string) {
+async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'LedgerAccount'>, today: string, exceptId?: string) {
   const issues: Issue[] = [];
   const block = blocking(issues);
   const name = body.name.trim();
@@ -79,8 +80,9 @@ async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'Ledge
   if (!USER_GROUPS.includes(body.group as LedgerGroup)) block('group', 'Debtors, creditors and stock come from parties and the stock ledger, not an account of your own');
   const [same] = await db.select({ id: LA.id }).from(LA).where(and(eq(LA.companyId, companyId), eq(LA.name, name), exceptId ? ne(LA.id, exceptId) : undefined));
   if (same) block('name', `There is already an account called ${name}`);
+  if (body.openingBalanceDate && body.openingBalanceDate > today) block('openingBalanceDate', 'The opening balance date cannot be in the future');
   if (issues.length) throw unprocessable(issues);
-  return { name, group: body.group as LedgerGroup, openingBalanceMinor: body.openingBalance.minor, status: body.status ?? ('active' as const) };
+  return { name, group: body.group as LedgerGroup, openingBalanceMinor: body.openingBalance.minor, openingBalanceDate: body.openingBalanceDate ?? null, status: body.status ?? ('active' as const) };
 }
 
 // ------------------------------------------------------------ vouchers
@@ -118,7 +120,14 @@ async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, 
       const ok = lines.every((l, i) => (l.debitMinor > 0 ? l.account.startsWith('sys:tdsPayable') : isCash(groups[i])));
       if (!ok) block('lines', 'A TDS challan clears TDS payable from a cash or bank account');
     }
+    if (body.kind === 'receipt') {
+      // Money in: cash or bank takes it, and whatever it's for (an income, a loan, capital) gives it.
+      const ok = lines.every((l, i) => (l.debitMinor > 0 ? isCash(groups[i]) : !isCash(groups[i])));
+      if (!ok) block('lines', 'A receipt brings money into a cash or bank account from an account that is not cash or bank');
+    }
   }
+  if (body.challan && body.kind !== 'tdsChallan') block('challan', 'Only a TDS challan has challan details');
+  if (body.challan && body.challan.depositedOn > ctx.now.toISOString().slice(0, 10)) block('challan.depositedOn', 'The deposit date cannot be in the future');
 
   let branchId = body.branchId ?? null;
   if (branchId) {
@@ -144,7 +153,7 @@ async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, 
       throw unprocessable([{ field: `lines[${i}]`, message: `${account.name} holds ${base} ${(Math.max(balance, 0) / 100).toFixed(2)}; this voucher takes ${base} ${(out / 100).toFixed(2)}`, severity: 'blocking' }], 'INSUFFICIENT_BALANCE');
     }
   }
-  return { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, lines };
+  return { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, lines };
 }
 
 async function findVoucher(ctx: AnyCtx, db: DbOrTx, id: string): Promise<VoucherRow> {
@@ -163,7 +172,8 @@ export const booksHandlers = defineHandlers({
   },
 
   async createLedgerAccount(ctx) {
-    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body);
+    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, ctx.now.toISOString().slice(0, 10));
+    if (cols.openingBalanceMinor && cols.openingBalanceDate) assertPeriodOpen(ctx.company, cols.openingBalanceDate);
     const row = await ctx.db.transaction(async (tx) => {
       const [created] = await tx.insert(LA).values({ id: newId('lac'), companyId: ctx.company.id, ...cols, createdAt: ctx.now, updatedAt: ctx.now }).returning();
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'ledger_account', entityId: created.id, entityLabel: created.name, version: created.version });
@@ -182,11 +192,15 @@ export const booksHandlers = defineHandlers({
   async saveLedgerAccount(ctx) {
     const current = await findAccount(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, current.id);
+    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, ctx.now.toISOString().slice(0, 10), current.id);
+    // A dated opening is part of that day's books: closing the period closes it too, before and after the change.
+    if (cols.openingBalanceMinor !== current.openingBalanceMinor || cols.openingBalanceDate !== current.openingBalanceDate) {
+      for (const date of [current.openingBalanceDate, cols.openingBalanceDate]) if (date) assertPeriodOpen(ctx.company, date);
+    }
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx.update(LA).set({ ...cols, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(LA.id, current.id), eq(LA.version, current.version))).returning();
       if (!updated) throw preconditionFailed();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'updated', entityType: 'ledger_account', entityId: updated.id, entityLabel: updated.name, version: updated.version, before: { name: current.name, group: current.group }, after: { name: updated.name, group: updated.group } });
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'updated', entityType: 'ledger_account', entityId: updated.id, entityLabel: updated.name, version: updated.version, before: { name: current.name, group: current.group, openingBalanceMinor: current.openingBalanceMinor, openingBalanceDate: current.openingBalanceDate }, after: { name: updated.name, group: updated.group, openingBalanceMinor: updated.openingBalanceMinor, openingBalanceDate: updated.openingBalanceDate } });
       return updated;
     });
     setEtag(ctx.reply, row.version);

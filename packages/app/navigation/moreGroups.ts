@@ -61,6 +61,7 @@ export function useMoreGroups(): MoreGroup[] {
         { label: tr('nav:more.entry.paymentsReceived'), icon: 'cash-plus', route: '/(app)/payments/received' },
         { label: tr('nav:more.entry.paymentsMade'), icon: 'cash-minus', route: '/(app)/payments/made' },
         { label: tr('nav:more.entry.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses' },
+        { label: tr('nav:more.entry.receipts'), icon: 'cash-plus', route: '/(app)/receipts' },
         { label: tr('nav:more.entry.books'), icon: 'book-open-page-variant-outline', route: '/(app)/books' },
       ],
     },

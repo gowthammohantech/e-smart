@@ -220,7 +220,7 @@ const READS: ReadTool[] = [
   }),
   read({
     name: 'get_receivables',
-    title: 'Receivables',
+    title: 'Receivable report',
     description: 'Who owes the business, with aging buckets (current, 1-30, 31-60, 61-90, 90+ days).',
     input: z.object({ partyId: id.optional(), asOf: date.optional() }),
     request: (i, ctx) => ({ method: 'GET', url: `${c(ctx)}/receivables${qs(i)}` }),

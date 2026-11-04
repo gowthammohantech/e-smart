@@ -101,7 +101,11 @@ export function buildDocumentHtml({
   const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
   const pos = INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name;
 
+  // Pure-agent reimbursements sit outside the taxable value (Rule 33), so they get their own
+  // table and the items table adds up to the subtotal.
+  const reimbursed = doc.lines.filter((l) => l.gst?.reimbursement);
   const rows = doc.lines
+    .filter((l) => !l.gst?.reimbursement)
     .map((line, i) => {
       const gross = money(Math.round(line.unitPrice.minor * line.quantity), doc.currency);
       const discount =
@@ -115,7 +119,6 @@ export function buildDocumentHtml({
         <td>
           <div class="item">${esc(line.name)}</div>
           ${line.hsnCode ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
-          ${line.gst?.reimbursement ? '<div class="sub">Reimbursement at cost (pure agent)</div>' : ''}
           ${line.gst?.supplyType && line.gst.supplyType !== 'taxable' ? `<div class="sub">${SUPPLY_NOTE[line.gst.supplyType]}</div>` : ''}
         </td>
         <td class="num">${formatQty(line.quantity)} ${esc(line.unit)}</td>
@@ -126,6 +129,27 @@ export function buildDocumentHtml({
       </tr>`;
     })
     .join('');
+
+  const reimbursementTable = reimbursed.length
+    ? `<table class="reimbursements">
+    <thead>
+      <tr>
+        <th style="width:26px">#</th>
+        <th>Reimbursement of expenses (pure agent, at cost, not part of taxable value)</th>
+        <th class="num">${bi('sales:pdf.amount')}</th>
+      </tr>
+    </thead>
+    <tbody>${reimbursed
+      .map(
+        (line, i) => `<tr>
+        <td class="num">${i + 1}</td>
+        <td><div class="item">${esc(line.name)}</div>${line.description ? `<div class="sub">${esc(line.description)}</div>` : ''}</td>
+        <td class="num strong">${formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}</td>
+      </tr>`,
+      )
+      .join('')}</tbody>
+  </table>`
+    : '';
 
   // `name` is markup: `bi()` labels come escaped already, plain ones go through `esc` here.
   const totalRow = (name: string, value: string, strong = false) =>
@@ -193,6 +217,7 @@ export function buildDocumentHtml({
   .item { font-weight: 600; }
   .sub { color: #5A6478; font-size: 10px; margin-top: 2px; }
   .strong { font-weight: 700; }
+  .reimbursements { margin-top: 14px; }
   .totals { width: 280px; margin-left: auto; margin-top: 14px; }
   .totals td { padding: 5px 0; border: 0; }
   .totals tr.grand td { border-top: 1px solid #E2E8F1; padding-top: 9px; font-weight: 700; font-size: 15px; }
@@ -276,6 +301,8 @@ export function buildDocumentHtml({
     </thead>
     <tbody>${rows}</tbody>
   </table>
+
+  ${reimbursementTable}
 
   <table class="totals"><tbody>${totalRows}</tbody></table>
 

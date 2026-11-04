@@ -7,7 +7,7 @@ import { ApiError, conflict, invalid } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
-import { money } from '../../lib/wire';
+import { compact, money } from '../../lib/wire';
 import { ReturnsError, type ReturnType } from '../../providers/returns';
 import { periodBounds } from './gstr2b';
 import { build3b, branchesOf } from './gstr3bBuild';
@@ -182,6 +182,9 @@ export const gstFilingHandlers = defineHandlers({
         carriedForward: amounts(b.utilization.carriedForward, base),
       },
       returns: returns.map(returnWire),
+      breakup: Object.fromEntries(
+        Object.entries(t.sources).map(([table, rows]) => [table, rows.map(({ taxable, igst, cgst, sgst, cess, ...ref }) => ({ ...compact(ref), ...amounts({ taxable, igst, cgst, sgst, cess }, base) }))]),
+      ),
     };
   },
 

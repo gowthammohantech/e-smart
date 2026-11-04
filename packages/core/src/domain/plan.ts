@@ -132,6 +132,9 @@ const FULL_PLAN_REPORTS: Record<string, Module> = {
   stock: 'inventory',
   profit: 'expenses',
   'tds-register': 'payables',
+  'tds-payable': 'payables',
+  'tds-26q': 'payables',
+  'tds-challans': 'payables',
   'trial-balance': 'books',
   'msme-payables': 'payables',
 };
@@ -157,6 +160,8 @@ const GATED_PATHS: [prefix: string, module: Module][] = [
   ['/settings/currencies', 'fx'],
   // Branches opens on every plan: Free has its one branch to name, and adding more is what is locked.
   ['/books', 'books'],
+  // Receipts are receipt vouchers.
+  ['/receipts', 'books'],
   // Matching 2B needs the purchase register.
   ['/gst/gstr2b', 'purchases'],
 ];

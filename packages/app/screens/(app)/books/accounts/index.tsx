@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -10,7 +10,9 @@ import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
+import { Icon } from '@esmart/ui/components/Icon';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
@@ -18,7 +20,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { GROUPS, USER_GROUPS, chartOfAccounts } from '@esmart/core/domain/ledger/accounts';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { nowISO } from '@esmart/core/lib/date';
+import { nowISO, today } from '@esmart/core/lib/date';
 import type { LedgerAccount, LedgerGroup } from '@esmart/core/types';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
@@ -50,6 +52,8 @@ export default function ChartOfAccounts() {
   const [name, setName] = useState('');
   const [group, setGroup] = useState<LedgerGroup>('indirectExpenses');
   const [opening, setOpening] = useState('');
+  const [side, setSide] = useState<'dr' | 'cr'>('dr');
+  const [openingDate, setOpeningDate] = useState<string | undefined>();
   const [groupOpen, setGroupOpen] = useState(false);
 
   const balances = useMemo(() => {
@@ -73,12 +77,22 @@ export default function ChartOfAccounts() {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', group: 'indirectExpenses', openingBalance: fromMajor('0', baseCurrency), status: 'active', createdAt: nowISO() } as LedgerAccount));
     setName(a?.name ?? '');
     setGroup(a?.group ?? 'indirectExpenses');
-    setOpening(a && a.openingBalance.minor ? String(toMajor(a.openingBalance)) : '');
+    setOpening(a && a.openingBalance.minor ? String(Math.abs(toMajor(a.openingBalance))) : '');
+    setSide(a && a.openingBalance.minor < 0 ? 'cr' : 'dr');
+    setOpeningDate(a?.openingBalanceDate);
   };
 
   const save = async () => {
     if (!editing || !name.trim()) return;
-    const record: LedgerAccount = { ...editing, id: editing.id || uid('lac'), name: name.trim(), group, openingBalance: fromMajor(opening || '0', baseCurrency) };
+    const amount = fromMajor(opening || '0', baseCurrency);
+    const record: LedgerAccount = {
+      ...editing,
+      id: editing.id || uid('lac'),
+      name: name.trim(),
+      group,
+      openingBalance: side === 'cr' ? { ...amount, minor: -amount.minor } : amount,
+      openingBalanceDate: amount.minor ? openingDate : undefined,
+    };
     const res = await serverSave(() => saveLedgerAccount(record), tr('books:accounts.saved'), { icon: 'format-list-bulleted-type' });
     if (res) setEditing(null);
   };
@@ -102,9 +116,16 @@ export default function ChartOfAccounts() {
                     title={nameOf(a)}
                     subtitle={own ? (own.status === 'inactive' ? tr('books:accounts.inactive') : tr('books:accounts.yours')) : undefined}
                     right={
-                      <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
-                        {drCr(balances.get(a.key) ?? 0, baseCurrency)}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+                        <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                          {drCr(balances.get(a.key) ?? 0, baseCurrency)}
+                        </Text>
+                        {own ? (
+                          <Pressable onPress={() => open(own)} accessibilityRole="button" accessibilityLabel={tr('books:accounts.edit')} hitSlop={8}>
+                            <Icon name="pencil-outline" size={18} color={t.c.muted} />
+                          </Pressable>
+                        ) : null}
+                      </View>
                     }
                     onPress={() => router.push(`/(app)/books/accounts/${encodeURIComponent(a.key)}` as never)}
                     onLongPress={own ? () => open(own) : undefined}
@@ -129,7 +150,20 @@ export default function ChartOfAccounts() {
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('books:accounts.name')} value={name} onChangeText={setName} placeholder={tr('books:accounts.namePlaceholder')} required />
           <PickerField label={tr('books:accounts.group')} value={groupName(group)} onPress={() => setGroupOpen(true)} icon="folder-outline" />
-          <AmountField label={tr('books:accounts.opening')} value={opening} onChangeValue={setOpening} currency={baseCurrency} allowNegative hint={tr('books:accounts.openingHint')} />
+          <View style={{ gap: t.spacing.sm }}>
+            <AmountField label={tr('books:accounts.opening')} value={opening} onChangeValue={setOpening} currency={baseCurrency} hint={tr('books:accounts.openingHint')} />
+            <Segmented
+              size="sm"
+              options={[
+                { value: 'dr', label: tr('books:accounts.debitSide') },
+                { value: 'cr', label: tr('books:accounts.creditSide') },
+              ]}
+              value={side}
+              onChange={setSide}
+            />
+          </View>
+          <SwitchField label={tr('books:accounts.openingOnDate')} description={tr('books:accounts.openingOnDateHint')} value={!!openingDate} onValueChange={(on) => setOpeningDate(on ? today() : undefined)} />
+          {openingDate ? <DateField label={tr('books:accounts.openingDate')} value={openingDate} onChange={setOpeningDate} maximumDate={new Date()} /> : null}
         </View>
       </Sheet>
       <SelectSheet

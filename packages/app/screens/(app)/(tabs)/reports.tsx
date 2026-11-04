@@ -39,7 +39,7 @@ type ReportLink = {
 /** Each report's route key, its catalogue entry under `reports:report`, and its icon. */
 const REPORTS: {
   key: string;
-  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'advances' | 'profit' | 'tdsRegister' | 'msmePayables';
+  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'advances' | 'profit' | 'tdsRegister' | 'tdsPayable' | 'tdsReceivable' | 'tds26q' | 'tdsChallans' | 'msmePayables';
   icon: ReportLink['icon'];
 }[] = [
   { key: 'sales-summary', id: 'salesSummary', icon: 'trending-up' },
@@ -53,6 +53,10 @@ const REPORTS: {
   { key: 'advances', id: 'advances', icon: 'cash-clock' },
   { key: 'profit', id: 'profit', icon: 'chart-line' },
   { key: 'tds-register', id: 'tdsRegister', icon: 'bank-minus' },
+  { key: 'tds-payable', id: 'tdsPayable', icon: 'bank-outline' },
+  { key: 'tds-receivable', id: 'tdsReceivable', icon: 'bank-plus' },
+  { key: 'tds-26q', id: 'tds26q', icon: 'file-table-outline' },
+  { key: 'tds-challans', id: 'tdsChallans', icon: 'bank-transfer-out' },
   { key: 'msme-payables', id: 'msmePayables', icon: 'timer-sand' },
 ];
 

@@ -39,7 +39,13 @@ export type BookBill = {
 export type MatchStatus =
   /** Same supplier, number, date and amounts (within the tolerance). */
   | 'matched'
-  /** Same supplier and number, but the amount or date differs. */
+  /** Same supplier, number and amounts, dated a few days apart (the bill entered on the day it came). */
+  | 'matchedWithinTolerance'
+  /** A person linked it to a bill, or accepted the one suggested. */
+  | 'manuallyLinked'
+  /** Matched to a bill whose credit has already been claimed for this period. */
+  | 'claimed'
+  /** Same supplier and number, but the amount or date differs: see `reasons`. */
   | 'partial'
   /** Same supplier and amount within days of each other: likely the same bill under another number. */
   | 'probable'
@@ -50,32 +56,43 @@ export type MatchStatus =
   /** A person put it off to a later month. */
   | 'claimLater';
 
+/** The statuses whose credit the period can claim. */
+export const CLAIMABLE: MatchStatus[] = ['matched', 'matchedWithinTolerance', 'manuallyLinked', 'claimed'];
+
+/** Why a line and its bill don't agree. */
+export type MismatchReason = 'taxable' | 'tax' | 'date' | 'number';
+
 export type Match = {
   line: TwoBLine;
   status: MatchStatus;
   bill?: BookBill;
-  /** What differs on a partial match, in paise (2B minus books). */
+  /** What differs from the bill, in paise (2B minus books). */
   difference?: { taxableMinor: number; taxMinor: number; days: number };
+  reasons?: MismatchReason[];
 };
 
 export type Reconciliation = {
   matches: Match[];
   /** Bills in the books for the period that no line of 2B accounts for: chase the supplier. */
   missingIn2b: BookBill[];
-  /** Credit the period can claim: matched and accepted lines that 2B marks available. */
+  /** Credit the period can claim: matched, linked and claimed lines that 2B marks available. */
   claimableTaxMinor: number;
 };
 
+/** "24-25", "2024-25", "2024/2025": a financial year, when the second year follows the first. */
+const YEAR = /(?<!\d)(?:20)?(\d{2})[-/](?:20)?(\d{2})(?!\d)/g;
+
 /**
  * "INV/24-25/0012", "inv-12" and "INV 0012" are one bill: case, separators, leading zeros and a
- * financial-year segment don't count.
+ * financial-year segment don't count. Other number pairs ("A/12/34") are kept, so they don't collide.
  */
 export function normalizeNumber(n: string): string {
   return n
     .toUpperCase()
-    .replace(/\b(20)?\d{2}[-/](20)?\d{2}\b/g, '')
-    .replace(/[^A-Z0-9]/g, '')
-    .replace(/^([A-Z]*)0+(?=\d)/, '$1');
+    .replace(YEAR, (all, a: string, b: string) => ((Number(a) + 1) % 100 === Number(b) ? '' : all))
+    .split(/[^A-Z0-9]+/)
+    .map((part) => part.replace(/^([A-Z]*)0+(?=\d)/, '$1'))
+    .join('');
 }
 
 const KIND_OF: Record<TwoBLine['documentType'], BookBill['kind'] | null> = { I: 'purchaseBill', C: 'supplierCreditNote', D: 'supplierDebitNote', BOE: 'purchaseBill' };
@@ -83,31 +100,45 @@ const daysApart = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(
 
 /**
  * Matches 2B to the books. `toleranceMinor` absorbs rounding (₹1 by default); `probableDays` is how
- * far apart a probable match's dates may be. A bill matches at most one line.
+ * far apart dates may be, for a probable match and for one within tolerance. A bill matches at most
+ * one line. A bill of entry carries the port, not a GSTIN, so it is matched on its number alone.
+ * Bills dated after `periodEnd` (entered on the day they came) can match, but aren't chased.
  */
-export function reconcile2b(lines: TwoBLine[], bills: BookBill[], opts: { toleranceMinor?: number; probableDays?: number } = {}): Reconciliation {
+export function reconcile2b(lines: TwoBLine[], bills: BookBill[], opts: { toleranceMinor?: number; probableDays?: number; periodEnd?: string } = {}): Reconciliation {
   const tolerance = opts.toleranceMinor ?? 100;
   const probableDays = opts.probableDays ?? 3;
   const used = new Set<string>();
   const byKey = new Map<string, BookBill[]>();
+  const keyOf = (kind: BookBill['kind'] | null, gstin: string, number: string, boe = false) => `${kind}|${boe ? '' : gstin}|${normalizeNumber(number)}`;
   for (const b of bills) {
-    const key = `${b.kind}|${b.supplierGstin}|${normalizeNumber(b.number)}`;
-    byKey.set(key, [...(byKey.get(key) ?? []), b]);
+    for (const key of [keyOf(b.kind, b.supplierGstin, b.number), keyOf(b.kind, '', b.number, true)]) byKey.set(key, [...(byKey.get(key) ?? []), b]);
   }
+  const compare = (line: TwoBLine, bill: BookBill): Pick<Match, 'difference' | 'reasons'> & { same: boolean; close: boolean } => {
+    const difference = { taxableMinor: line.taxableMinor - bill.taxableMinor, taxMinor: line.taxMinor - bill.taxMinor, days: Math.round(daysApart(line.date, bill.date)) };
+    const reasons: MismatchReason[] = [];
+    if (Math.abs(difference.taxableMinor) > tolerance) reasons.push('taxable');
+    if (Math.abs(difference.taxMinor) > tolerance) reasons.push('tax');
+    if (difference.days > 0) reasons.push('date');
+    const amounts = !reasons.includes('taxable') && !reasons.includes('tax');
+    return { same: amounts && difference.days === 0, close: amounts && difference.days <= probableDays, ...(reasons.length ? { difference, reasons } : {}) };
+  };
   const matches: Match[] = lines.map((line) => {
     if (line.decision === 'notOurs') return { line, status: 'notOurs' as const };
     if (line.decision === 'claimLater') return { line, status: 'claimLater' as const };
     const kind = KIND_OF[line.documentType];
+    const boe = line.documentType === 'BOE';
     // A person's link wins.
-    const linked = line.linkedDocumentId ? bills.find((b) => b.id === line.linkedDocumentId) : undefined;
-    const exact = linked ?? byKey.get(`${kind}|${line.supplierGstin}|${normalizeNumber(line.number)}`)?.find((b) => !used.has(b.id));
-    if (exact) {
-      used.add(exact.id);
-      const difference = { taxableMinor: line.taxableMinor - exact.taxableMinor, taxMinor: line.taxMinor - exact.taxMinor, days: Math.round(daysApart(line.date, exact.date)) };
-      const same = Math.abs(difference.taxableMinor) <= tolerance && Math.abs(difference.taxMinor) <= tolerance && difference.days === 0;
-      return { line, bill: exact, status: same || line.decision === 'accepted' ? 'matched' : 'partial', ...(same ? {} : { difference }) };
+    const linked = line.linkedDocumentId ? bills.find((b) => b.id === line.linkedDocumentId && !used.has(b.id)) : undefined;
+    const exact = linked ?? byKey.get(keyOf(kind, line.supplierGstin, line.number, boe))?.find((b) => !used.has(b.id));
+    if (!exact) return { line, status: 'missingInBooks' as const };
+    used.add(exact.id);
+    const { same, close, ...diff } = compare(line, exact);
+    if (linked || line.decision === 'accepted') {
+      const reasons = normalizeNumber(exact.number) === normalizeNumber(line.number) ? diff.reasons : [...(diff.reasons ?? []), 'number' as const];
+      return { line, bill: exact, status: exact.claimedIn ? 'claimed' : 'manuallyLinked', ...diff, ...(reasons?.length ? { reasons } : {}) };
     }
-    return { line, status: 'missingInBooks' as const };
+    const status: MatchStatus = !close ? 'partial' : exact.claimedIn ? 'claimed' : same ? 'matched' : 'matchedWithinTolerance';
+    return { line, bill: exact, status, ...diff };
   });
   // Second pass: an unmatched line and an unmatched bill of one supplier with the same tax, days apart.
   for (const m of matches) {
@@ -118,13 +149,13 @@ export function reconcile2b(lines: TwoBLine[], bills: BookBill[], opts: { tolera
     );
     if (near) {
       used.add(near.id);
-      m.bill = near;
-      m.status = 'probable';
+      const { difference, reasons = [] } = compare(m.line, near);
+      Object.assign(m, { bill: near, status: 'probable', difference, reasons: [...reasons, 'number'] });
     }
   }
-  const missingIn2b = bills.filter((b) => !used.has(b.id) && !b.claimedIn);
+  const missingIn2b = bills.filter((b) => !used.has(b.id) && !b.claimedIn && (!opts.periodEnd || b.date <= opts.periodEnd));
   const claimableTaxMinor = matches
-    .filter((m) => m.status === 'matched' && m.line.itcAvailable)
+    .filter((m) => CLAIMABLE.includes(m.status) && m.line.itcAvailable)
     .reduce((a, m) => a + (m.line.documentType === 'C' ? -m.line.taxMinor : m.line.taxMinor), 0);
   return { matches, missingIn2b, claimableTaxMinor };
 }

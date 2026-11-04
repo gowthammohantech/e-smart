@@ -29,9 +29,11 @@ import {
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { formatDate, monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
+import { formatDate, monthLabel, monthLabelNarrow, today } from '@esmart/core/lib/date';
 import { money, toMajor } from '@esmart/core/lib/money';
 import { tdsRegister } from '@esmart/core/domain/tds';
+import { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { useBooks, useVouchers } from '../../../store/books';
 import { BANK_RATE_PERCENT, msmePayables, sec43bh } from '@esmart/core/domain/msme';
 
 import {
@@ -67,13 +69,17 @@ export default function Report() {
     advances: { title: tr('reports:report.advances.title'), subtitle: tr('reports:report.advances.basis') },
     profit: { title: tr('reports:report.profit.title'), subtitle: tr('reports:report.profit.basis') },
     'tds-register': { title: tr('reports:report.tdsRegister.title'), subtitle: tr('reports:report.tdsRegister.basis') },
+    'tds-payable': { title: tr('reports:report.tdsPayable.title'), subtitle: tr('reports:report.tdsPayable.basis') },
+    'tds-receivable': { title: tr('reports:report.tdsReceivable.title'), subtitle: tr('reports:report.tdsReceivable.basis') },
+    'tds-26q': { title: tr('reports:report.tds26q.title'), subtitle: tr('reports:report.tds26q.basis') },
+    'tds-challans': { title: tr('reports:report.tdsChallans.title'), subtitle: tr('reports:report.tdsChallans.basis') },
     'msme-payables': { title: tr('reports:report.msmePayables.title'), subtitle: tr('reports:report.msmePayables.basis') },
   };
   const meta = titles[key];
   // Always false in the native apps, so the desktop layout only ever reaches a browser.
   const desktop = useIsDesktop();
 
-  const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' || key === 'tds-register' ? 'thisFY' : 'last90');
+  const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' || key.startsWith('tds-') ? 'thisFY' : 'last90');
 
   const baseCurrency = useBaseCurrency();
   const documents = useDocuments();
@@ -156,6 +162,15 @@ export default function Report() {
         { from: scope.filters.range.from, to: scope.filters.range.to },
       ),
     [documents, parties, baseCurrency, scope.filters],
+  );
+
+  const { postings } = useBooks();
+  const vouchers = useVouchers();
+  const tdsPayable = useMemo(() => (key === 'tds-payable' ? tdsPayableSummary(postings, scope.filters.range, today()) : []), [key, postings, scope.filters.range]);
+  const tdsIn = useMemo(() => (key === 'tds-receivable' ? tdsReceivable(postings, parties, scope.filters.range) : []), [key, postings, parties, scope.filters.range]);
+  const tdsReturn = useMemo(
+    () => (key === 'tds-26q' || key === 'tds-challans' ? tdsReturnRows(documents, vouchers, parties, baseCurrency, scope.filters.range) : { deductees: [], challans: [] }),
+    [key, documents, vouchers, parties, baseCurrency, scope.filters.range],
   );
 
   if (!meta) {
@@ -528,6 +543,118 @@ export default function Report() {
       );
   }
 
+  const amount = (minor: number) => formatMoney(money(minor, baseCurrency), { symbol: false });
+  const sectionName = (code: string) => code || tr('reports:tds.noSection');
+  const noTds = <EmptyState illustration="all-settled" icon="bank-minus" title={tr('reports:detail.noTds')} message={tr('reports:detail.noTdsBody')} />;
+
+  if (key === 'tds-payable') {
+    const due = tdsPayable.reduce((a, r) => a + r.balanceMinor, 0);
+    const late = tdsPayable.filter((r) => r.overdue).reduce((a, r) => a + r.balanceMinor, 0);
+    body = tdsPayable.length ? (
+      <>
+        <KeyFigures
+          rows={[
+            { label: tr('reports:tds.deducted'), value: formatMoney(money(tdsPayable.reduce((a, r) => a + r.deductedMinor, 0), baseCurrency)) },
+            { label: tr('reports:tds.deposited'), value: formatMoney(money(tdsPayable.reduce((a, r) => a + r.depositedMinor, 0), baseCurrency)), tone: 'good' },
+            { label: tr('reports:tds.toDeposit'), value: formatMoney(money(due, baseCurrency)), tone: due ? 'warn' : undefined },
+            { label: tr('reports:tds.overdue'), value: formatMoney(money(late, baseCurrency)), tone: late ? 'bad' : undefined },
+          ]}
+        />
+        <ReportSection title={tr('reports:tds.bySectionMonth')}>
+          <DataTable
+            headers={[tr('reports:column.month'), tr('reports:column.section'), tr('reports:tds.deducted'), tr('reports:tds.deposited'), tr('reports:tds.balance'), tr('reports:tds.dueBy')]}
+            rows={tdsPayable.map((r) => [monthLabel(r.month), sectionName(r.section), amount(r.deductedMinor), amount(r.depositedMinor), amount(r.balanceMinor), `${formatDate(r.dueDate)}${r.overdue ? ' ⚠' : ''}`])}
+            widths={[1, 0.8, 1, 1, 1, 1.1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      noTds
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:column.month'), tr('reports:column.section'), tr('reports:tds.deducted'), tr('reports:tds.deposited'), tr('reports:tds.balance'), tr('reports:tds.dueBy')],
+        tdsPayable.map((r) => [r.month, r.section, r.deductedMinor / 100, r.depositedMinor / 100, r.balanceMinor / 100, r.dueDate]),
+      );
+  }
+
+  if (key === 'tds-receivable') {
+    body = tdsIn.length ? (
+      <>
+        <KeyFigures rows={[{ label: tr('reports:tds.keptBack'), value: formatMoney(money(tdsIn.reduce((a, r) => a + r.tdsMinor, 0), baseCurrency)), tone: 'good' }]} />
+        <ReportSection title={tr('reports:tds.byCustomer')}>
+          <DataTable
+            headers={[tr('reports:column.quarter'), tr('reports:shell.contact'), 'PAN', tr('reports:column.tds')]}
+            rows={tdsIn.map((r) => [r.quarter.replace('FY ', ''), r.partyName, r.pan ?? '—', amount(r.tdsMinor)])}
+            widths={[1.2, 1.6, 1.2, 1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="bank-plus" title={tr('reports:tds.noneKept')} message={tr('reports:tds.noneKeptBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:column.quarter'), tr('reports:shell.contact'), 'PAN', tr('reports:column.tds'), tr('reports:tds.receipts')],
+        tdsIn.map((r) => [r.quarter, r.partyName, r.pan ?? '', r.tdsMinor / 100, r.receipts]),
+      );
+  }
+
+  if (key === 'tds-26q') {
+    const rows = tdsReturn.deductees;
+    const missingPan = rows.filter((r) => !r.pan).length;
+    body = rows.length ? (
+      <>
+        <KeyFigures
+          rows={[
+            { label: tr('reports:tds.deductees'), value: String(new Set(rows.map((r) => r.partyId)).size) },
+            { label: tr('reports:column.tds'), value: formatMoney(money(rows.reduce((a, r) => a + r.tdsMinor, 0), baseCurrency)) },
+            { label: tr('reports:tds.notDeposited'), value: String(rows.filter((r) => !r.challan && r.tdsMinor > 0).length), tone: rows.some((r) => !r.challan && r.tdsMinor > 0) ? 'warn' : undefined },
+            { label: tr('reports:tds.withoutPan'), value: String(missingPan), tone: missingPan ? 'bad' : undefined },
+          ]}
+        />
+        <ReportSection title={tr('reports:tds.deducteeRows')}>
+          <DataTable
+            headers={[tr('common:table.date'), tr('reports:shell.contact'), tr('reports:column.section'), tr('reports:column.tdsBase'), tr('reports:column.tds'), tr('reports:tds.challan')]}
+            rows={rows.map((r) => [formatDate(r.date), `${r.partyName}${r.pan ? '' : ' ⚠'}`, r.section, amount(r.amountMinor), amount(r.tdsMinor), r.challan?.number ?? '—'])}
+            widths={[1, 1.5, 0.8, 1.1, 0.9, 1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      noTds
+    );
+    // The columns of the 26Q deductee annexure, in its order, for the return preparation utility.
+    exportRows = () =>
+      reportTable(
+        ['Quarter', 'Section', 'Deductee PAN', 'Deductee name', 'Bill', 'Date of payment or credit', 'Amount paid or credited', 'Rate (%)', 'TDS', 'BSR code', 'Challan serial', 'Date deposited'],
+        rows.map((r) => [r.quarter, r.section, r.pan ?? '', r.partyName, r.number, r.date, r.amountMinor / 100, r.rate, r.tdsMinor / 100, r.challan?.bsrCode ?? '', r.challan?.serial ?? '', r.challan?.depositedOn ?? '']),
+      );
+  }
+
+  if (key === 'tds-challans') {
+    const rows = tdsReturn.challans;
+    body = rows.length ? (
+      <>
+        <KeyFigures rows={[{ label: tr('reports:tds.deposited'), value: formatMoney(money(rows.reduce((a, r) => a + r.totalMinor, 0), baseCurrency)), tone: 'good' }]} />
+        <ReportSection title={tr('reports:tds.challans')}>
+          <DataTable
+            headers={[tr('reports:tds.depositedOn'), tr('common:table.number'), tr('reports:tds.bsr'), tr('reports:tds.serial'), tr('reports:column.section'), tr('common:table.amount'), tr('reports:column.documents')]}
+            rows={rows.map((r) => [formatDate(r.depositedOn ?? r.date), r.number, r.bsrCode ?? '—', r.serial ?? '—', r.sections.map((x) => sectionName(x.section)).join(', '), amount(r.totalMinor), String(r.deductions)])}
+            widths={[1, 1, 0.9, 0.7, 0.9, 1, 0.6]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="bank-transfer-out" title={tr('reports:tds.noChallans')} message={tr('reports:tds.noChallansBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:tds.depositedOn'), tr('common:table.number'), tr('reports:tds.bsr'), tr('reports:tds.serial'), tr('reports:column.section'), tr('common:table.amount'), tr('reports:column.documents')],
+        rows.map((r) => [r.depositedOn ?? r.date, r.number, r.bsrCode ?? '', r.serial ?? '', r.sections.map((x) => x.section).join(' '), r.totalMinor / 100, r.deductions]),
+      );
+  }
+
   if (key === 'msme-payables') {
     // As of the period's end: what micro and small suppliers are still owed, against the 45-day limit.
     const asOf = scope.filters.range.to;
@@ -625,7 +752,8 @@ export default function Report() {
   }
 
   // A desktop browser gets its own layout; the phone keeps the single column above.
-  if (desktop) {
+  // Reports without a desktop layout of their own keep the single column there too.
+  if (desktop && !['tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'msme-payables'].includes(key)) {
     body = (
       <ReportDesktop
         report={key}

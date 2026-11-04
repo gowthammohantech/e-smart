@@ -87,7 +87,7 @@
     "namePlaceholder": "Rent, Loan from bank, Furniture",
     "group": "Group",
     "opening": "Opening balance",
-    "openingHint": "Debit as a positive amount, credit as negative, on the day your books begin.",
+    "openingHint": "The balance on the day your books begin, or on the date below.",
     "saved": "Account saved",
     "removed": "Account removed",
     "remove": "Remove",
@@ -95,7 +95,12 @@
     "yours": "Added by you",
     "balance": "Balance",
     "dr": "Dr",
-    "cr": "Cr"
+    "cr": "Cr",
+    "debitSide": "Debit (Dr)",
+    "creditSide": "Credit (Cr)",
+    "openingOnDate": "Opening balance as on a date",
+    "openingOnDateHint": "Off: it stands at the start of your books.",
+    "openingDate": "As on"
   },
   "vouchers": {
     "empty": "No vouchers yet",
@@ -105,13 +110,15 @@
       "journal": "Journal",
       "contra": "Contra",
       "gstJournal": "GST journal",
-      "tdsChallan": "TDS challan"
+      "tdsChallan": "TDS challan",
+      "receipt": "Receipt"
     },
     "kindHint": {
       "journal": "Any adjustment: depreciation, provisions, a refund, a correction.",
       "contra": "Money between cash and bank: a deposit, a withdrawal, a transfer.",
       "gstJournal": "Adjustments to the GST ledgers: a credit reversed, interest, a set-off.",
-      "tdsChallan": "TDS paid to the government, from the challan."
+      "tdsChallan": "TDS paid to the government, from the challan.",
+      "receipt": "Money in that isn't from an invoice, into cash or bank."
     },
     "date": "Date",
     "narration": "Narration",
@@ -135,7 +142,15 @@
     "deleteTitle": "Delete {{number}}?",
     "deleteMessage": "Its entries come off the books.",
     "unbalanced": "Debits and credits must be equal",
-    "needsTwo": "A voucher needs at least two lines"
+    "needsTwo": "A voucher needs at least two lines",
+    "drCr": "Dr/Cr",
+    "lineNarration": "Line narration",
+    "lineNarrationPlaceholder": "Optional",
+    "bsrCode": "BSR code",
+    "bsrHint": "The bank branch's 7-digit code, on the challan",
+    "challanSerial": "Challan serial number",
+    "depositedOn": "Deposited on",
+    "challanInvalid": "A BSR code has 7 digits and a challan serial up to 5"
   },
   "statement": {
     "opening": "Opening balance",
@@ -227,5 +242,27 @@
     "reopened": "Books reopened",
     "reopenHint": "Reopening lets the closed period change again. Anything changed there may no longer match what was filed or audited.",
     "ownerOnly": "Only an owner can close or reopen the books."
+  },
+  "receipts": {
+    "title": "Receipts",
+    "total": "Received",
+    "count_other": "{{count}} receipts",
+    "count_one": "{{count}} receipt",
+    "empty": "No receipts in this period",
+    "emptyBody": "Money in that isn't from an invoice: interest, rent, a refund, capital brought in.",
+    "new": "New receipt",
+    "amount": "Amount received",
+    "source": "Received for",
+    "pickSource": "Pick an income or account",
+    "sourceHint": "Interest, rent, a refund. Taxable income goes on an invoice.",
+    "into": "Received into",
+    "pickInto": "Pick cash or bank",
+    "from": "Received from",
+    "fromPlaceholder": "Optional: who paid",
+    "fromNarration": "From {{name}}",
+    "referencePlaceholder": "Cheque or UTR number",
+    "save": "Save receipt",
+    "saved": "Receipt saved",
+    "newIncome": "Add \"{{name}}\" as an income"
   }
 }

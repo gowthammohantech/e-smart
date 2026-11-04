@@ -1,27 +1,35 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
+import { Button } from '@esmart/ui/components/Button';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { useDocuments, useParties } from '../../store/selectors';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
-import { detailRouteFor } from './DocumentEditor';
+import { DocumentEditor, detailRouteFor } from './DocumentEditor';
 
 /** Raised against one invoice or bill: returns, and credit and debit notes. */
 type AgainstSource = 'salesReturn' | 'purchaseReturn' | 'creditNote' | 'debitNote' | 'supplierCreditNote' | 'supplierDebitNote';
 
 /**
- * A return or note is always raised against one invoice (or bill): pick it first, then
- * edit the draft that carries its lines — never a free pick from the catalogue.
+ * A return is always raised against one invoice (or bill): pick it first, then edit the draft that
+ * carries its lines. A note usually is too, but may also be direct (`?direct=1`): a discount over a
+ * period, a rate revision, against no one invoice. It then starts blank and must give its reason.
  */
 export function ReturnSourcePicker({ kind }: { kind: AgainstSource }) {
+  const { direct } = useLocalSearchParams<{ direct?: string }>();
+  if (direct && kind !== 'salesReturn' && kind !== 'purchaseReturn') return <DocumentEditor kind={kind} />;
+  return <SourceList kind={kind} />;
+}
+
+function SourceList({ kind }: { kind: AgainstSource }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales']);
   const router = useRouter();
@@ -56,6 +64,14 @@ export function ReturnSourcePicker({ kind }: { kind: AgainstSource }) {
           {tr(isReturn ? (purchase ? 'sales:returnPicker.purchaseHint' : 'sales:returnPicker.salesHint') : `sales:notePicker.hint.${kind}`)}
         </Text>
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('sales:returnPicker.search')} />
+        {isReturn ? null : (
+          <Button
+            title={tr(purchase ? 'sales:notePicker.directBill' : 'sales:notePicker.directInvoice')}
+            icon="file-document-outline"
+            variant="secondary"
+            onPress={() => router.setParams({ direct: '1' } as never)}
+          />
+        )}
       </View>
       <FlatList
         data={rows}

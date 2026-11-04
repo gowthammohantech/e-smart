@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { remindMsmeDue } from '../src/modules/ledger/msme';
 import { setupApi } from './helpers';
-import { line, moneySetup, type Money } from './money-fixtures';
+import { line, moneySetup, pdfText, type Money } from './money-fixtures';
 
 const t = setupApi();
 beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
@@ -94,6 +94,10 @@ describe('GST on advances for services', () => {
     expect(sep.body.advances.received).toEqual([{ placeOfSupply: '27', rate: 18, interState: false, taxable: inr(1_000_000), igst: inr(0), cgst: inr(90_000), sgst: inr(90_000), cess: inr(0) }]);
     const sep3b = await t.get(`${m.c}/gst/gstr3b`, { token: m.token, query: { gstin: GSTIN, period: '092026' } });
     expect(sep3b.body.outward.taxable).toMatchObject({ taxable: inr(1_000_000), cgst: inr(90_000), sgst: inr(90_000) });
+    expect(sep3b.body.breakup['3.1a']).toEqual([expect.objectContaining({ type: 'advance', id: adv.body.id, cgst: inr(90_000) })]);
+    // Its receipt is the receipt voucher Rule 50 asks for, with the tax on the advance.
+    const voucher = await t.get(`${m.c}/payments/${adv.body.id}/receipt`, { token: m.token });
+    expect(pdfText(voucher.raw)).toContain('RECEIPT VOUCHER');
 
     // October: the invoice is raised and the advance applied to it.
     t.setNow('2026-10-10T10:00:00Z');

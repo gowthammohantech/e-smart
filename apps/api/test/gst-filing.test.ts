@@ -50,6 +50,9 @@ describe('GSTR-3B and filing', () => {
     expect(res.body.setOff.credit.cgst.igst).toEqual(inr(9_000));
     expect(res.body.setOff.credit.sgst.igst).toEqual(inr(9_000));
     expect(res.body.setOff.cash.igst).toEqual(inr(18_000));
+    // Each figure breaks down to the documents behind it.
+    expect(res.body.breakup['3.1a']).toEqual([expect.objectContaining({ type: 'document', kind: 'invoice', taxable: inr(200_000), igst: inr(36_000) })]);
+    expect(res.body.breakup['4A5'][0]).toMatchObject({ type: 'document', kind: 'purchaseBill', cgst: inr(9_000) });
   });
 
   it('files GSTR-1 then 3B, never twice, and closes the books with the set-off posted', async () => {

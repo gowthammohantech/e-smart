@@ -235,15 +235,16 @@
     "claimed": "Credit claimed for the period",
     "status": {
       "matched": "Matched",
-      "partial": "Differs",
+      "partial": "Mismatch",
       "probable": "Likely match",
       "missingInBooks": "Not in your books",
       "notOurs": "Not ours",
-      "claimLater": "Later"
+      "claimLater": "Later",
+      "matchedWithinTolerance": "Matched, dates differ",
+      "manuallyLinked": "Linked by you",
+      "claimed": "Claimed"
     },
     "itcUnavailable": "credit not available",
-    "yourBill": "Your bill {{number}} ({{supplierNumber}}), tax {{tax}}",
-    "differs": "Supplier’s tax differs by {{tax}}; dates {{days}} days apart",
     "accept": "Accept",
     "addBill": "Add the bill",
     "later": "Claim later",
@@ -252,7 +253,20 @@
     "notIn2bTitle": "{{count}} bills your suppliers haven’t reported",
     "notIn2bBody": "Their credit can’t be claimed until the supplier files them. Send them the list.",
     "chase": "Ask the suppliers",
-    "chaseMessage": "These bills of ours are not in our GSTR-2B for {{period}}. Please report them in your GSTR-1:"
+    "chaseMessage": "These bills of ours are not in our GSTR-2B for {{period}}. Please report them in your GSTR-1:",
+    "all": "All",
+    "in2b": "In 2B",
+    "inBooks": "In your books",
+    "differsIn": "Differs in {{what}}",
+    "reason": {
+      "taxable": "taxable value",
+      "tax": "tax",
+      "date": "date",
+      "number": "number"
+    },
+    "link": "Link to a bill",
+    "linkTitle": "Which bill is it?",
+    "linkEmpty": "No unclaimed bills from this supplier"
   },
   "returns": {
     "notConnectedBody": "Returns are saved and filed through your own GST portal session.",
@@ -302,7 +316,8 @@
       "reversedRules": "Reversed: rules and blocked",
       "reversedOther": "Reversed: others",
       "reclaimed": "Reclaimed",
-      "net": "Net credit"
+      "net": "Net credit",
+      "isd": "From an input service distributor"
     },
     "setOff": "Paying the tax (6.1)",
     "head": {
@@ -313,7 +328,25 @@
       "liability": "Owed",
       "credit": "From credit",
       "cash": "In cash",
-      "forward": "Carried forward"
+      "forward": "Carried forward",
+      "placeOfSupply": "Place of supply",
+      "interState": "Inter-state",
+      "intraState": "Intra-state"
+    },
+    "fromBooks": "Worked out from your books. Connect the GST portal to save and file it.",
+    "breakupOf": "{{table}} · {{count}}",
+    "breakupTitle": "What makes up {{table}}",
+    "unregistered": "Inter-state supplies to unregistered persons (3.2)",
+    "none": "None this period",
+    "inwardExempt": "Exempt, nil and non-GST supplies received (5)",
+    "exemptRow": "From suppliers",
+    "interestLateFee": "Interest and late fee (5.1)",
+    "interestRow": "Interest",
+    "lateFeeRow": "Late fee",
+    "sourceType": {
+      "document": "Document",
+      "expense": "Expense",
+      "advance": "Advance received"
     }
   },
   "status": {

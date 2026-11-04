@@ -28,7 +28,7 @@ export const TITLES: Record<ReportKey, string> = {
   'sales-summary': 'Sales summary',
   'purchase-summary': 'Purchase summary',
   'expense-summary': 'Expense summary',
-  receivables: 'Receivables',
+  receivables: 'Receivable report',
   payables: 'Payables',
   stock: 'Stock',
   'tax-summary': 'Tax summary',

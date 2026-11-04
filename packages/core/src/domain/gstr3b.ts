@@ -47,7 +47,15 @@ export type Gstr3b = {
   /** 5.1 interest and late fee, in cash. */
   interest: Amounts;
   lateFee: { cgst: number; sgst: number };
+  /** What makes up each table, as the portal numbers them: the breakup behind every figure. */
+  sources: Partial<Record<Gstr3bTable, Gstr3bSource[]>>;
 };
+
+/** The portal's tables that the books fill. */
+export type Gstr3bTable = '3.1a' | '3.1b' | '3.1c' | '3.1d' | '3.1e' | '3.2' | '4A2' | '4A3' | '4A5' | '4B1' | '4B2' | '4D1' | '5';
+/** One document, expense or advance and what it puts in a table (signed: a credit note takes away). */
+export type Gstr3bSource = { type: 'document' | 'expense' | 'advance'; id: string; kind?: string; number?: string; date: string; partyId?: string } & Amounts;
+type SourceRef = Omit<Gstr3bSource, keyof Amounts>;
 
 type Input = {
   period: string;
@@ -87,8 +95,18 @@ export function gstr3b(input: Input): Gstr3b {
     inwardExempt: { interState: 0, intraState: 0 },
     interest: zero(),
     lateFee: { cgst: 0, sgst: 0 },
+    sources: {},
   };
   const unreg = new Map<string, { taxable: number; igst: number }>();
+  const found = new Map<string, { table: Gstr3bTable; row: Gstr3bSource }>();
+  /** Adds to a table's figure and notes where it came from. */
+  const put = (table: Gstr3bTable, bucket: Amounts | null, from: SourceRef, a: Partial<Amounts>, sign = 1) => {
+    if (bucket) add(bucket, a, sign);
+    const key = `${table}|${from.type}|${from.id}`;
+    const hit = found.get(key) ?? { table, row: { ...from, ...zero() } };
+    add(hit.row, a, sign);
+    found.set(key, hit);
+  };
 
   for (const doc of documents) {
     if (OFF.includes(doc.status)) continue;
@@ -96,6 +114,7 @@ export function gstr3b(input: Input): Gstr3b {
     const b = (m: number) => Math.round(m * rate);
     const sign = CREDIT_KINDS.includes(doc.kind) ? -1 : 1;
     const party = input.parties.find((p) => p.id === doc.partyId);
+    const src: SourceRef = { type: 'document', id: doc.id, kind: doc.kind, number: doc.number, date: doc.date, partyId: doc.partyId };
 
     if (SALES.includes(doc.kind) && inPeriod(doc.date, period)) {
       const ctx = { regime: 'GST' as const, registered: doc.totals.totalTax.minor + (doc.totals.reverseChargeTax?.minor ?? 0) > 0, reverseCharge: doc.reverseCharge };
@@ -106,10 +125,10 @@ export function gstr3b(input: Input): Gstr3b {
         const c = calculateLine(line, doc.currency, ctx);
         const taxable = b(c.taxable.minor);
         const supply = line.gst?.supplyType ?? 'taxable';
-        if (supply === 'nonGst') add(out.outward.nonGst, { taxable }, sign);
-        else if (supply !== 'taxable' || (!exported && t.rate + t.cessRate === 0)) add(out.outward.nilExempt, { taxable }, sign);
-        else if (exported) add(out.outward.zeroRated, { taxable }, sign);
-        else if (!t.reverseCharge) add(out.outward.taxable, { taxable }, sign);
+        if (supply === 'nonGst') put('3.1e', out.outward.nonGst, src, { taxable }, sign);
+        else if (supply !== 'taxable' || (!exported && t.rate + t.cessRate === 0)) put('3.1c', out.outward.nilExempt, src, { taxable }, sign);
+        else if (exported) put('3.1b', out.outward.zeroRated, src, { taxable }, sign);
+        else if (!t.reverseCharge) put('3.1a', out.outward.taxable, src, { taxable }, sign);
       }
       // Tax from the document's own components, so it ties to the invoices to the paisa.
       for (const tl of doc.totals.taxLines) {
@@ -119,7 +138,7 @@ export function gstr3b(input: Input): Gstr3b {
           const k = comp.type.toLowerCase() as keyof typeof split;
           if (k in split) split[k] += b(comp.amount.minor);
         }
-        add(exported ? out.outward.zeroRated : out.outward.taxable, split, sign);
+        put(exported ? '3.1b' : '3.1a', exported ? out.outward.zeroRated : out.outward.taxable, src, split, sign);
       }
       // 3.2: inter-state supplies to unregistered buyers.
       const registered = !!(doc.partyGstin ?? party?.taxId) && party?.gstRegistrationType !== 'unregistered';
@@ -130,6 +149,7 @@ export function gstr3b(input: Input): Gstr3b {
         row.taxable += sign * b(doc.totals.taxableAmount.minor);
         row.igst += sign * igst;
         unreg.set(pos, row);
+        put('3.2', null, src, { taxable: b(doc.totals.taxableAmount.minor), igst }, sign);
       }
     }
 
@@ -145,10 +165,10 @@ export function gstr3b(input: Input): Gstr3b {
             const k = comp.type.toLowerCase() as keyof typeof split;
             if (k in split) split[k] += b(comp.amount.minor);
           }
-          add(out.outward.reverseCharge, { taxable, ...split }, sign);
+          put('3.1d', out.outward.reverseCharge, src, { taxable, ...split }, sign);
           // Self-assessed credit is claimed with it: imports of services apart (4A(2)).
           const imported = party?.gstRegistrationType === 'overseas';
-          add(imported ? out.itc.importOfServices : out.itc.reverseCharge, fromSplit(itc.reverseCharge));
+          put(imported ? '4A2' : '4A3', imported ? out.itc.importOfServices : out.itc.reverseCharge, src, fromSplit(itc.reverseCharge));
         }
         // 5: exempt, nil and non-GST supplies received.
         const inter = (doc.partyGstin ?? party?.taxId)?.slice(0, 2) !== home;
@@ -158,20 +178,21 @@ export function gstr3b(input: Input): Gstr3b {
           const v = sign * b(calculateLine(line, doc.currency, { regime: 'GST', registered: false }).taxable.minor);
           if (inter) out.inwardExempt.interState += v;
           else out.inwardExempt.intraState += v;
+          put('5', null, src, { taxable: v });
         }
       }
       // 4A(5): credit on bills 2B matched and the business claimed for this period.
       if (doc.itcClaimPeriod === period) {
         // All of it, as 2B shows it; what the law blocks comes back out in 4B(1). Reverse charge is 4A(3), above.
-        add(out.itc.allOther, fromSplit(sumSplits(itc.eligible, itc.capitalGoods, itc.blocked, itc.ineligible)));
-        add(out.itc.reversedRules, fromSplit(sumSplits(itc.blocked, itc.ineligible)));
+        put('4A5', out.itc.allOther, src, fromSplit(sumSplits(itc.eligible, itc.capitalGoods, itc.blocked, itc.ineligible)));
+        put('4B1', out.itc.reversedRules, src, fromSplit(sumSplits(itc.blocked, itc.ineligible)));
       }
       // 4B(2) and 4D(1): 180 days unpaid, reversed; paid since, claimed again.
       const claimable = sumSplits(itc.eligible, itc.capitalGoods);
-      if (doc.itcReversedOn && inPeriod(doc.itcReversedOn, period)) add(out.itc.reversedOther, fromSplit(claimable));
+      if (doc.itcReversedOn && inPeriod(doc.itcReversedOn, period)) put('4B2', out.itc.reversedOther, src, fromSplit(claimable));
       if (doc.itcReclaimedOn && inPeriod(doc.itcReclaimedOn, period)) {
-        add(out.itc.allOther, fromSplit(claimable));
-        add(out.itc.reclaimed, fromSplit(claimable));
+        put('4A5', out.itc.allOther, src, fromSplit(claimable));
+        put('4D1', out.itc.reclaimed, src, fromSplit(claimable));
       }
     }
   }
@@ -181,13 +202,14 @@ export function gstr3b(input: Input): Gstr3b {
     if (!inPeriod(e.date, period)) continue;
     const split = input.expenseSplit.get(e.id);
     if (!split) continue;
+    const src: SourceRef = { type: 'expense', id: e.id, number: e.number, date: e.date, partyId: e.supplierId };
     if (e.reverseCharge) {
-      add(out.outward.reverseCharge, { taxable: Math.round(e.amount.minor * (e.exchangeRate || 1)), ...split });
-      if ((e.itcEligibility ?? 'eligible') === 'eligible') add(out.itc.reverseCharge, fromSplit(split));
+      put('3.1d', out.outward.reverseCharge, src, { taxable: Math.round(e.amount.minor * (e.exchangeRate || 1)), ...split });
+      if ((e.itcEligibility ?? 'eligible') === 'eligible') put('4A3', out.itc.reverseCharge, src, fromSplit(split));
       continue;
     }
-    add(out.itc.allOther, fromSplit(split));
-    if ((e.itcEligibility ?? 'eligible') !== 'eligible') add(out.itc.reversedRules, fromSplit(split));
+    put('4A5', out.itc.allOther, src, fromSplit(split));
+    if ((e.itcEligibility ?? 'eligible') !== 'eligible') put('4B1', out.itc.reversedRules, src, fromSplit(split));
   }
 
   // Advances for services: tax on those received less those adjusted, in 3.1(a) (GSTR-1 table 11).
@@ -198,8 +220,19 @@ export function gstr3b(input: Input): Gstr3b {
     for (const [rows, sign] of [[t11.received, 1], [t11.adjusted, -1]] as const) {
       for (const r of rows) add(out.outward.taxable, { taxable: sign * r.taxable, igst: sign * r.igst, cgst: sign * r.cgst, sgst: sign * r.sgst, cess: 0 });
     }
+    // The same, advance by advance, as advancesForPeriod counts them: an advance adjusted in the month it came nets to nothing.
+    const within = (d: string) => d >= from && d <= to;
+    for (const e of input.advances) {
+      const sign = e.kind === 'received' ? (within(e.receivedOn) ? 1 : 0) : within(e.date) && (within(e.receivedOn) || e.receivedOn < from) ? -1 : 0;
+      if (sign) put('3.1a', null, { type: 'advance', id: e.paymentId, date: e.kind === 'received' ? e.receivedOn : e.date }, { taxable: e.taxable, igst: e.igst, cgst: e.cgst, sgst: e.sgst }, sign);
+    }
   }
 
+  for (const { table, row } of found.values()) {
+    if (!row.taxable && !taxOf(row)) continue;
+    (out.sources[table] ??= []).push(row);
+  }
+  for (const rows of Object.values(out.sources)) rows.sort((a, b) => a.date.localeCompare(b.date) || (a.number ?? '').localeCompare(b.number ?? ''));
   out.interStateUnregistered = [...unreg.entries()].filter(([, v]) => v.taxable || v.igst).map(([placeOfSupply, v]) => ({ placeOfSupply, ...v }));
   const i = out.itc;
   for (const k of ['igst', 'cgst', 'sgst', 'cess'] as const) {

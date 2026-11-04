@@ -58,7 +58,7 @@
     "payment": "Payment",
     "paymentAccounts": "Payment accounts",
     "paymentsMade": "Payments made",
-    "paymentsReceived": "Payments received",
+    "paymentsReceived": "Income received",
     "preview": "Preview",
     "purchaseBill": "Purchase bill",
     "purchaseBills": "Purchase bills",
@@ -68,7 +68,7 @@
     "purchaseReturns": "Purchase returns",
     "quotation": "Quotation",
     "quotations": "Quotations",
-    "receivables": "Receivables",
+    "receivables": "Receivable report",
     "report": "Report",
     "review": "Review",
     "reviewExtraction": "Review extraction",
@@ -103,7 +103,8 @@
     "usersAndRoles": "Users & roles",
     "yourProfile": "Your profile",
     "editNamed": "Edit {{name}}",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "receipts": "Receipts"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -124,9 +125,9 @@
       "customers": "Customers",
       "itemsAndServices": "Items & services",
       "reports": "Reports",
-      "receivables": "Receivables",
+      "receivables": "Receivable report",
       "payables": "Payables",
-      "paymentsReceived": "Payments received",
+      "paymentsReceived": "Income received",
       "paymentsMade": "Payments made",
       "expenses": "Expenses",
       "scanBill": "Scan a bill or receipt",
@@ -157,7 +158,8 @@
       "books": "Books",
       "gstPortal": "GST portal connection",
       "gstr2b": "GSTR-2B and purchase match",
-      "gstReturns": "GSTR-1 and 3B filing"
+      "gstReturns": "GSTR-1 and 3B filing",
+      "receipts": "Receipts"
     },
     "signOut": {
       "row": "Sign out",

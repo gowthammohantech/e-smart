@@ -20,7 +20,7 @@ describe('GSTR-2B reconciliation', () => {
 
   it('calls it partial when the amount or date differs, and says by how much', () => {
     const r = reconcile2b([line({ taxableMinor: 1_100_000, taxMinor: 198_000, date: '2026-09-06' })], [bill()]);
-    expect(r.matches[0]).toMatchObject({ status: 'partial', difference: { taxableMinor: 100_000, taxMinor: 18_000, days: 1 } });
+    expect(r.matches[0]).toMatchObject({ status: 'partial', difference: { taxableMinor: 100_000, taxMinor: 18_000, days: 1 }, reasons: ['taxable', 'tax', 'date'] });
     expect(r.claimableTaxMinor).toBe(0);
   });
 
@@ -42,7 +42,8 @@ describe('GSTR-2B reconciliation', () => {
       [line({ linkedDocumentId: b.id, decision: 'accepted' }), line({ number: 'Z', decision: 'notOurs' }), line({ number: 'L', decision: 'claimLater' }), line({ documentType: 'C', number: 'CN 7', taxMinor: 18_000, taxableMinor: 100_000 })],
       [b, { ...cn, taxableMinor: 100_000 }],
     );
-    expect(r.matches.map((m) => m.status)).toEqual(['matched', 'notOurs', 'claimLater', 'matched']);
+    expect(r.matches.map((m) => m.status)).toEqual(['manuallyLinked', 'notOurs', 'claimLater', 'matched']);
+    expect(r.matches[0].reasons).toEqual(['number']);
     expect(r.claimableTaxMinor).toBe(180_000 - 18_000);
   });
 
@@ -51,5 +52,34 @@ describe('GSTR-2B reconciliation', () => {
     expect(r.matches[0].status).toBe('matched');
     expect(r.claimableTaxMinor).toBe(0);
     expect(r.missingIn2b).toEqual([]);
+  });
+
+  it('keeps real number pairs apart, and zeros in every run of digits', () => {
+    expect(normalizeNumber('INV24-25/12')).toBe('INV12');
+    expect(normalizeNumber('A/12/34')).not.toBe(normalizeNumber('A'));
+    expect(normalizeNumber('INV1-0012')).toBe(normalizeNumber('INV1-12'));
+  });
+
+  it('matches within tolerance when the bill was entered a day or two after it was dated', () => {
+    const r = reconcile2b([line({ date: '2026-09-05' })], [bill({ date: '2026-09-07' })]);
+    expect(r.matches[0]).toMatchObject({ status: 'matchedWithinTolerance', reasons: ['date'] });
+    expect(r.claimableTaxMinor).toBe(180_000);
+  });
+
+  it('matches a bill dated after the period, but chases only the period’s own', () => {
+    const r = reconcile2b([line()], [bill({ date: '2026-10-02' }), bill({ number: 'LATE', date: '2026-10-03' })], { periodEnd: '2026-09-30', probableDays: 30 });
+    expect(r.matches[0].status).toBe('matchedWithinTolerance');
+    expect(r.missingIn2b).toEqual([]);
+  });
+
+  it('matches a bill of entry on its number, whoever the supplier is in the books', () => {
+    const r = reconcile2b([line({ documentType: 'BOE', supplierGstin: 'INMAA1', number: '4471201' })], [bill({ supplierGstin: '', number: '4471201' })]);
+    expect(r.matches[0].status).toBe('matched');
+  });
+
+  it('says a line is claimed once its bill’s credit is claimed for the period', () => {
+    const r = reconcile2b([line()], [bill({ claimedIn: '092026' })]);
+    expect(r.matches[0].status).toBe('claimed');
+    expect(r.claimableTaxMinor).toBe(180_000);
   });
 });

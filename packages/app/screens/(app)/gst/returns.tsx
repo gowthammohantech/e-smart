@@ -7,6 +7,8 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
+import { ListRow } from '@esmart/ui/components/ListRow';
+import { Sheet } from '@esmart/ui/components/Sheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { PickerField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -17,7 +19,9 @@ import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
-import { useActiveCompany } from '../../../store/selectors';
+import { useActiveCompany, useBranches, useParties } from '../../../store/selectors';
+import { detailRouteFor } from '../../../features/documents/DocumentEditor';
+import type { DocumentKind } from '@esmart/core/types';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 
@@ -30,7 +34,12 @@ type Status = NonNullable<Schema<'GstReturn'>['status']> | 'none';
 const KINDS = ['igst', 'cgst', 'sgst', 'cess'] as const;
 const TONE: Record<Status, 'success' | 'warning' | 'danger' | 'neutral'> = { none: 'neutral', notFiled: 'neutral', prepared: 'neutral', saved: 'neutral', submitted: 'warning', filed: 'success', failed: 'danger' };
 const OUTWARD = ['taxable', 'zeroRated', 'nilExempt', 'reverseCharge', 'nonGst'] as const;
-const ITC = ['importOfGoods', 'importOfServices', 'reverseCharge', 'allOther', 'reversedRules', 'reversedOther', 'reclaimed', 'net'] as const;
+const ITC = ['importOfGoods', 'importOfServices', 'reverseCharge', 'isd', 'allOther', 'reversedRules', 'reversedOther', 'net', 'reclaimed'] as const;
+/** Each row as the portal numbers it; the key into the breakup. */
+const OUTWARD_TABLE: Record<(typeof OUTWARD)[number], string> = { taxable: '3.1a', zeroRated: '3.1b', nilExempt: '3.1c', reverseCharge: '3.1d', nonGst: '3.1e' };
+const ITC_TABLE: Record<(typeof ITC)[number], string> = { importOfGoods: '4A1', importOfServices: '4A2', reverseCharge: '4A3', isd: '4A4', allOther: '4A5', reversedRules: '4B1', reversedOther: '4B2', net: '4C', reclaimed: '4D1' };
+/** "3.1a" → "3.1(a)", "4A5" → "4A(5)". */
+const tableLabel = (k: string) => k.replace(/^(3\.1|4[ABD])([a-e1-5])$/, '$1($2)');
 
 const add = (...m: (Money | undefined)[]): Money => ({ minor: m.reduce((s, x) => s + (x?.minor ?? 0), 0), currency: m.find(Boolean)?.currency ?? 'INR' });
 const taxOf = (a?: Amounts) => add(a?.igst, a?.cgst, a?.sgst, a?.cess);
@@ -55,10 +64,18 @@ export default function GstReturnsScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [otp, setOtp] = useState<Record<ReturnType, string>>({ gstr1: '', gstr3b: '' });
   const [open, setOpen] = useState<'gstin' | 'period' | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [breakup, setBreakup] = useState<string | null>(null);
+  const branches = useBranches();
+  const parties = useParties();
 
   useEffect(() => {
     api.GET('/companies/{companyId}/gst/portal-sessions', { params: { path } }).then(({ data }) => {
-      const list = (data?.data ?? []).map((s) => s.gstin!);
+      const sessions = (data?.data ?? []).map((s) => s.gstin!);
+      // Without a portal session the return is still worked out from the books, to check before filing.
+      const own = [company.taxRegistration?.identifier, ...branches.map((b) => b.gstin)].filter((g): g is string => !!g);
+      const list = sessions.length ? sessions : [...new Set(own)];
+      setConnected(sessions.length > 0);
       setGstins(list);
       setGstin((g) => g ?? list[0] ?? null);
     });
@@ -113,6 +130,19 @@ export default function GstReturnsScreen() {
   const s = view?.setOff;
   const usedFor = (k: (typeof KINDS)[number]) => add(...KINDS.map((from) => s?.credit?.[from]?.[k]));
   const lateTotal = add(taxOf(view?.interest), taxOf(view?.lateFee));
+  const sources = breakup ? (view?.breakup?.[breakup] ?? []) : [];
+  const partyName = (id?: string) => parties.find((p) => p.id === id)?.name;
+  /** The tables of a section that have something behind them, to open. */
+  const breakupLinks = (tables: string[]) => {
+    const shown = tables.filter((k) => view?.breakup?.[k]?.length);
+    return shown.length ? (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
+        {shown.map((k) => (
+          <Button key={k} title={tr('compliance:returns.breakupOf', { table: tableLabel(k), count: view!.breakup![k].length })} size="sm" variant="secondary" icon="format-list-bulleted" onPress={() => setBreakup(k)} />
+        ))}
+      </View>
+    ) : null;
+  };
 
   const returnCard = (r: ReturnType) => {
     const status = statusOf(r);
@@ -197,20 +227,53 @@ export default function GstReturnsScreen() {
                     {tr('compliance:returns.lateFee', { amount: formatMoney(lateTotal) })}
                   </Text>
                 ) : null}
-                {!view.filingEnabled ? (
+                {!connected ? (
+                  <Card>
+                    <Text variant="caption" tone="muted">
+                      {tr('compliance:returns.fromBooks')}
+                    </Text>
+                  </Card>
+                ) : !view.filingEnabled ? (
                   <Card>
                     <Text variant="caption" tone="muted">
                       {tr('compliance:returns.filingOff')}
                     </Text>
                   </Card>
                 ) : null}
-                {returnCard('gstr1')}
-                {returnCard('gstr3b')}
+                {connected ? returnCard('gstr1') : null}
+                {connected ? returnCard('gstr3b') : null}
                 <ReportSection title={tr('compliance:returns.outward')}>
-                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={OUTWARD.map((k) => amountsRow(tr(`compliance:returns.outwardRow.${k}`), view.outward?.[k]))} />
+                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={OUTWARD.map((k) => amountsRow(`${tableLabel(OUTWARD_TABLE[k])} ${tr(`compliance:returns.outwardRow.${k}`)}`, view.outward?.[k]))} />
+                  {breakupLinks(Object.values(OUTWARD_TABLE))}
+                </ReportSection>
+                <ReportSection title={tr('compliance:returns.unregistered')}>
+                  {view.interStateUnregistered?.length ? (
+                    <DataTable
+                      headers={[tr('compliance:returns.head.placeOfSupply'), tr('compliance:returns.head.taxable'), 'IGST']}
+                      widths={[2, 1, 1]}
+                      rows={view.interStateUnregistered.map((x) => [x.placeOfSupply ?? '', formatMoney(x.taxable ?? add()), formatMoney(x.igst ?? add())])}
+                    />
+                  ) : (
+                    <Text variant="caption" tone="muted">
+                      {tr('compliance:returns.none')}
+                    </Text>
+                  )}
+                  {breakupLinks(['3.2'])}
                 </ReportSection>
                 <ReportSection title={tr('compliance:returns.itc')}>
-                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={ITC.map((k) => amountsRow(tr(`compliance:returns.itcRow.${k}`), view.itc?.[k]))} />
+                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={ITC.map((k) => amountsRow(`${tableLabel(ITC_TABLE[k])} ${tr(`compliance:returns.itcRow.${k}`)}`, view.itc?.[k]))} />
+                  {breakupLinks(Object.values(ITC_TABLE))}
+                </ReportSection>
+                <ReportSection title={tr('compliance:returns.inwardExempt')}>
+                  <DataTable
+                    headers={[tr('compliance:returns.head.section'), tr('compliance:returns.head.interState'), tr('compliance:returns.head.intraState')]}
+                    widths={[2, 1, 1]}
+                    rows={[[tr('compliance:returns.exemptRow'), formatMoney(view.inwardExempt?.interState ?? add()), formatMoney(view.inwardExempt?.intraState ?? add())]]}
+                  />
+                  {breakupLinks(['5'])}
+                </ReportSection>
+                <ReportSection title={tr('compliance:returns.interestLateFee')}>
+                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={[amountsRow(tr('compliance:returns.interestRow'), view.interest), amountsRow(tr('compliance:returns.lateFeeRow'), view.lateFee)]} />
                 </ReportSection>
                 <ReportSection title={tr('compliance:returns.setOff')}>
                   <DataTable
@@ -223,6 +286,37 @@ export default function GstReturnsScreen() {
           </>
         )}
       </ScrollView>
+      <Sheet visible={!!breakup} onClose={() => setBreakup(null)} title={breakup ? tr('compliance:returns.breakupTitle', { table: tableLabel(breakup) }) : undefined}>
+        <View style={{ paddingBottom: t.spacing.lg }}>
+          {sources.map((x, i) => (
+            <ListRow
+              key={`${x.type}-${x.id}`}
+              title={x.number ?? tr(`compliance:returns.sourceType.${x.type ?? 'document'}`)}
+              subtitle={[x.date ? formatDate(x.date) : '', partyName(x.partyId), !x.type || x.type === 'document' ? undefined : tr(`compliance:returns.sourceType.${x.type}`)].filter(Boolean).join(' · ')}
+              right={
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text variant="small" weight="600">
+                    {formatMoney(x.taxable ?? add())}
+                  </Text>
+                  <Text variant="caption" tone="muted">
+                    {formatMoney(taxOf(x))}
+                  </Text>
+                </View>
+              }
+              divider={i < sources.length - 1}
+              chevron={x.type === 'document' && !!x.kind}
+              onPress={
+                x.type === 'document' && x.kind
+                  ? () => {
+                      setBreakup(null);
+                      router.push(detailRouteFor(x.kind as DocumentKind, x.id!) as never);
+                    }
+                  : undefined
+              }
+            />
+          ))}
+        </View>
+      </Sheet>
       <SelectSheet visible={open === 'gstin'} onClose={() => setOpen(null)} title="GSTIN" options={gstins.map((g) => ({ value: g, label: g }))} value={gstin} onSelect={setGstin} searchable={false} />
       <SelectSheet visible={open === 'period'} onClose={() => setOpen(null)} title={tr('compliance:gstr2b.period')} options={periods.map((p) => ({ value: p, label: periodLabel(p) }))} value={period} onSelect={setPeriod} searchable={false} />
     </View>

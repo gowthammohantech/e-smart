@@ -33,7 +33,7 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   }));
   const expenseCategories = await loadExpenseCategories(s);
   const LA = schema.ledgerAccounts;
-  const ledgerAccounts = (await s.db.select().from(LA).where(eq(LA.companyId, id))).map((a) => ({ id: a.id, name: a.name, group: a.group, openingBalance: { minor: a.openingBalanceMinor, currency: base } }));
+  const ledgerAccounts = (await s.db.select().from(LA).where(eq(LA.companyId, id))).map((a) => ({ id: a.id, name: a.name, group: a.group, openingBalance: { minor: a.openingBalanceMinor, currency: base }, openingBalanceDate: a.openingBalanceDate ?? undefined }));
   const V = schema.vouchers;
   const vouchers: Voucher[] = (await s.db.select().from(V).where(eq(V.companyId, id))).map((v) => ({
     id: v.id,

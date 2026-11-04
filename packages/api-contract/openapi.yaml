@@ -4295,7 +4295,7 @@ components:
             companyId: { type: string, readOnly: true }
             kind:
               type: string
-              enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, selfInvoice, payment, expense, journal, contra, gstJournal, tdsChallan]
+              enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, selfInvoice, payment, expense, journal, contra, gstJournal, tdsChallan, receipt]
             prefix: { type: string, example: INV }
             nextNumber: { type: integer, minimum: 1 }
             padding: { type: integer, minimum: 1, maximum: 8 }
@@ -4381,6 +4381,7 @@ components:
             shippingAddress: { $ref: '#/components/schemas/Address' }
             creditLimit: { $ref: '#/components/schemas/Money' }
             openingBalance: { $ref: '#/components/schemas/Money' }
+            openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
             paymentTermsDays: { type: integer, minimum: 0 }
             notes: { type: string }
             status: { type: string, enum: [active, inactive] }
@@ -4449,9 +4450,11 @@ components:
       enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote]
       description: >-
         creditNote and debitNote lower or raise what an invoice charged, with no goods moving;
-        supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is raised
-        against its invoice or bill (sourceDocumentId). Credit notes, like returns, settle what the
-        source still owes; debit notes are owed and paid like an invoice or bill.
+        supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually
+        raised against its invoice or bill (sourceDocumentId); a direct note, against no one invoice
+        or bill, must give its noteReason. Credit notes, like returns, settle what the source still
+        owes, and a direct one is credit the party holds, like an advance; debit notes are owed and
+        paid like an invoice or bill.
     DocStatus:
       type: string
       enum: [draft, sent, accepted, rejected, expired, confirmed, fulfilled, cancelled, delivered, issued, partiallyPaid, paid, overdue, requested, approved, processed, received, billed]
@@ -4466,6 +4469,7 @@ components:
             name: { type: string, maxLength: 200 }
             group: { type: string, enum: [capital, reserves, loans, sundryCreditors, dutiesTaxes, provisions, currentLiabilities, fixedAssets, investments, sundryDebtors, cashInHand, bankAccounts, stockInHand, loansAdvances, currentAssets, salesAccounts, directIncomes, indirectIncomes, purchaseAccounts, directExpenses, indirectExpenses] }
             openingBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Debit positive, as of the day the books begin' }
+            openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
             status: { type: string, enum: [active, inactive] }
     CostCentre:
       allOf:
@@ -4497,11 +4501,19 @@ components:
             id: { type: string, readOnly: true }
             companyId: { type: string, readOnly: true }
             branchId: { type: string }
-            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan] }
+            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt], description: "receipt: money in that isn't from an invoice (interest, rent, a refund); it debits cash or bank only" }
             number: { type: string, readOnly: true }
             date: { type: string, format: date }
             narration: { type: string }
             reference: { type: string, description: "A TDS challan's number and BSR code, a cheque number" }
+            challan:
+              type: object
+              description: A TDS challan's deposit details (ITNS 281), for the challan register and Form 26Q
+              required: [bsrCode, serial, depositedOn]
+              properties:
+                bsrCode: { type: string, pattern: '^[0-9]{7}$' }
+                serial: { type: string, pattern: '^[0-9]{1,5}$' }
+                depositedOn: { type: string, format: date }
             lines: { type: array, minItems: 2, items: { $ref: '#/components/schemas/VoucherLine' } }
             createdBy: { type: string, readOnly: true }
     TrialBalance:
@@ -4566,6 +4578,9 @@ components:
           properties:
             lines: { type: integer }
             matched: { type: integer }
+            matchedWithinTolerance: { type: integer }
+            manuallyLinked: { type: integer }
+            claimed: { type: integer }
             partial: { type: integer }
             probable: { type: integer }
             missingInBooks: { type: integer }
@@ -4588,7 +4603,11 @@ components:
               reverseCharge: { type: boolean }
               itcAvailable: { type: boolean }
               itcReason: { type: string }
-              status: { type: string, enum: [matched, partial, probable, missingInBooks, notOurs, claimLater] }
+              status:
+                type: string
+                enum: [matched, matchedWithinTolerance, manuallyLinked, claimed, partial, probable, missingInBooks, notOurs, claimLater]
+                description: "matchedWithinTolerance: amounts agree, dated a few days apart. partial: number agrees, amount or date doesn't (see reasons). claimed: its bill's credit is claimed for this period."
+              reasons: { type: array, items: { type: string, enum: [taxable, tax, date, number] }, description: What differs between the line and its bill }
               decision: { type: string, enum: [accepted, notOurs, claimLater] }
               bill: { $ref: '#/components/schemas/Gstr2bBill' }
               difference:
@@ -4647,6 +4666,22 @@ components:
             carriedIn: { $ref: '#/components/schemas/GstAmounts' }
             carriedForward: { $ref: '#/components/schemas/GstAmounts' }
         returns: { type: array, items: { $ref: '#/components/schemas/GstReturn' }, description: This period's GSTR-1 and GSTR-3B as recorded }
+        breakup:
+          type: object
+          description: "What makes up each table, keyed as the portal numbers them (3.1a … 3.1e, 3.2, 4A2, 4A3, 4A5, 4B1, 4B2, 4D1, 5): one row per document, expense or advance, signed (a credit note takes away)."
+          additionalProperties:
+            type: array
+            items:
+              allOf:
+                - $ref: '#/components/schemas/GstAmounts'
+                - type: object
+                  properties:
+                    type: { type: string, enum: [document, expense, advance] }
+                    id: { type: string }
+                    kind: { type: string }
+                    number: { type: string }
+                    date: { type: string, format: date }
+                    partyId: { type: string }
     TdsSectionCode:
       type: string
       enum: [194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q]

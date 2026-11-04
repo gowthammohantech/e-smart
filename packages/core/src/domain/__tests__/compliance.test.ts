@@ -709,6 +709,20 @@ describe('the invoice registration portal (FRD 16)', () => {
     expect(res.reason).toBe('Order cancelled');
   });
 
+  it('sends a pure-agent reimbursement as other charges, so the values add up to the total', () => {
+    const reimbursed = fromMajor('500', 'INR');
+    const doc = invoice({
+      lines: [line(), line({ id: 'ln2', itemId: undefined, name: 'Courier at cost', hsnCode: undefined, quantity: 1, unitPrice: reimbursed, taxRate: 0, gst: { reimbursement: true } })],
+      totals: { reimbursements: reimbursed, grandTotal: fromMajor('12300', 'INR'), grandTotalBase: fromMajor('12300', 'INR') } as BusinessDocument['totals'],
+    });
+    const p = buildIrpPayload(ctx({ document: doc }));
+    expect(p.ItemList).toHaveLength(1);
+    expect(p.ValDtls.OthChrg).toBe(500);
+    const v = p.ValDtls;
+    expect(v.AssVal + v.IgstVal + v.CgstVal + v.SgstVal + v.CesVal - v.Discount + v.OthChrg + v.RndOffAmt).toBe(v.TotInvVal);
+    expect(validateEInvoice(ctx({ document: doc })).filter((i) => i.severity === 'blocking')).toEqual([]);
+  });
+
   it('never produces a leading zero in an acknowledgement number', () => {
     for (let i = 0; i < 200; i += 1) {
       expect(ackNoFrom(sha256Hex(`irn${i}`), NOW)[0]).not.toBe('0');

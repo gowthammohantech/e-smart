@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { applyOpening } from '@esmart/core/domain/receivables';
 import { schema } from '@esmart/db';
@@ -61,6 +61,17 @@ export async function partyBalances(
   for (const r of pays) {
     const wanted = kindOf.get(r.partyId) === 'supplier' ? 'paid' : 'received';
     if (r.direction === wanted) out.get(r.partyId)!.advance += Number(r.advance);
+  }
+
+  // A direct credit note, against no one invoice or bill, is credit the party holds until it is
+  // applied: counted with their advances. TDS a supplier credit note gives back was never theirs.
+  const notes = await db
+    .select({ partyId: d.partyId, kind: d.kind, total: sql<number>`coalesce(sum(${d.grandTotalMinor} - coalesce(${d.tdsAmountMinor}, 0)), 0)::bigint` })
+    .from(d)
+    .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, ['creditNote', 'supplierCreditNote']), isNull(d.sourceDocumentId), notInArray(d.status, [...CLOSED, 'requested'])))
+    .groupBy(d.partyId, d.kind);
+  for (const r of notes) {
+    if ((r.kind === 'supplierCreditNote') === (kindOf.get(r.partyId) === 'supplier')) out.get(r.partyId)!.advance += Number(r.total);
   }
 
   const openings = await db

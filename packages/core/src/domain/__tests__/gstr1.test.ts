@@ -292,6 +292,16 @@ describe('GSTR-1 credit and debit notes', () => {
     expect(s.docs.map((d) => d.nature).sort()).toEqual(['creditNote', 'debitNote', 'invoice']);
   });
 
+  it('reports a direct note, raised against no one invoice, by the buyer it is issued to', () => {
+    const registered = doc('registered', { kind: 'creditNote', number: 'CN-1', lines: [line({ quantity: 1 })] });
+    const consumer = doc('consumer_ka', { kind: 'creditNote', number: 'CN-2', lines: [line({ quantity: 1 })] });
+    const s = summarize([registered, consumer]);
+    expect(s.cdnr.map((r) => [r.number, r.noteType])).toEqual([['CN-1', 'C']]);
+    // A small unregistered note lowers B2CS, as its own value is all there is to go on.
+    expect(s.cdnur).toEqual([]);
+    expect(s.totals.taxableValue.minor).toBe(-200000);
+  });
+
   it('leaves the HSN quantity alone for a value-only note', () => {
     const inv = doc('registered');
     const cn = doc('registered', { kind: 'creditNote', number: 'CN-1', sourceDocumentId: inv.id, lines: [line({ quantity: 1 })] });

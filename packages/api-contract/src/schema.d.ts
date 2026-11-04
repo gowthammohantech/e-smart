@@ -3234,7 +3234,7 @@ export interface components {
             readonly id?: string;
             readonly companyId?: string;
             /** @enum {string} */
-            kind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan";
+            kind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
             /** @example INV */
             prefix: string;
             nextNumber: number;
@@ -3334,6 +3334,11 @@ export interface components {
             shippingAddress?: components["schemas"]["Address"];
             creditLimit?: components["schemas"]["Money"];
             openingBalance: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description The day the opening balance stands at; not after today. Unset reads as the start of the books.
+             */
+            openingBalanceDate?: string;
             paymentTermsDays: number;
             notes?: string;
             /** @enum {string} */
@@ -3396,7 +3401,7 @@ export interface components {
             readonly low?: boolean;
         };
         /**
-         * @description creditNote and debitNote lower or raise what an invoice charged, with no goods moving; supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is raised against its invoice or bill (sourceDocumentId). Credit notes, like returns, settle what the source still owes; debit notes are owed and paid like an invoice or bill.
+         * @description creditNote and debitNote lower or raise what an invoice charged, with no goods moving; supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually raised against its invoice or bill (sourceDocumentId); a direct note, against no one invoice or bill, must give its noteReason. Credit notes, like returns, settle what the source still owes, and a direct one is credit the party holds, like an advance; debit notes are owed and paid like an invoice or bill.
          * @enum {string}
          */
         DocumentKind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote";
@@ -3410,6 +3415,11 @@ export interface components {
             group: "capital" | "reserves" | "loans" | "sundryCreditors" | "dutiesTaxes" | "provisions" | "currentLiabilities" | "fixedAssets" | "investments" | "sundryDebtors" | "cashInHand" | "bankAccounts" | "stockInHand" | "loansAdvances" | "currentAssets" | "salesAccounts" | "directIncomes" | "indirectIncomes" | "purchaseAccounts" | "directExpenses" | "indirectExpenses";
             /** @description Debit positive, as of the day the books begin */
             openingBalance: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description The day the opening balance stands at; not after today. Unset reads as the start of the books.
+             */
+            openingBalanceDate?: string;
             /** @enum {string} */
             status?: "active" | "inactive";
         };
@@ -3439,14 +3449,24 @@ export interface components {
             readonly id?: string;
             readonly companyId?: string;
             branchId?: string;
-            /** @enum {string} */
-            kind: "journal" | "contra" | "gstJournal" | "tdsChallan";
+            /**
+             * @description receipt: money in that isn't from an invoice (interest, rent, a refund); it debits cash or bank only
+             * @enum {string}
+             */
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
             readonly number?: string;
             /** Format: date */
             date: string;
             narration?: string;
             /** @description A TDS challan's number and BSR code, a cheque number */
             reference?: string;
+            /** @description A TDS challan's deposit details (ITNS 281), for the challan register and Form 26Q */
+            challan?: {
+                bsrCode: string;
+                serial: string;
+                /** Format: date */
+                depositedOn: string;
+            };
             lines: components["schemas"]["VoucherLine"][];
             readonly createdBy?: string;
         };
@@ -3517,6 +3537,9 @@ export interface components {
             summary?: {
                 lines?: number;
                 matched?: number;
+                matchedWithinTolerance?: number;
+                manuallyLinked?: number;
+                claimed?: number;
                 partial?: number;
                 probable?: number;
                 missingInBooks?: number;
@@ -3538,8 +3561,13 @@ export interface components {
                 reverseCharge?: boolean;
                 itcAvailable?: boolean;
                 itcReason?: string;
-                /** @enum {string} */
-                status?: "matched" | "partial" | "probable" | "missingInBooks" | "notOurs" | "claimLater";
+                /**
+                 * @description matchedWithinTolerance: amounts agree, dated a few days apart. partial: number agrees, amount or date doesn't (see reasons). claimed: its bill's credit is claimed for this period.
+                 * @enum {string}
+                 */
+                status?: "matched" | "matchedWithinTolerance" | "manuallyLinked" | "claimed" | "partial" | "probable" | "missingInBooks" | "notOurs" | "claimLater";
+                /** @description What differs between the line and its bill */
+                reasons?: ("taxable" | "tax" | "date" | "number")[];
                 /** @enum {string} */
                 decision?: "accepted" | "notOurs" | "claimLater";
                 bill?: components["schemas"]["Gstr2bBill"];
@@ -3606,6 +3634,19 @@ export interface components {
             };
             /** @description This period's GSTR-1 and GSTR-3B as recorded */
             returns?: components["schemas"]["GstReturn"][];
+            /** @description What makes up each table, keyed as the portal numbers them (3.1a … 3.1e, 3.2, 4A2, 4A3, 4A5, 4B1, 4B2, 4D1, 5): one row per document, expense or advance, signed (a credit note takes away). */
+            breakup?: {
+                [key: string]: (components["schemas"]["GstAmounts"] & {
+                    /** @enum {string} */
+                    type?: "document" | "expense" | "advance";
+                    id?: string;
+                    kind?: string;
+                    number?: string;
+                    /** Format: date */
+                    date?: string;
+                    partyId?: string;
+                })[];
+            };
         };
         /**
          * @description 194J(a) is 194JA, 194I(b) is 194IB, and so on.

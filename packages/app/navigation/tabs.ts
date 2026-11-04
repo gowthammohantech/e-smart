@@ -38,6 +38,7 @@ export function tabForPath(pathname: string, paymentDirection?: 'received' | 'pa
       return second === 'made' || paymentDirection === 'paid' ? 'purchases' : 'sales';
     case 'sales':
     case 'receivables':
+    case 'receipts':
       return 'sales';
     case 'purchases':
     case 'payables':

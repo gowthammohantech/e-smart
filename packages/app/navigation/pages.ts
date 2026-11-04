@@ -22,6 +22,7 @@ export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
     { href: '/sales/credit-notes', labelKey: 'nav:title.creditNotes' },
     { href: '/sales/debit-notes', labelKey: 'nav:title.debitNotes' },
     { href: '/payments/received', labelKey: 'nav:title.paymentsReceived' },
+    { href: '/receipts', labelKey: 'nav:title.receipts' },
     { href: '/receivables', labelKey: 'nav:title.receivables' },
   ],
   purchases: [

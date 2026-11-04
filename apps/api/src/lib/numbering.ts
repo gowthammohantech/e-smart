@@ -11,7 +11,7 @@ const S = schema.numberingSeries;
 
 /** GST rule 46: a tax invoice or credit note number has at most 16 characters. */
 export const MAX_TAX_INVOICE_NUMBER = 16;
-const VOUCHER_KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan'];
+const VOUCHER_KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'];
 const isVoucherKind = (kind: SeriesKind): kind is VoucherKind => (VOUCHER_KINDS as string[]).includes(kind);
 
 export const TAX_INVOICE_KINDS: SeriesKind[] = ['invoice', 'salesReturn', 'creditNote', 'debitNote'];

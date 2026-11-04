@@ -84,7 +84,8 @@ describe('GSTR-2B', () => {
 
     // A second download keeps both decisions.
     const again = await t.post(`${m.c}/gst/gstr2b/fetch`, { gstin: GSTIN, period: '092026' }, { token: m.token });
-    expect(again.body.summary).toMatchObject({ matched: 2, partial: 0, missingInBooks: 0, claimableTax: inr(180_000 + 91_800) });
+    expect(again.body.summary).toMatchObject({ matched: 1, manuallyLinked: 1, partial: 0, missingInBooks: 0, claimableTax: inr(180_000 + 91_800) });
+    expect(byNumber('ks-0102').reasons).toEqual(['taxable', 'tax']);
     expect(again.body.rows.find((r: { number: string }) => r.number === 'KS/999').status).toBe('notOurs');
 
     const claim = await t.post(`${m.c}/gst/gstr2b/claim`, { gstin: GSTIN, period: '092026' }, { token: m.token });

@@ -278,6 +278,8 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
   }
 
   doc.lines.forEach((line, i) => {
+    // A pure-agent reimbursement is not sent as an item (see buildIrpPayload), so it needs no HSN or unit.
+    if (line.gst?.reimbursement) return;
     if (!line.hsnCode) {
       out.push(issue('2176', `lines[${i}].hsnCode`, `"${line.name}" has no HSN or SAC code`));
     } else if (!/^\d{4}(\d{2})?(\d{2})?$/.test(line.hsnCode)) {
@@ -388,6 +390,7 @@ function recomputeTotal(doc: BusinessDocument): number {
     t.totalTax.minor -
     t.documentDiscount.minor +
     t.charges.minor +
+    (t.reimbursements?.minor ?? 0) +
     t.roundOff.minor
   );
 }
@@ -435,6 +438,7 @@ export function irnForDocument(ctx: EInvoiceContext): string | null {
 export function mainHsnCodeOf(doc: BusinessDocument): string | undefined {
   let best: { hsn?: string; value: number } = { value: -1 };
   doc.lines.forEach((line) => {
+    if (line.gst?.reimbursement) return;
     const value = Math.round(line.quantity * line.unitPrice.minor);
     if (value > best.value) best = { hsn: line.hsnCode, value };
   });
@@ -538,7 +542,10 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
   const itemType = new Map(items.map((i) => [i.id, i.type]));
   const reverseCharge = !!doc.reverseCharge || doc.lines.some((l) => l.gst?.reverseCharge);
 
-  const itemList: IrpItem[] = doc.lines.map((line, i) => {
+  // Pure-agent reimbursements are not a supply (Rule 33): they stay out of the item list and
+  // travel in OthChrg, so AssVal + tax + OthChrg still adds up to TotInvVal.
+  const reimbursements = toMajor(doc.totals.reimbursements ?? { minor: 0, currency });
+  const itemList: IrpItem[] = doc.lines.filter((l) => !l.gst?.reimbursement).map((line, i) => {
     const gross = line.quantity * toMajor(line.unitPrice);
     const discount =
       line.discountMode === 'percent'
@@ -635,7 +642,7 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       Discount: round2(
         toMajor(doc.totals.documentDiscount) + Math.max(0, -toMajor(doc.totals.charges)),
       ),
-      OthChrg: round2(Math.max(0, toMajor(doc.totals.charges))),
+      OthChrg: round2(Math.max(0, toMajor(doc.totals.charges)) + reimbursements),
       RndOffAmt: round2(toMajor(doc.totals.roundOff)),
       // The portal checks the total against the item values, which carry reverse-charge tax too
       // (unconfirmed in the sandbox; see providers/gsp/README.md).
@@ -717,7 +724,7 @@ export function claimsFor(
     DocTyp: eInvoiceDocTypeFor(doc.kind) ?? 'INV',
     DocDt: portalDate(doc.date),
     TotInvVal: round2(toMajor(doc.totals.grandTotal)),
-    ItemCnt: doc.lines.length,
+    ItemCnt: doc.lines.filter((l) => !l.gst?.reimbursement).length,
     MainHsnCode: mainHsnCodeOf(doc),
     Irn: irn,
     IrnDt: portalDateTime(irnDate),

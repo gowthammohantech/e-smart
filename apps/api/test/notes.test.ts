@@ -70,11 +70,17 @@ describe('credit and debit notes', () => {
     expect(fits.status).toBe(201);
   });
 
-  it('needs the invoice it changes, of the same party', async () => {
+  it('takes a direct note with a reason, and otherwise the invoice it changes, of the same party', async () => {
     const m = await moneySetup(t);
-    const orphan = await t.post(`${m.c}/documents`, note(m, 'creditNote', '', 1000, { sourceDocumentId: undefined }), { token: m.token });
+    const orphan = await t.post(`${m.c}/documents`, note(m, 'creditNote', '', 1000, { sourceDocumentId: undefined, noteReason: undefined }), { token: m.token });
     expect(orphan.status).toBe(422);
-    expect(orphan.body.issues[0].field).toBe('sourceDocumentId');
+    expect(orphan.body.issues[0].field).toBe('noteReason');
+    const direct = await t.post(`${m.c}/documents`, note(m, 'creditNote', '', 100000, { sourceDocumentId: undefined, noteReason: 'discount' }), { token: m.token });
+    expect(direct.status).toBe(201);
+    expect(direct.body).toMatchObject({ kind: 'creditNote', status: 'issued', number: 'CN/26-27/0001' });
+    // With no invoice to take it off, the credit waits on the party, like an advance.
+    const balance = await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token });
+    expect(balance.body.advance.minor).toBe(118000);
 
     const inv = await issueInvoice(t, m);
     const other = await t.post(`${m.c}/documents`, note(m, 'creditNote', inv.id, 1000, { partyId: m.bengaluru.id }), { token: m.token });

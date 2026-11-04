@@ -390,6 +390,8 @@
       "debitNote": "Pick the invoice this debit note adds to. Its lines are copied in: change them to the extra amount being charged.",
       "supplierCreditNote": "Pick the supplier’s bill their credit note is against, then enter it as they issued it.",
       "supplierDebitNote": "Pick the supplier’s bill their debit note is against, then enter it as they issued it."
-    }
+    },
+    "directInvoice": "Without an invoice",
+    "directBill": "Without a bill"
   }
 }

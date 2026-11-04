@@ -62,7 +62,7 @@ export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed',
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
 export const messageChannel = pgEnum("message_channel", ['whatsapp', 'sms', 'email'])
 export const notificationKind = pgEnum("notification_kind", ['invoiceSent', 'paymentReceived', 'invoiceOverdue', 'lowStock', 'compliance', 'syncFailure', 'system'])
-export const numberingKind = pgEnum("numbering_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan'])
+export const numberingKind = pgEnum("numbering_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
 export const ocrFieldKey = pgEnum("ocr_field_key", ['vendor', 'gstin', 'date', 'amount', 'tax', 'reference', 'category'])
 export const ocrKind = pgEnum("ocr_kind", ['expense', 'purchaseBill'])
 export const ocrStatus = pgEnum("ocr_status", ['queued', 'processing', 'completed', 'failed'])
@@ -72,7 +72,7 @@ export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank'
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
 export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables', 'books'])
-export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan'])
+export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
 export const ledgerGroup = pgEnum("ledger_group", ['capital', 'reserves', 'loans', 'sundryCreditors', 'dutiesTaxes', 'provisions', 'currentLiabilities', 'fixedAssets', 'investments', 'sundryDebtors', 'cashInHand', 'bankAccounts', 'stockInHand', 'loansAdvances', 'currentAssets', 'salesAccounts', 'directIncomes', 'indirectIncomes', 'purchaseAccounts', 'directExpenses', 'indirectExpenses'])
 export const planTier = pgEnum("plan_tier", ['free', 'basic', 'pro', 'business'])
 export const platformRole = pgEnum("platform_role", ['superadmin', 'support'])
@@ -844,6 +844,8 @@ export const parties = pgTable("parties", {
 	shippingCountry: char("shipping_country", { length: 2 }),
 	creditLimitMinor: bigint("credit_limit_minor", { mode: "number" }),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
+	// The day the opening balance stands at; unset reads as the start of the books.
+	openingBalanceDate: date("opening_balance_date", { mode: 'string' }),
 	paymentTermsDays: smallint("payment_terms_days").default(0).notNull(),
 	notes: text(),
 	status: activeStatus().default('active').notNull(),
@@ -2087,6 +2089,8 @@ export const ledgerAccounts = pgTable("ledger_accounts", {
 	group: ledgerGroup().notNull(),
 	// Debit positive, as of the day the books begin.
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
+	// The day the opening balance stands at; unset reads as the start of the books.
+	openingBalanceDate: date("opening_balance_date", { mode: 'string' }),
 	status: activeStatus().default('active').notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -2122,7 +2126,7 @@ export const costCentres = pgTable("cost_centres", {
 ]);
 
 /**
- * Journal, contra, GST journal and TDS challan vouchers. Lines name accounts by key
+ * Journal, contra, GST journal, TDS challan and receipt vouchers. Lines name accounts by key
  * (`pay:<id>`, `sys:sales`…) and are base-currency paise: `[{ account, debitMinor, creditMinor, narration? }]`.
  */
 export const vouchers = pgTable("vouchers", {
@@ -2135,6 +2139,8 @@ export const vouchers = pgTable("vouchers", {
 	narration: text(),
 	reference: varchar({ length: 100 }),
 	lines: jsonb().notNull(),
+	// A TDS challan's deposit details: `{ bsrCode, serial, depositedOn }`, for the challan register and 26Q.
+	challan: jsonb(),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

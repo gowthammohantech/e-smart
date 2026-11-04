@@ -1,6 +1,6 @@
-import { and, eq, gte, inArray, isNull, lte, notInArray, or } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, notInArray, or } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
-import { normalizeNumber, reconcile2b, type BookBill, type TwoBLine } from '@esmart/core/domain/reconcile2b';
+import { CLAIMABLE, normalizeNumber, reconcile2b, type BookBill, type TwoBLine } from '@esmart/core/domain/reconcile2b';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
 import { notFound } from '../../http/errors';
@@ -105,27 +105,27 @@ async function billsFor(db: DbOrTx, company: CompanyRow, gstin: string, period: 
         inArray(D.branchId, branchIds),
         inArray(D.kind, ['purchaseBill', 'supplierCreditNote', 'supplierDebitNote']),
         notInArray(D.status, ['draft', 'cancelled', 'rejected']),
+        // No upper bound: a bill entered on the day it came, after the period, is still that period's.
         gte(D.date, from),
-        lte(D.date, to),
         or(isNull(D.itcClaimPeriod), eq(D.itcClaimPeriod, period)),
       ),
     );
-  const bills: BookBill[] = rows
-    .filter((r) => r.doc.partyGstin ?? r.partyGstin)
-    .map(({ doc, partyGstin }) => {
+  // A bill with no supplier GSTIN is an import: 2B has it only as a bill of entry, matched on its number.
+  const bills: BookBill[] = rows.map(({ doc, partyGstin }) => {
       const rate = Number(doc.exchangeRate) || 1;
       return {
         id: doc.id,
         kind: doc.kind as BookBill['kind'],
-        supplierGstin: (doc.partyGstin ?? partyGstin)!,
+        supplierGstin: doc.partyGstin ?? partyGstin ?? '',
         number: doc.supplierDocNumber ?? doc.number,
         date: doc.date,
         taxableMinor: Math.round(doc.taxableAmountMinor * rate),
-        taxMinor: Math.round(doc.totalTaxMinor * rate),
+        // 2B shows the tax on a reverse-charge supply too, though the buyer pays it.
+        taxMinor: Math.round((doc.totalTaxMinor + doc.reverseChargeTaxMinor) * rate),
         claimedIn: doc.itcClaimPeriod ?? undefined,
       };
     });
-  return { rows, bills };
+  return { rows, bills, to };
 }
 
 const line = (e: EntryRow): TwoBLine => ({
@@ -146,10 +146,12 @@ export async function reconciliation(db: DbOrTx, company: CompanyRow, gstin: str
   const base = company.baseCurrency.trim();
   const m = (minor: number) => money(minor, base);
   const [p] = await db.select().from(P).where(and(eq(P.companyId, company.id), eq(P.gstin, gstin), eq(P.period, period)));
-  if (!p) return { gstin, period, fetched: false, rows: [], missingIn2b: [], summary: { lines: 0, matched: 0, partial: 0, probable: 0, missingInBooks: 0, missingIn2b: 0, claimableTax: m(0) } };
+  if (!p) return { gstin, period, fetched: false, rows: [], missingIn2b: [], summary: { lines: 0, matched: 0, matchedWithinTolerance: 0, manuallyLinked: 0, claimed: 0, partial: 0, probable: 0, missingInBooks: 0, missingIn2b: 0, claimableTax: m(0) } };
   const entries = await db.select().from(E).where(and(eq(E.companyId, company.id), eq(E.gstin, gstin), eq(E.period, period))).orderBy(E.supplierGstin, E.date);
-  const { bills, rows: docs } = await billsFor(db, company, gstin, period);
-  const r = reconcile2b(entries.map(line), bills);
+  const { bills, rows: docs, to } = await billsFor(db, company, gstin, period);
+  const found = reconcile2b(entries.map(line), bills, { periodEnd: to });
+  // An import's bill isn't chased: its supplier files no GSTR-1.
+  const r = { ...found, missingIn2b: found.missingIn2b.filter((b) => b.supplierGstin) };
   const docOf = new Map(docs.map((d) => [d.doc.id, d.doc]));
   const billWire = (b: BookBill) => ({ documentId: b.id, kind: b.kind, number: docOf.get(b.id)?.number ?? b.number, supplierNumber: b.number, date: b.date, taxable: m(b.taxableMinor), tax: m(b.taxMinor), claimedIn: b.claimedIn });
   const count = (s: string) => r.matches.filter((x) => x.status === s).length;
@@ -178,12 +180,16 @@ export async function reconciliation(db: DbOrTx, company: CompanyRow, gstin: str
         decision: e.decision ?? undefined,
         bill: x.bill ? billWire(x.bill) : undefined,
         difference: x.difference ? { taxable: m(x.difference.taxableMinor), tax: m(x.difference.taxMinor), days: x.difference.days } : undefined,
+        reasons: x.reasons,
       };
     }),
     missingIn2b: r.missingIn2b.map(billWire),
     summary: {
       lines: entries.length,
       matched: count('matched'),
+      matchedWithinTolerance: count('matchedWithinTolerance'),
+      manuallyLinked: count('manuallyLinked'),
+      claimed: count('claimed'),
       partial: count('partial'),
       probable: count('probable'),
       missingInBooks: count('missingInBooks'),
@@ -217,7 +223,7 @@ export async function decide(db: DbOrTx, company: CompanyRow, actor: AuthUser, e
  */
 export async function claimMatched(db: DbOrTx, company: CompanyRow, gstin: string, period: string): Promise<number> {
   const rec = await reconciliation(db, company, gstin, period);
-  const ids = (rec.rows ?? []).flatMap((r) => (r.status === 'matched' && r.itcAvailable && r.bill?.documentId ? [r.bill.documentId] : []));
+  const ids = (rec.rows ?? []).flatMap((r) => (CLAIMABLE.includes(r.status!) && r.itcAvailable && r.bill?.documentId ? [r.bill.documentId] : []));
   if (!ids.length) return 0;
   await db.update(D).set({ itcClaimPeriod: period }).where(and(eq(D.companyId, company.id), inArray(D.id, ids)));
   return ids.length;

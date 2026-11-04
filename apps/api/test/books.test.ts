@@ -44,6 +44,25 @@ describe('books: accounts', () => {
     expect(remove.status).toBe(409);
     expect(remove.body.code).toBe('ACCOUNT_IN_USE');
   });
+
+  it('dates an opening balance, refuses a future date, and keeps a closed period closed', async () => {
+    const m = await moneySetup(t);
+    const future = await t.post(`${m.c}/ledger-accounts`, { name: 'Office deposit', group: 'loansAdvances', openingBalance: inr(5_000_000), openingBalanceDate: '2026-10-01' }, { token: m.token });
+    expect(future.status).toBe(422);
+    expect(future.body.issues[0].field).toBe('openingBalanceDate');
+    const deposit = await t.post(`${m.c}/ledger-accounts`, { name: 'Office deposit', group: 'loansAdvances', openingBalance: inr(5_000_000), openingBalanceDate: '2026-04-01' }, { token: m.token });
+    expect(deposit.status).toBe(201);
+    expect(deposit.body.openingBalanceDate).toBe('2026-04-01');
+
+    await t.deps.db.update(schema.companies).set({ lockedThroughDate: '2026-06-30' }).where(eq(schema.companies.id, m.companyId));
+    const edit = (over: Record<string, unknown>) =>
+      t.put(`${m.c}/ledger-accounts/${deposit.body.id}`, { name: 'Office deposit', group: 'loansAdvances', openingBalance: inr(5_000_000), openingBalanceDate: '2026-04-01', ...over }, { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect((await edit({ openingBalance: inr(6_000_000) })).body.code).toBe('PERIOD_LOCKED');
+    // Moving it out of the closed period still changes the closed period's books.
+    expect((await edit({ openingBalanceDate: '2026-07-01' })).body.code).toBe('PERIOD_LOCKED');
+    const renamed = await edit({ name: 'Office rent deposit' });
+    expect(renamed.status).toBe(200);
+  });
 });
 
 describe('books: vouchers', () => {
@@ -63,6 +82,32 @@ describe('books: vouchers', () => {
     // And no contra can take more out of cash than it holds.
     const over = await t.post(`${m.c}/vouchers`, voucher('contra', [[`pay:${hdfc}`, 7_000_000, 0], [`pay:${m.cash.id}`, 0, 7_000_000]]), { token: m.token });
     expect(over.body.code).toBe('INSUFFICIENT_BALANCE');
+  });
+
+  it('takes other income in with a receipt, cash or bank on the debit side only', async () => {
+    const m = await moneySetup(t);
+    const interest = await t.post(`${m.c}/ledger-accounts`, { name: 'Interest received', group: 'indirectIncomes', openingBalance: nil }, { token: m.token });
+    const rv = await t.post(`${m.c}/vouchers`, voucher('receipt', [[`pay:${m.cash.id}`, 120_000, 0], [`acc:${interest.body.id}`, 0, 120_000]], { narration: 'FD interest' }), { token: m.token });
+    expect(rv.status).toBe(201);
+    expect(rv.body.number).toBe('RV/26-27/0001');
+    const backwards = await t.post(`${m.c}/vouchers`, voucher('receipt', [[`acc:${interest.body.id}`, 100, 0], [`pay:${m.cash.id}`, 0, 100]]), { token: m.token });
+    expect(backwards.status).toBe(422);
+    const challan = await t.post(`${m.c}/vouchers`, voucher('receipt', [[`pay:${m.cash.id}`, 100, 0], [`acc:${interest.body.id}`, 0, 100]], { challan: { bsrCode: '0510308', serial: '12', depositedOn: '2026-09-29' } }), { token: m.token });
+    expect(challan.body.issues[0].field).toBe('challan');
+  });
+
+  it('splits one contra across more than two cash and bank accounts', async () => {
+    const m = await moneySetup(t);
+    const hdfc = await bank(m);
+    const sbi = (await t.post(`${m.c}/payment-accounts`, { name: 'SBI current', type: 'bank', currency: 'INR', openingBalance: inr(0) }, { token: m.token })).body.id as string;
+    await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: 10_000_000 }).where(eq(schema.paymentAccounts.id, m.cash.id));
+    const contra = await t.post(
+      `${m.c}/vouchers`,
+      voucher('contra', [[`pay:${hdfc}`, 3_000_000, 0], [`pay:${sbi}`, 2_000_000, 0], [`pay:${m.cash.id}`, 0, 5_000_000]]),
+      { token: m.token },
+    );
+    expect(contra.status).toBe(201);
+    expect(contra.body.lines).toHaveLength(3);
   });
 
   it('refuses an unbalanced voucher, a contra through a non-cash account, and a voucher in a closed period', async () => {

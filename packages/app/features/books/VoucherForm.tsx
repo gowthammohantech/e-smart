@@ -1,21 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { CostCentreField } from './CostCentreField';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
+import { Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { Icon } from '@esmart/ui/components/Icon';
 import { Text } from '@esmart/ui/components/Text';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { TDS_SECTIONS } from '@esmart/core/data/tdsSections';
 import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/ledger/accounts';
-import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -25,10 +21,9 @@ import { useAppStore } from '../../store/appStore';
 import { useBooks } from '../../store/books';
 import { useActiveCompany, useBaseCurrency, useDefaultBranchId } from '../../store/selectors';
 import { useAccountName, useGroupName } from './names';
+import { VoucherGrid, gridLine, type GridLine } from './VoucherGrid';
 
 const KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan'];
-type Line = { id: string; account: string; debit: string; credit: string; costCentreId?: string };
-const blank = (): Line => ({ id: uid('vl'), account: '', debit: '', credit: '' });
 
 /**
  * A journal, contra, GST journal or TDS challan: lines of debits and credits that must balance.
@@ -50,8 +45,19 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const [date, setDate] = useState(voucher?.date ?? today());
   const [narration, setNarration] = useState(voucher?.narration ?? '');
   const [reference, setReference] = useState(voucher?.reference ?? '');
-  const [lines, setLines] = useState<Line[]>(
-    voucher?.lines.map((l) => ({ id: uid('vl'), account: l.account, debit: l.debit.minor ? String(toMajor(l.debit)) : '', credit: l.credit.minor ? String(toMajor(l.credit)) : '', costCentreId: l.costCentreId })) ?? [blank(), blank()],
+  // A TDS challan's deposit details, as printed on it (ITNS 281).
+  const [bsrCode, setBsrCode] = useState(voucher?.challan?.bsrCode ?? '');
+  const [serial, setSerial] = useState(voucher?.challan?.serial ?? '');
+  const [depositedOn, setDepositedOn] = useState(voucher?.challan?.depositedOn ?? voucher?.date ?? today());
+  const [lines, setLines] = useState<GridLine[]>(
+    voucher?.lines.map((l) => ({
+      id: uid('vl'),
+      side: l.credit.minor ? 'cr' : 'dr',
+      account: l.account,
+      amount: String(toMajor(l.credit.minor ? l.credit : l.debit)),
+      narration: l.narration,
+      costCentreId: l.costCentreId,
+    })) ?? [gridLine('dr'), gridLine('cr')],
   );
   const [picking, setPicking] = useState<string | null>(null);
 
@@ -66,12 +72,32 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   }, [book, kind]);
 
   const minor = (v: string) => fromMajor(v || '0', baseCurrency).minor;
-  const debit = lines.reduce((a, l) => a + minor(l.debit), 0);
-  const credit = lines.reduce((a, l) => a + minor(l.credit), 0);
-  const filled = lines.filter((l) => l.account && (minor(l.debit) || minor(l.credit)));
-  const problem = filled.length < 2 ? tr('books:vouchers.needsTwo') : debit !== credit ? tr('books:vouchers.unbalanced') : null;
+  const total = (ls: GridLine[], side: GridLine['side']) => ls.reduce((a, l) => a + (l.side === side ? minor(l.amount) : 0), 0);
+  const debit = total(lines, 'dr');
+  const credit = total(lines, 'cr');
+  const filled = lines.filter((l) => l.account && minor(l.amount));
+  const challanGiven = kind === 'tdsChallan' && (bsrCode || serial);
+  const challanBad = challanGiven && (!/^\d{7}$/.test(bsrCode) || !/^\d{1,5}$/.test(serial));
+  const problem = filled.length < 2 ? tr('books:vouchers.needsTwo') : debit !== credit ? tr('books:vouchers.unbalanced') : challanBad ? tr('books:vouchers.challanInvalid') : null;
 
-  const patchLine = (id: string, p: Partial<Line>) => setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...p } : l)));
+  /**
+   * As in a ledger book: picking an account on an empty row fills in what's left to balance, and
+   * while the voucher doesn't balance a fresh row waits on the short side.
+   */
+  const patchLine = (id: string, p: Partial<GridLine>) =>
+    setLines((ls) => {
+      let next = ls.map((l) => (l.id === id ? { ...l, ...p } : l));
+      const changed = next.find((l) => l.id === id)!;
+      const others = next.filter((l) => l.id !== id);
+      const gap = total(others, 'dr') - total(others, 'cr');
+      if (p.account && !changed.amount && gap) {
+        next = next.map((l) => (l.id === id ? { ...l, side: gap > 0 ? 'cr' : 'dr', amount: String(toMajor(money(Math.abs(gap), baseCurrency))) } : l));
+      }
+      const last = next[next.length - 1];
+      const off = total(next, 'dr') - total(next, 'cr');
+      if (last.account && minor(last.amount) && off) next = [...next, gridLine(off > 0 ? 'cr' : 'dr')];
+      return next;
+    });
 
   const save = async () => {
     if (problem) return;
@@ -84,7 +110,14 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       date,
       narration: narration.trim() || undefined,
       reference: reference.trim() || undefined,
-      lines: filled.map((l) => ({ account: l.account, debit: money(minor(l.debit), baseCurrency), credit: money(minor(l.credit), baseCurrency), ...(l.costCentreId && { costCentreId: l.costCentreId }) })),
+      challan: challanGiven ? { bsrCode, serial, depositedOn } : undefined,
+      lines: filled.map((l) => ({
+        account: l.account,
+        debit: money(l.side === 'dr' ? minor(l.amount) : 0, baseCurrency),
+        credit: money(l.side === 'cr' ? minor(l.amount) : 0, baseCurrency),
+        ...(l.narration?.trim() && { narration: l.narration.trim() }),
+        ...(l.costCentreId && { costCentreId: l.costCentreId }),
+      })),
       createdBy: voucher?.createdBy ?? '',
       createdAt: voucher?.createdAt ?? nowISO(),
     };
@@ -94,7 +127,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer>
+      <FormContainer wide>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           {voucher ? null : (
             <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`books:vouchers.kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as VoucherKind)} />
@@ -104,63 +137,34 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
           </Text>
           <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} />
 
-          {lines.map((l, i) => {
-            const account = l.account ? accounts.find((a) => a.key === l.account) ?? accountFor(l.account, book) : undefined;
-            return (
-              <Card key={l.id} style={{ gap: t.spacing.md }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                  <View style={{ flex: 1 }}>
-                    <PickerField label={tr('books:vouchers.account')} value={account ? nameOf(account) : undefined} placeholder={tr('books:vouchers.pickAccount')} onPress={() => setPicking(l.id)} icon="book-outline" />
-                  </View>
-                  {lines.length > 2 ? (
-                    <Pressable onPress={() => setLines((ls) => ls.filter((x) => x.id !== l.id))} accessibilityRole="button" accessibilityLabel={tr('books:vouchers.removeLine')} hitSlop={8} style={{ paddingTop: 22 }}>
-                      <Icon name="close" size={20} color={t.c.muted} />
-                    </Pressable>
-                  ) : null}
-                </View>
-                <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                  <AmountField label={tr('books:vouchers.debit')} value={l.debit} onChangeValue={(v) => patchLine(l.id, { debit: v, credit: v ? '' : l.credit })} currency={baseCurrency} containerStyle={{ flex: 1 }} />
-                  <AmountField label={tr('books:vouchers.credit')} value={l.credit} onChangeValue={(v) => patchLine(l.id, { credit: v, debit: v ? '' : l.debit })} currency={baseCurrency} containerStyle={{ flex: 1 }} />
-                </View>
-                <CostCentreField compact value={l.costCentreId} onChange={(costCentreId) => patchLine(l.id, { costCentreId })} />
-                {i === lines.length - 1 && debit !== credit ? (
-                  <Button
-                    title={debit > credit ? `${tr('books:vouchers.credit')} ${formatMoney(money(debit - credit, baseCurrency))}` : `${tr('books:vouchers.debit')} ${formatMoney(money(credit - debit, baseCurrency))}`}
-                    variant="secondary"
-                    size="sm"
-                    onPress={() =>
-                      patchLine(l.id, debit > credit ? { credit: String(toMajor(money(minor(l.credit) + debit - credit, baseCurrency))), debit: '' } : { debit: String(toMajor(money(minor(l.debit) + credit - debit, baseCurrency))), credit: '' })
-                    }
-                  />
-                ) : null}
-              </Card>
-            );
-          })}
-          <Button title={tr('books:vouchers.addLine')} icon="plus" variant="secondary" onPress={() => setLines((ls) => [...ls, blank()])} />
-
-          <Card variant="flat" style={{ gap: t.spacing.sm }}>
-            {[
-              [tr('books:vouchers.totalDebit'), formatMoney(money(debit, baseCurrency))],
-              [tr('books:vouchers.totalCredit'), formatMoney(money(credit, baseCurrency))],
-              [tr('books:vouchers.difference'), formatMoney(money(Math.abs(debit - credit), baseCurrency))],
-            ].map(([label, value]) => (
-              <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text variant="caption" tone="muted">
-                  {label}
-                </Text>
-                <Text variant="caption" weight="600">
-                  {value}
-                </Text>
-              </View>
-            ))}
-            {problem ? (
-              <Text variant="caption" tone="bad">
-                {problem}
-              </Text>
-            ) : null}
-          </Card>
+          <VoucherGrid
+            lines={lines}
+            currency={baseCurrency}
+            debit={debit}
+            credit={credit}
+            accountLabel={(key) => {
+              const a = accounts.find((x) => x.key === key) ?? accountFor(key, book);
+              return a ? nameOf(a) : undefined;
+            }}
+            onPickAccount={setPicking}
+            onPatch={patchLine}
+            onRemove={(id) => setLines((ls) => ls.filter((x) => x.id !== id))}
+            onAdd={() => setLines((ls) => [...ls, gridLine(debit > credit ? 'cr' : 'dr')])}
+          />
+          {problem ? (
+            <Text variant="caption" tone="bad">
+              {problem}
+            </Text>
+          ) : null}
 
           <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
+          {kind === 'tdsChallan' ? (
+            <>
+              <TextField label={tr('books:vouchers.bsrCode')} value={bsrCode} onChangeText={(v) => setBsrCode(v.replace(/\D/g, '').slice(0, 7))} keyboardType="number-pad" hint={tr('books:vouchers.bsrHint')} />
+              <TextField label={tr('books:vouchers.challanSerial')} value={serial} onChangeText={(v) => setSerial(v.replace(/\D/g, '').slice(0, 5))} keyboardType="number-pad" />
+              <DateField label={tr('books:vouchers.depositedOn')} value={depositedOn} onChange={setDepositedOn} maximumDate={new Date()} />
+            </>
+          ) : null}
           <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" />
         </ScrollView>
         <FormActions>

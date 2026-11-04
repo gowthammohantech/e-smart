@@ -25,6 +25,7 @@ export const SERIES_KINDS: SeriesKind[] = [
   'contra',
   'gstJournal',
   'tdsChallan',
+  'receipt',
 ];
 
 /**
@@ -86,6 +87,7 @@ export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   contra: 'CV',
   gstJournal: 'GJV',
   tdsChallan: 'TDS',
+  receipt: 'RV',
 };
 
 export function seriesKindForDocument(kind: DocumentKind): SeriesKind {
