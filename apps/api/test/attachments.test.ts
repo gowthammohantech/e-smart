@@ -52,7 +52,7 @@ describe('attachments', () => {
     expect(storage.objects.has(row.storageKey)).toBe(false);
     expect((await t.get(`${c}/attachments/${id}`, { token })).status).toBe(404);
 
-    const trail = await t.deps.db.select().from(schema.changeLog).where(eq(schema.changeLog.entityId, id));
+    const trail = await t.deps.db.select().from(schema.changeLog).where(eq(schema.changeLog.entityId, id)).orderBy(schema.changeLog.seq);
     expect(trail.map((r) => `${r.entityType}:${r.op}`)).toEqual(['attachment:upsert', 'attachment:upsert', 'attachment:delete']);
   });
 
