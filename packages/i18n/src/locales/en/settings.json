@@ -223,6 +223,8 @@
     "lastError": "Last sync problem: {{message}}",
     "queue": "Queue",
     "conflictNote": "Conflicts are surfaced for you to resolve rather than being overwritten silently.",
+    "storageNoteWeb": "Changes waiting to sync are kept only in this browser. Clearing browsing data (cookies and site data) or closing a private window deletes them before they reach the server, so sync before you do.",
+    "storageNoteApp": "Changes waiting to sync are kept only on this device. Clearing the app's storage or uninstalling it deletes them before they reach the server, so sync before you do.",
     "syncNow": "Sync now",
     "reload": "Reload everything from the server",
     "lastSynced": "Last synced {{when}}",
