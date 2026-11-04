@@ -9,6 +9,13 @@ import { defineRailway, preserve, project, service } from 'railway/iac';
  * skips the corepack setup that root package.json's `packageManager` field
  * asks for, and the image export then fails on a missing /opt/corepack.
  */
+/**
+ * Every service builds with Railpack. The root Dockerfile is for local Docker
+ * runs (docker-compose.yml); left to detect, Railway would build that instead,
+ * and its last stage (the admin static server) has no package.json to start from.
+ */
+const railpack = (buildCommand: string) => ({ builder: 'RAILPACK' as const, buildCommand });
+
 export default defineRailway((ctx) => {
   /**
    * Production's addresses are fixed here. Any other environment (staging, demo) sets its own in
@@ -77,7 +84,7 @@ export default defineRailway((ctx) => {
   };
 
   const api = service('api', {
-    build: 'npm run build -w @esmart/api',
+    build: railpack('npm run build -w @esmart/api'),
     start: 'npm run start -w @esmart/api',
     // Schema and reference data, applied between build and deploy, then the
     // demo account when SEED_DEMO_ACCOUNT=true. Idempotent: Drizzle skips
@@ -99,7 +106,7 @@ export default defineRailway((ctx) => {
    * relying on it. Migrations stay with the API's preDeploy.
    */
   const worker = service('worker', {
-    build: 'npm run build -w @esmart/api',
+    build: railpack('npm run build -w @esmart/api'),
     start: 'npm run start -w @esmart/api',
     healthcheck: '/health',
     env: {
@@ -115,7 +122,7 @@ export default defineRailway((ctx) => {
    * to them needs a rebuild, not just a restart.
    */
   const web = service('web', {
-    build: 'npm run build -w @esmart/web',
+    build: railpack('npm run build -w @esmart/web'),
     start: 'npm run serve -w @esmart/web',
     healthcheck: '/health',
     env: {
@@ -140,7 +147,7 @@ export default defineRailway((ctx) => {
    * rebuild, not just a restart.
    */
   const admin = service('admin', {
-    build: 'npm run build -w @esmart/admin',
+    build: railpack('npm run build -w @esmart/admin'),
     start: 'npm run start -w @esmart/admin',
     healthcheck: '/health',
     env: {
@@ -160,7 +167,7 @@ export default defineRailway((ctx) => {
    * are compiled in at build time, so changing one needs a rebuild.
    */
   const site = service('site', {
-    build: 'npm run build -w @esmart/site',
+    build: railpack('npm run build -w @esmart/site'),
     start: 'npm run start -w @esmart/site',
     healthcheck: '/',
     env: {
