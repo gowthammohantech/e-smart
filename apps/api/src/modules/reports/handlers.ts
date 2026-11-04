@@ -233,7 +233,10 @@ export const reportsHandlers = defineHandlers({
       case 'tds-challans': {
         const { docs } = await loadDocuments(all, [...BUY_SIDE]);
         const vouchers = await loadVouchers(all, 'tdsChallan');
-        return tdsReturnRows(inScope(docs), vouchers, await partiesOf(docs), base, range) as never;
+        // Payments made that kept TDS back under a section are deductee rows too.
+        const { payments } = await loadPayments(all);
+        const sectioned = inScope(payments.filter((p) => p.direction === 'paid' && !!p.tdsSection));
+        return tdsReturnRows(inScope(docs), vouchers, await partiesOf(docs, sectioned), base, range, sectioned) as never;
       }
       case 'gstr1': {
         // The screen's range and branch, within the branches the user may see.

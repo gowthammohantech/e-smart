@@ -3,6 +3,7 @@ import { PAYABLE_KINDS, RECEIVABLE_KINDS, isFinalized } from '@esmart/core/domai
 import { settlementGainLoss } from '@esmart/core/domain/fx';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
+import { tdsSection as tdsSectionOf } from '@esmart/core/data/tdsSections';
 import type { PaymentMethod } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
@@ -64,6 +65,8 @@ export type PaymentInput = {
   advanceTax?: { taxCategoryId: string; placeOfSupplyStateCode: string } | null;
   /** Money paid back to a customer out of this advance receipt (a refund voucher, Rule 51). */
   refundOf?: string | null;
+  /** On money paid: the section of the TDS its allocations kept back. */
+  tdsSection?: string | null;
   /** `amountMinor` is cash; the other three settle the document without money moving. */
   allocations: { documentId: string; amountMinor: number; tdsMinor?: number; discountMinor?: number; writeOffMinor?: number; currency?: string }[];
 };
@@ -260,6 +263,7 @@ export async function writePayment(
     if (input.partyId !== existing!.partyId || input.currency !== existing!.currency.trim()) blocking('partyId', `${existing!.number} has refunds against it; its party and currency stay`);
     if (allocated + refunded > input.amountMinor) blocking('allocations', `${input.currency} ${(refunded / 100).toFixed(2)} of it has been refunded; allocations can use only the rest`);
   }
+  if (input.tdsSection && input.tdsSection !== 'none' && !tdsSectionOf(input.tdsSection)) blocking('tdsSection', `Unknown TDS section ${input.tdsSection}`);
   if (issues.length) throw unprocessable(issues, overOutstanding ? 'ALLOCATION_EXCEEDS_OUTSTANDING' : shortOfCash ? 'INSUFFICIENT_BALANCE' : 'VALIDATION_FAILED');
 
   // FX gain or loss (base currency) when a foreign-currency document settles at another rate.
@@ -291,6 +295,7 @@ export async function writePayment(
     advanceTaxRate,
     advancePlaceOfSupply: advance?.placeOfSupplyStateCode ?? null,
     refundOfPaymentId: refundOf,
+    tdsSection: input.direction === 'paid' && input.allocations.some((a) => (a.tdsMinor ?? 0) > 0) ? (input.tdsSection ?? null) : null,
     notes: input.notes ?? null,
   };
 

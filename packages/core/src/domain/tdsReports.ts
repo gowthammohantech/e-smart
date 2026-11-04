@@ -1,5 +1,5 @@
 import { tdsSection } from '../data/tdsSections';
-import type { BusinessDocument, Party, Voucher } from '../types';
+import type { BusinessDocument, Party, Payment, Voucher } from '../types';
 import type { Posting } from './ledger/postings';
 import { tdsQuarter } from './tds';
 
@@ -7,7 +7,7 @@ import { tdsQuarter } from './tds';
  * TDS from the books: what was deducted and deposited (TDS payable), what customers deducted from
  * what they paid (TDS receivable, to check against Form 26AS), the deductee rows Form 26Q asks for,
  * and the challans. Amounts in base-currency paise. TDS payable accounts are `sys:tdsPayable:<section>`
- * for bills, and plain `sys:tdsPayable` (no section) for TDS kept back on a payment.
+ * for bills and for payments that name one; plain `sys:tdsPayable` only for an older payment without.
  */
 
 const PAYABLE = 'sys:tdsPayable';
@@ -128,9 +128,9 @@ export type TdsDeducteeRow = {
 };
 
 /**
- * Form 26Q's deductee rows, one per bill, each with the challan that deposited it, and the challan
- * register. Challans settle a section's deductions oldest first. TDS kept back on a payment names no
- * section, so it is in the payable summary but not here: deduct it on the bill to report it.
+ * Form 26Q's deductee rows, one per bill and one per payment that kept TDS back under a section, each
+ * with the challan that deposited it, and the challan register. Challans settle a section's deductions
+ * oldest first. An older payment that named no section is in the payable summary but not here.
  */
 export function tdsReturnRows(
   documents: BusinessDocument[],
@@ -138,10 +138,38 @@ export function tdsReturnRows(
   parties: Pick<Party, 'id' | 'name' | 'pan'>[],
   baseCurrency: string,
   range: { from: string; to: string },
+  payments: Payment[] = [],
 ): { deductees: TdsDeducteeRow[]; challans: TdsChallanRow[] } {
+  const fromPayments: TdsDeducteeRow[] = payments
+    .filter((p) => p.direction === 'paid' && p.tdsSection && p.tdsSection !== 'none')
+    .flatMap((p) => {
+      const rate = p.currency === baseCurrency ? 1 : p.exchangeRate || 1;
+      const tds = p.allocations.reduce((a, x) => a + (x.tdsDeducted?.minor ?? 0), 0);
+      if (!tds) return [];
+      // What was paid or credited against the deduction: the cash on those documents plus the TDS.
+      const paid = p.allocations.filter((x) => x.tdsDeducted?.minor).reduce((a, x) => a + x.amount.minor + (x.tdsDeducted?.minor ?? 0), 0);
+      const party = parties.find((x) => x.id === p.partyId);
+      const q = tdsQuarter(p.date);
+      return [
+        {
+          documentId: p.id,
+          number: p.number,
+          date: p.date,
+          quarter: `FY ${q.fy} Q${q.quarter}`,
+          section: p.tdsSection!,
+          sectionLabel: tdsSection(p.tdsSection)?.label ?? p.tdsSection!,
+          partyId: p.partyId,
+          partyName: party?.name ?? '—',
+          pan: party?.pan,
+          amountMinor: Math.round(paid * rate),
+          tdsMinor: Math.round(tds * rate),
+          rate: paid ? Math.round((tds / paid) * 10_000) / 100 : 0,
+        },
+      ];
+    });
   const all: TdsDeducteeRow[] = documents
     .filter((d) => ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote'].includes(d.kind) && !['draft', 'cancelled', 'rejected', 'requested'].includes(d.status) && d.tds?.amount.minor)
-    .map((d) => {
+    .map((d): TdsDeducteeRow => {
       const rate = d.currency === baseCurrency ? 1 : d.exchangeRate || 1;
       const sign = d.kind === 'supplierCreditNote' ? -1 : 1;
       const party = parties.find((p) => p.id === d.partyId);
@@ -161,6 +189,7 @@ export function tdsReturnRows(
         rate: d.tds!.rate,
       };
     })
+    .concat(fromPayments)
     .sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
 
   const challans: TdsChallanRow[] = vouchers

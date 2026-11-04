@@ -147,6 +147,14 @@ describe('postings', () => {
     expect(net(ps, 'party:cus')).toBe(-102500);
   });
 
+  it('posts TDS kept back on a payment under its section, for 26Q', () => {
+    const p = { id: 'p2', number: 'PAY-2', direction: 'paid', partyId: 'sup', accountId: 'bank', branchId: 'b', date: '2026-06-05', amount: inr('980'), exchangeRate: 1, tdsSection: '194C', allocations: [{ documentId: 'x', documentNumber: 'X', amount: inr('980'), tdsDeducted: inr('20') }] } as Payment;
+    const ps = postPayment(p);
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:tdsPayable:194C')).toBe(-2000);
+    expect(net(ps, 'sys:tdsPayable')).toBe(0);
+  });
+
   it('posts an expense at its cost, with the credit it carries', () => {
     const e = { id: 'e', number: 'EXP-1', categoryId: 'rent', accountId: 'cash', branchId: 'b', date: '2026-06-05', amount: inr('1180'), taxAmount: inr('180'), exchangeRate: 1, taxCategoryId: 'tax_18' } as Expense;
     const ps = postExpense(e, { company, branches: [], taxCategories: [{ id: 'tax_18', rate: 18 } as never] });

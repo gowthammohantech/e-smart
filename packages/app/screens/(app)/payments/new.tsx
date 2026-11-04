@@ -27,6 +27,7 @@ import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from
 import { resolveRate, settlementGainLoss } from '@esmart/core/domain/fx';
 import { INDIAN_STATES, PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
@@ -105,7 +106,9 @@ export default function NewPayment() {
   const [serviceAdvance, setServiceAdvance] = useState(false);
   const [advanceTaxId, setAdvanceTaxId] = useState<string | undefined>();
   const [advancePos, setAdvancePos] = useState<string | undefined>();
-  const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | null>(null);
+  const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
+  /** The section of TDS kept back on money paid; the supplier's own until changed. */
+  const [tdsSectionChoice, setTdsSectionChoice] = useState<string | null>(null);
   const [seeded, setSeeded] = useState(false);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
   /** Per document: what settles it without cash (TDS deducted, discount, write-off), as typed. */
@@ -291,6 +294,10 @@ export default function NewPayment() {
     }
   };
   const adjustedTotal = Object.keys(allocations).reduce((acc, id) => acc + adjustedOf(id), 0);
+  // TDS kept back on money paid goes under a section (26Q): the supplier's own unless changed.
+  const keepsTds = direction === 'paid' && Object.keys(allocations).some((id) => fromMajor(adjustments[id]?.tdsDeducted || '0', currency).minor > 0);
+  const partySection = (party as { tdsSection?: string } | undefined)?.tdsSection;
+  const tdsSectionPicked = tdsSectionChoice ?? (partySection && partySection !== 'none' ? partySection : undefined);
 
   const fxGainLoss = useMemo(() => {
     if (currency === baseCurrency) return undefined;
@@ -319,7 +326,7 @@ export default function NewPayment() {
   const balanceBlocks = shortfall && !!account;
 
   // A receipt may move no money when it only records TDS deducted, a discount or a write-off.
-  const canSave = !!partyId && (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) && !overAllocated && !!accountId && !balanceBlocks;
+  const canSave = !!partyId && (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) && !overAllocated && !!accountId && !balanceBlocks && (!keepsTds || !!tdsSectionPicked);
 
   const save = async () => {
     if (!canSave || !partyId) return;
@@ -357,6 +364,7 @@ export default function NewPayment() {
       unallocated: unallocated.minor > 0 ? unallocated : zero(currency),
       fxGainLoss,
       advanceTax: advanceTax ?? undefined,
+      tdsSection: keepsTds ? tdsSectionPicked : undefined,
       notes: notes || undefined,
       attachmentIds: [],
       createdBy: '',
@@ -678,6 +686,26 @@ export default function NewPayment() {
 
   const notesField = (
     <>
+      {keepsTds ? (
+        <>
+          <PickerField
+            label={tr('sales:payment.tdsSection')}
+            value={tdsSectionPicked ? `${tdsSection(tdsSectionPicked)?.label ?? tdsSectionPicked} · ${tdsSection(tdsSectionPicked)?.nature ?? ''}` : undefined}
+            placeholder={tr('sales:payment.tdsSectionPick')}
+            onPress={() => setAdvanceSheet('tds')}
+            icon="percent-outline"
+            hint={tr('sales:payment.tdsSectionHint')}
+          />
+          <SelectSheet
+            visible={advanceSheet === 'tds'}
+            onClose={() => setAdvanceSheet(null)}
+            title={tr('sales:payment.tdsSection')}
+            options={TDS_SECTIONS.map((s) => ({ value: s.code, label: s.label, description: s.nature }))}
+            value={tdsSectionPicked}
+            onSelect={setTdsSectionChoice}
+          />
+        </>
+      ) : null}
       {canAdvance ? (
         <>
           <SwitchField label={tr('sales:payment.serviceAdvance')} description={tr('sales:payment.serviceAdvanceHint')} value={serviceAdvance} onValueChange={setServiceAdvance} />

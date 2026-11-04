@@ -1148,6 +1148,8 @@ export const payments = pgTable("payments", {
 	advancePlaceOfSupply: varchar("advance_place_of_supply", { length: 2 }),
 	// Money paid back to a customer out of an advance they paid: the receipt it refunds (Rule 51).
 	refundOfPaymentId: varchar("refund_of_payment_id", { length: 40 }),
+	// On money paid: the TDS section of what its allocations kept back, so it goes to that section's payable and 26Q.
+	tdsSection: varchar("tds_section", { length: 8 }),
 	notes: text(),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),

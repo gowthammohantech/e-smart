@@ -1,6 +1,6 @@
 import type { Posting } from '../ledger/postings';
 import { tdsDepositDue, tdsPayableSummary, tdsReceivable, tdsReturnRows } from '../tdsReports';
-import { BusinessDocument, Voucher } from '../../types';
+import { BusinessDocument, Payment, Voucher } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
 
 const inr = (major: string) => fromMajor(major, 'INR');
@@ -103,5 +103,11 @@ describe('Form 26Q rows and the challan register', () => {
       ['TDS-1', '0510308', 100_000, 1],
       ['TDS-2', '0510308', 60_000, 1],
     ]);
+  });
+
+  it('reports TDS kept back on a payment under the section it names', () => {
+    const p = { id: 'p', number: 'PAY-9', direction: 'paid', partyId: 'sup', date: '2026-09-15', currency: 'INR', exchangeRate: 1, tdsSection: '194C', amount: inr('980'), allocations: [{ documentId: 'x', documentNumber: 'X', amount: inr('980'), tdsDeducted: inr('20') }] } as unknown as Payment;
+    const { deductees } = tdsReturnRows([], [], parties, 'INR', FY, [p]);
+    expect(deductees.map((d) => [d.number, d.section, d.amountMinor, d.tdsMinor, d.rate])).toEqual([['PAY-9', '194C', 100_000, 2_000, 2]]);
   });
 });

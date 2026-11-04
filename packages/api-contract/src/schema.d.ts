@@ -4486,6 +4486,8 @@ export interface components {
                 readonly rate?: number;
                 placeOfSupplyStateCode: string;
             };
+            /** @description On money paid: the TDS section of what its allocations kept back (tdsDeducted), so it is reported under that section in 26Q and TDS payable */
+            tdsSection?: string;
             /** @description Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date. */
             refundOf?: string;
             /** @description On a receipt, what has been paid back out of it */

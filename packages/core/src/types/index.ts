@@ -731,6 +731,8 @@ export type Payment = {
    * supply it is taxed at. Advances for goods carry none (notification 66/2017).
    */
   advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string };
+  /** On money paid: the TDS section of what its allocations kept back (26Q). */
+  tdsSection?: string;
   /** Money paid back to a customer: the advance receipt it refunds (CGST Rule 51). */
   refundOf?: string;
   /** On an advance receipt: what has been paid back out of it, and when. */

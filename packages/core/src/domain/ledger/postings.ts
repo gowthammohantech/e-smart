@@ -151,7 +151,8 @@ export function postPayment(p: Payment, ctx: { homeState?: string; documentDate?
       ]
     : [
         [`pay:${p.accountId}`, -cash],
-        ['sys:tdsPayable', -b(sum('tdsDeducted'))],
+        // Kept back under its section, so it reaches that section's payable and 26Q.
+        [p.tdsSection && p.tdsSection !== 'none' ? `sys:tdsPayable:${p.tdsSection}` : 'sys:tdsPayable', -b(sum('tdsDeducted'))],
         ['sys:discountReceived', -b(sum('discount'))],
         ['sys:otherIncome', -b(sum('writeOff'))],
         ['sys:fxGainLoss', -gain],
