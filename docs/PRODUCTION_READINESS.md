@@ -166,4 +166,4 @@ three rows below are done; preparing and saving returns works without it.
 | Tally Prime (education mode) imports the Tally XML export, and its trial balance equals the app's | QA | ⬜ Todo |
 | Offline on a phone: a journal and a contra saved offline, synced, and the trial balance matches the server's | QA | ⬜ Todo |
 | Turn on `GST_FILING_ENABLED` in production | Ops | ⏸ Blocked on the rows above |
-| Known gaps, documented in the FAQ: DSC filing, advance refunds, imports of goods and ISD in 3B, GSTR-1 amendment tables, a document split across cost centres | Product | Decision needed |
+| Known gaps, documented in the FAQ: DSC filing, imports of goods and ISD in 3B, GSTR-1 amendment tables, a document split across cost centres | Product | Decision needed |

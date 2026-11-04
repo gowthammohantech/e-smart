@@ -19,6 +19,7 @@ import { useBaseCurrency, useDocuments, useParty, usePayment, usePaymentAccounts
 import { usePaymentRecord } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
 import { detailRouteFor } from '../../../features/documents/DocumentEditor';
+import { RefundAdvanceSheet } from '../../../features/payments/RefundAdvanceSheet';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
@@ -47,6 +48,9 @@ export default function PaymentDetail() {
   const applyAdvances = useAppStore((s) => s.applyAdvances);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  // A refund names the receipt it paid back; fetched so its number shows.
+  const refundOf = usePaymentRecord(payment?.refundOf).data;
 
   if (!payment && remote.isLoading) return <LoadingView />;
   if (!payment) {
@@ -196,6 +200,7 @@ export default function PaymentDetail() {
             <Text variant="small" style={{ flex: 1 }}>
               {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
             </Text>
+            {isIn ? <Button title={tr('sales:refund.action')} size="sm" variant="ghost" icon="cash-refund" onPress={() => setRefunding(true)} /> : null}
             <Button
               title={tr('sales:payment.adjustAdvance')}
               size="sm"
@@ -210,6 +215,43 @@ export default function PaymentDetail() {
                 );
               }}
             />
+          </Card>
+        ) : null}
+
+        {payment.refundOf ? (
+          <Card
+            onPress={() => router.push(`/(app)/payments/${payment.refundOf}`)}
+            style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
+          >
+            <Icon name="cash-refund" size={20} color={t.c.primary} />
+            <Text variant="small" style={{ flex: 1 }}>
+              {tr('sales:refund.of', { number: refundOf?.number ?? '…' })}
+            </Text>
+            <Icon name="chevron-right" size={18} color={t.c.muted} />
+          </Card>
+        ) : null}
+
+        {payment.refunds?.length ? (
+          <Card padded={false} style={{ marginTop: t.spacing.md }}>
+            <Text variant="caption" tone="muted" weight="600" style={{ padding: t.spacing.lg, paddingBottom: t.spacing.sm }}>
+              {tr('sales:refund.listTitle')}
+            </Text>
+            {payment.refunds.map((r) => (
+              <Pressable
+                key={r.paymentId}
+                onPress={() => router.push(`/(app)/payments/${r.paymentId}`)}
+                accessibilityRole="button"
+                style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.md, backgroundColor: pressed ? t.c.card2 : 'transparent' })}
+              >
+                <Text variant="small" weight="600" style={{ flex: 1 }}>
+                  {`${r.number ?? ''} · ${formatDate(r.date)}`}
+                </Text>
+                <Text variant="small" weight="700" tone="bad">
+                  {formatMoney(r.amount)}
+                </Text>
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
+              </Pressable>
+            ))}
           </Card>
         ) : null}
 
@@ -255,6 +297,8 @@ export default function PaymentDetail() {
           fullWidth
         />
       </View>
+
+      {isIn ? <RefundAdvanceSheet receipt={payment} visible={refunding} onClose={() => setRefunding(false)} onSaved={(rid) => router.push(`/(app)/payments/${rid}`)} /> : null}
 
       <ConfirmDialog
         visible={confirmDelete}

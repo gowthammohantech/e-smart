@@ -65,6 +65,20 @@ describe('GST on advances for services', () => {
     expect(net(ps, 'pay:bank')).toBe(1_180_000);
   });
 
+  it('takes back the tax on what is refunded, on the day of the refund (Rule 51)', () => {
+    const p = advance({ refunds: [{ paymentId: 'ref', date: '2026-10-05', amount: inr('5900') }] });
+    const events = advanceTaxEvents(p, '27', dateOf);
+    expect(events.map((e) => [e.kind, e.date, e.cgst + e.sgst, e.refundId])).toEqual([
+      ['received', '2026-09-10', 180_000, undefined],
+      ['refunded', '2026-10-05', 90_000, 'ref'],
+    ]);
+    // October reports the refund as an adjustment of September's advance (table 11B).
+    expect(advancesForPeriod(events, '2026-10-01', '2026-10-31').adjusted).toEqual([{ placeOfSupply: '27', rate: 18, interState: false, taxable: 500_000, igst: 0, cgst: 45_000, sgst: 45_000, cess: 0 }]);
+    const ps = postPayment(p, { homeState: '27', documentDate: dateOf });
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps.filter((x) => x.date === '2026-10-05'), 'sys:outputCgst')).toBe(45_000);
+  });
+
   it('shows each advance in the 3B breakup of 3.1(a), net of what was invoiced the same month', () => {
     const p = advance({ allocations: [{ documentId: 'sep', documentNumber: 'INV-2', amount: inr('5900') }, { documentId: 'oct', documentNumber: 'INV-3', amount: inr('5900') }] });
     const events = advanceTaxEvents(p, '27', dateOf);

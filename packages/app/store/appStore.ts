@@ -438,6 +438,22 @@ export const useAppStore = create<AppState>()(
        * changed. Any positive allocation short of the total is a valid
        * partial settlement.
        */
+      /** A receipt's advance and refund list after a refund out of it changed by `delta` (more paid back is positive). */
+      const moveRefund = (receiptId: string, refund: Payment, delta: number) => {
+        set({
+          payments: get().payments.map((p) => {
+            if (p.id !== receiptId) return p;
+            const others = (p.refunds ?? []).filter((r) => r.paymentId !== refund.id);
+            const kept = get().payments.some((x) => x.id === refund.id);
+            return {
+              ...p,
+              unallocated: { ...p.unallocated, minor: p.unallocated.minor - delta },
+              refunds: kept ? [...others, { paymentId: refund.id, number: refund.number, date: refund.date, amount: refund.amount }] : others,
+            };
+          }),
+        });
+      };
+
       const refreshPaymentStatuses = (affected: Set<string>) => {
         if (!affected.size) return;
         const allocations = get().payments.flatMap((p) => p.allocations);
@@ -973,6 +989,8 @@ export const useAppStore = create<AppState>()(
               ? get().payments.map((p) => (p.id === payment.id ? withNumber : p))
               : [withNumber, ...get().payments],
           });
+          // A refund comes out of the advance on the receipt it pays back, as the server will have it.
+          if (withNumber.refundOf) moveRefund(withNumber.refundOf, withNumber, withNumber.amount.minor - (previous?.amount.minor ?? 0));
 
           // Refresh the status of every invoice/bill this payment touches —
           // including ones an edit removed it from.
@@ -991,6 +1009,7 @@ export const useAppStore = create<AppState>()(
           const p = get().payments.find((x) => x.id === id);
           if (!p) return;
           set({ payments: get().payments.filter((x) => x.id !== id) });
+          if (p.refundOf) moveRefund(p.refundOf, p, -p.amount.minor);
           refreshPaymentStatuses(new Set(p.allocations.map((a) => a.documentId)));
           audit('deleted payment', 'payment', id, p.number);
         },

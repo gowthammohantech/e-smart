@@ -156,6 +156,7 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 8.8 | Late interest at three times the bank rate, compounded monthly (shown for information) | MSMED Act s.16 | `msme.ts` `msmeInterest` | core `extras` › *lists covered suppliers' unpaid bills…* |
 | 8.9 | What wasn't paid within the limit is listed as not deductible this year | Income-tax Act s.43B(h) | `msme.ts` `sec43bh` | core `extras` › *lists for the CA what wasn't paid in time* |
 | 8.10 | **New.** The receipt for a service advance is also its receipt voucher: recipient and GSTIN, place of supply, value of the advance, rate and CGST/SGST or IGST | CGST s.31(3)(d), Rule 50 | `payments/receipt.ts` | api `extras` › *reports the advance in table 11A…* |
+| 8.11 | **New.** An advance paid back with no supply made is a refund: a payment out that settles nothing but that receipt's advance, no more than is left of it. It prints as the refund voucher (receipt voucher referred to, recipient, amount, rate and tax). On a service advance, the tax on what is refunded comes back on the refund date, reported with the adjustments (GSTR-1 11B; netted in 11A within the same month; 3B 3.1(a)) | CGST s.31(3)(e), s.34; Rule 51 | `advanceTax.ts` `advanceTaxEvents`; `payments/engine.ts`; `payments/receipt.ts` | core `extras` › *takes back the tax on what is refunded…* |
 
 ---
 
@@ -167,7 +168,7 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 4. **Reimbursements (8.6).** The expense stays in its category, and the recovery goes to *Reimbursements recovered* (indirect income), so they net off in P&L. Would you rather they go through a *Reimbursements recoverable* asset account, keeping both out of P&L?
 5. **Cost centres (6.7).** A document goes to one cost centre as a whole; only voucher lines can split. Is that enough for your clients?
 6. **Opening balances (6.4).** An opening with no date stands at the start of the books, as in Tally; one with an "as on" date posts the day before it. Please confirm both, and whether cash and bank openings should take their date too (today the form fills it with the day the account was added, so it isn't used).
-7. **Advance refunds (8.1).** Refunding an advance is not built. Editing the receipt adjusts its tax. Is that acceptable for now?
+7. **Advance refunds (8.11).** Refunds are now built as above: the tax comes back in the month of the refund, reported with the 11B adjustments. Please confirm that reporting, and that a refund of an advance for goods (no tax) needs only the voucher.
 8. **ISD and imports of goods.** 3B 4A(1) imports of goods and 4A(4) ISD are always zero today. Bills of entry and ISD invoices aren't recorded.
 9. **Amendments.** Corrections after filing go in a later period's ordinary tables. B2BA/CDNRA amendment tables aren't produced.
 10. **2B tolerance (3, GSTR-2B matching).** A line whose amounts agree but whose date is up to 3 days off is now claimable without a person accepting it. Is 3 days right, or should any date difference wait for a person?

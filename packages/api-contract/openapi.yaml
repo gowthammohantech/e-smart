@@ -5648,6 +5648,17 @@ components:
                 taxCategoryId: { type: string }
                 rate: { type: number, readOnly: true, description: The rate on the day received }
                 placeOfSupplyStateCode: { type: string, pattern: '^\d{2}$' }
+            refundOf:
+              type: string
+              description: "Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date."
+            refunds:
+              type: array
+              readOnly: true
+              description: On a receipt, what has been paid back out of it
+              items:
+                type: object
+                required: [paymentId, date, amount]
+                properties: { paymentId: { type: string }, number: { type: string }, date: { type: string, format: date }, amount: { $ref: '#/components/schemas/Money' } }
             source: { type: string, enum: [manual, gateway], readOnly: true }
             notes: { type: string }
             attachmentIds: { type: array, items: { type: string } }

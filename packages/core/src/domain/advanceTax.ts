@@ -9,16 +9,20 @@ import { Payment } from '../types';
  *
  * The receipt's allocations say how it was applied. Money applied to an invoice dated on or before the
  * receipt settled that invoice and was never an advance; money applied to a later invoice is the
- * advance being adjusted, on that invoice's date. Amounts are base-currency paise.
+ * advance being adjusted, on that invoice's date. Money paid back out of it (a refund voucher, Rule 51)
+ * takes its share of the tax back on the day it is refunded, as an adjustment does. Amounts are
+ * base-currency paise.
  */
 export type AdvanceEvent = {
   paymentId: string;
-  /** Received: the advance's tax arises. Adjusted: an invoice was raised against it. */
-  kind: 'received' | 'adjusted';
+  /** Received: the advance's tax arises. Adjusted: an invoice was raised against it. Refunded: paid back. */
+  kind: 'received' | 'adjusted' | 'refunded';
   date: string;
   /** The date the advance was received (on an adjustment, of the advance it adjusts). */
   receivedOn: string;
   documentId?: string;
+  /** On a refund: the payment that paid it back. */
+  refundId?: string;
   placeOfSupply: string;
   rate: number;
   interState: boolean;
@@ -44,11 +48,13 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
   if (gross <= 0) return [];
   const interState = !!homeState && homeState !== at.placeOfSupplyStateCode;
   const tax = inclusiveTax(money(gross, 'INR'), at.rate);
-  // The tax shared out over each adjustment and what is still unadjusted, so the parts add up exactly.
+  // The tax shared out over each adjustment, each refund and what is still unadjusted, so the parts add up exactly.
   const adjustedGross = later.map((a) => base(a.amount.minor));
-  const rest = Math.max(0, gross - adjustedGross.reduce((s, x) => s + x, 0));
-  const taxParts = allocate(tax, [...adjustedGross, rest]);
-  const event = (kind: AdvanceEvent['kind'], date: string, g: number, t: number, documentId?: string): AdvanceEvent => {
+  const refunds = (p.refunds ?? []).filter((r) => r.date >= p.date);
+  const refundedGross = refunds.map((r) => base(r.amount.minor));
+  const rest = Math.max(0, gross - [...adjustedGross, ...refundedGross].reduce((s, x) => s + x, 0));
+  const taxParts = allocate(tax, [...adjustedGross, ...refundedGross, rest]);
+  const event = (kind: AdvanceEvent['kind'], date: string, g: number, t: number, documentId?: string, refundId?: string): AdvanceEvent => {
     const [c, s] = allocate(money(t, 'INR'), [1, 1]);
     return {
       paymentId: p.id,
@@ -56,6 +62,7 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
       date,
       receivedOn: p.date,
       documentId,
+      refundId,
       placeOfSupply: at.placeOfSupplyStateCode,
       rate: at.rate,
       interState,
@@ -68,6 +75,7 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
   return [
     event('received', p.date, gross, tax.minor),
     ...later.map((a, i) => event('adjusted', documentDate(a.documentId)!, adjustedGross[i], taxParts[i].minor, a.documentId)),
+    ...refunds.map((r, i) => event('refunded', r.date, refundedGross[i], taxParts[later.length + i].minor, undefined, r.paymentId)),
   ];
 }
 
@@ -75,9 +83,9 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
 export type AdvanceRow = { placeOfSupply: string; rate: number; interState: boolean; taxable: number; igst: number; cgst: number; sgst: number; cess: number };
 
 /**
- * Table 11 for a period. 11A: advances received in it, less what invoices in the same period already
- * adjusted (those are reported on the invoice alone). 11B: invoices in it raised against advances
- * received in an earlier period.
+ * Table 11 for a period. 11A: advances received in it, less what invoices (or refunds) in the same
+ * period already adjusted (those are reported on the invoice alone). 11B: invoices in it raised against
+ * advances received in an earlier period, and refund vouchers issued in it for them.
  */
 export function advancesForPeriod(events: AdvanceEvent[], from: string, to: string): { received: AdvanceRow[]; adjusted: AdvanceRow[] } {
   const inPeriod = (d: string) => d >= from && d <= to;
@@ -98,8 +106,8 @@ export function advancesForPeriod(events: AdvanceEvent[], from: string, to: stri
   return {
     received: group([
       ...received.filter((e) => e.kind === 'received').map((e) => ({ e, sign: 1 })),
-      ...received.filter((e) => e.kind === 'adjusted' && inPeriod(e.date)).map((e) => ({ e, sign: -1 })),
+      ...received.filter((e) => e.kind !== 'received' && inPeriod(e.date)).map((e) => ({ e, sign: -1 })),
     ]),
-    adjusted: group(events.filter((e) => e.kind === 'adjusted' && inPeriod(e.date) && e.receivedOn < from).map((e) => ({ e, sign: 1 }))),
+    adjusted: group(events.filter((e) => e.kind !== 'received' && inPeriod(e.date) && e.receivedOn < from).map((e) => ({ e, sign: 1 }))),
   };
 }

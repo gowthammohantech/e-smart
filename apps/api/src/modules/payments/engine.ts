@@ -6,7 +6,7 @@ import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
 import type { PaymentMethod } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
-import { planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { conflict, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
@@ -62,6 +62,8 @@ export type PaymentInput = {
   notes?: string | null;
   /** An advance for services, taxed when received at this category's rate and place of supply. */
   advanceTax?: { taxCategoryId: string; placeOfSupplyStateCode: string } | null;
+  /** Money paid back to a customer out of this advance receipt (a refund voucher, Rule 51). */
+  refundOf?: string | null;
   /** `amountMinor` is cash; the other three settle the document without money moving. */
   allocations: { documentId: string; amountMinor: number; tdsMinor?: number; discountMinor?: number; writeOffMinor?: number; currency?: string }[];
 };
@@ -70,9 +72,35 @@ export type PaymentInput = {
 const settles = (a: PaymentInput['allocations'][number]) => a.amountMinor + (a.tdsMinor ?? 0) + (a.discountMinor ?? 0) + (a.writeOffMinor ?? 0);
 const adjusts = (a: PaymentInput['allocations'][number]) => (a.tdsMinor ?? 0) + (a.discountMinor ?? 0) + (a.writeOffMinor ?? 0);
 
-/** Paying suppliers is the payables module (Pro and up). */
-export function assertDirectionAllowed(company: CompanyRow, direction: 'received' | 'paid') {
-  if (direction === 'paid' && !hasModule(company.plan, 'payables')) throw planUpgradeRequired(FULL_PLAN, 'payables');
+/** Paying suppliers is the payables module (Pro and up); refunding a customer's advance is not. */
+export function assertDirectionAllowed(company: CompanyRow, direction: 'received' | 'paid', refund = false) {
+  if (direction === 'paid' && !refund && !hasModule(company.plan, 'payables')) throw planUpgradeRequired(FULL_PLAN, 'payables');
+}
+
+/** What has been paid back out of a receipt so far. */
+async function refundedFrom(tx: DbOrTx, receiptId: string): Promise<number> {
+  const [r] = await tx.select({ total: sql<string>`coalesce(sum(${PAY.amountMinor}), 0)` }).from(PAY).where(eq(PAY.refundOfPaymentId, receiptId));
+  return Number(r?.total ?? 0);
+}
+
+/** A receipt's advance after a refund out of it changed by `delta` (positive pays more back). */
+async function moveRefund(tx: DbOrTx, actor: AuthUser, receipt: PaymentRow, delta: number, now: Date) {
+  if (!delta) return;
+  const [updated] = await tx
+    .update(PAY)
+    .set({ unallocatedMinor: receipt.unallocatedMinor - delta, version: receipt.version + 1, updatedAt: now })
+    .where(eq(PAY.id, receipt.id))
+    .returning();
+  await recordChange(tx, actor, {
+    companyId: receipt.companyId,
+    action: delta > 0 ? 'advance refunded' : 'refund reversed',
+    entityType: 'payment',
+    entityId: receipt.id,
+    entityLabel: receipt.number,
+    version: updated.version,
+    before: { unallocatedMinor: receipt.unallocatedMinor },
+    after: { unallocatedMinor: updated.unallocatedMinor },
+  });
 }
 
 /**
@@ -83,7 +111,8 @@ export function assertDirectionAllowed(company: CompanyRow, direction: 'received
  *   party and currency, of the kind that fits the direction (received →
  *   invoice, paid → purchase bill), and no more than what it still owes;
  * - the allocations add up to no more than the payment;
- * - `unallocated_minor` = amount − allocations (the party's advance);
+ * - `unallocated_minor` = amount − allocations − refunds (the party's advance);
+ * - a refund (`refundOf`) pays back no more than is left of that receipt's advance, and moves it;
  * - every document touched (before or after) gets `amount_paid_minor`
  *   re-summed from its allocations and its status re-derived.
  *
@@ -207,6 +236,30 @@ export async function writePayment(
     else if (!(Number(tax.rate) > 0)) blocking('advanceTax.taxCategoryId', 'An advance taxed at 0% carries no tax; leave it off');
     else advanceTaxRate = existing?.advanceTaxCategoryId === advance.taxCategoryId && existing.advanceTaxRate && existing.date === input.date ? existing.advanceTaxRate : String(tax.rate);
   }
+  // A refund pays a customer back out of an advance they paid (Rule 51): it settles nothing else,
+  // and takes no more than is left of that advance.
+  const refundOf = input.refundOf ?? null;
+  let receipt: PaymentRow | undefined;
+  if ((existing?.refundOfPaymentId ?? null) !== refundOf && existing) blocking('refundOf', 'A refund stays with the advance it refunds');
+  if (refundOf) {
+    if (input.direction !== 'paid') blocking('refundOf', 'Only money paid out refunds an advance');
+    if (input.allocations.length) blocking('allocations', 'A refund settles no documents');
+    [receipt] = await tx.select().from(PAY).where(and(eq(PAY.companyId, company.id), eq(PAY.id, refundOf))).for('update');
+    if (!receipt || receipt.direction !== 'received') blocking('refundOf', 'No such receipt in this company');
+    else {
+      if (receipt.partyId !== input.partyId) blocking('refundOf', `${receipt.number} was received from another party`);
+      if (receipt.currency.trim() !== input.currency) blocking('refundOf', `${receipt.number} is in ${receipt.currency.trim()}`);
+      if (input.date < receipt.date) blocking('date', `Not before the advance was received (${receipt.date})`);
+      const left = receipt.unallocatedMinor + (existing ? existing.amountMinor : 0);
+      if (input.amountMinor > left) blocking('amount.minor', `${receipt.number} has ${input.currency} ${(Math.max(left, 0) / 100).toFixed(2)} of its advance left`);
+    }
+  }
+  // A receipt keeps room for what was already paid back out of it.
+  const refunded = existing && input.direction === 'received' ? await refundedFrom(tx, existing.id) : 0;
+  if (refunded) {
+    if (input.partyId !== existing!.partyId || input.currency !== existing!.currency.trim()) blocking('partyId', `${existing!.number} has refunds against it; its party and currency stay`);
+    if (allocated + refunded > input.amountMinor) blocking('allocations', `${input.currency} ${(refunded / 100).toFixed(2)} of it has been refunded; allocations can use only the rest`);
+  }
   if (issues.length) throw unprocessable(issues, overOutstanding ? 'ALLOCATION_EXCEEDS_OUTSTANDING' : shortOfCash ? 'INSUFFICIENT_BALANCE' : 'VALIDATION_FAILED');
 
   // FX gain or loss (base currency) when a foreign-currency document settles at another rate.
@@ -231,11 +284,13 @@ export async function writePayment(
     method: input.method,
     reference: input.reference ?? null,
     accountId: input.accountId,
-    unallocatedMinor: input.amountMinor - allocated,
+    // A refund is all applied: to the advance it pays back.
+    unallocatedMinor: refundOf ? 0 : input.amountMinor - allocated - refunded,
     fxGainLossMinor,
     advanceTaxCategoryId: advance?.taxCategoryId ?? null,
     advanceTaxRate,
     advancePlaceOfSupply: advance?.placeOfSupplyStateCode ?? null,
+    refundOfPaymentId: refundOf,
     notes: input.notes ?? null,
   };
 
@@ -271,6 +326,7 @@ export async function writePayment(
     );
   }
   await syncPaymentState(tx, actor, company.id, docIds, opts.now);
+  if (receipt) await moveRefund(tx, actor, receipt, input.amountMinor - (existing?.amountMinor ?? 0), opts.now);
 
   await recordChange(tx, actor, {
     companyId: company.id,
@@ -299,6 +355,9 @@ export async function writePayment(
 /** Deletes a payment and its allocations, and re-derives every document it settled. */
 export async function deletePayment(tx: DbOrTx, company: CompanyRow, actor: AuthUser, row: PaymentRow, now: Date) {
   assertPeriodOpen(company, row.date);
+  if (row.direction === 'received' && (await refundedFrom(tx, row.id))) throw conflict('PAYMENT_REFUNDED', `${row.number} has refunds against it; remove those first`);
+  // Removing a refund gives the advance back to the receipt it came out of.
+  const [receipt] = row.refundOfPaymentId ? await tx.select().from(PAY).where(eq(PAY.id, row.refundOfPaymentId)).for('update') : [];
   const allocations = await tx.select().from(A).where(eq(A.paymentId, row.id));
   const docIds = [...new Set(allocations.map((a) => a.documentId))].sort();
   if (docIds.length) await tx.select({ id: D.id }).from(D).where(inArray(D.id, docIds)).orderBy(D.id).for('update');
@@ -308,6 +367,7 @@ export async function deletePayment(tx: DbOrTx, company: CompanyRow, actor: Auth
   await tx.update(A2).set({ entityType: null, entityId: null }).where(and(eq(A2.companyId, company.id), eq(A2.entityType, 'payment'), eq(A2.entityId, row.id)));
   const deleted = await tx.delete(PAY).where(and(eq(PAY.id, row.id), eq(PAY.version, row.version))).returning({ id: PAY.id });
   if (!deleted.length) throw preconditionFailed();
+  if (receipt) await moveRefund(tx, actor, receipt, -row.amountMinor, now);
   await syncPaymentState(tx, actor, company.id, docIds, now);
   await recordChange(tx, actor, { companyId: company.id, action: 'deleted', entityType: 'payment', entityId: row.id, entityLabel: row.number, version: row.version + 1, deleted: true });
 }

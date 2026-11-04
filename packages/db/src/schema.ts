@@ -1146,6 +1146,8 @@ export const payments = pgTable("payments", {
 	advanceTaxCategoryId: varchar("advance_tax_category_id", { length: 40 }),
 	advanceTaxRate: numeric("advance_tax_rate", { precision: 6, scale:  3 }),
 	advancePlaceOfSupply: varchar("advance_place_of_supply", { length: 2 }),
+	// Money paid back to a customer out of an advance they paid: the receipt it refunds (Rule 51).
+	refundOfPaymentId: varchar("refund_of_payment_id", { length: 40 }),
 	notes: text(),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
@@ -1153,6 +1155,7 @@ export const payments = pgTable("payments", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	index("payments_account_id_idx").using("btree", table.accountId.asc().nullsLast()),
+	index("payments_refund_of_payment_id_idx").using("btree", table.refundOfPaymentId.asc().nullsLast()),
 	index("payments_company_id_direction_date_idx").using("btree", table.companyId.asc().nullsLast(), table.direction.asc().nullsLast(), table.date.asc().nullsLast()),
 	uniqueIndex("payments_company_id_number_idx").using("btree", table.companyId.asc().nullsLast(), table.number.asc().nullsLast()),
 	index("payments_company_id_party_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.partyId.asc().nullsLast(), table.date.asc().nullsLast()),

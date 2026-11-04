@@ -4476,6 +4476,16 @@ export interface components {
                 readonly rate?: number;
                 placeOfSupplyStateCode: string;
             };
+            /** @description Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date. */
+            refundOf?: string;
+            /** @description On a receipt, what has been paid back out of it */
+            readonly refunds?: {
+                paymentId: string;
+                number?: string;
+                /** Format: date */
+                date: string;
+                amount: components["schemas"]["Money"];
+            }[];
             /** @enum {string} */
             readonly source?: "manual" | "gateway";
             notes?: string;

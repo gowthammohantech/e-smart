@@ -393,5 +393,20 @@
     },
     "directInvoice": "Without an invoice",
     "directBill": "Without a bill"
+  },
+  "refund": {
+    "action": "Refund",
+    "title": "Refund the advance",
+    "subtitle": "Out of {{number}}: {{amount}} still held",
+    "amount": "Amount to refund",
+    "tooMuch": "Only {{amount}} of the advance is left",
+    "beforeReceipt": "A refund can't be dated before the advance was received",
+    "paidFrom": "Paid from",
+    "hint": "The refund prints as the refund voucher (Rule 51). On an advance for services, the GST paid on what is refunded comes back in the month of the refund.",
+    "save": "Refund",
+    "saved": "Advance refunded",
+    "note": "Refund of the advance on {{number}}",
+    "of": "Refund of the advance on {{number}}",
+    "listTitle": "Refunded out of this advance"
   }
 }

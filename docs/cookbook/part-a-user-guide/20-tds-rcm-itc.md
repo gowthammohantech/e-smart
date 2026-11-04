@@ -92,7 +92,7 @@ When a customer pays before you invoice a service, GST is due on the advance whe
 - **Taking the tax back:** when you raise the invoice and apply the advance to it, the advance's tax is taken back on the invoice's date. The invoice then carries the full tax.
 - **Where it is reported:** GSTR-1 table 11 (11A received, 11B adjusted) and 3B 3.1(a).
 - **Goods:** advances for goods carry no GST (notification 66/2017), so leave the switch off.
-- **Refunds:** refunding an advance isn't built yet. Edit the receipt instead, and its tax follows.
+- **Refunds:** open the receipt and tap **Refund** under the advance it holds. The refund prints as the refund voucher (Rule 51), and the GST on what you pay back comes off in the month of the refund (GSTR-1 table 11B).
 
 ## Paying micro and small suppliers on time
 

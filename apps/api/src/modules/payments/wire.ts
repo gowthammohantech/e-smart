@@ -27,6 +27,15 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
     .where(and(isNotNull(schema.paymentLinks.paymentId), inArray(schema.paymentLinks.paymentId, ids)));
   const gateway = new Set(links.map((l) => l.paymentId));
   const partyIds = [...new Set(rows.map((r) => r.partyId))];
+  // On a receipt: what has been paid back out of it.
+  const receipts = rows.filter((r) => r.direction === 'received').map((r) => r.id);
+  const refunds = receipts.length
+    ? await db
+        .select({ id: schema.payments.id, number: schema.payments.number, date: schema.payments.date, amountMinor: schema.payments.amountMinor, currency: schema.payments.currency, of: schema.payments.refundOfPaymentId })
+        .from(schema.payments)
+        .where(inArray(schema.payments.refundOfPaymentId, receipts))
+        .orderBy(schema.payments.date, schema.payments.id)
+    : [];
   const docIds = [...new Set(allocations.map((a) => a.documentId))];
   const kinds = new Map(docIds.length ? (await db.select({ id: schema.documents.id, kind: schema.documents.kind }).from(schema.documents).where(inArray(schema.documents.id, docIds))).map((d) => [d.id, d.kind]) : []);
   const names = new Map((await db.select({ id: schema.parties.id, name: schema.parties.name }).from(schema.parties).where(inArray(schema.parties.id, partyIds))).map((p) => [p.id, p.name]));
@@ -61,6 +70,8 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
       unallocated: money(r.unallocatedMinor, currency),
       fxGainLoss: maybeMoney(r.fxGainLossMinor, baseCurrency),
       advanceTax: r.advanceTaxCategoryId ? { taxCategoryId: r.advanceTaxCategoryId, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply! } : undefined,
+      refundOf: r.refundOfPaymentId ?? undefined,
+      refunds: r.direction === 'received' ? refunds.filter((f) => f.of === r.id).map((f) => ({ paymentId: f.id, number: f.number, date: f.date, amount: money(f.amountMinor, f.currency.trim()) })) : undefined,
       source: gateway.has(r.id) ? ('gateway' as const) : ('manual' as const),
       notes: r.notes,
       attachmentIds: attachments.filter((a) => a.entityId === r.id).map((a) => a.id),

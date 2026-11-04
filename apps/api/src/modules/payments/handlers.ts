@@ -19,7 +19,7 @@ async function findPayment(ctx: AnyCtx, db: DbOrTx, id: string, opts: { lock?: b
   const q = db.select().from(PAY).where(and(eq(PAY.companyId, ctx.company.id), eq(PAY.id, id)));
   const [row] = opts.lock ? await q.for('update') : await q;
   if (!row || (ctx.user.branchIds.length && !ctx.user.branchIds.includes(row.branchId))) throw notFound('Payment');
-  assertDirectionAllowed(ctx.company, row.direction);
+  assertDirectionAllowed(ctx.company, row.direction, !!row.refundOfPaymentId);
   return row;
 }
 
@@ -43,6 +43,7 @@ function inputOf(body: Schema<'Payment'>): PaymentInput {
     accountId: body.accountId,
     notes: body.notes,
     advanceTax: body.advanceTax ?? null,
+    refundOf: body.refundOf ?? null,
     allocations: (body.allocations ?? []).map((a) => ({
       documentId: a.documentId,
       amountMinor: a.amount.minor,
@@ -107,7 +108,7 @@ export const paymentsHandlers = defineHandlers({
   },
 
   async createPayment(ctx) {
-    assertDirectionAllowed(ctx.company, ctx.body.direction);
+    assertDirectionAllowed(ctx.company, ctx.body.direction, !!ctx.body.refundOf);
     const row = await ctx.db.transaction(async (tx) => {
       const created = await writePayment(tx, ctx.deps, ctx.company, ctx.user, inputOf(ctx.body), { now: ctx.now });
       await linkPaymentAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);
@@ -124,7 +125,7 @@ export const paymentsHandlers = defineHandlers({
   },
 
   async savePayment(ctx) {
-    assertDirectionAllowed(ctx.company, ctx.body.direction);
+    assertDirectionAllowed(ctx.company, ctx.body.direction, !!ctx.body.refundOf);
     const row = await ctx.db.transaction(async (tx) => {
       const current = await findPayment(ctx, tx, ctx.params.id, { lock: true });
       checkIfMatch(ctx.req, current.version);

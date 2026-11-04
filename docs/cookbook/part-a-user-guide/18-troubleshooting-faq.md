@@ -140,7 +140,7 @@ These features are planned or partly built. They are **not working today**, and 
 | **Google sign-in** | Not built | Use email and password, or phone OTP |
 | **Filing GSTR-1 and GSTR-3B from the app** | Built; switched off until CA sign-off and the GSP sandbox | Save from the app, file on the portal |
 | **Filing with a DSC** | EVC only | Companies save from the app and file on the portal |
-| **Refunding an advance** | Not built | Edit the receipt; its GST follows |
+| **Refunding an advance** | Built | Open the receipt, tap **Refund** under the advance it holds; the refund prints as the refund voucher |
 | **Imports of goods (bill of entry) and ISD credit in 3B** | Always zero | Adjust on the portal before filing |
 | **GSTR-1 amendment tables** (B2BA, CDNRA) | Not produced | Correct in a later period's ordinary tables |
 | **Delete my account** in the app | Not built (app stores require it) | Contact support |
