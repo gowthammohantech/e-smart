@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useVouchers } from '../../store/books';
 import { CostCentreField } from '../books/CostCentreField';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
@@ -22,7 +21,7 @@ import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { Expense, ItcEligibility, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
-import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { addDaysISO, today } from '@esmart/core/lib/date';
@@ -35,13 +34,13 @@ import { useReceiptQueue } from '../../remote/receiptQueue';
 import { keepQueued } from '../../remote/keptFiles';
 import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
+import { usePartyRecord, usePartySearch, useServerAccountBalances } from '../../remote/queries';
+import { useDebounced } from '../../components/useDebounced';
 import {
   useBaseCurrency,
   useExpenseCategories,
-  useExpenses,
   useParties,
   usePaymentAccounts,
-  usePayments,
   useDefaultBranchId,
   useTaxCategories,
 } from '../../store/selectors';
@@ -85,8 +84,6 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const defaultBranchId = useDefaultBranchId();
-  const payments = usePayments();
-  const expenses = useExpenses();
 
   // No silent default: the person recording the expense chooses its category.
   const [categoryId, setCategoryId] = useState(expense?.categoryId ?? initial?.categoryId ?? '');
@@ -129,6 +126,13 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [methodOpen, setMethodOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [supplierOpen, setSupplierOpen] = useState(false);
+  // Pickers search the server; what they find (and the parties already on the expense) lands in the store.
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
+  const supplierSearch = usePartySearch('supplier', useDebounced(supplierQuery), supplierOpen);
+  const customerSearch = usePartySearch('customer', useDebounced(customerQuery), customerOpen);
+  usePartyRecord(supplierId ?? undefined);
+  usePartyRecord(customerId);
   const [taxOpen, setTaxOpen] = useState(false);
   const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
@@ -159,13 +163,13 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const totalPaid = inclusive || reverseCharge ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
 
   // Cash in hand cannot pay out more than it holds (an edit gives back its own amount first).
-  const vouchers = useVouchers();
   const account = accounts.find((a) => a.id === accountId);
+  const balances = useServerAccountBalances();
   const cashBalance = useMemo(() => {
-    if (!account || account.type !== 'cash') return undefined;
-    const others = expenses.filter((e) => e.id !== expense?.id);
-    return accountBalances(accounts, payments, others, vouchers)[account.id];
-  }, [account, accounts, payments, expenses, vouchers, expense?.id]);
+    if (!account || account.type !== 'cash' || !balances) return undefined;
+    const own = expense && expense.accountId === account.id ? Math.round(expense.amount.minor * (expense.exchangeRate || 1)) : 0;
+    return (balances[account.id] ?? 0) + own;
+  }, [account, balances, expense]);
   const cashShort = cashBalance !== undefined && totalPaid.minor > cashBalance;
 
   const attachReceipt = async () => {
@@ -574,7 +578,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={customerOpen}
           onClose={() => setCustomerOpen(false)}
           title={tr('purchases:form.billTo')}
-          options={[{ value: '', label: tr('purchases:form.billToAny') }, ...customers.map((c) => ({ value: c.id, label: c.name }))]}
+          options={[{ value: '', label: tr('purchases:form.billToAny') }, ...(customerSearch.data ?? []).map((c) => ({ value: c.id!, label: c.name! }))]}
+          onQueryChange={setCustomerQuery}
+          loading={customerSearch.isFetching}
           value={customerId ?? ''}
           onSelect={(v) => setCustomerId(v || undefined)}
         />
@@ -653,12 +659,14 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={supplierOpen}
           onClose={() => setSupplierOpen(false)}
           title={tr('purchases:form.supplier')}
-          options={suppliers.map((s) => ({ value: s.id, label: s.name, description: s.phone ?? s.code }))}
+          options={(supplierSearch.data ?? []).map((s) => ({ value: s.id!, label: s.name!, description: s.phone ?? s.code }))}
+          onQueryChange={setSupplierQuery}
+          loading={supplierSearch.isFetching}
           value={supplierId}
           onSelect={(id) => {
             setSupplierId(id);
             // A supplier under reverse charge puts their bills under it.
-            setReverseCharge(!!suppliers.find((x) => x.id === id)?.reverseCharge);
+            setReverseCharge(!!supplierSearch.data?.find((x) => x.id === id)?.reverseCharge);
           }}
         />
         <SelectSheet

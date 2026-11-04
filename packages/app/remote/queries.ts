@@ -45,6 +45,8 @@ export type DocumentQuery = {
   from?: string;
   to?: string;
   q?: string;
+  /** Only documents with something left to pay. */
+  outstanding?: boolean;
   sort?: 'date' | '-date' | 'number' | '-number' | 'total' | '-total';
 };
 
@@ -60,6 +62,7 @@ function documentParams(companyId: string, f: DocumentQuery) {
     from: f.from || undefined,
     to: f.to || undefined,
     q: f.q?.trim() || undefined,
+    outstanding: f.outstanding || undefined,
   };
   return { path: { companyId }, query };
 }
@@ -213,6 +216,60 @@ export async function fetchDocumentRecord(companyId: string, id: string, signal?
   keep('payment', companyId, doc.payments ?? []);
   keep('document', companyId, [doc]);
   return doc;
+}
+
+/**
+ * Every open document of `kinds` for a party, oldest first, with what each still owes as the server
+ * counts it (the figure it checks an allocation against). Empty until a party is picked.
+ */
+export function useOpenDocuments(partyId: string | null | undefined, kinds: DocumentKind[]) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...documentKeys.all(companyId), 'open', partyId, kinds],
+    enabled: !!companyId && !!partyId,
+    queryFn: async ({ signal }) => {
+      const rows: ListedDocument[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 20; page++) {
+        const p = documentParams(companyId, { kinds, partyId: partyId!, outstanding: true });
+        const { data } = await api.GET('/companies/{companyId}/documents', { params: { path: p.path, query: { ...p.query, sort: 'date', limit: 200, cursor } }, signal });
+        rows.push(...((data?.data ?? []) as ListedDocument[]));
+        cursor = data?.nextCursor ?? undefined;
+        if (!cursor) break;
+      }
+      return rows;
+    },
+  });
+}
+
+/**
+ * Brings a party's payments and the open documents named into the store, so a rule that works on
+ * the device (adjusting held advances) sees all of them, not just what happened to be opened.
+ */
+export async function loadForAdvances(companyId: string, partyId: string, direction: 'received' | 'paid', documentIds: string[]) {
+  let cursor: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const { data } = await api.GET('/companies/{companyId}/payments', { params: { path: { companyId }, query: { partyId, direction, limit: 200, cursor } } });
+    keep('payment', companyId, data?.data ?? []);
+    cursor = data?.nextCursor ?? undefined;
+    if (!cursor) break;
+  }
+  await Promise.all(documentIds.map((id) => fetchDocumentRecord(companyId, id)));
+}
+
+/** Each payment account's balance in base minor units, as the server works it out from everything. */
+export function useServerAccountBalances() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const q = useQuery({
+    queryKey: [...paymentKeys.all(companyId), 'balances'],
+    enabled: !!companyId,
+    staleTime: 0,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payment-accounts', { params: { path: { companyId } }, signal });
+      return Object.fromEntries((data?.data ?? []).map((a) => [a.id!, a.currentBalance?.minor ?? 0])) as Record<string, number>;
+    },
+  });
+  return q.data;
 }
 
 export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string };
@@ -833,6 +890,8 @@ export function watchStoreForQueries(): () => void {
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'pages'] });
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'all'] });
       void queryClient.invalidateQueries({ queryKey: ['books', companyId] });
+      // Contra and journal lines move money between accounts.
+      void queryClient.invalidateQueries({ queryKey: [...paymentKeys.all(companyId), 'balances'] });
     }
     if (stale.has('documents')) {
       void queryClient.invalidateQueries({ queryKey: documentKeys.all(companyId) });

@@ -199,6 +199,7 @@ export async function summariesToWire(db: DbOrTx, rows: SummaryRow[], now: Date)
       supplierDocNumber: row.supplierDocNumber,
       itcClaimPeriod: row.itcClaimPeriod,
       grandTotal: money(row.grandTotalMinor, currency),
+      exchangeRate: Number(row.exchangeRate),
       totalTax: money(row.totalTaxMinor, currency),
       outstanding: money(open ? Math.max(row.grandTotalMinor - row.amountPaidMinor, 0) : 0, currency),
       eInvoiceStatus: compliance.einv.get(row.id)?.status,

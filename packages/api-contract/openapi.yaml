@@ -5410,6 +5410,7 @@ components:
         supplierDocNumber: { type: string, description: "On a purchase: the supplier's own number for it" }
         itcClaimPeriod: { type: string, description: The GSTR-2B period (MMYYYY) its credit was claimed in }
         grandTotal: { $ref: '#/components/schemas/Money' }
+        exchangeRate: { type: number, description: To base currency }
         totalTax: { $ref: '#/components/schemas/Money' }
         outstanding: { $ref: '#/components/schemas/Money' }
         eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }

@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useVouchers } from '../../../store/books';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -24,14 +23,13 @@ import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../../components/useLeaveGuard';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
-import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivables';
-import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
 import { resolveRate, settlementGainLoss } from '@esmart/core/domain/fx';
 import { INDIAN_STATES, PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
-import { formatDate, today } from '@esmart/core/lib/date';
+import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { Money, fromMajor, inclusiveTax, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 
@@ -39,17 +37,16 @@ import { useAppStore } from '../../../store/appStore';
 import {
   useBaseCurrency,
   useCurrentUser,
-  useDocuments,
   useExchangeRates,
-  useExpenses,
   useHasModule,
   useParties,
   usePaymentAccounts,
-  usePayments,
   useDefaultBranchId,
   useActiveCompany,
   useTaxCategories,
 } from '../../../store/selectors';
+import { loadForAdvances, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
@@ -80,18 +77,9 @@ export default function NewPayment() {
   const parties = useParties(direction === 'received' ? 'customer' : 'supplier');
   const accounts = usePaymentAccounts();
   const exchangeRates = useExchangeRates();
-  // Money in settles invoices and debit notes; money out, bills and supplier debit notes.
-  const mainDocs = useDocuments(direction === 'received' ? 'invoice' : 'purchaseBill');
-  const debitNotes = useDocuments(direction === 'received' ? 'debitNote' : 'supplierDebitNote');
-  const openDocs = useMemo(() => [...mainDocs, ...debitNotes], [mainDocs, debitNotes]);
-  // Returns and credit notes against them lower what they still owe.
-  const allDocs = useDocuments();
   const user = useCurrentUser();
   // The server lets only these roles write off what a party owes.
   const canWriteOff = ['owner', 'admin', 'accountant'].includes(user?.role ?? '');
-  const existingPayments = usePayments(direction);
-  const allPayments = usePayments();
-  const expenses = useExpenses();
   const savePayment = useAppStore((s) => s.savePayment);
   const applyAdvances = useAppStore((s) => s.applyAdvances);
   const defaultBranchId = useDefaultBranchId();
@@ -137,18 +125,30 @@ export default function NewPayment() {
   const [untouched] = useState(entered);
   const leaveGuard = useLeaveGuard(entered !== untouched);
 
-  const party = parties.find((p) => p.id === partyId);
+  // The party from the server, with the advance it holds; the store copy until it lands.
+  const partyRecord = usePartyRecord(partyId ?? undefined).data;
+  const party = (partyRecord as unknown as (typeof parties)[number] | undefined) ?? parties.find((p) => p.id === partyId);
+  const [partyQuery, setPartyQuery] = useState('');
+  const partySearch = usePartySearch(direction === 'received' ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen);
 
   // A payment settles in the party's currency unless the user picks another, at
   // the rate effective on the payment date unless the user says otherwise.
   const currency = currencyChoice ?? party?.currency ?? baseCurrency;
 
-  // Outstanding documents for the selected party in the payment currency, oldest first.
+  // Money in settles invoices and debit notes; money out, bills and supplier debit notes. What each
+  // still owes is the server's figure (returns and credit notes already off), in the payment currency, oldest first.
+  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote'] : ['purchaseBill', 'supplierDebitNote']);
   const outstanding = useMemo(() => {
-    if (!partyId) return [];
-    const docs = openDocs.filter((d) => d.partyId === partyId && d.currency === currency);
-    return buildOutstanding(docs, existingPayments, undefined, allDocs).sort((a, b) => a.document.date.localeCompare(b.document.date));
-  }, [openDocs, allDocs, existingPayments, partyId, currency]);
+    const asOf = today();
+    return (open.data ?? [])
+      .filter((d) => d.grandTotal.currency === currency && (d.outstanding?.minor ?? 0) > 0)
+      .map((d) => ({
+        document: { id: d.id, number: d.number, date: d.date, dueDate: d.dueDate, exchangeRate: d.exchangeRate ?? 1 },
+        outstanding: d.outstanding as Money,
+        daysOverdue: d.dueDate ? daysBetween(d.dueDate, asOf) : 0,
+      }))
+      .sort((a, b) => a.document.date.localeCompare(b.document.date));
+  }, [open.data, currency]);
 
   const resolvedRate = useMemo(
     () => (currency === baseCurrency ? 1 : resolveRate(exchangeRates, currency, baseCurrency, date)),
@@ -167,13 +167,13 @@ export default function NewPayment() {
   }
 
   // Advances already held against this party (unallocated parts of earlier payments).
-  const advance = useMemo(
-    () => availableAdvance(existingPayments.filter((p) => p.partyId === partyId), currency),
-    [existingPayments, partyId, currency],
-  );
+  const held = (partyRecord as { advance?: Money } | undefined)?.advance;
+  const advance = held && held.currency === currency ? held : zero(currency);
   /** Adjust held advances against every open document, or just `docId`. */
-  const adjustAdvance = (docId?: string) => {
+  const adjustAdvance = async (docId?: string) => {
     if (!partyId) return;
+    // The rule runs on the device, so it needs the party's payments and these documents in full.
+    await loadForAdvances(activeCompanyId, partyId, direction, docId ? [docId] : outstanding.map((o) => o.document.id));
     const applied = applyAdvances(partyId, direction, docId ? [docId] : undefined);
     const next = { ...allocations };
     if (docId) delete next[docId];
@@ -311,12 +311,9 @@ export default function NewPayment() {
   }, [outstanding, allocations, currency, baseCurrency, exchangeRate]);
 
   // Money going out cannot exceed what the account holds, whether cash, bank or wallet.
-  const vouchers = useVouchers();
   const account = accounts.find((a) => a.id === accountId);
-  const balance = useMemo(
-    () => (accountId ? accountBalances(accounts, allPayments, expenses, vouchers)[accountId] : undefined),
-    [accounts, allPayments, expenses, vouchers, accountId],
-  );
+  const balances = useServerAccountBalances();
+  const balance = accountId ? balances?.[accountId] : undefined;
   const amountInBase = Math.round(amount.minor * (exchangeRate || 1));
   const shortfall = direction === 'paid' && balance !== undefined && amountInBase > balance;
   const balanceBlocks = shortfall && !!account;
@@ -849,7 +846,9 @@ export default function NewPayment() {
           visible={partyOpen}
           onClose={() => setPartyOpen(false)}
           title={tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
-          options={parties.map((p) => ({ value: p.id, label: p.name, description: p.phone ?? p.email ?? p.code }))}
+          options={(partySearch.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: p.phone ?? p.email ?? p.code }))}
+          onQueryChange={setPartyQuery}
+          loading={partySearch.isFetching}
           value={partyId}
           onSelect={(id) => {
             setPartyId(id);

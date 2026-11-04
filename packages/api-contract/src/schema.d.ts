@@ -4226,6 +4226,8 @@ export interface components {
             /** @description The GSTR-2B period (MMYYYY) its credit was claimed in */
             itcClaimPeriod?: string;
             grandTotal?: components["schemas"]["Money"];
+            /** @description To base currency */
+            exchangeRate?: number;
             totalTax?: components["schemas"]["Money"];
             outstanding?: components["schemas"]["Money"];
             eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
