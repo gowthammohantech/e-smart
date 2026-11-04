@@ -72,7 +72,9 @@
     "emptyNoMatchTitle": "Nothing matches",
     "emptyNoMatchMessage": "Try clearing a filter or searching for something else.",
     "clearFilters": "Clear filters",
-    "statusSection": "Status"
+    "statusSection": "Status",
+    "loadMore": "Load more",
+    "waiting": "Waiting to sync"
   },
   "documentEditor": {
     "finalised": "{{kind}} finalised",

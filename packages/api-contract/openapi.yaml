@@ -1432,6 +1432,89 @@ paths:
               schema: { $ref: '#/components/schemas/BusinessDocument' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/documents/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Documents]
+      operationId: summarizeDocumentList
+      summary: How many documents a list's filters match, what they add up to, and how many are in each status
+      description: |
+        Takes the filters of `listDocuments`, so a paged list can show its count, total and status
+        chips without loading every page. `byStatus` ignores the `status` filter (the chips show every
+        status there is); `count` and `total` apply it. The total is in base currency and leaves out
+        cancelled and rejected documents.
+      parameters:
+        - name: kind
+          in: query
+          style: form
+          explode: false
+          schema: { type: array, items: { $ref: '#/components/schemas/DocumentKind' } }
+        - name: status
+          in: query
+          style: form
+          explode: false
+          schema: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total, byStatus]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  byStatus:
+                    type: array
+                    items:
+                      type: object
+                      required: [status, count]
+                      properties:
+                        status: { $ref: '#/components/schemas/DocStatus' }
+                        count: { type: integer }
+  /companies/{companyId}/tds/preview:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Documents]
+      operationId: previewTds
+      x-plan-module: payables
+      summary: The TDS a supplier's bill would keep back, as saving it would work it out
+      description: |
+        Thresholds and catch-up count the deductee's earlier bills in the financial year (by PAN),
+        so the editor doesn't need every bill on the device. Nothing is saved. A company with no TAN
+        deducts nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyId, date, taxable]
+              properties:
+                partyId: { type: string }
+                date: { type: string, format: date }
+                taxable: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "The bill's taxable value, in base currency" }
+                section: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], description: "The bill's own choice; defaults to the supplier's" }
+                documentId: { type: string, description: "The bill being edited, left out of the year so far" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rate, amount]
+                properties:
+                  section: { type: string, description: "The section TDS was worked under; absent when none applies" }
+                  rate: { type: number }
+                  amount: { $ref: '#/components/schemas/Money' }
+                  reason: { type: string }
   /companies/{companyId}/documents/calculate:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -3086,6 +3169,51 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Dashboard' }
+  /companies/{companyId}/hubs/sales:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getSalesHub
+      summary: Everything the Sales tab shows, in one call
+      description: |
+        This month's invoicing and collections, what customers owe (as the receivables aging works it
+        out), how many of each sales document there are, the top five customers by invoiced value, and
+        the six latest invoices. Amounts are in base currency; drafts and cancelled invoices count
+        towards nothing but the document counts.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoicedThisMonth, collectedThisMonth, outstanding, overdue, counts, paymentsReceived, eInvoicesGenerated, topCustomers, recentInvoices]
+                properties:
+                  invoicedThisMonth: { $ref: '#/components/schemas/Money' }
+                  collectedThisMonth: { $ref: '#/components/schemas/Money' }
+                  outstanding:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer, description: Open invoices and debit notes } }
+                  overdue:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer } }
+                  counts:
+                    type: object
+                    description: Documents of each sales kind, in every status
+                    additionalProperties: { type: integer }
+                  paymentsReceived: { type: integer }
+                  eInvoicesGenerated: { type: integer }
+                  topCustomers:
+                    type: array
+                    items:
+                      type: object
+                      required: [partyId, name, total]
+                      properties: { partyId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
+                  recentInvoices: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
   /companies/{companyId}/search:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:

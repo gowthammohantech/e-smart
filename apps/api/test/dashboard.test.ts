@@ -50,6 +50,28 @@ describe('dashboard', () => {
     expect(quarter.body.sales).toEqual(INR(354000));
   });
 
+  it('gives the Sales tab its figures in one call', async () => {
+    const m = await moneySetup(t);
+    const k = await books(t, m);
+    await t.deps.db.insert(schema.eInvoices).values({ documentId: k.a.id, companyId: m.companyId, status: 'generated' });
+    const res = await t.get(`${m.c}/hubs/sales`, { token: m.token });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      invoicedThisMonth: INR(236000), // A; B is August's and the draft doesn't count
+      collectedThisMonth: INR(100000),
+      outstanding: { amount: INR(254000), count: 2 },
+      overdue: { amount: INR(118000), count: 1 }, // B, due 14 Sep
+      counts: { invoice: 3 },
+      paymentsReceived: 1,
+      eInvoicesGenerated: 1,
+    });
+    expect(res.body.topCustomers).toEqual([
+      { partyId: m.mumbai.id, name: 'Sunrise Retail', total: INR(236000) },
+      { partyId: m.bengaluru.id, name: expect.any(String), total: INR(118000) },
+    ]);
+    expect(res.body.recentInvoices.map((d: { id: string }) => d.id)).toEqual([k.draft.id, k.a.id, k.b.id]);
+  });
+
   it('leaves out what the plan does not include', async () => {
     const m = await moneySetup(t, 'basic');
     t.setNow('2026-09-29T10:00:00Z');

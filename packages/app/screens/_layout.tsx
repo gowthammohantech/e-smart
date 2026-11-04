@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Text, useColorScheme, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -13,6 +14,7 @@ import { I18nProvider } from '../i18n/I18nProvider';
 import { useAppStore } from '../store/appStore';
 import { useUiStore } from '../store/uiStore';
 import { API_CONFIGURED, installRemote, useRemoteSync } from '../remote';
+import { queryClient, useQueryStoreWatch } from '../remote/queries';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import { ErrorFallback, FallbackArt } from '../components/ErrorFallback';
 import { OfflinePrompt } from '../components/OfflinePrompt';
@@ -29,6 +31,7 @@ export { ErrorFallback as ErrorBoundary };
 function RootNavigator() {
   const t = useTheme();
   useRemoteSync();
+  useQueryStoreWatch();
   const router = useRouter();
   const segments = useSegments();
 
@@ -113,18 +116,20 @@ export default function RootLayout() {
   if (!API_CONFIGURED) return <Misconfigured />;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        {/* Outermost, because the theme derives its script metrics from the
-            active language and the toast renders translated text. */}
-        <I18nProvider>
-          <AppThemeProvider>
-            <ToastProvider>
-              <RootNavigator />
-              <OfflinePrompt />
-            </ToastProvider>
-          </AppThemeProvider>
-        </I18nProvider>
-      </SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          {/* Outermost, because the theme derives its script metrics from the
+              active language and the toast renders translated text. */}
+          <I18nProvider>
+            <AppThemeProvider>
+              <ToastProvider>
+                <RootNavigator />
+                <OfflinePrompt />
+              </ToastProvider>
+            </AppThemeProvider>
+          </I18nProvider>
+        </SafeAreaProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

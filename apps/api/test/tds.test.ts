@@ -74,6 +74,18 @@ describe('TDS on supplier bills', () => {
     expect(fourth.body.tds.amount).toEqual(inr(210_000));
   });
 
+  it('previews a bill’s TDS from the year so far, as saving it would', async () => {
+    const m = await deductor();
+    for (let i = 0; i < 3; i++) await t.post(`${m.c}/documents`, bill(m, 2_500_000), { token: m.token });
+    const preview = (over: Record<string, unknown> = {}) =>
+      t.post(`${m.c}/tds/preview`, { partyId: m.supplier!.id, date: '2026-09-29', taxable: inr(3_000_000), ...over }, { token: m.token });
+    const res = await preview();
+    expect(res.status).toBe(200);
+    // The same catch-up the fourth bill gets: 2% of the year's 1,05,000.
+    expect(res.body).toMatchObject({ section: '194C', rate: 2, amount: inr(210_000), reason: 'catchUp' });
+    expect((await preview({ section: 'none' })).body).toMatchObject({ rate: 0, amount: inr(0) });
+  });
+
   it('can be switched off on one bill', async () => {
     const m = await deductor();
     const res = await t.post(`${m.c}/documents`, bill(m, 4_000_000, { tdsSection: 'none' }), { token: m.token });

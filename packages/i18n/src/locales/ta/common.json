@@ -72,7 +72,9 @@
     "emptyNoMatchTitle": "எதுவும் பொருந்தவில்லை",
     "emptyNoMatchMessage": "ஒரு வடிகட்டியை நீக்கிப் பாருங்கள், அல்லது வேறு ஒன்றைத் தேடுங்கள்.",
     "clearFilters": "வடிகட்டிகளை நீக்கு",
-    "statusSection": "நிலை"
+    "statusSection": "நிலை",
+    "loadMore": "மேலும் ஏற்று",
+    "waiting": "ஒத்திசைக்கக் காத்திருக்கிறது"
   },
   "documentEditor": {
     "finalised": "{{kind}} இறுதி செய்யப்பட்டது",

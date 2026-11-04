@@ -5,19 +5,16 @@ import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { DocumentListView } from '../../../../components/DocumentListView';
 import { Fab } from '@esmart/ui/components/Fab';
-import { useDocuments } from '../../../../store/selectors';
 
 export default function DebitNoteList() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
-  const documents = useDocuments('debitNote');
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <Stack.Screen options={{ title: tr('nav:title.debitNotes') }} />
       <DocumentListView
-        documents={documents}
         kind="debitNote"
         routeFor={(d) => `/(app)/sales/debit-notes/${d.id}`}
         emptyAction={tr('nav:title.newDebitNote')}

@@ -21,7 +21,7 @@ export type Column<T> = {
   secondary?: boolean;
 };
 
-type Sort = { key: string; dir: 'asc' | 'desc' };
+export type Sort = { key: string; dir: 'asc' | 'desc' };
 
 /** Rows per page for every list table in the web app, so they all page alike. */
 export const TABLE_PAGE_SIZE = 10;
@@ -50,6 +50,8 @@ export function DataTable<T>({
   scroll = true,
   rowLabel,
   pageSize,
+  sort: sortProp,
+  onSortChange,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -66,6 +68,12 @@ export function DataTable<T>({
   rowLabel?: (row: T) => string;
   /** Shows this many rows at a time, with a pager under the table. */
   pageSize?: number;
+  /**
+   * Sorting done elsewhere (a server list): headers report the click and the rows keep their order.
+   * Without it the table sorts the rows it has.
+   */
+  sort?: Sort | null;
+  onSortChange?: (sort: Sort) => void;
 }) {
   const t = useTheme();
   const breakpoint = useBreakpoint();
@@ -73,11 +81,13 @@ export function DataTable<T>({
   // Only a desktop window scrolls sideways; a phone never reaches this table.
   const desktop = breakpoint !== 'phone';
   const columns = narrow ? allColumns.filter((c) => !c.secondary) : allColumns;
-  const [sort, setSort] = useState<Sort | null>(initialSort ?? null);
+  const [localSort, setSort] = useState<Sort | null>(initialSort ?? null);
+  const controlled = onSortChange !== undefined;
+  const sort = controlled ? (sortProp ?? null) : localSort;
 
   const sorted = useMemo(() => {
     const column = sort ? columns.find((c) => c.key === sort.key) : undefined;
-    if (!sort || !column?.sortValue) return rows;
+    if (controlled || !sort || !column?.sortValue) return rows;
     const value = column.sortValue;
     const dir = sort.dir === 'asc' ? 1 : -1;
     return [...rows].sort((a, b) => {
@@ -85,10 +95,12 @@ export function DataTable<T>({
       const y = value(b);
       return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * dir;
     });
-  }, [rows, sort, columns]);
+  }, [rows, sort, columns, controlled]);
 
   const toggleSort = (key: string) => {
-    setSort((s) => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+    const next = (s: Sort | null): Sort => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+    if (controlled) onSortChange(next(sort));
+    else setSort(next);
     setPageIndex(0);
   };
 

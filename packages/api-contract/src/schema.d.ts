@@ -1009,6 +1009,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/documents/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many documents a list's filters match, what they add up to, and how many are in each status
+         * @description Takes the filters of `listDocuments`, so a paged list can show its count, total and status
+         *     chips without loading every page. `byStatus` ignores the `status` filter (the chips show every
+         *     status there is); `count` and `total` apply it. The total is in base currency and leaves out
+         *     cancelled and rejected documents.
+         */
+        get: operations["summarizeDocumentList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/tds/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The TDS a supplier's bill would keep back, as saving it would work it out
+         * @description Thresholds and catch-up count the deductee's earlier bills in the financial year (by PAN),
+         *     so the editor doesn't need every bill on the device. Nothing is saved. A company with no TAN
+         *     deducts nothing.
+         */
+        post: operations["previewTds"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/documents/calculate": {
         parameters: {
             query?: never;
@@ -2212,6 +2261,31 @@ export interface paths {
         };
         /** Everything the home tab shows, in one call */
         get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Sales tab shows, in one call
+         * @description This month's invoicing and collections, what customers owe (as the receivables aging works it
+         *     out), how many of each sales document there are, the top five customers by invoiced value, and
+         *     the six latest invoices. Amounts are in base currency; drafts and cancelled invoices count
+         *     towards nothing but the document counts.
+         */
+        get: operations["getSalesHub"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7037,6 +7111,89 @@ export interface operations {
             422: components["responses"]["Unprocessable"];
         };
     };
+    summarizeDocumentList: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["DocumentKind"][];
+                status?: components["schemas"]["DocStatus"][];
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                        byStatus: {
+                            status: components["schemas"]["DocStatus"];
+                            count: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    previewTds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    partyId: string;
+                    /** Format: date */
+                    date: string;
+                    /** @description The bill's taxable value, in base currency */
+                    taxable: components["schemas"]["Money"];
+                    /**
+                     * @description The bill's own choice; defaults to the supplier's
+                     * @enum {string}
+                     */
+                    section?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+                    /** @description The bill being edited, left out of the year so far */
+                    documentId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description The section TDS was worked under; absent when none applies */
+                        section?: string;
+                        rate: number;
+                        amount: components["schemas"]["Money"];
+                        reason?: string;
+                    };
+                };
+            };
+        };
+    };
     calculateDocument: {
         parameters: {
             query?: never;
@@ -9399,6 +9556,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+        };
+    };
+    getSalesHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        invoicedThisMonth: components["schemas"]["Money"];
+                        collectedThisMonth: components["schemas"]["Money"];
+                        outstanding: {
+                            amount: components["schemas"]["Money"];
+                            /** @description Open invoices and debit notes */
+                            count: number;
+                        };
+                        overdue: {
+                            amount: components["schemas"]["Money"];
+                            count: number;
+                        };
+                        /** @description Documents of each sales kind, in every status */
+                        counts: {
+                            [key: string]: number;
+                        };
+                        paymentsReceived: number;
+                        eInvoicesGenerated: number;
+                        topCustomers: {
+                            partyId: string;
+                            name: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                        recentInvoices: components["schemas"]["DocumentSummary"][];
+                    };
                 };
             };
         };

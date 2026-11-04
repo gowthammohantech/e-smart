@@ -68,6 +68,8 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useCanWrite } from '../../remote/connectivity';
 import { useSaveOnline } from '../../remote/save';
+import { useItemSearch, usePartySearch, useTdsPreview } from '../../remote/queries';
+import { useDebounced } from '../../components/useDebounced';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { tdsForDocument } from '../../store/tds';
@@ -238,7 +240,14 @@ export function DocumentEditor({
 
   // TDS kept back on a supplier's bill or debit note, for a business with a TAN: worked out as the server will.
   const takesTds = !!company?.tan && (kind === 'purchaseBill' || kind === 'supplierDebitNote');
-  const draftTds = useMemo(
+  const fx = draft.currency === company?.baseCurrency ? 1 : draft.exchangeRate || 1;
+  // The server counts the deductee's year so far; the device's own figure is the fallback while it answers or offline.
+  const serverTds = useTdsPreview(
+    takesTds && draft.partyId
+      ? { partyId: draft.partyId, date: draft.date, taxableMinor: Math.round(totals.taxableAmount.minor * fx), currency: company!.baseCurrency, section: draft.tdsSection, documentId }
+      : null,
+  ).data;
+  const deviceTds = useMemo(
     () =>
       takesTds && draft.partyId
         ? tdsForDocument(
@@ -248,12 +257,29 @@ export function DocumentEditor({
         : undefined,
     [takesTds, documentId, kind, draft.partyId, draft.date, draft.currency, draft.exchangeRate, draft.tdsSection, draft.sourceDocumentId, totals, company, parties, documents],
   );
+  const draftTds = useMemo<typeof deviceTds>(() => {
+    if (!takesTds || !serverTds) return deviceTds;
+    if (!serverTds.section || !serverTds.amount.minor) return undefined;
+    // The server answers in base currency; the bill shows its own.
+    return { section: serverTds.section, rate: serverTds.rate, amount: money(Math.round(serverTds.amount.minor / fx), draft.currency) };
+  }, [takesTds, serverTds, deviceTds, fx, draft.currency]);
   const tdsRow = draftTds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(draftTds.section)?.label ?? draftTds.section, rate: formatPercent(draftTds.rate) }), amount: draftTds.amount } : undefined;
   const tdsSectionLabel = (code: string | undefined) => (!code || code === 'none' ? tr('purchases:tds.none') : `${tdsSection(code)?.label ?? code} · ${tdsSection(code)?.nature ?? ''}`);
 
   const [step, setStep] = useState(seed?.step ?? 0);
   const [partyOpen, setPartyOpen] = useState(false);
   const [itemOpen, setItemOpen] = useState(false);
+  // The pickers search the server, so a long customer or item list needn't be on the device.
+  const [partyQuery, setPartyQuery] = useState('');
+  const [itemQuery, setItemQuery] = useState('');
+  const partySearch = usePartySearch(isPurchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen);
+  const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !(isReturn && draft.sourceDocumentId));
+  const partyOptions = partySearch.data ?? [];
+  // Looked up in the store, where the search keeps what it found, for stock and opening-date checks.
+  const itemOptions = useMemo(() => {
+    const byId = new Map(items.map((i) => [i.id, i]));
+    return (itemSearch.data ?? []).flatMap((r) => (r.id && byId.get(r.id) ? [byId.get(r.id)!] : []));
+  }, [itemSearch.data, items]);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -1192,12 +1218,14 @@ export function DocumentEditor({
           visible={partyOpen}
           onClose={() => setPartyOpen(false)}
           title={tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')}
-          options={parties.map((p) => ({
-            value: p.id,
-            label: p.name,
+          options={partyOptions.map((p) => ({
+            value: p.id!,
+            label: p.name ?? '',
             description: [p.displayName, p.taxId, p.phone].filter(Boolean).join(' · '),
-            trailing: p.currency !== baseCurrency ? p.currency : undefined,
+            trailing: p.currency && p.currency !== baseCurrency ? p.currency : undefined,
           }))}
+          onQueryChange={setPartyQuery}
+          loading={partySearch.isFetching}
           value={draft.partyId}
           onSelect={pickParty}
           searchPlaceholder={tr(isPurchase ? 'sales:editor.searchSuppliers' : 'sales:editor.searchCustomers')}
@@ -1229,7 +1257,7 @@ export function DocumentEditor({
                   description: `${formatQty(l.quantity)} ${l.unit} × ${formatMoney(l.unitPrice)}`,
                   trailing: formatPercent(l.taxRate),
                 }))
-              : items.map((i) => ({
+              : itemOptions.map((i) => ({
                   value: i.id,
                   label: i.name,
                   description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
@@ -1238,6 +1266,8 @@ export function DocumentEditor({
                   blocked: openingStockBlock(i) ?? outOfStockBlock(i),
                 }))
           }
+          onQueryChange={sourceDoc ? undefined : setItemQuery}
+          loading={!sourceDoc && itemSearch.isFetching}
           multiple
           confirmLabel={(count) => tr('sales:editor.addItems', { count })}
           onConfirm={(ids) =>

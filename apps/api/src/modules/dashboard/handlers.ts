@@ -1,4 +1,4 @@
-import { and, count, desc, eq, getTableColumns, gt, inArray, isNull, lte, ne, notInArray, or } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, gt, gte, inArray, isNull, lte, ne, notInArray, or, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { hasModule } from '@esmart/core/domain/plan';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
@@ -63,6 +63,61 @@ function lastSixMonths(today: string): string[] {
  * `isLowStock`. Figures for a module outside the plan are left out.
  */
 export const dashboardHandlers = defineHandlers({
+  async getSalesHub(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const today = ctx.now.toISOString().slice(0, 10);
+    const month = periodOf('month', today, ctx.company.fiscalYearStartMonth);
+    const branchId = ctx.query.branchId;
+    const branchScope = branchId ? [branchId] : ctx.user.branchIds;
+    const D = schema.documents;
+    const P = schema.payments;
+    const inBranches = (col: typeof D.branchId | typeof P.branchId) => (branchScope.length ? inArray(col, branchScope) : undefined);
+    const mine = and(eq(D.companyId, ctx.company.id), inBranches(D.branchId));
+    const billed = and(mine, eq(D.kind, 'invoice'), notInArray(D.status, ['draft', 'cancelled']));
+    const inBase = sql<number>`coalesce(sum(round(${D.grandTotalMinor} * ${D.exchangeRate})), 0)::bigint`;
+
+    const [[invoiced], [collected], kinds, [payments], [einvoices], top, recent, receivables] = await Promise.all([
+      ctx.db.select({ v: inBase }).from(D).where(and(billed, gte(D.date, month.from), lte(D.date, month.to))),
+      ctx.db
+        .select({ v: sql<number>`coalesce(sum(round(${P.amountMinor} * ${P.exchangeRate})), 0)::bigint` })
+        .from(P)
+        .where(and(eq(P.companyId, ctx.company.id), eq(P.direction, 'received'), gte(P.date, month.from), lte(P.date, month.to), inBranches(P.branchId))),
+      ctx.db.select({ kind: D.kind, n: count() }).from(D).where(and(mine, inArray(D.kind, ['invoice', 'quote', 'salesOrder', 'delivery', 'salesReturn', 'creditNote', 'debitNote']))).groupBy(D.kind),
+      ctx.db.select({ n: count() }).from(P).where(and(eq(P.companyId, ctx.company.id), eq(P.direction, 'received'), inBranches(P.branchId))),
+      ctx.db.select({ n: count() }).from(schema.eInvoices).innerJoin(D, eq(D.id, schema.eInvoices.documentId)).where(and(mine, eq(schema.eInvoices.status, 'generated'))),
+      ctx.db
+        .select({ partyId: D.partyId, name: schema.parties.name, v: inBase })
+        .from(D)
+        .innerJoin(schema.parties, eq(schema.parties.id, D.partyId))
+        .where(billed)
+        .groupBy(D.partyId, schema.parties.name)
+        .orderBy(desc(inBase))
+        .limit(5),
+      ctx.db
+        .select({ ...getTableColumns(D), partyName: schema.parties.name })
+        .from(D)
+        .innerJoin(schema.parties, eq(schema.parties.id, D.partyId))
+        .where(and(mine, eq(D.kind, 'invoice'), ne(D.status, 'cancelled')))
+        .orderBy(desc(D.date), desc(D.createdAt), desc(D.id))
+        .limit(6) as Promise<SummaryRow[]>,
+      aging(ctx, 'receivables', { asOf: today, branchId }),
+    ]);
+    const open = receivables.documents ?? [];
+    const late = open.filter((d) => (d.daysOverdue ?? 0) > 0);
+    return {
+      invoicedThisMonth: money(Number(invoiced.v), base),
+      collectedThisMonth: money(Number(collected.v), base),
+      outstanding: { amount: receivables.total ?? money(0, base), count: open.length },
+      // In base currency, as the buckets are: everything not yet due is the current bucket.
+      overdue: { amount: money((receivables.total?.minor ?? 0) - (receivables.buckets?.find((b) => b.key === 'current')?.amount?.minor ?? 0), base), count: late.length },
+      counts: Object.fromEntries(kinds.map((k) => [k.kind, Number(k.n)])),
+      paymentsReceived: Number(payments.n),
+      eInvoicesGenerated: Number(einvoices.n),
+      topCustomers: top.map((r) => ({ partyId: r.partyId, name: r.name, total: money(Number(r.v), base) })),
+      recentInvoices: await summariesToWire(ctx.db, recent, ctx.now),
+    };
+  },
+
   async getDashboard(ctx) {
     const plan = ctx.company.plan;
     const base = ctx.company.baseCurrency.trim();

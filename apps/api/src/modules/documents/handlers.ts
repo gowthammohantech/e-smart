@@ -12,6 +12,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { notify } from '../../lib/notify';
 import { money } from '../../lib/wire';
+import { tdsOn, tdsSectionFor } from '../../lib/tds';
 import { afterFinalize } from '../compliance/handlers';
 import { partyToWire } from '../parties/wire';
 import { paymentsToWire } from '../payments/wire';
@@ -238,40 +239,48 @@ async function eInvoiceGenerated(db: DbOrTx, documentId: string): Promise<boolea
  * convertDocument, duplicateDocument, getDocumentPdf, createShareLink,
  * sendDocument, createPaymentLink.
  */
+const splitList = <T extends string>(v: T[] | undefined) => (v ?? []).flatMap((x) => String(x).split(',')).filter(Boolean) as T[];
+
+type ListQuery = Pick<Ctx<'listDocuments'>['query'], 'kind' | 'status' | 'partyId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listDocuments'>['query'], 'sourceDocumentId' | 'outstanding' | 'overdue' | 'eInvoiceStatus'>>;
+
+/** The WHERE of a document list, shared by the list and its summary so the two never disagree. */
+function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' | 'now'>, q: ListQuery): (SQL | undefined)[] {
+  const asOf = today(ctx.now);
+  const kinds = splitList(q.kind);
+  const statuses = splitList(q.status);
+  const full = hasModule(ctx.company.plan, 'purchases');
+  for (const k of kinds) assertKindAllowed(ctx.company, k);
+
+  const filters: (SQL | undefined)[] = [eq(D.companyId, ctx.company.id)];
+  if (kinds.length) filters.push(inArray(D.kind, kinds));
+  else if (!full) filters.push(inArray(D.kind, SALES_KINDS));
+  if (ctx.user.branchIds.length) filters.push(inArray(D.branchId, ctx.user.branchIds));
+  if (statuses.length) filters.push(inArray(effectiveStatusSql(asOf), statuses));
+  if (q.partyId) filters.push(eq(D.partyId, q.partyId));
+  if (q.branchId) filters.push(eq(D.branchId, q.branchId));
+  if (q.from) filters.push(gte(D.date, q.from));
+  if (q.to) filters.push(lte(D.date, q.to));
+  if (q.sourceDocumentId) filters.push(eq(D.sourceDocumentId, q.sourceDocumentId));
+  if (q.outstanding !== undefined) {
+    const open = and(inArray(D.kind, PAYABLE_KINDS), notInArray(D.status, ['draft', 'cancelled']), sql`${D.grandTotalMinor} > ${D.amountPaidMinor}`);
+    filters.push(q.outstanding ? open : sql`not (${open})`);
+  }
+  if (q.overdue !== undefined) filters.push(q.overdue ? sql`${effectiveStatusSql(asOf)} = 'overdue'` : sql`${effectiveStatusSql(asOf)} <> 'overdue'`);
+  if (q.eInvoiceStatus) {
+    const E = schema.eInvoices;
+    filters.push(exists(ctx.db.select({ one: sql`1` }).from(E).where(and(eq(E.documentId, D.id), eq(E.status, q.eInvoiceStatus)))));
+  }
+  if (q.q) {
+    const like = `%${q.q.trim()}%`;
+    filters.push(or(ilike(D.number, like), ilike(D.reference, like), ilike(D.supplierDocNumber, like), ilike(P.name, like)));
+  }
+  return filters;
+}
+
 export const documentsHandlers = defineHandlers({
   async listDocuments(ctx) {
     const q = ctx.query;
-    const asOf = today(ctx.now);
-    const split = <T extends string>(v: T[] | undefined) => (v ?? []).flatMap((x) => String(x).split(',')).filter(Boolean) as T[];
-    const kinds = split(q.kind);
-    const statuses = split(q.status);
-    const full = hasModule(ctx.company.plan, 'purchases');
-    for (const k of kinds) assertKindAllowed(ctx.company, k);
-
-    const filters: (SQL | undefined)[] = [eq(D.companyId, ctx.company.id)];
-    if (kinds.length) filters.push(inArray(D.kind, kinds));
-    else if (!full) filters.push(inArray(D.kind, SALES_KINDS));
-    if (ctx.user.branchIds.length) filters.push(inArray(D.branchId, ctx.user.branchIds));
-    if (statuses.length) filters.push(inArray(effectiveStatusSql(asOf), statuses));
-    if (q.partyId) filters.push(eq(D.partyId, q.partyId));
-    if (q.branchId) filters.push(eq(D.branchId, q.branchId));
-    if (q.from) filters.push(gte(D.date, q.from));
-    if (q.to) filters.push(lte(D.date, q.to));
-    if (q.sourceDocumentId) filters.push(eq(D.sourceDocumentId, q.sourceDocumentId));
-    if (q.outstanding !== undefined) {
-      const open = and(inArray(D.kind, PAYABLE_KINDS), notInArray(D.status, ['draft', 'cancelled']), sql`${D.grandTotalMinor} > ${D.amountPaidMinor}`);
-      filters.push(q.outstanding ? open : sql`not (${open})`);
-    }
-    if (q.overdue !== undefined) filters.push(q.overdue ? sql`${effectiveStatusSql(asOf)} = 'overdue'` : sql`${effectiveStatusSql(asOf)} <> 'overdue'`);
-    if (q.eInvoiceStatus) {
-      const E = schema.eInvoices;
-      filters.push(exists(ctx.db.select({ one: sql`1` }).from(E).where(and(eq(E.documentId, D.id), eq(E.status, q.eInvoiceStatus)))));
-    }
-    if (q.q) {
-      const like = `%${q.q.trim()}%`;
-      filters.push(or(ilike(D.number, like), ilike(D.reference, like), ilike(P.name, like)));
-    }
-
+    const filters = listFilters(ctx, q);
     const sort = q.sort ?? '-date';
     const column = sort.endsWith('number') ? D.number : sort.endsWith('total') ? D.grandTotalMinor : D.date;
     const k = keyset({ cursor: q.cursor, limit: q.limit, sort: column, id: D.id, order: sort.startsWith('-') ? 'desc' : 'asc' });
@@ -284,6 +293,37 @@ export const documentsHandlers = defineHandlers({
       .limit(k.take);
     const page = rows.slice(0, k.take - 1) as SummaryRow[];
     return k.page(await summariesToWire(ctx.db, page, ctx.now), rows);
+  },
+
+  async summarizeDocumentList(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const asOf = today(ctx.now);
+    const status = effectiveStatusSql(asOf);
+    // Chips show every status there is, so they ignore the status filter; the count and total keep it.
+    const rows = await ctx.db
+      .select({ status: sql<DocStatus>`${status}`, count: sql<number>`count(*)::int`, total: sql<number>`coalesce(sum(round(${D.grandTotalMinor} * ${D.exchangeRate})), 0)::bigint` })
+      .from(D)
+      .innerJoin(P, eq(P.id, D.partyId))
+      .where(and(...listFilters(ctx, { ...ctx.query, status: undefined })))
+      // By position: the status expression carries the date as a parameter, which GROUP BY can't match by text.
+      .groupBy(sql`1`);
+    const wanted = new Set(splitList(ctx.query.status));
+    const counted = rows.filter((r) => !wanted.size || wanted.has(r.status));
+    return {
+      count: counted.reduce((a, r) => a + r.count, 0),
+      // A cancelled or rejected document no longer counts towards what was billed.
+      total: money(counted.filter((r) => r.status !== 'cancelled' && r.status !== 'rejected').reduce((a, r) => a + Number(r.total), 0), base),
+      byStatus: rows.map((r) => ({ status: r.status, count: r.count })).sort((a, b) => a.status.localeCompare(b.status)),
+    };
+  },
+
+  async previewTds(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const [party] = await ctx.db.select().from(P).where(and(eq(P.companyId, ctx.company.id), eq(P.id, ctx.body.partyId)));
+    if (!party) throw notFound('Party');
+    const section = tdsSectionFor(ctx.company, party, ctx.body.section);
+    const r = await tdsOn(ctx.db, ctx.company, party, section, ctx.body.date, ctx.body.taxable.minor, { documentId: ctx.body.documentId });
+    return { ...(r.section ? { section: r.section } : {}), rate: r.rate, amount: money(r.amountMinor, base), reason: r.reason };
   },
 
   async createDocument(ctx) {

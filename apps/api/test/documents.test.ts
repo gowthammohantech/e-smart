@@ -233,6 +233,27 @@ describe('documents: numbering and lifecycle', () => {
     expect([...p1.body.data, ...p2.body.data].map((d: { id: string }) => d.id)).toEqual(all.body.data.map((d: { id: string }) => d.id));
     expect(p2.body.nextCursor).toBeNull();
   });
+
+  it('sums up a list without paging through it: count, total and every status there is', async () => {
+    const m = await moneySetup(t);
+    await issueInvoice(t, m, { date: '2026-08-01', dueDate: '2026-08-31' });
+    await issueInvoice(t, m, { partyId: m.bengaluru.id, supplierDocNumber: undefined, reference: 'PO-7781' });
+    const cancelled = await issueInvoice(t, m);
+    await t.post(`${m.c}/documents/${cancelled.id}/status`, { status: 'cancelled' }, { token: m.token });
+    await t.post(`${m.c}/documents`, invoiceBody(m, { kind: 'quote' }), { token: m.token });
+
+    const all = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice' } });
+    expect(all.status).toBe(200);
+    // A cancelled invoice is counted but adds nothing to the total.
+    expect(all.body).toMatchObject({ count: 3, total: { minor: 236000 * 2, currency: 'INR' } });
+    expect(all.body.byStatus).toEqual(expect.arrayContaining([{ status: 'overdue', count: 1 }, { status: 'cancelled', count: 1 }]));
+    // A status filter narrows the count and total, never the chips.
+    const overdue = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice', status: 'overdue' } });
+    expect(overdue.body).toMatchObject({ count: 1, total: { minor: 236000 } });
+    expect(overdue.body.byStatus).toEqual(all.body.byStatus);
+    const found = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice', q: '7781' } });
+    expect(found.body.count).toBe(1);
+  });
 });
 
 describe('documents: stock and plans', () => {

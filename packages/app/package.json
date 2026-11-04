@@ -13,6 +13,7 @@
     "@esmart/core": "*",
     "@esmart/i18n": "*",
     "@esmart/ui": "*",
+    "@tanstack/react-query": "5.103.3",
     "fflate": "^0.8.3"
   },
   "peerDependencies": {
