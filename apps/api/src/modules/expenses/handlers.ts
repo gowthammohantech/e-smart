@@ -138,32 +138,57 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
 }
 
 /** Expenses: listExpenses, createExpense, getExpense, saveExpense, removeExpense. */
+type ExpenseQuery = Pick<Ctx<'listExpenses'>['query'], 'categoryId' | 'supplierId' | 'billable' | 'recurring' | 'branchId' | 'from' | 'to' | 'q'>;
+
+/** The WHERE of an expense list, shared by the list and its summary so the two never disagree. */
+function expenseFilters(ctx: Pick<Ctx<'listExpenses'>, 'company' | 'user' | 'db'>, q: ExpenseQuery): (SQL | undefined)[] {
+  const filters: (SQL | undefined)[] = [eq(E.companyId, ctx.company.id)];
+  if (q.categoryId) filters.push(eq(E.categoryId, q.categoryId));
+  if (q.supplierId) filters.push(eq(E.supplierId, q.supplierId));
+  if (q.billable !== undefined) filters.push(eq(E.billable, q.billable));
+  if (q.recurring !== undefined) filters.push(q.recurring ? ne(E.recurrence, 'none') : eq(E.recurrence, 'none'));
+  if (q.branchId) filters.push(eq(E.branchId, q.branchId));
+  if (ctx.user.branchIds.length) filters.push(inArray(E.branchId, ctx.user.branchIds));
+  if (q.from) filters.push(gte(E.date, q.from));
+  if (q.to) filters.push(lte(E.date, q.to));
+  if (q.q) {
+    const like = `%${q.q.trim()}%`;
+    const P = schema.parties;
+    const C = schema.expenseCategories;
+    filters.push(
+      or(
+        ilike(E.number, like),
+        ilike(E.reference, like),
+        ilike(E.notes, like),
+        exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, E.supplierId), ilike(P.name, like)))),
+        exists(ctx.db.select({ one: sql`1` }).from(C).where(and(eq(C.id, E.categoryId), ilike(C.name, like)))),
+      ),
+    );
+  }
+  return filters;
+}
+
 export const expensesHandlers = defineHandlers({
+  async summarizeExpenseList(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const inBase = (col: typeof E.amountMinor | typeof E.taxAmountMinor) => sql<number>`coalesce(sum(round(${col} * ${E.exchangeRate})), 0)::bigint`;
+    const rows = await ctx.db
+      .select({ categoryId: E.categoryId, count: sql<number>`count(*)::int`, total: inBase(E.amountMinor), tax: inBase(E.taxAmountMinor) })
+      .from(E)
+      .where(and(...expenseFilters(ctx, ctx.query)))
+      .groupBy(E.categoryId);
+    const add = (k: 'total' | 'tax') => money(rows.reduce((a, r) => a + Number(r[k]), 0), base);
+    return {
+      count: rows.reduce((a, r) => a + r.count, 0),
+      total: add('total'),
+      tax: add('tax'),
+      byCategory: rows.map((r) => ({ categoryId: r.categoryId, total: money(Number(r.total), base) })).sort((a, b) => b.total.minor - a.total.minor),
+    };
+  },
+
   async listExpenses(ctx) {
     const q = ctx.query;
-    const filters: (SQL | undefined)[] = [eq(E.companyId, ctx.company.id)];
-    if (q.categoryId) filters.push(eq(E.categoryId, q.categoryId));
-    if (q.supplierId) filters.push(eq(E.supplierId, q.supplierId));
-    if (q.billable !== undefined) filters.push(eq(E.billable, q.billable));
-    if (q.recurring !== undefined) filters.push(q.recurring ? ne(E.recurrence, 'none') : eq(E.recurrence, 'none'));
-    if (q.branchId) filters.push(eq(E.branchId, q.branchId));
-    if (ctx.user.branchIds.length) filters.push(inArray(E.branchId, ctx.user.branchIds));
-    if (q.from) filters.push(gte(E.date, q.from));
-    if (q.to) filters.push(lte(E.date, q.to));
-    if (q.q) {
-      const like = `%${q.q.trim()}%`;
-      const P = schema.parties;
-      const C = schema.expenseCategories;
-      filters.push(
-        or(
-          ilike(E.number, like),
-          ilike(E.reference, like),
-          ilike(E.notes, like),
-          exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, E.supplierId), ilike(P.name, like)))),
-          exists(ctx.db.select({ one: sql`1` }).from(C).where(and(eq(C.id, E.categoryId), ilike(C.name, like)))),
-        ),
-      );
-    }
+    const filters = expenseFilters(ctx, q);
     const k = keyset({ cursor: q.cursor, limit: q.limit, sort: E.date, id: E.id, order: 'desc' });
     const rows = await ctx.db
       .select()

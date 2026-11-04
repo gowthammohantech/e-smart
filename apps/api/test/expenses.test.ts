@@ -133,6 +133,19 @@ describe('expenses', () => {
     const next = await t.get(`${m.c}/expenses`, { token: m.token, query: { limit: 1, cursor: paged.body.nextCursor } });
     expect(next.body.data[0].id).toBe(a.id);
 
+    // The summary adds up what the filters match, by category, without paging.
+    const summary = await t.get(`${m.c}/expenses/summary`, { token: m.token });
+    expect(summary.body).toEqual({
+      count: 2,
+      total: { minor: 26600, currency: 'INR' },
+      tax: { minor: 3600, currency: 'INR' },
+      byCategory: [
+        { categoryId: cat.id, total: { minor: 23600, currency: 'INR' } },
+        { categoryId: other.id, total: { minor: 3000, currency: 'INR' } },
+      ],
+    });
+    expect((await t.get(`${m.c}/expenses/summary`, { token: m.token, query: { q: 'diesel' } })).body.count).toBe(1);
+
     // Another company cannot see or touch it.
     const stranger = await ownerWithCompany(t, { plan: 'pro' });
     expect((await t.get(`${stranger.c}/expenses/${a.id}`, { token: stranger.token })).status).toBe(404);

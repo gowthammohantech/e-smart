@@ -2139,6 +2139,41 @@ paths:
               schema: { type: string, format: binary }
 
   # ------------------------------------------------------------------ Expenses
+  /companies/{companyId}/expenses/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Expenses]
+      operationId: summarizeExpenseList
+      x-plan-module: expenses
+      summary: How many expenses a list's filters match, what they add up to, and the split by category
+      description: Takes the filters of `listExpenses`. Amounts are in base currency.
+      parameters:
+        - { name: categoryId, in: query, schema: { type: string } }
+        - { name: supplierId, in: query, schema: { type: string } }
+        - { name: billable, in: query, schema: { type: boolean } }
+        - { name: recurring, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total, tax, byCategory]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  tax: { $ref: '#/components/schemas/Money' }
+                  byCategory:
+                    type: array
+                    items:
+                      type: object
+                      required: [categoryId, total]
+                      properties: { categoryId: { type: string }, total: { $ref: '#/components/schemas/Money' } }
   /companies/{companyId}/expenses:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:

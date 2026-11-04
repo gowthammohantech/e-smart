@@ -14,6 +14,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
 import { useDocuments, useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
+import { useExpenseRecord } from '../../../../remote/queries';
+import { LoadingView } from '../../../../components/LoadingView';
 import { useCostCentres } from '../../../../store/books';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
@@ -38,6 +40,8 @@ export default function ExpenseDetail() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const expense = useExpense(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = useExpenseRecord(id);
   const costCentre = useCostCentres(true).find((c) => c.id === expense?.costCentreId);
   const billTo = useParty(expense?.customerId);
   // The invoice that recovered it, when one has.
@@ -57,6 +61,7 @@ export default function ExpenseDetail() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  if (!expense && remote.isLoading) return <LoadingView />;
   if (!expense) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>

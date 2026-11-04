@@ -1533,6 +1533,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/expenses/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many expenses a list's filters match, what they add up to, and the split by category
+         * @description Takes the filters of `listExpenses`. Amounts are in base currency.
+         */
+        get: operations["summarizeExpenseList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/expenses": {
         parameters: {
             query?: never;
@@ -8130,6 +8152,46 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+        };
+    };
+    summarizeExpenseList: {
+        parameters: {
+            query?: {
+                categoryId?: string;
+                supplierId?: string;
+                billable?: boolean;
+                recurring?: boolean;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                        tax: components["schemas"]["Money"];
+                        byCategory: {
+                            categoryId: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                    };
                 };
             };
         };
