@@ -27,6 +27,7 @@ import {
 import { formatDate, formatDateTime, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useAppStore } from '@esmart/app/store/appStore';
+import { useDocumentRecord } from '@esmart/app/remote/queries';
 import { useEwayBill, useParties } from '@esmart/app/store/selectors';
 import { detailRouteFor } from '@esmart/app/features/documents/DocumentEditor';
 import { EwayBillActionSheets, useEwayBillHistory, type EwayBillAction } from '@esmart/app/features/compliance/EwayBillDetail';
@@ -130,6 +131,8 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'common']);
   const router = useRouter();
+  // The document behind it, with its party, loaded into the store.
+  useDocumentRecord(bill.documentId);
   const documents = useAppStore((s) => s.documents);
   const parties = useParties();
   const history = useEwayBillHistory(bill);

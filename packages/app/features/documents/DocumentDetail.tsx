@@ -46,7 +46,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { useDocumentRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
+import { useDocumentRecord, useEwayBillRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
@@ -85,6 +85,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
   const record = useDocumentRecord(doc.id).data;
   const allPayments = usePayments();
+  // Its current e-way bill, fetched into the store: the device keeps only the bills it has seen.
+  useEwayBillRecord(doc.compliance?.ewayBillId);
   const ewayBill = useActiveEwayBill(doc.id);
   const complianceSettings = useComplianceSettings();
   const hasInventory = useHasModule('inventory');

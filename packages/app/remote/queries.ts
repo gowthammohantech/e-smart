@@ -885,6 +885,22 @@ export function useBillableExpenses(partyId: string | undefined, currency: strin
   });
 }
 
+/** One e-way bill from the server, kept in the store, for its page. */
+export function useEwayBillRecord(id: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['ewayBill', companyId, id],
+    enabled: !!companyId && !!id,
+    staleTime: 0,
+    retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/eway-bills/{id}', { params: { path: { companyId, id: id! } }, signal });
+      keep('eway_bill', companyId, [data]);
+      return data!;
+    },
+  });
+}
+
 /** The compliance register's documents: by e-invoice status, or those still needing an e-way bill. */
 export function useComplianceDocuments(f: { need: 'eInvoice' | 'ewayBill'; status?: EInvoiceStatus; q?: string }, enabled = true) {
   const companyId = useAppStore((s) => s.activeCompanyId);
