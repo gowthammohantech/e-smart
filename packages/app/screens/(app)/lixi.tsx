@@ -179,7 +179,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: t.c.bg }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {onClose ? (

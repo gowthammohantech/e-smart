@@ -51,7 +51,7 @@ export default function PaymentDetail() {
   if (!payment && remote.isLoading) return <LoadingView />;
   if (!payment) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.payment') }} />
         <EmptyState illustration="not-found" icon="cash-remove" title={tr('common:notFound.title')} message={tr('common:notFound.payment')} />
       </View>
@@ -62,7 +62,7 @@ export default function PaymentDetail() {
   const account = accounts.find((a) => a.id === payment.accountId);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: payment.number }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>

@@ -178,13 +178,12 @@ function ValidityCard({ form }: { form: EwayBillFormState }) {
  * and submit as the phone form (`useEwayBillForm`), whose pickers it reuses.
  */
 export function NewEwayBillDesktop() {
-  const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'nav']);
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const document = useDocument(documentId);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.newEWayBill') }} />
       {document ? (
         <EwayBillFormDesktop doc={document} />

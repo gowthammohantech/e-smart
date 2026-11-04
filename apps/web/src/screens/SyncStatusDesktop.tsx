@@ -108,7 +108,7 @@ export function SyncStatusDesktop() {
   const openEntry = (q: SyncQueueEntry) => setOpen(q);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.syncStatus') }} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }}>

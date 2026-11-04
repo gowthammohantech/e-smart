@@ -61,7 +61,7 @@ export function StockTransferDesktop() {
 
   if (branches.length < 2) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.branchTransfer') }} />
         <EmptyState
           illustration="single-location"

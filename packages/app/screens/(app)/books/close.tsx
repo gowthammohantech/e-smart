@@ -36,7 +36,7 @@ export default function CloseBooks() {
     serverSave(() => saveCompany({ ...company, lockedThroughDate }), lockedThroughDate ? tr('books:close.closed', { date: formatDate(lockedThroughDate) }) : tr('books:close.reopened'), { icon: 'lock-outline' });
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.close') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.sm }}>

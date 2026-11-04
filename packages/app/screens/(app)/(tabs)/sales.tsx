@@ -20,7 +20,6 @@ import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { documentKindLabel } from '@esmart/core/labels';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
-import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 export default function SalesTab() {
   const t = useTheme();
@@ -38,8 +37,7 @@ export default function SalesTab() {
   const recent = hub?.recentInvoices ?? [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <DoodleScatter />
+    <View style={{ flex: 1 }}>
       <AppHeader title={tr('sales:hub.title')} subtitle={tr('sales:hub.subtitle')} />
 
       <ScrollView

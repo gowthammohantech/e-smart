@@ -22,7 +22,7 @@ export default function About() {
   const open = (url: string) => () => Linking.openURL(url).catch(() => toast.show(url.replace(/^mailto:/, ''), 'info', { icon: 'link-variant' }));
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.about') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>

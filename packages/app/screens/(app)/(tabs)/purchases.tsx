@@ -18,7 +18,6 @@ import { usePurchasesHub } from '../../../remote/queries';
 import { zero, type Money } from '@esmart/core/lib/money';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
-import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 export default function PurchasesTab() {
   const t = useTheme();
@@ -36,8 +35,7 @@ export default function PurchasesTab() {
   const recent = hub?.recentBills ?? [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <DoodleScatter />
+    <View style={{ flex: 1 }}>
       <AppHeader title={tr('purchases:hub.title')} subtitle={tr('purchases:hub.subtitle')} />
 
       <ScrollView

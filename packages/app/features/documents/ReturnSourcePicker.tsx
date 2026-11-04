@@ -58,7 +58,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
         <Text variant="small" tone="muted">
           {tr(isReturn ? (purchase ? 'sales:returnPicker.purchaseHint' : 'sales:returnPicker.salesHint') : `sales:notePicker.hint.${kind}`)}

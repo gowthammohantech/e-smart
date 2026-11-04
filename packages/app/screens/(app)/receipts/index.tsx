@@ -58,7 +58,7 @@ export default function ReceiptsList() {
   const total = receipts.reduce((a, v) => a + amountOf(v), 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:receipts.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm }}>

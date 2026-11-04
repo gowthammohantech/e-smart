@@ -74,7 +74,7 @@ export default function OpeningStock() {
   useSaveShortcut(() => void save(), !saving && entered.length > 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.openingStock') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>

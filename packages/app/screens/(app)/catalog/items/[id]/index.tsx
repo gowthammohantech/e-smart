@@ -67,7 +67,7 @@ export default function ItemDetail() {
 
   if (!item) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.item') }} />
         <EmptyState illustration="not-found" icon="package-variant-closed-remove" title={tr('common:notFound.title')} message={tr('common:notFound.item')} />
       </View>
@@ -242,7 +242,7 @@ export default function ItemDetail() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           title: item.name,

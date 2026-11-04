@@ -73,7 +73,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
   const history = useEwayBillHistory(bill);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xl }}

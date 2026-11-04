@@ -11,7 +11,6 @@ import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Stagger } from '@esmart/ui/components/Stagger';
-import { DoodleScatter } from '@esmart/ui/components/Doodles';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Button } from '@esmart/ui/components/Button';
 import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
@@ -307,7 +306,6 @@ export function DocumentListView({
 
   return (
     <View style={{ flex: 1 }}>
-      <DoodleScatter />
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
         <SearchBar
           value={filters.query}

@@ -118,7 +118,6 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         paddingTop: desktop ? t.spacing.xl : insets.top + t.spacing.sm,
         paddingHorizontal: t.spacing.lg,
         paddingBottom: t.spacing.md,
-        backgroundColor: t.c.bg,
         gap: t.spacing.sm,
       }}
     >

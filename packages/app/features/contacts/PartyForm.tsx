@@ -525,7 +525,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
         {desktop ? desktopForm : phoneForm}
 

@@ -98,7 +98,7 @@ export default function ChartOfAccounts() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.accounts') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('books:accounts.search')} />

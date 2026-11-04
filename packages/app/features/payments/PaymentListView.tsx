@@ -78,7 +78,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   ) : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <View
         style={
           desktop

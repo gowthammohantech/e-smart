@@ -67,7 +67,7 @@ export default function DocumentPreview() {
   if (!doc && remote.isLoading) return <LoadingView title={tr('nav:title.preview')} />;
   if (!doc) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.preview') }} />
         <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} message={tr('common:notFound.document')} />
       </View>

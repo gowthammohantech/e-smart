@@ -812,7 +812,7 @@ export default function NewPayment() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: t.c.bg }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>

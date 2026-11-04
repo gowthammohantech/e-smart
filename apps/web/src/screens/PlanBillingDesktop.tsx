@@ -46,7 +46,7 @@ export function PlanBillingDesktop() {
   if (pendingInvites > 0) usage.push({ label: tr('plan:billing.usagePending'), value: String(pendingInvites), ratio: null });
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('plan:billing.title') }} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.xxl }}>

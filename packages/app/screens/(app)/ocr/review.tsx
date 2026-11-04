@@ -47,7 +47,7 @@ export default function OcrReview() {
 
   if (!result) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.review') }} />
         <EmptyState
           illustration="no-scan-result"
@@ -185,7 +185,7 @@ export default function OcrReview() {
     );
 
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen
           options={{
             title: tr('nav:title.reviewExtraction'),
@@ -218,7 +218,7 @@ export default function OcrReview() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.reviewExtraction') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">

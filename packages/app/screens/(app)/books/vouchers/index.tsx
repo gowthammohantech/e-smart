@@ -22,7 +22,7 @@ export default function VoucherList() {
   const vouchers = useVouchers();
   const baseCurrency = useBaseCurrency();
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.vouchers') }} />
       {vouchers.length ? (
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>

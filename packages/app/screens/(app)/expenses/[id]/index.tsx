@@ -64,7 +64,7 @@ export default function ExpenseDetail() {
   if (!expense && remote.isLoading) return <LoadingView />;
   if (!expense) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.expense') }} />
         <EmptyState illustration="not-found" icon="receipt-text-outline" title={tr('common:notFound.title')} message={tr('common:notFound.expense')} />
       </View>
@@ -217,7 +217,7 @@ export default function ExpenseDetail() {
     const stacked = bp === 'tablet';
 
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen
           options={{
             title: expense.number || tr('nav:title.expense'),
@@ -246,7 +246,7 @@ export default function ExpenseDetail() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: expense.number || tr('nav:title.expense') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>

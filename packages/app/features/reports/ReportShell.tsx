@@ -134,7 +134,7 @@ export function ReportShell({
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       {desktop && exportRows ? (
         // A desktop puts Export with the page title, top right, instead of a bar at the bottom.
         <Stack.Screen

@@ -135,7 +135,7 @@ export default function EInvoicingSettings() {
   useSaveShortcut(onSave);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={
           desktop

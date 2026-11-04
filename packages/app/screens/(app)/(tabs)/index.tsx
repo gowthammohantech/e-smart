@@ -42,7 +42,6 @@ import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
 import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 export default function Home() {
   const t = useTheme();
@@ -156,8 +155,7 @@ export default function Home() {
   // A desktop browser has the room for its own first-run layout; a phone keeps the one below.
   if (isFirstRun && desktop) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <DoodleScatter />
+      <View style={{ flex: 1 }}>
         <AppHeader />
         <Screen bottomInset={80}>
           <FirstRunDesktop />
@@ -170,7 +168,7 @@ export default function Home() {
 
   if (isFirstRun) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <AppHeader />
         <Screen bottomInset={80}>
           <View style={{ alignItems: 'center', gap: t.spacing.md, paddingTop: t.spacing.xl }}>
@@ -236,7 +234,7 @@ export default function Home() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <AppHeader />
 
       <Screen

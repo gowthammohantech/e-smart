@@ -55,7 +55,7 @@ export default function ItemList() {
       : tr('inventory:catalog.noItemsBody');
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.itemsAndServices') }} />
       {desktop ? (
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>

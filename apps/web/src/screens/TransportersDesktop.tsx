@@ -100,7 +100,7 @@ export function TransportersDesktop() {
   useSaveShortcut(save, sheetOpen);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.transporters') }} />
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48 }}>

@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { SHOW_SCROLLBAR } from '../theme/breakpoints';
-import { DoodleScatter } from './Doodles';
 
 type Props = {
   children: React.ReactNode;
@@ -35,7 +34,8 @@ export function Screen({
 }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const bg = background === 'bg' ? t.c.bg : t.c.card;
+  // 'bg' stays clear so the navigator's doodle page (PageSurface) shows through.
+  const bg = background === 'bg' ? 'transparent' : t.c.card;
 
   const inner: StyleProp<ViewStyle> = [
     padded ? { paddingHorizontal: t.spacing.lg } : null,
@@ -43,23 +43,13 @@ export function Screen({
     contentStyle,
   ];
 
-  // Doodles frame the page, not the white of a card-coloured screen.
-  const doodles = background === 'bg' ? <DoodleScatter /> : null;
-
   if (!scroll) {
-    return (
-      <View style={[{ flex: 1, backgroundColor: bg }, style]}>
-        {doodles}
-        {children}
-      </View>
-    );
+    return <View style={[{ flex: 1, backgroundColor: bg }, style]}>{children}</View>;
   }
 
   return (
-    <View style={[{ flex: 1, backgroundColor: bg }, style]}>
-    {doodles}
     <ScrollView
-      style={{ flex: 1 }}
+      style={[{ flex: 1, backgroundColor: bg }, style]}
       contentContainerStyle={inner}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={SHOW_SCROLLBAR}
@@ -77,7 +67,6 @@ export function Screen({
     >
       {children}
     </ScrollView>
-    </View>
   );
 }
 

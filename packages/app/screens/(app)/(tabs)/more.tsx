@@ -17,7 +17,6 @@ import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
 import { useMoreGroups } from '../../../navigation/moreGroups';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { appVersion } from '../../../lib/appVersion';
-import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 export default function MoreTab() {
   const t = useTheme();
@@ -35,8 +34,7 @@ export default function MoreTab() {
   const desktop = useIsDesktop();
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <DoodleScatter />
+    <View style={{ flex: 1 }}>
       <AppHeader title={tr('nav:more.header.title')} subtitle={tr('nav:more.header.subtitle')} />
 
       <ScrollView

@@ -159,7 +159,7 @@ export default function ExpensesList() {
   // in a side column.
   if (desktop) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
+      <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
         <Stack.Screen options={{ title: tr('nav:title.expenses') }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
           <View style={{ width: 300 }}>
@@ -258,7 +258,7 @@ export default function ExpensesList() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.expenses') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>

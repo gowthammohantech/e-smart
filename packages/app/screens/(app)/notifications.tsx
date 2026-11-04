@@ -52,7 +52,7 @@ export default function Notifications() {
   const unread = notifications.filter((n) => !n.read).length;
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           title: 'Notifications',

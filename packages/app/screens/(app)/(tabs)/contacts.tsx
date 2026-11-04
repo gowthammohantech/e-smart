@@ -19,7 +19,6 @@ import { buildOutstanding } from '@esmart/core/domain/receivables';
 import { money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 type Tab = 'customer' | 'supplier';
 
@@ -95,8 +94,7 @@ export default function ContactsTab() {
   const emptyMessage = parties.length === 0 ? tr('contacts:hub.emptyBody') : tr('contacts:hub.noMatchesBody');
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <DoodleScatter />
+    <View style={{ flex: 1 }}>
       <AppHeader
         title={hasSuppliers ? tr('contacts:hub.title') : tr('contacts:hub.titleCustomersOnly')}
         subtitle={hasSuppliers ? tr('contacts:hub.subtitle') : tr('contacts:hub.subtitleCustomersOnly')}

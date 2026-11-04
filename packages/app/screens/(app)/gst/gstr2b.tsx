@@ -136,7 +136,7 @@ export default function Gstr2bScreen() {
   const matchedTotal = (s?.matched ?? 0) + (s?.matchedWithinTolerance ?? 0) + (s?.manuallyLinked ?? 0) + (s?.claimed ?? 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.gstr2b') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {!gstins.length ? (

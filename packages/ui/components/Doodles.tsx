@@ -10,7 +10,7 @@ import { DOODLES, SCATTER, WALLPAPER_TILE, placeDoodle } from '../illustrations/
 /** How much the doodles show: enough to notice, never enough to compete with text. */
 const useInk = () => {
   const t = useTheme();
-  return { color: t.c.muted, opacity: t.scheme === 'dark' ? 0.14 : 0.11 };
+  return { color: t.c.muted, opacity: t.scheme === 'dark' ? 0.16 : 0.14 };
 };
 
 /**
@@ -111,6 +111,24 @@ export function DoodleScatter() {
             </Animated.View>
           ))
         : null}
+    </View>
+  );
+}
+
+/**
+ * The page every in-app screen sits on: the page colour, the doodle wallpaper
+ * and a few larger doodles around the edges. Navigators draw it once per
+ * screen (`screenLayout`), and screens leave their own root transparent so it
+ * shows through between their cards. Each screen keeps its own opaque surface,
+ * so a screen sliding in never shows the one beneath it.
+ */
+export function PageSurface({ children }: { children: React.ReactNode }) {
+  const t = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <DoodleWallpaper />
+      <DoodleScatter />
+      {children}
     </View>
   );
 }

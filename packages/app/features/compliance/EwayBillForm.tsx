@@ -238,7 +238,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
   } = form;
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <FormContainer wide>
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}

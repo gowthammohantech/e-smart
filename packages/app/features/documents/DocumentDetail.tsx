@@ -698,7 +698,7 @@ ${url}`;
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       {desktop ? (
         <>
           <Stack.Screen options={{ headerRight: () => desktopActions }} />

@@ -111,14 +111,13 @@ function Leg({ title, place }: { title: string; place: EwayBill['from'] }) {
  * (`@esmart/app/features/compliance/EwayBillDetail`), whose sheets it reuses.
  */
 export function EwayBillDetailDesktop() {
-  const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'common']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const bill = useEwayBill(id);
 
   if (!bill) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: 'Not found' }} />
         <EmptyState illustration="not-found" title={tr('compliance:notFound.ewbTitle')} message={tr('compliance:notFound.ewbBody')} />
       </View>
@@ -149,7 +148,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
   const party = parties.find((p) => p.id === bill.partyId);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: `E-way bill ${bill.ewayBillNumber}` }} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }}>

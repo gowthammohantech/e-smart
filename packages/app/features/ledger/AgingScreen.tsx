@@ -168,7 +168,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     );
 
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <StatGrid>
             <StatTile
@@ -203,7 +203,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
           <StatTile

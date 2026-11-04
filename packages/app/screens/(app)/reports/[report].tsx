@@ -175,7 +175,7 @@ export default function Report() {
 
   if (!meta) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.report') }} />
         <EmptyState illustration="unknown-report" icon="chart-box-outline" title={tr('reports:detail.unknown')} message={tr('reports:detail.unknownBody')} />
       </View>

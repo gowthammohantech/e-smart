@@ -770,7 +770,7 @@ details.table-view .table-wrap {
   }
 }
 
-/* A few doodles framing the content of every console page. */
+/* The doodle wallpaper, plus a few larger doodles, behind every console page. */
 .main {
   position: relative;
   isolation: isolate;
@@ -781,6 +781,16 @@ details.table-view .table-wrap {
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
+}
+.doodle-scatter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--muted);
+  opacity: 0.1;
+  -webkit-mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  animation: wallpaper 60s linear infinite;
 }
 .doodle-scatter svg {
   position: absolute;
@@ -852,6 +862,7 @@ table.data td {
   /* The art rests at its drawn pose rather than a frame of a loop. */
   .art *,
   .doodle-scatter svg,
+  .doodle-scatter::before,
   .backdrop::before,
   .backdrop::after {
     animation: none !important;

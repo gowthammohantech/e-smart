@@ -32,7 +32,7 @@ export default function VoucherDetail() {
 
   if (!voucher) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} />
       </View>
     );
@@ -43,7 +43,7 @@ export default function VoucherDetail() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: voucher.number }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.xs }}>
