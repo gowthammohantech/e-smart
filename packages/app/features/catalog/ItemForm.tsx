@@ -77,8 +77,9 @@ export function ItemForm({ item }: { item?: Item }) {
       hsn: validHsn(hsnCode, { required: hsnRequired }),
       openingStockDate: takesOpeningStock && openingStockDate > today() ? tr('inventory:form.openingStockDateFuture') : undefined,
     };
-    const skuValue = sku.trim().toUpperCase() || `SKU-${String(existing.length + 1).padStart(4, '0')}`;
-    if (existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
+    // Left blank, a new item gets the next free SKU from the server when it is created.
+    const skuValue = sku.trim().toUpperCase() || (item?.sku ?? '');
+    if (skuValue && existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
       next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);

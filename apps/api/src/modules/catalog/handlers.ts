@@ -33,10 +33,11 @@ async function imageUri(deps: Deps, db: DbOrTx, attachmentId: string | null): Pr
 }
 
 /** Reference data the foreign keys need, and prices in the company's currency. */
-async function validate(db: DbOrTx, companyId: string, baseCurrency: string, body: Schema<'Item'>, today: string) {
+async function validate(db: DbOrTx, companyId: string, baseCurrency: string, body: Schema<'Item'>, today: string, creating = false) {
   const issues: Issue[] = [];
   const blocking = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
-  if (!body.sku.trim()) blocking('sku', 'SKU is required');
+  // A new item may leave it blank for the next number.
+  if (!body.sku.trim() && !creating) blocking('sku', 'SKU is required');
   if (!body.name.trim()) blocking('name', 'Name is required');
   const unit = body.unit.trim().toUpperCase();
   const [u] = await db.select().from(schema.units).where(eq(schema.units.code, unit));
@@ -55,6 +56,14 @@ async function validate(db: DbOrTx, companyId: string, baseCurrency: string, bod
 }
 
 /** SKU and barcode are unique per company. */
+async function nextSku(db: DbOrTx, companyId: string): Promise<string> {
+  const [row] = await db
+    .select({ max: sql<number | null>`max(nullif(regexp_replace(${I.sku}, '\\D', '', 'g'), '')::int)` })
+    .from(I)
+    .where(and(eq(I.companyId, companyId), ilike(I.sku, 'SKU-%')));
+  return `SKU-${String((row?.max ?? 0) + 1).padStart(4, '0')}`;
+}
+
 async function assertUnique(db: DbOrTx, companyId: string, sku: string, barcode: string | null, exceptId?: string) {
   const others = exceptId ? [ne(I.id, exceptId)] : [];
   const [skuTaken] = await db.select({ id: I.id }).from(I).where(and(eq(I.companyId, companyId), sql`lower(${I.sku}) = lower(${sku})`, ...others));
@@ -141,12 +150,14 @@ export const catalogHandlers = defineHandlers({
   async createItem(ctx) {
     const base = ctx.company.baseCurrency.trim();
     const today = businessDate(ctx.now);
-    await validate(ctx.db, ctx.company.id, base, ctx.body, today);
+    await validate(ctx.db, ctx.company.id, base, ctx.body, today, true);
     const cols = itemColumns(ctx.body, base);
     const openingStock = ctx.body.openingStock ?? 0;
     // The day the stock was counted; only a tracked item has stock to date.
     const openingStockDate = cols.trackInventory ? (ctx.body.openingStockDate ?? today) : null;
     const row = await ctx.db.transaction(async (tx) => {
+      // Left blank, a new item takes the next SKU-0001 style number.
+      if (!cols.sku) cols.sku = await nextSku(tx, ctx.company.id);
       await assertUnique(tx, ctx.company.id, cols.sku, cols.barcode);
       const hsnCode = ctx.body.hsnCode ? await ensureHsn(tx, ctx.body.hsnCode) : null;
       const [created] = await tx
