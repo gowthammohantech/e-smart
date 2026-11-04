@@ -7,7 +7,8 @@
     "gst": "GST",
     "contacts": "நபர்கள்",
     "reports": "அறிக்கை",
-    "more": "மேலும்"
+    "more": "மேலும்",
+    "money": "பணம்"
   },
   "title": {
     "about": "பற்றி",
@@ -68,7 +69,7 @@
     "purchaseReturns": "கொள்முதல் ரிட்டர்ன்கள்",
     "quotation": "விலைப்புள்ளி",
     "quotations": "விலைப்புள்ளிகள்",
-    "receivables": "வரவேண்டியவை அறிக்கை",
+    "receivables": "வரவேண்டியவை",
     "report": "அறிக்கை",
     "review": "சரிபார்",
     "reviewExtraction": "பிரித்தெடுத்ததைச் சரிபார்",
@@ -113,27 +114,16 @@
       "subtitle": "அமைப்புகளும் கருவிகளும்"
     },
     "group": {
-      "sales": "விற்பனை",
-      "money": "பணம்",
       "tools": "கருவிகள்",
       "businessSetup": "வணிக அமைப்பு",
-      "dataCompliance": "தரவும் இணக்கமும்",
       "account": "கணக்கு",
-      "business": "நபர்கள் & அறிக்கைகள்"
+      "gstSetup": "GST & இ-இன்வாய்ஸ்",
+      "data": "தரவு",
+      "moreSections": "மேலும் பகுதிகள்"
     },
     "entry": {
-      "customers": "வாடிக்கையாளர்கள்",
-      "itemsAndServices": "பொருட்களும் சேவைகளும்",
-      "reports": "அறிக்கைகள்",
-      "receivables": "வரவேண்டியவை அறிக்கை",
-      "payables": "செலுத்த வேண்டியவை",
-      "paymentsReceived": "பெற்ற வருமானம்",
-      "paymentsMade": "செலுத்திய கட்டணங்கள்",
-      "expenses": "செலவுகள்",
-      "scanBill": "பில் அல்லது ரசீதை ஸ்கேன் செய்",
       "askLixi": "Lixi-யிடம் கேள்",
       "globalSearch": "எல்லாவற்றிலும் தேடு",
-      "notifications": "அறிவிப்புகள்",
       "businessProfile": "வணிக விவரம்",
       "branches": "கிளைகள்",
       "usersAndRoles": "பயனர்களும் பொறுப்புகளும்",
@@ -143,7 +133,6 @@
       "paymentAccounts": "கட்டணக் கணக்குகள்",
       "expenseCategories": "செலவு வகைகள்",
       "gstCompliance": "GST இணக்கம்",
-      "gstr1": "GSTR-1",
       "eInvoicing": "இ-இன்வாய்ஸ் மற்றும் இ-வே பில்",
       "transporters": "போக்குவரத்தாளர்கள்",
       "integrations": "ஒருங்கிணைப்புகள்",
@@ -154,12 +143,9 @@
       "planAndBilling": "திட்டமும் கட்டணமும்",
       "appearanceAndLanguage": "தோற்றமும் மொழியும்",
       "about": "பற்றி",
-      "notificationSettings": "அறிவிப்புகள்",
+      "notificationSettings": "அறிவிப்பு விருப்பங்கள்",
       "books": "கணக்குப் புத்தகங்கள்",
-      "gstPortal": "GST போர்ட்டல் இணைப்பு",
-      "gstr2b": "GSTR-2B, கொள்முதல் ஒப்பீடு",
-      "gstReturns": "GSTR-1, 3B தாக்கல்",
-      "receipts": "வரவுகள்"
+      "gstPortal": "GST போர்ட்டல் இணைப்பு"
     },
     "signOut": {
       "row": "வெளியேறு",
@@ -188,8 +174,8 @@
     "allSettings": "அனைத்து அமைப்புகளும்",
     "group": {
       "transactions": "பரிவர்த்தனைகள்",
-      "compliance": "இணக்கம்",
-      "manage": "நிர்வாகம்"
+      "manage": "நிர்வாகம்",
+      "finance": "நிதி"
     },
     "showPages": "{{label}} பக்கங்களைக் காட்டு",
     "hidePages": "{{label}} பக்கங்களை மறை",
@@ -218,5 +204,8 @@
     "openBills_other": "{{count}} நிலுவை பில்கள்",
     "daysOverdue_one": "{{count}} நாள் தாமதம்",
     "daysOverdue_other": "{{count}} நாள் தாமதம்"
+  },
+  "money": {
+    "subtitle": "கட்டணங்கள், நிலுவைகள், செலவுகள், கணக்குப் புத்தகங்கள்"
   }
 }

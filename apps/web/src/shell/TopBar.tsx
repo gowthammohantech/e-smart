@@ -21,6 +21,8 @@ import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
 import { NOTIFICATION_META, notificationRoute } from '@esmart/app/features/notifications/notificationMeta';
 import { CommandPalette } from './CommandPalette';
+import { SETTINGS_HREF } from '@esmart/app/navigation/pages';
+import { appHref } from '@esmart/app/navigation/menu';
 
 export const TOP_BAR_HEIGHT = 56;
 
@@ -294,7 +296,7 @@ export function TopBar() {
             ['account-circle-outline', 'nav:title.yourProfile', '/(app)/settings/profile'],
             ['star-circle-outline', 'nav:more.entry.planAndBilling', '/(app)/settings/plan'],
             ['palette-outline', 'nav:more.entry.appearanceAndLanguage', '/(app)/settings/appearance'],
-            ['cog-outline', 'nav:shell.allSettings', '/(app)/(tabs)/more'],
+            ['cog-outline', 'nav:shell.allSettings', appHref(SETTINGS_HREF)],
           ] as const
         ).map(([icon, key, route]) => (
           <MenuItem

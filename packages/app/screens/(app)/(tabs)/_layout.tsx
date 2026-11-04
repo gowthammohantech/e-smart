@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, View, useWindowDimensions } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
 import { BottomTabBar } from 'expo-router/build/react-navigation/bottom-tabs';
@@ -87,13 +87,11 @@ export default function TabsLayout() {
             backgroundColor: t.c.paper,
             borderTopColor: t.c.line,
             borderTopWidth: 0.5,
-            height: (showLabels ? 56 : 48) + bottomInset,
+            height: 56 + bottomInset,
             paddingTop: 6,
             paddingBottom: bottomInset,
           },
-          tabBarShowLabel: showLabels,
-          tabBarItemStyle: crowded ? { paddingHorizontal: 0 } : undefined,
-          tabBarLabelStyle: { fontSize: labelSize, fontWeight: '600' },
+          tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
           tabBarHideOnKeyboard: true,
         }}
         screenLayout={({ children, route, navigation }) => (

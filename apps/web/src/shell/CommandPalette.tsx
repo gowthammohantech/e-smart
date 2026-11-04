@@ -10,7 +10,8 @@ import { canOpen } from '@esmart/core/domain/plan';
 import { quickActions } from '@esmart/app/components/QuickActions';
 import { TABS, tabPath } from '@esmart/app/navigation/tabs';
 import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
-import { matchPages, SETTINGS_GROUPS, useAppPages } from '@esmart/app/navigation/pages';
+import { matchPages, useAppPages } from '@esmart/app/navigation/pages';
+import { appHref } from '@esmart/app/navigation/menu';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
 import { useUiStore } from '@esmart/app/store/uiStore';
 
@@ -33,8 +34,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [index, setIndex] = useState(0);
   const { results } = useGlobalSearch(query);
   const searching = query.trim().length >= 2;
-  // Every page the sidebar reaches: its sections, the pages under them, and settings.
-  const pages = useAppPages(SETTINGS_GROUPS);
+  // Every page in the menu: the sections, the pages under them, the tools and settings.
+  const pages = useAppPages();
 
   const entries = useMemo<Entry[]>(() => {
     const actions: Entry[] = quickActions(tr, t.c.primary)
@@ -51,12 +52,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       results.slice(0, 40).forEach((r) => byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), { ...r, key: `${r.group}-${r.id}` }]));
       return [...matchedActions, ...matchedPages, ...Array.from(byGroup.values()).flat()];
     }
-    const sections: Entry[] = TABS.filter((tab) => canOpen(plan, tabPath(tab.name))).map((tab) => ({
+    // More is the phone's catch-all; the sidebar and settings cover it here.
+    const sections: Entry[] = TABS.filter((tab) => tab.name !== 'more' && canOpen(plan, tabPath(tab.name))).map((tab) => ({
       key: `tab-${tab.name}`,
       group: tr('nav:shell.goTo'),
       title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
       icon: tab.icon,
-      route: tab.name === 'index' ? '/(app)/(tabs)' : `/(app)/(tabs)/${tab.name}`,
+      route: appHref(tabPath(tab.name)),
     }));
     return [...actions, ...sections];
   }, [searching, query, pages, results, tr, t.c.primary, allowed, plan]);

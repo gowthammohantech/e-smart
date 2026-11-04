@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Easing, Pressable, ScrollView, useWindowDimensions, View, type ViewStyle } from 'react-native';
-import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
@@ -11,7 +11,8 @@ import { BrandLogo } from '@esmart/ui/components/BrandLogo';
 import { canOpen } from '@esmart/core/domain/plan';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
-import { usePayment, usePlan } from '@esmart/app/store/selectors';
+import { section, type SidebarGroup } from '@esmart/app/navigation/menu';
+import { usePlan } from '@esmart/app/store/selectors';
 // A page swap the open form can't see coming; it asks first when there are unsaved changes.
 import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
 import {
@@ -28,27 +29,17 @@ import { TOP_BAR_HEIGHT } from './shell/TopBar';
 export { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH };
 
 type Rect = { x: number; y: number; width: number; height: number };
-type GroupKey = 'transactions' | 'compliance' | 'manage';
+type GroupKey = Exclude<SidebarGroup, null>;
 
 const ICON_SIZE = 18;
 const ROW_HEIGHT = 36;
 const SUB_ROW_HEIGHT = 32;
 
-/**
- * The sections under small headings. Home sits alone at the top; a section
- * added to TABS later and not listed here lands under Manage.
- */
-const GROUPS: { key: GroupKey | null; tabs: TabName[] }[] = [
-  { key: null, tabs: ['index'] },
-  { key: 'transactions', tabs: ['sales', 'purchases', 'inventory'] },
-  { key: 'compliance', tabs: ['gst'] },
-  { key: 'manage', tabs: ['contacts', 'reports'] },
-];
+/** The small headings the sections sit under, in order; Home sits alone at the top. */
+const GROUPS: (GroupKey | null)[] = [null, 'transactions', 'finance', 'manage'];
 
 function groupOf(name: TabName): GroupKey | null {
-  const group = GROUPS.find((g) => g.tabs.includes(name));
-  // Not `?.key ?? 'manage'`: Home's group key is null, which `??` would also send to Manage.
-  return group ? group.key : 'manage';
+  return section(name).sidebarGroup;
 }
 
 /** react-native-web passes `fixed` through; the native types don't know it. */
@@ -406,11 +397,7 @@ export function Sidebar() {
   }, [folded]);
   const compact = folded && settled;
 
-  // A payment's page, or recording one, sits under Buy when the money went out.
-  const { direction } = useGlobalSearchParams<{ direction?: string }>();
-  const [, firstSegment, paymentId] = pathname.split('/');
-  const payment = usePayment(firstSegment === 'payments' ? paymentId : undefined);
-  const current = tabForPath(pathname, payment?.direction ?? (direction === 'paid' ? 'paid' : undefined));
+  const current = tabForPath(pathname);
   const inSettings = pathname.startsWith('/settings');
 
   // Arriving in a section lists its pages, so you can see where you are.
@@ -441,7 +428,7 @@ export function Sidebar() {
   const labelFor = (name: TabName) => tr(`nav:tab.${name}` as 'nav:tab.index');
 
   const visible = TABS.filter((tab) => tab.name !== 'more' && canOpen(plan, tabPath(tab.name)));
-  const groups = GROUPS.map((g) => ({ key: g.key, tabs: visible.filter((tab) => groupOf(tab.name) === g.key) })).filter(
+  const groups = GROUPS.map((key) => ({ key, tabs: visible.filter((tab) => groupOf(tab.name) === key) })).filter(
     (g) => g.tabs.length > 0,
   );
 

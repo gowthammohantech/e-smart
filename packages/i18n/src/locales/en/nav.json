@@ -7,7 +7,8 @@
     "gst": "GST",
     "contacts": "People",
     "reports": "Reports",
-    "more": "More"
+    "more": "More",
+    "money": "Money"
   },
   "title": {
     "about": "About",
@@ -68,7 +69,7 @@
     "purchaseReturns": "Purchase returns",
     "quotation": "Quotation",
     "quotations": "Quotations",
-    "receivables": "Receivable report",
+    "receivables": "Receivables",
     "report": "Report",
     "review": "Review",
     "reviewExtraction": "Review extraction",
@@ -113,27 +114,16 @@
       "subtitle": "Settings and tools"
     },
     "group": {
-      "sales": "Sales",
-      "money": "Money",
       "tools": "Tools",
       "businessSetup": "Business setup",
-      "dataCompliance": "Data & compliance",
       "account": "Account",
-      "business": "People & reports"
+      "gstSetup": "GST & e-invoicing",
+      "data": "Data",
+      "moreSections": "More sections"
     },
     "entry": {
-      "customers": "Customers",
-      "itemsAndServices": "Items & services",
-      "reports": "Reports",
-      "receivables": "Receivable report",
-      "payables": "Payables",
-      "paymentsReceived": "Income received",
-      "paymentsMade": "Payments made",
-      "expenses": "Expenses",
-      "scanBill": "Scan a bill or receipt",
       "askLixi": "Ask Lixi",
       "globalSearch": "Global search",
-      "notifications": "Notifications",
       "businessProfile": "Business profile",
       "branches": "Branches",
       "usersAndRoles": "Users & roles",
@@ -143,7 +133,6 @@
       "paymentAccounts": "Payment accounts",
       "expenseCategories": "Expense categories",
       "gstCompliance": "GST compliance",
-      "gstr1": "GSTR-1",
       "eInvoicing": "E-invoicing & e-way bill",
       "transporters": "Transporters",
       "integrations": "Integrations",
@@ -154,12 +143,9 @@
       "planAndBilling": "Plan & billing",
       "appearanceAndLanguage": "Appearance & language",
       "about": "About",
-      "notificationSettings": "Notifications",
+      "notificationSettings": "Notification preferences",
       "books": "Books",
-      "gstPortal": "GST portal connection",
-      "gstr2b": "GSTR-2B and purchase match",
-      "gstReturns": "GSTR-1 and 3B filing",
-      "receipts": "Receipts"
+      "gstPortal": "GST portal connection"
     },
     "signOut": {
       "row": "Sign out",
@@ -188,8 +174,8 @@
     "allSettings": "All settings",
     "group": {
       "transactions": "Transactions",
-      "compliance": "Compliance",
-      "manage": "Manage"
+      "manage": "Manage",
+      "finance": "Finance"
     },
     "showPages": "Show {{label}} pages",
     "hidePages": "Hide {{label}} pages",
@@ -218,5 +204,8 @@
     "openBills_other": "{{count}} open bills",
     "daysOverdue_one": "{{count}}d overdue",
     "daysOverdue_other": "{{count}}d overdue"
+  },
+  "money": {
+    "subtitle": "Payments, dues, expenses and your books"
   }
 }

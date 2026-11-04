@@ -1,13 +1,11 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
-import { useMoreGroups, type MoreEntry } from '@esmart/app/navigation/moreGroups';
-import { SETTINGS_GROUPS } from '@esmart/app/navigation/pages';
+import { useSettingsGroups, type MoreEntry } from '@esmart/app/navigation/moreGroups';
 
 export const SETTINGS_NAV_WIDTH = 240;
 
@@ -64,15 +62,12 @@ function Entry({ entry, active }: { entry: MoreEntry; active: boolean }) {
  */
 export function SettingsNav() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
   const pathname = usePathname();
-  const groups = useMoreGroups().filter((g) => (SETTINGS_GROUPS as readonly string[]).includes(g.key));
-  const profile: MoreEntry = { label: tr('nav:title.yourProfile'), icon: 'account-circle-outline', route: '/(app)/settings/profile' };
+  const groups = useSettingsGroups();
 
   return (
     <View style={{ width: SETTINGS_NAV_WIDTH, paddingTop: t.spacing.xxl }}>
       <ScrollView contentContainerStyle={{ gap: t.spacing.lg, paddingBottom: t.spacing.xl }}>
-        <Entry entry={profile} active={pathname === publicPath(profile.route)} />
         {groups.map((g) => (
           <View key={g.key} style={{ gap: 2 }}>
             <Text
