@@ -742,7 +742,7 @@ details.table-view .table-wrap {
 .skeleton i:nth-child(3n + 2) { width: 72%; }
 .skeleton i:nth-child(3n) { width: 48%; }
 
-/* The dot-grid wash with soft glows behind sign-in and the error pages. */
+/* A drifting doodle wallpaper with soft glows behind sign-in and the error pages. */
 .backdrop {
   position: relative;
   isolation: isolate;
@@ -756,9 +756,46 @@ details.table-view .table-wrap {
   pointer-events: none;
 }
 .backdrop::before {
-  background-image: radial-gradient(color-mix(in srgb, var(--muted) 30%, transparent) 1.1px, transparent 1.2px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(to bottom, #000, transparent 55%);
+  /* The tile is drawn in black and used as a mask, so the doodles take the theme's muted ink. */
+  background: var(--muted);
+  opacity: 0.12;
+  -webkit-mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  animation: wallpaper 60s linear infinite;
+}
+@keyframes wallpaper {
+  to {
+    -webkit-mask-position: -260px -260px;
+    mask-position: -260px -260px;
+  }
+}
+
+/* A few doodles framing the content of every console page. */
+.main {
+  position: relative;
+  isolation: isolate;
+}
+.doodle-scatter {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.doodle-scatter svg {
+  position: absolute;
+  translate: -50% 0;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.16;
+  animation: art-bob 7s ease-in-out infinite;
+}
+.doodle-scatter svg.spark {
+  stroke: var(--primary);
+  opacity: 0.3;
 }
 .backdrop::after {
   background:
@@ -814,6 +851,8 @@ table.data td {
   }
   /* The art rests at its drawn pose rather than a frame of a loop. */
   .art *,
+  .doodle-scatter svg,
+  .backdrop::before,
   .backdrop::after {
     animation: none !important;
   }

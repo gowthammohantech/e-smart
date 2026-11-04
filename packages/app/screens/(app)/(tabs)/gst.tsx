@@ -6,6 +6,7 @@ import { AppHeader } from '../../../components/AppHeader';
 import { HubTiles } from '@esmart/ui/components/HubTiles';
 import { ComplianceHub } from '../../../features/compliance/ComplianceHub';
 import { useComplianceSummary } from '../../../store/selectors';
+import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 /**
  * The Sales plan's GST tab: shortcuts to returns and setup, then the same
@@ -18,6 +19,7 @@ export default function GstTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <DoodleScatter />
       <AppHeader title="GST" subtitle={tr('compliance:hub.subtitle')} />
       <ComplianceHub
         bottomInset={120}

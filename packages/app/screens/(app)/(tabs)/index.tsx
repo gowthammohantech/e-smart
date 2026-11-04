@@ -42,6 +42,7 @@ import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
 import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 export default function Home() {
   const t = useTheme();
@@ -156,6 +157,7 @@ export default function Home() {
   if (isFirstRun && desktop) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+        <DoodleScatter />
         <AppHeader />
         <Screen bottomInset={80}>
           <FirstRunDesktop />

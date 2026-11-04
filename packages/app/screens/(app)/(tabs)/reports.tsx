@@ -28,6 +28,7 @@ import { money } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 type ReportLink = {
   key: string;
@@ -121,6 +122,7 @@ export default function ReportsTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <DoodleScatter />
       <AppHeader title={tr('reports:hub.title')} subtitle={tr('reports:hub.subtitle', { currency: baseCurrency })} />
 
       <ScrollView

@@ -25,6 +25,7 @@ import {
 import { money, sum } from '@esmart/core/lib/money';
 import { inRange, resolveRange } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 export default function PurchasesTab() {
   const t = useTheme();
@@ -86,6 +87,7 @@ export default function PurchasesTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <DoodleScatter />
       <AppHeader title={tr('purchases:hub.title')} subtitle={tr('purchases:hub.subtitle')} />
 
       <ScrollView

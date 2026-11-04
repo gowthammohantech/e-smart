@@ -26,6 +26,7 @@ import { inRange, resolveRange } from '@esmart/core/lib/date';
 import { documentKindLabel } from '@esmart/core/labels';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 export default function SalesTab() {
   const t = useTheme();
@@ -90,6 +91,7 @@ export default function SalesTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <DoodleScatter />
       <AppHeader title={tr('sales:hub.title')} subtitle={tr('sales:hub.subtitle')} />
 
       <ScrollView

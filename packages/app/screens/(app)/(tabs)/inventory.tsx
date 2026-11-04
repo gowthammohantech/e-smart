@@ -21,6 +21,7 @@ import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../../navigation/queryParams';
+import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
 type Filter = 'all' | 'low' | 'out' | 'services';
 const FILTERS: Filter[] = ['all', 'low', 'out', 'services'];
@@ -58,6 +59,7 @@ export default function InventoryTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <DoodleScatter />
       <AppHeader title={tr('inventory:hub.title')} subtitle={tr('inventory:hub.subtitle')} />
 
       <ScrollView

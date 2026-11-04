@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router';
 import { useAuth, useOperator } from '../auth/AuthProvider';
 import { useThemeMode, type ThemeMode } from '../theme/themeMode';
 import { RoleBadge } from './Badges';
+import { DoodleScatter } from './Doodles';
 
 const icon = (d: string) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -64,6 +65,7 @@ export function AppShell() {
         </div>
       </aside>
       <main className="main">
+        <DoodleScatter />
         <Outlet />
       </main>
     </div>
