@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { ExpenseForm, ExpenseInitial } from '../../../features/expenses/ExpenseForm';
 import { useOcrStore } from '../../../features/ocr/ocrStore';
-import { isoOrUndefined, useScannedParty } from '../../../features/ocr/matchParty';
+import { isoOrUndefined } from '../../../features/ocr/matchParty';
+import { useScannedParty } from '../../../features/ocr/useScannedParty';
 import { useExpenseCategories } from '../../../store/selectors';
 import { LoadingView } from '../../../components/LoadingView';
 
