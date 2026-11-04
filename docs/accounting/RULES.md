@@ -174,7 +174,11 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 10. **2B tolerance (3, GSTR-2B matching).** A line whose amounts agree but whose date is up to 3 days off is now claimable without a person accepting it. Is 3 days right, or should any date difference wait for a person?
 11. **TDS on payments (4.12).** TDS kept back on a payment (rather than on its bill) is posted with no section, so it can't go into 26Q. Should the payment screen ask for the section?
 
-## Sign-off
+## Interim acceptance by the product owner
+
+On 5 Nov 2026 Gowtham (product owner) accepted every rule above and the team's current answer to each open question, so that work can go on. **This is not a chartered accountant's review.** Nothing here has been checked by a CA. The CA sign-off below is still required before `GST_FILING_ENABLED` is switched on in production.
+
+## Sign-off (chartered accountant)
 
 | | |
 |---|---|
