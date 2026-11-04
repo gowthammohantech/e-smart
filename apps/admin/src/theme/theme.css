@@ -129,6 +129,11 @@ h2 {
   flex-direction: column;
   gap: 8px;
 }
+.theme-select {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 13px;
+}
 .operator {
   display: flex;
   flex-direction: column;
