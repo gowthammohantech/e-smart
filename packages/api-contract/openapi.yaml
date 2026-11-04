@@ -2894,6 +2894,34 @@ paths:
         '202': { description: Queued }
 
   # ------------------------------------------------------------------ Reports
+  /companies/{companyId}/report-data/{reportKey}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - name: reportKey
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, advances, profit, tds-register, tds-payable, tds-receivable, tds-26q, tds-challans, msme-payables, gstr1]
+    get:
+      tags: [Reports]
+      operationId: getReportData
+      summary: A report as the app shows it, worked out on the server
+      description: |
+        The same `@esmart/core` reports function the app ran on the device, on the server's records
+        (the whole book up to `to`, so balances carry their history), with the same filters. Shaped as
+        core returns it, amounts as Money in base currency. A report outside the plan is refused.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { name: partyId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
   /companies/{companyId}/reports/{reportKey}:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -5207,7 +5235,10 @@ components:
         branchId: { type: string }
         date: { type: string, format: date }
         dueDate: { type: string, format: date }
+        supplierDocNumber: { type: string, description: "On a purchase: the supplier's own number for it" }
+        itcClaimPeriod: { type: string, description: The GSTR-2B period (MMYYYY) its credit was claimed in }
         grandTotal: { $ref: '#/components/schemas/Money' }
+        totalTax: { $ref: '#/components/schemas/Money' }
         outstanding: { $ref: '#/components/schemas/Money' }
         eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }
         ewayBillStatus: { type: string, enum: [notApplicable, notRequired, pending, generated, cancelled, expired] }

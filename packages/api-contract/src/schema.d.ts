@@ -2014,6 +2014,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/report-data/{reportKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+            };
+            cookie?: never;
+        };
+        /**
+         * A report as the app shows it, worked out on the server
+         * @description The same `@esmart/core` reports function the app ran on the device, on the server's records
+         *     (the whole book up to `to`, so balances carry their history), with the same filters. Shaped as
+         *     core returns it, amounts as Money in base currency. A report outside the plan is refused.
+         */
+        get: operations["getReportData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/reports/{reportKey}": {
         parameters: {
             query?: never;
@@ -4099,7 +4124,12 @@ export interface components {
             date?: string;
             /** Format: date */
             dueDate?: string;
+            /** @description On a purchase: the supplier's own number for it */
+            supplierDocNumber?: string;
+            /** @description The GSTR-2B period (MMYYYY) its credit was claimed in */
+            itcClaimPeriod?: string;
             grandTotal?: components["schemas"]["Money"];
+            totalTax?: components["schemas"]["Money"];
             outstanding?: components["schemas"]["Money"];
             eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
             /** @enum {string} */
@@ -9350,6 +9380,36 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getReportData: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                partyId?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };

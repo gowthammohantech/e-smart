@@ -26,31 +26,17 @@ import {
   summarizeStock,
   summarizeTax,
 } from '@esmart/core/domain/reports';
-import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { formatDate, monthLabel, monthLabelNarrow, today } from '@esmart/core/lib/date';
+import { formatDate, monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
 import { money, toMajor } from '@esmart/core/lib/money';
-import { tdsRegister } from '@esmart/core/domain/tds';
-import { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
-import { useBooks, useVouchers } from '../../../store/books';
-import { BANK_RATE_PERCENT, msmePayables, sec43bh } from '@esmart/core/domain/msme';
-
-import {
-  useBaseCurrency,
-  useBranches,
-  useDocuments,
-  useExpenseCategories,
-  useExpenses,
-  useItems,
-  useParties,
-  useActiveCompany,
-  usePayables,
-  usePaymentAccounts,
-  usePayments,
-  useReceivables,
-  useStockMovements,
-} from '../../../store/selectors';
+import { summarizeAging, type OutstandingDoc } from '@esmart/core/domain/receivables';
+import type { tdsRegister } from '@esmart/core/domain/tds';
+import type { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { BANK_RATE_PERCENT, type msmePayables, type sec43bh } from '@esmart/core/domain/msme';
+import { useActiveCompany, useBaseCurrency, useBranches, useExpenseCategories, useParties } from '../../../store/selectors';
+import { useReportData, type ReportDataKey } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
 
 export default function Report() {
   const t = useTheme();
@@ -82,96 +68,53 @@ export default function Report() {
   const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' || key.startsWith('tds-') ? 'thisFY' : 'last90');
 
   const baseCurrency = useBaseCurrency();
-  const documents = useDocuments();
-  const expenses = useExpenses();
-  const expenseCategories = useExpenseCategories();
-  const items = useItems();
-  const movements = useStockMovements();
   const parties = useParties();
   const company = useActiveCompany();
   const branches = useBranches();
-  const payments = usePayments();
-  const accounts = usePaymentAccounts();
-  const receivables = useReceivables();
-  const payables = usePayables();
+  const expenseCategories = useExpenseCategories();
 
-  const branchNames = useMemo(
-    () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
-    [branches],
-  );
-  const accountNames = useMemo(
-    () => Object.fromEntries(accounts.map((a) => [a.id, a.name])),
-    [accounts],
-  );
-
-  const sales = useMemo(
-    () => summarizeDocuments(documents.filter((d) => d.kind === 'invoice'), parties, items, branchNames, baseCurrency, scope.filters),
-    [documents, parties, items, branchNames, baseCurrency, scope.filters],
-  );
-  const purchases = useMemo(
-    () => summarizeDocuments(documents.filter((d) => d.kind === 'purchaseBill'), parties, items, branchNames, baseCurrency, scope.filters),
-    [documents, parties, items, branchNames, baseCurrency, scope.filters],
-  );
-  const expenseSummary = useMemo(
-    () => summarizeExpenses(expenses, expenseCategories, baseCurrency, scope.filters),
-    [expenses, expenseCategories, baseCurrency, scope.filters],
-  );
-  const tax = useMemo(
-    () => summarizeTax(documents, baseCurrency, scope.filters, expenses, company),
-    [documents, baseCurrency, scope.filters, expenses, company],
-  );
-  // The reports engine takes method names as data, so it stays free of the
-  // translator. Rebuilt when the language changes, or the chart keeps the old
-  // one's labels.
-  const methodLabels = useMemo(
-    () => Object.fromEntries(PAYMENT_METHODS.map((m) => [m, paymentMethodLabel(tr, m)])),
-    [tr],
-  );
+  // The report on screen comes from the server, worked out there by the same core function; the
+  // others stay empty, made by those functions over nothing so every shape is what it always was.
+  const SERVER_KEYS = ['sales-summary', 'purchase-summary', 'expense-summary', 'receivables', 'payables', 'stock', 'tax-summary', 'payments', 'advances', 'profit', 'tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'msme-payables'];
+  const serverKey = SERVER_KEYS.includes(key) ? (key as ReportDataKey) : null;
+  const remote = useReportData<unknown>(serverKey, { ...scope.filters.range, branchId: scope.filters.branchId, partyId: scope.filters.partyId });
+  const data = remote.data;
+  const empty = useMemo(() => {
+    const aging = { outstanding: [] as OutstandingDoc[], summary: summarizeAging([], baseCurrency) };
+    return {
+      summary: summarizeDocuments([], [], [], {}, baseCurrency, scope.filters),
+      expenses: summarizeExpenses([], [], baseCurrency, scope.filters),
+      tax: summarizeTax([], baseCurrency, scope.filters, [], company),
+      payments: summarizePayments([], {}, {}, baseCurrency, scope.filters),
+      advances: summarizeAdvances([], baseCurrency, scope.filters),
+      stock: summarizeStock([], [], baseCurrency, scope.filters.branchId),
+      profit: profitSnapshot([], [], [], baseCurrency, scope.filters),
+      aging,
+    };
+  }, [baseCurrency, scope.filters, company]);
+  const pick = <T,>(k: string, fallback: T): T => (key === k && data ? (data as T) : fallback);
+  const sales = pick('sales-summary', empty.summary);
+  const purchases = pick('purchase-summary', empty.summary);
+  const expenseSummary = pick('expense-summary', empty.expenses);
+  const tax = pick('tax-summary', empty.tax);
+  const serverPayments = pick('payments', empty.payments);
+  // The server names payment methods by their key: they are named here, in the reader's language.
   const paymentSummary = useMemo(
-    () => summarizePayments(payments, accountNames, methodLabels, baseCurrency, scope.filters),
-    [payments, accountNames, methodLabels, baseCurrency, scope.filters],
+    () => ({ ...serverPayments, byMethod: serverPayments.byMethod.map((r) => ({ ...r, label: paymentMethodLabel(tr, r.label as never) })) }),
+    [serverPayments, tr],
   );
-  const advances = useMemo(() => summarizeAdvances(payments, baseCurrency, scope.filters), [payments, baseCurrency, scope.filters]);
-  const stock = useMemo(
-    () => summarizeStock(items, movements, baseCurrency, scope.filters.branchId),
-    [items, movements, baseCurrency, scope.filters.branchId],
-  );
-  const profit = useMemo(
-    () => profitSnapshot(documents, expenses, items, baseCurrency, scope.filters),
-    [documents, expenses, items, baseCurrency, scope.filters],
-  );
+  const advances = pick('advances', empty.advances);
+  const stock = pick('stock', empty.stock);
+  const profit = pick('profit', empty.profit);
+  const receivables = pick('receivables', empty.aging);
+  const payables = pick('payables', empty.aging);
+  const tdsRows = pick<{ rows: ReturnType<typeof tdsRegister> }>('tds-register', { rows: [] }).rows;
+  const tdsPayable = pick<{ rows: ReturnType<typeof tdsPayableSummary> }>('tds-payable', { rows: [] }).rows;
+  const tdsIn = pick<{ rows: ReturnType<typeof tdsReceivable> }>('tds-receivable', { rows: [] }).rows;
+  const tdsReturn = pick<ReturnType<typeof tdsReturnRows>>(key === 'tds-challans' ? 'tds-challans' : 'tds-26q', { deductees: [], challans: [] });
+  const msme = pick<{ rows: ReturnType<typeof msmePayables>; late: ReturnType<typeof sec43bh> }>('msme-payables', { rows: [], late: [] });
 
-  // TDS kept back on supplier bills, by section, deductee and quarter (the input for Form 26Q).
-  const tdsRows = useMemo(
-    () =>
-      tdsRegister(
-        documents
-          .filter((d) => ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote'].includes(d.kind) && !['draft', 'cancelled'].includes(d.status))
-          .filter((d) => (!scope.filters.branchId || d.branchId === scope.filters.branchId) && (!scope.filters.partyId || d.partyId === scope.filters.partyId))
-          .map((d) => {
-            const rate = d.currency === baseCurrency ? 1 : d.exchangeRate;
-            return {
-              partyId: d.partyId,
-              date: d.date,
-              tds: d.tds ? { section: d.tds.section, amount: { minor: Math.round(d.tds.amount.minor * rate) } } : undefined,
-              baseMinor: Math.round(d.totals.taxableAmount.minor * rate),
-              sign: d.kind === 'supplierCreditNote' ? -1 : 1,
-            };
-          }),
-        parties,
-        { from: scope.filters.range.from, to: scope.filters.range.to },
-      ),
-    [documents, parties, baseCurrency, scope.filters],
-  );
-
-  const { postings } = useBooks();
-  const vouchers = useVouchers();
-  const tdsPayable = useMemo(() => (key === 'tds-payable' ? tdsPayableSummary(postings, scope.filters.range, today()) : []), [key, postings, scope.filters.range]);
-  const tdsIn = useMemo(() => (key === 'tds-receivable' ? tdsReceivable(postings, parties, scope.filters.range) : []), [key, postings, parties, scope.filters.range]);
-  const tdsReturn = useMemo(
-    () => (key === 'tds-26q' || key === 'tds-challans' ? tdsReturnRows(documents, vouchers, parties, baseCurrency, scope.filters.range) : { deductees: [], challans: [] }),
-    [key, documents, vouchers, parties, baseCurrency, scope.filters.range],
-  );
+  if (meta && serverKey && !data && remote.isLoading) return <LoadingView title={meta.title} />;
 
   if (!meta) {
     return (
@@ -488,7 +431,8 @@ export default function Report() {
   }
 
   if (key === 'advances') {
-    const partyName = (id: string) => parties.find((x) => x.id === id)?.name ?? '';
+    const names = (advances as { partyNames?: Record<string, string> }).partyNames ?? {};
+    const partyName = (id: string) => names[id] ?? parties.find((x) => x.id === id)?.name ?? '';
     body = advances.rows.length ? (
       <>
         <KeyFigures
@@ -656,12 +600,10 @@ export default function Report() {
   }
 
   if (key === 'msme-payables') {
-    // As of the period's end: what micro and small suppliers are still owed, against the 45-day limit.
-    const asOf = scope.filters.range.to;
-    const bills = documents.filter((d) => !scope.filters.branchId || d.branchId === scope.filters.branchId);
-    const rows = msmePayables(asOf, bills, parties, payments);
-    const late = sec43bh(asOf, bills, parties, payments, company.fiscalYearStartMonth);
-    const nameOf = (id: string) => parties.find((x) => x.id === id)?.name ?? '';
+    // As of the period's end: what micro and small suppliers are still owed, against the 45-day limit
+    // (worked out on the server, for the branch).
+    const { rows, late } = msme;
+    const nameOf = (id: string) => (msme as { partyNames?: Record<string, string> }).partyNames?.[id] ?? parties.find((x) => x.id === id)?.name ?? '';
     const sum = (list: typeof rows) => money(list.reduce((a, r) => a + r.outstandingMinor, 0), baseCurrency);
     const when = (days: number) => (days < 0 ? tr('reports:msme.overdue', { count: -days }) : tr('reports:msme.left', { count: days }));
     body = rows.length || late.length ? (

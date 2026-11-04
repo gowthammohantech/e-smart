@@ -17,7 +17,10 @@ import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
-import { useActiveCompany, useDocuments, useParties } from '../../../store/selectors';
+import { useActiveCompany } from '../../../store/selectors';
+import { deliverFile } from '../../../features/reports/exportFiles';
+import { toCsv } from '../../../features/reports/reportTable';
+import { useDocumentPages, usePartySearch } from '../../../remote/queries';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 import { KeyFigures } from '../../../features/reports/reportParts';
 
@@ -53,7 +56,6 @@ export default function Gstr2bScreen() {
   const toast = useToast();
   const { t: tr } = useTranslation(['compliance', 'nav']);
   const company = useActiveCompany();
-  const suppliers = useParties('supplier');
   const path = { companyId: company.id };
   const periods = useMemo(() => recentPeriods(), []);
   const [gstins, setGstins] = useState<string[]>([]);
@@ -64,7 +66,6 @@ export default function Gstr2bScreen() {
   const [open, setOpen] = useState<'gstin' | 'period' | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [linking, setLinking] = useState<Row | null>(null);
-  const purchases = useDocuments();
 
   useEffect(() => {
     api.GET('/companies/{companyId}/gst/portal-sessions', { params: { path } }).then(({ data }) => {
@@ -106,19 +107,49 @@ export default function Gstr2bScreen() {
   const decide = (row: Row, decision: 'accepted' | 'notOurs' | 'claimLater' | 'undecided', documentId = row.bill?.documentId) =>
     act(() => api.PUT('/companies/{companyId}/gst/gstr2b/lines/{id}/decision', { params: { path: { ...path, id: row.id! } }, body: { decision, documentId } }));
   // The supplier's bills of the line's kind, not yet claimed: any of them can be the one 2B means.
-  const candidates = useMemo(() => {
-    if (!linking) return [];
-    const kind = KIND_OF[linking.documentType ?? 'I'];
-    const supplierIds = new Set(suppliers.filter((p) => p.taxId === linking.supplierGstin).map((p) => p.id));
-    return purchases.filter(
-      (d) => d.kind === kind && !['draft', 'cancelled', 'rejected'].includes(d.status) && (linking.documentType === 'BOE' || supplierIds.has(d.partyId)) && (!d.itcClaimPeriod || d.itcClaimPeriod === period),
-    );
-  }, [linking, purchases, suppliers, period]);
+  // The supplier is found on the server by GSTIN; a bill of entry names none, so any bill will do.
+  const lineSupplier = usePartySearch('supplier', linking?.supplierGstin ?? '', !!linking && linking.documentType !== 'BOE').data?.find((p) => p.taxId === linking?.supplierGstin);
+  const boe = linking?.documentType === 'BOE';
+  const supplierBills = useDocumentPages({ kinds: linking ? [KIND_OF[linking.documentType ?? 'I']] : [], partyId: boe ? undefined : lineSupplier?.id }, !!linking && (boe || !!lineSupplier));
+  const candidates = useMemo(
+    () => (linking ? supplierBills.rows.filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status ?? '') && (!d.itcClaimPeriod || d.itcClaimPeriod === period)) : []),
+    [linking, supplierBills.rows, period],
+  );
   const claim = () => gstin && act(() => api.POST('/companies/{companyId}/gst/gstr2b/claim', { params: { path }, body: { gstin, period } }), tr('compliance:gstr2b.claimed'));
-  const addBill = (row: Row) => {
-    const party = suppliers.find((s) => s.taxId === row.supplierGstin);
+  const addBill = async (row: Row) => {
+    // The supplier, found on the server by its GSTIN.
+    const { data } = await api.GET('/companies/{companyId}/parties', { params: { path, query: { kind: 'supplier', q: row.supplierGstin, limit: 5 } } });
+    const party = (data?.data ?? []).find((s) => s.taxId === row.supplierGstin);
     const q = new URLSearchParams({ ...(party && { partyId: party.id }), supplierDocNumber: row.number ?? '', date: row.date ?? '' });
     router.push(`/(app)/purchases/bills/new?${q.toString()}` as never);
+  };
+  /** Every line of 2B with what it matched in the books and why it differs, for the CA's working file. */
+  const exportCsv = () => {
+    const amount = (m?: { minor?: number }) => (m?.minor ?? 0) / 100;
+    const table = {
+      headers: ['Supplier GSTIN', 'Supplier', 'Type', 'Number', 'Date', 'Taxable (2B)', 'Tax (2B)', 'ITC available', 'Status', 'Differs in', 'Your bill', 'Supplier number (books)', 'Date (books)', 'Taxable (books)', 'Tax (books)'],
+      rows: [
+        ...all.map((r) => [
+          r.supplierGstin ?? '',
+          r.supplierName ?? '',
+          r.documentType ?? '',
+          r.number ?? '',
+          r.date ?? '',
+          amount(r.taxable),
+          amount(r.tax),
+          r.itcAvailable ? 'Yes' : 'No',
+          filterLabel(r.status!),
+          (r.reasons ?? []).map((x) => tr(`compliance:gstr2b.reason.${x}`)).join(', '),
+          r.bill?.number ?? '',
+          r.bill?.supplierNumber ?? '',
+          r.bill?.date ?? '',
+          r.bill ? amount(r.bill.taxable) : '',
+          r.bill ? amount(r.bill.tax) : '',
+        ]),
+        ...(rec?.missingIn2b ?? []).map((b) => ['', '', b.kind ?? '', '', '', '', '', '', filterLabel('missingIn2b'), '', b.number ?? '', b.supplierNumber ?? '', b.date ?? '', amount(b.taxable), amount(b.tax)]),
+      ],
+    };
+    void deliverFile(`gstr2b-${gstin}-${period}.csv`, new TextEncoder().encode(toCsv(table)), 'text/csv');
   };
   const chase = () => {
     const bills = rec?.missingIn2b ?? [];
@@ -167,7 +198,10 @@ export default function Gstr2bScreen() {
                     { label: tr('compliance:gstr2b.notIn2b'), value: String(s.missingIn2b), tone: s.missingIn2b ? 'bad' : undefined },
                   ]}
                 />
-                <Button title={tr('compliance:gstr2b.claim')} icon="check-all" onPress={() => void claim()} disabled={busy || !matchedTotal} />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+                  <Button title={tr('compliance:gstr2b.claim')} icon="check-all" onPress={() => void claim()} disabled={busy || !matchedTotal} style={{ flexGrow: 1 }} />
+                  <Button title={tr('compliance:gstr2b.exportCsv')} icon="file-delimited-outline" variant="secondary" onPress={exportCsv} disabled={!all.length} />
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm }}>
                   {(['all', ...ORDER, 'missingIn2b'] as Filter[])
                     .filter((f) => counts.get(f))
@@ -236,7 +270,7 @@ export default function Gstr2bScreen() {
                     ) : null}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
                       {(row.status === 'partial' || row.status === 'probable') && row.bill ? <Button title={tr('compliance:gstr2b.accept')} size="sm" onPress={() => void decide(row, 'accepted')} /> : null}
-                      {row.status === 'missingInBooks' ? <Button title={tr('compliance:gstr2b.addBill')} size="sm" onPress={() => addBill(row)} /> : null}
+                      {row.status === 'missingInBooks' ? <Button title={tr('compliance:gstr2b.addBill')} size="sm" onPress={() => void addBill(row)} /> : null}
                       {LINKABLE.includes(row.status!) ? <Button title={tr('compliance:gstr2b.link')} size="sm" variant="secondary" icon="link-variant" onPress={() => setLinking(row)} /> : null}
                       {['partial', 'probable', 'missingInBooks'].includes(row.status!) ? (
                         <>
@@ -275,7 +309,7 @@ export default function Gstr2bScreen() {
         onClose={() => setLinking(null)}
         title={tr('compliance:gstr2b.linkTitle')}
         subtitle={linking ? `${linking.number} · ${formatMoney(linking.tax!)}` : undefined}
-        options={candidates.map((d) => ({ value: d.id, label: `${d.supplierDocNumber ?? d.number} · ${formatDate(d.date)}`, description: `${d.number} · ${formatMoney(d.totals.totalTax)}` }))}
+        options={candidates.map((d) => ({ value: d.id!, label: `${d.supplierDocNumber ?? d.number} · ${formatDate(d.date!)}`, description: `${d.number} · ${d.totalTax ? formatMoney(d.totalTax) : ''}` }))}
         emptyMessage={tr('compliance:gstr2b.linkEmpty')}
         onSelect={(id) => linking && void decide(linking, 'accepted', id)}
       />

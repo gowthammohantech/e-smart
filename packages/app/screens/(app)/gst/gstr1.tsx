@@ -14,13 +14,13 @@ import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/
 import {
   NIL_SUPPLY_LABELS,
   Gstr1Row,
+  Gstr1Summary,
   Gstr1Table,
   consolidateB2cs,
   gstr1Summary,
 } from '@esmart/core/domain/gstr1';
-import { useActiveCompany, useBaseCurrency, useBranches, useDocuments, useItems, useParties, usePayments } from '../../../store/selectors';
-import { advanceTaxEvents } from '@esmart/core/domain/advanceTax';
-import { homeStateCode } from '@esmart/core/domain/taxEngine';
+import { useActiveCompany, useBaseCurrency } from '../../../store/selectors';
+import { useReportData } from '../../../remote/queries';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { money, toMajor } from '@esmart/core/lib/money';
 
@@ -57,32 +57,13 @@ export default function Gstr1Report() {
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
-  const documents = useDocuments();
-  const parties = useParties();
-  const items = useItems();
-  const payments = usePayments();
-  const branches = useBranches();
-  // Tax on advances for services (table 11), dated by the invoices that adjust them.
-  const advances = useMemo(() => {
-    const dates = new Map(documents.map((d) => [d.id, d.date]));
-    return payments
-      .filter((p) => !scope.filters.branchId || p.branchId === scope.filters.branchId)
-      .flatMap((p) => advanceTaxEvents(p, homeStateCode(company, branches.find((b) => b.id === p.branchId)), (id) => dates.get(id)));
-  }, [payments, documents, branches, company, scope.filters.branchId]);
-
-  const summary = useMemo(
-    () =>
-      gstr1Summary({
-        company,
-        documents: scope.filters.branchId ? documents.filter((d) => d.branchId === scope.filters.branchId) : documents,
-        parties,
-        items,
-        baseCurrency,
-        period: scope.filters.range,
-        advances,
-      }),
-    [company, documents, parties, items, baseCurrency, scope.filters.range, scope.filters.branchId, advances],
+  // Worked out on the server for the range and branch, by the same core gstr1Summary.
+  const remote = useReportData<Gstr1Summary>('gstr1', { ...scope.filters.range, branchId: scope.filters.branchId });
+  const emptySummary = useMemo(
+    () => gstr1Summary({ company, documents: [], parties: [], items: [], baseCurrency, period: scope.filters.range, advances: [] }),
+    [company, baseCurrency, scope.filters.range],
   );
+  const summary = remote.data ?? emptySummary;
 
   const rowsFor = (table: Gstr1Table): Gstr1Row[] => summary[table];
   // Table 7 is filed per place of supply and rate, net of the credit notes against it.

@@ -6,10 +6,15 @@ import { FULL_PLAN, hasModule, moduleForReport } from '@esmart/core/domain/plan'
 import { tdsRegister } from '@esmart/core/domain/tds';
 import type { BusinessDocument } from '@esmart/core/types';
 import { schema } from '@esmart/db';
-import { profitSnapshot, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
+import { profitSnapshot, summarizeAdvances, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
-import { loadBook } from '../books/book';
+import { loadBook, loadVouchers } from '../books/book';
+import { gstr1ForRange } from '../gst/handlers';
+import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
+import { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { msmePayables, sec43bh } from '@esmart/core/domain/msme';
+import { today } from '../documents/lifecycle';
 import { trialBalance } from '@esmart/core/domain/ledger/reports';
 import { money } from '../../lib/wire';
 import { expensesToWire } from '../expenses/wire';
@@ -134,6 +139,115 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
 
 /** Reports: getReport. JSON by default; CSV or PDF when `Accept` asks for one. */
 export const reportsHandlers = defineHandlers({
+  async getReportData(ctx) {
+    const key = ctx.params.reportKey;
+    const module = moduleForReport(key);
+    if (module && !hasModule(ctx.company.plan, module)) throw planUpgradeRequired(FULL_PLAN, module);
+    const { from, to, branchId, partyId } = ctx.query;
+    if (from > to) throw invalid('from', 'The range starts after it ends');
+    // The whole book up to `to`, as the app held it: the core functions apply the range themselves.
+    const all: Scope = { db: ctx.db, company: ctx.company, user: ctx.user, now: ctx.now, from: '1900-01-01', to };
+    const base = ctx.company.baseCurrency.trim();
+    const filters: ReportFilters = { range: { from, to }, branchId: branchId ?? null, partyId: partyId ?? null, currency: null };
+    const range = { from, to };
+    const SALES_SIDE = ['invoice', 'debitNote', 'salesReturn', 'creditNote'] as const;
+    const BUY_SIDE = ['purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote'] as const;
+    const partiesOf = async (docs: { partyId: string }[], extra: { partyId: string }[] = []) => loadParties(all, [...docs, ...extra].map((d) => d.partyId));
+    const inScope = <T extends { branchId?: string; partyId?: string }>(rows: T[]) => rows.filter((r) => (!branchId || r.branchId === branchId) && (!partyId || r.partyId === partyId));
+
+    switch (key) {
+      case 'sales-summary':
+      case 'purchase-summary': {
+        const { docs } = await loadDocuments(all, [key === 'sales-summary' ? 'invoice' : 'purchaseBill']);
+        return summarizeDocuments(docs, await partiesOf(docs), await loadItems(all), await branchNames(all), base, filters) as never;
+      }
+      case 'expense-summary': {
+        const { expenses } = await loadExpenses(all);
+        return summarizeExpenses(expenses, await loadExpenseCategories(all), base, filters) as never;
+      }
+      case 'tax-summary': {
+        const { docs } = await loadDocuments(all, [...SALES_SIDE, ...BUY_SIDE]);
+        const { expenses } = await loadExpenses(all);
+        return summarizeTax(docs, base, filters, expenses, companyCore(ctx.company)) as never;
+      }
+      case 'payments': {
+        const { payments } = await loadPayments(all);
+        // Methods are labelled by their key: the app names them in the reader's language.
+        return summarizePayments(payments, await accountNames(all), Object.fromEntries(PAYMENT_METHODS.map((m) => [m, m])), base, filters) as never;
+      }
+      case 'advances': {
+        const { payments } = await loadPayments(all);
+        const r = summarizeAdvances(payments, base, filters);
+        // Names travel with the rows: the app needn't hold every party to show them.
+        const names = Object.fromEntries((await loadParties(all, r.rows.map((x) => x.partyId))).map((p) => [p.id, p.name]));
+        return { ...r, partyNames: names } as never;
+      }
+      case 'stock': {
+        const branchIds = branchId ? [branchId] : ctx.user.branchIds;
+        const movements = await coreMovements(ctx.db, ctx.company.id, { branchIds, to });
+        return summarizeStock(await loadItems(all), movements, base, branchId ?? null) as never;
+      }
+      case 'profit': {
+        const { docs } = await loadDocuments(all, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
+        const { expenses } = await loadExpenses(all);
+        return profitSnapshot(docs, expenses, await loadItems(all), base, filters) as never;
+      }
+      case 'receivables':
+      case 'payables': {
+        const sales = key === 'receivables';
+        const { docs } = await loadDocuments(all, sales ? [...SALES_SIDE] : [...BUY_SIDE]);
+        const { payments } = await loadPayments(all);
+        const owed = inScope(docs.filter((d) => d.kind === (sales ? 'invoice' : 'purchaseBill')));
+        const outstanding = buildOutstanding(owed, payments.filter((p) => p.direction === (sales ? 'received' : 'paid')), undefined, docs);
+        return { outstanding, summary: summarizeAging(outstanding, base) } as never;
+      }
+      case 'tds-register': {
+        const { docs } = await loadDocuments(all, [...BUY_SIDE]);
+        const live = inScope(docs.filter((d) => d.kind !== 'purchaseReturn' && !isCancelled(d.status)));
+        const rate = (d: BusinessDocument) => (d.currency === base ? 1 : d.exchangeRate);
+        const rows = tdsRegister(
+          live.map((d) => ({
+            partyId: d.partyId,
+            date: d.date,
+            tds: d.tds ? { section: d.tds.section, amount: { minor: Math.round(d.tds.amount.minor * rate(d)) } } : undefined,
+            baseMinor: Math.round(d.totals.taxableAmount.minor * rate(d)),
+            sign: d.kind === 'supplierCreditNote' ? -1 : 1,
+          })),
+          await partiesOf(live),
+          range,
+        );
+        return { rows } as never;
+      }
+      case 'tds-payable':
+      case 'tds-receivable': {
+        if (ctx.user.branchIds.length) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
+        const { postings, book } = await loadBook(all);
+        if (key === 'tds-payable') return { rows: tdsPayableSummary(postings, range, today(ctx.now)) } as never;
+        const parties = await loadParties(all, book.parties.map((p) => p.id));
+        return { rows: tdsReceivable(postings, parties, range) } as never;
+      }
+      case 'tds-26q':
+      case 'tds-challans': {
+        const { docs } = await loadDocuments(all, [...BUY_SIDE]);
+        const vouchers = await loadVouchers(all, 'tdsChallan');
+        return tdsReturnRows(inScope(docs), vouchers, await partiesOf(docs), base, range) as never;
+      }
+      case 'gstr1': {
+        // The screen's range and branch, within the branches the user may see.
+        const branchIds = branchId ? [branchId] : ctx.user.branchIds;
+        return gstr1ForRange(ctx.db, ctx.company, range, ctx.now, { branchIds }) as never;
+      }
+      case 'msme-payables': {
+        const { docs } = await loadDocuments(all, [...BUY_SIDE]);
+        const { payments } = await loadPayments(all);
+        const bills = inScope(docs);
+        const parties = await partiesOf(bills);
+        const partyNames = Object.fromEntries(parties.map((p) => [p.id, p.name]));
+        return { rows: msmePayables(to, bills, parties, payments), late: sec43bh(to, bills, parties, payments, ctx.company.fiscalYearStartMonth), partyNames } as never;
+      }
+    }
+  },
+
   async getReport(ctx) {
     const key = ctx.params.reportKey as ReportKey;
     const module = moduleForReport(key);

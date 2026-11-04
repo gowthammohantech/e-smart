@@ -69,11 +69,11 @@ export const documentKeys = {
 };
 
 /** One kind's documents (or several), 50 at a time, newest first unless sorted otherwise. */
-export function useDocumentPages(f: DocumentQuery) {
+export function useDocumentPages(f: DocumentQuery, enabled = true) {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const query = useInfiniteQuery({
     queryKey: documentKeys.pages(companyId, f),
-    enabled: !!companyId,
+    enabled: enabled && !!companyId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
       const p = documentParams(companyId, f);
@@ -630,6 +630,27 @@ export function useVoucherRecord(id: string | undefined) {
       keep('voucher', companyId, [data]);
       return data!;
     },
+  });
+}
+
+export type ReportDataKey =
+  | 'sales-summary' | 'purchase-summary' | 'expense-summary' | 'receivables' | 'payables' | 'stock' | 'tax-summary'
+  | 'payments' | 'advances' | 'profit' | 'tds-register' | 'tds-payable' | 'tds-receivable' | 'tds-26q' | 'tds-challans' | 'msme-payables' | 'gstr1';
+
+/** A report as the app shows it, worked out on the server by the same core function (see getReportData). */
+export function useReportData<T>(key: ReportDataKey | null, scope: { from: string; to: string; branchId?: string | null; partyId?: string | null }) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['reports', companyId, 'data', key, scope],
+    enabled: !!companyId && !!key,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/report-data/{reportKey}', {
+        params: { path: { companyId, reportKey: key! }, query: { from: scope.from, to: scope.to, branchId: scope.branchId || undefined, partyId: scope.partyId || undefined } },
+        signal,
+      });
+      return data as T;
+    },
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -36,8 +36,16 @@ export function periodRange(period: string): { from: string; to: string } {
  * state. Without it, the whole company, as the GSTR-1 screen shows it.
  */
 export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date, gstin?: string): Promise<Gstr1Summary> {
-  const range = periodRange(period);
-  const branchIds = gstin ? await branchesOf(db, company, gstin) : undefined;
+  return gstr1ForRange(db, company, periodRange(period), now, { gstin });
+}
+
+/**
+ * GSTR-1 over any date range, for one GSTIN's branches or a list of branches (the app's GSTR-1
+ * screen picks a range and a branch), as `@esmart/core` gstr1Summary works it out.
+ */
+export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { from: string; to: string }, now: Date, opts: { gstin?: string; branchIds?: string[] } = {}): Promise<Gstr1Summary> {
+  const { gstin } = opts;
+  const branchIds = gstin ? await branchesOf(db, company, gstin) : opts.branchIds?.length ? opts.branchIds : undefined;
   const rows =
     branchIds && !branchIds.length
       ? []

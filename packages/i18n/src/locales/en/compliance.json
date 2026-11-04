@@ -266,7 +266,8 @@
     },
     "link": "Link to a bill",
     "linkTitle": "Which bill is it?",
-    "linkEmpty": "No unclaimed bills from this supplier"
+    "linkEmpty": "No unclaimed bills from this supplier",
+    "exportCsv": "Export CSV"
   },
   "returns": {
     "notConnectedBody": "Returns are saved and filed through your own GST portal session.",

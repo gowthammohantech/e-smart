@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, lte } from 'drizzle-orm';
 import type { Book } from '@esmart/core/domain/ledger/accounts';
 import { allPostings, type Posting } from '@esmart/core/domain/ledger/postings';
 import { openingStockValue, type Stock } from '@esmart/core/domain/ledger/reports';
@@ -34,18 +34,7 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   const expenseCategories = await loadExpenseCategories(s);
   const LA = schema.ledgerAccounts;
   const ledgerAccounts = (await s.db.select().from(LA).where(eq(LA.companyId, id))).map((a) => ({ id: a.id, name: a.name, group: a.group, openingBalance: { minor: a.openingBalanceMinor, currency: base }, openingBalanceDate: a.openingBalanceDate ?? undefined }));
-  const V = schema.vouchers;
-  const vouchers: Voucher[] = (await s.db.select().from(V).where(eq(V.companyId, id))).map((v) => ({
-    id: v.id,
-    companyId: v.companyId,
-    branchId: v.branchId,
-    kind: v.kind,
-    number: v.number,
-    date: v.date,
-    lines: (v.lines as { account: string; debitMinor: number; creditMinor: number }[]).map((l) => ({ account: l.account, debit: { minor: l.debitMinor, currency: base }, credit: { minor: l.creditMinor, currency: base } })),
-    createdBy: v.createdBy,
-    createdAt: v.createdAt.toISOString(),
-  }));
+  const vouchers = await loadVouchers(s);
   const branches = await s.db.select().from(schema.branches).where(eq(schema.branches.companyId, id));
   const T = schema.taxCategories;
   const taxCategories = (await s.db.select().from(T).where(eq(T.companyId, id))).map((t) => ({ id: t.id, companyId: t.companyId, name: t.name, rate: Number(t.rate), type: t.type, effectiveFrom: t.effectiveFrom }));
@@ -68,4 +57,25 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
     openingStockMinor: openingStockValue(items, movements, base),
   });
   return { postings, book: { parties, paymentAccounts, expenseCategories, ledgerAccounts }, stock };
+}
+
+/** The company's vouchers up to `s.to` (of one kind, when given), as core sees them. */
+export async function loadVouchers(s: Pick<Scope, 'db' | 'company' | 'to'>, kind?: Voucher['kind']): Promise<Voucher[]> {
+  const V = schema.vouchers;
+  const base = s.company.baseCurrency.trim();
+  const rows = await s.db.select().from(V).where(and(eq(V.companyId, s.company.id), lte(V.date, s.to), kind ? eq(V.kind, kind) : undefined));
+  return rows.map((v) => ({
+    id: v.id,
+    companyId: v.companyId,
+    branchId: v.branchId,
+    kind: v.kind,
+    number: v.number,
+    date: v.date,
+    narration: v.narration ?? undefined,
+    reference: v.reference ?? undefined,
+    challan: (v.challan as Voucher['challan']) ?? undefined,
+    lines: (v.lines as { account: string; debitMinor: number; creditMinor: number }[]).map((l) => ({ account: l.account, debit: { minor: l.debitMinor, currency: base }, credit: { minor: l.creditMinor, currency: base } })),
+    createdBy: v.createdBy,
+    createdAt: v.createdAt.toISOString(),
+  }));
 }
