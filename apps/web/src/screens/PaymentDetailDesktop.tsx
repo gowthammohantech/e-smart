@@ -19,6 +19,7 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '@esmart/app/store/selectors';
 import { usePaymentRecord } from '@esmart/app/remote/queries';
 import { LoadingView } from '@esmart/app/components/LoadingView';
+import { RefundAdvanceSheet } from '@esmart/app/features/payments/RefundAdvanceSheet';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
@@ -74,6 +75,9 @@ export function PaymentDetailDesktop() {
   const applyAdvances = useAppStore((s) => s.applyAdvances);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  // A refund names the receipt it paid back; fetched so its number shows.
+  const refundOf = usePaymentRecord(payment?.refundOf).data;
 
   if (!payment && remote.isLoading) return <LoadingView />;
   if (!payment) {
@@ -166,8 +170,8 @@ export function PaymentDetailDesktop() {
               <Card padded={false}>
                 <EmptyState
                   icon="wallet-outline"
-                  title={tr('sales:payment.heldAsAdvance')}
-                  message={tr('sales:payment.advanceBody')}
+                  title={payment.refundOf ? tr('sales:refund.emptyTitle') : tr('sales:payment.heldAsAdvance')}
+                  message={payment.refundOf ? tr('sales:refund.emptyBody') : tr('sales:payment.advanceBody')}
                   compact
                 />
               </Card>
@@ -220,6 +224,7 @@ export function PaymentDetailDesktop() {
                 <Text variant="small" style={{ flex: 1 }}>
                   {formatMoney(payment.unallocated)} is unallocated and available as an advance.
                 </Text>
+                {isIn ? <Button title={tr('sales:refund.action')} size="sm" variant="ghost" icon="cash-refund" onPress={() => setRefunding(true)} /> : null}
                 <Button
                   title={tr('sales:payment.adjustAdvance')}
                   size="sm"
@@ -234,6 +239,43 @@ export function PaymentDetailDesktop() {
                     );
                   }}
                 />
+              </Card>
+            ) : null}
+
+            {payment.refundOf ? (
+              <Card onPress={() => router.push(`/(app)/payments/${payment.refundOf}`)} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+                <Icon name="cash-refund" size={20} color={t.c.primary} />
+                <Text variant="small" style={{ flex: 1 }}>
+                  {tr('sales:refund.of', { number: refundOf?.number ?? '…' })}
+                </Text>
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
+              </Card>
+            ) : null}
+
+            {payment.refunds?.length ? (
+              <Card padded={false}>
+                <Text variant="caption" tone="muted" weight="600" style={{ padding: t.spacing.lg, paddingBottom: t.spacing.sm }}>
+                  {tr('sales:refund.listTitle')}
+                </Text>
+                {payment.refunds.map((r) => (
+                  <Pressable
+                    key={r.paymentId}
+                    onPress={() => router.push(`/(app)/payments/${r.paymentId}`)}
+                    accessibilityRole="button"
+                    style={(state) => {
+                      const { hovered, focused } = state as WebPressState;
+                      return [{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.md, backgroundColor: hovered ? t.c.card2 : 'transparent' }, focusRing(t, focused)];
+                    }}
+                  >
+                    <Text variant="small" weight="600" style={{ flex: 1 }}>
+                      {`${r.number ?? ''} · ${formatDate(r.date)}`}
+                    </Text>
+                    <Text variant="small" weight="700" tone="bad">
+                      {formatMoney(r.amount)}
+                    </Text>
+                    <Icon name="chevron-right" size={18} color={t.c.muted} />
+                  </Pressable>
+                ))}
               </Card>
             ) : null}
 
@@ -330,6 +372,8 @@ export function PaymentDetailDesktop() {
           </View>
         </View>
       </ScrollView>
+
+      {isIn && refunding ? <RefundAdvanceSheet receipt={payment} visible onClose={() => setRefunding(false)} onSaved={(rid) => router.push(`/(app)/payments/${rid}`)} /> : null}
 
       <ConfirmDialog
         visible={confirmDelete}

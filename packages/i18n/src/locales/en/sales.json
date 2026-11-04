@@ -407,6 +407,8 @@
     "saved": "Advance refunded",
     "note": "Refund of the advance on {{number}}",
     "of": "Refund of the advance on {{number}}",
-    "listTitle": "Refunded out of this advance"
+    "listTitle": "Refunded out of this advance",
+    "emptyTitle": "Paid back out of an advance",
+    "emptyBody": "A refund settles no invoices: it returns part of the advance the customer paid."
   }
 }

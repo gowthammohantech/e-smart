@@ -147,8 +147,8 @@ export default function PaymentDetail() {
           {payment.allocations.length === 0 ? (
             <EmptyState
               icon="wallet-outline"
-              title={tr('sales:payment.heldAsAdvance')}
-              message={tr('sales:payment.advanceBody')}
+              title={payment.refundOf ? tr('sales:refund.emptyTitle') : tr('sales:payment.heldAsAdvance')}
+              message={payment.refundOf ? tr('sales:refund.emptyBody') : tr('sales:payment.advanceBody')}
               compact
             />
           ) : (
