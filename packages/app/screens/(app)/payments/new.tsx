@@ -20,6 +20,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../../components/useLeaveGuard';
+import { useRateText } from '../../../components/useRateText';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
 import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivables';
@@ -128,6 +129,7 @@ export default function NewPayment() {
     [currency, baseCurrency, exchangeRates, date],
   );
   const exchangeRate = rateOverride ?? resolvedRate;
+  const rateText = useRateText(exchangeRate, setRateOverride);
 
   // Seed the allocation from the invoice we were opened from, on the first
   // render where that invoice is actually in the outstanding list.
@@ -447,8 +449,7 @@ export default function NewPayment() {
     currency !== baseCurrency ? (
       <TextField
         label={`${tr('sales:payment.settlementRate')} (1 ${currency} → ${baseCurrency})`}
-        value={String(exchangeRate)}
-        onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
+        {...rateText}
         keyboardType="decimal-pad"
         icon="swap-horizontal"
         hint={tr('sales:payment.fxHint')}
