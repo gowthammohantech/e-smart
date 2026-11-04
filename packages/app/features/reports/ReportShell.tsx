@@ -14,6 +14,8 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { dateRangeLabel } from '@esmart/core/labels';
 import { useActiveCompany, useBranches, useParties } from '../../store/selectors';
+import { usePartyRecord, usePartySearch } from '../../remote/queries';
+import { useDebounced } from '../../components/useDebounced';
 import { ReportFilters } from '@esmart/core/domain/reports';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { deliverFile, deliverPdf } from './exportFiles';
@@ -59,11 +61,15 @@ export function ReportShell({
   const company = useActiveCompany();
   const branches = useBranches();
   const parties = useParties();
+  // The picker searches the server; the chosen contact is loaded into the store to be named.
+  const [partyQuery, setPartyQuery] = useState('');
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [partyOpen, setPartyOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const partySearch = usePartySearch(undefined, useDebounced(partyQuery), partyOpen);
+  usePartyRecord(scope.filters.partyId ?? undefined);
 
   const branch = branches.find((b) => b.id === scope.filters.branchId);
   const party = parties.find((p) => p.id === scope.filters.partyId);
@@ -285,8 +291,10 @@ export function ReportShell({
         title={tr('reports:shell.contact')}
         options={[
           { value: '', label: tr('reports:shell.allContacts') },
-          ...parties.map((p) => ({ value: p.id, label: p.name, description: tr(`common:table.${p.kind}`) })),
+          ...(partySearch.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: tr(`common:table.${p.kind}`) })),
         ]}
+        onQueryChange={setPartyQuery}
+        loading={partySearch.isFetching}
         value={scope.filters.partyId ?? ''}
         onSelect={(v) => onScopeChange({ ...scope, filters: { ...scope.filters, partyId: v || null } })}
       />

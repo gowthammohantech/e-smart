@@ -159,7 +159,9 @@ export const reportsHandlers = defineHandlers({
       case 'sales-summary':
       case 'purchase-summary': {
         const { docs } = await loadDocuments(all, [key === 'sales-summary' ? 'invoice' : 'purchaseBill']);
-        return summarizeDocuments(docs, await partiesOf(docs), await loadItems(all), await branchNames(all), base, filters) as never;
+        const parties = await partiesOf(docs);
+        const partyNames = Object.fromEntries(parties.map((p) => [p.id, p.name]));
+        return { ...summarizeDocuments(docs, parties, await loadItems(all), await branchNames(all), base, filters), partyNames } as never;
       }
       case 'expense-summary': {
         const { expenses } = await loadExpenses(all);

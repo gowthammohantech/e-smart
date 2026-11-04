@@ -3983,6 +3983,7 @@ export interface components {
                     /** Format: date */
                     date?: string;
                     partyId?: string;
+                    partyName?: string;
                 })[];
             };
         };
@@ -4438,6 +4439,7 @@ export interface components {
         PaymentAllocation: {
             documentId: string;
             readonly documentNumber?: string;
+            readonly documentKind?: components["schemas"]["DocumentKind"];
             /** @description Cash: what the payment itself settles; may be zero when an adjustment below settles the document */
             amount: components["schemas"]["Money"];
             /** @description Settled without cash: TDS the customer deducted, or the business deducted from a supplier */

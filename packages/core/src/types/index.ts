@@ -692,6 +692,8 @@ export type PaymentMethod = 'cash' | 'bank' | 'upi' | 'card' | 'cheque' | 'walle
 export type PaymentAllocation = {
   documentId: string;
   documentNumber: string;
+  /** The server's: what kind the document is, so it opens as itself. */
+  documentKind?: DocumentKind;
   /** Cash: what the payment itself settles. */
   amount: Money;
   /** Settled without cash: TDS the customer deducted (or the business deducted from a supplier). */

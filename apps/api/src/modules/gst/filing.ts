@@ -161,6 +161,11 @@ export const gstFilingHandlers = defineHandlers({
     const base = ctx.company.baseCurrency.trim();
     const b = await build3b(ctx.db, ctx.company, gstin, period, ctx.now);
     const t = b.tables;
+    // Names travel with the breakup rows: the app needn't hold every party to show them.
+    const partyIds = [...new Set(Object.values(t.sources).flatMap((rows) => rows.map((r) => r.partyId).filter((x): x is string => !!x)))];
+    const partyNames = new Map(
+      partyIds.length ? (await ctx.db.select({ id: schema.parties.id, name: schema.parties.name }).from(schema.parties).where(inArray(schema.parties.id, partyIds))).map((p) => [p.id, p.name]) : [],
+    );
     const returns = await ctx.db.select().from(R).where(and(eq(R.companyId, ctx.company.id), eq(R.gstin, gstin), eq(R.period, period), inArray(R.returnType, ['gstr1', 'gstr3b'])));
     const a = (x: Amounts) => amounts(x, base);
     return {
@@ -183,7 +188,10 @@ export const gstFilingHandlers = defineHandlers({
       },
       returns: returns.map(returnWire),
       breakup: Object.fromEntries(
-        Object.entries(t.sources).map(([table, rows]) => [table, rows.map(({ taxable, igst, cgst, sgst, cess, ...ref }) => ({ ...compact(ref), ...amounts({ taxable, igst, cgst, sgst, cess }, base) }))]),
+        Object.entries(t.sources).map(([table, rows]) => [
+          table,
+          rows.map(({ taxable, igst, cgst, sgst, cess, ...ref }) => ({ ...compact(ref), partyName: ref.partyId ? partyNames.get(ref.partyId) : undefined, ...amounts({ taxable, igst, cgst, sgst, cess }, base) })),
+        ]),
       ),
     };
   },

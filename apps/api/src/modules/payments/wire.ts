@@ -27,6 +27,8 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
     .where(and(isNotNull(schema.paymentLinks.paymentId), inArray(schema.paymentLinks.paymentId, ids)));
   const gateway = new Set(links.map((l) => l.paymentId));
   const partyIds = [...new Set(rows.map((r) => r.partyId))];
+  const docIds = [...new Set(allocations.map((a) => a.documentId))];
+  const kinds = new Map(docIds.length ? (await db.select({ id: schema.documents.id, kind: schema.documents.kind }).from(schema.documents).where(inArray(schema.documents.id, docIds))).map((d) => [d.id, d.kind]) : []);
   const names = new Map((await db.select({ id: schema.parties.id, name: schema.parties.name }).from(schema.parties).where(inArray(schema.parties.id, partyIds))).map((p) => [p.id, p.name]));
   return rows.map((r) => {
     const currency = r.currency.trim();
@@ -50,6 +52,7 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
         .map((a) => ({
           documentId: a.documentId,
           documentNumber: a.documentNumber,
+          documentKind: kinds.get(a.documentId),
           amount: money(a.amountMinor, currency),
           tdsDeducted: a.tdsMinor ? money(a.tdsMinor, currency) : undefined,
           discount: a.discountMinor ? money(a.discountMinor, currency) : undefined,

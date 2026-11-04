@@ -19,7 +19,7 @@ import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
-import { useActiveCompany, useBranches, useParties } from '../../../store/selectors';
+import { useActiveCompany, useBranches } from '../../../store/selectors';
 import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import type { DocumentKind } from '@esmart/core/types';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
@@ -67,7 +67,6 @@ export default function GstReturnsScreen() {
   const [connected, setConnected] = useState(false);
   const [breakup, setBreakup] = useState<string | null>(null);
   const branches = useBranches();
-  const parties = useParties();
 
   useEffect(() => {
     api.GET('/companies/{companyId}/gst/portal-sessions', { params: { path } }).then(({ data }) => {
@@ -131,7 +130,6 @@ export default function GstReturnsScreen() {
   const usedFor = (k: (typeof KINDS)[number]) => add(...KINDS.map((from) => s?.credit?.[from]?.[k]));
   const lateTotal = add(taxOf(view?.interest), taxOf(view?.lateFee));
   const sources = breakup ? (view?.breakup?.[breakup] ?? []) : [];
-  const partyName = (id?: string) => parties.find((p) => p.id === id)?.name;
   /** The tables of a section that have something behind them, to open. */
   const breakupLinks = (tables: string[]) => {
     const shown = tables.filter((k) => view?.breakup?.[k]?.length);
@@ -292,7 +290,7 @@ export default function GstReturnsScreen() {
             <ListRow
               key={`${x.type}-${x.id}`}
               title={x.number ?? tr(`compliance:returns.sourceType.${x.type ?? 'document'}`)}
-              subtitle={[x.date ? formatDate(x.date) : '', partyName(x.partyId), !x.type || x.type === 'document' ? undefined : tr(`compliance:returns.sourceType.${x.type}`)].filter(Boolean).join(' · ')}
+              subtitle={[x.date ? formatDate(x.date) : '', x.partyName, !x.type || x.type === 'document' ? undefined : tr(`compliance:returns.sourceType.${x.type}`)].filter(Boolean).join(' · ')}
               right={
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text variant="small" weight="600">

@@ -93,6 +93,9 @@ export default function Report() {
     };
   }, [baseCurrency, scope.filters, company]);
   const pick = <T,>(k: string, fallback: T): T => (key === k && data ? (data as T) : fallback);
+  // The server names the parties on its rows; the store's copy is the fallback.
+  const serverNames = ((data as { partyNames?: Record<string, string> } | undefined)?.partyNames ?? {}) as Record<string, string>;
+  const partyNameOf = (id: string) => serverNames[id] ?? parties.find((p) => p.id === id)?.name ?? '';
   const sales = pick('sales-summary', empty.summary);
   const purchases = pick('purchase-summary', empty.summary);
   const expenseSummary = pick('expense-summary', empty.expenses);
@@ -190,7 +193,7 @@ export default function Report() {
         data.documents.map((d) => [
           d.number,
           d.date,
-          parties.find((p) => p.id === d.partyId)?.name ?? '',
+          partyNameOf(d.partyId),
           toMajor(d.totals.taxableAmount),
           toMajor(d.totals.totalTax),
           toMajor(d.totals.grandTotal),
@@ -275,7 +278,7 @@ export default function Report() {
         ],
         data.outstanding.map((o) => [
           o.document.number,
-          parties.find((p) => p.id === o.document.partyId)?.name ?? '',
+          partyNameOf(o.document.partyId),
           o.document.date,
           o.document.dueDate ?? '',
           toMajor(o.document.totals.grandTotal),

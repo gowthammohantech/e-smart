@@ -153,8 +153,8 @@ export default function PaymentDetail() {
                 key={a.documentId}
                 onPress={() => {
                   // A debit note opens as itself, not as an invoice or bill.
-                  const doc = documents.find((d) => d.id === a.documentId);
-                  router.push((doc ? detailRouteFor(doc.kind, doc.id) : isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`) as never);
+                  const kind = a.documentKind ?? documents.find((d) => d.id === a.documentId)?.kind;
+                  router.push((kind ? detailRouteFor(kind, a.documentId) : isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`) as never);
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={tr('sales:payment.openDocument', { number: a.documentNumber })}

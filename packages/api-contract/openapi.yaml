@@ -5212,6 +5212,7 @@ components:
                     number: { type: string }
                     date: { type: string, format: date }
                     partyId: { type: string }
+                    partyName: { type: string }
     TdsSectionCode:
       type: string
       enum: [194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q]
@@ -5601,6 +5602,7 @@ components:
       properties:
         documentId: { type: string }
         documentNumber: { type: string, readOnly: true }
+        documentKind: { allOf: [{ $ref: '#/components/schemas/DocumentKind' }], readOnly: true }
         amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Cash: what the payment itself settles; may be zero when an adjustment below settles the document' }
         tdsDeducted: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Settled without cash: TDS the customer deducted, or the business deducted from a supplier' }
         discount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Settled without cash: a discount allowed or received' }

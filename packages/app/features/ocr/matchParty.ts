@@ -1,5 +1,6 @@
 import { Party } from '@esmart/core/types';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
+import { usePartySearch } from '../../remote/queries';
 
 /** Find the contact a scanned bill is from: by GSTIN first, then by name. */
 export function matchParty(parties: Party[], by: { gstin?: string; name?: string }): string | undefined {
@@ -21,4 +22,15 @@ export function matchParty(parties: Party[], by: { gstin?: string; name?: string
 /** A scanned date the forms can take (the review screen allows free text). */
 export function isoOrUndefined(value: string | undefined): string | undefined {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+}
+
+/**
+ * `matchParty` over what the server finds for the scanned GSTIN and name: the
+ * device no longer holds every contact. `loading` until both searches answer.
+ */
+export function useScannedParty(kind: 'customer' | 'supplier', by: { gstin?: string; name?: string }, enabled: boolean) {
+  const gstin = usePartySearch(kind, by.gstin ? normalizeGstin(by.gstin) : '', enabled && !!by.gstin);
+  const name = usePartySearch(kind, by.name?.trim().split(/\s+/).slice(0, 2).join(' ') ?? '', enabled && !!by.name?.trim());
+  const found = [...(gstin.data ?? []), ...(name.data ?? [])] as unknown as Party[];
+  return { id: enabled ? matchParty(found, by) : undefined, loading: gstin.isLoading || name.isLoading };
 }

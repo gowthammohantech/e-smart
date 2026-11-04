@@ -126,10 +126,10 @@ export function keep(entityType: keyof typeof COLLECTIONS, companyId: string, ro
 }
 
 /** Customers or suppliers matching what's typed (name, code, GSTIN, phone, email), 50 at most. */
-export function usePartySearch(kind: 'customer' | 'supplier', q: string, enabled = true) {
+export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: string, enabled = true) {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: ['parties', companyId, 'search', kind, q.trim()],
+    queryKey: ['parties', companyId, 'search', kind ?? '', q.trim()],
     enabled: enabled && !!companyId,
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind, q: q.trim() || undefined, limit: PAGE } }, signal });
