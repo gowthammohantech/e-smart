@@ -10,7 +10,7 @@ import { canOpen } from '@esmart/core/domain/plan';
 import { quickActions } from '@esmart/app/components/QuickActions';
 import { TABS, tabPath } from '@esmart/app/navigation/tabs';
 import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
-import { matchPages, SETTINGS_GROUPS, useAppPages } from '@esmart/app/navigation/pages';
+import { matchPages, sectionHref, SETTINGS_GROUPS, useAppPages } from '@esmart/app/navigation/pages';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
 import { useUiStore } from '@esmart/app/store/uiStore';
 
@@ -48,12 +48,17 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const actions: Entry[] = quickActions(tr, t.c.primary)
       .filter((a) => allowed(a.route))
       .map((a) => ({ key: `action-${a.key}`, group: tr('nav:shell.quickActions'), title: a.label, icon: a.icon, route: a.route }));
-    const sections: Entry[] = TABS.filter((tab) => canOpen(plan, tabPath(tab.name))).map((tab) => ({
+    const sections: Entry[] = TABS.filter((tab) => sectionHref(plan, tab.name)).map((tab) => ({
       key: `tab-${tab.name}`,
       group: tr('nav:shell.goTo'),
       title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
       icon: tab.icon,
-      route: tab.name === 'index' ? '/(app)/(tabs)' : `/(app)/(tabs)/${tab.name}`,
+      // A section whose own page is locked opens the first of its pages the plan has.
+      route: !canOpen(plan, tabPath(tab.name))
+        ? (sectionHref(plan, tab.name) as string)
+        : tab.name === 'index'
+          ? '/(app)/(tabs)'
+          : `/(app)/(tabs)/${tab.name}`,
     }));
     return [...actions, ...sections];
   }, [searching, query, pages, results, tr, t.c.primary, allowed, plan]);

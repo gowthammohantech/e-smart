@@ -21,7 +21,7 @@ import {
   useExpandedSections,
   useSidebarCollapsed,
 } from './sidebarState';
-import { SECTION_LINKS, SETTINGS_HREF, type SubLink } from './navLinks';
+import { SECTION_LINKS, SETTINGS_HREF, sectionHref, type SubLink } from './navLinks';
 import { CompanySwitcher } from './shell/CompanySwitcher';
 import { TOP_BAR_HEIGHT } from './shell/TopBar';
 
@@ -440,7 +440,8 @@ export function Sidebar() {
       .map((l: SubLink) => ({ href: l.href, label: tr(l.labelKey as 'nav:title.invoices') }));
   const labelFor = (name: TabName) => tr(`nav:tab.${name}` as 'nav:tab.index');
 
-  const visible = TABS.filter((tab) => tab.name !== 'more' && canOpen(plan, tabPath(tab.name)));
+  // A section shows while the plan can open any of its pages.
+  const visible = TABS.filter((tab) => tab.name !== 'more' && sectionHref(plan, tab.name));
   const groups = GROUPS.map((g) => ({ key: g.key, tabs: visible.filter((tab) => groupOf(tab.name) === g.key) })).filter(
     (g) => g.tabs.length > 0,
   );
@@ -485,7 +486,7 @@ export function Sidebar() {
                       icon={active ? tab.activeIcon : tab.icon}
                       label={label}
                       active={active}
-                      href={tabPath(tab.name)}
+                      href={sectionHref(plan, tab.name) ?? tabPath(tab.name)}
                       compact={compact}
                       trailing={
                         links.length > 0 ? (

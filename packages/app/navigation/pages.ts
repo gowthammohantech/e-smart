@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { IconName } from '@esmart/ui/components/Icon';
 import { canOpen } from '@esmart/core/domain/plan';
+import type { PlanTier } from '@esmart/core/types';
 import { usePlan } from '../store/selectors';
 import { TABS, tabPath, type TabName } from './tabs';
 import { useMoreGroups, type MoreGroupKey } from './moreGroups';
@@ -42,6 +43,16 @@ export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
   ],
 };
 
+/**
+ * Where a section leads on a plan: its own page, or the first of its pages the
+ * plan can open when the section's page is locked (Stock on Free still has
+ * Items & services). Null when the plan can open none of it.
+ */
+export function sectionHref(plan: PlanTier, name: TabName): string | null {
+  if (canOpen(plan, tabPath(name))) return tabPath(name);
+  return (SECTION_LINKS[name] ?? []).find((l) => canOpen(plan, l.href))?.href ?? null;
+}
+
 /** Where the desktop sidebar's Settings entry opens. */
 export const SETTINGS_HREF = '/settings/company';
 
@@ -75,9 +86,11 @@ export function useAppPages(groups?: readonly MoreGroupKey[]): AppPage[] {
       if (!list.has(at)) list.set(at, page);
     };
 
-    TABS.filter((tab) => tab.name !== 'more' && canOpen(plan, tabPath(tab.name))).forEach((tab) => {
+    TABS.filter((tab) => tab.name !== 'more').forEach((tab) => {
+      const href = sectionHref(plan, tab.name);
+      if (!href) return;
       const section = tr(`nav:tab.${tab.name}` as 'nav:tab.index');
-      add({ key: `tab-${tab.name}`, title: section, icon: tab.icon, route: tabPath(tab.name) });
+      add({ key: `tab-${tab.name}`, title: section, icon: tab.icon, route: href });
       (SECTION_LINKS[tab.name] ?? [])
         .filter((l) => canOpen(plan, l.href))
         .forEach((l) => add({ key: l.href, title: tr(l.labelKey as 'nav:title.invoices'), subtitle: section, icon: tab.icon, route: l.href }));
