@@ -22,6 +22,7 @@ import { useAppStore } from '../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { FROM_DOCUMENT, handBack } from '../../navigation/handBack';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
@@ -41,7 +42,7 @@ export function ItemForm({ item }: { item?: Item }) {
   const hasInventory = useHasModule('inventory');
 
   // A new one starts as goods or a service from ?type= (Items & services passes its open tab).
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; from?: string }>();
   const startType: ItemType = item?.type ?? (params.type === 'service' ? 'service' : 'goods');
   const [type, setType] = useState<ItemType>(startType);
   const [name, setName] = useState(item?.name ?? '');
@@ -104,8 +105,13 @@ export function ItemForm({ item }: { item?: Item }) {
 
     const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'), { icon: 'tag-check-outline', detail: record.name });
     if (!res) return;
+    const id = res.id ?? record.id;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
-    else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
+    else if (params.from === FROM_DOCUMENT && router.canGoBack()) {
+      // Back to the document it was made from, which adds it as a line.
+      handBack({ kind: 'item', record: { ...record, id } });
+      router.back();
+    } else router.replace(`/(app)/catalog/items/${id}`);
   };
   useSaveShortcut(() => void save(), !saving);
 

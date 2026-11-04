@@ -66,6 +66,8 @@ import { useQueryParams } from '../../navigation/queryParams';
 import { useSaveOnline } from '../../remote/save';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
+import { useRateText } from '../../components/useRateText';
+import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -216,6 +218,7 @@ export function DocumentEditor({
   const [partyOpen, setPartyOpen] = useState(false);
   const [itemOpen, setItemOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const rateText = useRateText(draft.exchangeRate, (exchangeRate) => patch({ exchangeRate }));
   const [posOpen, setPosOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);
@@ -267,7 +270,8 @@ export function DocumentEditor({
   const dueBeforeDate = (kind === 'invoice' || kind === 'purchaseBill') && draft.dueDate && draft.dueDate < draft.date ? beforeDocDate : undefined;
   const validBeforeDate = kind === 'quote' && draft.validUntil && draft.validUntil < draft.date ? beforeDocDate : undefined;
   // What the server refuses on any save, a draft too.
-  const dateProblem = dateBeforeOpeningStock ?? dueBeforeDate ?? validBeforeDate;
+  // A draft can't be dated before what it was made from either; the server refuses it.
+  const dateProblem = dateBeforeSource ?? dateBeforeOpeningStock ?? dueBeforeDate ?? validBeforeDate;
   const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
 
   // The item list shows stock at this branch when finalising this document moves
@@ -318,14 +322,29 @@ export function DocumentEditor({
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
   const [, setParams] = useQueryParams();
-  const pickParty = (id: string) => {
-    const p = parties.find((x) => x.id === id);
+  const pickParty = (id: string, made?: Party) => {
+    const p = made ?? parties.find((x) => x.id === id);
     if (!p) return;
     setDraft((d) => withParty(d, p));
     // A new document keeps its party in the URL (replaced, not pushed), so a
     // refresh or a shared link reopens it with the same party.
     if (!documentId) setParams({ partyId: id });
   };
+
+  // Back from New item or New customer/supplier opened from this document:
+  // the item goes on as a line, the party is picked.
+  const takeMade = useRef<() => void>(() => {});
+  useEffect(() => {
+    takeMade.current = () => {
+      const made = takeHandBack();
+      if (made?.kind === 'party') pickParty(made.record.id, made.record);
+      else if (made?.kind === 'item') {
+        const line = lineFromItem(made.record, isPurchase, taxCategories);
+        addLine({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) });
+      }
+    };
+  });
+  useFocusEffect(useCallback(() => takeMade.current(), []));
 
   useEffect(() => {
     if (seed?.missingParty) toast.show(tr('common:documentEditor.prefillMissingParty'), 'warning', { icon: 'account-question-outline' });
@@ -677,8 +696,7 @@ export function DocumentEditor({
       {draft.currency !== baseCurrency ? (
         <TextField
           label={`${tr('common:totals.exchangeRate')} (1 ${draft.currency} → ${baseCurrency})`}
-          value={String(draft.exchangeRate)}
-          onChangeText={(v) => patch({ exchangeRate: Number(v.replace(/[^0-9.]/g, '')) || 0 })}
+          {...rateText}
           keyboardType="decimal-pad"
           icon="swap-horizontal"
           hint={tr('sales:editor.rateStored')}
@@ -1094,7 +1112,7 @@ export function DocumentEditor({
               fullWidth
               onPress={() => {
                 setPartyOpen(false);
-                router.push(isPurchase ? '/(app)/contacts/suppliers/new' : '/(app)/contacts/customers/new');
+                router.push(`${isPurchase ? '/(app)/contacts/suppliers/new' : '/(app)/contacts/customers/new'}?from=${FROM_DOCUMENT}` as never);
               }}
             />
           }
@@ -1160,7 +1178,7 @@ export function DocumentEditor({
                   style={{ flex: 1 }}
                   onPress={() => {
                     setItemOpen(false);
-                    router.push('/(app)/catalog/items/new');
+                    router.push(`/(app)/catalog/items/new?from=${FROM_DOCUMENT}` as never);
                   }}
                 />
               </View>

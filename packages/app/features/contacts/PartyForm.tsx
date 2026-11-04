@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -26,6 +26,7 @@ import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { FROM_DOCUMENT, handBack } from '../../navigation/handBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
@@ -35,6 +36,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain']);
   const router = useRouter();
   const goBack = useGoBack();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   // Where Cancel and Save land when there is no screen to go back to.
   const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
   const { run: serverSave, saving } = useServerSave();
@@ -181,8 +183,13 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     const res = await serverSave(() => saveParty(record), savedMessage, { icon: 'account-check-outline', detail: record.name });
     if (!res) return;
     const id = res.id ?? record.id;
+    const page = kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`;
     if (party) goBack(backTo);
-    else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`);
+    else if (from === FROM_DOCUMENT && router.canGoBack()) {
+      // Back to the document it was made from, which picks it.
+      handBack({ kind: 'party', record: { ...record, id } });
+      router.back();
+    } else router.replace(page);
   };
   useSaveShortcut(() => void save(), !saving);
 
