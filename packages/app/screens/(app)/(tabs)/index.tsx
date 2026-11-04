@@ -23,11 +23,11 @@ import { useBaseCurrency, useCanOpen, useComplianceSummary, useCurrentUser, useM
 import { useAppStore } from '../../../store/appStore';
 import { useHomeHub } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
-import { money, subtract } from '@esmart/core/lib/money';
+import { money, subtract, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { monthLabelNarrow } from '@esmart/core/lib/date';
 import { AGING_BUCKETS } from '@esmart/core/domain/receivables';
-import type { BusinessDocument } from '@esmart/core/types';
+import type { DocStatus } from '@esmart/core/types';
 import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
 import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
@@ -357,7 +357,7 @@ export default function Home() {
                     {overdueInvoices.map((o, i) => (
                       <DocumentRow
                         key={o.document.id}
-                        document={o.document as unknown as BusinessDocument}
+                        document={{ number: o.document.number ?? '', date: o.document.date!, status: o.document.status as DocStatus, totals: { grandTotal: o.document.grandTotal as Money } }}
                         partyName={nameOf(o.document)}
                         outstandingLabel={tr('nav:home.daysOverdue', { count: o.daysOverdue })}
                         divider={i < overdueInvoices.length - 1}
@@ -384,7 +384,7 @@ export default function Home() {
                   recent.map((d, i) => (
                     <DocumentRow
                       key={d.id}
-                      document={d as unknown as BusinessDocument}
+                      document={{ number: d.number ?? '', date: d.date!, status: d.status as DocStatus, totals: { grandTotal: d.grandTotal as Money } }}
                       partyName={nameOf(d)}
                       divider={i < recent.length - 1}
                       onPress={() => router.push(`/(app)/sales/invoices/${d.id}`)}

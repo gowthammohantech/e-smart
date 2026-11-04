@@ -18,6 +18,7 @@ import { usePurchasesHub } from '../../../remote/queries';
 import { zero, type Money } from '@esmart/core/lib/money';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSectionTiles } from '../../../navigation/useSectionTiles';
 
 export default function PurchasesTab() {
   const t = useTheme();
@@ -33,6 +34,15 @@ export default function PurchasesTab() {
   const monthExpenses = (hub?.expensesThisMonth as Money | undefined) ?? none;
   const expenseSlices = (hub?.expensesByCategory ?? []).map((c) => ({ label: c.name, value: c.total as Money }));
   const recent = hub?.recentBills ?? [];
+
+  const tiles = useSectionTiles('purchases', {
+    bills: count('purchaseBill'),
+    purchaseOrders: count('purchaseOrder'),
+    goodsReceipts: count('goodsReceipt'),
+    purchaseReturns: count('purchaseReturn'),
+    supplierCreditNotes: count('supplierCreditNote'),
+    supplierDebitNotes: count('supplierDebitNote'),
+  });
 
   return (
     <View style={{ flex: 1 }}>
@@ -77,18 +87,7 @@ export default function PurchasesTab() {
         </StatGrid>
 
         <SectionHeader title={tr('purchases:hub.documents')} />
-        <HubTiles
-          tiles={[
-            { key: 'bills', label: tr('nav:title.purchaseBills'), icon: 'file-document-outline', route: '/(app)/purchases/bills', count: count('purchaseBill') },
-            { key: 'orders', label: tr('nav:title.purchaseOrders'), icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: count('purchaseOrder') },
-            { key: 'receipts', label: tr('nav:title.goodsReceipts'), icon: 'package-down', route: '/(app)/purchases/receipts', count: count('goodsReceipt') },
-            { key: 'returns', label: tr('nav:title.purchaseReturns'), icon: 'package-up', route: '/(app)/purchases/returns', count: count('purchaseReturn') },
-            { key: 'creditNotes', label: tr('nav:title.supplierCreditNotes'), icon: 'file-document-minus-outline', route: '/(app)/purchases/credit-notes', count: count('supplierCreditNote') },
-            { key: 'debitNotes', label: tr('nav:title.supplierDebitNotes'), icon: 'file-document-plus-outline', route: '/(app)/purchases/debit-notes', count: count('supplierDebitNote') },
-            { key: 'expenses', label: tr('purchases:hub.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses', count: hub?.expenses ?? 0 },
-            { key: 'payments', label: tr('purchases:hub.paymentsOut'), icon: 'cash-minus', route: '/(app)/payments/made', count: hub?.paymentsMade ?? 0 },
-          ]}
-        />
+        <HubTiles tiles={tiles} />
 
         <SectionHeader title={tr('purchases:hub.whereMoneyGoes')} action={tr('nav:title.report')} onAction={() => router.push('/(app)/reports/expense-summary')} />
         <Card>

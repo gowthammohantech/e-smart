@@ -5,39 +5,34 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AppHeader } from '../../../components/AppHeader';
 import { HubTiles } from '@esmart/ui/components/HubTiles';
 import { ComplianceHub } from '../../../features/compliance/ComplianceHub';
-import { useComplianceSummary } from '../../../store/selectors';
+import { useCanOpen } from '../../../store/selectors';
+import { SETTINGS, appHref } from '../../../navigation/menu';
+import { useSectionTiles } from '../../../navigation/useSectionTiles';
 
 /**
- * The Sales plan's GST tab: shortcuts to returns and setup, then the same
- * compliance register the full plan reaches from More.
+ * The Sales plan's GST tab: the GST pages and their setup, then the same
+ * compliance register the full plan reaches from More or the sidebar.
  */
 export default function GstTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['compliance']);
-  const summary = useComplianceSummary();
+  const { t: tr } = useTranslation(['compliance', 'nav']);
+  const canOpen = useCanOpen();
+  // The register below is the compliance page itself; its setup sits in Settings.
+  const setup = SETTINGS.find((g) => g.key === 'gstSetup')!.pages[0];
+  const pages = useSectionTiles('gst', {}, ['compliance']);
+  const tiles = [
+    ...pages,
+    ...(canOpen(setup.route) ? [{ key: 'setup', label: tr('nav:more.group.gstSetup'), icon: 'cog-outline' as const, route: appHref(setup.route) }] : []),
+  ];
 
   return (
     <View style={{ flex: 1 }}>
-      <AppHeader title="GST" subtitle={tr('compliance:hub.subtitle')} />
+      <AppHeader title={tr('nav:tab.gst')} subtitle={tr('compliance:hub.subtitle')} />
       <ComplianceHub
         bottomInset={120}
         header={
           <View style={{ marginBottom: t.spacing.lg }}>
-            <HubTiles
-              tiles={[
-                {
-                  key: 'invoices',
-                  label: 'Invoices',
-                  icon: 'file-document-outline',
-                  route: '/(app)/sales/invoices',
-                  count: summary.eInvoice.pending + summary.eInvoice.failed || undefined,
-                  tone: summary.eInvoice.failed ? 'danger' : 'default',
-                },
-                { key: 'gstr1', label: 'GSTR-1', icon: 'file-send-outline', route: '/(app)/gst/gstr1' },
-                { key: 'transporters', label: 'Transporters', icon: 'truck-outline', route: '/(app)/settings/transporters' },
-                { key: 'settings', label: 'GST settings', icon: 'cog-outline', route: '/(app)/settings/e-invoicing' },
-              ]}
-            />
+            <HubTiles tiles={tiles} />
           </View>
         }
       />

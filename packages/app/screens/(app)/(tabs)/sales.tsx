@@ -17,9 +17,9 @@ import { useBaseCurrency } from '../../../store/selectors';
 import { useSalesHub } from '../../../remote/queries';
 import { zero, type Money } from '@esmart/core/lib/money';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
-import { documentKindLabel } from '@esmart/core/labels';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSectionTiles } from '../../../navigation/useSectionTiles';
 
 export default function SalesTab() {
   const t = useTheme();
@@ -35,6 +35,16 @@ export default function SalesTab() {
   const monthCollected = (hub?.collectedThisMonth as Money | undefined) ?? none;
   const topCustomers = (hub?.topCustomers ?? []).map((c) => ({ label: c.name, value: c.total as Money }));
   const recent = hub?.recentInvoices ?? [];
+
+  const tiles = useSectionTiles('sales', {
+    invoices: count('invoice'),
+    quotes: count('quote'),
+    salesOrders: count('salesOrder'),
+    deliveries: count('delivery'),
+    salesReturns: count('salesReturn'),
+    creditNotes: count('creditNote'),
+    debitNotes: count('debitNote'),
+  });
 
   return (
     <View style={{ flex: 1 }}>
@@ -81,19 +91,7 @@ export default function SalesTab() {
         </StatGrid>
 
         <SectionHeader title={tr('sales:hub.documents')} />
-        <HubTiles
-          tiles={[
-            { key: 'invoices', label: documentKindLabel(tr, 'invoice', 2), icon: 'file-document-outline', route: '/(app)/sales/invoices', count: count('invoice') },
-            { key: 'quotes', label: documentKindLabel(tr, 'quote', 2), icon: 'file-percent-outline', route: '/(app)/sales/quotes', count: count('quote') },
-            { key: 'orders', label: documentKindLabel(tr, 'salesOrder', 2), icon: 'clipboard-list-outline', route: '/(app)/sales/orders', count: count('salesOrder') },
-            { key: 'deliveries', label: documentKindLabel(tr, 'delivery', 2), icon: 'truck-outline', route: '/(app)/sales/deliveries', count: count('delivery') },
-            { key: 'returns', label: documentKindLabel(tr, 'salesReturn', 2), icon: 'keyboard-return', route: '/(app)/sales/returns', count: count('salesReturn') },
-            { key: 'creditNotes', label: documentKindLabel(tr, 'creditNote', 2), icon: 'file-document-minus-outline', route: '/(app)/sales/credit-notes', count: count('creditNote') },
-            { key: 'debitNotes', label: documentKindLabel(tr, 'debitNote', 2), icon: 'file-document-plus-outline', route: '/(app)/sales/debit-notes', count: count('debitNote') },
-            { key: 'payments', label: tr('sales:hub.paymentsIn'), icon: 'cash-plus', route: '/(app)/payments/received', count: hub?.paymentsReceived ?? 0 },
-            { key: 'compliance', label: tr('reports:home.eInvoices'), icon: 'shield-check-outline', route: '/(app)/compliance', count: hub?.eInvoicesGenerated ?? 0 },
-          ]}
-        />
+        <HubTiles tiles={tiles} />
 
         <SectionHeader title={tr('sales:hub.topCustomers')} action={tr('sales:hub.contacts')} onAction={() => router.push('/(app)/(tabs)/contacts')} />
         <Card>

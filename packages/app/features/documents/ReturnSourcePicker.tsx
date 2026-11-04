@@ -13,7 +13,8 @@ import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { fetchDocumentRecord, useDocumentPages, type ListedDocument } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
-import type { BusinessDocument } from '@esmart/core/types';
+import type { DocStatus } from '@esmart/core/types';
+import type { Money } from '@esmart/core/lib/money';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { DocumentEditor, detailRouteFor } from './DocumentEditor';
 
@@ -90,7 +91,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
         }
         renderItem={({ item, index }) => (
           <Card padded={false} style={{ marginBottom: index === rows.length - 1 ? 0 : t.spacing.sm }}>
-            <DocumentRow document={item.doc as unknown as BusinessDocument} partyName={item.partyName} onPress={() => pick(item.doc.id)} divider={false} />
+            <DocumentRow document={{ number: item.doc.number ?? '', date: item.doc.date!, status: item.doc.status as DocStatus, totals: { grandTotal: item.doc.grandTotal as Money } }} partyName={item.partyName} onPress={() => pick(item.doc.id)} divider={false} />
           </Card>
         )}
       />
