@@ -92,7 +92,9 @@ export async function build3b(db: DbOrTx, company: CompanyRow, gstin: string, pe
   let utilization = utilizeItc(forward, reverseCharge, available);
   const due = dueDate(period, company.returnFrequency, gstin.slice(0, 2));
   // Filing today: the late fee and interest it would carry (table 5.1), paid in cash too.
-  const late = lateFeeAndInterest(tables, utilization.cash, due, businessDate(now));
+  // The cap follows the turnover the compliance settings record (notification 19/2021-CT).
+  const [settings] = await db.select({ turnover: schema.complianceSettings.annualTurnoverMinor }).from(schema.complianceSettings).where(eq(schema.complianceSettings.companyId, company.id));
+  const late = lateFeeAndInterest(tables, utilization.cash, due, businessDate(now), settings?.turnover || undefined);
   tables.lateFee = late.lateFee;
   tables.interest = { taxable: 0, ...late.interest };
   if (late.lateFee.cgst || late.interest.igst + late.interest.cgst + late.interest.sgst + late.interest.cess) {

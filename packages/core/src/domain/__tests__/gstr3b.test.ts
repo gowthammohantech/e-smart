@@ -1,6 +1,6 @@
 import { calculateDocument } from '../lineCalc';
 import { buildTaxContext } from '../taxEngine';
-import { dueDate, gstr3b, gstr3bJson, lateFeeAndInterest, liabilityOf, utilizeItc } from '../gstr3b';
+import { dueDate, gstr3b, gstr3bJson, lateFeeAndInterest, lateFeeCap, liabilityOf, utilizeItc } from '../gstr3b';
 import { BusinessDocument, Company, DocumentKind, DocumentLine, GstFlags, Party } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
 
@@ -144,5 +144,15 @@ describe('due date, late fee and interest', () => {
     const { lateFee, interest } = lateFeeAndInterest(r, { igst: 0, cgst: 3_650_000, sgst: 0, cess: 0 }, '2026-10-20', '2026-10-30');
     expect(lateFee).toEqual({ cgst: 25_000, sgst: 25_000 });
     expect(interest.cgst).toBe(18_000);
+  });
+});
+
+describe('late fee cap', () => {
+  it('follows the aggregate turnover (notification 19/2021-CT)', () => {
+    expect(lateFeeCap(1_00_00_000_00)).toBe(1_00_000); // ₹1 crore: ₹1,000 a head
+    expect(lateFeeCap(1_50_00_000_00)).toBe(1_00_000);
+    expect(lateFeeCap(4_00_00_000_00)).toBe(2_50_000); // ₹4 crore: ₹2,500
+    expect(lateFeeCap(9_00_00_000_00)).toBe(5_00_000); // above ₹5 crore: ₹5,000
+    expect(lateFeeCap(undefined)).toBe(5_00_000);
   });
 });

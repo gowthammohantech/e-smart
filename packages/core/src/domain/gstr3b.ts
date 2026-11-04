@@ -318,14 +318,26 @@ export function dueDate(period: string, frequency: 'monthly' | 'qrmp', stateCode
 const QRMP_22 = ['22', '23', '24', '25', '26', '27', '29', '30', '31', '32', '33', '34', '35', '36', '37', '97'];
 
 /**
- * Late fee for filing on `filedOn`: ₹50 a day (₹25 CGST + ₹25 SGST), ₹20 for a nil return, capped
- * at ₹10,000 (₹500 for nil). Interest at 18% a year on tax paid in cash after the due date.
+ * The late fee cap per head (CGST, and SGST the same) for a return with tax, by the previous year's
+ * aggregate turnover (notification 19/2021-CT): ₹1,000 up to ₹1.5 crore, ₹2,500 up to ₹5 crore,
+ * ₹5,000 above. With the turnover unknown, the highest. Paise.
  */
-export function lateFeeAndInterest(r: Gstr3b, cash: Record<TaxKind, number>, due: string, filedOn: string): { lateFee: { cgst: number; sgst: number }; interest: Record<TaxKind, number> } {
+export function lateFeeCap(turnoverMinor?: number): number {
+  if (turnoverMinor === undefined || turnoverMinor <= 0) return 5_00_000;
+  if (turnoverMinor <= 1_50_00_000_00) return 1_00_000;
+  if (turnoverMinor <= 5_00_00_000_00) return 2_50_000;
+  return 5_00_000;
+}
+
+/**
+ * Late fee for filing on `filedOn`: ₹50 a day (₹25 CGST + ₹25 SGST), ₹20 for a nil return, capped
+ * by turnover (`lateFeeCap`; ₹500 for nil). Interest at 18% a year on tax paid in cash after the due date.
+ */
+export function lateFeeAndInterest(r: Gstr3b, cash: Record<TaxKind, number>, due: string, filedOn: string, turnoverMinor?: number): { lateFee: { cgst: number; sgst: number }; interest: Record<TaxKind, number> } {
   const days = Math.max(0, Math.round((Date.parse(filedOn) - Date.parse(due)) / 86_400_000));
   const nil = taxOf(r.outward.taxable) + taxOf(r.outward.zeroRated) + taxOf(r.outward.reverseCharge) === 0;
   const perDay = nil ? 1000 : 2500;
-  const cap = nil ? 25_000 : 5_00_000;
+  const cap = nil ? 25_000 : lateFeeCap(turnoverMinor);
   const half = Math.min(days * perDay, cap);
   const interest = kinds();
   for (const k of ['igst', 'cgst', 'sgst', 'cess'] as const) interest[k] = Math.round((cash[k] * 18 * days) / (100 * 365));
