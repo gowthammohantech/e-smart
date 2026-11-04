@@ -4708,6 +4708,8 @@ components:
             lockedThroughDate: { type: [string, 'null'], format: date, description: 'Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.' }
             tan: { type: string, pattern: '^([A-Z]{4}[0-9]{5}[A-Z])?$', description: 'Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it.' }
             allowNegativeStock: { type: boolean, default: false, description: 'When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.' }
+            msmeBankRate: { type: number, minimum: 0, maximum: 50, default: 5.5, description: "RBI's bank rate in percent; MSME late-payment interest is three times it (MSMED Act s.16)" }
+            gstr2bDateToleranceDays: { type: integer, minimum: 0, maximum: 30, default: 3, description: 'How many days apart a GSTR-2B line and a bill with the same amounts may be dated and still be claimable without a person accepting it; 0 means the same day only.' }
             plan: { allOf: [{ $ref: '#/components/schemas/PlanTier' }], readOnly: true, description: Changed only through billing }
     Branch:
       allOf:

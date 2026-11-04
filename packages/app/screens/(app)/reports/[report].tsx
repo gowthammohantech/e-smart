@@ -624,7 +624,7 @@ export default function Report() {
             widths={[1, 1.4, 1.6, 1, 0.9]}
           />
           <Text variant="caption" tone="muted">
-            {tr('reports:msme.interestBasis', { rate: formatPercent(BANK_RATE_PERCENT * 3) })}
+            {tr('reports:msme.interestBasis', { rate: formatPercent((company.msmeBankRate ?? BANK_RATE_PERCENT) * 3) })}
           </Text>
         </ReportSection>
         {late.length ? (

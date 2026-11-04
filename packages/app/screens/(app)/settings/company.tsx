@@ -58,6 +58,8 @@ export default function CompanySettings() {
   const [returnFrequency, setReturnFrequency] = useState(company?.taxRegistration?.returnFrequency ?? 'monthly');
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
   const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
+  const [bankRate, setBankRate] = useState(String(company?.msmeBankRate ?? 5.5));
+  const [toleranceDays, setToleranceDays] = useState(String(company?.gstr2bDateToleranceDays ?? 3));
   const [tan, setTan] = useState(company?.tan ?? '');
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
@@ -98,6 +100,9 @@ export default function CompanySettings() {
         website: website.trim() || undefined,
         fiscalYearStartMonth: fyMonth,
         allowNegativeStock,
+        // Typed values out of range fall back to the defaults the server also keeps.
+        msmeBankRate: Number(bankRate) >= 0 && Number(bankRate) <= 50 && bankRate.trim() ? Number(bankRate) : 5.5,
+        gstr2bDateToleranceDays: /^\d{1,2}$/.test(toleranceDays.trim()) && Number(toleranceDays) <= 30 ? Number(toleranceDays) : 3,
         // Blank clears it; the server takes an empty TAN as "none".
         tan: tan.trim().toUpperCase(),
         address: {
@@ -243,6 +248,24 @@ export default function CompanySettings() {
           description={tr('settings:company.allowNegativeStockHint')}
           value={allowNegativeStock}
           onValueChange={setAllowNegativeStock}
+        />
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.rules')}</Text>
+        <TextField
+          label={tr('settings:company.msmeBankRate')}
+          value={bankRate}
+          onChangeText={setBankRate}
+          keyboardType="decimal-pad"
+          hint={tr('settings:company.msmeBankRateHint')}
+          icon="percent-outline"
+        />
+        <TextField
+          label={tr('settings:company.gstr2bTolerance')}
+          value={toleranceDays}
+          onChangeText={setToleranceDays}
+          keyboardType="number-pad"
+          hint={tr('settings:company.gstr2bToleranceHint')}
+          icon="calendar-range"
         />
       </ScrollView>
 

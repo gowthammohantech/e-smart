@@ -35,6 +35,8 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     lockedThroughDate: row.lockedThroughDate,
     allowNegativeStock: row.allowNegativeStock,
+    msmeBankRate: Number(row.msmeBankRate),
+    gstr2bDateToleranceDays: row.gstr2bDateToleranceDays,
     tan: row.tan,
     plan: row.plan,
     ...versioned(row),
@@ -67,6 +69,8 @@ export function companyColumns(body: Schema<'Company'>) {
     fiscalYearStartMonth: body.fiscalYearStartMonth,
     // Left alone when a client that predates the setting saves the company.
     ...(body.allowNegativeStock !== undefined && { allowNegativeStock: body.allowNegativeStock }),
+    ...(body.msmeBankRate !== undefined && { msmeBankRate: String(body.msmeBankRate) }),
+    ...(body.gstr2bDateToleranceDays !== undefined && { gstr2bDateToleranceDays: body.gstr2bDateToleranceDays }),
     ...(body.tan !== undefined && { tan: body.tan.trim().toUpperCase() || null }),
   };
 }

@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
-import { BANK_RATE_PERCENT, MSME_WARN_DAYS, msmePayables, sec43bh } from '@esmart/core/domain/msme';
+import { MSME_WARN_DAYS, msmePayables, sec43bh } from '@esmart/core/domain/msme';
 import type { BusinessDocument, Party, Payment } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { CompanyRow, Deps } from '../../context';
@@ -14,7 +14,7 @@ const P = schema.parties;
 
 /** Micro and small suppliers, their bills up to `asOf`, and what was paid against them: what core's msme functions read. */
 async function loadMsme(db: DbOrTx, companyId: string, asOf: string, branchIds: string[] = []) {
-  const parties = await db.select({ id: P.id, name: P.name, msmeType: P.msmeType }).from(P).where(and(eq(P.companyId, companyId), inArray(P.msmeType, ['micro', 'small'])));
+  const parties = await db.select({ id: P.id, name: P.name, msmeType: P.msmeType, paymentTermsDays: P.paymentTermsDays }).from(P).where(and(eq(P.companyId, companyId), inArray(P.msmeType, ['micro', 'small'])));
   if (!parties.length) return { parties: [], bills: [], payments: [], names: new Map<string, string>() };
   const rows = await db
     .select()
@@ -58,7 +58,8 @@ async function loadMsme(db: DbOrTx, companyId: string, asOf: string, branchIds: 
 export async function msmeReport(db: DbOrTx, company: CompanyRow, asOf: string, branchIds: string[]): Promise<Schema<'MsmePayables'>> {
   const base = company.baseCurrency.trim();
   const { parties, bills, payments, names } = await loadMsme(db, company.id, asOf, branchIds);
-  const rows = msmePayables(asOf, bills, parties, payments);
+  const bankRate = Number(company.msmeBankRate);
+  const rows = msmePayables(asOf, bills, parties, payments, bankRate);
   const late = sec43bh(asOf, bills, parties, payments, company.fiscalYearStartMonth);
   const sum = (list: typeof rows) => money(list.reduce((a, r) => a + r.outstandingMinor, 0), base);
   return {
@@ -76,7 +77,7 @@ export async function msmeReport(db: DbOrTx, company: CompanyRow, asOf: string, 
       interest: money(r.interestMinor, r.currency),
     })),
     notPaidInTime: late.map((r) => ({ documentId: r.documentId, number: r.number, partyId: r.partyId, partyName: names.get(r.partyId), date: r.date, dueDate: r.dueDate, amount: money(r.notPaidInTimeMinor, r.currency) })),
-    bankRate: BANK_RATE_PERCENT,
+    bankRate,
     outstanding: sum(rows),
     overdue: sum(rows.filter((r) => r.daysLeft < 0)),
   };

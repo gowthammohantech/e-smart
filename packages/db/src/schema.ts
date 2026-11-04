@@ -1747,6 +1747,10 @@ export const companies = pgTable("companies", {
 	lockedThroughDate: date("locked_through_date"),
 	// Off by default: a sale cannot take a tracked item below zero at its branch.
 	allowNegativeStock: boolean("allow_negative_stock").default(false).notNull(),
+	// RBI's bank rate (percent) for MSME late-payment interest, three times it (MSMED Act s.16).
+	msmeBankRate: numeric("msme_bank_rate", { precision: 5, scale: 2 }).default('5.5').notNull(),
+	// How many days apart a 2B line and a bill with the same amounts may be dated and still be claimed without a person.
+	gstr2bDateToleranceDays: smallint("gstr2b_date_tolerance_days").default(3).notNull(),
 	// With a TAN the business deducts TDS on what it pays suppliers.
 	tan: varchar({ length: 10 }),
 	plan: planTier().default('free').notNull(),

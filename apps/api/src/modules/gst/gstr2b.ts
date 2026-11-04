@@ -149,7 +149,7 @@ export async function reconciliation(db: DbOrTx, company: CompanyRow, gstin: str
   if (!p) return { gstin, period, fetched: false, rows: [], missingIn2b: [], summary: { lines: 0, matched: 0, matchedWithinTolerance: 0, manuallyLinked: 0, claimed: 0, partial: 0, probable: 0, missingInBooks: 0, missingIn2b: 0, claimableTax: m(0) } };
   const entries = await db.select().from(E).where(and(eq(E.companyId, company.id), eq(E.gstin, gstin), eq(E.period, period))).orderBy(E.supplierGstin, E.date);
   const { bills, rows: docs, to } = await billsFor(db, company, gstin, period);
-  const found = reconcile2b(entries.map(line), bills, { periodEnd: to });
+  const found = reconcile2b(entries.map(line), bills, { periodEnd: to, dateToleranceDays: company.gstr2bDateToleranceDays });
   // An import's bill isn't chased: its supplier files no GSTR-1.
   const r = { ...found, missingIn2b: found.missingIn2b.filter((b) => b.supplierGstin) };
   const docOf = new Map(docs.map((d) => [d.doc.id, d.doc]));

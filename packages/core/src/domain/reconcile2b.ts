@@ -100,13 +100,15 @@ const daysApart = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(
 
 /**
  * Matches 2B to the books. `toleranceMinor` absorbs rounding (₹1 by default); `probableDays` is how
- * far apart dates may be, for a probable match and for one within tolerance. A bill matches at most
+ * far apart dates may be for a probable match, and `dateToleranceDays` (the company's setting, 3 by
+ * default; 0 for the same day only) for one claimable within tolerance. A bill matches at most
  * one line. A bill of entry carries the port, not a GSTIN, so it is matched on its number alone.
  * Bills dated after `periodEnd` (entered on the day they came) can match, but aren't chased.
  */
-export function reconcile2b(lines: TwoBLine[], bills: BookBill[], opts: { toleranceMinor?: number; probableDays?: number; periodEnd?: string } = {}): Reconciliation {
+export function reconcile2b(lines: TwoBLine[], bills: BookBill[], opts: { toleranceMinor?: number; probableDays?: number; dateToleranceDays?: number; periodEnd?: string } = {}): Reconciliation {
   const tolerance = opts.toleranceMinor ?? 100;
   const probableDays = opts.probableDays ?? 3;
+  const dateTolerance = opts.dateToleranceDays ?? probableDays;
   const used = new Set<string>();
   const byKey = new Map<string, BookBill[]>();
   const keyOf = (kind: BookBill['kind'] | null, gstin: string, number: string, boe = false) => `${kind}|${boe ? '' : gstin}|${normalizeNumber(number)}`;
@@ -120,7 +122,7 @@ export function reconcile2b(lines: TwoBLine[], bills: BookBill[], opts: { tolera
     if (Math.abs(difference.taxMinor) > tolerance) reasons.push('tax');
     if (difference.days > 0) reasons.push('date');
     const amounts = !reasons.includes('taxable') && !reasons.includes('tax');
-    return { same: amounts && difference.days === 0, close: amounts && difference.days <= probableDays, ...(reasons.length ? { difference, reasons } : {}) };
+    return { same: amounts && difference.days === 0, close: amounts && difference.days <= dateTolerance, ...(reasons.length ? { difference, reasons } : {}) };
   };
   const matches: Match[] = lines.map((line) => {
     if (line.decision === 'notOurs') return { line, status: 'notOurs' as const };

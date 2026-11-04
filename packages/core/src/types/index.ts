@@ -36,6 +36,10 @@ export type Company = {
   lockedThroughDate?: string | null;
   /** Let sales take tracked items below zero. Off unless the business turns it on. */
   allowNegativeStock?: boolean;
+  /** RBI's bank rate, percent, for MSME late-payment interest (three times it). 5.5 unless changed. */
+  msmeBankRate?: number;
+  /** Days apart a 2B line and a bill may be dated and still be claimed without a person. 3 unless changed. */
+  gstr2bDateToleranceDays?: number;
   /** Tax deduction account number: with it the business deducts TDS on what it pays suppliers. */
   tan?: string;
   plan: PlanTier;

@@ -66,6 +66,14 @@ describe('GSTR-2B reconciliation', () => {
     expect(r.claimableTaxMinor).toBe(180_000);
   });
 
+  it('claims a date difference only within the company’s tolerance; 0 means the same day', () => {
+    const exactOnly = reconcile2b([line({ date: '2026-09-05' })], [bill({ date: '2026-09-07' })], { dateToleranceDays: 0 });
+    expect(exactOnly.matches[0].status).toBe('partial');
+    expect(exactOnly.claimableTaxMinor).toBe(0);
+    const wide = reconcile2b([line({ date: '2026-09-05' })], [bill({ date: '2026-09-12' })], { dateToleranceDays: 7 });
+    expect(wide.matches[0].status).toBe('matchedWithinTolerance');
+  });
+
   it('matches a bill dated after the period, but chases only the period’s own', () => {
     const r = reconcile2b([line()], [bill({ date: '2026-10-02' }), bill({ number: 'LATE', date: '2026-10-03' })], { periodEnd: '2026-09-30', probableDays: 30 });
     expect(r.matches[0].status).toBe('matchedWithinTolerance');

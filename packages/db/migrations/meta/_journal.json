@@ -218,6 +218,13 @@
       "when": 1793821062556,
       "tag": "0030_advance_refunds",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793824007004,
+      "tag": "0031_company_rule_settings",
+      "breakpoints": true
     }
   ]
 }

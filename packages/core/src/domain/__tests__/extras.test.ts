@@ -146,6 +146,12 @@ describe('paying micro and small suppliers (MSMED s.15, s.43B(h))', () => {
     expect(msmeDueDate({ date: '2026-09-01', dueDate: '2026-09-01' })).toBe('2026-09-16');
   });
 
+  it('takes a due date that only follows the supplier’s standing terms as nothing agreed: 15 days', () => {
+    expect(msmeDueDate({ date: '2026-09-01', dueDate: '2026-10-01' }, 30)).toBe('2026-09-16');
+    // A date typed for this bill is the agreement, within 45 days.
+    expect(msmeDueDate({ date: '2026-09-01', dueDate: '2026-09-25' }, 30)).toBe('2026-09-25');
+  });
+
   it('lists covered suppliers’ unpaid bills, most urgent first, with interest once late', () => {
     const bills = [bill('a', 'm', '2026-09-01'), bill('b', 'm', '2026-09-20', '2026-10-30'), bill('c', 'big', '2026-09-01'), bill('d', 'm', '2026-09-05')];
     const rows = msmePayables('2026-10-01', bills, [micro, medium], [pay('a', '2026-09-20', '4000'), pay('d', '2026-09-10', '10000')]);

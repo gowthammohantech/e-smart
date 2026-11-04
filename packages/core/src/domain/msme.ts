@@ -9,7 +9,7 @@ import { outstandingOf, settledBy } from './receivables';
  * year it was bought (Income-tax Act s.43B(h)). Medium enterprises are outside both rules.
  */
 
-/** RBI's bank rate, percent; s.16 interest is three times it. Shown for information; update when RBI changes it. */
+/** RBI's bank rate, percent, unless the company sets its own (`Company.msmeBankRate`); s.16 interest is three times it. */
 export const BANK_RATE_PERCENT = 5.5;
 export const MSME_MAX_DAYS = 45;
 export const MSME_DEFAULT_DAYS = 15;
@@ -19,11 +19,15 @@ export const MSME_WARN_DAYS = 7;
 const COVERED = ['micro', 'small'];
 export const isMsmeCovered = (party?: Pick<Party, 'msmeType'>) => !!party?.msmeType && COVERED.includes(party.msmeType);
 
-/** The last day a covered supplier's bill can be paid on time. */
-export function msmeDueDate(bill: Pick<BusinessDocument, 'date' | 'dueDate'>): string {
+/**
+ * The last day a covered supplier's bill can be paid on time. A due date the bill took from the
+ * supplier's standing payment terms (`termsDays`) is not an agreement for this bill: it gets 15 days.
+ */
+export function msmeDueDate(bill: Pick<BusinessDocument, 'date' | 'dueDate'>, termsDays?: number): string {
   const cap = addDaysISO(bill.date, MSME_MAX_DAYS);
-  // No terms: a bill due the day it is dated records no agreement.
-  if (!bill.dueDate || bill.dueDate <= bill.date) return addDaysISO(bill.date, MSME_DEFAULT_DAYS);
+  // No terms: a bill due the day it is dated, or on its supplier's standing terms, records no agreement.
+  const fromTerms = termsDays !== undefined && bill.dueDate === addDaysISO(bill.date, termsDays);
+  if (!bill.dueDate || bill.dueDate <= bill.date || fromTerms) return addDaysISO(bill.date, MSME_DEFAULT_DAYS);
   return bill.dueDate < cap ? bill.dueDate : cap;
 }
 
@@ -54,7 +58,7 @@ const BILLS = ['purchaseBill'];
 const OFF = ['draft', 'requested', 'cancelled', 'rejected'];
 
 /** Covered suppliers' bills still unpaid on `asOf`, most urgent first. */
-export function msmePayables(asOf: string, bills: BusinessDocument[], parties: Party[], payments: Payment[]): MsmePayable[] {
+export function msmePayables(asOf: string, bills: BusinessDocument[], parties: Party[], payments: Payment[], bankRate = BANK_RATE_PERCENT): MsmePayable[] {
   const byId = new Map(parties.map((p) => [p.id, p]));
   const paidBy = payments.filter((p) => p.date <= asOf);
   const out: MsmePayable[] = [];
@@ -63,7 +67,7 @@ export function msmePayables(asOf: string, bills: BusinessDocument[], parties: P
     if (!BILLS.includes(b.kind) || OFF.includes(b.status) || b.date > asOf || !isMsmeCovered(party)) continue;
     const outstanding = outstandingOf(b, paidBy).minor;
     if (outstanding <= 0) continue;
-    const dueDate = msmeDueDate(b);
+    const dueDate = msmeDueDate(b, party!.paymentTermsDays);
     const daysLeft = daysBetween(asOf, dueDate);
     out.push({
       documentId: b.id,
@@ -76,7 +80,7 @@ export function msmePayables(asOf: string, bills: BusinessDocument[], parties: P
       outstandingMinor: outstanding,
       currency: b.currency,
       daysLeft,
-      interestMinor: msmeInterest(outstanding, -daysLeft),
+      interestMinor: msmeInterest(outstanding, -daysLeft, bankRate),
     });
   }
   return out.sort((a, b) => a.daysLeft - b.daysLeft);
@@ -95,7 +99,7 @@ export function sec43bh(asOf: string, bills: BusinessDocument[], parties: Party[
   const out: Sec43bhRow[] = [];
   for (const b of bills) {
     if (!BILLS.includes(b.kind) || OFF.includes(b.status) || b.date < fy.start || b.date > fy.end || !isMsmeCovered(byId.get(b.partyId))) continue;
-    const dueDate = msmeDueDate(b);
+    const dueDate = msmeDueDate(b, byId.get(b.partyId)!.paymentTermsDays);
     if (dueDate >= asOf) continue;
     const inTime = payments
       .filter((p) => p.date <= dueDate)

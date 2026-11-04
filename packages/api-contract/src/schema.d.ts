@@ -3452,6 +3452,16 @@ export interface components {
              * @default false
              */
             allowNegativeStock: boolean;
+            /**
+             * @description RBI's bank rate in percent; MSME late-payment interest is three times it (MSMED Act s.16)
+             * @default 5.5
+             */
+            msmeBankRate: number;
+            /**
+             * @description How many days apart a GSTR-2B line and a bill with the same amounts may be dated and still be claimable without a person accepting it; 0 means the same day only.
+             * @default 3
+             */
+            gstr2bDateToleranceDays: number;
             /** @description Changed only through billing */
             readonly plan?: components["schemas"]["PlanTier"];
         };

@@ -53,7 +53,12 @@
     "allowNegativeStockHint": "Let invoices and deliveries sell more than the branch has in stock. When off, they cannot be finalised until the stock is added.",
     "lutValidTill": "LUT valid till",
     "logoRemoving": "Removing the logo…",
-    "registeredFor": "Registered for {{regime}}"
+    "registeredFor": "Registered for {{regime}}",
+    "rules": "Rules",
+    "msmeBankRate": "RBI bank rate (%)",
+    "msmeBankRateHint": "MSME late-payment interest is three times this rate (MSMED Act s.16). Update it when RBI changes the rate.",
+    "gstr2bTolerance": "GSTR-2B date tolerance (days)",
+    "gstr2bToleranceHint": "A 2B line and a bill with the same amounts, dated this many days apart or less, can be claimed without anyone accepting it. 0 means the same day only."
   },
   "gstPortal": {
     "howTitle": "Before you connect",

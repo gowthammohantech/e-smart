@@ -1,0 +1,2 @@
+ALTER TABLE "companies" ADD COLUMN "msme_bank_rate" numeric(5, 2) DEFAULT '5.5' NOT NULL;--> statement-breakpoint
+ALTER TABLE "companies" ADD COLUMN "gstr2b_date_tolerance_days" smallint DEFAULT 3 NOT NULL;

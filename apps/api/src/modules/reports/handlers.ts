@@ -246,7 +246,7 @@ export const reportsHandlers = defineHandlers({
         const bills = inScope(docs);
         const parties = await partiesOf(bills);
         const partyNames = Object.fromEntries(parties.map((p) => [p.id, p.name]));
-        return { rows: msmePayables(to, bills, parties, payments), late: sec43bh(to, bills, parties, payments, ctx.company.fiscalYearStartMonth), partyNames } as never;
+        return { rows: msmePayables(to, bills, parties, payments, Number(ctx.company.msmeBankRate)), late: sec43bh(to, bills, parties, payments, ctx.company.fiscalYearStartMonth), partyNames } as never;
       }
     }
   },
