@@ -15,7 +15,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
+import { useBaseCurrency, useDocuments, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
+import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
@@ -32,6 +33,7 @@ export default function PaymentDetail() {
   const { run: serverSave } = useServerSave();
 
   const { id } = useLocalSearchParams<{ id: string }>();
+  const documents = useDocuments();
   const payment = usePayment(id);
   const party = useParty(payment?.partyId);
   const accounts = usePaymentAccounts();
@@ -135,11 +137,11 @@ export default function PaymentDetail() {
             payment.allocations.map((a, i) => (
               <Pressable
                 key={a.documentId}
-                onPress={() =>
-                  router.push(
-                    isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`,
-                  )
-                }
+                onPress={() => {
+                  // A debit note opens as itself, not as an invoice or bill.
+                  const doc = documents.find((d) => d.id === a.documentId);
+                  router.push((doc ? detailRouteFor(doc.kind, doc.id) : isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`) as never);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={tr('sales:payment.openDocument', { number: a.documentNumber })}
                 style={({ pressed }) => ({
@@ -153,9 +155,18 @@ export default function PaymentDetail() {
                 })}
               >
                 <Icon name="file-document-outline" size={20} color={t.c.primary} />
-                <Text variant="body" weight="600" style={{ flex: 1 }}>
-                  {a.documentNumber}
-                </Text>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text variant="body" weight="600">
+                    {a.documentNumber}
+                  </Text>
+                  {(['tdsDeducted', 'discount', 'writeOff'] as const)
+                    .filter((k) => a[k]?.minor)
+                    .map((k) => (
+                      <Text key={k} variant="caption" tone="muted">
+                        {`${tr(`sales:payment.adjustment.${k}`)}: ${formatMoney(a[k]!)}`}
+                      </Text>
+                    ))}
+                </View>
                 <Text variant="body" weight="700">
                   {formatMoney(a.amount)}
                 </Text>

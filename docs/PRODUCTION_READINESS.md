@@ -29,6 +29,7 @@ fall back to manual entry) until a real adapter exists.
 | GSP GSTIN search is built (`GSTIN_PROVIDER=gsp`, Adaequare or Whitebooks). Still open: PIN codes the India Post directory lacks and the EWB portal road distance, which answer 503 so the apps fall back to manual entry | `apps/api/src/providers/gstin.ts`, `providers/gsp/` | Backend | 🟨 Partly |
 | Document AI OCR: read an uploaded bill image server-side, so OCR works on the web and without ML Kit. `OCR_PROVIDER=document-ai` currently throws at boot | `apps/api/src/providers/ocr.ts` (`createOcrProvider`) | Backend | ⬜ Todo |
 | GSP e-invoice / e-way bill adapters (Adaequare, Whitebooks) are built; run them against each GSP's sandbox and settle the routes flagged unconfirmed in the GSP README before production | `apps/api/src/providers/gsp/` | Backend | 🟨 Built, unverified |
+| GSP returns adapter (taxpayer session, GSTR-2B, save, offset, proceed, EVC, file, track) is built for Adaequare; every route is unconfirmed until the sandbox run. Whitebooks has none yet | `apps/api/src/providers/gsp/returns.ts` | Backend | 🟨 Built, unverified |
 
 ## 2. Vendor accounts and secrets to provision
 
@@ -150,3 +151,19 @@ API will not start until the provider rows are real.
 | App store builds: profiles, signing and the privacy manifest are done (`apps/mobile/eas.json`, `app.json`); store listings, labels and submission follow `docs/STORE_SUBMISSION.md` | Mobile/Web | 🟨 Partly |
 | Legal pages: drafts at `/privacy`, `/terms`, `/refund`, `/delete-account`, `/support` on the site (`apps/site/content/legal.ts`); a lawyer must review them and a grievance officer be named | Product | 🟨 Drafted |
 | Data privacy: consent is recorded at sign-up (`users.terms_version`), deletion is self-serve (`POST /me/delete`), export exists, sub-processors are listed in the privacy page. Still open: the purge job for `accounts.purge_after` | Product, Backend | 🟨 Partly |
+
+## 9. Accounting and GST returns (Phase 3)
+
+The books, TDS, reverse charge, credit, notes, GSTR-2B, GSTR-3B and filing are built and tested
+against the simulator. Filing stays off in production (`GST_FILING_ENABLED=false`) until the first
+three rows below are done; preparing and saving returns works without it.
+
+| Item | Owner | Status |
+|---|---|---|
+| A chartered accountant reviews and signs off `docs/accounting/RULES.md`, including its open questions (late-fee cap by turnover, bank rate, agreed day, reimbursement accounting) | Product | ⬜ Todo |
+| A worked month on a test company, checked to the paisa by the CA: TDS over the threshold, GTA reverse charge, a blocked credit, capital goods, a credit and a debit note, an advance for services, a reimbursement, an MSME bill. Expected GSTR-1 JSON, 3B tables and set-off | QA, CA | ⬜ Todo |
+| The returns routes confirmed on the GSP sandbox, and one return filed end to end on a test GSTIN (`docs/RUNBOOK.md`, GST returns) | Backend | ⏸ Blocked: needs GSP taxpayer-API access |
+| Tally Prime (education mode) imports the Tally XML export, and its trial balance equals the app's | QA | ⬜ Todo |
+| Offline on a phone: a journal and a contra saved offline, synced, and the trial balance matches the server's | QA | ⬜ Todo |
+| Turn on `GST_FILING_ENABLED` in production | Ops | ⏸ Blocked on the rows above |
+| Known gaps, documented in the FAQ: DSC filing, advance refunds, imports of goods and ISD in 3B, GSTR-1 amendment tables, a document split across cost centres | Product | Decision needed |

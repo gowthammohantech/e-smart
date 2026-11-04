@@ -13,6 +13,8 @@ import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { GstRegistrationType, MsmeType, Party, PartyKind } from '@esmart/core/types';
+import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
@@ -33,7 +35,7 @@ const MSME_OPTIONS = ['none', 'micro', 'small', 'medium'] as const;
 
 export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain']);
+  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
   // Where Cancel and Save land when there is no screen to go back to.
@@ -84,6 +86,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [udyam, setUdyam] = useState(party?.udyamNumber ?? '');
   const [reverseCharge, setReverseCharge] = useState(!!party?.reverseCharge);
   const [msmeOpen, setMsmeOpen] = useState(false);
+  const [tdsSectionCode, setTdsSectionCode] = useState(party?.tdsSection);
+  const [tdsOpen, setTdsOpen] = useState(false);
+  const [certRate, setCertRate] = useState(party?.lowerTdsCertificate ? String(party.lowerTdsCertificate.rate) : '');
+  const [certValidTill, setCertValidTill] = useState(party?.lowerTdsCertificate?.validTill ?? '');
   const [active, setActive] = useState((party?.status ?? 'active') === 'active');
 
   const [stateOpen, setStateOpen] = useState(false);
@@ -156,6 +162,8 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       msmeType: kind === 'supplier' ? msmeType : undefined,
       udyamNumber: kind === 'supplier' && msmeType ? udyam.trim().toUpperCase() || undefined : undefined,
       reverseCharge: kind === 'supplier' && reverseCharge ? true : undefined,
+      tdsSection: kind === 'supplier' ? tdsSectionCode : undefined,
+      lowerTdsCertificate: kind === 'supplier' && tdsSectionCode && certRate && certValidTill ? { rate: Number(certRate), validTill: certValidTill } : undefined,
       email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
@@ -257,6 +265,29 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           <TextField label={tr('contacts:form.udyam')} value={udyam} onChangeText={(v) => setUdyam(v.toUpperCase())} placeholder="UDYAM-TN-02-0012345" autoCapitalize="characters" icon="numeric" />
         ) : null}
         <SwitchField label={tr('contacts:form.reverseCharge')} description={tr('contacts:form.reverseChargeHint')} value={reverseCharge} onValueChange={setReverseCharge} />
+        <PickerField
+          label={tr('contacts:form.tdsSection')}
+          value={tdsSectionCode ? `${tdsSection(tdsSectionCode)?.label} · ${tdsSection(tdsSectionCode)?.nature}` : tr('purchases:tds.none')}
+          onPress={() => setTdsOpen(true)}
+          icon="bank-minus"
+          hint={tr('contacts:form.tdsSectionHint')}
+        />
+        {tdsSectionCode ? (
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <TextField
+              label={tr('contacts:form.lowerTdsRate')}
+              value={certRate}
+              onChangeText={(v) => setCertRate(v.replace(/[^0-9.]/g, ''))}
+              placeholder="—"
+              keyboardType="decimal-pad"
+              hint={tr('contacts:form.lowerTds')}
+              containerStyle={{ flex: 1 }}
+            />
+            <View style={{ flex: 1 }}>
+              <DateField label={tr('contacts:form.lowerTdsValidTill')} value={certValidTill} onChange={setCertValidTill} />
+            </View>
+          </View>
+        ) : null}
       </>
     ) : null;
   const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
@@ -547,6 +578,15 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
           value={currency}
           onSelect={setCurrency}
+        />
+        <SelectSheet
+          visible={tdsOpen}
+          onClose={() => setTdsOpen(false)}
+          title={tr('contacts:form.tdsSection')}
+          options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature }))]}
+          value={tdsSectionCode ?? 'none'}
+          onSelect={(v) => setTdsSectionCode(v === 'none' ? undefined : v)}
+          searchable={false}
         />
         <SelectSheet
           visible={msmeOpen}

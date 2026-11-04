@@ -34,6 +34,19 @@ They live in the `jobs` table; the code is in `apps/api/src/jobs/` and the sched
 | `exports.expire` | 04:00 | Deletes export files past their keep-until date |
 | `accounts.purge` | 04:30 | Erases closed accounts after 8 years. Only logs while `PURGE_DRY_RUN=true` (the default). |
 | `invoices.overdue` | 09:30 | Tells each team once about invoices that fell overdue in the past week |
+| `itc.reversal180` | 05:00 | Marks bills unpaid 180 days after their date (input tax credit reversed, Rule 37), tells the business, and marks them reclaimed once paid |
+| `msme.reminders` | 08:30 | Tells the business, once each, a week before a micro or small supplier's bill passes its MSMED s.15 limit, and once it has |
+| `gstr2b.fetch` | 09:00 | From the 14th, downloads last month's GSTR-2B for each connected GSTIN that hasn't got it, and tells the business |
+| `gst.returns.recover` | every 15 min | Settles GST return filings whose answer was lost, from the portal's return tracker; a settled GSTR-3B closes its month and posts its set-off |
+
+## GST returns: switching filing on
+
+`RETURNS_PROVIDER` (`simulator`, `gsp` or `disabled`; production defaults to `disabled`) connects the taxpayer's GST portal session for GSTR-2B and for saving returns. `GST_FILING_ENABLED` (default `false`) lets the app file them. Turn filing on only when all three hold:
+1. A chartered accountant has signed off `docs/accounting/RULES.md`.
+2. Every returns route in `apps/api/src/providers/gsp/README.md` has been confirmed on the GSP's sandbox: save, offset, proceed to file, EVC, file, track.
+3. One real return has been filed end to end on a test GSTIN.
+
+**A filing stuck "checking whether it went through":** the `gst.returns.recover` job asks the portal every 15 minutes. If the taxpayer's portal session has lapsed it can't; ask them to reconnect in **GST portal connection**. Never file it on the portal by hand until the tracker says it isn't filed: `select gstin, return_type, period, last_error from gst_returns where status = 'submitted' and last_error like 'No answer%'`.
 
 **Is it keeping up?** Check `GET /health/worker`. It answers 503 when the oldest due job has waited more than 15 minutes; alert on that. `deadLastDay` counts jobs that gave up after their last try.
 

@@ -45,6 +45,10 @@ describe('production config guards', () => {
     const config = loadConfig(ready);
     expect(config.GSTIN_PROVIDER).toBe('disabled');
     expect(config.OCR_PROVIDER).toBe('disabled');
+    // Unset, returns are prepared but not filed, so a deployment from before them still starts.
+    expect(config.RETURNS_PROVIDER).toBe('disabled');
+    expect(config.GST_FILING_ENABLED).toBe(false);
+    expect(() => loadConfig({ ...ready, RETURNS_PROVIDER: 'simulator' })).toThrow(/RETURNS_PROVIDER=simulator/);
   });
 
   it('keeps every simulator available outside production', () => {

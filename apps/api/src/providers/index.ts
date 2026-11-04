@@ -8,6 +8,7 @@ import { createGstinProvider, type GstinProvider } from './gstin';
 import { createMessaging, Outbox, type EmailProvider, type PushProvider, type SmsProvider, type WhatsAppProvider } from './messaging';
 import { createOcrProvider, type OcrProvider } from './ocr';
 import { createPaymentsProvider, type PaymentsProvider } from './payments';
+import { createReturnsProvider, type ReturnsProvider } from './returns';
 import { ChromiumPdf, StubPdf, type PdfProvider } from './pdf';
 import { AzureBlobStorage, MemoryStorage, S3Storage, type StorageProvider } from './storage';
 
@@ -21,6 +22,7 @@ export type Providers = {
   storage: StorageProvider;
   pdf: PdfProvider;
   compliance: ComplianceProvider;
+  returns: ReturnsProvider;
   gstin: GstinProvider;
   ocr: OcrProvider;
   fx: FxProvider;
@@ -33,7 +35,7 @@ export type Providers = {
  * in-process stand-in, so development and tests need only Postgres; config
  * refuses the stand-ins when NODE_ENV=production.
  */
-export function createProviders(config: Config, log: FastifyBaseLogger | { info: (m: string) => void }, db: Db): Providers {
+export function createProviders(config: Config, log: FastifyBaseLogger | { info: (m: string) => void }, db: Db, now: () => Date = () => new Date()): Providers {
   const outbox = new Outbox();
   const messaging = createMessaging(config, outbox, (m) => log.info(m));
   return {
@@ -42,6 +44,7 @@ export function createProviders(config: Config, log: FastifyBaseLogger | { info:
     storage: createStorage(config),
     pdf: config.PDF_PROVIDER === 'chromium' ? new ChromiumPdf(config) : new StubPdf(),
     compliance: createComplianceProvider(config),
+    returns: createReturnsProvider(config, now),
     gstin: createGstinProvider(config, db),
     ocr: createOcrProvider(config),
     fx: createFxProvider(config),

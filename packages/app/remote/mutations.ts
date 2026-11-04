@@ -234,6 +234,14 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   saveExpense: master('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
   removeExpense: removal('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
 
+  /* books */
+  saveLedgerAccount: master('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  removeLedgerAccount: removal('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  saveVoucher: master('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  removeVoucher: removal('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  saveCostCentre: master('cost_centre', 'costCentres', 'cost-centres', named),
+  removeCostCentre: removal('cost_centre', 'costCentres', 'cost-centres', named),
+
   /* stock */
   addStockMovement: ({ args }) => {
     const m = args[0] as Omit<StockMovement, 'id' | 'createdAt' | 'createdBy'>;

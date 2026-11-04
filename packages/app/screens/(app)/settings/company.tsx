@@ -56,6 +56,7 @@ export default function CompanySettings() {
   const [returnFrequency, setReturnFrequency] = useState(company?.taxRegistration?.returnFrequency ?? 'monthly');
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
   const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
+  const [tan, setTan] = useState(company?.tan ?? '');
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
   const [lutValidTill, setLutValidTill] = useState(() => {
@@ -94,6 +95,7 @@ export default function CompanySettings() {
         website: website.trim() || undefined,
         fiscalYearStartMonth: fyMonth,
         allowNegativeStock,
+        tan: tan.trim().toUpperCase(),
         address: {
           ...company.address,
           line1: line1.trim(),
@@ -204,6 +206,15 @@ export default function CompanySettings() {
                     {tr('settings:company.returnFrequencyHint')}
                   </Text>
                 </View>
+                <TextField
+                  label={tr('settings:company.tan')}
+                  value={tan}
+                  onChangeText={(v) => setTan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                  autoCapitalize="characters"
+                  icon="bank-minus"
+                  placeholder="MUMA12345B"
+                  hint={tr('settings:company.tanHint')}
+                />
                 <TextField
                   label={tr('settings:company.lutNumber')}
                   value={lutNumber}

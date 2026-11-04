@@ -165,6 +165,25 @@ describe('payment accounts', () => {
   });
 });
 
+describe('a foreign-currency account', () => {
+  it('counts its opening balance in base at the rate on its opening day', async () => {
+    t.setNow('2026-10-01T10:00:00Z');
+    const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
+    const usd = { name: 'EEFC USD', type: 'bank', currency: 'USD', openingBalance: { minor: 100_000, currency: 'USD' }, openingBalanceDate: '2026-09-15' };
+    const none = await t.post(`${c}/payment-accounts`, usd, { token });
+    expect(none.status).toBe(422);
+    expect(none.body.issues[0].field).toBe('openingBalance');
+    await t.post(`${c}/exchange-rates`, { from: 'USD', to: 'INR', rate: 83, effectiveFrom: '2026-09-01' }, { token });
+    await t.post(`${c}/exchange-rates`, { from: 'USD', to: 'INR', rate: 85, effectiveFrom: '2026-09-20' }, { token });
+    const res = await t.post(`${c}/payment-accounts`, usd, { token });
+    expect(res.status).toBe(201);
+    // US$1,000 on 15 September, at that day's ₹83.
+    expect(res.body).toMatchObject({ openingRate: 83, currentBalance: { minor: 8_300_000, currency: 'INR' } });
+    const tb = await t.get(`${c}/reports/trial-balance`, { token, query: { from: '2026-04-01', to: '2026-10-01' } });
+    expect(tb.body.rows.find((r: { account: string }) => r.account === `pay:${res.body.id}`).closing).toEqual({ minor: 8_300_000, currency: 'INR' });
+  });
+});
+
 describe('exchange rates', () => {
   it('manages manual rates on the full plan', async () => {
     const free = await ownerWithCompany(t);
@@ -235,7 +254,7 @@ describe('numbering series', () => {
   it('lists every kind, only moves forward, and previews with the branch code', async () => {
     const { token, c, company } = await ownerWithCompany(t);
     const list = await t.get(`${c}/numbering-series`, { token });
-    expect(list.body.data).toHaveLength(11);
+    expect(list.body.data).toHaveLength(20);
     const inv = list.body.data.find((s: { kind: string }) => s.kind === 'invoice');
     expect(inv).toMatchObject({ prefix: 'INV', nextNumber: 1, includeFiscalYear: true });
 

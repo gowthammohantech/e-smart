@@ -39,7 +39,7 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   const homeState = gstin.slice(0, 2);
   const rchrg = (rows: Gstr1Row[]) => (rows.some((r) => r.reverseCharge) ? 'Y' : 'N');
   const invoice = (rows: Gstr1Row[]) => ({ inum: rows[0].number, idt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: 'R', itms: itemsOf(rows) });
-  const note = (rows: Gstr1Row[]) => ({ ntty: 'C', nt_num: rows[0].number, nt_dt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: 'R', itms: itemsOf(rows) });
+  const note = (rows: Gstr1Row[]) => ({ ntty: rows[0].noteType ?? 'C', nt_num: rows[0].number, nt_dt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: 'R', itms: itemsOf(rows) });
 
   const b2b = [...byKey(byDocument(summary.b2b), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, inv: docs.map(invoice) }));
   const b2cl = [...byKey(byDocument(summary.b2cl), (d) => d[0].placeOfSupply).entries()].map(([pos, docs]) => ({
@@ -47,7 +47,7 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
     inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d) })),
   }));
   const b2cs = [...byKey(summary.b2cs, (r) => `${r.placeOfSupply}|${r.rate}`).values()].map((rows) => {
-    const total = (pick: (r: Gstr1Row) => number) => r2(rows.reduce((a, r) => a + (r.kind === 'salesReturn' ? -1 : 1) * pick(r), 0));
+    const total = (pick: (r: Gstr1Row) => number) => r2(rows.reduce((a, r) => a + (r.noteType === 'C' ? -1 : 1) * pick(r), 0));
     return {
       sply_ty: rows[0].placeOfSupply === homeState ? 'INTRA' : 'INTER',
       pos: rows[0].placeOfSupply,
@@ -77,6 +77,7 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   };
   const docNatures = [
     { nature: 'invoice' as const, doc_num: 1, doc_typ: 'Invoices for outward supply' },
+    { nature: 'debitNote' as const, doc_num: 4, doc_typ: 'Debit Note' },
     { nature: 'creditNote' as const, doc_num: 5, doc_typ: 'Credit Note' },
   ];
   const doc_issue = {
@@ -104,5 +105,14 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
       csamt: r2(h.cess.minor),
     })),
   };
-  return { gstin, fp: period, version: 'GST3.1.6', hash: 'hash', b2b, b2cl, b2cs, exp, cdnr, cdnur, nil, hsn, doc_issue };
+  // Table 11: advances for services, by place of supply, one item per rate (ad_amt is the advance less its tax).
+  const advanceTable = (rows: Gstr1Summary['advances']['received']) =>
+    [...new Set(rows.map((r) => r.placeOfSupply))].map((pos) => ({
+      pos,
+      sply_ty: rows.find((r) => r.placeOfSupply === pos)!.interState ? 'INTER' : 'INTRA',
+      itms: rows.filter((r) => r.placeOfSupply === pos).map((r) => ({ rt: r.rate, ad_amt: r2(r.taxable), iamt: r2(r.igst), camt: r2(r.cgst), samt: r2(r.sgst), csamt: r2(r.cess) })),
+    }));
+  const at = advanceTable(summary.advances.received);
+  const txpd = advanceTable(summary.advances.adjusted);
+  return { gstin, fp: period, version: 'GST3.1.6', hash: 'hash', b2b, b2cl, b2cs, exp, cdnr, cdnur, nil, hsn, doc_issue, ...(at.length && { at }), ...(txpd.length && { txpd }) };
 }

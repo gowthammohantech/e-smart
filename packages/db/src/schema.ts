@@ -32,7 +32,9 @@ export const cancelReasonCode = pgEnum("cancel_reason_code", ['1', '2', '3', '4'
 export const deliveryStatus = pgEnum("delivery_status", ['queued', 'sent', 'delivered', 'read', 'failed'])
 export const discountMode = pgEnum("discount_mode", ['percent', 'amount'])
 export const docStatus = pgEnum("doc_status", ['draft', 'sent', 'accepted', 'rejected', 'expired', 'confirmed', 'fulfilled', 'cancelled', 'delivered', 'issued', 'partiallyPaid', 'paid', 'overdue', 'requested', 'approved', 'processed', 'received', 'billed'])
-export const documentKind = pgEnum("document_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'])
+export const documentKind = pgEnum("document_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'])
+/** Why a credit or debit note was raised. */
+export const noteReason = pgEnum("note_reason", ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'])
 export const einvoiceDocType = pgEnum("einvoice_doc_type", ['INV', 'CRN', 'DBN'])
 export const einvoiceStatus = pgEnum("einvoice_status", ['notApplicable', 'pending', 'generated', 'cancelled', 'failed'])
 export const einvoiceSupplyType = pgEnum("einvoice_supply_type", ['B2B', 'SEZWP', 'SEZWOP', 'EXPWP', 'EXPWOP', 'DEXP'])
@@ -60,7 +62,7 @@ export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed',
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
 export const messageChannel = pgEnum("message_channel", ['whatsapp', 'sms', 'email'])
 export const notificationKind = pgEnum("notification_kind", ['invoiceSent', 'paymentReceived', 'invoiceOverdue', 'lowStock', 'compliance', 'syncFailure', 'system'])
-export const numberingKind = pgEnum("numbering_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense'])
+export const numberingKind = pgEnum("numbering_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan'])
 export const ocrFieldKey = pgEnum("ocr_field_key", ['vendor', 'gstin', 'date', 'amount', 'tax', 'reference', 'category'])
 export const ocrKind = pgEnum("ocr_kind", ['expense', 'purchaseBill'])
 export const ocrStatus = pgEnum("ocr_status", ['queued', 'processing', 'completed', 'failed'])
@@ -69,7 +71,9 @@ export const partyKind = pgEnum("party_kind", ['customer', 'supplier'])
 export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank', 'wallet'])
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
-export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables'])
+export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables', 'books'])
+export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan'])
+export const ledgerGroup = pgEnum("ledger_group", ['capital', 'reserves', 'loans', 'sundryCreditors', 'dutiesTaxes', 'provisions', 'currentLiabilities', 'fixedAssets', 'investments', 'sundryDebtors', 'cashInHand', 'bankAccounts', 'stockInHand', 'loansAdvances', 'currentAssets', 'salesAccounts', 'directIncomes', 'indirectIncomes', 'purchaseAccounts', 'directExpenses', 'indirectExpenses'])
 export const planTier = pgEnum("plan_tier", ['free', 'basic', 'pro', 'business'])
 export const platformRole = pgEnum("platform_role", ['superadmin', 'support'])
 export const pushProvider = pgEnum("push_provider", ['expo', 'fcm', 'apns'])
@@ -326,6 +330,8 @@ export const paymentAccounts = pgTable("payment_accounts", {
 	accountNumber: varchar("account_number", { length: 40 }),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
 	openingBalanceDate: date("opening_balance_date"),
+	// A foreign-currency account: its opening balance's rate to base on that day, so totals in base agree everywhere.
+	openingRate: numeric("opening_rate", { precision: 18, scale:  8 }).default('1').notNull(),
 	isDefault: boolean("is_default").default(false).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -605,6 +611,20 @@ export const documents = pgTable("documents", {
 	notes: text(),
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
+	noteReason: noteReason("note_reason"),
+	// TDS deducted on a supplier's bill; what's owed them is the grand total less this.
+	tdsSection: varchar("tds_section", { length: 8 }),
+	tdsRate: numeric("tds_rate", { precision: 6, scale:  3 }),
+	tdsAmountMinor: bigint("tds_amount_minor", { mode: "number" }).default(0).notNull(),
+	// Rule 46(f): a reverse-charge purchase from an unregistered supplier.
+	selfInvoiceNumber: varchar("self_invoice_number", { length: 40 }),
+	// Credit reversed after 180 days unpaid (Rule 37), and claimed again once paid.
+	// The GSTR-2B period (MMYYYY) whose line this bill was matched to: its credit is claimed then.
+	itcClaimPeriod: char("itc_claim_period", { length: 6 }),
+	// The project or department the document belongs to, for profit by cost centre.
+	costCentreId: varchar("cost_centre_id", { length: 40 }),
+	itcReversedOn: date("itc_reversed_on"),
+	itcReclaimedOn: date("itc_reclaimed_on"),
 	subtotalMinor: bigint("subtotal_minor", { mode: "number" }).default(0).notNull(),
 	lineDiscountMinor: bigint("line_discount_minor", { mode: "number" }).default(0).notNull(),
 	documentDiscountMinor: bigint("document_discount_minor", { mode: "number" }).default(0).notNull(),
@@ -691,6 +711,8 @@ export const documentLines = pgTable("document_lines", {
 	// The item's GST treatment when the line was written.
 	supplyType: supplyType("supply_type").default('taxable').notNull(),
 	reimbursement: boolean().default(false).notNull(),
+	// A reimbursement line: the billable expense it recovers.
+	expenseId: varchar("expense_id", { length: 40 }),
 	capitalGoods: boolean("capital_goods").default(false).notNull(),
 	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
 	reverseCharge: boolean("reverse_charge").default(false).notNull(),
@@ -799,6 +821,10 @@ export const parties = pgTable("parties", {
 	udyamNumber: varchar("udyam_number", { length: 19 }),
 	// Bills from this supplier are under reverse charge unless a line says otherwise.
 	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	// The TDS section their bills fall under by default, and any lower deduction certificate (s.197).
+	tdsSection: varchar("tds_section", { length: 8 }),
+	lowerTdsRate: numeric("lower_tds_rate", { precision: 6, scale:  3 }),
+	lowerTdsValidTill: date("lower_tds_valid_till"),
 	email: varchar({ length: 254 }),
 	phone: varchar({ length: 20 }),
 	currency: char({ length: 3 }).notNull(),
@@ -1114,6 +1140,10 @@ export const payments = pgTable("payments", {
 	accountId: varchar("account_id", { length: 40 }).notNull(),
 	unallocatedMinor: bigint("unallocated_minor", { mode: "number" }).default(0).notNull(),
 	fxGainLossMinor: bigint("fx_gain_loss_minor", { mode: "number" }),
+	// An advance for services carries GST when received (s.13): its rate and place of supply.
+	advanceTaxCategoryId: varchar("advance_tax_category_id", { length: 40 }),
+	advanceTaxRate: numeric("advance_tax_rate", { precision: 6, scale:  3 }),
+	advancePlaceOfSupply: varchar("advance_place_of_supply", { length: 2 }),
 	notes: text(),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
@@ -1189,7 +1219,11 @@ export const paymentAllocations = pgTable("payment_allocations", {
 	paymentId: varchar("payment_id", { length: 40 }).notNull(),
 	documentId: varchar("document_id", { length: 40 }).notNull(),
 	documentNumber: varchar("document_number", { length: 40 }).notNull(),
+	// Cash: what the payment itself settles. The three below settle the document without money moving.
 	amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+	tdsMinor: bigint("tds_minor", { mode: "number" }).default(0).notNull(),
+	discountMinor: bigint("discount_minor", { mode: "number" }).default(0).notNull(),
+	writeOffMinor: bigint("write_off_minor", { mode: "number" }).default(0).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	index("payment_allocations_document_id_idx").using("btree", table.documentId.asc().nullsLast()),
 	uniqueIndex("payment_allocations_payment_id_document_id_idx").using("btree", table.paymentId.asc().nullsLast(), table.documentId.asc().nullsLast()),
@@ -1229,6 +1263,9 @@ export const expenses = pgTable("expenses", {
 	reference: varchar({ length: 100 }),
 	notes: text(),
 	billable: boolean().default(false).notNull(),
+	// Billable: the customer it is recovered from.
+	customerId: varchar("customer_id", { length: 40 }),
+	costCentreId: varchar("cost_centre_id", { length: 40 }),
 	recurrence: recurrenceFrequency().default('none').notNull(),
 	nextRecurrenceDate: date("next_recurrence_date"),
 	recurringParentId: varchar("recurring_parent_id", { length: 40 }),
@@ -1703,6 +1740,8 @@ export const companies = pgTable("companies", {
 	lockedThroughDate: date("locked_through_date"),
 	// Off by default: a sale cannot take a tracked item below zero at its branch.
 	allowNegativeStock: boolean("allow_negative_stock").default(false).notNull(),
+	// With a TAN the business deducts TDS on what it pays suppliers.
+	tan: varchar({ length: 10 }),
 	plan: planTier().default('free').notNull(),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),
 	version: integer().default(1).notNull(),
@@ -2033,5 +2072,207 @@ export const complianceAttempts = pgTable("compliance_attempts", {
 			columns: [table.documentId],
 			foreignColumns: [documents.id],
 			name: "compliance_attempts_document_id_fkey"
+		}),
+]);
+
+/**
+ * Accounts a business adds itself (rent, a loan, a fixed asset). System accounts and the ones that
+ * mirror parties, cash and bank accounts and expense categories are derived, never stored
+ * (packages/core/src/domain/ledger/accounts.ts).
+ */
+export const ledgerAccounts = pgTable("ledger_accounts", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 200 }).notNull(),
+	group: ledgerGroup().notNull(),
+	// Debit positive, as of the day the books begin.
+	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
+	status: activeStatus().default('active').notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("ledger_accounts_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "ledger_accounts_company_id_fkey"
+		}),
+]);
+
+/** Projects, departments and the like: income and costs can be tagged with one, for profit by cost centre. */
+export const costCentres = pgTable("cost_centres", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 200 }).notNull(),
+	// What kind of centre: "Project", "Department"…
+	category: varchar({ length: 60 }),
+	parentId: varchar("parent_id", { length: 40 }),
+	status: activeStatus().default('active').notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("cost_centres_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "cost_centres_company_id_fkey"
+		}),
+]);
+
+/**
+ * Journal, contra, GST journal and TDS challan vouchers. Lines name accounts by key
+ * (`pay:<id>`, `sys:sales`…) and are base-currency paise: `[{ account, debitMinor, creditMinor, narration? }]`.
+ */
+export const vouchers = pgTable("vouchers", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	branchId: varchar("branch_id", { length: 40 }).notNull(),
+	kind: voucherKind().notNull(),
+	number: varchar({ length: 40 }).notNull(),
+	date: date().notNull(),
+	narration: text(),
+	reference: varchar({ length: 100 }),
+	lines: jsonb().notNull(),
+	createdBy: varchar("created_by", { length: 40 }).notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	index("vouchers_company_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.date.asc().nullsLast()),
+	uniqueIndex("vouchers_company_id_kind_number_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "vouchers_company_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.branchId],
+			foreignColumns: [branches.id],
+			name: "vouchers_branch_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [users.id],
+			name: "vouchers_created_by_fkey"
+		}),
+]);
+
+export const gstReturnType = pgEnum("gst_return_type", ['gstr1', 'gstr3b'])
+export const gstReturnStatus = pgEnum("gst_return_status", ['prepared', 'saved', 'submitted', 'filed', 'failed'])
+
+/**
+ * The taxpayer's own session on the GST portal, per GSTIN (a branch with its own GSTIN has its own):
+ * opened with their portal username and an OTP to their registered phone. The token is encrypted
+ * with CREDENTIALS_KEY; it lasts six hours and refreshes up to `refreshable_until`.
+ */
+export const gstPortalSessions = pgTable("gst_portal_sessions", {
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	username: varchar({ length: 100 }).notNull(),
+	authTokenEncrypted: bytea("auth_token_encrypted"),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'date' }),
+	refreshableUntil: timestamp("refreshable_until", { withTimezone: true, mode: 'date' }),
+	otpRequestedAt: timestamp("otp_requested_at", { withTimezone: true, mode: 'date' }),
+	connectedBy: varchar("connected_by", { length: 40 }),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	primaryKey({ columns: [table.companyId, table.gstin], name: "gst_portal_sessions_pkey" }),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gst_portal_sessions_company_id_fkey"
+		}),
+]);
+
+/**
+ * One GSTR-1 or GSTR-3B for a GSTIN and period (MMYYYY): what was prepared, saved and filed.
+ * Filing locks the period's books.
+ */
+export const gstReturns = pgTable("gst_returns", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	returnType: gstReturnType("return_type").notNull(),
+	period: char({ length: 6 }).notNull(),
+	status: gstReturnStatus().default('prepared').notNull(),
+	/** What was saved to the portal, and our totals of it. */
+	payload: jsonb(),
+	referenceId: varchar("reference_id", { length: 60 }),
+	summaryHash: varchar("summary_hash", { length: 200 }),
+	arn: varchar({ length: 40 }),
+	filedAt: timestamp("filed_at", { withTimezone: true, mode: 'date' }),
+	lastError: text("last_error"),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("gst_returns_company_gstin_type_period_idx").using("btree", table.companyId.asc().nullsLast(), table.gstin.asc().nullsLast(), table.returnType.asc().nullsLast(), table.period.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gst_returns_company_id_fkey"
+		}),
+]);
+
+export const gstr2bDecision = pgEnum("gstr2b_decision", ['accepted', 'notOurs', 'claimLater'])
+
+/** One GSTR-2B download per GSTIN and period (MMYYYY). */
+export const gstr2bPeriods = pgTable("gstr2b_periods", {
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	period: char({ length: 6 }).notNull(),
+	/** When GSTN generated it (the 14th, for most), and when it was last downloaded. */
+	generatedOn: date("generated_on"),
+	fetchedAt: timestamp("fetched_at", { withTimezone: true, mode: 'date' }).notNull(),
+	fetchedBy: varchar("fetched_by", { length: 40 }),
+}, (table): PgTableExtraConfigValue[] => [
+	primaryKey({ columns: [table.companyId, table.gstin, table.period], name: "gstr2b_periods_pkey" }),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gstr2b_periods_company_id_fkey"
+		}),
+]);
+
+/**
+ * The lines of a GSTR-2B: what each supplier reported. A download replaces the period's lines,
+ * but a person's decision on a line (keyed by supplier, kind and number) carries over.
+ */
+export const gstr2bEntries = pgTable("gstr2b_entries", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	gstin: varchar({ length: 15 }).notNull(),
+	period: char({ length: 6 }).notNull(),
+	section: varchar({ length: 8 }).notNull(),
+	supplierGstin: varchar("supplier_gstin", { length: 15 }).notNull(),
+	supplierName: varchar("supplier_name", { length: 200 }),
+	documentType: varchar("document_type", { length: 3 }).notNull(),
+	number: varchar({ length: 40 }).notNull(),
+	/** The number as matched: no case, separators, leading zeros or year. */
+	matchKey: varchar("match_key", { length: 40 }).notNull(),
+	date: date().notNull(),
+	placeOfSupply: varchar("place_of_supply", { length: 2 }),
+	reverseCharge: boolean("reverse_charge").default(false).notNull(),
+	taxableMinor: bigint("taxable_minor", { mode: "number" }).notNull(),
+	igstMinor: bigint("igst_minor", { mode: "number" }).default(0).notNull(),
+	cgstMinor: bigint("cgst_minor", { mode: "number" }).default(0).notNull(),
+	sgstMinor: bigint("sgst_minor", { mode: "number" }).default(0).notNull(),
+	cessMinor: bigint("cess_minor", { mode: "number" }).default(0).notNull(),
+	itcAvailable: boolean("itc_available").default(true).notNull(),
+	itcReason: varchar("itc_reason", { length: 40 }),
+	supplierFiledOn: date("supplier_filed_on"),
+	originalNumber: varchar("original_number", { length: 40 }),
+	decision: gstr2bDecision(),
+	linkedDocumentId: varchar("linked_document_id", { length: 40 }),
+	decidedBy: varchar("decided_by", { length: 40 }),
+	decidedAt: timestamp("decided_at", { withTimezone: true, mode: 'date' }),
+}, (table): PgTableExtraConfigValue[] => [
+	index("gstr2b_entries_period_idx").using("btree", table.companyId.asc().nullsLast(), table.gstin.asc().nullsLast(), table.period.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "gstr2b_entries_company_id_fkey"
 		}),
 ]);

@@ -141,6 +141,55 @@
       "when": 1793701909987,
       "tag": "0019_gst_treatment",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793705974052,
+      "tag": "0020_credit_debit_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793709216335,
+      "tag": "0021_tds_rcm_itc",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793710999341,
+      "tag": "0022_books",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793714582819,
+      "tag": "0023_gst_returns",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793720070327,
+      "tag": "0024_gstr2b",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793755303923,
+      "tag": "0025_extras",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793757004884,
+      "tag": "0026_opening_rate",
+      "breakpoints": true
     }
   ]
 }

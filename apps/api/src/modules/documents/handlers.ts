@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import { SALES_KINDS, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -32,7 +32,7 @@ import {
   type DocRow,
   type LineInput,
 } from './engine';
-import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, assertNoLiveReturns, assertPeriodOpen, finalizeInTx, isReturn, reverseStock, syncPaymentState, today } from './lifecycle';
+import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, assertNoLiveReturns, assertPeriodOpen, finalizeInTx, isCredit, reverseStock, syncPaymentState, today } from './lifecycle';
 import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
 import { companyLogoLink } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
@@ -111,7 +111,7 @@ async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus, opts: {
     checkIfMatch(ctx.req, row.version);
     if (isFinalized(row.status) || row.status === 'cancelled') throw conflict('DOCUMENT_ALREADY_FINAL', `${row.number} is already ${row.status}`);
     const lines = await tx.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, row.id));
-    const prepared = await prepareDocument(tx, ctx.company, fieldsFromRow(row), linesFromRows(lines), { snapshotRates: true });
+    const prepared = await prepareDocument(tx, ctx.company, fieldsFromRow(row), linesFromRows(lines), { snapshotRates: true, documentId: row.id });
     const [recomputed] = await tx.update(D).set({ ...prepared.columns, updatedAt: ctx.now }).where(eq(D.id, row.id)).returning();
     await writeLines(tx, row.id, prepared);
     const done = await finalizeInTx(tx, ctx.company, ctx.user, recomputed, target, ctx.now, opts);
@@ -156,7 +156,7 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
       .where(and(eq(D.id, locked.id), eq(D.version, locked.version)))
       .returning();
     if (!updated) throw preconditionFailed();
-    if (isReturn(updated) && updated.sourceDocumentId) {
+    if (isCredit(updated) && updated.sourceDocumentId) {
       await tx.select({ id: D.id }).from(D).where(eq(D.id, updated.sourceDocumentId)).for('update');
       await syncPaymentState(tx, ctx.user, ctx.company.id, [updated.sourceDocumentId], ctx.now);
     }
@@ -235,7 +235,7 @@ export const documentsHandlers = defineHandlers({
     if (q.to) filters.push(lte(D.date, q.to));
     if (q.sourceDocumentId) filters.push(eq(D.sourceDocumentId, q.sourceDocumentId));
     if (q.outstanding !== undefined) {
-      const open = and(inArray(D.kind, ['invoice', 'purchaseBill']), notInArray(D.status, ['draft', 'cancelled']), sql`${D.grandTotalMinor} > ${D.amountPaidMinor}`);
+      const open = and(inArray(D.kind, PAYABLE_KINDS), notInArray(D.status, ['draft', 'cancelled']), sql`${D.grandTotalMinor} > ${D.amountPaidMinor}`);
       filters.push(q.outstanding ? open : sql`not (${open})`);
     }
     if (q.overdue !== undefined) filters.push(q.overdue ? sql`${effectiveStatusSql(asOf)} = 'overdue'` : sql`${effectiveStatusSql(asOf)} <> 'overdue'`);
@@ -308,7 +308,7 @@ export const documentsHandlers = defineHandlers({
       ...doc,
       party: partyToWire(party),
       allocated: money(row.amountPaidMinor, currency),
-      outstanding: money(open && (row.kind === 'invoice' || row.kind === 'purchaseBill') ? Math.max(row.grandTotalMinor - row.amountPaidMinor, 0) : 0, currency),
+      outstanding: money(open && isPayableDocument(row.kind) ? Math.max(row.grandTotalMinor - row.amountPaidMinor, 0) : 0, currency),
       payments: await paymentsToWire(ctx.db, paymentRows, ctx.company.baseCurrency.trim()),
       linkedDocuments: await summariesToWire(ctx.db, related as SummaryRow[], ctx.now),
       allowedTransitions: nextStatuses(row.kind, status).filter((s) => !DERIVED.includes(s)),
@@ -342,7 +342,7 @@ export const documentsHandlers = defineHandlers({
         if (!updated) throw preconditionFailed();
       } else {
         if (body.kind !== current.kind) throw invalid('kind', 'A document cannot change kind; convert it instead');
-        const prepared = await prepareDocument(tx, ctx.company, fieldsFromWire(body, current), linesFromWire(body.lines), { snapshotRates: true });
+        const prepared = await prepareDocument(tx, ctx.company, fieldsFromWire(body, current), linesFromWire(body.lines), { snapshotRates: true, documentId: current.id });
         if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot move documents to this branch');
         [updated] = await tx
           .update(D)
@@ -426,10 +426,10 @@ export const documentsHandlers = defineHandlers({
     const block = conversionBlock({ id: src.id, status }, target, made as { kind: DocumentKind; status: DocStatus; sourceDocumentId: string | null; number: string | null }[]);
     if (block === 'cancelled') throw conflict('INVALID_CONVERSION', `${src.number} is ${status}`);
     if (block === 'draft') {
-      throw conflict('INVALID_CONVERSION', target === 'salesReturn' || target === 'purchaseReturn' ? 'A return is raised against a finalised document' : 'A draft is finalised before anything is made from it');
+      throw conflict('INVALID_CONVERSION', NOTE_SOURCE[target] ? 'A return or note is raised against a finalised document' : 'A draft is finalised before anything is made from it');
     }
     if (block === 'converted') {
-      const onward = made.find((d) => d.kind !== 'salesReturn' && d.kind !== 'purchaseReturn' && d.status !== 'cancelled' && d.status !== 'rejected');
+      const onward = made.find((d) => !NOTE_SOURCE[d.kind] && d.status !== 'cancelled' && d.status !== 'rejected');
       throw conflict('ALREADY_CONVERTED', `${src.number} has already been carried forward${onward?.number ? ` to ${onward.number}` : ''}; cancel that first to convert it again`);
     }
     const stored = linesFromRows(await ctx.db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, src.id)));
@@ -439,7 +439,8 @@ export const documentsHandlers = defineHandlers({
       if (unknown.length) throw unprocessable(unknown.map((id) => ({ field: 'lineIds', message: `${id} is not a line of ${src.number}`, severity: 'blocking' as const })));
       lines = stored.filter((l) => ctx.body.lineIds!.includes(l.id!));
     }
-    const f: DocFields = { ...fieldsFromRow(src), kind: target, date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: src.id };
+    // A new document takes the supplier's TDS section, not the one its source was finalised with.
+    const f: DocFields = { ...fieldsFromRow(src), kind: target, date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: src.id, tdsSection: undefined };
     // The new draft keeps the source's tax rates: a return must reverse exactly what was charged.
     const row = await insertDocument(ctx, f, lines.map((l) => ({ ...l, id: undefined })), requestedStatus(target, 'draft') as DocStatus, {
       snapshotRates: false,
@@ -452,7 +453,7 @@ export const documentsHandlers = defineHandlers({
   async duplicateDocument(ctx) {
     const src = await findDocument(ctx, ctx.db, ctx.params.id);
     const stored = linesFromRows(await ctx.db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, src.id)));
-    const f: DocFields = { ...fieldsFromRow(src), date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: null };
+    const f: DocFields = { ...fieldsFromRow(src), date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: null, tdsSection: src.tdsSection ?? undefined };
     const row = await insertDocument(ctx, f, stored.map((l) => ({ ...l, id: undefined, taxRate: undefined })), requestedStatus(src.kind, 'draft') as DocStatus, {
       action: `duplicated from ${src.number}`,
     });

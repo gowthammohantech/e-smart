@@ -222,7 +222,7 @@ async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Prom
   // first, then what it paid on the newest invoices, so the oldest stay settled.
   const A = schema.paymentAllocations;
   const allocations = await tx
-    .select({ documentId: A.documentId, amountMinor: A.amountMinor, date: schema.documents.date })
+    .select({ documentId: A.documentId, amountMinor: A.amountMinor, tdsMinor: A.tdsMinor, discountMinor: A.discountMinor, writeOffMinor: A.writeOffMinor, date: schema.documents.date })
     .from(A)
     .innerJoin(schema.documents, eq(schema.documents.id, A.documentId))
     .where(eq(A.paymentId, payment.id))
@@ -233,9 +233,10 @@ async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Prom
     .map((a) => {
       const cut = Math.min(a.amountMinor, release);
       release -= cut;
-      return { documentId: a.documentId, amountMinor: a.amountMinor - cut };
+      // Only the cash is refunded; TDS, discount and write-off stay as they were.
+      return { documentId: a.documentId, amountMinor: a.amountMinor - cut, tdsMinor: a.tdsMinor, discountMinor: a.discountMinor, writeOffMinor: a.writeOffMinor };
     })
-    .filter((a) => a.amountMinor > 0);
+    .filter((a) => a.amountMinor + a.tdsMinor + a.discountMinor + a.writeOffMinor > 0);
   const refunded = `${payment.currency.trim()} ${(amount / 100).toFixed(2)}`;
   await writePayment(
     tx,

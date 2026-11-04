@@ -14,8 +14,17 @@ export const SERIES_KINDS: SeriesKind[] = [
   'goodsReceipt',
   'purchaseBill',
   'purchaseReturn',
+  'creditNote',
+  'debitNote',
+  'supplierCreditNote',
+  'supplierDebitNote',
+  'selfInvoice',
   'payment',
   'expense',
+  'journal',
+  'contra',
+  'gstJournal',
+  'tdsChallan',
 ];
 
 /**
@@ -66,8 +75,17 @@ export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   goodsReceipt: 'GRN',
   purchaseBill: 'BILL',
   purchaseReturn: 'DRN',
+  creditNote: 'CN',
+  debitNote: 'DBN',
+  supplierCreditNote: 'SCN',
+  supplierDebitNote: 'SDN',
+  selfInvoice: 'SI',
   payment: 'PAY',
   expense: 'EXP',
+  journal: 'JV',
+  contra: 'CV',
+  gstJournal: 'GJV',
+  tdsChallan: 'TDS',
 };
 
 export function seriesKindForDocument(kind: DocumentKind): SeriesKind {

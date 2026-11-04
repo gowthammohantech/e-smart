@@ -1,4 +1,5 @@
 import { B2CL_THRESHOLD_MINOR, gstr1Summary } from '../gstr1';
+import { creditNoteDeadline } from '../../lib/date';
 import { calculateDocument } from '../lineCalc';
 import { fromMajor, zero } from '../../lib/money';
 import { Address, BusinessDocument, Company, DocumentLine, Party } from '../../types';
@@ -273,5 +274,45 @@ describe('GSTR-1 and GST treatment', () => {
   it('reports the buyer’s GSTIN as it was when the invoice was issued', () => {
     const s = summarize([doc('registered', { partyGstin: '29AACFA1111P1ZH' })]);
     expect(s.b2b[0].gstin).toBe('29AACFA1111P1ZH');
+  });
+});
+
+describe('GSTR-1 credit and debit notes', () => {
+  it('reports a credit note as C and a debit note as D, counted against the totals each way', () => {
+    const inv = doc('registered', { number: 'INV-1' });
+    const cn = doc('registered', { kind: 'creditNote', number: 'CN-1', sourceDocumentId: inv.id, lines: [line({ quantity: 1 })] });
+    const dn = doc('registered', { kind: 'debitNote', number: 'DBN-1', sourceDocumentId: inv.id, lines: [line({ quantity: 1, unitPrice: fromMajor('500', 'INR') })] });
+    const s = summarize([inv, cn, dn]);
+    expect(s.cdnr.map((r) => [r.number, r.noteType])).toEqual([
+      ['CN-1', 'C'],
+      ['DBN-1', 'D'],
+    ]);
+    // 10,000 − 1,000 + 500
+    expect(s.totals.taxableValue.minor).toBe(950000);
+    expect(s.docs.map((d) => d.nature).sort()).toEqual(['creditNote', 'debitNote', 'invoice']);
+  });
+
+  it('leaves the HSN quantity alone for a value-only note', () => {
+    const inv = doc('registered');
+    const cn = doc('registered', { kind: 'creditNote', number: 'CN-1', sourceDocumentId: inv.id, lines: [line({ quantity: 1 })] });
+    const s = summarize([inv, cn]);
+    expect(s.hsn[0].quantity).toBe(10);
+    expect(s.hsn[0].taxableValue.minor).toBe(900000);
+  });
+
+  it('puts an unregistered buyer’s note in CDNUR when the invoice it lowers was B2CL', () => {
+    const big = doc('consumer_ka', { lines: [line({ quantity: 200 })] });
+    const cn = doc('consumer_ka', { kind: 'creditNote', number: 'CN-1', sourceDocumentId: big.id, lines: [line({ quantity: 1 })] });
+    const s = summarize([big, cn]);
+    expect(s.b2cl).toHaveLength(1);
+    expect(s.cdnur.map((r) => r.number)).toEqual(['CN-1']);
+  });
+});
+
+describe('credit note deadline (s.34(2))', () => {
+  it('is 30 November after the end of the financial year of the supply', () => {
+    expect(creditNoteDeadline('2025-06-10')).toBe('2026-11-30');
+    expect(creditNoteDeadline('2026-03-31')).toBe('2026-11-30');
+    expect(creditNoteDeadline('2026-04-01')).toBe('2027-11-30');
   });
 });

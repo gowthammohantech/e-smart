@@ -36,6 +36,8 @@ export type Company = {
   lockedThroughDate?: string | null;
   /** Let sales take tracked items below zero. Off unless the business turns it on. */
   allowNegativeStock?: boolean;
+  /** Tax deduction account number: with it the business deducts TDS on what it pays suppliers. */
+  tan?: string;
   plan: PlanTier;
   createdAt: string;
 };
@@ -133,6 +135,10 @@ export type Party = {
   udyamNumber?: string;
   /** Bills from this supplier are under reverse charge unless a line says otherwise. */
   reverseCharge?: boolean;
+  /** The TDS section their bills fall under by default (194C, 194J(b)…). */
+  tdsSection?: string;
+  /** A lower or nil deduction certificate they hold (s.197). */
+  lowerTdsCertificate?: { rate: number; validTill: string };
   email?: string;
   phone?: string;
   currency: string;
@@ -268,7 +274,18 @@ export type DocumentKind =
   | 'purchaseOrder'
   | 'goodsReceipt'
   | 'purchaseBill'
-  | 'purchaseReturn';
+  | 'purchaseReturn'
+  /** Lowers what an invoice charged, with no goods coming back: a discount or a price correction. */
+  | 'creditNote'
+  /** Adds to what an invoice charged: a price increase or tax short-billed. */
+  | 'debitNote'
+  /** A supplier's credit note against their bill. */
+  | 'supplierCreditNote'
+  /** A supplier's debit note: more owed on their bill. */
+  | 'supplierDebitNote';
+
+/** Why a credit or debit note was raised, as GSTR-1 and the e-invoice describe it. */
+export type NoteReason = 'discount' | 'priceChange' | 'taxCorrection' | 'deficiency' | 'other';
 
 export type DocStatus =
   | 'draft'
@@ -309,6 +326,8 @@ export type DocumentLine = {
   taxInclusive: boolean;
   /** The item's GST treatment when the line was written; see GstFlags. */
   gst?: GstFlags;
+  /** A reimbursement line: the billable expense it recovers from the customer. */
+  expenseId?: string;
 };
 
 export type DocumentTotals = {
@@ -367,6 +386,21 @@ export type BusinessDocument = {
   attachmentIds: string[];
   /** Links between documents, e.g. invoice created from quote q_1. */
   sourceDocumentId?: string;
+  /** Why a credit or debit note was raised. */
+  noteReason?: NoteReason;
+  /** The TDS section asked for on a supplier's bill: a code, `none`, or unset for the supplier's own. */
+  tdsSection?: string;
+  /** TDS the business deducted on a supplier's bill: what's paid them is the total less this. */
+  tds?: { section: string; rate: number; amount: Money };
+  /** The self-invoice raised for a reverse-charge purchase from an unregistered supplier (Rule 46(f)). */
+  selfInvoiceNumber?: string;
+  /** Input tax credit reversed because the bill went unpaid for 180 days, and claimed again once paid. */
+  itcReversedOn?: string;
+  itcReclaimedOn?: string;
+  /** The GSTR-2B period (MMYYYY) whose line this bill matched: its credit is claimed in that return. */
+  itcClaimPeriod?: string;
+  /** The project or department it belongs to. */
+  costCentreId?: string;
   totals: DocumentTotals;
   compliance?: ComplianceInfo;
   createdBy: string;
@@ -656,7 +690,14 @@ export type PaymentMethod = 'cash' | 'bank' | 'upi' | 'card' | 'cheque' | 'walle
 export type PaymentAllocation = {
   documentId: string;
   documentNumber: string;
+  /** Cash: what the payment itself settles. */
   amount: Money;
+  /** Settled without cash: TDS the customer deducted (or the business deducted from a supplier). */
+  tdsDeducted?: Money;
+  /** Settled without cash: a discount allowed for prompt or short payment. */
+  discount?: Money;
+  /** Settled without cash: the rest written off as bad debt. */
+  writeOff?: Money;
 };
 
 export type Payment = {
@@ -677,6 +718,11 @@ export type Payment = {
   /** Unallocated part of the payment, held as an advance against the party. */
   unallocated: Money;
   fxGainLoss?: Money;
+  /**
+   * An advance received for services carries GST when received (s.13(2)): the rate and place of
+   * supply it is taxed at. Advances for goods carry none (notification 66/2017).
+   */
+  advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string };
   notes?: string;
   attachmentIds: string[];
   createdBy: string;
@@ -693,6 +739,8 @@ export type PaymentAccount = {
   openingBalance: Money;
   /** The day the opening balance was counted (ISO date, not after today). */
   openingBalanceDate?: string;
+  /** A foreign-currency account: the opening balance's rate to base on that day (1 in base currency). */
+  openingRate?: number;
   isDefault: boolean;
 };
 
@@ -737,6 +785,9 @@ export type Expense = {
   reference?: string;
   notes?: string;
   billable: boolean;
+  /** Billable: the customer it is recovered from. */
+  customerId?: string;
+  costCentreId?: string;
   recurrence: RecurrenceFrequency;
   nextRecurrenceDate?: string;
   attachmentIds: string[];
@@ -829,7 +880,7 @@ export type AuditEvent = {
 export type NumberingSeries = {
   id: string;
   companyId: string;
-  kind: DocumentKind | 'payment' | 'expense';
+  kind: DocumentKind | 'payment' | 'expense' | 'selfInvoice' | VoucherKind;
   prefix: string;
   nextNumber: number;
   padding: number;
@@ -878,4 +929,84 @@ export type Integration = {
   available?: boolean;
   /** Where the row links for configuration, when it has any. */
   configRoute?: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Books: the general ledger                                           */
+/* ------------------------------------------------------------------ */
+
+/** The groups every account sits in, as Tally lays out a chart of accounts. */
+export type LedgerGroup =
+  | 'capital'
+  | 'reserves'
+  | 'loans'
+  | 'sundryCreditors'
+  | 'dutiesTaxes'
+  | 'provisions'
+  | 'currentLiabilities'
+  | 'fixedAssets'
+  | 'investments'
+  | 'sundryDebtors'
+  | 'cashInHand'
+  | 'bankAccounts'
+  | 'stockInHand'
+  | 'loansAdvances'
+  | 'currentAssets'
+  | 'salesAccounts'
+  | 'directIncomes'
+  | 'indirectIncomes'
+  | 'purchaseAccounts'
+  | 'directExpenses'
+  | 'indirectExpenses';
+
+/** An account a business adds itself: rent, a loan, a fixed asset. The rest are derived. */
+export type LedgerAccount = {
+  id: string;
+  companyId: string;
+  name: string;
+  group: LedgerGroup;
+  /** Opening balance, debit positive, as of the day the books start. */
+  openingBalance: Money;
+  status: 'active' | 'inactive';
+  createdAt: string;
+};
+
+/** A project, department or the like, that income and costs can be tagged with. */
+export type CostCentre = {
+  id: string;
+  companyId: string;
+  name: string;
+  /** What kind of centre: "Project", "Department"… */
+  category?: string;
+  parentId?: string;
+  status: 'active' | 'inactive';
+  createdAt: string;
+};
+
+/** Journal: any adjustment. Contra: money between cash and bank. GST journal: adjustments to the GST ledgers. TDS challan: TDS paid to the government. */
+export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan';
+
+export type VoucherLine = {
+  /** An account key: `sys:sales`, `party:<id>`, `pay:<id>`, `exp:<id>`, `acc:<id>`, `sys:tdsPayable:194C`. */
+  account: string;
+  debit: Money;
+  credit: Money;
+  narration?: string;
+  costCentreId?: string;
+};
+
+export type Voucher = {
+  id: string;
+  companyId: string;
+  branchId: string;
+  kind: VoucherKind;
+  number: string;
+  date: string;
+  narration?: string;
+  /** TDS challan: the challan's number and BSR code. */
+  reference?: string;
+  lines: VoucherLine[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt?: string;
 };

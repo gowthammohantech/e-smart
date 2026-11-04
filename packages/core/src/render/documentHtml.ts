@@ -32,6 +32,9 @@ function bilingual(t: Translate, language: LanguageCode): (key: string) => strin
   };
 }
 
+/** Statutory wording on the note, so English like the field names. */
+const NOTE_REASON = { discount: 'Discount after sale', priceChange: 'Price change', taxCorrection: 'Tax correction', deficiency: 'Short or faulty supply', other: 'Other' } as const;
+
 const SUPPLY_NOTE = { nil: 'Nil-rated supply', exempt: 'Exempt supply', nonGst: 'Non-GST supply' } as const;
 
 function esc(s: string | undefined | null): string {
@@ -65,6 +68,7 @@ export function buildDocumentHtml({
   branch,
   ewayBill,
   logoSrc,
+  source,
   t,
   language,
 }: {
@@ -75,6 +79,8 @@ export function buildDocumentHtml({
   /** The issuing branch: its own address and GSTIN win over the company's. */
   branch?: Branch;
   ewayBill?: EwayBill;
+  /** The invoice or bill a note or return is raised against: Rule 53 has the note name it. */
+  source?: Pick<BusinessDocument, 'number' | 'date'>;
   /** The business logo, when not `company.logoUri`: the server passes it inline, as a data URI, so a PDF never waits on a link. */
   logoSrc?: string;
   /** Translator for the descriptive labels. Statutory field names stay English. */
@@ -229,6 +235,8 @@ export function buildDocumentHtml({
         <div class="muted">Date: ${formatDate(doc.date)}</div>
         ${doc.dueDate ? `<div class="muted">Due: ${formatDate(doc.dueDate)}</div>` : ''}
         ${doc.validUntil ? `<div class="muted">Valid until: ${formatDate(doc.validUntil)}</div>` : ''}
+        ${source ? `<div class="muted">Against ${esc(source.number)} of ${formatDate(source.date)}</div>` : ''}
+        ${doc.noteReason ? `<div class="muted">Reason: ${esc(NOTE_REASON[doc.noteReason])}</div>` : ''}
         ${branchLabel ? `<div class="muted">${esc(branchLabel)}</div>` : ''}
       </div>
     </div>

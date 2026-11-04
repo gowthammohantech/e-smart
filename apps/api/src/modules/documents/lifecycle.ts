@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, ne, notInArray, sql, type SQL } from 'drizzle-orm';
-import { businessDate } from '@esmart/core/lib/date';
+import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
-import { isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
+import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
 import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
 import type { BusinessDocument, DocStatus, DocumentKind, StockMovement, StockMovementType } from '@esmart/core/types';
@@ -33,6 +33,10 @@ export const FINAL_STATUS: Record<DocumentKind, DocStatus> = {
   purchaseReturn: 'approved',
   invoice: 'issued',
   purchaseBill: 'issued',
+  creditNote: 'issued',
+  debitNote: 'issued',
+  supplierCreditNote: 'issued',
+  supplierDebitNote: 'issued',
 };
 
 /** Which kinds each kind converts into (quote → order → delivery → invoice, PO → receipt → bill, invoice/bill → return). */
@@ -40,12 +44,16 @@ export const CONVERSIONS: Record<DocumentKind, DocumentKind[]> = {
   quote: ['salesOrder', 'invoice'],
   salesOrder: ['delivery', 'invoice'],
   delivery: ['invoice'],
-  invoice: ['salesReturn'],
+  invoice: ['salesReturn', 'creditNote', 'debitNote'],
   salesReturn: [],
   purchaseOrder: ['goodsReceipt', 'purchaseBill'],
   goodsReceipt: ['purchaseBill'],
-  purchaseBill: ['purchaseReturn'],
+  purchaseBill: ['purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'],
   purchaseReturn: [],
+  creditNote: [],
+  debitNote: [],
+  supplierCreditNote: [],
+  supplierDebitNote: [],
 };
 
 export const today = (d: Date) => businessDate(d);
@@ -64,7 +72,7 @@ export function effectiveStatus(row: Pick<DocRow, 'kind' | 'status' | 'grandTota
 
 /** `effectiveStatus` in SQL, for filtering lists by status. Keep the two in step. */
 export function effectiveStatusSql(asOf: string): SQL<string> {
-  return sql<string>`(case when ${D.kind} in ('invoice', 'purchaseBill') and ${D.status} in ('issued', 'partiallyPaid', 'paid', 'overdue') then
+  return sql<string>`(case when ${D.kind} in (${sql.join(PAYABLE_KINDS.map((k) => sql`${k}`), sql`, `)}) and ${D.status} in ('issued', 'partiallyPaid', 'paid', 'overdue') then
     case when ${D.grandTotalMinor} - ${D.amountPaidMinor} <= 0 then 'paid'
          when ${D.dueDate} is not null and ${D.dueDate} < ${asOf} then 'overdue'
          when ${D.amountPaidMinor} > 0 then 'partiallyPaid'
@@ -302,6 +310,7 @@ export async function finalizeInTx(
   }
   if (row.kind === 'invoice') await checkInvoiceLimit(tx, company, now);
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
+  if (againstSource(row)) await checkAgainstSource(tx, row);
   if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
   const number = await assignNumber(tx, { companyId: row.companyId, kind: row.kind, branchId: row.branchId, date: row.date });
   const status = effectiveStatus({ ...row, status: target }, today(now));
@@ -310,14 +319,25 @@ export async function finalizeInTx(
     .select({ taxId: schema.parties.taxId, stateCode: schema.parties.billingStateCode })
     .from(schema.parties)
     .where(eq(schema.parties.id, row.partyId));
+  // Rule 46(f): reverse-charge tax on a purchase from an unregistered supplier is self-invoiced.
+  const selfInvoiceNumber =
+    row.kind === 'purchaseBill' && row.reverseChargeTaxMinor > 0 && !party?.taxId
+      ? await assignNumber(tx, { companyId: row.companyId, kind: 'selfInvoice', branchId: row.branchId, date: row.date })
+      : null;
   const [updated] = await tx
     .update(D)
-    .set({ number, status, finalizedAt: now, partyGstin: party?.taxId ?? null, partyStateCode: party?.stateCode ?? null, version: row.version + 1, updatedAt: now })
+    .set({ number, status, finalizedAt: now, partyGstin: party?.taxId ?? null, partyStateCode: party?.stateCode ?? null, selfInvoiceNumber, version: row.version + 1, updatedAt: now })
     .where(and(eq(D.id, row.id), eq(D.version, row.version)))
     .returning();
   if (!updated) throw preconditionFailed();
   await postStock(tx, company, updated, actor.id);
-  if (isReturn(updated) && updated.sourceDocumentId) await syncPaymentState(tx, actor, updated.companyId, [updated.sourceDocumentId], now);
+  // A bill with TDS kept back starts part-settled.
+  if (isCredit(updated) && updated.sourceDocumentId) await syncPaymentState(tx, actor, updated.companyId, [updated.sourceDocumentId], now);
+  if (updated.tdsAmountMinor > 0) {
+    await syncPaymentState(tx, actor, updated.companyId, [updated.id], now);
+    const [settled] = await tx.select().from(D).where(eq(D.id, updated.id));
+    return settled;
+  }
   return updated;
 }
 
@@ -327,6 +347,11 @@ const addDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00
 const TAX_DOCUMENTS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'];
 const RETURN_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn'];
 export const isReturn = (row: Pick<DocRow, 'kind'>) => RETURN_KINDS.includes(row.kind);
+/** Returns and credit notes: they lower what their source still owes. */
+export const isCredit = (row: Pick<DocRow, 'kind'>) => CREDIT_KINDS.includes(row.kind);
+/** Raised against an invoice or bill: returns and notes. */
+const AGAINST_SOURCE: DocumentKind[] = [...RETURN_KINDS, ...NOTE_KINDS];
+const againstSource = (row: Pick<DocRow, 'kind'>) => AGAINST_SOURCE.includes(row.kind);
 /** A return that counts: approved or issued, and not since withdrawn. */
 const LIVE_RETURN = notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected']);
 
@@ -388,10 +413,41 @@ async function checkReturnWithinSource(tx: DbOrTx, row: DocRow) {
   if (issues.length) throw unprocessable(issues, 'RETURN_EXCEEDS_SOURCE');
 }
 
-/** A document can't be cancelled while a return stands against it. */
+/**
+ * A note or return must stand against a finalised invoice or bill of the same party and currency.
+ * Credit (returns and credit notes) can't add up to more than the source charged plus its debit
+ * notes, and the business's own credit notes have a deadline (s.34(2)).
+ */
+async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
+  const blocking = (field: string, message: string, code = 'VALIDATION_FAILED') => {
+    throw unprocessable([{ field, message, severity: 'blocking' }], code);
+  };
+  if (!row.sourceDocumentId) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');
+  const [source] = await tx.select().from(D).where(and(eq(D.companyId, row.companyId), eq(D.id, row.sourceDocumentId))).for('update');
+  if (!source || source.kind !== NOTE_SOURCE[row.kind]) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');
+  if (!isFinalized(source.status) || source.status === 'cancelled') return blocking('sourceDocumentId', `${source.number} is ${source.status}`);
+  if (source.partyId !== row.partyId) return blocking('partyId', `${source.number} belongs to another party`);
+  if (source.currency.trim() !== row.currency.trim()) return blocking('currency', `${source.number} is in ${source.currency.trim()}`);
+  if ((row.kind === 'creditNote' || row.kind === 'salesReturn') && row.date > creditNoteDeadline(source.date)) {
+    return blocking('date', `A credit note for ${source.number} had to be issued by ${creditNoteDeadline(source.date)} (CGST s.34(2))`, 'NOTE_TIME_BARRED');
+  }
+  if (!isCredit(row)) return;
+  const others = await tx
+    .select({ kind: D.kind, total: D.grandTotalMinor })
+    .from(D)
+    .where(and(eq(D.sourceDocumentId, source.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN, ne(D.id, row.id)));
+  const credited = others.filter((o) => isCredit(o)).reduce((a, o) => a + o.total, 0);
+  const debited = others.filter((o) => !isCredit(o)).reduce((a, o) => a + o.total, 0);
+  const room = source.grandTotalMinor + debited - credited;
+  if (row.grandTotalMinor > room) {
+    blocking('lines', `${source.number} has ${(Math.max(room, 0) / 100).toFixed(2)} left to credit; this note is ${(row.grandTotalMinor / 100).toFixed(2)}`, 'NOTE_EXCEEDS_SOURCE');
+  }
+}
+
+/** A document can't be cancelled while a return or note stands against it. */
 export async function assertNoLiveReturns(tx: DbOrTx, row: DocRow) {
-  const [live] = await tx.select({ number: D.number }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, RETURN_KINDS), LIVE_RETURN)).limit(1);
-  if (live) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel return ${live.number} before cancelling ${row.number}`);
+  const [live] = await tx.select({ number: D.number, kind: D.kind }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN)).limit(1);
+  if (live) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel ${isReturn(live) ? 'return' : 'note'} ${live.number} before cancelling ${row.number}`);
 }
 
 /**
@@ -405,22 +461,25 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
   const ids = [...new Set(documentIds)];
   if (!ids.length) return;
   const A = schema.paymentAllocations;
+  // Cash and what settled it without cash: TDS deducted, discount, write-off.
   const sums = await tx
-    .select({ documentId: A.documentId, paid: sql<number>`coalesce(sum(${A.amountMinor}), 0)::bigint` })
+    .select({ documentId: A.documentId, paid: sql<number>`coalesce(sum(${A.amountMinor} + ${A.tdsMinor} + ${A.discountMinor} + ${A.writeOffMinor}), 0)::bigint` })
     .from(A)
     .where(inArray(A.documentId, ids))
     .groupBy(A.documentId);
   const paidOf = new Map(sums.map((s) => [s.documentId, Number(s.paid)]));
   // A return settles what it credits, as far as there's anything left to settle.
   const credits = await tx
-    .select({ documentId: D.sourceDocumentId, credited: sql<number>`coalesce(sum(${D.grandTotalMinor}), 0)::bigint` })
+    // Net of the TDS a supplier credit note gives back, which was never owed to the supplier.
+    .select({ documentId: D.sourceDocumentId, credited: sql<number>`coalesce(sum(${D.grandTotalMinor} - ${D.tdsAmountMinor}), 0)::bigint` })
     .from(D)
-    .where(and(inArray(D.sourceDocumentId, ids), inArray(D.kind, RETURN_KINDS), LIVE_RETURN))
+    .where(and(inArray(D.sourceDocumentId, ids), inArray(D.kind, CREDIT_KINDS), LIVE_RETURN))
     .groupBy(D.sourceDocumentId);
   const creditOf = new Map(credits.map((c) => [c.documentId, Number(c.credited)]));
   const rows = await tx.select().from(D).where(and(eq(D.companyId, companyId), inArray(D.id, ids)));
   for (const row of rows) {
-    const allocated = paidOf.get(row.id) ?? 0;
+    // TDS kept back is paid to the government, so it settles the bill as far as the supplier goes.
+    const allocated = (paidOf.get(row.id) ?? 0) + row.tdsAmountMinor;
     const amountPaidMinor = Math.max(allocated, Math.min(allocated + (creditOf.get(row.id) ?? 0), row.grandTotalMinor));
     const status = isFinalized(row.status) ? effectiveStatus({ ...row, amountPaidMinor }, today(now)) : row.status;
     if (amountPaidMinor === row.amountPaidMinor && status === row.status) continue;

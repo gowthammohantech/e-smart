@@ -1,16 +1,17 @@
 import ExcelJS from 'exceljs';
 import { and, eq, gte, inArray, lte, ne } from 'drizzle-orm';
-import { gstr1Summary, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Summary } from '@esmart/core/domain/gstr1';
+import { gstr1Summary, GSTR1_KINDS, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Summary } from '@esmart/core/domain/gstr1';
 import type { Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type CompanyRow } from '../../context';
 import { invalid } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
-import { compact } from '../../lib/wire';
+import { compact, money } from '../../lib/wire';
 import { companyCore, partyCore } from '../documents/engine';
 import { documentsToWire, toCoreDocument } from '../documents/wire';
 import { toCsv } from '../exports/build';
+import { loadAdvanceEvents } from './advances';
 import { gstnJson } from './gstn';
 
 const D = schema.documents;
@@ -35,10 +36,13 @@ export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string
   const rows = await db
     .select()
     .from(D)
-    .where(and(eq(D.companyId, company.id), inArray(D.kind, ['invoice', 'salesReturn']), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to)))
+    .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to)))
     .orderBy(D.date, D.number);
+  // A note's invoice may be from an earlier period; its value decides the note's table.
+  const sourceIds = [...new Set(rows.map((r) => r.sourceDocumentId).filter((id): id is string => !!id && !rows.some((x) => x.id === id)))];
+  const sources = sourceIds.length ? await db.select().from(D).where(and(eq(D.companyId, company.id), inArray(D.id, sourceIds))) : [];
   const baseCurrency = company.baseCurrency.trim();
-  const documents = (await documentsToWire(db, rows, now, baseCurrency)).map(toCoreDocument);
+  const documents = (await documentsToWire(db, [...rows, ...sources], now, baseCurrency)).map(toCoreDocument);
   const partyIds = [...new Set(rows.map((r) => r.partyId))];
   const parties = partyIds.length ? await db.select().from(schema.parties).where(inArray(schema.parties.id, partyIds)) : [];
   const items = await db.select().from(schema.items).where(eq(schema.items.companyId, company.id));
@@ -49,6 +53,7 @@ export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string
     items: items.map((i) => ({ id: i.id, name: i.name, type: i.type, unit: i.unit, hsnCode: i.hsnCode ?? undefined }) as Item),
     baseCurrency,
     period: range,
+    advances: await loadAdvanceEvents(db, company, range.to),
   });
 }
 
@@ -121,7 +126,9 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 export const gstHandlers = defineHandlers({
   async getGstr1(ctx) {
     const summary = await buildGstr1(ctx.db, ctx.company, ctx.query.period, ctx.now);
-    return compact({ period: ctx.query.period, ...summary }) as Schema<'Gstr1Summary'>;
+    const base = ctx.company.baseCurrency.trim();
+    const rows = (list: Gstr1Summary['advances']['received']) => list.map((r) => ({ ...r, taxable: money(r.taxable, base), igst: money(r.igst, base), cgst: money(r.cgst, base), sgst: money(r.sgst, base), cess: money(r.cess, base) }));
+    return compact({ period: ctx.query.period, ...summary, advances: { received: rows(summary.advances.received), adjusted: rows(summary.advances.adjusted) } }) as Schema<'Gstr1Summary'>;
   },
 
   /** `format` picks the file: the GSTN offline-tool JSON (default), a flat CSV of invoice rows, or an Excel workbook. */

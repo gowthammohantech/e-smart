@@ -20,6 +20,8 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
     msmeType: row.msmeType,
     udyamNumber: row.udyamNumber,
     reverseCharge: row.reverseCharge || undefined,
+    tdsSection: (row.tdsSection ?? undefined) as Schema<'Party'>['tdsSection'],
+    lowerTdsCertificate: row.lowerTdsRate !== null && row.lowerTdsValidTill ? { rate: Number(row.lowerTdsRate), validTill: row.lowerTdsValidTill } : undefined,
     email: row.email,
     phone: row.phone,
     currency,
@@ -56,6 +58,9 @@ export function partyColumns(body: Schema<'Party'>) {
     msmeType: body.msmeType ?? null,
     udyamNumber: body.udyamNumber?.trim().toUpperCase() || null,
     reverseCharge: body.reverseCharge ?? false,
+    tdsSection: body.tdsSection ?? null,
+    lowerTdsRate: body.lowerTdsCertificate ? String(body.lowerTdsCertificate.rate) : null,
+    lowerTdsValidTill: body.lowerTdsCertificate?.validTill ?? null,
     // Addresses aren't case-sensitive; one spelling keeps search and duplicates simple.
     email: body.email?.trim().toLowerCase() || null,
     phone: body.phone ?? null,

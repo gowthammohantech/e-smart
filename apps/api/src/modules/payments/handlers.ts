@@ -41,7 +41,15 @@ function inputOf(body: Schema<'Payment'>): PaymentInput {
     reference: body.reference,
     accountId: body.accountId,
     notes: body.notes,
-    allocations: (body.allocations ?? []).map((a) => ({ documentId: a.documentId, amountMinor: a.amount.minor, currency: a.amount.currency })),
+    advanceTax: body.advanceTax ?? null,
+    allocations: (body.allocations ?? []).map((a) => ({
+      documentId: a.documentId,
+      amountMinor: a.amount.minor,
+      tdsMinor: a.tdsDeducted?.minor,
+      discountMinor: a.discount?.minor,
+      writeOffMinor: a.writeOff?.minor,
+      currency: a.amount.currency,
+    })),
   };
 }
 

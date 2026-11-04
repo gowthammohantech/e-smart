@@ -124,7 +124,7 @@ const limit = z.number().int().min(1).max(50).optional().describe('How many rows
 
 // ------------------------------------------------------------------ reads
 
-const DOC_KINDS = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'] as const;
+const DOC_KINDS = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'] as const;
 const DOC_STATUSES = ['draft', 'sent', 'accepted', 'issued', 'partiallyPaid', 'paid', 'overdue', 'cancelled'] as const;
 const REPORTS = ['sales-summary', 'purchase-summary', 'expense-summary', 'receivables', 'payables', 'stock', 'tax-summary', 'payments', 'profit'] as const;
 

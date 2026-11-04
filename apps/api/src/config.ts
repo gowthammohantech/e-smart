@@ -101,6 +101,14 @@ const Env = z.object({
   CHROMIUM_PATH: z.string().optional(),
 
   COMPLIANCE_PROVIDER: z.enum(['simulator', 'gsp']).default('simulator'),
+  /**
+   * GST returns: the taxpayer's portal session, GSTR-2B, saving and filing GSTR-1 and 3B. `gsp` uses the
+   * GSP's taxpayer API (needs it enabled on the GSP account); `disabled` keeps the app to preparing returns,
+   * and is what production gets when this is unset.
+   */
+  RETURNS_PROVIDER: z.enum(['simulator', 'gsp', 'disabled']).default('simulator'),
+  /** Filing (not saving) GSTR-1 and 3B through the GSP. Off until a CA signs off the returns and the sandbox run passes. */
+  GST_FILING_ENABLED: bool.default(false),
   /** Legacy name for `TAXATION_GSP_BASE_URL`; the latter wins when both are set. */
   GSP_BASE_URL: z.string().optional(),
 
@@ -229,8 +237,8 @@ export function productionProblems(config: Config, env: Record<string, string | 
     need(config[key] === 'log', `${key}=log only writes to the log; choose a real provider in production.`);
   }
   need(config.PDF_PROVIDER === 'stub', 'PDF_PROVIDER=stub renders placeholder PDFs; use chromium in production.');
-  for (const key of ['COMPLIANCE_PROVIDER', 'PAYMENTS_PROVIDER', 'ASSISTANT_PROVIDER', 'GSTIN_PROVIDER', 'OCR_PROVIDER'] as const) {
-    need(config[key] === 'simulator', `${key}=simulator is for development and tests; choose a real provider${key === 'GSTIN_PROVIDER' || key === 'OCR_PROVIDER' ? ' or disabled' : ''} in production.`);
+  for (const key of ['COMPLIANCE_PROVIDER', 'PAYMENTS_PROVIDER', 'ASSISTANT_PROVIDER', 'GSTIN_PROVIDER', 'OCR_PROVIDER', 'RETURNS_PROVIDER'] as const) {
+    need(config[key] === 'simulator', `${key}=simulator is for development and tests; choose a real provider${key === 'GSTIN_PROVIDER' || key === 'OCR_PROVIDER' || key === 'RETURNS_PROVIDER' ? ' or disabled' : ''} in production.`);
   }
   need(config.FX_PROVIDER === 'static', 'FX_PROVIDER=static serves fixed rates; use openexchangerates in production.');
   need(config.STORAGE_PROVIDER === 'memory', 'STORAGE_PROVIDER=memory loses uploads on restart; use azure or s3 in production.');
@@ -299,10 +307,14 @@ function sandboxProblems(env: {
 /** The GSP gateway settings a production `gsp` provider needs. The sandbox-only ones are `sandboxProblems`. */
 function gspProblems(config: Config): string[] {
   const problems: string[] = [];
-  const uses = config.COMPLIANCE_PROVIDER === 'gsp' || config.GSTIN_PROVIDER === 'gsp';
+  const uses = config.COMPLIANCE_PROVIDER === 'gsp' || config.GSTIN_PROVIDER === 'gsp' || config.RETURNS_PROVIDER === 'gsp';
   if (!uses) return problems;
+  // Returns go through Adaequare's taxpayer API only, for now.
+  if (config.RETURNS_PROVIDER === 'gsp' && resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE) !== 'adaequare') {
+    problems.push('RETURNS_PROVIDER=gsp needs the Adaequare gateway (TAXATION_GSP_PROVIDER_CODE=ADAEQUARE_GSP).');
+  }
   const gateway = resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE);
-  if (!gspBaseUrl(config)) problems.push(`TAXATION_${gateway.toUpperCase()}_BASE_URL (or TAXATION_GSP_BASE_URL) must be set for COMPLIANCE_PROVIDER=gsp or GSTIN_PROVIDER=gsp.`);
+  if (!gspBaseUrl(config)) problems.push(`TAXATION_${gateway.toUpperCase()}_BASE_URL (or TAXATION_GSP_BASE_URL) must be set for COMPLIANCE_PROVIDER, GSTIN_PROVIDER or RETURNS_PROVIDER=gsp.`);
   const app = gspApplication(config, gateway, config.COMPLIANCE_PROVIDER === 'gsp' && gateway === 'whitebooks' ? 'EINVOICE' : 'TAXPAYER');
   if (!app.clientId || !app.clientSecret) problems.push(`${app.variable} must be set for the ${gateway} gateway.`);
   return problems;
@@ -349,7 +361,9 @@ function isPublicHttps(url: string): boolean {
 const ALWAYS_FATAL = /^(JWT_SECRET|CREDENTIALS_KEY|DEMO_OTP|APP_URL|PUBLIC_BASE_URL)\b/;
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
-  const config = Env.parse(env);
+  // Filing returns is new: a production deployment that hasn't chosen keeps to preparing them,
+  // rather than refusing to start over a variable it never had.
+  const config = Env.parse(env.RETURNS_PROVIDER === undefined && env.NODE_ENV === 'production' ? { ...env, RETURNS_PROVIDER: 'disabled' } : env);
   if (config.NODE_ENV === 'production') {
     let problems = productionProblems(config, env);
     if (config.ALLOW_UNCONFIGURED_PROVIDERS) {

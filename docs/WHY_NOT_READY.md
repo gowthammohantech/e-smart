@@ -51,6 +51,19 @@ _Updated 3 Nov 2026 (Phase 2, not yet committed):_
 - _CI runs the web offline scenarios, the migration rule and a dependency audit; CodeQL and Dependabot are on._
 - _`docs/RUNBOOK.md` covers backups, restore, rotation and the job queue._
 
+_Updated 4 Nov 2026 (Phase 3, accounting, not yet committed):_
+- _A double-entry ledger worked out from every record, the same in the app and on the server:_
+  - _chart of accounts;_
+  - _journal, contra, GST journal and TDS challan vouchers;_
+  - _trial balance, P&L, balance sheet and day book;_
+  - _cost centres and closing the books;_
+  - _a Tally export of masters and every voucher._
+- _GST treatment per line (nil, exempt and non-GST, cess, composition, reimbursements, branch GSTINs), credit and debit notes without goods, and settling invoices by TDS, discount or write-off._
+- _TDS on supplier bills with thresholds, catch-up, s.206AA and s.197 certificates; reverse charge with self-invoices; input credit buckets and the 180-day reversal._
+- _GSTR-2B download and matching, GSTR-3B from the books with the rule 88A set-off, and saving and filing GSTR-1 and 3B through the GSP. A return is never filed twice, and lost answers are settled from the portal's tracker._
+- _GST on advances for services (GSTR-1 table 11), recovering billable expenses, and MSME 45-day tracking with reminders and the s.43B(h) list._
+- _Still open: CA sign-off of `docs/accounting/RULES.md` and the GSP returns sandbox run. `GST_FILING_ENABLED` stays off until both are done (`PRODUCTION_READINESS.md` §9)._
+
 _Still open from this audit: error tracking vendor, the purge job for closed accounts, encrypted local storage, httpOnly cookies on the web, the job scheduler, backups and PITR, e2e and load tests, the security review, device testing of offline sync, push notifications, and camera barcode scanning._
 
 ## Summary

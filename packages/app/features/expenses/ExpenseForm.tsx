@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useVouchers } from '../../store/books';
+import { CostCentreField } from '../books/CostCentreField';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -74,6 +76,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const accounts = usePaymentAccounts();
   const taxCategories = useTaxCategories();
   const suppliers = useParties('supplier');
+  const customers = useParties('customer');
 
   const saveExpense = useAppStore((s) => s.saveExpense);
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
@@ -108,6 +111,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [notes, setNotes] = useState(expense?.notes ?? initial?.notes ?? '');
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(expense?.recurrence ?? 'none');
   const [billable, setBillable] = useState(expense?.billable ?? false);
+  const [customerId, setCustomerId] = useState<string | undefined>(expense?.customerId);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [costCentreId, setCostCentreId] = useState<string | undefined>(expense?.costCentreId);
   const [receiptUri, setReceiptUri] = useState<string | undefined>(initial?.receiptUri);
   const [uploading, setUploading] = useState(false);
 
@@ -141,12 +147,13 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const totalPaid = inclusive || reverseCharge ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
 
   // Cash in hand cannot pay out more than it holds (an edit gives back its own amount first).
+  const vouchers = useVouchers();
   const account = accounts.find((a) => a.id === accountId);
   const cashBalance = useMemo(() => {
     if (!account || account.type !== 'cash') return undefined;
     const others = expenses.filter((e) => e.id !== expense?.id);
-    return accountBalances(accounts, payments, others)[account.id];
-  }, [account, accounts, payments, expenses, expense?.id]);
+    return accountBalances(accounts, payments, others, vouchers)[account.id];
+  }, [account, accounts, payments, expenses, vouchers, expense?.id]);
   const cashShort = cashBalance !== undefined && totalPaid.minor > cashBalance;
 
   const attachReceipt = async () => {
@@ -221,6 +228,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       reference: reference.trim() || undefined,
       notes: notes.trim() || undefined,
       billable,
+      customerId: billable ? customerId : undefined,
+      costCentreId,
       recurrence,
       nextRecurrenceDate: recurrence === 'none' ? undefined : addDaysISO(date, recurrence === 'weekly' ? 7 : recurrence === 'monthly' ? 30 : recurrence === 'quarterly' ? 91 : 365),
       attachmentIds,
@@ -328,7 +337,13 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     <PickerField label={tr('purchases:form.repeats')} value={tr(`purchases:recurrence.${recurrence}`)} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
   );
   const billableField = (
-    <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
+    <>
+      <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
+      {billable ? (
+        <PickerField label={tr('purchases:form.billTo')} value={customers.find((c) => c.id === customerId)?.name ?? tr('purchases:form.billToAny')} onPress={() => setCustomerOpen(true)} icon="account-arrow-right-outline" hint={tr('purchases:form.billToHint')} />
+      ) : null}
+      <CostCentreField value={costCentreId} onChange={setCostCentreId} />
+    </>
   );
   const receiptCard = (
     <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
@@ -534,6 +549,14 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           </FormActions>
         )}
 
+        <SelectSheet
+          visible={customerOpen}
+          onClose={() => setCustomerOpen(false)}
+          title={tr('purchases:form.billTo')}
+          options={[{ value: '', label: tr('purchases:form.billToAny') }, ...customers.map((c) => ({ value: c.id, label: c.name }))]}
+          value={customerId ?? ''}
+          onSelect={(v) => setCustomerId(v || undefined)}
+        />
         <SelectSheet
           visible={itcOpen}
           onClose={() => setItcOpen(false)}

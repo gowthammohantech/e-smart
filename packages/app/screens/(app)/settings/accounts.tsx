@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useVouchers } from '../../../store/books';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,7 +56,8 @@ export default function AccountSettings() {
   };
 
   /** Running balance: opening + money in − money out − expenses paid from it. */
-  const balances = useMemo(() => accountBalances(accounts, payments, expenses), [accounts, payments, expenses]);
+  const vouchers = useVouchers();
+  const balances = useMemo(() => accountBalances(accounts, payments, expenses, vouchers), [accounts, payments, expenses, vouchers]);
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 

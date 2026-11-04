@@ -1,13 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  BusinessDocument,
-  DiscountMode,
-  DocumentKind,
-  DocumentLine,
-  Item,
-  Party,
-  TaxCategory,
-} from '@esmart/core/types';
+import { BusinessDocument, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, TaxCategory } from '@esmart/core/types';
 import { Money, fromMajor, money, zero } from '@esmart/core/lib/money';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -32,6 +24,11 @@ export type DraftState = {
   placeOfSupplyStateCode?: string;
   /** The whole document is under reverse charge: the buyer pays the GST. */
   reverseCharge?: boolean;
+  /** Why a credit or debit note was raised. */
+  noteReason?: NoteReason;
+  /** A TDS section, `none`, or unset for the supplier's own. */
+  tdsSection?: string;
+  costCentreId?: string;
   notes: string;
   terms: string;
   attachmentIds: string[];
@@ -80,6 +77,10 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     roundOffManual: doc.roundOffManual,
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,
     reverseCharge: doc.reverseCharge,
+    noteReason: doc.noteReason,
+    // A stored bill keeps what it was worked out with.
+    tdsSection: doc.tdsSection ?? doc.tds?.section ?? 'none',
+    costCentreId: doc.costCentreId,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],

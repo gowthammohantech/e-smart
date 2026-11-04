@@ -156,6 +156,8 @@
     "taxableValue": "Taxable value",
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
+    "tdsLabel": "TDS {{section}} at {{rate}}",
+    "payableToSupplier": "Payable to supplier",
     "reimbursements": "Reimbursements at cost",
     "reverseChargeTax": "Tax payable by the recipient (reverse charge)",
     "roundOff": "Round off",

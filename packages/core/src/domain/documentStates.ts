@@ -78,6 +78,28 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     approved: ['processed', 'cancelled'],
     processed: [],
   },
+  creditNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['cancelled'],
+  },
+  supplierCreditNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['cancelled'],
+  },
+  debitNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid'],
+    paid: [],
+  },
+  supplierDebitNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid'],
+    paid: [],
+  },
 };
 
 export function nextStatuses(kind: DocumentKind, status: DocStatus): DocStatus[] {
@@ -104,6 +126,25 @@ export function isCancelled(status: DocStatus): boolean {
 
 const RETURN_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn'];
 
+/** Notes against an invoice or bill: they change what it charged, and move no goods. */
+export const NOTE_KINDS: DocumentKind[] = ['creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'];
+
+/** Documents that lower what their source still owes: returns and credit notes. */
+export const CREDIT_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn', 'creditNote', 'supplierCreditNote'];
+
+/** Raised against an invoice or bill, any number of times: returns and notes. */
+const AGAINST_SOURCE: DocumentKind[] = [...RETURN_KINDS, ...NOTE_KINDS];
+
+/** The kind of document each note is raised against. */
+export const NOTE_SOURCE: Partial<Record<DocumentKind, DocumentKind>> = {
+  creditNote: 'invoice',
+  debitNote: 'invoice',
+  supplierCreditNote: 'purchaseBill',
+  supplierDebitNote: 'purchaseBill',
+  salesReturn: 'invoice',
+  purchaseReturn: 'purchaseBill',
+};
+
 /**
  * Why nothing of `target` can be made from `source` now, or null when it can.
  * A draft isn't final, so nothing is made from it. And a quote or order is
@@ -119,15 +160,19 @@ export function conversionBlock(
 ): 'cancelled' | 'draft' | 'converted' | null {
   if (isCancelled(source.status)) return 'cancelled';
   if (!isFinalized(source.status)) return 'draft';
-  if (RETURN_KINDS.includes(target)) return null;
-  const onward = made.some((d) => d.sourceDocumentId === source.id && !RETURN_KINDS.includes(d.kind) && !isCancelled(d.status));
+  if (AGAINST_SOURCE.includes(target)) return null;
+  const onward = made.some((d) => d.sourceDocumentId === source.id && !AGAINST_SOURCE.includes(d.kind) && !isCancelled(d.status));
   return onward ? 'converted' : null;
 }
 
 /** Documents that create a receivable / payable. */
 export function isPayableDocument(kind: DocumentKind): boolean {
-  return kind === 'invoice' || kind === 'purchaseBill';
+  return PAYABLE_KINDS.includes(kind);
 }
 
-export const SALES_KINDS: DocumentKind[] = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn'];
-export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
+export const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'purchaseBill', 'debitNote', 'supplierDebitNote'];
+/** Settled by money received; the rest by money paid. */
+export const RECEIVABLE_KINDS: DocumentKind[] = ['invoice', 'debitNote'];
+
+export const SALES_KINDS: DocumentKind[] = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote'];
+export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'];

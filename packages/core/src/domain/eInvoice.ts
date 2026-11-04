@@ -57,11 +57,11 @@ export const E_INVOICE_SUPPLY_TYPES: Record<EInvoiceSupplyType, string> = {
 /** Cancellation must reach the portal within 24 hours of the IRN being issued. */
 export const E_INVOICE_CANCEL_WINDOW_HOURS = 24;
 
-/** Document kinds this app can report. Debit notes have no kind here. */
 /** Turnover from which the portal requires 6-digit HSN codes: 5 crore, in paise. */
 const HSN_SIX_DIGIT_TURNOVER_MINOR = 5_00_00_000 * 100;
 
-export const E_INVOICE_KINDS: DocumentKind[] = ['invoice', 'salesReturn'];
+/** Document kinds this app can report: invoices, credit notes (returns or value-only) and debit notes. */
+export const E_INVOICE_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'creditNote', 'debitNote'];
 
 /** The portal reconciles totals to the nearest rupee, so ±1 is tolerated. */
 export const TOTAL_TOLERANCE_MINOR = 100;
@@ -119,7 +119,8 @@ export type EInvoiceApplicability = {
 
 export function eInvoiceDocTypeFor(kind: DocumentKind): EInvoiceDocType | null {
   if (kind === 'invoice') return 'INV';
-  if (kind === 'salesReturn') return 'CRN';
+  if (kind === 'salesReturn' || kind === 'creditNote') return 'CRN';
+  if (kind === 'debitNote') return 'DBN';
   return null;
 }
 

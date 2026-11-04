@@ -4,6 +4,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { schema } from '@esmart/db';
 import { MUMBAI, ownerWithCompany, setupApi } from './helpers';
 import { joinTeam } from './team-helpers';
+import { line, moneySetup } from './money-fixtures';
 
 const t = setupApi();
 
@@ -88,6 +89,28 @@ describe('exports', () => {
     const amounts = [...xml.matchAll(/<AMOUNT>(-?[\d.]+)<\/AMOUNT>/g)].map((m) => Number(m[1]));
     expect(amounts).toEqual([-1180, 1000, 90, 90]);
     expect(amounts.reduce((a, b) => a + b, 0)).toBeCloseTo(0);
+  });
+
+  it('writes the whole book for Tally: ledgers under Tally\'s groups, and every voucher balanced', async () => {
+    const m = await moneySetup(t);
+    const inr = (minor: number) => ({ minor, currency: 'INR' });
+    await t.deps.db.update(schema.parties).set({ openingBalanceMinor: 50_000 }).where(eq(schema.parties.id, m.mumbai.id));
+    const inv = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.bengaluru.id, date: '2026-09-29', currency: 'INR', lines: [line(m.gst(18))], status: 'issued' }, { token: m.token });
+    await t.post(`${m.c}/payments`, { direction: 'received', partyId: m.bengaluru.id, date: '2026-09-29', amount: inr(100_000), currency: 'INR', method: 'cash', accountId: m.cash.id, allocations: [{ documentId: inv.body.id, amount: inr(100_000) }] }, { token: m.token });
+    await t.post(`${m.c}/vouchers`, { kind: 'journal', date: '2026-09-29', lines: [{ account: 'sys:roundOff', debit: inr(500), credit: inr(0) }, { account: 'sys:capital', debit: inr(0), credit: inr(500) }] }, { token: m.token });
+    const job = await exported(m.c, m.token, { format: 'tally-xml' });
+    const xml = (await download(job.downloadUrl)).toString('utf8');
+
+    expect(xml).toContain('<LEDGER NAME="Anand Enterprises" ACTION="Create"><NAME.LIST><NAME>Anand Enterprises</NAME></NAME.LIST><PARENT>Sundry Debtors</PARENT><PARTYGSTIN>29AABCG4321K1ZM</PARTYGSTIN>');
+    expect(xml).toMatch(/<LEDGER NAME="Output IGST"[^]*?<PARENT>Duties &amp; Taxes<\/PARENT>/);
+    // Sunrise Retail owed ₹500 when the books began: a debit opening, negative in Tally.
+    expect(xml).toMatch(/<LEDGER NAME="Sunrise Retail"[^]*?<OPENINGBALANCE>-500.00<\/OPENINGBALANCE>/);
+    const vouchers = [...xml.matchAll(/<VOUCHER VCHTYPE="([^"]+)"[^]*?<\/VOUCHER>/g)];
+    expect(vouchers.map((v) => v[1]).sort()).toEqual(['Journal', 'Receipt', 'Sales']);
+    for (const [v] of vouchers) {
+      const amounts = [...v.matchAll(/<AMOUNT>(-?[\d.]+)<\/AMOUNT>/g)].map((x) => Number(x[1]));
+      expect(amounts.reduce((a, b) => a + b, 0)).toBeCloseTo(0);
+    }
   });
 
   it('marks the export failed once its last try fails, so the app stops waiting', async () => {

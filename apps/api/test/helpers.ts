@@ -102,8 +102,9 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
   const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, LOG_LEVEL: 'silent', DEMO_OTP: 'false', RATE_LIMIT_PER_MINUTE: '100000', AUTH_RATE_LIMIT_PER_MINUTE: '100000', ...env });
   const pool = createPool(url, 5);
   const db = createDb(pool);
-  const providers = createProviders(config, { info: () => {} }, db);
   let now: Date | null = null;
+  // The simulators keep the test's clock, so a session opened "now" is the pinned now.
+  const providers = createProviders(config, { info: () => {} }, db, () => (now ? new Date(now) : new Date()));
   const deps: Deps = { db, pool, config, providers, now: () => (now ? new Date(now) : new Date()) };
   let app: FastifyInstance | null = null;
   let operations: Operation[] = [];
@@ -132,6 +133,7 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
     now = null;
     providers.outbox.clear();
     (providers.compliance as { reset?: () => void }).reset?.();
+    (providers.returns as { reset?: () => void }).reset?.();
     await pool.query(`TRUNCATE ${tables.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`);
   });
 

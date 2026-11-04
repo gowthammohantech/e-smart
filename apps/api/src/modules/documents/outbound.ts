@@ -1,4 +1,5 @@
 import { and, eq, gt } from 'drizzle-orm';
+import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import type { LanguageCode } from '@esmart/i18n/config';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
@@ -37,6 +38,9 @@ export async function renderDocumentPdf(
   return deps.providers.pdf.render(await renderDocumentHtml(db, deps, company, row, opts));
 }
 
+/** Returns and notes print the invoice or bill they're against. */
+const AGAINST_SOURCE = Object.keys(NOTE_SOURCE);
+
 /** The printable page itself: what the PDF is made from, and what a share link shows. */
 export async function renderDocumentHtml(
   db: DbOrTx,
@@ -48,6 +52,9 @@ export async function renderDocumentHtml(
   const [doc] = await documentsToWire(db, [row], opts.now, company.baseCurrency.trim());
   const [party] = await db.select().from(schema.parties).where(eq(schema.parties.id, row.partyId));
   const [branch] = await db.select().from(schema.branches).where(eq(schema.branches.id, row.branchId));
+  const [source] = row.sourceDocumentId
+    ? await db.select({ number: schema.documents.number, date: schema.documents.date }).from(schema.documents).where(eq(schema.documents.id, row.sourceDocumentId))
+    : [];
   const eway = row.currentEwayBillId ? await db.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, row.currentEwayBillId)) : [];
   const language: LanguageCode = opts.locale ?? 'en';
   const coreBranch: Branch | undefined = branch
@@ -62,6 +69,7 @@ export async function renderDocumentHtml(
     party: party ? partyCore(party) : undefined,
     branch: coreBranch,
     ewayBill,
+    source: AGAINST_SOURCE.includes(row.kind) ? source : undefined,
     logoSrc: await companyLogoDataUri(db, deps, company),
     t: i18n.getFixedT(language),
     language,

@@ -991,7 +991,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description Purchase-side kinds (`purchaseOrder`, `goodsReceipt`, `purchaseBill`, `purchaseReturn`) need the `purchases` module. */
+        /** @description Purchase-side kinds (`purchaseOrder`, `goodsReceipt`, `purchaseBill`, `purchaseReturn`, `supplierCreditNote`, `supplierDebitNote`) need the `purchases` module. */
         get: operations["listDocuments"];
         put?: never;
         /**
@@ -1500,6 +1500,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/ledger-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listLedgerAccounts"];
+        put?: never;
+        /** @description An account the business adds itself. System accounts and those mirroring parties, cash and bank accounts and expense categories are derived and need no record. An account a voucher uses cannot be removed (409 ACCOUNT_IN_USE). */
+        post: operations["createLedgerAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/ledger-accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLedgerAccount"];
+        put: operations["saveLedgerAccount"];
+        post?: never;
+        delete: operations["removeLedgerAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/cost-centres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listCostCentres"];
+        put?: never;
+        /** @description A project, department or the like. Documents, expenses and voucher lines can carry one, for profit by cost centre. One in use cannot be removed (409 COST_CENTRE_IN_USE). */
+        post: operations["createCostCentre"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/cost-centres/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCostCentre"];
+        put: operations["saveCostCentre"];
+        post?: never;
+        delete: operations["removeCostCentre"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVouchers"];
+        put?: never;
+        /** @description The server assigns `number` from the kind's series. Debits must equal credits; a contra moves money only between cash and bank accounts; a GST journal touches a GST ledger; a TDS challan clears TDS payable. Refused in a closed period (409 PERIOD_LOCKED). */
+        post: operations["createVoucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vouchers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getVoucher"];
+        put: operations["saveVoucher"];
+        post?: never;
+        delete: operations["removeVoucher"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/stock/levels": {
         parameters: {
             query?: never;
@@ -1740,7 +1854,7 @@ export interface paths {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit" | "tds-register" | "trial-balance" | "msme-payables";
             };
             cookie?: never;
         };
@@ -1751,11 +1865,298 @@ export interface paths {
          *     The response schema depends on `reportKey`: sales/purchase-summary →
          *     TransactionSummary, expense-summary → ExpenseSummary, receivables/payables →
          *     AgingReport, stock → StockReport, tax-summary → TaxSummary, payments →
-         *     PaymentSummary, profit → ProfitSnapshot.
+         *     PaymentSummary, profit → ProfitSnapshot, tds-register → TdsRegister,
+         *     trial-balance → TrialBalance (the whole books, not only the period's documents),
+         *     msme-payables → MsmePayables (as of `to`; `from` is ignored).
          */
         get: operations["getReport"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/portal-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** The business's GSTINs and whether each is connected to the GST portal */
+        get: operations["listGstPortalSessions"];
+        put?: never;
+        /**
+         * Opens the taxpayer's GST portal session with the OTP sent to their registered phone
+         * @description The taxpayer switches API access on in the portal (Profile → Manage API Access) first. The session lasts six hours and refreshes on its own for as long as they chose there (up to 30 days).
+         */
+        post: operations["connectGstPortal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/portal-sessions/otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asks the GST portal to send an OTP to the taxpayer's registered phone */
+        post: operations["requestGstPortalOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/portal-sessions/{gstin}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                gstin: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["disconnectGstPortal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** GSTR-1 and GSTR-3B for a financial year, as recorded here and, when connected, as the portal tracks them */
+        get: operations["listGstReturns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** A period's GSTR-2B matched against the purchase register */
+        get: operations["getGstr2b"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Downloads a period's GSTR-2B through the GST portal session, keeping decisions already made
+         * @description 409 GSTR2B_NOT_GENERATED until GSTN has made it (the 14th of the next month, for most).
+         */
+        post: operations["fetchGstr2b"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claims the period's credit on every matched bill (GSTR-3B reads it from there) */
+        post: operations["claimGstr2b"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b/lines/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** A person's call on one line of 2B */
+        put: operations["decideGstr2bLine"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr3b": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** A period's GSTR-3B worked out from the books, with the tax set off from credit and cash */
+        get: operations["getGstr3b"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Saves the period’s return to the GST portal (again, if it changed)
+         * @description GSTR-1 from the period’s sales; GSTR-3B from the books, with the set-off. Saving replaces what was saved before. 409 RETURN_FILED once filed.
+         */
+        post: operations["saveGstReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/offset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** GSTR-3B: sets off the liability from credit and cash, as the saved return says */
+        post: operations["offsetGstReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/proceed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** GSTR-1: freezes the saved data for filing */
+        post: operations["proceedGstReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/evc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends the EVC OTP to the authorised signatory’s phone */
+        post: operations["requestGstReturnEvc"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Files the return with the EVC OTP. Cannot be undone.
+         * @description 503 FILING_DISABLED until GST_FILING_ENABLED is on. GSTR-3B needs the period’s GSTR-1 filed first. The portal is asked first whether it is already filed, so a return is never filed twice; an answer lost on the way is settled by the portal’s tracker. Filing GSTR-3B closes the books through the period and posts the set-off as a GST journal.
+         */
+        post: operations["fileGstReturn"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2706,6 +3107,8 @@ export interface components {
              * @description Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.
              */
             lockedThroughDate?: string | null;
+            /** @description Tax deduction account number. With it, TDS is worked out on supplier bills under their section. */
+            tan?: string;
             /**
              * @description When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.
              * @default false
@@ -2759,7 +3162,7 @@ export interface components {
             monthly?: number;
             yearly?: number;
             features?: string[];
-            modules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables")[];
+            modules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
             popular?: boolean;
         };
         Subscription: {
@@ -2810,6 +3213,9 @@ export interface components {
              * @description The day the opening balance was counted; not after today.
              */
             openingBalanceDate?: string;
+            /** @description A foreign-currency account: the opening balance's rate to base on its date, from the company's exchange rates */
+            readonly openingRate?: number;
+            /** @description In base currency */
             readonly currentBalance?: components["schemas"]["Money"];
             isDefault?: boolean;
         };
@@ -2828,7 +3234,7 @@ export interface components {
             readonly id?: string;
             readonly companyId?: string;
             /** @enum {string} */
-            kind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "payment" | "expense";
+            kind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan";
             /** @example INV */
             prefix: string;
             nextNumber: number;
@@ -2912,6 +3318,14 @@ export interface components {
             udyamNumber?: string;
             /** @description Bills from this supplier are under reverse charge unless a line says otherwise */
             reverseCharge?: boolean;
+            /** @description The TDS section this supplier's bills fall under by default */
+            tdsSection?: components["schemas"]["TdsSectionCode"];
+            /** @description A lower or nil deduction certificate (s.197) */
+            lowerTdsCertificate?: {
+                rate: number;
+                /** Format: date */
+                validTill: string;
+            };
             /** Format: email */
             email?: string;
             phone?: string;
@@ -2939,7 +3353,7 @@ export interface components {
                 /** Format: date */
                 date?: string;
                 /** @enum {string} */
-                entityType?: "document" | "payment" | "opening";
+                entityType?: "document" | "payment" | "voucher" | "opening";
                 entityId?: string;
                 number?: string;
                 debit?: components["schemas"]["Money"];
@@ -2981,10 +3395,279 @@ export interface components {
             readonly stockOnHand?: number;
             readonly low?: boolean;
         };
-        /** @enum {string} */
-        DocumentKind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn";
+        /**
+         * @description creditNote and debitNote lower or raise what an invoice charged, with no goods moving; supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is raised against its invoice or bill (sourceDocumentId). Credit notes, like returns, settle what the source still owes; debit notes are owed and paid like an invoice or bill.
+         * @enum {string}
+         */
+        DocumentKind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote";
         /** @enum {string} */
         DocStatus: "draft" | "sent" | "accepted" | "rejected" | "expired" | "confirmed" | "fulfilled" | "cancelled" | "delivered" | "issued" | "partiallyPaid" | "paid" | "overdue" | "requested" | "approved" | "processed" | "received" | "billed";
+        LedgerAccount: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @enum {string} */
+            group: "capital" | "reserves" | "loans" | "sundryCreditors" | "dutiesTaxes" | "provisions" | "currentLiabilities" | "fixedAssets" | "investments" | "sundryDebtors" | "cashInHand" | "bankAccounts" | "stockInHand" | "loansAdvances" | "currentAssets" | "salesAccounts" | "directIncomes" | "indirectIncomes" | "purchaseAccounts" | "directExpenses" | "indirectExpenses";
+            /** @description Debit positive, as of the day the books begin */
+            openingBalance: components["schemas"]["Money"];
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        CostCentre: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @example Project */
+            category?: string;
+            /** @description The centre this one sits under */
+            parentId?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        VoucherLine: {
+            /**
+             * @description An account key: sys:<name>, sys:tdsPayable:<section>, party:<id>, pay:<id>, exp:<id> or acc:<id>
+             * @example pay:pac_123
+             */
+            account: string;
+            debit: components["schemas"]["Money"];
+            credit: components["schemas"]["Money"];
+            narration?: string;
+            costCentreId?: string;
+        };
+        Voucher: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            branchId?: string;
+            /** @enum {string} */
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan";
+            readonly number?: string;
+            /** Format: date */
+            date: string;
+            narration?: string;
+            /** @description A TDS challan's number and BSR code, a cheque number */
+            reference?: string;
+            lines: components["schemas"]["VoucherLine"][];
+            readonly createdBy?: string;
+        };
+        TrialBalance: {
+            rows?: {
+                account?: string;
+                name?: string;
+                group?: string;
+                /** @description Debit positive */
+                opening?: components["schemas"]["Money"];
+                debit?: components["schemas"]["Money"];
+                credit?: components["schemas"]["Money"];
+                /** @description Debit positive */
+                closing?: components["schemas"]["Money"];
+            }[];
+            totalDebit?: components["schemas"]["Money"];
+            totalCredit?: components["schemas"]["Money"];
+        };
+        GstPortalSession: {
+            gstin?: string;
+            username?: string;
+            connected?: boolean;
+            /** Format: date-time */
+            expiresAt?: string;
+            /**
+             * Format: date-time
+             * @description Until when it renews without a new OTP
+             */
+            refreshableUntil?: string;
+            /** Format: date-time */
+            otpRequestedAt?: string;
+        };
+        GstReturn: {
+            id?: string;
+            gstin?: string;
+            /** @enum {string} */
+            returnType?: "gstr1" | "gstr3b";
+            /** @description MMYYYY */
+            period?: string;
+            /** @enum {string} */
+            status?: "prepared" | "saved" | "submitted" | "filed" | "failed" | "notFiled";
+            arn?: string;
+            /** Format: date */
+            filedOn?: string;
+            referenceId?: string;
+            lastError?: string;
+        };
+        Gstr2bBill: {
+            documentId?: string;
+            /** @enum {string} */
+            kind?: "purchaseBill" | "supplierCreditNote" | "supplierDebitNote";
+            number?: string;
+            supplierNumber?: string;
+            /** Format: date */
+            date?: string;
+            taxable?: components["schemas"]["Money"];
+            tax?: components["schemas"]["Money"];
+            claimedIn?: string;
+        };
+        Gstr2bReconciliation: {
+            gstin?: string;
+            period?: string;
+            fetched?: boolean;
+            /** Format: date-time */
+            fetchedAt?: string;
+            /** Format: date */
+            generatedOn?: string;
+            summary?: {
+                lines?: number;
+                matched?: number;
+                partial?: number;
+                probable?: number;
+                missingInBooks?: number;
+                missingIn2b?: number;
+                claimableTax?: components["schemas"]["Money"];
+            };
+            rows?: {
+                id?: string;
+                section?: string;
+                supplierGstin?: string;
+                supplierName?: string;
+                /** @enum {string} */
+                documentType?: "I" | "C" | "D" | "BOE";
+                number?: string;
+                /** Format: date */
+                date?: string;
+                taxable?: components["schemas"]["Money"];
+                tax?: components["schemas"]["Money"];
+                reverseCharge?: boolean;
+                itcAvailable?: boolean;
+                itcReason?: string;
+                /** @enum {string} */
+                status?: "matched" | "partial" | "probable" | "missingInBooks" | "notOurs" | "claimLater";
+                /** @enum {string} */
+                decision?: "accepted" | "notOurs" | "claimLater";
+                bill?: components["schemas"]["Gstr2bBill"];
+                difference?: {
+                    taxable?: components["schemas"]["Money"];
+                    tax?: components["schemas"]["Money"];
+                    days?: number;
+                };
+            }[];
+            missingIn2b?: components["schemas"]["Gstr2bBill"][];
+        };
+        GstAmounts: {
+            taxable?: components["schemas"]["Money"];
+            igst?: components["schemas"]["Money"];
+            cgst?: components["schemas"]["Money"];
+            sgst?: components["schemas"]["Money"];
+            cess?: components["schemas"]["Money"];
+        };
+        Gstr3bView: {
+            gstin?: string;
+            period?: string;
+            /** Format: date */
+            dueDate?: string;
+            /** @description Whether this server files returns (GST_FILING_ENABLED) */
+            filingEnabled?: boolean;
+            outward?: {
+                taxable?: components["schemas"]["GstAmounts"];
+                zeroRated?: components["schemas"]["GstAmounts"];
+                nilExempt?: components["schemas"]["GstAmounts"];
+                reverseCharge?: components["schemas"]["GstAmounts"];
+                nonGst?: components["schemas"]["GstAmounts"];
+            };
+            interStateUnregistered?: {
+                placeOfSupply?: string;
+                taxable?: components["schemas"]["Money"];
+                igst?: components["schemas"]["Money"];
+            }[];
+            itc?: {
+                importOfGoods?: components["schemas"]["GstAmounts"];
+                importOfServices?: components["schemas"]["GstAmounts"];
+                reverseCharge?: components["schemas"]["GstAmounts"];
+                isd?: components["schemas"]["GstAmounts"];
+                allOther?: components["schemas"]["GstAmounts"];
+                reversedRules?: components["schemas"]["GstAmounts"];
+                reversedOther?: components["schemas"]["GstAmounts"];
+                net?: components["schemas"]["GstAmounts"];
+                reclaimed?: components["schemas"]["GstAmounts"];
+            };
+            inwardExempt?: {
+                interState?: components["schemas"]["Money"];
+                intraState?: components["schemas"]["Money"];
+            };
+            interest?: components["schemas"]["GstAmounts"];
+            lateFee?: components["schemas"]["GstAmounts"];
+            /** @description How the tax is paid. credit[from][to], cash by kind, credit carried in from last month and forward to the next. */
+            setOff?: {
+                liability?: components["schemas"]["GstAmounts"];
+                credit?: {
+                    [key: string]: components["schemas"]["GstAmounts"];
+                };
+                cash?: components["schemas"]["GstAmounts"];
+                carriedIn?: components["schemas"]["GstAmounts"];
+                carriedForward?: components["schemas"]["GstAmounts"];
+            };
+            /** @description This period's GSTR-1 and GSTR-3B as recorded */
+            returns?: components["schemas"]["GstReturn"][];
+        };
+        /**
+         * @description 194J(a) is 194JA, 194I(b) is 194IB, and so on.
+         * @enum {string}
+         */
+        TdsSectionCode: "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+        TdsDeduction: {
+            section: components["schemas"]["TdsSectionCode"];
+            rate: number;
+            amount: components["schemas"]["Money"];
+        };
+        /** @description Bills of micro and small suppliers still unpaid (MSMED Act s.15: by the agreed day, at most 45 days, else 15), and for the CA what wasn't paid in time this financial year (s.43B(h)) */
+        MsmePayables: {
+            rows?: {
+                documentId?: string;
+                number?: string;
+                supplierDocNumber?: string;
+                partyId?: string;
+                partyName?: string;
+                /** @enum {string} */
+                msmeType?: "micro" | "small";
+                /** Format: date */
+                date?: string;
+                /** Format: date */
+                dueDate?: string;
+                outstanding?: components["schemas"]["Money"];
+                /** @description Negative once overdue */
+                daysLeft?: number;
+                /** @description s.16 interest so far, at three times the bank rate, compounded monthly */
+                interest?: components["schemas"]["Money"];
+            }[];
+            notPaidInTime?: {
+                documentId?: string;
+                number?: string;
+                partyId?: string;
+                partyName?: string;
+                /** Format: date */
+                date?: string;
+                /** Format: date */
+                dueDate?: string;
+                amount?: components["schemas"]["Money"];
+            }[];
+            /** @description RBI's bank rate used for the interest, percent */
+            bankRate?: number;
+            outstanding?: components["schemas"]["Money"];
+            overdue?: components["schemas"]["Money"];
+        };
+        TdsRegister: {
+            rows?: {
+                section?: string;
+                sectionLabel?: string;
+                partyId?: string;
+                partyName?: string;
+                pan?: string;
+                /** @example FY 2026-27 Q1 */
+                quarter?: string;
+                base?: components["schemas"]["Money"];
+                tds?: components["schemas"]["Money"];
+                documents?: number;
+            }[];
+            total?: components["schemas"]["Money"];
+        };
         /** @description How GST treats an item. Kept on each document line as it was when the line was written. */
         GstFlags: {
             /**
@@ -3029,6 +3712,8 @@ export interface components {
             taxInclusive: boolean;
             /** @description Defaults to the item's; kept as it was once the document is finalised */
             gst?: components["schemas"]["GstFlags"];
+            /** @description A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED) */
+            expenseId?: string;
         };
         TaxComponent: {
             /** @enum {string} */
@@ -3095,6 +3780,18 @@ export interface components {
             reverseCharge?: boolean;
             attachmentIds?: string[];
             sourceDocumentId?: string;
+            /**
+             * @description Why a credit or debit note was raised
+             * @enum {string}
+             */
+            noteReason?: "discount" | "priceChange" | "taxCorrection" | "deficiency" | "other";
+            /** @description The project or department it belongs to */
+            costCentreId?: string;
+            /**
+             * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN.
+             * @enum {string}
+             */
+            tdsSection?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
             /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
             overrideCreditLimit?: boolean;
             /**
@@ -3112,6 +3809,22 @@ export interface components {
             totals?: components["schemas"]["DocumentTotals"];
             /** @description The party's GSTIN when the document was finalised */
             readonly partyGstin?: string;
+            /** @description TDS deducted on the bill: what is owed the supplier is the grand total less this */
+            tds?: components["schemas"]["TdsDeduction"];
+            /** @description The self-invoice for a reverse-charge purchase from an unregistered supplier (Rule 46(f)) */
+            readonly selfInvoiceNumber?: string;
+            /**
+             * Format: date
+             * @description Input tax credit reversed after 180 days unpaid
+             */
+            readonly itcReversedOn?: string;
+            /**
+             * Format: date
+             * @description Credit claimed again once paid
+             */
+            readonly itcReclaimedOn?: string;
+            /** @description The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return */
+            readonly itcClaimPeriod?: string;
             readonly partyStateCode?: string;
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
@@ -3337,7 +4050,14 @@ export interface components {
         PaymentAllocation: {
             documentId: string;
             readonly documentNumber?: string;
+            /** @description Cash: what the payment itself settles; may be zero when an adjustment below settles the document */
             amount: components["schemas"]["Money"];
+            /** @description Settled without cash: TDS the customer deducted, or the business deducted from a supplier */
+            tdsDeducted?: components["schemas"]["Money"];
+            /** @description Settled without cash: a discount allowed or received */
+            discount?: components["schemas"]["Money"];
+            /** @description Settled without cash: written off as bad debt (owner, admin or accountant) */
+            writeOff?: components["schemas"]["Money"];
         };
         Payment: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -3357,6 +4077,13 @@ export interface components {
             allocations?: components["schemas"]["PaymentAllocation"][];
             readonly unallocated?: components["schemas"]["Money"];
             readonly fxGainLoss?: components["schemas"]["Money"];
+            /** @description A receipt that is an advance for services owes GST when received (s.13(2)), at this rate and place of supply; invoices raised against it later take the tax back (GSTR-1 table 11). Advances for goods carry none. */
+            advanceTax?: {
+                taxCategoryId: string;
+                /** @description The rate on the day received */
+                readonly rate?: number;
+                placeOfSupplyStateCode: string;
+            };
             /** @enum {string} */
             readonly source?: "manual" | "gateway";
             notes?: string;
@@ -3394,6 +4121,9 @@ export interface components {
             reference?: string;
             notes?: string;
             billable?: boolean;
+            /** @description Billable: the customer it is recovered from, as a reimbursement line on their invoice */
+            customerId?: string;
+            costCentreId?: string;
             /** @enum {string} */
             recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
             /** Format: date */
@@ -3880,6 +4610,16 @@ export interface components {
             total?: number;
             cancelled?: number;
         };
+        Gstr1AdvanceRow: {
+            placeOfSupply?: string;
+            rate?: number;
+            interState?: boolean;
+            taxable?: components["schemas"]["Money"];
+            igst?: components["schemas"]["Money"];
+            cgst?: components["schemas"]["Money"];
+            sgst?: components["schemas"]["Money"];
+            cess?: components["schemas"]["Money"];
+        };
         Gstr1Summary: {
             period?: string;
             b2b?: components["schemas"]["Gstr1Row"][];
@@ -3891,6 +4631,11 @@ export interface components {
             hsn?: components["schemas"]["HsnRow"][];
             nil?: components["schemas"]["NilRow"][];
             docs?: components["schemas"]["DocIssueRow"][];
+            /** @description Table 11: tax on advances for services received in the period and not yet invoiced (11A), and on earlier advances invoiced in it (11B) */
+            advances?: {
+                received?: components["schemas"]["Gstr1AdvanceRow"][];
+                adjusted?: components["schemas"]["Gstr1AdvanceRow"][];
+            };
             totals?: {
                 taxableValue?: components["schemas"]["Money"];
                 tax?: components["schemas"]["Money"];
@@ -7244,6 +7989,397 @@ export interface operations {
             };
         };
     };
+    listLedgerAccounts: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["LedgerAccount"][];
+                    };
+                };
+            };
+        };
+    };
+    createLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAccount"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    getLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    saveLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAccount"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    removeLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCostCentres: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["CostCentre"][];
+                    };
+                };
+            };
+        };
+    };
+    createCostCentre: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostCentre"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostCentre"];
+                };
+            };
+        };
+    };
+    getCostCentre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostCentre"];
+                };
+            };
+        };
+    };
+    saveCostCentre: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostCentre"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostCentre"];
+                };
+            };
+        };
+    };
+    removeCostCentre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listVouchers: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["Voucher"][];
+                    };
+                };
+            };
+        };
+    };
+    createVoucher: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Voucher"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+        };
+    };
+    getVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+        };
+    };
+    saveVoucher: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Voucher"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+        };
+    };
+    removeVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getStockLevels: {
         parameters: {
             query?: {
@@ -7701,7 +8837,7 @@ export interface operations {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit" | "tds-register" | "trial-balance" | "msme-payables";
             };
             cookie?: never;
         };
@@ -7713,12 +8849,439 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TransactionSummary"] | components["schemas"]["ExpenseSummary"] | components["schemas"]["AgingReport"] | components["schemas"]["StockReport"] | components["schemas"]["TaxSummary"] | components["schemas"]["PaymentSummary"] | components["schemas"]["ProfitSnapshot"];
+                    "application/json": components["schemas"]["TransactionSummary"] | components["schemas"]["ExpenseSummary"] | components["schemas"]["AgingReport"] | components["schemas"]["StockReport"] | components["schemas"]["TaxSummary"] | components["schemas"]["PaymentSummary"] | components["schemas"]["MsmePayables"] | components["schemas"]["ProfitSnapshot"] | components["schemas"]["TdsRegister"] | components["schemas"]["TrialBalance"];
                     "text/csv": string;
                     "application/pdf": string;
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listGstPortalSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["GstPortalSession"][];
+                    };
+                };
+            };
+        };
+    };
+    connectGstPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Connected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstPortalSession"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    requestGstPortalOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    /** @description The GST portal username */
+                    username: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OTP sent */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    disconnectGstPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                gstin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listGstReturns: {
+        parameters: {
+            query: {
+                fy: string;
+                gstin?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["GstReturn"][];
+                        /** @description Whether the portal was asked */
+                        portal?: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getGstr2b: {
+        parameters: {
+            query: {
+                gstin: string;
+                period: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr2bReconciliation"];
+                };
+            };
+        };
+    };
+    fetchGstr2b: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Downloaded and matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr2bReconciliation"];
+                };
+            };
+        };
+    };
+    claimGstr2b: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Claimed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        claimed?: number;
+                    };
+                };
+            };
+        };
+    };
+    decideGstr2bLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "accepted" | "notOurs" | "claimLater" | "undecided";
+                    /** @description With accepted: the bill this line is, when the matcher did not find it */
+                    documentId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getGstr3b: {
+        parameters: {
+            query: {
+                gstin: string;
+                period: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr3bView"];
+                };
+            };
+        };
+    };
+    saveGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    offsetGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    proceedGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    requestGstReturnEvc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    /** @description The authorised signatory’s PAN; defaults to the one in the GSTIN */
+                    pan?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    fileGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    pan?: string;
+                    otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
         };
     };
     getGstr1: {

@@ -20,7 +20,9 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { DocumentKind, DocumentLine, Party } from '@esmart/core/types';
+import { DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { NOTE_KINDS, PURCHASE_KINDS } from '@esmart/core/domain/documentStates';
+import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
@@ -63,14 +65,16 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useSaveOnline } from '../../remote/save';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { tdsForDocument } from '../../store/tds';
+import { CostCentreField } from '../books/CostCentreField';
+import { BillableExpenses } from './BillableExpenses';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
-const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
-
 /** The documents GST is charged on, where reverse charge can apply. */
-const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'];
+const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
+const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
 
 export function DocumentEditor({
   kind,
@@ -95,7 +99,7 @@ export function DocumentEditor({
   onSaved?: (id: string) => void;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'purchases']);
   const router = useRouter();
   const toast = useToast();
   const { save: saveOnline, saving } = useSaveOnline();
@@ -118,7 +122,8 @@ export function DocumentEditor({
   const hsnRequired = hsnMandatory(company?.taxRegistration);
   const isReturn = kind === 'salesReturn' || kind === 'purchaseReturn';
   // Tax documents carry HSN/SAC per line; quotes and orders do not have to.
-  const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn);
+  const isNote = NOTE_KINDS.includes(kind);
+  const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn || isNote);
 
   const createDocument = useAppStore((s) => s.createDocument);
   const updateDocument = useAppStore((s) => s.updateDocument);
@@ -200,11 +205,28 @@ export function DocumentEditor({
     initial: initialDraft ?? seed?.draft,
   });
 
+  // TDS kept back on a supplier's bill or debit note, for a business with a TAN: worked out as the server will.
+  const takesTds = !!company?.tan && (kind === 'purchaseBill' || kind === 'supplierDebitNote');
+  const draftTds = useMemo(
+    () =>
+      takesTds && draft.partyId
+        ? tdsForDocument(
+            { id: documentId ?? '', kind, partyId: draft.partyId, date: draft.date, currency: draft.currency, exchangeRate: draft.exchangeRate, totals, tdsSection: draft.tdsSection, sourceDocumentId: draft.sourceDocumentId },
+            { company, parties, documents },
+          )
+        : undefined,
+    [takesTds, documentId, kind, draft.partyId, draft.date, draft.currency, draft.exchangeRate, draft.tdsSection, draft.sourceDocumentId, totals, company, parties, documents],
+  );
+  const tdsRow = draftTds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(draftTds.section)?.label ?? draftTds.section, rate: formatPercent(draftTds.rate) }), amount: draftTds.amount } : undefined;
+  const tdsSectionLabel = (code: string | undefined) => (!code || code === 'none' ? tr('purchases:tds.none') : `${tdsSection(code)?.label ?? code} · ${tdsSection(code)?.nature ?? ''}`);
+
   const [step, setStep] = useState(seed?.step ?? 0);
   const [partyOpen, setPartyOpen] = useState(false);
   const [itemOpen, setItemOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [tdsOpen, setTdsOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
@@ -445,6 +467,9 @@ export function DocumentEditor({
       supplierDocNumber: draft.supplierDocNumber || undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
       reverseCharge: draft.reverseCharge || undefined,
+      noteReason: isNote ? draft.noteReason : undefined,
+      tdsSection: takesTds ? draft.tdsSection : undefined,
+      costCentreId: draft.costCentreId,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -661,6 +686,28 @@ export function DocumentEditor({
       ) : null}
       </FieldRow>
 
+      {takesTds ? (
+        <PickerField
+          label={tr('purchases:tds.section')}
+          value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
+          onPress={() => setTdsOpen(true)}
+          icon="bank-minus"
+          hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
+        />
+      ) : null}
+
+      <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
+
+      {isNote ? (
+        <PickerField
+          label={tr('sales:editor.noteReason')}
+          value={draft.noteReason ? tr(`domain:noteReason.${draft.noteReason}`) : undefined}
+          onPress={() => setReasonOpen(true)}
+          icon="text-box-outline"
+          hint={tr('sales:editor.noteReasonHint')}
+        />
+      ) : null}
+
       {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
         <SwitchField
           label={tr('sales:editor.reverseCharge')}
@@ -689,6 +736,8 @@ export function DocumentEditor({
       {draft.lines.length > 0 ? (
         <Button title={tr('sales:editor.addItem')} icon="plus" variant="secondary" onPress={() => setItemOpen(true)} fullWidth />
       ) : null}
+
+      {kind === 'invoice' ? <BillableExpenses partyId={draft.partyId ?? undefined} currency={draft.currency} documentId={documentId} lines={draft.lines} onAdd={addLine} /> : null}
 
       {draft.lines.length === 0 ? (
         <Card padded={false}>
@@ -780,6 +829,7 @@ export function DocumentEditor({
             baseCurrency={baseCurrency}
             exchangeRate={draft.exchangeRate}
             compact
+            tds={tdsRow}
           />
         </Card>
       ) : null}
@@ -895,6 +945,7 @@ export function DocumentEditor({
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
           compact
+          tds={tdsRow}
         />
       </Card>
     </View>
@@ -942,6 +993,7 @@ export function DocumentEditor({
           currency={draft.currency}
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
+          tds={tdsRow}
         />
       </Card>
 
@@ -1069,6 +1121,24 @@ export function DocumentEditor({
 
         {/* ---------------- sheets ---------------- */}
 
+        <SelectSheet
+          visible={tdsOpen}
+          onClose={() => setTdsOpen(false)}
+          title={tr('purchases:tds.section')}
+          options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature, trailing: formatPercent(x.rateOther) }))]}
+          value={draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none'}
+          onSelect={(v) => patch({ tdsSection: v })}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={reasonOpen}
+          onClose={() => setReasonOpen(false)}
+          title={tr('sales:editor.noteReason')}
+          options={NOTE_REASONS.map((r) => ({ value: r, label: tr(`domain:noteReason.${r}`) }))}
+          value={draft.noteReason}
+          onSelect={(r) => patch({ noteReason: r as NoteReason })}
+          searchable={false}
+        />
         <SelectSheet
           visible={partyOpen}
           onClose={() => setPartyOpen(false)}
@@ -1255,6 +1325,10 @@ export function detailRouteFor(kind: DocumentKind, id: string): string {
     goodsReceipt: '/(app)/purchases/receipts',
     purchaseBill: '/(app)/purchases/bills',
     purchaseReturn: '/(app)/purchases/returns',
+    creditNote: '/(app)/sales/credit-notes',
+    debitNote: '/(app)/sales/debit-notes',
+    supplierCreditNote: '/(app)/purchases/credit-notes',
+    supplierDebitNote: '/(app)/purchases/debit-notes',
   };
   return `${map[kind]}/${id}`;
 }

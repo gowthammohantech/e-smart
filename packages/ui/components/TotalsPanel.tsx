@@ -6,7 +6,7 @@ import { Text } from './Text';
 import { DocumentTotals } from '@esmart/core/types';
 import { formatMoney } from '@esmart/core/lib/format';
 import { flattenTaxComponents } from '@esmart/core/domain/lineCalc';
-import { isZero } from '@esmart/core/lib/money';
+import { Money, isZero, subtract } from '@esmart/core/lib/money';
 
 function Row({
   label,
@@ -47,8 +47,11 @@ export function TotalsPanel({
   baseCurrency,
   exchangeRate,
   compact,
+  tds,
 }: {
   totals: DocumentTotals;
+  /** TDS kept back on a supplier's bill, with how it reads ("TDS 194C @ 2%"). */
+  tds?: { label: string; amount: Money };
   currency: string;
   baseCurrency?: string;
   exchangeRate?: number;
@@ -90,6 +93,13 @@ export function TotalsPanel({
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 4 }} />
 
       <Row label={tr('common:totals.total')} value={formatMoney(totals.grandTotal)} bold />
+
+      {tds && !isZero(tds.amount) ? (
+        <>
+          <Row label={tds.label} value={`− ${formatMoney(tds.amount)}`} />
+          <Row label={tr('common:totals.payableToSupplier')} value={formatMoney(subtract(totals.grandTotal, tds.amount))} bold />
+        </>
+      ) : null}
 
       {totals.reverseChargeTax && !isZero(totals.reverseChargeTax) ? (
         <Row label={tr('common:totals.reverseChargeTax')} value={formatMoney(totals.reverseChargeTax)} />

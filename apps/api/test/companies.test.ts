@@ -13,7 +13,7 @@ describe('companies', () => {
 
     const db = t.deps.db;
     const series = await db.select().from(schema.numberingSeries).where(eq(schema.numberingSeries.companyId, company.id!));
-    expect(series).toHaveLength(11);
+    expect(series).toHaveLength(20);
     const taxes = await db.select().from(schema.taxCategories).where(eq(schema.taxCategories.companyId, company.id!));
     expect(taxes.map((x) => Number(x.rate)).sort((a, b) => a - b)).toEqual([0, 5, 12, 18, 28]);
     const branches = await db.select().from(schema.branches).where(eq(schema.branches.companyId, company.id!));

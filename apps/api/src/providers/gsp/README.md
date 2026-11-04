@@ -1,4 +1,4 @@
-# GSP gateway: e-invoice, e-way bill, GSTIN search
+# GSP gateway: e-invoice, e-way bill, GSTIN search, GST returns
 
 Adaequare and Whitebooks behind the `ComplianceProvider` and `GstinProvider`
 interfaces. Ported from the Elixir Books platform's taxation service
@@ -118,6 +118,24 @@ GSTIN details, public search and standalone `canewb`; Adaequare generate and
 PIN code lookup and the EWB portal's road distance have no route on either
 gateway here, so with `GSTIN_PROVIDER=gsp` they answer 503 FEATURE_UNAVAILABLE
 and the apps fall back to manual entry.
+
+## GST returns (RETURNS_PROVIDER=gsp)
+
+`gsp/returns.ts` talks to Adaequare's taxpayer API (`/enriched/gsp/taxpayerapi/…`), acting for the
+taxpayer with their portal username and an OTP to their registered phone, not our API login. The
+taxpayer switches API access on in the portal first (Profile → Manage API Access).
+
+**Nothing in it is confirmed.** The routes and action names follow GSTN's taxpayer API (OTPREQUEST,
+AUTHTOKEN, REFRESHTOKEN, RETSAVE, RETOFFSET, RETSTATUS, RETSUM, RETNEWPTF, EVCOTP, RETFILE, RETTRACK,
+ledgers BAL) and the GSTR-2B JSON GSTN publishes, which `parseGstr2b` reads. Before filing for anyone:
+
+1. Ask Adaequare to enable the returns (taxpayer) API on the account, and for its sandbox GSTINs.
+2. Run each call against the sandbox and correct the paths, headers and answer fields in `gsp/returns.ts`.
+3. Keep `GST_FILING_ENABLED=false` until then and until a CA has signed off the returns. Saving and
+   GSTR-2B can be tried with filing off.
+
+Filing can't be undone. A save or file whose answer is lost is settled by `returnStatus` or
+`trackReturns`, never sent again.
 
 ## Rules worth keeping
 

@@ -19,6 +19,8 @@ export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
     { href: '/sales/orders', labelKey: 'nav:title.salesOrders' },
     { href: '/sales/deliveries', labelKey: 'nav:title.deliveryNotes' },
     { href: '/sales/returns', labelKey: 'nav:title.salesReturns' },
+    { href: '/sales/credit-notes', labelKey: 'nav:title.creditNotes' },
+    { href: '/sales/debit-notes', labelKey: 'nav:title.debitNotes' },
     { href: '/payments/received', labelKey: 'nav:title.paymentsReceived' },
     { href: '/receivables', labelKey: 'nav:title.receivables' },
   ],
@@ -27,6 +29,8 @@ export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
     { href: '/purchases/orders', labelKey: 'nav:title.purchaseOrders' },
     { href: '/purchases/receipts', labelKey: 'nav:title.goodsReceipts' },
     { href: '/purchases/returns', labelKey: 'nav:title.purchaseReturns' },
+    { href: '/purchases/credit-notes', labelKey: 'nav:title.supplierCreditNotes' },
+    { href: '/purchases/debit-notes', labelKey: 'nav:title.supplierDebitNotes' },
     { href: '/payments/made', labelKey: 'nav:title.paymentsMade' },
     { href: '/payables', labelKey: 'nav:title.payables' },
     { href: '/expenses', labelKey: 'nav:title.expenses' },
@@ -39,6 +43,8 @@ export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
   gst: [
     { href: '/compliance', labelKey: 'nav:more.entry.gstCompliance' },
     { href: '/gst/gstr1', labelKey: 'nav:title.gstr1' },
+    { href: '/gst/gstr2b', labelKey: 'nav:title.gstr2b' },
+    { href: '/gst/returns', labelKey: 'nav:title.gstReturns' },
   ],
 };
 

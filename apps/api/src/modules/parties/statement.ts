@@ -1,4 +1,5 @@
-import { and, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { isPayableDocument } from '@esmart/core/domain/documentStates';
 import type { Schema } from '@esmart/api-contract';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -11,7 +12,7 @@ import { partyToWire } from './wire';
 
 type PartyRow = typeof schema.parties.$inferSelect;
 type Statement = Schema<'PartyStatement'>;
-type Entry = { date: string; at: string; entityType: 'document' | 'payment'; entityId: string; number: string; debit: number; credit: number };
+type Entry = { date: string; at: string; entityType: 'document' | 'payment' | 'voucher'; entityId: string; number: string; debit: number; credit: number };
 
 /**
  * A party's running ledger, in the party's currency.
@@ -30,30 +31,59 @@ export async function partyStatement(db: DbOrTx, company: CompanyRow, party: Par
   const baseCurrency = company.baseCurrency.trim();
   const supplier = party.kind === 'supplier';
   const D = schema.documents;
-  const kinds = supplier ? (['purchaseBill', 'purchaseReturn'] as const) : (['invoice', 'salesReturn'] as const);
+  const kinds = supplier
+    ? (['purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'] as const)
+    : (['invoice', 'salesReturn', 'creditNote', 'debitNote'] as const);
   const docs = await db
     .select()
     .from(D)
     .where(and(eq(D.companyId, company.id), eq(D.partyId, party.id), inArray(D.kind, [...kinds]), notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected'])));
   const PAY = schema.payments;
   const pays = await db.select().from(PAY).where(and(eq(PAY.companyId, company.id), eq(PAY.partyId, party.id)));
+  // TDS deducted, discounts and write-offs settle the party's documents along with the cash.
+  const A = schema.paymentAllocations;
+  const adjustments = pays.length
+    ? await db
+        .select({ paymentId: A.paymentId, total: sql<number>`coalesce(sum(${A.tdsMinor} + ${A.discountMinor} + ${A.writeOffMinor}), 0)::bigint` })
+        .from(A)
+        .where(inArray(A.paymentId, pays.map((p) => p.id)))
+        .groupBy(A.paymentId)
+    : [];
+  const adjustedOf = new Map(adjustments.map((a) => [a.paymentId, Number(a.total)]));
+  const V = schema.vouchers;
+  const vouchers = await db
+    .select()
+    .from(V)
+    .where(and(eq(V.companyId, company.id), sql`${V.lines} @> ${JSON.stringify([{ account: `party:${party.id}` }])}::jsonb`));
 
   // In the party's currency: as booked when they match, via base when the party is billed in base.
   const inPartyCurrency = (minor: number, cur: string, baseMinor: number) => (cur.trim() === currency ? minor : currency === baseCurrency ? baseMinor : minor);
 
   // Debit raises what a customer owes; credit raises what we owe a supplier.
   const entries: Entry[] = [
-    ...docs.map((d) => {
+    ...docs.flatMap((d) => {
       const amount = inPartyCurrency(d.grandTotalMinor, d.currency, d.grandTotalBaseMinor);
-      const raises = d.kind === 'invoice' || d.kind === 'purchaseBill';
+      const raises = isPayableDocument(d.kind);
       const debit = supplier ? !raises : raises;
-      return { date: d.date, at: iso(d.finalizedAt ?? d.createdAt)!, entityType: 'document' as const, entityId: d.id, number: d.number, debit: debit ? amount : 0, credit: debit ? 0 : amount };
+      const at = iso(d.finalizedAt ?? d.createdAt)!;
+      const entry = { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: d.number, debit: debit ? amount : 0, credit: debit ? 0 : amount };
+      if (!d.tdsAmountMinor) return [entry];
+      // TDS kept back goes to the government: it lowers what the supplier is owed (or a credit note gives it back).
+      const tds = inPartyCurrency(d.tdsAmountMinor, d.currency, Math.round(d.tdsAmountMinor * Number(d.exchangeRate)));
+      return [entry, { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: `${d.number} TDS`, debit: debit ? 0 : tds, credit: debit ? tds : 0 }];
     }),
     ...pays.map((p) => {
-      const amount = inPartyCurrency(p.amountMinor, p.currency, Math.round(p.amountMinor * Number(p.exchangeRate)));
+      const settled = p.amountMinor + (adjustedOf.get(p.id) ?? 0);
+      const amount = inPartyCurrency(settled, p.currency, Math.round(settled * Number(p.exchangeRate)));
       const debit = p.direction === 'paid';
       return { date: p.date, at: iso(p.createdAt)!, entityType: 'payment' as const, entityId: p.id, number: p.number, debit: debit ? amount : 0, credit: debit ? 0 : amount };
     }),
+    // A journal on the party: a refund paid out, a balance written off, a transfer between ledgers.
+    ...vouchers.flatMap((v) =>
+      (v.lines as { account: string; debitMinor: number; creditMinor: number }[])
+        .filter((l) => l.account === `party:${party.id}`)
+        .map((l) => ({ date: v.date, at: iso(v.createdAt)!, entityType: 'voucher' as const, entityId: v.id, number: v.number, debit: l.debitMinor, credit: l.creditMinor })),
+    ),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.at.localeCompare(b.at));
 
   const net = (e: Entry) => (supplier ? e.credit - e.debit : e.debit - e.credit);

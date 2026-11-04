@@ -6,6 +6,10 @@ import { recoverComplianceAttempts } from '../modules/compliance/recovery';
 import { materializeRecurringExpenses } from '../modules/expenses/engine';
 import { deleteExpiredExports, failExport, queueDueBackups, runExport } from '../modules/exports/handlers';
 import { checkPushReceipts, sendPush } from '../lib/notify';
+import { reverseUnpaidItc } from '../modules/documents/itcReversal';
+import { recoverLostFilings } from '../modules/gst/filing';
+import { remindMsmeDue } from '../modules/ledger/msme';
+import { fetchDueGstr2b } from '../modules/gst/gstr2b';
 import { notifyOverdueInvoices } from '../modules/documents/overdue';
 import { runQueuedExtraction } from '../modules/ocr/handlers';
 import { purgeDueAccounts } from '../modules/platform/purge';
@@ -70,6 +74,20 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
   'invoices.overdue': async ({ deps }) => {
     await notifyOverdueInvoices(deps);
   },
+  'itc.reversal180': async ({ deps, log }) => {
+    log.info(await reverseUnpaidItc(deps), 'input tax credit reversals');
+  },
+  'msme.reminders': async ({ deps, log }) => {
+    const sent = await remindMsmeDue(deps);
+    if (sent) log.info({ sent }, 'MSME payment reminders sent');
+  },
+  'gst.returns.recover': async ({ deps, log }) => {
+    const settled = await recoverLostFilings(deps);
+    if (settled) log.info({ settled }, 'lost GST return filings settled');
+  },
+  'gstr2b.fetch': async ({ deps, log }) => {
+    log.info({ fetched: await fetchDueGstr2b(deps) }, 'GSTR-2B downloaded');
+  },
 };
 
 /** What runs on its own, and when. */
@@ -86,4 +104,11 @@ export const SCHEDULES: Schedule[] = [
   { kind: 'accounts.purge', dailyAt: { hour: 4, minute: 30 } },
   // In the morning, when people are at work.
   { kind: 'invoices.overdue', dailyAt: { hour: 9, minute: 30 } },
+  { kind: 'itc.reversal180', dailyAt: { hour: 5, minute: 0 } },
+  // GSTN makes last month's GSTR-2B on the 14th; from then, each day until it's in.
+  { kind: 'gstr2b.fetch', dailyAt: { hour: 9, minute: 0 } },
+  // A return whose filing answer was lost: the portal's tracker says whether it went through.
+  { kind: 'gst.returns.recover', everyMinutes: 15 },
+  // A week before a micro or small supplier's bill passes its legal limit, and once it has.
+  { kind: 'msme.reminders', dailyAt: { hour: 8, minute: 30 } },
 ];

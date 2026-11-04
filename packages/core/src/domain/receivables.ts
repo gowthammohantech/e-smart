@@ -1,5 +1,5 @@
 import { Money, add, money, subtract, sum, zero } from '../lib/money';
-import { BusinessDocument, Payment } from '../types';
+import { BusinessDocument, Payment, PaymentAllocation } from '../types';
 import { daysBetween, today } from '../lib/date';
 
 export type AgingBucketKey = 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90plus';
@@ -20,6 +20,11 @@ export type OutstandingDoc = {
   bucket: AgingBucketKey;
 };
 
+/** What one allocation settles: its cash, plus TDS deducted, discount and write-off. */
+export function settledBy(a: PaymentAllocation): number {
+  return a.amount.minor + (a.tdsDeducted?.minor ?? 0) + (a.discount?.minor ?? 0) + (a.writeOff?.minor ?? 0);
+}
+
 /**
  * invoice_total - allocated_payments - adjustments = outstanding  (FRD 18)
  */
@@ -30,7 +35,7 @@ export function allocatedTo(documentId: string, payments: Payment[]): Money | nu
     p.allocations.forEach((a) => {
       if (a.documentId === documentId) {
         currency = currency ?? a.amount.currency;
-        total += a.amount.minor;
+        total += settledBy(a);
       }
     });
   });
@@ -39,7 +44,8 @@ export function allocatedTo(documentId: string, payments: Payment[]): Money | nu
 
 export function outstandingOf(doc: BusinessDocument, payments: Payment[]): Money {
   const allocated = allocatedTo(doc.id, payments) ?? zero(doc.currency);
-  const paid = money(allocated.minor, doc.currency);
+  // TDS the business deducted is paid to the government, not the supplier.
+  const paid = money(allocated.minor + (doc.tds?.amount.minor ?? 0), doc.currency);
   const remaining = subtract(doc.totals.grandTotal, paid);
   return remaining.minor < 0 ? zero(doc.currency) : remaining;
 }

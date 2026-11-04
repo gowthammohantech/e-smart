@@ -61,6 +61,7 @@ export function useMoreGroups(): MoreGroup[] {
         { label: tr('nav:more.entry.paymentsReceived'), icon: 'cash-plus', route: '/(app)/payments/received' },
         { label: tr('nav:more.entry.paymentsMade'), icon: 'cash-minus', route: '/(app)/payments/made' },
         { label: tr('nav:more.entry.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses' },
+        { label: tr('nav:more.entry.books'), icon: 'book-open-page-variant-outline', route: '/(app)/books' },
       ],
     },
     {
@@ -100,6 +101,9 @@ export function useMoreGroups(): MoreGroup[] {
             : undefined,
         },
         { label: tr('nav:more.entry.gstr1'), icon: 'file-send-outline', route: '/(app)/gst/gstr1' },
+        { label: tr('nav:more.entry.gstr2b'), icon: 'file-compare', route: '/(app)/gst/gstr2b' },
+        { label: tr('nav:more.entry.gstReturns'), icon: 'file-certificate-outline', route: '/(app)/gst/returns' },
+        { label: tr('nav:more.entry.gstPortal'), icon: 'link-variant', route: '/(app)/settings/gst-portal' },
         { label: tr('nav:more.entry.eInvoicing'), icon: 'qrcode', route: '/(app)/settings/e-invoicing' },
         { label: tr('nav:more.entry.transporters'), icon: 'truck-outline', route: '/(app)/settings/transporters' },
         { label: tr('nav:more.entry.integrations'), icon: 'puzzle-outline', route: '/(app)/settings/integrations' },

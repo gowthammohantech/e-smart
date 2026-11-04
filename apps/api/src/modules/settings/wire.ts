@@ -27,7 +27,8 @@ export function expenseCategoryToWire(row: ExpenseCategoryRow): Schema<'ExpenseC
 }
 
 /** `balance` is the running balance in minor units; see `accountBalances` in core. */
-export function paymentAccountToWire(row: AccountRow, balance: number): Schema<'PaymentAccount'> {
+/** `baseCurrency` labels the balance, which is in base; it defaults to the account's own. */
+export function paymentAccountToWire(row: AccountRow, balance: number, baseCurrency?: string): Schema<'PaymentAccount'> {
   const currency = row.currency.trim();
   return compact({
     id: row.id,
@@ -38,7 +39,8 @@ export function paymentAccountToWire(row: AccountRow, balance: number): Schema<'
     accountNumber: row.accountNumber,
     openingBalance: money(row.openingBalanceMinor, currency),
     openingBalanceDate: row.openingBalanceDate,
-    currentBalance: money(balance, currency),
+    openingRate: Number(row.openingRate) === 1 ? undefined : Number(row.openingRate),
+    currentBalance: money(balance, baseCurrency ?? currency),
     isDefault: row.isDefault,
   });
 }

@@ -22,7 +22,8 @@ import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
-import { STATUS_TONE, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { tdsSection } from '@esmart/core/data/tdsSections';
+import { NOTE_SOURCE, STATUS_TONE, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { stockShortfalls } from '@esmart/core/domain/stockLedger';
@@ -63,7 +64,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   useRefreshOnFocus();
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance', 'purchases']);
   const language = useResolvedLanguage();
   const router = useRouter();
   const goBack = useGoBack();
@@ -137,6 +138,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       party,
       branch,
       ewayBill,
+      // Returns and notes name the invoice or bill they're against.
+      source: NOTE_SOURCE[doc.kind] ? allDocuments.find((d) => d.id === doc.sourceDocumentId) : undefined,
     });
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
@@ -247,7 +250,11 @@ ${url}`;
         : doc.kind === 'delivery'
           ? [{ target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' }]
           : doc.kind === 'invoice'
-            ? [{ target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' }]
+            ? [
+                { target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' },
+                { target: 'creditNote', label: tr('sales:detail.createCreditNote'), icon: 'file-document-minus-outline' },
+                { target: 'debitNote', label: tr('sales:detail.createDebitNote'), icon: 'file-document-plus-outline' },
+              ]
             : doc.kind === 'purchaseOrder'
               ? [
                   { target: 'goodsReceipt', label: tr('sales:detail.createGoodsReceipt'), icon: 'package-down' },
@@ -256,7 +263,11 @@ ${url}`;
               : doc.kind === 'goodsReceipt'
                 ? [{ target: 'purchaseBill', label: tr('sales:detail.convertToBill'), icon: 'file-document-outline' }]
                 : doc.kind === 'purchaseBill'
-                  ? [{ target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' }]
+                  ? [
+                      { target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' },
+                      { target: 'supplierCreditNote', label: tr('sales:detail.recordSupplierCreditNote'), icon: 'file-document-minus-outline' },
+                      { target: 'supplierDebitNote', label: tr('sales:detail.recordSupplierDebitNote'), icon: 'file-document-plus-outline' },
+                    ]
                   : [];
   // Only what can be made now: nothing from a draft or a cancelled document,
   // and an order or quote carried forward once (conversionBlock).
@@ -441,7 +452,18 @@ ${url}`;
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}
+          tds={doc.tds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount } : undefined}
         />
+        {doc.selfInvoiceNumber ? (
+          <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.selfInvoice', { number: doc.selfInvoiceNumber })}
+          </Text>
+        ) : null}
+        {doc.itcReversedOn && !doc.itcReclaimedOn ? (
+          <Text variant="caption" tone="warn" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.itcReversed', { date: formatDate(doc.itcReversedOn) })}
+          </Text>
+        ) : null}
       </Card>
     </>
   );
