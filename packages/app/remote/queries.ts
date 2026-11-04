@@ -214,7 +214,21 @@ export async function fetchDocumentRecord(companyId: string, id: string, signal?
 export const hubKeys = {
   all: (companyId: string) => ['hubs', companyId] as const,
   sales: (companyId: string, branchId?: string) => ['hubs', companyId, 'sales', branchId ?? ''] as const,
+  purchases: (companyId: string, branchId?: string) => ['hubs', companyId, 'purchases', branchId ?? ''] as const,
 };
+
+/** The Purchases tab's figures: this month's bills and expenses, what's owed, counts, latest bills. */
+export function usePurchasesHub(branchId?: string) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: hubKeys.purchases(companyId, branchId),
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/hubs/purchases', { params: { path: { companyId }, query: { branchId } }, signal });
+      return data!;
+    },
+  });
+}
 
 /** The Sales tab's figures: this month, what customers owe, counts, top customers, latest invoices. */
 export function useSalesHub(branchId?: string) {
@@ -257,7 +271,7 @@ export function watchStoreForQueries(): () => void {
       return;
     }
     // A payment changes what an invoice still owes, and so its status.
-    if (s.documents !== prev.documents || s.payments !== prev.payments) mark('documents');
+    if (s.documents !== prev.documents || s.payments !== prev.payments || s.expenses !== prev.expenses) mark('documents');
   });
   return () => {
     unsubscribe();

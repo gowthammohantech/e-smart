@@ -72,6 +72,23 @@ describe('dashboard', () => {
     expect(res.body.recentInvoices.map((d: { id: string }) => d.id)).toEqual([k.draft.id, k.a.id, k.b.id]);
   });
 
+  it('gives the Purchases tab its figures in one call', async () => {
+    const m = await moneySetup(t);
+    const k = await books(t, m);
+    const res = await t.get(`${m.c}/hubs/purchases`, { token: m.token });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      billedThisMonth: INR(324500),
+      expensesThisMonth: INR(11800),
+      payable: { amount: INR(324500), count: 1 },
+      counts: { purchaseBill: 1 },
+      expenses: 1,
+      paymentsMade: 0,
+      expensesByCategory: [{ categoryId: k.category.id, name: k.category.name, total: INR(11800) }],
+    });
+    expect(res.body.recentBills.map((d: { id: string }) => d.id)).toEqual([(k.bill as { id: string }).id]);
+  });
+
   it('leaves out what the plan does not include', async () => {
     const m = await moneySetup(t, 'basic');
     t.setNow('2026-09-29T10:00:00Z');

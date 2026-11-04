@@ -2294,6 +2294,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/hubs/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Purchases tab shows, in one call
+         * @description This month's bills and expenses, what the business owes suppliers (as the payables aging works
+         *     it out), how many of each purchase document there are, the last 90 days' expenses by
+         *     category, and the six latest bills. Amounts are in base currency. The expense figures are left
+         *     out on a plan without expenses.
+         */
+        get: operations["getPurchasesHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/search": {
         parameters: {
             query?: never;
@@ -9603,6 +9628,55 @@ export interface operations {
                             total: components["schemas"]["Money"];
                         }[];
                         recentInvoices: components["schemas"]["DocumentSummary"][];
+                    };
+                };
+            };
+        };
+    };
+    getPurchasesHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        billedThisMonth: components["schemas"]["Money"];
+                        expensesThisMonth?: components["schemas"]["Money"];
+                        payable: {
+                            amount: components["schemas"]["Money"];
+                            /** @description Open bills and supplier debit notes */
+                            count: number;
+                        };
+                        overdue: {
+                            amount: components["schemas"]["Money"];
+                            count: number;
+                        };
+                        /** @description Documents of each purchase kind, in every status */
+                        counts: {
+                            [key: string]: number;
+                        };
+                        expenses?: number;
+                        paymentsMade: number;
+                        /** @description The last 90 days */
+                        expensesByCategory?: {
+                            categoryId: string;
+                            name: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                        recentBills: components["schemas"]["DocumentSummary"][];
                     };
                 };
             };

@@ -3214,6 +3214,53 @@ paths:
                       required: [partyId, name, total]
                       properties: { partyId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
                   recentInvoices: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+  /companies/{companyId}/hubs/purchases:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getPurchasesHub
+      x-plan-module: purchases
+      summary: Everything the Purchases tab shows, in one call
+      description: |
+        This month's bills and expenses, what the business owes suppliers (as the payables aging works
+        it out), how many of each purchase document there are, the last 90 days' expenses by
+        category, and the six latest bills. Amounts are in base currency. The expense figures are left
+        out on a plan without expenses.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [billedThisMonth, payable, overdue, counts, paymentsMade, recentBills]
+                properties:
+                  billedThisMonth: { $ref: '#/components/schemas/Money' }
+                  expensesThisMonth: { $ref: '#/components/schemas/Money' }
+                  payable:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer, description: Open bills and supplier debit notes } }
+                  overdue:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer } }
+                  counts:
+                    type: object
+                    description: Documents of each purchase kind, in every status
+                    additionalProperties: { type: integer }
+                  expenses: { type: integer }
+                  paymentsMade: { type: integer }
+                  expensesByCategory:
+                    type: array
+                    description: The last 90 days
+                    items:
+                      type: object
+                      required: [categoryId, name, total]
+                      properties: { categoryId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
+                  recentBills: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
   /companies/{companyId}/search:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:

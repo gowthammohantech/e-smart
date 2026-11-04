@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -13,17 +13,10 @@ import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { DonutChart } from '@esmart/ui/components/charts/DonutChart';
-import {
-  useBaseCurrency,
-  useDocuments,
-  useExpenseCategories,
-  useExpenses,
-  useParties,
-  usePayables,
-  usePayments,
-} from '../../../store/selectors';
-import { money, sum } from '@esmart/core/lib/money';
-import { inRange, resolveRange } from '@esmart/core/lib/date';
+import { useBaseCurrency } from '../../../store/selectors';
+import { usePurchasesHub } from '../../../remote/queries';
+import { zero, type Money } from '@esmart/core/lib/money';
+import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { DoodleScatter } from '@esmart/ui/components/Doodles';
 
@@ -33,57 +26,14 @@ export default function PurchasesTab() {
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  const bills = useDocuments('purchaseBill');
-  const orders = useDocuments('purchaseOrder');
-  const receipts = useDocuments('goodsReceipt');
-  const returns = useDocuments('purchaseReturn');
-  const creditNotes = useDocuments('supplierCreditNote');
-  const debitNotes = useDocuments('supplierDebitNote');
-  const expenses = useExpenses();
-  const categories = useExpenseCategories();
-  const payments = usePayments('paid');
-  const payables = usePayables();
-  const suppliers = useParties('supplier');
-
-  const month = resolveRange('thisMonth');
-
-  const monthPurchases = useMemo(
-    () =>
-      sum(
-        bills
-          .filter((d) => inRange(d.date, month) && !['draft', 'cancelled'].includes(d.status))
-          .map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
-        baseCurrency,
-      ),
-    [bills, month, baseCurrency],
-  );
-
-  const monthExpenses = useMemo(
-    () =>
-      sum(
-        expenses
-          .filter((e) => inRange(e.date, month))
-          .map((e) => money(Math.round(e.amount.minor * (e.exchangeRate || 1)), baseCurrency)),
-        baseCurrency,
-      ),
-    [expenses, month, baseCurrency],
-  );
-
-  const expenseSlices = useMemo(() => {
-    const map = new Map<string, number>();
-    expenses
-      .filter((e) => inRange(e.date, resolveRange('last90')))
-      .forEach((e) => {
-        map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + Math.round(e.amount.minor * (e.exchangeRate || 1)));
-      });
-    return Array.from(map.entries()).map(([id, minor]) => ({
-      label: categories.find((c) => c.id === id)?.name ?? tr('purchases:expense.otherCategory'),
-      value: money(minor, baseCurrency),
-    }));
-  }, [expenses, categories, baseCurrency, tr]);
-
-  const recent = bills.filter((d) => d.status !== 'cancelled').slice(0, 6);
-  const nameOf = (id: string) => suppliers.find((s) => s.id === id)?.name ?? tr('common:placeholder.unknown');
+  // Worked out by the server: the whole book needn't be on the device to show it.
+  const hub = usePurchasesHub().data;
+  const none = zero(baseCurrency);
+  const count = (kind: DocumentKind) => hub?.counts[kind] ?? 0;
+  const monthPurchases = (hub?.billedThisMonth as Money | undefined) ?? none;
+  const monthExpenses = (hub?.expensesThisMonth as Money | undefined) ?? none;
+  const expenseSlices = (hub?.expensesByCategory ?? []).map((c) => ({ label: c.name, value: c.total as Money }));
+  const recent = hub?.recentBills ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -113,14 +63,14 @@ export default function PurchasesTab() {
           <StatRow>
             <StatTile
               label={tr('purchases:hub.payable')}
-              value={payables.summary.total}
+              value={(hub?.payable.amount as Money | undefined) ?? none}
               icon="file-clock-outline"
-              caption={tr('purchases:hub.openBills', { count: payables.outstanding.length })}
+              caption={tr('purchases:hub.openBills', { count: hub?.payable.count ?? 0 })}
               onPress={() => router.push('/(app)/payables')}
             />
             <StatTile
               label={tr('purchases:hub.overdue')}
-              value={payables.summary.overdue}
+              value={(hub?.overdue.amount as Money | undefined) ?? none}
               tone="bad"
               icon="alert-circle-outline"
               onPress={() => router.push('/(app)/payables')}
@@ -131,14 +81,14 @@ export default function PurchasesTab() {
         <SectionHeader title={tr('purchases:hub.documents')} />
         <HubTiles
           tiles={[
-            { key: 'bills', label: tr('nav:title.purchaseBills'), icon: 'file-document-outline', route: '/(app)/purchases/bills', count: bills.length },
-            { key: 'orders', label: tr('nav:title.purchaseOrders'), icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: orders.length },
-            { key: 'receipts', label: tr('nav:title.goodsReceipts'), icon: 'package-down', route: '/(app)/purchases/receipts', count: receipts.length },
-            { key: 'returns', label: tr('nav:title.purchaseReturns'), icon: 'package-up', route: '/(app)/purchases/returns', count: returns.length },
-            { key: 'creditNotes', label: tr('nav:title.supplierCreditNotes'), icon: 'file-document-minus-outline', route: '/(app)/purchases/credit-notes', count: creditNotes.length },
-            { key: 'debitNotes', label: tr('nav:title.supplierDebitNotes'), icon: 'file-document-plus-outline', route: '/(app)/purchases/debit-notes', count: debitNotes.length },
-            { key: 'expenses', label: tr('purchases:hub.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses', count: expenses.length },
-            { key: 'payments', label: tr('purchases:hub.paymentsOut'), icon: 'cash-minus', route: '/(app)/payments/made', count: payments.length },
+            { key: 'bills', label: tr('nav:title.purchaseBills'), icon: 'file-document-outline', route: '/(app)/purchases/bills', count: count('purchaseBill') },
+            { key: 'orders', label: tr('nav:title.purchaseOrders'), icon: 'clipboard-list-outline', route: '/(app)/purchases/orders', count: count('purchaseOrder') },
+            { key: 'receipts', label: tr('nav:title.goodsReceipts'), icon: 'package-down', route: '/(app)/purchases/receipts', count: count('goodsReceipt') },
+            { key: 'returns', label: tr('nav:title.purchaseReturns'), icon: 'package-up', route: '/(app)/purchases/returns', count: count('purchaseReturn') },
+            { key: 'creditNotes', label: tr('nav:title.supplierCreditNotes'), icon: 'file-document-minus-outline', route: '/(app)/purchases/credit-notes', count: count('supplierCreditNote') },
+            { key: 'debitNotes', label: tr('nav:title.supplierDebitNotes'), icon: 'file-document-plus-outline', route: '/(app)/purchases/debit-notes', count: count('supplierDebitNote') },
+            { key: 'expenses', label: tr('purchases:hub.expenses'), icon: 'receipt-text-outline', route: '/(app)/expenses', count: hub?.expenses ?? 0 },
+            { key: 'payments', label: tr('purchases:hub.paymentsOut'), icon: 'cash-minus', route: '/(app)/payments/made', count: hub?.paymentsMade ?? 0 },
           ]}
         />
 
@@ -162,8 +112,8 @@ export default function PurchasesTab() {
             recent.map((d, i) => (
               <DocumentRow
                 key={d.id}
-                document={d}
-                partyName={nameOf(d.partyId)}
+                document={{ number: d.number ?? '', date: d.date!, status: d.status as DocStatus, totals: { grandTotal: d.grandTotal as Money } }}
+                partyName={d.partyName ?? tr('common:placeholder.unknown')}
                 divider={i < recent.length - 1}
                 onPress={() => router.push(`/(app)/purchases/bills/${d.id}`)}
               />

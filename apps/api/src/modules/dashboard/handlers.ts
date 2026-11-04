@@ -63,6 +63,75 @@ function lastSixMonths(today: string): string[] {
  * `isLowStock`. Figures for a module outside the plan are left out.
  */
 export const dashboardHandlers = defineHandlers({
+  async getPurchasesHub(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const today = ctx.now.toISOString().slice(0, 10);
+    const month = periodOf('month', today, ctx.company.fiscalYearStartMonth);
+    const branchId = ctx.query.branchId;
+    const branchScope = branchId ? [branchId] : ctx.user.branchIds;
+    const D = schema.documents;
+    const P = schema.payments;
+    const X = schema.expenses;
+    const inBranches = (col: typeof D.branchId | typeof P.branchId | typeof X.branchId) => (branchScope.length ? inArray(col, branchScope) : undefined);
+    const mine = and(eq(D.companyId, ctx.company.id), inBranches(D.branchId));
+    const billed = and(mine, eq(D.kind, 'purchaseBill'), notInArray(D.status, ['draft', 'cancelled']));
+    const docsInBase = sql<number>`coalesce(sum(round(${D.grandTotalMinor} * ${D.exchangeRate})), 0)::bigint`;
+    const expensesInBase = sql<number>`coalesce(sum(round(${X.amountMinor} * ${X.exchangeRate})), 0)::bigint`;
+    const ownExpenses = and(eq(X.companyId, ctx.company.id), inBranches(X.branchId));
+    const withExpenses = hasModule(ctx.company.plan, 'expenses');
+    const since90 = addDaysISO(today, -89);
+
+    const [[billedMonth], kinds, [payments], recent, payables, expenseFigures] = await Promise.all([
+      ctx.db.select({ v: docsInBase }).from(D).where(and(billed, gte(D.date, month.from), lte(D.date, month.to))),
+      ctx.db
+        .select({ kind: D.kind, n: count() })
+        .from(D)
+        .where(and(mine, inArray(D.kind, ['purchaseBill', 'purchaseOrder', 'goodsReceipt', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'])))
+        .groupBy(D.kind),
+      ctx.db.select({ n: count() }).from(P).where(and(eq(P.companyId, ctx.company.id), eq(P.direction, 'paid'), inBranches(P.branchId))),
+      ctx.db
+        .select({ ...getTableColumns(D), partyName: schema.parties.name })
+        .from(D)
+        .innerJoin(schema.parties, eq(schema.parties.id, D.partyId))
+        .where(and(mine, eq(D.kind, 'purchaseBill'), ne(D.status, 'cancelled')))
+        .orderBy(desc(D.date), desc(D.createdAt), desc(D.id))
+        .limit(6) as Promise<SummaryRow[]>,
+      aging(ctx, 'payables', { asOf: today, branchId }),
+      withExpenses
+        ? Promise.all([
+            ctx.db.select({ v: expensesInBase }).from(X).where(and(ownExpenses, gte(X.date, month.from), lte(X.date, month.to))),
+            ctx.db.select({ n: count() }).from(X).where(ownExpenses),
+            ctx.db
+              .select({ categoryId: X.categoryId, name: schema.expenseCategories.name, v: expensesInBase })
+              .from(X)
+              .innerJoin(schema.expenseCategories, eq(schema.expenseCategories.id, X.categoryId))
+              .where(and(ownExpenses, gte(X.date, since90), lte(X.date, today)))
+              .groupBy(X.categoryId, schema.expenseCategories.name)
+              .orderBy(desc(expensesInBase)),
+          ])
+        : null,
+    ]);
+    const open = payables.documents ?? [];
+    const late = open.filter((d) => (d.daysOverdue ?? 0) > 0);
+    const [[expMonth], [expCount], byCategory] = expenseFigures ?? [[{ v: 0 }], [{ n: 0 }], []];
+    return {
+      billedThisMonth: money(Number(billedMonth.v), base),
+      payable: { amount: payables.total ?? money(0, base), count: open.length },
+      // In base currency, as the buckets are: everything not yet due is the current bucket.
+      overdue: { amount: money((payables.total?.minor ?? 0) - (payables.buckets?.find((b) => b.key === 'current')?.amount?.minor ?? 0), base), count: late.length },
+      counts: Object.fromEntries(kinds.map((k) => [k.kind, Number(k.n)])),
+      paymentsMade: Number(payments.n),
+      recentBills: await summariesToWire(ctx.db, recent, ctx.now),
+      ...(withExpenses
+        ? {
+            expensesThisMonth: money(Number(expMonth.v), base),
+            expenses: Number(expCount.n),
+            expensesByCategory: byCategory.map((c) => ({ categoryId: c.categoryId, name: c.name, total: money(Number(c.v), base) })),
+          }
+        : {}),
+    };
+  },
+
   async getSalesHub(ctx) {
     const base = ctx.company.baseCurrency.trim();
     const today = ctx.now.toISOString().slice(0, 10);
