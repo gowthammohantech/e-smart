@@ -298,7 +298,7 @@ export default function PaymentDetail() {
         />
       </View>
 
-      {isIn ? <RefundAdvanceSheet receipt={payment} visible={refunding} onClose={() => setRefunding(false)} onSaved={(rid) => router.push(`/(app)/payments/${rid}`)} /> : null}
+      {isIn && refunding ? <RefundAdvanceSheet receipt={payment} visible onClose={() => setRefunding(false)} onSaved={(rid) => router.push(`/(app)/payments/${rid}`)} /> : null}
 
       <ConfirmDialog
         visible={confirmDelete}

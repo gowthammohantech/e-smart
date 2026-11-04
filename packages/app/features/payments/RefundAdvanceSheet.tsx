@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -22,7 +22,8 @@ const METHOD_FOR: Record<'cash' | 'bank' | 'wallet', PaymentMethod> = { cash: 'c
 /**
  * Pays a customer back out of the advance on `receipt` (CGST Rule 51): a payment out that settles
  * nothing but that advance, no more than is left of it. It prints as the refund voucher, and a service
- * advance's tax comes back on its date. The server keeps the receipt's advance in step.
+ * advance's tax comes back on its date. The server keeps the receipt's advance in step. Mounted
+ * while open, so each opening offers what is left of the advance then.
  */
 export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { receipt: Payment; visible: boolean; onClose: () => void; onSaved?: (id: string) => void }) {
   const t = useTheme();
@@ -35,11 +36,6 @@ export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { rec
   const [amountText, setAmountText] = useState(() => toAmountInput(left));
   const [date, setDate] = useState(today());
   const [accountId, setAccountId] = useState(() => accounts.find((a) => a.id === receipt.accountId)?.id ?? accounts[0]?.id ?? '');
-
-  // Each time it opens, it offers what is left of the advance now.
-  useEffect(() => {
-    if (visible) setAmountText(toAmountInput(receipt.unallocated));
-  }, [visible, receipt.unallocated]);
 
   const amount = fromMajor(amountText || '0', receipt.currency);
   const tooMuch = amount.minor > left.minor;
