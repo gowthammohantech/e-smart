@@ -52,15 +52,17 @@ async function upsertReturn(db: DbOrTx, companyId: string, gstin: string, return
 /** The return's data as GSTN takes it, with our totals to compare against the portal's summary. */
 async function payloadFor(db: DbOrTx, company: CompanyRow, gstin: string, returnType: ReturnType, period: string, now: Date) {
   if (returnType === 'gstr1') {
-    const summary = await buildGstr1(db, company, period, now);
+    const summary = await buildGstr1(db, company, period, now, gstin);
     return { json: { ...gstnJson(summary, gstin, period), totals: { taxableMinor: summary.totals.taxableValue.minor, taxMinor: summary.totals.tax.minor } }, utilization: undefined };
   }
   const built = await build3b(db, company, gstin, period, now);
   return { json: gstr3bJson(built.tables, gstin, built.utilization), utilization: built.utilization };
 }
 
-/** Asks the portal whether the return is already filed, and records it if so. */
-async function settleFromTracker(db: DbOrTx, deps: Deps, company: CompanyRow, row: ReturnRow): Promise<ReturnRow | null> {
+type Filing = { arn: string | null; filedAt: Date; summaryHash?: string };
+
+/** Asks the portal's return tracker whether the return is already filed. Writes nothing. */
+async function trackedFiling(db: DbOrTx, deps: Deps, company: CompanyRow, row: ReturnRow): Promise<Filing | null> {
   const ctx = await portalContext(db, deps, company, row.gstin);
   const y = Number(row.period.slice(2));
   const m = Number(row.period.slice(0, 2));
@@ -68,12 +70,25 @@ async function settleFromTracker(db: DbOrTx, deps: Deps, company: CompanyRow, ro
   const tracked = await deps.providers.returns.trackReturns(ctx, `${fyStart}-${String((fyStart + 1) % 100).padStart(2, '0')}`);
   const filed = tracked.find((t) => t.returnType === row.returnType && t.period === row.period && t.status === 'filed');
   if (!filed) return null;
-  const [updated] = await db
-    .update(R)
-    .set({ status: 'filed', arn: filed.arn ?? row.arn, filedAt: filed.filedOn ? new Date(`${filed.filedOn}T00:00:00Z`) : deps.now(), lastError: null, updatedAt: deps.now() })
-    .where(eq(R.id, row.id))
-    .returning();
-  return updated;
+  return { arn: filed.arn ?? row.arn, filedAt: filed.filedOn ? new Date(`${filed.filedOn}T00:00:00Z`) : deps.now() };
+}
+
+/**
+ * Records a filing, however it was learnt (the portal's answer, or its tracker), in one transaction
+ * with what follows it: for GSTR-3B the books close and the set-off is posted. So a return is never
+ * marked filed with its month still open.
+ */
+async function recordFiled(db: DbOrTx, company: CompanyRow, actor: AuthUser, row: ReturnRow, f: Filing, now: Date): Promise<ReturnRow> {
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(R)
+      .set({ status: 'filed', arn: f.arn, filedAt: f.filedAt, ...(f.summaryHash && { summaryHash: f.summaryHash }), lastError: null, updatedAt: now })
+      .where(eq(R.id, row.id))
+      .returning();
+    if (updated.returnType === 'gstr3b') await afterFiled3b(tx, company, actor, updated, now);
+    await recordChange(tx, actor, { companyId: company.id, action: `filed ${updated.returnType.toUpperCase()} for ${updated.period}`, entityType: 'company', entityId: company.id, entityLabel: updated.gstin, version: company.version, after: { arn: updated.arn } });
+    return updated;
+  });
 }
 
 /**
@@ -242,33 +257,33 @@ export const gstFilingHandlers = defineHandlers({
       if (r1?.status !== 'filed') throw conflict('GSTR1_FIRST', 'File the period’s GSTR-1 before its GSTR-3B');
     }
     // Never twice: the portal is asked first.
-    const already = await call(() => settleFromTracker(ctx.db, ctx.deps, ctx.company, row!));
-    if (already) return returnWire(already);
+    const already = await call(() => trackedFiling(ctx.db, ctx.deps, ctx.company, row!));
+    if (already) return returnWire(await recordFiled(ctx.db, ctx.company, ctx.user, row, already, ctx.now));
     const pctx = await portalContext(ctx.db, ctx.deps, ctx.company, gstin);
     const summary = await call(() => ctx.deps.providers.returns.summary(pctx, returnType, period));
-    let arn: string;
+    let filing: Filing;
     try {
-      ({ arn } = await ctx.deps.providers.returns.file(pctx, returnType, period, pan, otp, summary.hash));
+      const { arn } = await ctx.deps.providers.returns.file(pctx, returnType, period, pan, otp, summary.hash);
+      filing = { arn, filedAt: ctx.now, summaryHash: summary.hash };
     } catch (error) {
-      if (error instanceof ReturnsError && error.code === 'UNANSWERED') {
-        await ctx.db.update(R).set({ lastError: ANSWER_LOST, updatedAt: ctx.now }).where(eq(R.id, row.id));
-        const settled = await call(() => settleFromTracker(ctx.db, ctx.deps, ctx.company, row!)).catch(() => null);
-        if (settled) row = settled;
-        else throw new ApiError(502, 'GSP_UNAVAILABLE', `${ANSWER_LOST}; it will be checked again, so don't file it on the portal yet`);
-      } else returnsFailure(error);
+      if (!(error instanceof ReturnsError && error.code === 'UNANSWERED')) returnsFailure(error);
+      await ctx.db.update(R).set({ lastError: ANSWER_LOST, updatedAt: ctx.now }).where(eq(R.id, row.id));
+      const settled = await call(() => trackedFiling(ctx.db, ctx.deps, ctx.company, row!)).catch(() => null);
+      if (!settled) throw new ApiError(502, 'GSP_UNAVAILABLE', `${ANSWER_LOST}; it will be checked again, so don't file it on the portal yet`);
+      filing = { ...settled, summaryHash: summary.hash };
     }
-    const filed = await ctx.db.transaction(async (tx) => {
-      const [updated] =
-        row!.status === 'filed'
-          ? [row!]
-          : await tx.update(R).set({ status: 'filed', arn: arn!, summaryHash: summary.hash, filedAt: ctx.now, lastError: null, updatedAt: ctx.now }).where(eq(R.id, row!.id)).returning();
-      if (returnType === 'gstr3b') await afterFiled3b(tx, ctx.company, ctx.user, updated, ctx.now);
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: `filed ${returnType.toUpperCase()} for ${period}`, entityType: 'company', entityId: ctx.company.id, entityLabel: gstin, version: ctx.company.version, after: { arn: updated.arn } });
-      return updated;
-    });
-    return returnWire(filed);
+    return returnWire(await recordFiled(ctx.db, ctx.company, ctx.user, row, filing, ctx.now));
   },
 });
+
+/** Who the background settlement acts as: the account's owner, else its first user. */
+async function ownerOf(db: DbOrTx, company: CompanyRow): Promise<AuthUser> {
+  const U = schema.users;
+  const people = await db.select({ id: U.id, name: U.name, role: U.role }).from(U).where(eq(U.accountId, company.accountId)).orderBy(U.createdAt);
+  const owner = people.find((p) => p.role === 'owner') ?? people[0];
+  if (!owner) throw new Error(`No user on account ${company.accountId} to record the filing as`);
+  return { id: owner.id, name: owner.name } as AuthUser;
+}
 
 /** The `gst.returns.recover` job: returns whose filing answer was lost, settled from the portal's tracker. */
 export async function recoverLostFilings(deps: Deps): Promise<number> {
@@ -277,13 +292,10 @@ export async function recoverLostFilings(deps: Deps): Promise<number> {
   for (const row of rows) {
     const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, row.companyId));
     try {
-      const done = await settleFromTracker(deps.db, deps, company, row);
+      const done = await trackedFiling(deps.db, deps, company, row);
       if (!done) continue;
+      await recordFiled(deps.db, company, await ownerOf(deps.db, company), row, done, deps.now());
       settled++;
-      if (done.returnType === 'gstr3b') {
-        const [owner] = await deps.db.select().from(schema.users).where(eq(schema.users.accountId, company.accountId)).limit(1);
-        await deps.db.transaction((tx) => afterFiled3b(tx, company, { id: owner.id } as AuthUser, done, deps.now()));
-      }
     } catch {
       // Not connected or no answer: the next run asks again.
     }

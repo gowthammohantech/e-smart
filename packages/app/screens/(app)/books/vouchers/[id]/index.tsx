@@ -14,7 +14,7 @@ import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useServerSave } from '../../../../../components/useServerSave';
 import { useAppStore } from '../../../../../store/appStore';
-import { useBooks, useVouchers } from '../../../../../store/books';
+import { useBooks, useCostCentres, useVouchers } from '../../../../../store/books';
 import { useAccountName } from '../../../../../features/books/names';
 
 export default function VoucherDetail() {
@@ -28,6 +28,7 @@ export default function VoucherDetail() {
   const nameOf = useAccountName();
   const removeVoucher = useAppStore((s) => s.removeVoucher);
   const [confirm, setConfirm] = useState(false);
+  const costCentres = useCostCentres(true);
 
   if (!voucher) {
     return (
@@ -62,9 +63,14 @@ export default function VoucherDetail() {
         <Card style={{ gap: t.spacing.md }}>
           {voucher.lines.map((l, i) => (
             <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
-              <Text variant="body" style={{ flex: 1 }}>
-                {label(l.account)}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text variant="body">{label(l.account)}</Text>
+                {l.costCentreId ? (
+                  <Text variant="caption" tone="muted">
+                    {costCentres.find((c) => c.id === l.costCentreId)?.name ?? l.costCentreId}
+                  </Text>
+                ) : null}
+              </View>
               <Text variant="body" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
                 {l.debit.minor ? `${formatMoney(l.debit)} ${tr('books:accounts.dr')}` : `${formatMoney(l.credit)} ${tr('books:accounts.cr')}`}
               </Text>

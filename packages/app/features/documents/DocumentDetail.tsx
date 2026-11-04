@@ -34,6 +34,7 @@ import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
+import { useCostCentres } from '../../store/books';
 import {
   useActiveCompany,
   useActiveEwayBill,
@@ -63,6 +64,7 @@ import { useGoBack } from '../../navigation/useGoBack';
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   useRefreshOnFocus();
   const t = useTheme();
+  const costCentre = useCostCentres(true).find((c) => c.id === doc.costCentreId);
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance', 'purchases']);
   const language = useResolvedLanguage();
@@ -352,6 +354,7 @@ ${url}`;
           ) : null}
           {doc.reference ? <Badge label={tr('sales:detail.referenceBadge', { reference: doc.reference })} tone="neutral" /> : null}
           {doc.supplierDocNumber ? <Badge label={tr('sales:detail.theirNumber', { number: doc.supplierDocNumber })} tone="neutral" /> : null}
+          {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
         </View>
       </Card>
     </>

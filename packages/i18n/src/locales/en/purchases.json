@@ -75,6 +75,8 @@
   },
   "expense": {
     "billable": "Billable",
+    "billTo": "Bill to {{name}}",
+    "recoveredOn": "Recovered on {{number}}",
     "edit": "Edit",
     "delete": "Delete",
     "deleteTitle": "Delete this expense?",

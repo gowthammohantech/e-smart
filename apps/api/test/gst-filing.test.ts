@@ -114,6 +114,58 @@ describe('GSTR-3B and filing', () => {
     expect(await recoverLostFilings(t.deps)).toBe(0);
   });
 
+  it('settles a lost GSTR-3B filing in the background with the books closed and the set-off posted', async () => {
+    const m = await setup();
+    await m.step('gstr1', 'save');
+    await m.step('gstr1', 'proceed');
+    await m.step('gstr1', 'file', { otp: ReturnsSimulator.OTP });
+    await m.step('gstr3b', 'save');
+    await m.step('gstr3b', 'offset');
+    // Filed on the portal, but the app heard nothing back, then or on the immediate check.
+    await t.deps.db.update(schema.gstReturns).set({ lastError: ANSWER_LOST }).where(eq(schema.gstReturns.returnType, 'gstr3b'));
+    sim().filed.set(`${GSTIN}|gstr3b|${PERIOD}`, { arn: 'AA2709202600003', filedOn: '2026-10-15' });
+    expect(await recoverLostFilings(t.deps)).toBe(1);
+    const [company] = await t.deps.db.select().from(schema.companies).where(eq(schema.companies.id, m.companyId));
+    expect(company.lockedThroughDate).toBe('2026-09-30');
+    const journals = await t.deps.db.select().from(schema.vouchers).where(and(eq(schema.vouchers.companyId, m.companyId), eq(schema.vouchers.kind, 'gstJournal')));
+    expect(journals).toHaveLength(1);
+  });
+
+  it('records the books closing when the portal already has the return filed', async () => {
+    const m = await setup();
+    await m.step('gstr1', 'save');
+    await m.step('gstr1', 'proceed');
+    await m.step('gstr1', 'file', { otp: ReturnsSimulator.OTP });
+    await m.step('gstr3b', 'save');
+    await m.step('gstr3b', 'offset');
+    // Filed on the portal directly; the app learns of it before filing again.
+    sim().filed.set(`${GSTIN}|gstr3b|${PERIOD}`, { arn: 'AA2709202600004', filedOn: '2026-10-14' });
+    const res = await m.step('gstr3b', 'file', { otp: ReturnsSimulator.OTP });
+    expect(res.body).toMatchObject({ status: 'filed', arn: 'AA2709202600004' });
+    const [company] = await t.deps.db.select().from(schema.companies).where(eq(schema.companies.id, m.companyId));
+    expect(company.lockedThroughDate).toBe('2026-09-30');
+  });
+
+  it('files GSTR-1 for one GSTIN only, leaving out a branch registered under another', async () => {
+    const m = await setup();
+    const [main] = await t.deps.db.select().from(schema.branches).where(eq(schema.branches.companyId, m.companyId));
+    const [karnataka] = await t.deps.db
+      .insert(schema.branches)
+      .values({ ...main, id: 'brn_karnataka', name: 'Bengaluru', code: 'BLR', isPrimary: false, gstin: '29AABCV1234F1ZX' })
+      .returning();
+    t.setNow('2026-09-29T10:00:00Z');
+    const there = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, branchId: karnataka.id, date: '2026-09-12', currency: 'INR', lines: [line(m.gst(18))], status: 'issued' }, { token: m.token });
+    expect(there.status).toBe(201);
+    t.setNow('2026-10-15T10:00:00Z');
+    await m.step('gstr1', 'save');
+    const [saved] = await t.deps.db.select().from(schema.gstReturns).where(and(eq(schema.gstReturns.gstin, GSTIN), eq(schema.gstReturns.returnType, 'gstr1')));
+    // The Bengaluru branch's consumer sale would be a B2CS row; it belongs to the Karnataka return.
+    const payload = saved.payload as { b2b: unknown[]; b2cs: unknown[] };
+    expect(payload.b2cs).toEqual([]);
+    // The Maharashtra registration's own sale to Bengaluru is still there.
+    expect(payload.b2b).toHaveLength(1);
+  });
+
   it('saves but does not file while filing is switched off', async () => {
     const m = await setup();
     const config = t.deps.config as { GST_FILING_ENABLED: boolean };

@@ -19,6 +19,7 @@ import { useBaseCurrency, useDocuments, useParty, usePayment, usePaymentAccounts
 import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
+import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
@@ -88,6 +89,14 @@ export default function PaymentDetail() {
             { label: tr('common:table.method'), value: paymentMethodLabel(tr, payment.method) },
             { label: isIn ? tr('sales:payment.depositedInto') : tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
             ...(payment.reference ? [{ label: tr('common:table.reference'), value: payment.reference }] : []),
+            ...(payment.advanceTax
+              ? [
+                  {
+                    label: tr('sales:payment.serviceAdvance'),
+                    value: `GST ${payment.advanceTax.rate}% · ${INDIAN_STATES.find((st) => st.code === payment.advanceTax!.placeOfSupplyStateCode)?.name ?? payment.advanceTax.placeOfSupplyStateCode}`,
+                  },
+                ]
+              : []),
             ...(payment.currency !== baseCurrency
               ? [{ label: tr('common:totals.exchangeRate'), value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
               : []),

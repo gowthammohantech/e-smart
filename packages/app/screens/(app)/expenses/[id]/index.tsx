@@ -13,7 +13,8 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
-import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
+import { useDocuments, useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
+import { useCostCentres } from '../../../../store/books';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
@@ -37,6 +38,17 @@ export default function ExpenseDetail() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const expense = useExpense(id);
+  const costCentre = useCostCentres(true).find((c) => c.id === expense?.costCentreId);
+  const billTo = useParty(expense?.customerId);
+  // The invoice that recovered it, when one has.
+  const recoveredOn = useDocuments().find((d) => !['draft', 'cancelled', 'rejected'].includes(d.status) && d.lines.some((l) => !!l.expenseId && l.expenseId === expense?.id));
+  const extraBadges = (
+    <>
+      {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
+      {expense?.billable && billTo ? <Badge label={tr('purchases:expense.billTo', { name: billTo.name })} tone="neutral" /> : null}
+      {recoveredOn ? <Badge label={tr('purchases:expense.recoveredOn', { number: recoveredOn.number })} tone="success" /> : null}
+    </>
+  );
   const categories = useExpenseCategories();
   const accounts = usePaymentAccounts();
   const taxCategories = useTaxCategories();
@@ -103,6 +115,7 @@ export default function ExpenseDetail() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 }}>
             {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" icon="repeat" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
+            {extraBadges}
           </View>
         </Card>
 
@@ -259,6 +272,7 @@ export default function ExpenseDetail() {
             <Badge label={expense.number} tone="neutral" />
             {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
+            {extraBadges}
           </View>
         </Card>
 

@@ -12,6 +12,7 @@ import { companyCore, partyCore } from '../documents/engine';
 import { documentsToWire, toCoreDocument } from '../documents/wire';
 import { toCsv } from '../exports/build';
 import { loadAdvanceEvents } from './advances';
+import { branchesOf } from './gstr3bBuild';
 import { gstnJson } from './gstn';
 
 const D = schema.documents;
@@ -30,14 +31,21 @@ export function periodRange(period: string): { from: string; to: string } {
  * company's issued invoices and credit notes, in the base currency. Drafts
  * never count; cancelled documents are fetched only for the table 13
  * document summary.
+ *
+ * With `gstin`, only that registration's return: the branches filing under it, supplying from its
+ * state. Without it, the whole company, as the GSTR-1 screen shows it.
  */
-export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date): Promise<Gstr1Summary> {
+export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date, gstin?: string): Promise<Gstr1Summary> {
   const range = periodRange(period);
-  const rows = await db
-    .select()
-    .from(D)
-    .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to)))
-    .orderBy(D.date, D.number);
+  const branchIds = gstin ? await branchesOf(db, company, gstin) : undefined;
+  const rows =
+    branchIds && !branchIds.length
+      ? []
+      : await db
+          .select()
+          .from(D)
+          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined))
+          .orderBy(D.date, D.number);
   // A note's invoice may be from an earlier period; its value decides the note's table.
   const sourceIds = [...new Set(rows.map((r) => r.sourceDocumentId).filter((id): id is string => !!id && !rows.some((x) => x.id === id)))];
   const sources = sourceIds.length ? await db.select().from(D).where(and(eq(D.companyId, company.id), inArray(D.id, sourceIds))) : [];
@@ -46,14 +54,17 @@ export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string
   const partyIds = [...new Set(rows.map((r) => r.partyId))];
   const parties = partyIds.length ? await db.select().from(schema.parties).where(inArray(schema.parties.id, partyIds)) : [];
   const items = await db.select().from(schema.items).where(eq(schema.items.companyId, company.id));
+  const core = companyCore(company);
+  // A branch registered in another state supplies from there.
+  const home = gstin ? { ...core, taxRegistration: core.taxRegistration && { ...core.taxRegistration, placeOfSupplyStateCode: gstin.slice(0, 2) } } : core;
   return gstr1Summary({
-    company: companyCore(company),
+    company: home,
     documents,
     parties: parties.map(partyCore),
     items: items.map((i) => ({ id: i.id, name: i.name, type: i.type, unit: i.unit, hsnCode: i.hsnCode ?? undefined }) as Item),
     baseCurrency,
     period: range,
-    advances: await loadAdvanceEvents(db, company, range.to),
+    advances: await loadAdvanceEvents(db, company, range.to, branchIds),
   });
 }
 
@@ -135,7 +146,8 @@ export const gstHandlers = defineHandlers({
   async exportGstr1(ctx) {
     const { period } = ctx.query;
     const format = ctx.query.format ?? 'gstn-json';
-    const summary = await buildGstr1(ctx.db, ctx.company, period, ctx.now);
+    // The GSTN file is one registration's return: the company's own GSTIN, not its branches' others.
+    const summary = await buildGstr1(ctx.db, ctx.company, period, ctx.now, format === 'gstn-json' && ctx.company.taxIdentifier ? ctx.company.taxIdentifier : undefined);
     const name = `GSTR1_${ctx.company.taxIdentifier ?? ctx.company.id}_${period}`;
     if (format === 'csv') return new RawBody(toCsv(ROW_COLUMNS, flatRows(summary)), 'text/csv; charset=utf-8', `${name}.csv`);
     if (format === 'xlsx') return new RawBody(await workbook(summary, ctx.company, period), XLSX, `${name}.xlsx`);
