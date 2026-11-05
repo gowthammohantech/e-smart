@@ -483,6 +483,11 @@ export function profitSnapshot(
   items: Item[],
   baseCurrency: string,
   filters: ReportFilters,
+  /**
+   * Perpetual stock (RULES 6.2): from `from`, what each sale's goods cost is what the books posted
+   * (goodsCostByDocument), not the average bill price.
+   */
+  perpetual?: { from: string; goodsCost: Map<string, number> },
 ): ProfitSnapshot {
   // Sales and debit notes add to revenue; returns and credit notes take it back.
   const invoices = documents.filter(
@@ -519,7 +524,9 @@ export function profitSnapshot(
   };
   // Only goods move cost: an invoice sells them, a return brings them back; notes move none.
   const costOf = (d: BusinessDocument): Money =>
-    d.kind === 'invoice' || d.kind === 'salesReturn'
+    perpetual && d.date >= perpetual.from
+      ? money(Math.round(d.kind === 'invoice' || d.kind === 'salesReturn' ? (perpetual.goodsCost.get(d.id) ?? 0) : 0), baseCurrency)
+      : d.kind === 'invoice' || d.kind === 'salesReturn'
       ? money(signOf(d) * Math.round(d.lines.reduce((acc, l) => acc + unitCost(l.itemId) * l.quantity, 0)), baseCurrency)
       : zero(baseCurrency);
 

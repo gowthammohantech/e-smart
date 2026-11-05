@@ -126,7 +126,43 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   };
   const gstinLookup = useGstinLookup({ gstin: taxId, opened: party?.taxId, enabled: needsGstin, fill: fillFromPortal });
 
-  const save = async () => {
+  /**
+   * After "Save & add another": a clean form for the next contact, keeping what tends to
+   * repeat in a run of them (currency, payment terms, state).
+   */
+  const resetForAnother = () => {
+    setName('');
+    setContact('');
+    setTaxId('');
+    setRegistration('unregistered');
+    setCountry('');
+    setRegion('');
+    setEmail('');
+    phone.reset();
+    setCreditLimit('');
+    setOpeningBalance('');
+    setOpeningDate(undefined);
+    setLine1('');
+    setCity('');
+    setPostalCode('');
+    setSameShipping(true);
+    setShipLine1('');
+    setShipCity('');
+    setNotes('');
+    setPan('');
+    setMsmeType(undefined);
+    setUdyam('');
+    setReverseCharge(false);
+    setTdsSectionCode(undefined);
+    setCertRate('');
+    setCertValidTill('');
+    setErrors({});
+    requestAnimationFrame(() => (globalThis.document?.getElementById('party-form-name') as HTMLElement | null)?.focus());
+  };
+  // Not when the form was opened to pick a contact (?then=back): that one goes straight back.
+  const offersAnother = !party && then !== 'back';
+
+  const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'> = {
       name: required(name, nameLabel),
@@ -208,14 +244,15 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (!res) return;
     const id = res.id ?? record.id;
     if (party) goBack(backTo);
+    else if (another) resetForAnother();
     else if (then === 'back' && router.canGoBack()) router.back();
     else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`);
   };
-  useSaveShortcut(() => void save(), !saving);
+  useSaveShortcut(() => void save(), !saving, offersAnother ? () => void save(true) : undefined);
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
-  const nameField = <TextField label={nameLabel} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />;
+  const nameField = <TextField id="party-form-name" label={nameLabel} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />;
   const contactField = <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />;
   const registrationField = (
     <PickerField
@@ -536,10 +573,25 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           {desktop ? (
             <>
               <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(backTo)} />
+              {offersAnother ? (
+                <Button
+                  title={tr('common:action.saveAndAddAnother')}
+                  tooltip={tr('common:action.saveAndAddAnotherShortcut')}
+                  variant="secondary"
+                  onPress={() => void save(true)}
+                  loading={saving}
+                  disabled={blocked}
+                />
+              ) : null}
               <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} />
             </>
           ) : (
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+            <>
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+              {offersAnother ? (
+                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+              ) : null}
+            </>
           )}
         </FormActions>
 

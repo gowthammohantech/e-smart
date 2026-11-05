@@ -40,7 +40,9 @@ function voucherType(source: Posting['source'], debitsParty: boolean): string {
     if (source.kind === 'invoice' || source.kind === 'debitNote') return 'Sales';
     if (source.kind === 'purchaseBill' || source.kind === 'supplierDebitNote') return 'Purchase';
     if (source.kind === 'creditNote' || source.kind === 'salesReturn') return 'Credit Note';
-    return 'Debit Note';
+    if (source.kind === 'purchaseReturn' || source.kind === 'supplierCreditNote') return 'Debit Note';
+    // Goods sent out on a delivery challan: under perpetual stock their cost posts on its own.
+    return 'Journal';
   }
   if (source.type === 'payment') return debitsParty ? 'Payment' : 'Receipt';
   if (source.type === 'expense') return 'Payment';

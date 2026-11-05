@@ -8,6 +8,7 @@ import type { DbOrTx } from '../../lib/audit';
 import { money } from '../../lib/wire';
 import { effectiveStatusSql } from '../documents/lifecycle';
 import { loadDocuments, loadExpenses, loadItems } from '../reports/data';
+import { loadPerpetualCost } from '../books/book';
 import { paymentAccountBalances } from '../settings/handlers';
 
 /**
@@ -111,9 +112,11 @@ export async function profitLoader(c: MetricsCtx, branchId: string | undefined, 
     loadItems(all),
   ]);
   const base = c.company.baseCurrency.trim();
+  // Costed once up to `upTo`: a movement's cost depends only on what came before it.
+  const perpetual = await loadPerpetualCost(all, docs, items);
   return (p: Period): ProfitSnapshot => {
     const asOf = (d: { date: string }) => d.date <= p.to;
-    return profitSnapshot(docs.filter(asOf), spent.filter(asOf), items, base, { range: p, branchId: branchId ?? null, partyId: null, currency: null });
+    return profitSnapshot(docs.filter(asOf), spent.filter(asOf), items, base, { range: p, branchId: branchId ?? null, partyId: null, currency: null }, perpetual);
   };
 }
 

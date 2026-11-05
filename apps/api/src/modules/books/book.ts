@@ -3,6 +3,8 @@ import type { Book } from '@esmart/core/domain/ledger/accounts';
 import { allPostings, type Posting } from '@esmart/core/domain/ledger/postings';
 import { openingStockValue, type Stock } from '@esmart/core/domain/ledger/reports';
 import type { Voucher } from '@esmart/core/types';
+import { goodsCostByDocument, perpetualStock } from '@esmart/core/domain/stockLedger';
+import type { BusinessDocument, Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import { companyCore, partyCore } from '../documents/engine';
 import { coreMovements } from '../inventory/ledger';
@@ -40,7 +42,11 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   const taxCategories = (await s.db.select().from(T).where(eq(T.companyId, id))).map((t) => ({ id: t.id, companyId: t.companyId, name: t.name, rate: Number(t.rate), type: t.type, effectiveFrom: t.effectiveFrom }));
   const items = await loadItems(s);
   const movements = await coreMovements(s.db, id, { to: s.to });
-  const stock: Stock = { items, movements, baseCurrency: base };
+  const perpetualFrom = s.company.perpetualStockFrom;
+  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom };
+  // A return comes back at what the goods it returns went out (or came in) at.
+  const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
+  const openingStockMinor = openingStockValue(items, movements, base);
 
   const postings = allPostings({
     baseCurrency: base,
@@ -54,9 +60,24 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
     parties,
     paymentAccounts,
     ledgerAccounts,
-    openingStockMinor: openingStockValue(items, movements, base),
+    openingStockMinor,
+    ...(perpetualFrom && perpetualFrom <= s.to && { stock: perpetualStock(items, movements, perpetualFrom, base, (id) => sourceOf.get(id)) }),
   });
   return { postings, book: { parties, paymentAccounts, expenseCategories, ledgerAccounts }, stock };
+}
+
+/**
+ * Under perpetual stock, what each sale's goods cost as the books posted it, for the profit report
+ * (profitSnapshot). Undefined while the books are periodic. Stock is costed across the whole company,
+ * up to `s.to`, whatever branch the report is for.
+ */
+export async function loadPerpetualCost(s: Pick<Scope, 'db' | 'company' | 'to'>, docs: Pick<BusinessDocument, 'id' | 'sourceDocumentId'>[], items: Item[]): Promise<{ from: string; goodsCost: Map<string, number> } | undefined> {
+  const from = s.company.perpetualStockFrom;
+  if (!from || from > s.to) return undefined;
+  const movements = await coreMovements(s.db, s.company.id, { to: s.to });
+  const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
+  const stock = perpetualStock(items, movements, from, s.company.baseCurrency.trim(), (id) => sourceOf.get(id));
+  return { from, goodsCost: goodsCostByDocument(stock, docs) };
 }
 
 /** The company's vouchers up to `s.to` (of one kind, when given), as core sees them. */

@@ -1775,6 +1775,9 @@ export const companies = pgTable("companies", {
 	// With a TAN the business deducts TDS on what it pays suppliers.
 	tan: varchar({ length: 10 }),
 	plan: planTier().default('free').notNull(),
+	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
+	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
+	perpetualStockFrom: date("perpetual_stock_from"),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

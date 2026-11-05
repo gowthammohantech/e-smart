@@ -260,6 +260,13 @@
       "when": 1793843649047,
       "tag": "0036_item_categories_brands",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793844649233,
+      "tag": "0037_perpetual_stock",
+      "breakpoints": true
     }
   ]
 }

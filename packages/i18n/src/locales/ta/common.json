@@ -16,7 +16,9 @@
     "reset": "மீட்டமை",
     "confirm": "உறுதிப்படுத்து",
     "recordPayment": "கட்டணத்தைப் பதிவு செய்",
-    "seeAll": "அனைத்தையும் பார்"
+    "seeAll": "அனைத்தையும் பார்",
+    "saveAndAddAnother": "சேமித்து இன்னொன்றைச் சேர்",
+    "saveAndAddAnotherShortcut": "சேமித்து, அடுத்ததைத் தொடங்கு (Shift+Ctrl+S)"
   },
   "placeholder": {
     "none": "—",

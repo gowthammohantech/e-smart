@@ -9,7 +9,7 @@ import { schema } from '@esmart/db';
 import { profitSnapshot, summarizeAdvances, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
-import { loadBook, loadVouchers } from '../books/book';
+import { loadBook, loadPerpetualCost, loadVouchers } from '../books/book';
 import { gstr1ForRange } from '../gst/handlers';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
 import { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
@@ -97,7 +97,8 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
       // Bills give the average cost of what was sold.
       const { docs } = await loadDocuments(s, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
       const { expenses } = await loadExpenses(s);
-      return profitSnapshot(docs, expenses, await loadItems(s), base, filters);
+      const items = await loadItems(s);
+      return profitSnapshot(docs, expenses, items, base, filters, await loadPerpetualCost(s, docs, items));
     }
     case 'trial-balance': {
       // The books are one set across branches; a user limited to some of them sees the branch reports instead.
@@ -192,7 +193,8 @@ export const reportsHandlers = defineHandlers({
       case 'profit': {
         const { docs } = await loadDocuments(all, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
         const { expenses } = await loadExpenses(all);
-        return profitSnapshot(docs, expenses, await loadItems(all), base, filters) as never;
+        const items = await loadItems(all);
+        return profitSnapshot(docs, expenses, items, base, filters, await loadPerpetualCost(all, docs, items)) as never;
       }
       case 'receivables':
       case 'payables': {

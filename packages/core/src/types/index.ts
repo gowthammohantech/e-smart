@@ -34,6 +34,11 @@ export type Company = {
   fiscalYearStartMonth: number;
   /** Books are closed up to and including this date. */
   lockedThroughDate?: string | null;
+  /**
+   * Perpetual stock from this day (the start of a financial year): purchases of tracked goods post to
+   * Stock in hand at cost and the goods sold to Cost of goods sold. Unset, the books are periodic.
+   */
+  perpetualStockFrom?: string | null;
   /** Let sales take tracked items below zero. Off unless the business turns it on. */
   allowNegativeStock?: boolean;
   /** RBI's bank rate, percent, for MSME late-payment interest (three times it). 5.5 unless changed. */

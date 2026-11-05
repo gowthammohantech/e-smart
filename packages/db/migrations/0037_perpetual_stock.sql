@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "perpetual_stock_from" date;

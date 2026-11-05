@@ -1,4 +1,4 @@
-import { BusinessDocument, Company, Branch, Expense, LedgerAccount, Party, Payment, PaymentAccount, TaxCategory, Voucher } from '../../types';
+import { BusinessDocument, Company, Branch, Expense, LedgerAccount, Party, Payment, PaymentAccount, StockMovement, TaxCategory, Voucher } from '../../types';
 import { advanceTaxEvents } from '../advanceTax';
 import { CREDIT_KINDS } from '../documentStates';
 import { expenseCost, claimableTax, expenseTaxComponents } from '../expenseTax';
@@ -6,6 +6,7 @@ import { ItcBuckets, TaxSplit, itcOfDocument } from '../itc';
 import { calculateLine } from '../lineCalc';
 import { homeStateCode } from '../taxEngine';
 import { addDaysISO } from '../../lib/date';
+import type { PerpetualStock } from '../stockLedger';
 import { TAX_KINDS, TaxKind } from './accounts';
 
 /**
@@ -18,7 +19,7 @@ export type Posting = {
   account: string;
   debit: number;
   credit: number;
-  source: { type: 'document' | 'payment' | 'expense' | 'voucher' | 'opening'; id: string; number: string; kind?: string };
+  source: { type: 'document' | 'payment' | 'expense' | 'voucher' | 'opening' | 'stock'; id: string; number: string; kind?: string };
   branchId?: string;
   partyId?: string;
   costCentreId?: string;
@@ -253,6 +254,45 @@ export function postOpenings(book: {
     });
 }
 
+/** What a costed movement posts against Stock in hand (sys:openingStock), by the kind of movement. */
+const STOCK_CONTRA: Partial<Record<StockMovement['type'], string>> = {
+  purchaseReceipt: 'sys:purchases',
+  purchaseReturn: 'sys:purchases',
+  salesIssue: 'sys:cogs',
+  salesReturn: 'sys:cogs',
+  adjustment: 'sys:stockAdjustment',
+};
+
+/**
+ * Perpetual stock (RULES 6.2): each movement from the day it starts posts its cost to Stock in hand.
+ * Goods bought move out of Purchases into stock at what the stock ledger valued them at, so Purchases
+ * keeps only what isn't stock (services, untracked goods, credit that can't be claimed); goods sold or
+ * returned move between stock and Cost of goods sold; a count found short or over goes to Stock
+ * adjustments. Transfers and cancelled documents move no value. What was in stock the day before
+ * the start, beyond the opening stock already posted, is brought onto the books on the first day
+ * against earlier years' profit: the periodic years counted it in their closing stock. (Dated the
+ * day before, a balance sheet on that day would count it twice: posted and valued.)
+ *
+ * A movement from a document posts under that document, with its party, branch and cost centre.
+ */
+export function postStock(stock: PerpetualStock, ctx: { openingStockMinor: number; documents: Map<string, BusinessDocument> }): Posting[] {
+  const out: Posting[] = [];
+  const carry = stock.broughtForward - ctx.openingStockMinor;
+  if (Math.round(carry)) {
+    out.push(...toPostings([['sys:openingStock', carry], ['sys:retainedEarnings', -carry]], { type: 'stock', id: 'perpetual', number: 'Stock brought onto the books' }, stock.from, {}));
+  }
+  for (const m of stock.costed) {
+    const contra = STOCK_CONTRA[m.type];
+    if (!contra || !Math.round(m.cost)) continue;
+    const doc = m.referenceId ? ctx.documents.get(m.referenceId) : undefined;
+    const source: Posting['source'] = doc
+      ? { type: 'document', id: doc.id, number: doc.number, kind: doc.kind }
+      : { type: 'stock', id: m.referenceId ?? m.id, number: m.referenceNumber ?? m.notes ?? '', kind: m.type };
+    out.push(...toPostings([['sys:openingStock', m.cost], [contra, -m.cost]], source, m.date, { branchId: m.branchId, partyId: doc?.partyId, costCentreId: doc?.costCentreId }));
+  }
+  return out;
+}
+
 /** Everything on the books, in date order. */
 export function allPostings(book: {
   baseCurrency: string;
@@ -267,6 +307,8 @@ export function allPostings(book: {
   paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate' | 'openingBalanceDate'>[];
   ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceDate'>[];
   openingStockMinor: number;
+  /** Perpetual stock from its day; left out, the books are periodic. */
+  stock?: PerpetualStock;
 }): Posting[] {
   const dates = new Map(book.documents.map((d) => [d.id, d.date]));
   const documentDate = (id: string) => dates.get(id);
@@ -276,5 +318,6 @@ export function allPostings(book: {
     ...book.payments.flatMap((p) => postPayment(p, { homeState: homeStateCode(book.company, book.branches.find((b) => b.id === p.branchId)), documentDate })),
     ...book.expenses.flatMap((e) => postExpense(e, book)),
     ...book.vouchers.flatMap(postVoucher),
+    ...(book.stock ? postStock(book.stock, { openingStockMinor: book.openingStockMinor, documents: new Map(book.documents.filter((d) => !OFF_BOOKS.includes(d.status)).map((d) => [d.id, d])) }) : []),
   ].sort((a, b) => a.date.localeCompare(b.date));
 }

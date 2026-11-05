@@ -67,8 +67,12 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:sales': { name: 'Sales', group: 'salesAccounts' },
   'sys:purchases': { name: 'Purchases', group: 'purchaseAccounts' },
   'sys:fixedAssets': { name: 'Plant and machinery', group: 'fixedAssets' },
-  // Stock is valued from the stock ledger; this only carries what was counted when the books began.
+  // Stock in hand. Periodic books carry only what was counted when the books began here, and value
+  // closing stock from the stock ledger; perpetual books post every receipt and issue to it at cost.
   'sys:openingStock': { name: 'Opening stock', group: 'stockInHand' },
+  // Perpetual stock: what the goods sold cost, and stock counted short or over.
+  'sys:cogs': { name: 'Cost of goods sold', group: 'directExpenses' },
+  'sys:stockAdjustment': { name: 'Stock adjustments', group: 'directExpenses' },
   'sys:freightInward': { name: 'Freight and charges on purchases', group: 'directExpenses' },
   'sys:chargesRecovered': { name: 'Freight and charges recovered', group: 'indirectIncomes' },
   // Kept for books posted before reimbursements went through the asset account below.

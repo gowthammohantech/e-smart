@@ -16,7 +16,9 @@
     "reset": "Reset",
     "confirm": "Confirm",
     "recordPayment": "Record payment",
-    "seeAll": "See all"
+    "seeAll": "See all",
+    "saveAndAddAnother": "Save & add another",
+    "saveAndAddAnotherShortcut": "Save, then start the next one (Shift+Ctrl+S)"
   },
   "placeholder": {
     "none": "—",

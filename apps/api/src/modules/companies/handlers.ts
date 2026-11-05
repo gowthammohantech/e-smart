@@ -7,7 +7,8 @@ import type { Schema } from '@esmart/api-contract';
 import type { DbOrTx } from '../../lib/audit';
 import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { forbidden, invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { conflict, forbidden, invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { financialYearOf } from '@esmart/core/lib/date';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { addressTo } from '../../lib/wire';
@@ -60,7 +61,8 @@ export const companiesHandlers = defineHandlers({
     const row = await ctx.db.transaction(async (tx) => {
       const [company] = await tx
         .insert(schema.companies)
-        .values({ id: companyId, accountId: ctx.user.accountId, ...cols, plan: 'free' })
+        // A new business keeps stock perpetually from its first financial year (RULES 6.2).
+        .values({ id: companyId, accountId: ctx.user.accountId, ...cols, perpetualStockFrom: financialYearOf(ctx.now.toISOString().slice(0, 10), cols.fiscalYearStartMonth).start, plan: 'free' })
         .returning();
       await tx.insert(schema.branches).values(
         branches.map((b, i) => ({
@@ -116,10 +118,12 @@ export const companiesHandlers = defineHandlers({
     // Left out by an app that doesn't know about it: that isn't reopening the books.
     const lockedThroughDate = ctx.body.lockedThroughDate === undefined ? current.lockedThroughDate : ctx.body.lockedThroughDate;
     if (lockedThroughDate !== current.lockedThroughDate && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can close or reopen the books');
+    const perpetualStockFrom = ctx.body.perpetualStockFrom === undefined ? current.perpetualStockFrom : ctx.body.perpetualStockFrom;
+    if (perpetualStockFrom !== current.perpetualStockFrom) checkPerpetualFrom(ctx.user.role, current.fiscalYearStartMonth, lockedThroughDate, current.perpetualStockFrom, perpetualStockFrom);
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(schema.companies)
-        .set({ ...companyColumns(body), lockedThroughDate, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...companyColumns(body), lockedThroughDate, perpetualStockFrom, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(schema.companies.id, current.id), eq(schema.companies.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
@@ -175,3 +179,18 @@ function addressChanged(a: AddressRow, b: AddressRow): boolean {
   return keys.some((k) => (a[k] ?? '').trim() !== (b[k] ?? '').trim());
 }
 
+/**
+ * Moving the books to perpetual stock, or back, or to another day (RULES 6.2). Only an owner may; the
+ * day starts a financial year, so no year is half one way and half the other; and every year it
+ * changes must still be open, so a closed period's stock and profit never change.
+ */
+function checkPerpetualFrom(role: string, fyStartMonth: number, lockedThroughDate: string | null, from: string | null, to: string | null) {
+  if (role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can change how stock is kept in the books');
+  if (to && financialYearOf(to, fyStartMonth).start !== to) {
+    throw unprocessable([{ field: 'perpetualStockFrom', message: `Perpetual stock starts on the first day of a financial year, ${financialYearOf(to, fyStartMonth).start} for ${to}`, severity: 'blocking' }], 'PERPETUAL_NOT_YEAR_START');
+  }
+  const earliest = [from, to].filter((d): d is string => !!d).sort()[0];
+  if (lockedThroughDate && earliest && earliest <= lockedThroughDate) {
+    throw conflict('PERIOD_LOCKED', `The books are closed through ${lockedThroughDate}; stock can only change to perpetual, or back, from a year after it`);
+  }
+}

@@ -29,6 +29,8 @@
     "purchases": "Purchases",
     "fixedAssets": "Plant and machinery",
     "openingStock": "Stock in hand",
+    "cogs": "Cost of goods sold",
+    "stockAdjustment": "Stock adjustments",
     "freightInward": "Freight and charges on purchases",
     "chargesRecovered": "Freight and charges recovered",
     "reimbursements": "Reimbursements recovered",
@@ -221,7 +223,8 @@
     "payment": "Payment",
     "expense": "Expense",
     "voucher": "Voucher",
-    "opening": "Opening balances"
+    "opening": "Opening balances",
+    "stock": "Stock"
   },
   "costCentres": {
     "add": "Add cost centre",
@@ -256,7 +259,16 @@
     "reopen": "Reopen the books",
     "reopened": "Books reopened",
     "reopenHint": "Reopening lets the closed period change again. Anything changed there may no longer match what was filed or audited.",
-    "ownerOnly": "Only an owner can close or reopen the books."
+    "ownerOnly": "Only an owner can close or reopen the books.",
+    "stockTitle": "Stock in the books",
+    "periodic": "Periodic: closing stock is valued from the stock ledger at the end of each period, as in Tally.",
+    "perpetualSince": "Perpetual since {{date}}: goods are posted to Stock in hand at cost as they come in and go out, and what is sold to Cost of goods sold.",
+    "perpetualBody": "Perpetual stock starts on the first day of a financial year that is still open. Earlier years stay periodic, with the stock they closed with.",
+    "perpetualFrom": "Perpetual from",
+    "turnOn": "Keep stock perpetually",
+    "turnOff": "Go back to periodic",
+    "perpetualOn": "Stock is perpetual from {{date}}",
+    "perpetualOff": "Stock is periodic again"
   },
   "receipts": {
     "title": "Receipts",

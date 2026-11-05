@@ -77,7 +77,27 @@ export function ItemForm({ item }: { item?: Item }) {
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
 
-  const save = async () => {
+  /**
+   * After "Save & add another": a clean form for the next item, keeping what tends to
+   * repeat in a run of them (goods or service, unit, tax rate, category, brand).
+   */
+  const resetForAnother = () => {
+    setName('');
+    setSku('');
+    setDescription('');
+    setSalePrice('');
+    setPurchasePrice('');
+    setHsnCode('');
+    setBarcode('');
+    setOpeningStock('');
+    setReorderLevel('');
+    setErrors({});
+    setGst(undefined);
+    // Straight back into the name, for the next one.
+    requestAnimationFrame(() => (globalThis.document?.getElementById('item-form-name') as HTMLElement | null)?.focus());
+  };
+
+  const save = async (another = false) => {
     const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
       name: required(name, tr('inventory:form.itemName')),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
@@ -123,9 +143,10 @@ export function ItemForm({ item }: { item?: Item }) {
     const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'), { icon: 'tag-check-outline', detail: record.name });
     if (!res) return;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
+    else if (another) resetForAnother();
     else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
   };
-  useSaveShortcut(() => void save(), !saving);
+  useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -150,7 +171,7 @@ export function ItemForm({ item }: { item?: Item }) {
             }}
           />
 
-          <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
+          <TextField id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
           <TextField
             label={tr('inventory:form.sku')}
             value={sku}
@@ -243,6 +264,9 @@ export function ItemForm({ item }: { item?: Item }) {
 
         <FormActions>
           <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+          {item ? null : (
+            <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+          )}
         </FormActions>
 
         <SelectSheet

@@ -192,7 +192,11 @@ export type CostedMovement = StockMovement & { cost: number };
 export function costMovements(
   items: Pick<Item, 'id' | 'purchasePrice'>[],
   movements: StockMovement[],
-  opts: { sourceOf?: (documentId: string) => string | undefined } = {},
+  opts: {
+    sourceOf?: (documentId: string) => string | undefined;
+    /** Stock already there before the first movement, by item: its quantity and value. */
+    seed?: Map<string, { qty: number; value: number }>;
+  } = {},
 ): CostedMovement[] {
   const price = new Map(items.map((i) => [i.id, i.purchasePrice.minor]));
   // A document cancelled since: its movements and their reversal net to nothing, item by item.
@@ -207,7 +211,7 @@ export function costMovements(
   const costOf = new Map<StockMovement, number>();
 
   for (const m of sorted) {
-    const s = state.get(m.itemId) ?? { qty: 0, value: 0 };
+    const s = state.get(m.itemId) ?? { ...(opts.seed?.get(m.itemId) ?? { qty: 0, value: 0 }) };
     state.set(m.itemId, s);
     const q = signedQuantity(m);
     if (!q || voided(m)) {
@@ -240,4 +244,58 @@ export function costMovements(
 /** The value of stock on hand at the end of `date` (or of everything), from costed movements. */
 export function costedStockValue(costed: CostedMovement[], date?: string): number {
   return costed.reduce((a, m) => (date && m.date > date ? a : a + m.cost), 0);
+}
+
+/** Perpetual stock from a day: the movements from then on at cost, and what was there the day before. */
+export type PerpetualStock = {
+  from: string;
+  costed: CostedMovement[];
+  /** Stock in hand at the end of the day before `from`, valued as the periodic books valued it. */
+  broughtForward: number;
+};
+
+/**
+ * The stock side of perpetual books from `from` (RULES 6.2). Up to the day before, stock is valued as
+ * the periodic books did, so the years before keep their closing stock; from that value on, every
+ * movement is costed at the moving average (costMovements). Opening stock counts from the start.
+ */
+export function perpetualStock(
+  items: Item[],
+  movements: StockMovement[],
+  from: string,
+  baseCurrency: string,
+  sourceOf?: (documentId: string) => string | undefined,
+): PerpetualStock {
+  const before = movements.filter((m) => m.type === 'opening' || m.date < from);
+  const seed = new Map<string, { qty: number; value: number }>();
+  let broughtForward = 0;
+  for (const item of items) {
+    if (!item.trackInventory) continue;
+    const qty = stockOnHand(item.id, before);
+    const value = stockValue(item, before, baseCurrency).minor;
+    if (qty || value) seed.set(item.id, { qty, value });
+    broughtForward += value;
+  }
+  const after = movements.filter((m) => m.type !== 'opening' && m.date >= from);
+  return { from, costed: costMovements(items, after, { sourceOf, seed }), broughtForward };
+}
+
+/**
+ * What each sale's goods cost under perpetual stock, by document: positive for what an invoice (or the
+ * delivery it was made from) took out, negative for what a return brought back. It is the same figure
+ * Cost of goods sold posts, so the profit report and the books agree.
+ */
+export function goodsCostByDocument(stock: PerpetualStock, documents: Pick<BusinessDocument, 'id' | 'sourceDocumentId'>[]): Map<string, number> {
+  const byRef = new Map<string, number>();
+  for (const m of stock.costed) {
+    if ((m.type !== 'salesIssue' && m.type !== 'salesReturn') || !m.referenceId) continue;
+    byRef.set(m.referenceId, (byRef.get(m.referenceId) ?? 0) - m.cost);
+  }
+  const out = new Map<string, number>();
+  for (const d of documents) {
+    // An invoice made from a delivery challan: the goods left with the challan.
+    const cost = byRef.get(d.id) ?? (d.sourceDocumentId ? byRef.get(d.sourceDocumentId) : undefined);
+    if (cost !== undefined) out.set(d.id, cost);
+  }
+  return out;
 }

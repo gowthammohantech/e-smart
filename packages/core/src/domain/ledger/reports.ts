@@ -21,7 +21,16 @@ export function openingStockValue(items: Item[], movements: StockMovement[], bas
   return stockValueOn(items, movements.filter((m) => m.type === 'opening'), OPENING_DATE, baseCurrency);
 }
 
-export type Stock = { items: Item[]; movements: StockMovement[]; baseCurrency: string };
+export type Stock = {
+  items: Item[];
+  movements: StockMovement[];
+  baseCurrency: string;
+  /** Perpetual stock from this day (a financial year's start): stock is then posted, not valued at the end. */
+  perpetualFrom?: string | null;
+};
+
+/** Whether the books hold stock perpetually on a day. */
+const perpetualOn = (stock: Stock, date: string) => !!stock.perpetualFrom && date >= stock.perpetualFrom;
 
 /** Net debit (debit positive) of each account over the postings given. */
 function netByAccount(postings: Posting[]): Map<string, number> {
@@ -117,8 +126,12 @@ export function profitAndLoss(postings: Posting[], book: Book, range: { from: st
   }
   const pick = (trading: boolean, nature: 'income' | 'expense') =>
     lines.filter((l) => !!GROUPS[l.group].trading === trading && GROUPS[l.group].nature === nature).sort((a, b) => b.amount - a.amount);
-  const openingStock = stockValueOn(stock.items, stock.movements, dayBefore(range.from), stock.baseCurrency);
-  const closingStock = stockValueOn(stock.items, stock.movements, range.to, stock.baseCurrency);
+  // Periodic days value stock at each end; perpetual ones have posted it (RULES 6.2). A period that
+  // runs into perpetual stock values its periodic part, up to the day before it starts.
+  const periodicTo = perpetualOn(stock, range.to) ? dayBefore(stock.perpetualFrom!) : range.to;
+  const periodic = !perpetualOn(stock, range.from);
+  const openingStock = periodic ? stockValueOn(stock.items, stock.movements, dayBefore(range.from), stock.baseCurrency) : 0;
+  const closingStock = periodic ? stockValueOn(stock.items, stock.movements, periodicTo, stock.baseCurrency) : 0;
   const total = (ls: StatementLine[]) => ls.reduce((a, l) => a + l.amount, 0);
   const trading = { income: pick(true, 'income'), expense: pick(true, 'expense'), openingStock, closingStock };
   const grossProfit = total(trading.income) + closingStock - openingStock - total(trading.expense);
@@ -153,10 +166,14 @@ export function balanceSheet(postings: Posting[], book: Book, asOf: string, stoc
     const acc = accountFor(key, book);
     return acc && isNominal(acc.group) ? a + v : a;
   }, 0);
+  // Perpetual stock is posted, so Stock in hand is its balance like any account; periodic stock is
+  // valued on the day, and what it gained to the year's start counts in earlier years' profit.
+  const perpetual = perpetualOn(stock, asOf);
   const openingStock = net.get('sys:openingStock') ?? 0;
-  const stockAtYearStart = stockValueOn(stock.items, stock.movements, dayBefore(fyStart), stock.baseCurrency);
-  // Debit-positive, so a profit is negative here.
-  const earlierProfit = -earlierNominal + stockAtYearStart - openingStock;
+  const stockAtYearStart = perpetual ? openingStock : stockValueOn(stock.items, stock.movements, dayBefore(fyStart), stock.baseCurrency);
+  // Debit-positive, so a profit is negative here. Anything posted straight to earlier years' profit
+  // (stock brought onto the books when perpetual stock began) stands with it, on one line.
+  const earlierProfit = -earlierNominal + stockAtYearStart - openingStock - (net.get('sys:retainedEarnings') ?? 0);
 
   const sides = { liabilities: new Map<string, StatementLine[]>(), assets: new Map<string, StatementLine[]>() };
   const add = (side: 'liabilities' | 'assets', line: StatementLine) => {
@@ -165,12 +182,12 @@ export function balanceSheet(postings: Posting[], book: Book, asOf: string, stoc
   };
   for (const [key, value] of net) {
     const account = accountFor(key, book);
-    if (!account || isNominal(account.group) || key === 'sys:openingStock' || !value) continue;
+    if (!account || isNominal(account.group) || (!perpetual && key === 'sys:openingStock') || key === 'sys:retainedEarnings' || !value) continue;
     // A debtor in credit or a bank overdraft stays where its group is; its sign shows it.
     if (GROUPS[account.group].nature === 'asset') add('assets', { group: account.group, account, amount: value });
     else add('liabilities', { group: account.group, account, amount: -value });
   }
-  const closingStock = stockValueOn(stock.items, stock.movements, asOf, stock.baseCurrency);
+  const closingStock = perpetual ? 0 : stockValueOn(stock.items, stock.movements, asOf, stock.baseCurrency);
   if (closingStock) add('assets', { group: 'stockInHand', account: accountFor('sys:openingStock', book)!, amount: closingStock });
   if (earlierProfit) add('liabilities', { group: 'reserves', account: accountFor('sys:retainedEarnings', book)!, amount: earlierProfit });
 
@@ -245,8 +262,9 @@ export function dayBook(postings: Posting[], range: { from: string; to: string }
 export type CostCentreRow = { costCentreId?: string; income: number; expense: number; profit: number; lines: StatementLine[] };
 
 /**
- * Income and expense by cost centre for a period; what carries no centre is its own row. Stock is
- * not split by centre, so the rows add up to the P&L before the change in stock.
+ * Income and expense by cost centre for a period; what carries no centre is its own row. Periodic
+ * stock is not split by centre, so the rows add up to the P&L before the change in stock; perpetual
+ * stock posts the goods sold under each document's centre, so they add up to the P&L itself.
  */
 export function costCentreProfit(postings: Posting[], book: Book, range: { from: string; to: string }): CostCentreRow[] {
   const byCentre = new Map<string, Posting[]>();

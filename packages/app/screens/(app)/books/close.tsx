@@ -8,7 +8,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
-import { financialYearOf, formatDate, today } from '@esmart/core/lib/date';
+import { addDaysISO, financialYearOf, formatDate, today } from '@esmart/core/lib/date';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
@@ -31,6 +31,15 @@ export default function CloseBooks() {
     return new Date(Date.parse(`${fy.start}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
   })();
   const [date, setDate] = useState(company.lockedThroughDate ?? lastFyEnd);
+
+  // Perpetual stock starts a financial year still open: this one, or the next if this one is closed.
+  const thisFy = financialYearOf(today(), company.fiscalYearStartMonth).start;
+  const nextFy = financialYearOf(addDaysISO(financialYearOf(today(), company.fiscalYearStartMonth).end, 1), company.fiscalYearStartMonth).start;
+  const perpetualStart = company.lockedThroughDate && company.lockedThroughDate >= thisFy ? nextFy : thisFy;
+  const perpetual = company.perpetualStockFrom ?? null;
+  const canGoBack = !!perpetual && !(company.lockedThroughDate && perpetual <= company.lockedThroughDate);
+  const setPerpetual = (perpetualStockFrom: string | null) =>
+    serverSave(() => saveCompany({ ...company, perpetualStockFrom }), perpetualStockFrom ? tr('books:close.perpetualOn', { date: formatDate(perpetualStockFrom) }) : tr('books:close.perpetualOff'), { icon: 'package-variant-closed' });
 
   const save = (lockedThroughDate: string | null) =>
     serverSave(() => saveCompany({ ...company, lockedThroughDate }), lockedThroughDate ? tr('books:close.closed', { date: formatDate(lockedThroughDate) }) : tr('books:close.reopened'), { icon: 'lock-outline' });
@@ -65,6 +74,25 @@ export default function CloseBooks() {
             {tr('books:close.ownerOnly')}
           </Text>
         )}
+
+        <Card style={{ gap: t.spacing.sm }}>
+          <Text variant="body" weight="600">
+            {tr('books:close.stockTitle')}
+          </Text>
+          <Text variant="caption" tone="muted">
+            {perpetual ? tr('books:close.perpetualSince', { date: formatDate(perpetual) }) : tr('books:close.periodic')}
+          </Text>
+          <Text variant="caption" tone="muted">
+            {tr('books:close.perpetualBody')}
+          </Text>
+        </Card>
+        {owner ? (
+          perpetual ? (
+            <Button title={tr('books:close.turnOff')} icon="package-variant" variant="secondary" onPress={() => void setPerpetual(null)} disabled={blocked || saving || !canGoBack} />
+          ) : (
+            <Button title={`${tr('books:close.turnOn')} · ${formatDate(perpetualStart)}`} icon="package-variant-closed" onPress={() => void setPerpetual(perpetualStart)} loading={saving} disabled={blocked} />
+          )
+        ) : null}
       </ScrollView>
     </View>
   );

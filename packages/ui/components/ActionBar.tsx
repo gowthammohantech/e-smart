@@ -32,6 +32,8 @@ export function FormActions({ children }: { children: React.ReactNode }) {
           : {
               padding: t.spacing.lg,
               paddingBottom: insets.bottom + t.spacing.md,
+              // Stacked buttons (a save and a "save & add another") keep apart.
+              gap: t.spacing.sm,
               borderTopWidth: 1,
               borderTopColor: t.c.line,
               backgroundColor: t.c.paper,

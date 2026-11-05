@@ -79,7 +79,26 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const cost = Number(purchasePrice) || 0;
   const margin = sale > 0 && cost > 0 ? ((sale - cost) / sale) * 100 : null;
 
-  const save = async () => {
+  /**
+   * After "Save & add another": a clean form for the next item, keeping what tends to
+   * repeat in a run of them (goods or service, unit, tax rate, category, brand).
+   */
+  const resetForAnother = () => {
+    setName('');
+    setSku('');
+    setDescription('');
+    setSalePrice('');
+    setPurchasePrice('');
+    setHsnCode('');
+    setBarcode('');
+    setOpeningStock('');
+    setReorderLevel('');
+    setErrors({});
+    // Straight back into the name, for the next one.
+    requestAnimationFrame(() => (globalThis.document?.getElementById('item-form-name') as HTMLElement | null)?.focus());
+  };
+
+  const save = async (another = false) => {
     const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
       name: required(name, tr('inventory:form.itemName')),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
@@ -123,9 +142,10 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
     const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'), { icon: 'tag-check-outline', detail: record.name });
     if (!res) return;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
+    else if (another) resetForAnother();
     else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
   };
-  useSaveShortcut(() => void save(), !saving);
+  useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
 
   return (
     <View style={{ flex: 1 }}>
@@ -136,6 +156,15 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
               <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/catalog/items')} />
+              {item ? null : (
+                <Button
+                  title={tr('common:action.saveAndAddAnother')}
+                  tooltip={tr('common:action.saveAndAddAnotherShortcut')}
+                  variant="secondary"
+                  onPress={() => void save(true)}
+                  loading={saving}
+                />
+              )}
               <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} />
             </View>
           ),
@@ -171,7 +200,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                     <SwitchField label={tr('inventory:form.active')} value={active} onValueChange={setActive} />
                   </FieldShell>
                 </View>
-                <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
+                <TextField id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
                 <Row>
                   <TextField
                     label={tr('inventory:form.sku')}
