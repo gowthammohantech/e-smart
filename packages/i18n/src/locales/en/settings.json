@@ -661,5 +661,14 @@
     "deleted": "Field deleted",
     "choose": "Choose",
     "none": "None"
+  },
+  "approvals": {
+    "title": "Approvals",
+    "hint": "Choose which documents wait for an owner or admin before they are issued, and over what amount. Owners and admins never wait on themselves.",
+    "ownerOnly": "Only an owner can set what needs approval.",
+    "over": "Over",
+    "overHint": "0 holds every one.",
+    "save": "Save",
+    "saved": "Approval rules saved"
   }
 }

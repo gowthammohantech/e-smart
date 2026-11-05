@@ -49,6 +49,7 @@ import {
 import { useDocumentRecord, useEwayBillRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
+import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
@@ -629,6 +630,7 @@ ${url}`;
   const complianceSection = (
     <>
       {/* Compliance */}
+      <ApprovalBanner doc={doc} />
       <ComplianceCard document={doc} />
     </>
   );

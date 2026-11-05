@@ -464,5 +464,21 @@
     "stopped": "No longer repeats",
     "action": "Repeat…",
     "badge": "Repeats"
+  },
+  "approval": {
+    "title": "Waiting for approval",
+    "pending": "Waiting for approval",
+    "pendingBody": "Sent for approval on {{date}}. An owner or admin approves it, which issues it, or sends it back.",
+    "rejected": "Sent back",
+    "rejectedBody": "An owner or admin sent this back: {{note}}. Change it and issue it again.",
+    "approve": "Approve",
+    "reject": "Send back",
+    "why": "Why is it going back?",
+    "sendBack": "Send back",
+    "cancel": "Cancel",
+    "approved": "Approved and issued",
+    "sentBack": "Sent back to its creator",
+    "empty": "Nothing waiting",
+    "emptyBody": "Documents over the amounts set in Settings → Approvals wait here for an owner or admin."
   }
 }

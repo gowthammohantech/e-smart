@@ -112,7 +112,8 @@
     "documentPreview": "{{kind}} preview",
     "proformas": "Proforma invoices",
     "newProforma": "New proforma invoice",
-    "proforma": "Proforma invoice"
+    "proforma": "Proforma invoice",
+    "approvals": "Waiting for approval"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -157,7 +158,8 @@
       "gstPortal": "GST portal connection",
       "security": "Sign-in security",
       "modules": "Modules",
-      "customFields": "Custom fields"
+      "customFields": "Custom fields",
+      "approvalRules": "Approvals"
     },
     "signOut": {
       "row": "Sign out",

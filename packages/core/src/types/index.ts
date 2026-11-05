@@ -50,6 +50,8 @@ export type Company = {
   lockedThroughDate?: string | null;
   /** Modules the owner switched off within the plan (domain/plan moduleEnabled). */
   disabledModules?: Module[];
+  /** Documents of a kind over the amount (base currency) wait for an owner or admin. */
+  approvalRules?: { kind: DocumentKind; overMinor: number }[];
   /**
    * Perpetual stock from this day (the start of a financial year): purchases of tracked goods post to
    * Stock in hand at cost and the goods sold to Cost of goods sold. Unset, the books are periodic.
@@ -453,6 +455,8 @@ export type BusinessDocument = {
   recurrenceAutoSend?: boolean;
   /** On a copy, the recurring invoice it was issued from. */
   recurringParentId?: string;
+  /** Sent for approval: a draft until an owner or admin approves (and issues) it or sends it back. */
+  approval?: { status: 'pending' | 'approved' | 'rejected'; requestedBy?: string; requestedAt?: string; decidedBy?: string; decidedAt?: string; note?: string };
   totals: DocumentTotals;
   compliance?: ComplianceInfo;
   createdBy: string;
