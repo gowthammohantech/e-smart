@@ -1,4 +1,5 @@
-import { and, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { buysFrom, hasLedger } from '@esmart/core/domain/partyKinds';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
 import { isValidGstin } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
@@ -26,9 +27,9 @@ async function findParty(db: DbOrTx, companyId: string, id: string): Promise<Par
   return row;
 }
 
-/** Suppliers belong to the buying side, which the Sales plans don't include. */
+/** Suppliers, and parties that are both, belong to the buying side, which the Sales plans don't include. */
 function assertKindAllowed(ctx: { company: { plan: Schema<'PlanTier'> } }, kind: Schema<'PartyKind'>) {
-  if (kind === 'supplier' && !hasModule(ctx.company.plan, 'purchases')) throw planUpgradeRequired(FULL_PLAN, 'purchases');
+  if (buysFrom(kind) && !hasModule(ctx.company.plan, 'purchases')) throw planUpgradeRequired(FULL_PLAN, 'purchases');
 }
 
 async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
@@ -45,6 +46,8 @@ async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
   ] as const) {
     if (m && m.currency !== body.currency) issues.push({ field: `${field}.currency`, message: `Must be in the party's currency (${body.currency})`, severity: 'blocking' });
   }
+  // A general contact keeps no account with the business.
+  if (!hasLedger(body.kind) && body.openingBalance.minor !== 0) issues.push({ field: 'openingBalance', message: 'A general contact has no opening balance; make them a customer, supplier or both', severity: 'blocking' });
   if (body.openingBalanceDate && body.openingBalanceDate > today) {
     issues.push({ field: 'openingBalanceDate', message: 'The opening balance date cannot be in the future', severity: 'blocking' });
   }
@@ -53,9 +56,11 @@ async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
   if (issues.length) throw unprocessable(issues);
 }
 
-/** C-001, C-002… for customers; S-001… for suppliers. Follows the highest so far. */
+const CODE_PREFIX: Record<Schema<'PartyKind'>, string> = { customer: 'C-', supplier: 'S-', both: 'B-', general: 'G-' };
+
+/** C-001, C-002… for customers; S-001… for suppliers, B- for both, G- for general contacts. Follows the highest so far. */
 async function nextCode(db: DbOrTx, companyId: string, kind: Schema<'PartyKind'>): Promise<string> {
-  const prefix = kind === 'supplier' ? 'S-' : 'C-';
+  const prefix = CODE_PREFIX[kind];
   const [row] = await db
     .select({ max: sql<number | null>`max(nullif(regexp_replace(${P.code}, '\\D', '', 'g'), '')::int)` })
     .from(P)
@@ -65,7 +70,8 @@ async function nextCode(db: DbOrTx, companyId: string, kind: Schema<'PartyKind'>
 
 async function withBalance(ctx: Ctx<'getParty'>, row: PartyRow) {
   const balances = await partyBalances(ctx.db, row.companyId, [row], today(ctx.now));
-  return partyWithBalance(row, balances.get(row.id));
+  const payable = row.kind === 'both' ? (await partyBalances(ctx.db, row.companyId, [row], today(ctx.now), 'supplier')).get(row.id) : undefined;
+  return partyWithBalance(row, balances.get(row.id), payable);
 }
 
 /** Documents, payments, expenses or e-way bills that point at the party. */
@@ -88,9 +94,11 @@ async function usage(db: DbOrTx, companyId: string, partyId: string): Promise<st
  * getPartyStatement.
  */
 /** The WHERE of a party list, shared by the list and its summary. */
-function partyFilters(companyId: string, q: { kind?: 'customer' | 'supplier'; status?: 'active' | 'inactive'; q?: string }): SQL[] {
+function partyFilters(companyId: string, q: { kind?: Schema<'PartyKind'>; status?: 'active' | 'inactive'; q?: string }): SQL[] {
   const filters: SQL[] = [eq(P.companyId, companyId)];
-  if (q.kind) filters.push(eq(P.kind, q.kind));
+  // A party that is both is among the customers and among the suppliers.
+  if (q.kind === 'customer' || q.kind === 'supplier') filters.push(inArray(P.kind, [q.kind, 'both']));
+  else if (q.kind) filters.push(eq(P.kind, q.kind));
   if (q.status) filters.push(eq(P.status, q.status));
   if (q.q) {
     const like = `%${q.q.trim()}%`;
@@ -103,7 +111,7 @@ export const partiesHandlers = defineHandlers({
   async summarizePartyList(ctx) {
     const base = ctx.company.baseCurrency.trim();
     const rows = await ctx.db.select().from(P).where(and(...partyFilters(ctx.company.id, ctx.query)));
-    const balances = await partyBalances(ctx.db, ctx.company.id, rows, today(ctx.now));
+    const balances = await partyBalances(ctx.db, ctx.company.id, rows, today(ctx.now), ctx.query.kind === 'supplier' ? 'supplier' : 'customer');
     const day = today(ctx.now);
     const rates = new Map<string, number>();
     for (const c of new Set(rows.map((r) => r.currency.trim()))) rates.set(c, (await rateToBase(ctx.db, ctx.company.id, c, base, day)) ?? 1);
@@ -122,7 +130,7 @@ export const partiesHandlers = defineHandlers({
       .orderBy(...k.orderBy)
       .limit(k.take);
     const page = rows.slice(0, k.take - 1);
-    const balances = await partyBalances(ctx.db, ctx.company.id, page, today(ctx.now));
+    const balances = await partyBalances(ctx.db, ctx.company.id, page, today(ctx.now), ctx.query.kind === 'supplier' ? 'supplier' : 'customer');
     return k.page(
       page.map((r) => partyWithBalance(r, balances.get(r.id))),
       rows,

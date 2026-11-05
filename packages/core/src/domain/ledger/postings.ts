@@ -1,4 +1,5 @@
 import { BusinessDocument, Company, Branch, Expense, LedgerAccount, Party, Payment, PaymentAccount, StockMovement, TaxCategory, Voucher } from '../../types';
+import { openingDebit } from '../partyKinds';
 import { advanceTaxEvents } from '../advanceTax';
 import { CREDIT_KINDS } from '../documentStates';
 import { expenseCost, claimableTax, expenseTaxComponents } from '../expenseTax';
@@ -230,7 +231,7 @@ export const OPENING_DATE = '1900-01-01';
  * that day on reads it as opening, one before it doesn't see it. Undated ones sit at OPENING_DATE.
  */
 export function postOpenings(book: {
-  parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate'>[];
+  parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate' | 'openingBalanceSide'>[];
   paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate' | 'openingBalanceDate'>[];
   ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceDate'>[];
   openingStockMinor: number;
@@ -240,8 +241,8 @@ export function postOpenings(book: {
     const day = date ? addDaysISO(date, -1) : OPENING_DATE;
     byDate.set(day, [...(byDate.get(day) ?? []), entry]);
   };
-  // A customer's positive opening balance is owed to us; a supplier's is owed by us.
-  for (const p of book.parties) add(p.openingBalanceDate, [`party:${p.id}`, p.kind === 'supplier' ? -p.openingBalance.minor : p.openingBalance.minor]);
+  // On the side the party says, or its kind's usual one: a customer's is owed to us, a supplier's by us.
+  for (const p of book.parties) add(p.openingBalanceDate, [`party:${p.id}`, openingDebit(p)]);
   // A cash or bank account's opening stands on its "as on" date too, like any other; undated, at the start of the books.
   for (const a of book.paymentAccounts) add(a.openingBalanceDate, [`pay:${a.id}`, a.openingBalance.minor * (a.openingRate ?? 1)]);
   for (const a of book.ledgerAccounts) add(a.openingBalanceDate, [`acc:${a.id}`, a.openingBalance.minor]);
@@ -303,7 +304,7 @@ export function allPostings(book: {
   payments: Payment[];
   expenses: Expense[];
   vouchers: Voucher[];
-  parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate'>[];
+  parties: Pick<Party, 'id' | 'kind' | 'openingBalance' | 'openingBalanceDate' | 'openingBalanceSide'>[];
   paymentAccounts: Pick<PaymentAccount, 'id' | 'openingBalance' | 'openingRate' | 'openingBalanceDate'>[];
   ledgerAccounts: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceDate'>[];
   openingStockMinor: number;

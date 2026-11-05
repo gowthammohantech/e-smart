@@ -7,7 +7,8 @@ import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/comp
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, focusFirstInvalid, PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { AmountField, focusFirstInvalid, PhoneField, PickerField, Segmented, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { buysFrom, hasLedger, sellsTo, usualSide, type BalanceSide } from '@esmart/core/domain/partyKinds';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
@@ -25,15 +26,17 @@ import { uid } from '@esmart/core/lib/id';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
-import { useBaseCurrency, useParties } from '../../store/selectors';
+import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 
+const CODE_PREFIX: Record<PartyKind, string> = { customer: 'C', supplier: 'S', both: 'B', general: 'G' };
+
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
 const MSME_OPTIONS = ['none', 'micro', 'small', 'medium'] as const;
 
-export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
+export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases', 'books']);
   const router = useRouter();
@@ -41,14 +44,19 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   // Added from a document's party picker: back to the document, which picks the new party.
   const { then } = useLocalSearchParams<{ then?: string }>();
   // Where Cancel and Save land when there is no screen to go back to.
-  const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
+  // The route's kind to start with; a new contact can be both or general, and a customer or supplier can become both.
+  const [kind, setKind] = useState<PartyKind>(party?.kind ?? routeKind);
+  const hasPurchases = useHasModule('purchases');
+  const kindOptions: PartyKind[] = !party || party.kind === 'general' ? ['customer', 'supplier', 'both', 'general'] : party.kind === 'both' ? ['both'] : [party.kind, 'both'];
+  const allowedKinds = kindOptions.filter((k) => hasPurchases || !buysFrom(k));
+  const backTo = party ? `/(app)/contacts/${party.kind === 'supplier' ? 'suppliers' : 'customers'}/${party.id}` : '/(app)/(tabs)/contacts';
   const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
 
   const baseCurrency = useBaseCurrency();
-  const existing = useParties(kind);
+  const existing = useParties();
   const saveParty = useAppStore((s) => s.saveParty);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
@@ -73,9 +81,14 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [terms, setTerms] = useState(party?.paymentTermsDays ?? 30);
   const [creditLimit, setCreditLimit] = useState(party?.creditLimit ? String(toMajor(party.creditLimit)) : '');
   const [openingBalance, setOpeningBalance] = useState(
-    party?.openingBalance && party.openingBalance.minor !== 0 ? String(toMajor(party.openingBalance)) : '',
+    party?.openingBalance && party.openingBalance.minor !== 0 ? String(Math.abs(toMajor(party.openingBalance))) : '',
   );
   const [openingDate, setOpeningDate] = useState<string | undefined>(party?.openingBalanceDate);
+  // Dr: they owe us; Cr: we owe them. A negative stored amount (an old advance) reads as the other side.
+  const [openingSide, setOpeningSide] = useState<BalanceSide>(() => {
+    const side = party?.openingBalanceSide ?? usualSide(party?.kind ?? routeKind);
+    return (party?.openingBalance.minor ?? 0) < 0 ? (side === 'dr' ? 'cr' : 'dr') : side;
+  });
   const [line1, setLine1] = useState(billing?.line1 ?? '');
   const [city, setCity] = useState(billing?.city ?? '');
   const [stateCode, setStateCode] = useState(billing?.stateCode ?? '');
@@ -108,7 +121,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (shipCity && !cities.includes(shipCity)) setShipCity('');
   };
 
-  const nameLabel = kind === 'customer' ? tr('contacts:form.customerName') : tr('contacts:form.supplierName');
+  const nameLabel = kind === 'supplier' ? tr('contacts:form.supplierName') : tr('contacts:form.customerName');
   const termsLabel = (days: number) => (days === 0 ? tr('contacts:form.dueOnReceipt') : tr('contacts:form.termsDays', { count: days }));
   // A GSTIN brings the party's registered name, GST type and address from the GST portal.
   const fillFromPortal = (d: GstinDetails) => {
@@ -188,7 +201,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     const partyCountry = overseas ? country : 'IN';
     const nextCode =
       party?.code ??
-      `${kind === 'customer' ? 'C' : 'S'}-${String(existing.length + 1).padStart(3, '0')}`;
+      `${CODE_PREFIX[kind]}-${String(existing.filter((p) => p.kind === kind).length + 1).padStart(3, '0')}`;
 
     const record: Party = {
       id: party?.id ?? uid(kind === 'customer' ? 'cus' : 'sup'),
@@ -201,11 +214,11 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       gstRegistrationType: registration,
       // A GSTIN carries the PAN; the server reads it from there when this is blank.
       pan: overseas ? undefined : pan.trim().toUpperCase() || undefined,
-      msmeType: kind === 'supplier' ? msmeType : undefined,
-      udyamNumber: kind === 'supplier' && msmeType ? udyam.trim().toUpperCase() || undefined : undefined,
-      reverseCharge: kind === 'supplier' && reverseCharge ? true : undefined,
-      tdsSection: kind === 'supplier' ? tdsSectionCode : undefined,
-      lowerTdsCertificate: kind === 'supplier' && tdsSectionCode && certRate && certValidTill ? { rate: Number(certRate), validTill: certValidTill } : undefined,
+      msmeType: buysFrom(kind) ? msmeType : undefined,
+      udyamNumber: buysFrom(kind) && msmeType ? udyam.trim().toUpperCase() || undefined : undefined,
+      reverseCharge: buysFrom(kind) && reverseCharge ? true : undefined,
+      tdsSection: buysFrom(kind) ? tdsSectionCode : undefined,
+      lowerTdsCertificate: buysFrom(kind) && tdsSectionCode && certRate && certValidTill ? { rate: Number(certRate), validTill: certValidTill } : undefined,
       email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
@@ -228,8 +241,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
             country: partyCountry,
           },
       creditLimit: creditLimit ? fromMajor(creditLimit, currency) : undefined,
-      openingBalance: openingBalance ? fromMajor(openingBalance, currency) : zero(currency),
-      openingBalanceDate: openingBalance ? openingDate : undefined,
+      openingBalance: openingBalance && hasLedger(kind) ? fromMajor(openingBalance, currency) : zero(currency),
+      openingBalanceDate: openingBalance && hasLedger(kind) ? openingDate : undefined,
+      // Said only when it isn't the kind's usual side, so most records stay as they were.
+      openingBalanceSide: openingBalance && hasLedger(kind) && openingSide !== usualSide(kind) ? openingSide : undefined,
       paymentTermsDays: terms,
       notes: notes.trim() || undefined,
       status: active ? 'active' : 'inactive',
@@ -246,7 +261,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (party) goBack(backTo);
     else if (another) resetForAnother();
     else if (then === 'back' && router.canGoBack()) router.back();
-    else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${id}` : `/(app)/contacts/suppliers/${id}`);
+    else router.replace(kind === 'supplier' ? `/(app)/contacts/suppliers/${id}` : `/(app)/contacts/customers/${id}`);
   };
   useSaveShortcut(() => void save(), !saving, offersAnother ? () => void save(true) : undefined);
 
@@ -297,7 +312,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     />
   );
   const supplierTaxFields =
-    kind === 'supplier' ? (
+    buysFrom(kind) ? (
       <>
         <PickerField
           label={tr('contacts:form.msme')}
@@ -378,26 +393,42 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   );
 
   const currencyField = <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />;
-  const termsField = <PickerField label={tr('contacts:form.paymentTerms')} value={termsLabel(terms)} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
+  const termsField = !hasLedger(kind) ? null : <PickerField label={tr('contacts:form.paymentTerms')} value={termsLabel(terms)} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
   const creditLimitField =
-    kind === 'customer' ? (
+    sellsTo(kind) ? (
       <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
     ) : null;
-  const openingBalanceField = (
+  const openingBalanceField = !hasLedger(kind) ? null : (
     <>
       <AmountField
         label={tr('contacts:form.openingBalance')}
         value={openingBalance}
         onChangeValue={setOpeningBalance}
         currency={currency}
-        hint={kind === 'customer' ? tr('contacts:form.openingBalanceHintCustomer') : tr('contacts:form.openingBalanceHintSupplier')}
+        hint={kind === 'supplier' ? tr('contacts:form.openingBalanceHintSupplier') : kind === 'both' ? tr('contacts:form.openingBalanceHintBoth') : tr('contacts:form.openingBalanceHintCustomer')}
       />
+      {openingBalance ? (
+        <Segmented
+          options={(['dr', 'cr'] as const).map((s) => ({ value: s, label: tr(`contacts:form.openingSide.${s}`) }))}
+          value={openingSide}
+          onChange={(v) => setOpeningSide(v as BalanceSide)}
+        />
+      ) : null}
       {openingBalance ? (
         <SwitchField label={tr('books:accounts.openingOnDate')} description={tr('books:accounts.openingOnDateHint')} value={!!openingDate} onValueChange={(on) => setOpeningDate(on ? today() : undefined)} />
       ) : null}
       {openingBalance && openingDate ? <DateField label={tr('books:accounts.openingDate')} value={openingDate} onChange={setOpeningDate} maximumDate={new Date()} /> : null}
     </>
   );
+  const kindField =
+    allowedKinds.length > 1 ? (
+      <View style={{ gap: t.spacing.xs }}>
+        <Segmented options={allowedKinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as PartyKind)} />
+        <Text variant="caption" tone="muted">
+          {tr(`contacts:kindHint.${kind}`)}
+        </Text>
+      </View>
+    ) : null;
   const notesField = <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />;
   const activeField = <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />;
 
@@ -417,6 +448,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={SHOW_SCROLLBAR}
     >
+      {kindField}
       {nameField}
       {contactField}
       {registrationField}
@@ -468,6 +500,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
   const details = (
     <FormSection title={tr('contacts:form.businessDetails')}>
+      {kindField}
       <FieldRow>
         {nameField}
         {contactField}

@@ -30,7 +30,8 @@
       "advance": "Advances",
       "advanceCaption": "Paid ahead, not yet applied",
       "overdueCaption": "Past the due date"
-    }
+    },
+    "tabOther": "Other"
   },
   "form": {
     "businessName": "Business name",
@@ -97,7 +98,12 @@
     "customerAdded": "Customer added",
     "customerUpdated": "Customer updated",
     "supplierAdded": "Supplier added",
-    "supplierUpdated": "Supplier updated"
+    "supplierUpdated": "Supplier updated",
+    "openingSide": {
+      "dr": "They owe you (Dr)",
+      "cr": "You owe them (Cr)"
+    },
+    "openingBalanceHintBoth": "What stood between you when you started; choose who owed whom."
   },
   "detail": {
     "inactive": "Inactive",
@@ -136,7 +142,8 @@
     "sendReminder": "Send payment reminder",
     "deleteContact": "Delete contact",
     "deleteTitle": "Delete {{name}}?",
-    "statement": "Statement of account"
+    "statement": "Statement of account",
+    "payable": "You owe them"
   },
   "statement": {
     "title": "Statement · {{name}}",
@@ -162,5 +169,17 @@
     "downloaded": "Statement downloaded",
     "ready": "Statement ready",
     "failed": "Could not make the PDF."
+  },
+  "kind": {
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "both": "Both",
+    "general": "Other"
+  },
+  "kindHint": {
+    "customer": "You sell to them.",
+    "supplier": "You buy from them.",
+    "both": "You buy from and sell to them, on one account.",
+    "general": "A contact only, such as a landlord, auditor or transporter. Not on invoices, bills or payments."
   }
 }

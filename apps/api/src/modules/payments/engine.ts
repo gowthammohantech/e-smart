@@ -1,4 +1,5 @@
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { hasLedger } from '@esmart/core/domain/partyKinds';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS, isFinalized } from '@esmart/core/domain/documentStates';
 import { settlementGainLoss } from '@esmart/core/domain/fx';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
@@ -140,6 +141,7 @@ export async function writePayment(
 
   const [party] = await tx.select().from(schema.parties).where(and(eq(schema.parties.companyId, company.id), eq(schema.parties.id, input.partyId)));
   if (!party) blocking('partyId', 'No such party in this company');
+  else if (!hasLedger(party.kind)) blocking('partyId', `${party.name} is a general contact; money is received from customers and paid to suppliers`);
   // Locked so two payments out of one cash box cannot both spend its last rupee.
   const [account] = await tx
     .select()

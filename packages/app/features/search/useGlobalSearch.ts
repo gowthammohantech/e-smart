@@ -38,11 +38,11 @@ export function useGlobalSearch(query: string) {
     (found.parties ?? []).forEach((p) => {
       out.push({
         id: p.id!,
-        group: p.kind === 'customer' ? 'Customers' : 'Suppliers',
+        group: p.kind !== 'supplier' ? 'Customers' : 'Suppliers',
         title: p.name!,
         subtitle: `${p.code ?? ''}${p.phone ? ` · ${p.phone}` : ''}`,
-        icon: p.kind === 'customer' ? 'account-outline' : 'truck-outline',
-        route: p.kind === 'customer' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`,
+        icon: p.kind !== 'supplier' ? 'account-outline' : 'truck-outline',
+        route: p.kind !== 'supplier' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`,
       });
     });
 

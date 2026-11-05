@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
@@ -62,7 +62,7 @@ async function toWire(db: DbOrTx, row: ExtractionRow, digits: number): Promise<S
 /** The supplier a bill is from: by GSTIN first, then by name (as the app's matchParty). */
 async function matchSupplier(db: DbOrTx, companyId: string, gstin: string | undefined, vendor: string | undefined): Promise<string | null> {
   const P = schema.parties;
-  const suppliers = and(eq(P.companyId, companyId), eq(P.kind, 'supplier'));
+  const suppliers = and(eq(P.companyId, companyId), inArray(P.kind, ['supplier', 'both']));
   if (gstin) {
     const [hit] = await db.select({ id: P.id }).from(P).where(and(suppliers, eq(P.taxId, normalizeGstin(gstin))));
     if (hit) return hit.id;

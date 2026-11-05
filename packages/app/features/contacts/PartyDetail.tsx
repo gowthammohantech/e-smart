@@ -57,11 +57,14 @@ export function PartyDetail({ party }: { party: Party }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
 
-  const isCustomer = party.kind === 'customer';
+  // A party that is both reads like a customer, with what we owe them beside; a general contact has no account.
+  const isCustomer = party.kind !== 'supplier';
+  const isBoth = party.kind === 'both';
+  const canTransact = party.kind !== 'general';
 
   // Everything below comes from the server, so the party's whole history needn't be on the device.
   const record = usePartyRecord(party.id).data;
-  const aging = usePartyAging(party.id, party.kind).data;
+  const aging = usePartyAging(party.id, isCustomer ? 'customer' : 'supplier').data;
   const outstanding = useMemo(
     () =>
       (aging?.documents ?? []).map((o) => ({
@@ -181,7 +184,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {contactAction('phone', tr('contacts:detail.call'), () => Linking.openURL(`tel:${party.phone}`), !party.phone)}
         {contactAction('whatsapp', 'WhatsApp', () => Linking.openURL(`https://wa.me/${(party.phone ?? '').replace(/[^0-9]/g, '')}`), !party.phone)}
         {contactAction('email-outline', tr('contacts:form.email'), () => Linking.openURL(`mailto:${party.email}`), !party.email)}
-        {contactAction(
+        {canTransact && contactAction(
           isCustomer ? 'file-document-edit-outline' : 'cart-outline',
           isCustomer ? tr('nav:title.invoice') : tr('purchases:hub.bill'),
           () => router.push(`${isCustomer ? '/(app)/sales/invoices/new' : '/(app)/purchases/bills/new'}?partyId=${party.id}`),
@@ -204,6 +207,13 @@ export function PartyDetail({ party }: { party: Party }) {
             : tr('contacts:detail.openCount', { count: outstanding.length })
         }
       />
+      {isBoth ? (
+        <StatTile
+          label={tr('contacts:detail.payable')}
+          value={((record as { payable?: Money } | undefined)?.payable) ?? { minor: 0, currency: party.currency }}
+          icon="cash-minus"
+        />
+      ) : null}
       <StatTile
         label={isCustomer ? tr('contacts:detail.totalInvoiced') : tr('contacts:detail.totalPurchased')}
         value={lifetimeValue}
@@ -354,11 +364,13 @@ export function PartyDetail({ party }: { party: Party }) {
             headerRight: () => (
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
                 <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
-                <Button
-                  title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
-                  icon={isCustomer ? 'cash-plus' : 'cash-minus'}
-                  onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
-                />
+                {canTransact ? (
+                  <Button
+                    title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
+                    icon={isCustomer ? 'cash-plus' : 'cash-minus'}
+                    onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
+                  />
+                ) : null}
               </View>
             ),
           }}
@@ -434,12 +446,14 @@ export function PartyDetail({ party }: { party: Party }) {
             gap: t.spacing.md,
           }}
         >
-          <Button
-            title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
-            icon={isCustomer ? 'cash-plus' : 'cash-minus'}
-            onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
-            style={{ flex: 1 }}
-          />
+          {canTransact ? (
+            <Button
+              title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
+              icon={isCustomer ? 'cash-plus' : 'cash-minus'}
+              onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
+              style={{ flex: 1 }}
+            />
+          ) : null}
           <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
         </View>
       )}
@@ -448,12 +462,21 @@ export function PartyDetail({ party }: { party: Party }) {
         {[
           { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
           { label: tr('contacts:detail.statement'), icon: 'book-open-outline' as const, onPress: () => router.push(`/(app)/contacts/${isCustomer ? 'customers' : 'suppliers'}/${party.id}/statement` as never) },
-          ...(isCustomer
+          ...(!canTransact
+            ? []
+            : isCustomer
             ? [
                 { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
                 { label: tr('nav:title.newQuotation'), icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
                 // Only when something is owed; it opens the same reminder as the aging screen.
                 ...(outstanding.length ? [{ label: tr('contacts:detail.sendReminder'), icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
+                // A party that is both is bought from too.
+                ...(isBoth
+                  ? [
+                      { label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) },
+                      { label: tr('contacts:detail.pay'), icon: 'cash-minus' as const, onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${party.id}`) },
+                    ]
+                  : []),
               ]
             : [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
           { label: tr('contacts:detail.deleteContact'), icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },

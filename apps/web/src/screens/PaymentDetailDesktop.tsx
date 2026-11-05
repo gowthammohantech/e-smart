@@ -320,10 +320,10 @@ export function PaymentDetailDesktop() {
 
             {party ? (
               <View style={{ gap: t.spacing.md }}>
-                <SectionTitle>{party.kind === 'customer' ? tr('common:table.customer') : tr('common:table.supplier')}</SectionTitle>
+                <SectionTitle>{party.kind !== 'supplier' ? tr('common:table.customer') : tr('common:table.supplier')}</SectionTitle>
                 <Pressable
                   onPress={() =>
-                    router.push(party.kind === 'customer' ? `/(app)/contacts/customers/${party.id}` : `/(app)/contacts/suppliers/${party.id}`)
+                    router.push(party.kind !== 'supplier' ? `/(app)/contacts/customers/${party.id}` : `/(app)/contacts/suppliers/${party.id}`)
                   }
                   accessibilityRole="link"
                   accessibilityLabel={party.name}

@@ -15,6 +15,7 @@ import {
   Expense,
   Item,
   Party,
+  PartyKind,
   Payment,
   PlanTier,
   StockMovement,
@@ -92,13 +93,14 @@ export function useCompanies() {
   return useAppStore((s) => s.companies);
 }
 
-export function useParties(kind?: 'customer' | 'supplier'): Party[] {
+/** A company's parties; customers or suppliers include parties that are both, and the general contacts are asked for by name. */
+export function useParties(kind?: PartyKind): Party[] {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const parties = useAppStore((s) => s.parties);
   return useMemo(
     () =>
       parties
-        .filter((p) => p.companyId === companyId && (!kind || p.kind === kind))
+        .filter((p) => p.companyId === companyId && (!kind || p.kind === kind || ((kind === 'customer' || kind === 'supplier') && p.kind === 'both')))
         .sort((a, b) => a.name.localeCompare(b.name)),
     [parties, companyId, kind],
   );

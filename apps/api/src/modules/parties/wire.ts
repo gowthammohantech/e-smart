@@ -30,6 +30,7 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
     creditLimit: maybeMoney(row.creditLimitMinor, currency),
     openingBalance: money(row.openingBalanceMinor, currency),
     openingBalanceDate: row.openingBalanceDate,
+    openingBalanceSide: row.openingBalanceSide ?? undefined,
     paymentTermsDays: row.paymentTermsDays,
     notes: row.notes,
     status: row.status,
@@ -37,13 +38,15 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
   });
 }
 
-export function partyWithBalance(row: PartyRow, balance: PartyBalance | undefined): Schema<'PartyWithBalance'> {
+export function partyWithBalance(row: PartyRow, balance: PartyBalance | undefined, payable?: PartyBalance): Schema<'PartyWithBalance'> {
   const currency = row.currency.trim();
   return {
     ...partyToWire(row),
     outstanding: money(balance?.outstanding ?? 0, currency),
     overdue: money(balance?.overdue ?? 0, currency),
     advance: money(balance?.advance ?? 0, currency),
+    // A party that is both: what we owe them on bills, beside what they owe on invoices.
+    ...(row.kind === 'both' && { payable: money(payable?.outstanding ?? 0, currency) }),
   };
 }
 
@@ -71,6 +74,7 @@ export function partyColumns(body: Schema<'Party'>) {
     creditLimitMinor: body.creditLimit?.minor ?? null,
     openingBalanceMinor: body.openingBalance.minor,
     openingBalanceDate: body.openingBalanceDate ?? null,
+    openingBalanceSide: body.openingBalanceSide ?? null,
     paymentTermsDays: body.paymentTermsDays,
     notes: body.notes ?? null,
     status: body.status ?? 'active',

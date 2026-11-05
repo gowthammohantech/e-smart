@@ -1,6 +1,8 @@
 import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { applyOpening } from '@esmart/core/domain/receivables';
+import { openingOnSide } from '@esmart/core/domain/partyKinds';
+import type { PartyKind } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from './audit';
 
@@ -25,8 +27,10 @@ const CLOSED = ['draft', 'cancelled', 'rejected'] as const;
 export async function partyBalances(
   db: DbOrTx,
   companyId: string,
-  parties: { id: string; kind: 'customer' | 'supplier' }[],
+  parties: { id: string; kind: PartyKind }[],
   today: string,
+  /** Which side to read a party that is both from; others read from their own. */
+  side: 'customer' | 'supplier' = 'customer',
 ): Promise<Map<string, PartyBalance>> {
   const out = new Map<string, PartyBalance>(parties.map((p) => [p.id, { outstanding: 0, overdue: 0, advance: 0 }]));
   if (!parties.length) return out;
@@ -58,9 +62,12 @@ export async function partyBalances(
       .from(d)
       .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, ['creditNote', 'supplierCreditNote']), isNull(d.sourceDocumentId), notInArray(d.status, [...CLOSED, 'requested'])))
       .groupBy(d.partyId, d.kind),
-    db.select({ id: schema.parties.id, opening: schema.parties.openingBalanceMinor }).from(schema.parties).where(inArray(schema.parties.id, ids)),
+    db.select({ id: schema.parties.id, opening: schema.parties.openingBalanceMinor, openingSide: schema.parties.openingBalanceSide }).from(schema.parties).where(inArray(schema.parties.id, ids)),
   ]);
-  const kindOf = new Map(parties.map((x) => [x.id, x.kind]));
+  // The side each party is read from: a supplier's own, a customer's or general contact's the customer
+  // side, and a party that is both the one asked for.
+  const sideOf = new Map(parties.map((x) => [x.id, x.kind === 'both' ? side : x.kind === 'supplier' ? 'supplier' : 'customer']));
+  const kindOf = new Map(parties.map((x) => [x.id, sideOf.get(x.id)]));
   for (const r of docs) {
     // A customer owes on invoices and debit notes; the company owes a supplier on bills and their debit notes.
     if (RECEIVABLE_KINDS.includes(r.kind) === (kindOf.get(r.partyId) === 'supplier')) continue;
@@ -78,7 +85,9 @@ export async function partyBalances(
   // Last: the opening balance is settled first from the advances counted above.
   for (const r of openings) {
     const b = out.get(r.id)!;
-    const { opening, advance } = applyOpening(Number(r.opening ?? 0), b.advance);
+    const party = parties.find((x) => x.id === r.id)!;
+    const signed = openingOnSide({ kind: party.kind, openingBalance: { minor: Number(r.opening ?? 0) }, openingBalanceSide: r.openingSide ?? undefined }, sideOf.get(r.id)!);
+    const { opening, advance } = applyOpening(signed, b.advance);
     b.outstanding += opening;
     b.advance = advance;
   }

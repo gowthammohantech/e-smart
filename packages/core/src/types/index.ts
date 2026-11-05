@@ -109,7 +109,8 @@ export type DeviceSession = {
 /* Parties                                                             */
 /* ------------------------------------------------------------------ */
 
-export type PartyKind = 'customer' | 'supplier';
+/** both: buys and sells under one ledger; general: a contact only (see domain/partyKinds). */
+export type PartyKind = 'customer' | 'supplier' | 'both' | 'general';
 
 /** A carrier saved for Part-B of an e-way bill. */
 export type Transporter = {
@@ -158,6 +159,8 @@ export type Party = {
   /** Positive opening balance means the party owes us (customer) / we owe them (supplier). */
   /** The day the opening balance stands at (ISO date). Unset reads as the start of the books. */
   openingBalanceDate?: string;
+  /** dr: they owe us; cr: we owe them. Unset is the kind's usual side. */
+  openingBalanceSide?: 'dr' | 'cr';
   paymentTermsDays: number;
   notes?: string;
   status: 'active' | 'inactive';

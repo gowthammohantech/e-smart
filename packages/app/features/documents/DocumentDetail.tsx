@@ -430,7 +430,7 @@ ${url}`;
           onPress={() =>
             party &&
             router.push(
-              party.kind === 'customer'
+              party.kind !== 'supplier'
                 ? `/(app)/contacts/customers/${party.id}`
                 : `/(app)/contacts/suppliers/${party.id}`,
             )

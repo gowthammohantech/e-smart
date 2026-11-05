@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
+import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import { NOTE_KINDS, PURCHASE_KINDS, initialStatus, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
@@ -342,8 +343,9 @@ export async function prepareDocument(
   const [party] = await db.select().from(schema.parties).where(and(eq(schema.parties.companyId, company.id), eq(schema.parties.id, f.partyId)));
   if (!party) blocking('partyId', 'No such party in this company');
   else {
-    const wanted = isPurchaseKind(f.kind) ? 'supplier' : 'customer';
-    if (party.kind !== wanted) blocking('partyId', `A ${f.kind} needs a ${wanted}`);
+    // A party that is both is on either side; a general contact on neither.
+    const purchase = isPurchaseKind(f.kind);
+    if (!(purchase ? buysFrom(party.kind) : sellsTo(party.kind))) blocking('partyId', `A ${f.kind} needs a ${purchase ? 'supplier' : 'customer'}`);
   }
 
   let branchId = f.branchId;

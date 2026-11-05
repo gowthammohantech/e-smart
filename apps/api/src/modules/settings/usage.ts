@@ -1,4 +1,4 @@
-import { and, count, eq, notInArray, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { money } from '../../lib/wire';
@@ -23,7 +23,7 @@ export const usageHandlers = defineHandlers({
 
     const [[parties], [customers], [items], [movements], [audit], byBranch, [posted], [invoices], [payments], byCategory, itemTaxes, docTaxes, accounts, paidThrough, spentFrom] = await Promise.all([
       tally(schema.parties),
-      ctx.db.select({ n: count() }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), eq(schema.parties.kind, 'customer'))),
+      ctx.db.select({ n: count() }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), inArray(schema.parties.kind, ['customer', 'both']))),
       tally(schema.items),
       tally(schema.stockMovements),
       tally(schema.auditEvents),

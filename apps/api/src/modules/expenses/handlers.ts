@@ -1,4 +1,5 @@
 import { and, eq, exists, gte, ilike, inArray, isNull, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import type { Schema } from '@esmart/api-contract';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
@@ -51,7 +52,7 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
   if (body.supplierId) {
     const [supplier] = await db.select({ kind: schema.parties.kind }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), eq(schema.parties.id, body.supplierId)));
     if (!supplier) blocking('supplierId', 'No such party in this company');
-    else if (supplier.kind !== 'supplier') blocking('supplierId', 'An expense can only name a supplier');
+    else if (!buysFrom(supplier.kind)) blocking('supplierId', 'An expense can only name a supplier');
   }
 
   const [account] = await db.select().from(schema.paymentAccounts).where(and(eq(schema.paymentAccounts.companyId, companyId), eq(schema.paymentAccounts.id, body.accountId)));
@@ -99,7 +100,7 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
   if (body.customerId) {
     const P = schema.parties;
     const [customer] = await db.select({ kind: P.kind }).from(P).where(and(eq(P.companyId, companyId), eq(P.id, body.customerId)));
-    if (customer?.kind !== 'customer') blocking('customerId', 'No such customer in this company');
+    if (!customer || !sellsTo(customer.kind)) blocking('customerId', 'No such customer in this company');
     else if (!body.billable) blocking('customerId', 'Only a billable expense is recovered from a customer');
   }
   issues.push(...(await costCentreIssues(db, companyId, [{ field: 'costCentreId', id: body.costCentreId }])));

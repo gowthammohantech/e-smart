@@ -28,7 +28,8 @@ import { zero, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
-type Tab = 'customer' | 'supplier';
+/** general: contacts with no account (a landlord, the auditor), which read like customers here. */
+type Tab = 'customer' | 'supplier' | 'general';
 
 export default function ContactsTab() {
   const t = useTheme();
@@ -40,6 +41,7 @@ export default function ContactsTab() {
   const [pickedTab, setTab] = useState<Tab>('customer');
   // Suppliers belong to buying; a Sales-plan company only sees customers.
   const tab: Tab = hasSuppliers ? pickedTab : 'customer';
+  const asCustomer = tab !== 'supplier';
   const [query, setQuery] = useState('');
   const desktop = useIsDesktop();
 
@@ -59,11 +61,11 @@ export default function ContactsTab() {
   const exportRows = useRowsExport();
   const saveParty = useAppStore((s) => s.saveParty);
   const { run: serverSave, saving } = useServerSave();
-  const detailRoute = (p: { id: string }) => (tab === 'customer' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`);
+  const detailRoute = (p: { id: string }) => (asCustomer ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`);
   const chosen = (keys: string[]) => filtered.filter((p) => keys.includes(p.id));
   const exportChosen = (keys: string[]) =>
     exportRows(
-      tab === 'customer' ? tr('common:table.customer') : tr('common:table.supplier'),
+      asCustomer ? tr('common:table.customer') : tr('common:table.supplier'),
       {
         headers: [tr('common:table.name'), tr('common:table.code'), tr('common:table.taxId'), tr('common:table.phone'), tr('common:table.email'), tr('common:table.outstanding')],
         rows: chosen(keys).map((p) => [p.name, p.code ?? '', p.taxId ?? '', p.phone ?? '', p.email ?? '', owed(p) / 100]),
@@ -112,7 +114,7 @@ export default function ContactsTab() {
   const emptyTitle =
     !noneAtAll
       ? tr('common:component.noMatches')
-      : tab === 'customer'
+      : asCustomer
         ? tr('contacts:hub.noCustomers')
         : tr('contacts:hub.noSuppliers');
   const emptyMessage = noneAtAll ? tr('contacts:hub.emptyBody') : tr('contacts:hub.noMatchesBody');
@@ -132,11 +134,12 @@ export default function ContactsTab() {
         }
       >
         {hasSuppliers ? (
-          <View style={desktop ? { width: 260 } : undefined}>
+          <View style={desktop ? { width: 340 } : undefined}>
           <Segmented
             options={[
               { value: 'customer', label: tr('contacts:hub.customers') },
               { value: 'supplier', label: tr('contacts:hub.suppliers') },
+              { value: 'general', label: tr('contacts:hub.tabOther') },
             ]}
             value={tab}
             onChange={(v) => setTab(v as Tab)}
@@ -144,14 +147,14 @@ export default function ContactsTab() {
           </View>
         ) : null}
         <View style={desktop ? { width: 380 } : undefined}>
-          <SearchBar value={query} onChangeText={setQuery} placeholder={tab === 'customer' ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')} />
+          <SearchBar value={query} onChangeText={setQuery} placeholder={asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
           <Text variant="caption" tone="muted">
-            {tab === 'customer' ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count })}
+            {asCustomer ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count })}
           </Text>
-          <Text variant="caption" weight="600" tone={tab === 'customer' ? 'warn' : 'bad'}>
-            {tab === 'customer'
+          <Text variant="caption" weight="600" tone={asCustomer ? 'warn' : 'bad'}>
+            {asCustomer
               ? tr('contacts:hub.receivable', { amount: formatMoney(totalOutstanding) })
               : tr('contacts:hub.payable', { amount: formatMoney(totalOutstanding) })}
           </Text>
@@ -163,14 +166,14 @@ export default function ContactsTab() {
           {summary ? (
             <StatGrid>
               <StatTile
-                label={tab === 'customer' ? tr('contacts:hub.customers') : tr('contacts:hub.suppliers')}
+                label={asCustomer ? tr('contacts:hub.customers') : tr('contacts:hub.suppliers')}
                 value={String(summary.count)}
                 icon="account-group-outline"
               />
               <StatTile
-                label={tab === 'customer' ? tr('contacts:hub.tile.toReceive') : tr('contacts:hub.tile.toPay')}
+                label={asCustomer ? tr('contacts:hub.tile.toReceive') : tr('contacts:hub.tile.toPay')}
                 value={totalOutstanding}
-                tone={tab === 'customer' ? 'warn' : 'bad'}
+                tone={asCustomer ? 'warn' : 'bad'}
                 icon="cash-clock"
               />
               <StatTile label={tr('contacts:hub.tile.overdue')} value={summary.overdue as Money} tone="bad" icon="alert-outline" caption={tr('contacts:hub.tile.overdueCaption')} />
@@ -203,7 +206,7 @@ export default function ContactsTab() {
                 align: 'right',
                 render: (p) =>
                   owed(p) > 0 ? (
-                    <Cell weight="700" tone={tab === 'customer' ? 'warn' : 'bad'} mono>
+                    <Cell weight="700" tone={asCustomer ? 'warn' : 'bad'} mono>
                       {formatMoney(p.outstanding!)}
                     </Cell>
                   ) : (
@@ -245,7 +248,7 @@ export default function ContactsTab() {
               actionLabel={noneAtAll ? tr('contacts:hub.addContact') : undefined}
               onAction={
                 noneAtAll
-                  ? () => router.push(tab === 'customer' ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
+                  ? () => router.push(asCustomer ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
                   : undefined
               }
               compact
@@ -273,7 +276,7 @@ export default function ContactsTab() {
               <Pressable
                 onPress={() =>
                   router.push(
-                    tab === 'customer'
+                    asCustomer
                       ? `/(app)/contacts/customers/${p.id}`
                       : `/(app)/contacts/suppliers/${p.id}`,
                   )
@@ -308,11 +311,11 @@ export default function ContactsTab() {
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
                   {outstanding > 0 ? (
                     <>
-                      <Text variant="small" weight="700" tone={tab === 'customer' ? 'warn' : 'bad'}>
+                      <Text variant="small" weight="700" tone={asCustomer ? 'warn' : 'bad'}>
                         {formatMoney(p.outstanding!)}
                       </Text>
                       <Text variant="micro" tone="muted">
-                        {tab === 'customer' ? tr('contacts:hub.owesYou') : tr('contacts:hub.youOwe')}
+                        {asCustomer ? tr('contacts:hub.owesYou') : tr('contacts:hub.youOwe')}
                       </Text>
                     </>
                   ) : (
@@ -329,7 +332,7 @@ export default function ContactsTab() {
       <Fab
         icon="account-plus"
         onPress={() =>
-          router.push(tab === 'customer' ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
+          router.push(asCustomer ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
         }
       />
     </View>

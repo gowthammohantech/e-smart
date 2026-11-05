@@ -291,7 +291,7 @@ export function ReportShell({
         title={tr('reports:shell.contact')}
         options={[
           { value: '', label: tr('reports:shell.allContacts') },
-          ...(partySearch.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: tr(`common:table.${p.kind}`) })),
+          ...(partySearch.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: tr(p.kind === 'supplier' ? 'common:table.supplier' : 'common:table.customer') })),
         ]}
         onQueryChange={setPartyQuery}
         loading={partySearch.isFetching}

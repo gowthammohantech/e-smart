@@ -3816,8 +3816,11 @@ export interface components {
             /** Format: date-time */
             readonly lastBackupAt?: string;
         };
-        /** @enum {string} */
-        PartyKind: "customer" | "supplier";
+        /**
+         * @description both: buys and sells, one ledger under Sundry Debtors, on sales and purchase documents. general: a contact only, on no document or payment. Listing customers or suppliers includes both.
+         * @enum {string}
+         */
+        PartyKind: "customer" | "supplier" | "both" | "general";
         /** @enum {string} */
         GstRegistrationType: "regular" | "composition" | "unregistered" | "sez" | "overseas";
         Party: components["schemas"]["Versioned"] & {
@@ -3863,6 +3866,11 @@ export interface components {
              * @description The day the opening balance stands at; not after today. Unset reads as the start of the books.
              */
             openingBalanceDate?: string;
+            /**
+             * @description dr: they owe us; cr: we owe them. Unset is the kind's usual side (customer and both dr, supplier cr). A general contact has no opening balance.
+             * @enum {string}
+             */
+            openingBalanceSide?: "dr" | "cr";
             paymentTermsDays: number;
             notes?: string;
             /** @enum {string} */
@@ -3873,6 +3881,8 @@ export interface components {
             readonly overdue?: components["schemas"]["Money"];
             /** @description Unallocated payments */
             readonly advance?: components["schemas"]["Money"];
+            /** @description Only for a party that is both: what we owe them on bills (outstanding is what they owe on invoices) */
+            readonly payable?: components["schemas"]["Money"];
         };
         PartyStatement: {
             party?: components["schemas"]["Party"];

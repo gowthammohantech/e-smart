@@ -392,7 +392,7 @@ export function useExpenseRecord(id: string | undefined) {
   });
 }
 
-export type PartyQuery = { kind: 'customer' | 'supplier'; q?: string };
+export type PartyQuery = { kind: 'customer' | 'supplier' | 'general'; q?: string };
 const partyKeys = {
   all: (companyId: string) => ['parties', companyId] as const,
 };
