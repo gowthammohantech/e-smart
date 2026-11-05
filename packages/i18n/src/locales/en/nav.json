@@ -161,7 +161,8 @@
       "modules": "Modules",
       "customFields": "Custom fields",
       "approvalRules": "Approvals",
-      "invoiceDesign": "Invoice design"
+      "invoiceDesign": "Invoice design",
+      "vehicles": "Vehicles"
     },
     "signOut": {
       "row": "Sign out",

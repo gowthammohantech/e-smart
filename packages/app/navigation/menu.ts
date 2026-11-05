@@ -152,6 +152,7 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
       { key: 'expenseCategories', labelKey: 'nav:more.entry.expenseCategories', icon: 'shape-outline', route: '/settings/expense-categories' },
       { key: 'itemCategories', labelKey: 'nav:more.entry.itemCategories', icon: 'tag-outline', route: '/settings/item-categories' },
       { key: 'brands', labelKey: 'nav:more.entry.brands', icon: 'star-circle-outline', route: '/settings/brands' },
+      { key: 'vehicles', labelKey: 'nav:more.entry.vehicles', icon: 'truck-outline', route: '/settings/vehicles' },
     ],
   },
   {

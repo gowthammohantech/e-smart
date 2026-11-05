@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { CostCentreField } from '../books/CostCentreField';
+import { VehicleField } from '../vehicles/VehicleField';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -119,6 +120,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [customerId, setCustomerId] = useState<string | undefined>(expense?.customerId);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [costCentreId, setCostCentreId] = useState<string | undefined>(expense?.costCentreId);
+  const [vehicleId, setVehicleId] = useState<string | undefined>(expense?.vehicleId);
   const [receiptUri, setReceiptUri] = useState<string | undefined>(initial?.receiptUri);
   const [uploading, setUploading] = useState(false);
 
@@ -252,6 +254,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       billable,
       customerId: billable ? customerId : undefined,
       costCentreId,
+      vehicleId,
       recurrence,
       nextRecurrenceDate: recurrence === 'none' ? undefined : addDaysISO(date, recurrence === 'weekly' ? 7 : recurrence === 'monthly' ? 30 : recurrence === 'quarterly' ? 91 : 365),
       attachmentIds,
@@ -368,6 +371,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         <PickerField label={tr('purchases:form.billTo')} value={customers.find((c) => c.id === customerId)?.name ?? tr('purchases:form.billToAny')} onPress={() => setCustomerOpen(true)} icon="account-arrow-right-outline" hint={tr('purchases:form.billToHint')} />
       ) : null}
       <CostCentreField value={costCentreId} onChange={setCostCentreId} />
+      <VehicleField value={vehicleId} onChange={setVehicleId} />
     </>
   );
   const receiptCard = (

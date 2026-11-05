@@ -686,5 +686,26 @@
     "save": "Save",
     "saved": "Invoice design saved",
     "noInvoice": "Issue an invoice to see a preview here."
+  },
+  "vehicles": {
+    "title": "Vehicles",
+    "hint": "Tag fuel, repairs and other expenses, and deliveries, with the vehicle. Spend shown for {{fy}}.",
+    "field": "Vehicle",
+    "none": "No vehicle",
+    "spend_one": "{{amount}} on {{count}} expense · {{docs}} documents",
+    "spend_other": "{{amount}} on {{count}} expenses · {{docs}} documents",
+    "inactive": "Not in use",
+    "empty": "No vehicles yet",
+    "emptyBody": "Add the vehicles your business runs to see what each one costs.",
+    "add": "Add vehicle",
+    "registration": "Registration number",
+    "name": "Name (optional)",
+    "active": "In use",
+    "save": "Save",
+    "saved": "Vehicle saved",
+    "delete": "Delete vehicle",
+    "deleteTitle": "Delete {{registration}}?",
+    "deleteMessage": "Only a vehicle on no expense or document can be deleted; mark it not in use instead.",
+    "deleted": "Vehicle deleted"
   }
 }

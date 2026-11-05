@@ -38,6 +38,7 @@ export const ENTITY_SOURCES: Record<string, Source> = {
   item_category: list('item-categories'),
   brand: list('brands'),
   custom_field: list('custom-fields'),
+  vehicle: list('vehicles'),
   payment_account: list('payment-accounts'),
   exchange_rate: list('exchange-rates'),
   transporter: list('transporters'),

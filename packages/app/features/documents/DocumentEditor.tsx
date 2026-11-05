@@ -78,6 +78,7 @@ import { tdsForDocument } from '../../store/tds';
 import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
 import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import { VehicleField } from '../vehicles/VehicleField';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -577,6 +578,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       tcsSection: kind === 'invoice' && draft.tcsSection && draft.tcsSection !== 'none' ? draft.tcsSection : undefined,
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
+      vehicleId: draft.vehicleId,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -841,6 +843,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
 
       <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
+      <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} />
       <CustomFieldsSection entity="document" values={draft.customFields ?? {}} onChange={(customFields) => patch({ customFields })} />
 
       {isNote ? (

@@ -161,7 +161,8 @@
       "modules": "தொகுதிகள்",
       "customFields": "தனிப்பயன் புலங்கள்",
       "approvalRules": "ஒப்புதல்கள்",
-      "invoiceDesign": "விலைப்பட்டியல் வடிவமைப்பு"
+      "invoiceDesign": "விலைப்பட்டியல் வடிவமைப்பு",
+      "vehicles": "வாகனங்கள்"
     },
     "signOut": {
       "row": "வெளியேறு",

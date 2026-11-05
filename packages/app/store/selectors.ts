@@ -160,6 +160,16 @@ export function useItemCategories() {
   return useMemo(() => (cats ?? []).filter((c) => c.companyId === companyId).sort((a, b) => a.name.localeCompare(b.name)), [cats, companyId]);
 }
 
+/** The active company's vehicles, by registration; inactive ones only when asked. */
+export function useVehicles(includeInactive = false) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const vehicles = useAppStore((s) => s.vehicles);
+  return useMemo(
+    () => (vehicles ?? []).filter((v) => v.companyId === companyId && (includeInactive || v.status !== 'inactive')).sort((a, b) => a.registration.localeCompare(b.registration)),
+    [vehicles, companyId, includeInactive],
+  );
+}
+
 export function useBrands() {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const brands = useAppStore((s) => s.brands);

@@ -1675,6 +1675,97 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/vehicles:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listVehicles
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Vehicle' } }
+    post:
+      tags: [Settings]
+      operationId: createVehicle
+      x-roles: [owner, admin, accountant]
+      description: '`422 VEHICLE_EXISTS` when the registration is already on the list.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Vehicle' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/vehicles/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Reports]
+      operationId: summarizeVehicles
+      summary: What each vehicle cost over a period (its expenses, base currency) and how many documents it carried
+      parameters:
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        vehicleId: { type: string }
+                        registration: { type: string }
+                        name: { type: string }
+                        expenses: { $ref: '#/components/schemas/Money' }
+                        expenseCount: { type: integer }
+                        documentCount: { type: integer }
+  /companies/{companyId}/vehicles/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveVehicle
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Vehicle' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Settings]
+      operationId: removeVehicle
+      description: '`409 VEHICLE_IN_USE` when an expense or document names it; mark it inactive instead.'
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
   /companies/{companyId}/custom-fields:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -6013,6 +6104,17 @@ components:
             name: { type: string }
             icon: { type: string }
             color: { type: string }
+    Vehicle:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [registration]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            registration: { type: string, description: 'As on the RC; spaces and dashes are dropped: TN09AB1234' }
+            name: { type: string, maxLength: 100 }
+            status: { type: string, enum: [active, inactive] }
     CustomField:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -6655,6 +6757,7 @@ components:
         sourceDocumentId: { type: string }
         noteReason: { type: string, enum: [discount, priceChange, taxCorrection, deficiency, other], description: Why a credit or debit note was raised }
         costCentreId: { type: string, description: The project or department it belongs to }
+        vehicleId: { type: string, description: The vehicle it moved on }
         tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
         tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN." }
         overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
@@ -7142,6 +7245,7 @@ components:
             billable: { type: boolean }
             customerId: { type: string, description: 'Billable: the customer it is recovered from, as a reimbursement line on their invoice' }
             costCentreId: { type: string }
+            vehicleId: { type: string, description: The vehicle it was spent on }
             recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly] }
             nextRecurrenceDate: { type: string, format: date, readOnly: true }
             attachmentIds: { type: array, items: { type: string } }

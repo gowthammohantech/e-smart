@@ -38,6 +38,7 @@ export type DraftState = {
   customFields?: CustomValues;
   /** On an invoice: the TCS section (s.206C), or none. */
   tcsSection?: string;
+  vehicleId?: string;
   notes: string;
   terms: string;
   attachmentIds: string[];
@@ -116,6 +117,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     costCentreId: doc.costCentreId,
     customFields: doc.customFields,
     tcsSection: doc.tcs?.section,
+    vehicleId: doc.vehicleId,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],

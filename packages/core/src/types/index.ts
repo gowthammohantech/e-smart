@@ -125,6 +125,9 @@ export type DeviceSession = {
   location?: string;
 };
 
+/** A company's vehicle, for tagging what is spent on it and what it carries. */
+export type Vehicle = { id: string; companyId: string; registration: string; name?: string; status: 'active' | 'inactive'; version?: number };
+
 /* ------------------------------------------------------------------ */
 /* Parties                                                             */
 /* ------------------------------------------------------------------ */
@@ -463,6 +466,8 @@ export type BusinessDocument = {
   /** The GSTR-2B period (MMYYYY) whose line this bill matched: its credit is claimed in that return. */
   itcClaimPeriod?: string;
   /** The project or department it belongs to. */
+  /** The vehicle it moved on. */
+  vehicleId?: string;
   costCentreId?: string;
   /** An invoice that repeats: the server issues a copy on each next date (setDocumentRecurrence). */
   recurrence?: RecurrenceFrequency;
@@ -881,6 +886,8 @@ export type Expense = {
   billable: boolean;
   /** Billable: the customer it is recovered from. */
   customerId?: string;
+  /** The vehicle it was spent on. */
+  vehicleId?: string;
   costCentreId?: string;
   recurrence: RecurrenceFrequency;
   nextRecurrenceDate?: string;

@@ -3,6 +3,7 @@ import { authHandlers } from './auth/handlers';
 import { meHandlers } from './me/handlers';
 import { myMfaHandlers } from './me/mfa';
 import { customFieldHandlers } from './settings/customFields';
+import { vehicleHandlers } from './settings/vehicles';
 import { deleteAccountHandlers } from './me/deleteAccount';
 import { companiesHandlers } from './companies/handlers';
 import { usersHandlers } from './users/handlers';
@@ -45,6 +46,7 @@ export const handlers: Handlers = {
   ...meHandlers,
   ...myMfaHandlers,
   ...customFieldHandlers,
+  ...vehicleHandlers,
   ...deleteAccountHandlers,
   ...companiesHandlers,
   ...usersHandlers,

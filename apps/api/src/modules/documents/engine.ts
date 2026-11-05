@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
+import { vehicleIssues } from '../settings/vehicles';
 import { tcsRateFor } from '@esmart/core/data/tcsSections';
 import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
@@ -164,6 +165,7 @@ export type DocFields = {
   costCentreId: string | null;
   /** A TCS section (s.206C), `none`, or unset: an invoice keeps what it had. */
   tcsSection?: string | null;
+  vehicleId?: string | null;
   /** Undefined keeps what the document had. */
   customFields?: Record<string, unknown>;
   notes: string | null;
@@ -246,6 +248,7 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     costCentreId: keep(body.costCentreId, base?.costCentreId),
     customFields: (body.customFields as Record<string, unknown> | undefined) ?? (base?.customFields as Record<string, unknown> | undefined),
     tcsSection: body.tcsSection ?? base?.tcsSection ?? null,
+    vehicleId: keep(body.vehicleId, base?.vehicleId),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
     sourceDocumentId: keep(body.sourceDocumentId, base?.sourceDocumentId),
@@ -278,6 +281,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     costCentreId: row.costCentreId,
     customFields: row.customFields as Record<string, unknown>,
     tcsSection: row.tcsSection,
+    vehicleId: row.vehicleId,
     notes: row.notes,
     terms: row.terms,
     sourceDocumentId: row.sourceDocumentId,
@@ -470,6 +474,7 @@ export async function prepareDocument(
   if (exchangeRate !== null && !(exchangeRate > 0)) blocking('exchangeRate', 'Must be more than zero');
 
   issues.push(...(await costCentreIssues(db, company.id, [{ field: 'costCentreId', id: f.costCentreId }])));
+  issues.push(...(await vehicleIssues(db, company.id, f.vehicleId)));
   await checkRecoveredExpenses(db, company.id, f, coreLines, opts.documentId, blocking);
   if (issues.length) throw unprocessable(issues);
 
@@ -553,6 +558,7 @@ export async function prepareDocument(
       reverseCharge,
       noteReason: NOTE_KINDS.includes(f.kind) ? f.noteReason : null,
       tcsSection: tcsRate > 0 ? f.tcsSection : null,
+      vehicleId: f.vehicleId ?? null,
       tcsRate: tcsRate > 0 ? String(tcsRate) : null,
       tdsSection: tds.amountMinor > 0 || tds.section ? tds.section : null,
       tdsRate: tds.section ? String(tds.rate) : null,

@@ -1183,6 +1183,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVehicles"];
+        put?: never;
+        /** @description `422 VEHICLE_EXISTS` when the registration is already on the list. */
+        post: operations["createVehicle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** What each vehicle cost over a period (its expenses, base currency) and how many documents it carried */
+        get: operations["summarizeVehicles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveVehicle"];
+        post?: never;
+        /** @description `409 VEHICLE_IN_USE` when an expense or document names it; mark it inactive instead. */
+        delete: operations["removeVehicle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/custom-fields": {
         parameters: {
             query?: never;
@@ -4311,6 +4369,15 @@ export interface components {
             icon?: string;
             color?: string;
         };
+        Vehicle: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            /** @description As on the RC; spaces and dashes are dropped: TN09AB1234 */
+            registration: string;
+            name?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
         CustomField: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
@@ -5017,6 +5084,8 @@ export interface components {
             noteReason?: "discount" | "priceChange" | "taxCorrection" | "deficiency" | "other";
             /** @description The project or department it belongs to */
             costCentreId?: string;
+            /** @description The vehicle it moved on */
+            vehicleId?: string;
             /**
              * @description On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.
              * @enum {string}
@@ -5562,6 +5631,8 @@ export interface components {
             /** @description Billable: the customer it is recovered from, as a reimbursement line on their invoice */
             customerId?: string;
             costCentreId?: string;
+            /** @description The vehicle it was spent on */
+            vehicleId?: string;
             /** @enum {string} */
             recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
             /** Format: date */
@@ -8865,6 +8936,150 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listVehicles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Vehicle"][];
+                    };
+                };
+            };
+        };
+    };
+    createVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vehicle"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vehicle"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    summarizeVehicles: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: {
+                            vehicleId?: string;
+                            registration?: string;
+                            name?: string;
+                            expenses?: components["schemas"]["Money"];
+                            expenseCount?: number;
+                            documentCount?: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    saveVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vehicle"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vehicle"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 companyId: components["parameters"]["CompanyId"];
                 id: components["parameters"]["Id"];

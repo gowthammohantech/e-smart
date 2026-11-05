@@ -151,6 +151,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       itcClaimPeriod: row.itcClaimPeriod,
       costCentreId: row.costCentreId,
       customFields: row.customFields as Record<string, unknown>,
+      vehicleId: row.vehicleId ?? undefined,
       approval: (row.approval as DocumentWire['approval']) ?? undefined,
       tcs: row.tcsSection && row.tcsRate ? { section: row.tcsSection, rate: Number(row.tcsRate) } : undefined,
       tcsSection: row.tcsSection ?? undefined,
