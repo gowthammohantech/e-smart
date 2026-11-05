@@ -4,7 +4,7 @@ import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
 import { defineHandlers, type AuthUser, type Deps } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { ApiError, conflict, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -200,6 +200,78 @@ export const catalogHandlers = defineHandlers({
     });
     setEtag(ctx.reply, row.version);
     return itemToWire(row);
+  },
+
+  async importItems(ctx) {
+    const { rows, dryRun } = ctx.body;
+    const base = ctx.company.baseCurrency.trim();
+    const today = businessDate(ctx.now);
+    // What is already there, to tell duplicates by SKU, barcode or name in any case.
+    const existing = await ctx.db.select({ sku: I.sku, barcode: I.barcode, name: I.name }).from(I).where(eq(I.companyId, ctx.company.id));
+    const skus = new Set(existing.map((e) => e.sku.toLowerCase()));
+    const barcodes = new Set(existing.map((e) => e.barcode).filter(Boolean) as string[]);
+    const names = new Set(existing.map((e) => e.name.trim().toLowerCase()));
+    type Result = { index: number; status: 'created' | 'duplicate' | 'invalid'; id?: string; issues?: Issue[] };
+    const results: Result[] = [];
+    const good: { index: number; body: Schema<'Item'> }[] = [];
+    for (const [index, body] of rows.entries()) {
+      try {
+        await validate(ctx.db, ctx.company.id, base, body, today, true);
+      } catch (err) {
+        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
+        results.push({ index, status: 'invalid', issues });
+        continue;
+      }
+      const sku = body.sku.trim().toLowerCase();
+      const barcode = body.barcode?.trim();
+      const name = body.name.trim().toLowerCase();
+      if ((sku && skus.has(sku)) || (barcode && barcodes.has(barcode)) || names.has(name)) {
+        results.push({ index, status: 'duplicate' });
+        continue;
+      }
+      if (sku) skus.add(sku);
+      if (barcode) barcodes.add(barcode);
+      names.add(name);
+      good.push({ index, body });
+    }
+    if (!dryRun && good.length) {
+      await ctx.db.transaction(async (tx) => {
+        const branchId = await primaryBranchId(tx, ctx.company.id);
+        // Blank SKUs follow the SKU-0001 series, counted on within the batch.
+        let nextNumber = Number((await nextSku(tx, ctx.company.id)).replace(/\D/g, ''));
+        for (const { index, body } of good) {
+          const cols = itemColumns(body, base);
+          if (!cols.sku) cols.sku = `SKU-${String(nextNumber++).padStart(4, '0')}`;
+          const openingStock = body.openingStock ?? 0;
+          const openingStockDate = cols.trackInventory ? (body.openingStockDate ?? today) : null;
+          const hsnCode = body.hsnCode ? await ensureHsn(tx, body.hsnCode) : null;
+          const [created] = await tx
+            .insert(I)
+            .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, hsnCode, openingStock: String(openingStock), openingStockDate })
+            .returning();
+          if (created.trackInventory && openingStock > 0) {
+            await tx.insert(schema.stockMovements).values({
+              id: newId('stm'),
+              companyId: ctx.company.id,
+              branchId,
+              itemId: created.id,
+              type: 'opening',
+              quantity: String(openingStock),
+              currency: base,
+              unitCostMinor: created.purchasePriceMinor,
+              date: openingStockDate ?? today,
+              notes: 'Opening stock',
+              createdBy: ctx.user.id,
+            });
+          }
+          await auditItem(tx, ctx.user, 'created', created);
+          results.push({ index, status: 'created', id: created.id });
+        }
+      });
+    } else for (const { index } of good) results.push({ index, status: 'created' });
+    results.sort((a, b) => a.index - b.index);
+    const count = (st: Result['status']) => results.filter((r) => r.status === st).length;
+    return { created: count('created'), skipped: count('duplicate'), invalid: count('invalid'), results };
   },
 
   async getItem(ctx) {

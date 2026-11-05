@@ -1011,6 +1011,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/items/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create many items at once, from a spreadsheet the app has read
+         * @description Each row is checked as createItem checks it (unit, tax category, prices, opening stock). A row whose SKU or barcode is already taken, by an item there or an earlier row, or whose name (in any case) matches one, is skipped as a duplicate. A blank SKU takes the next free number. With `dryRun` nothing is written and the results say what would happen; otherwise every good row is created in one transaction, opening stock posted at the primary branch as createItem does.
+         */
+        post: operations["importItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/items": {
         parameters: {
             query?: never;
@@ -8070,6 +8092,47 @@ export interface operations {
             content: {
                 "application/json": {
                     rows: components["schemas"]["Party"][];
+                    /** @default false */
+                    dryRun?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        skipped?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "duplicate" | "invalid";
+                            id?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    importItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: components["schemas"]["Item"][];
                     /** @default false */
                     dryRun?: boolean;
                 };

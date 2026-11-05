@@ -1406,6 +1406,49 @@ paths:
                         issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
 
   # ------------------------------------------------------------------ Catalog
+  /companies/{companyId}/items/import:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Catalog]
+      operationId: importItems
+      summary: Create many items at once, from a spreadsheet the app has read
+      description: >-
+        Each row is checked as createItem checks it (unit, tax category, prices, opening stock).
+        A row whose SKU or barcode is already taken, by an item there or an earlier row, or whose name
+        (in any case) matches one, is skipped as a duplicate. A blank SKU takes the next free number.
+        With `dryRun` nothing is written and the results say what would happen; otherwise every good row
+        is created in one transaction, opening stock posted at the primary branch as createItem does.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/Item' } }
+                dryRun: { type: boolean, default: false }
+      responses:
+        '200':
+          description: What happened to each row
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+                  skipped: { type: integer }
+                  invalid: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index: { type: integer }
+                        status: { type: string, enum: [created, duplicate, invalid] }
+                        id: { type: string }
+                        issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
   /companies/{companyId}/items:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
