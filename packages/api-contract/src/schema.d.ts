@@ -2567,6 +2567,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** The business's budgets, the latest year first */
+        get: operations["listBudgets"];
+        put?: never;
+        /**
+         * @description A plan for each income and expense account, month by month over a financial year (RULES 6.16), for the whole
+         *     business or one branch or cost centre. `yearFrom` is the year's first day; each line's `months` are its twelve
+         *     months from then, in base-currency paise, income as earned and expenses as spent.
+         */
+        post: operations["createBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/budgets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getBudget"];
+        put: operations["saveBudget"];
+        post?: never;
+        delete: operations["removeBudget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/budgets/{id}/variance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The budget against the books
+         * @description For each account planned: what was planned over `from`–`to` (within the budget's year; a month covered in part
+         *     is planned in proportion to its days), what the books show, and the difference, month by month. The books
+         *     cover every branch, so a user limited to some is refused (403 BOOKS_ALL_BRANCHES).
+         */
+        get: operations["getBudgetVariance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/fixed-assets": {
         parameters: {
             query?: never;
@@ -4943,6 +5011,57 @@ export interface components {
             openingBalanceDate?: string;
             /** @enum {string} */
             status?: "active" | "inactive";
+        };
+        Budget: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            name: string;
+            /**
+             * Format: date
+             * @description The first day of the financial year it plans
+             */
+            yearFrom: string;
+            branchId?: string;
+            costCentreId?: string;
+            notes?: string;
+            lines: {
+                /** @description An income or expense account, by key */
+                account: string;
+                /** @description Base-currency paise for each month from the year's first */
+                months: number[];
+            }[];
+        };
+        BudgetVariance: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            income: components["schemas"]["BudgetActual"];
+            expense: components["schemas"]["BudgetActual"];
+            profit: components["schemas"]["BudgetActual"];
+            rows: {
+                account: components["schemas"]["LedgerAccountRef"];
+                /** @enum {string} */
+                nature: "income" | "expense";
+                budget: number;
+                actual: number;
+                variance: number;
+                favourable: boolean;
+                months: {
+                    /** Format: date */
+                    month: string;
+                    budget: number;
+                    actual: number;
+                }[];
+            }[];
+        };
+        BudgetActual: {
+            budget: number;
+            actual: number;
+        };
+        LedgerAccountRef: {
+            key: string;
+            name: string;
+            group: string;
         };
         FixedAsset: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -12069,6 +12188,164 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listBudgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Budget"][];
+                    };
+                };
+            };
+        };
+    };
+    createBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Budget"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
+    saveBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Budget"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBudgetVariance: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetVariance"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
         };
     };
     listFixedAssets: {

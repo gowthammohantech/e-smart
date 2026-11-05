@@ -3670,6 +3670,108 @@ paths:
       responses:
         '204': { description: Removed }
 
+  /companies/{companyId}/budgets:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: listBudgets
+      x-plan-module: books
+      summary: The business's budgets, the latest year first
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Budget' } }
+    post:
+      tags: [Books]
+      operationId: createBudget
+      description: |
+        A plan for each income and expense account, month by month over a financial year (RULES 6.16), for the whole
+        business or one branch or cost centre. `yearFrom` is the year's first day; each line's `months` are its twelve
+        months from then, in base-currency paise, income as earned and expenses as spent.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Budget' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/budgets/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Books]
+      operationId: getBudget
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+    put:
+      tags: [Books]
+      operationId: saveBudget
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Budget' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Books]
+      operationId: removeBudget
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '204': { description: Removed }
+  /companies/{companyId}/budgets/{id}/variance:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Books]
+      operationId: getBudgetVariance
+      x-plan-module: books
+      summary: The budget against the books
+      description: |
+        For each account planned: what was planned over `from`–`to` (within the budget's year; a month covered in part
+        is planned in proportion to its days), what the books show, and the difference, month by month. The books
+        cover every branch, so a user limited to some is refused (403 BOOKS_ALL_BRANCHES).
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetVariance' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /companies/{companyId}/fixed-assets:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -6784,6 +6886,70 @@ components:
             openingBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Debit positive, as of the day the books begin' }
             openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
             status: { type: string, enum: [active, inactive] }
+    Budget:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, yearFrom, lines]
+          properties:
+            id: { type: string, readOnly: true }
+            name: { type: string, maxLength: 200 }
+            yearFrom: { type: string, format: date, description: 'The first day of the financial year it plans' }
+            branchId: { type: string }
+            costCentreId: { type: string }
+            notes: { type: string, maxLength: 2000 }
+            lines:
+              type: array
+              maxItems: 500
+              items:
+                type: object
+                required: [account, months]
+                properties:
+                  account: { type: string, description: 'An income or expense account, by key' }
+                  months: { type: array, minItems: 12, maxItems: 12, items: { type: integer, minimum: 0 }, description: "Base-currency paise for each month from the year's first" }
+    BudgetVariance:
+      type: object
+      required: [from, to, rows, income, expense, profit]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        income: { $ref: '#/components/schemas/BudgetActual' }
+        expense: { $ref: '#/components/schemas/BudgetActual' }
+        profit: { $ref: '#/components/schemas/BudgetActual' }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [account, nature, budget, actual, variance, favourable, months]
+            properties:
+              account: { $ref: '#/components/schemas/LedgerAccountRef' }
+              nature: { type: string, enum: [income, expense] }
+              budget: { type: integer }
+              actual: { type: integer }
+              variance: { type: integer }
+              favourable: { type: boolean }
+              months:
+                type: array
+                items:
+                  type: object
+                  required: [month, budget, actual]
+                  properties:
+                    month: { type: string, format: date }
+                    budget: { type: integer }
+                    actual: { type: integer }
+    BudgetActual:
+      type: object
+      required: [budget, actual]
+      properties:
+        budget: { type: integer }
+        actual: { type: integer }
+    LedgerAccountRef:
+      type: object
+      required: [key, name, group]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        group: { type: string }
     FixedAsset:
       allOf:
         - $ref: '#/components/schemas/Versioned'

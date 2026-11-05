@@ -104,6 +104,7 @@ export const MENU: MenuSection[] = [
       { key: 'bankReconciliation', labelKey: 'nav:title.bankReconciliation', icon: 'bank-check', route: '/books/reconciliation', group: 'accounts' },
       { key: 'cashForecast', labelKey: 'nav:title.cashForecast', icon: 'chart-areaspline', route: '/books/cash-forecast', group: 'accounts' },
       { key: 'fixedAssets', labelKey: 'nav:title.fixedAssets', icon: 'office-building-cog-outline', route: '/books/fixed-assets', group: 'accounts', createRoute: '/books/fixed-assets/new' },
+      { key: 'budgets', labelKey: 'nav:title.budgets', icon: 'target', route: '/books/budgets', group: 'accounts', createRoute: '/books/budgets/new' },
     ],
   },
   {

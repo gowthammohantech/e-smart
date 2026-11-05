@@ -115,7 +115,8 @@
     "proforma": "Proforma invoice",
     "approvals": "Waiting for approval",
     "cashForecast": "Cash-flow forecast",
-    "fixedAssets": "Fixed assets"
+    "fixedAssets": "Fixed assets",
+    "budgets": "Budgets"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
