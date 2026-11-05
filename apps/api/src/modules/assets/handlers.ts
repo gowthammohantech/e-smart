@@ -215,8 +215,9 @@ export const fixedAssetHandlers = defineHandlers({
   },
 
   async getFixedAssetSchedule(ctx) {
-    const { from, to } = ctx.query;
-    const rows = assetSchedule(await loadAssets(ctx.db, ctx.company.id), { from, to }, ctx.company.fiscalYearStartMonth);
+    const { from, to, branchId } = ctx.query;
+    const assets = (await loadAssets(ctx.db, ctx.company.id)).filter((a) => !branchId || a.branchId === branchId);
+    const rows = assetSchedule(assets, { from, to }, ctx.company.fiscalYearStartMonth);
     return { from, to, rows: rows.map((r) => compact(r)), totals: total(rows) };
   },
 

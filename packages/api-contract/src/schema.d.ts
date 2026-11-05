@@ -12410,6 +12410,8 @@ export interface operations {
             query: {
                 from: string;
                 to: string;
+                /** @description Only the assets of this branch */
+                branchId?: string;
             };
             header?: never;
             path: {

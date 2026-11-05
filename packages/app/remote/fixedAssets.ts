@@ -45,10 +45,10 @@ export function useFixedAsset(id: string | undefined) {
   });
 }
 
-export function useFixedAssetSchedule(range: { from: string; to: string }) {
+export function useFixedAssetSchedule(range: { from: string; to: string; branchId?: string }) {
   const c = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: fixedAssetKeys.schedule(c, range.from, range.to),
+    queryKey: [...fixedAssetKeys.schedule(c, range.from, range.to), range.branchId ?? ''],
     enabled: !!c,
     placeholderData: keepPreviousData,
     queryFn: async () => (await api.GET('/companies/{companyId}/fixed-assets/schedule', { params: { path: { companyId: c }, query: range } })).data!,

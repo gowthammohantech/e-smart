@@ -15,7 +15,7 @@ export default function FixedAssetScheduleScreen() {
   const { scope, setScope } = useReportScope('thisFY');
   const currency = useBaseCurrency();
   const range = scope.filters.range;
-  const query = useFixedAssetSchedule({ from: range.from, to: range.to });
+  const query = useFixedAssetSchedule({ from: range.from, to: range.to, branchId: scope.filters.branchId ?? undefined });
   const s = query.data;
   const m = (minor: number) => formatMoney(money(minor, currency));
   const heads = [tr('books:assets.name'), tr('books:assets.sched.openingCost'), tr('books:assets.sched.additions'), tr('books:assets.sched.disposals'), tr('books:assets.sched.closingCost'), tr('books:assets.sched.openingDep'), tr('books:assets.sched.depreciation'), tr('books:assets.sched.onDisposals'), tr('books:assets.sched.closingDep'), tr('books:assets.sched.closingValue')];
