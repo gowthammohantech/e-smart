@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { decide, needsApproval, pendingApprovals, sendForApproval, type Approval } from './approvals';
 import { NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
@@ -121,6 +122,8 @@ export async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput
     await linkAttachments(tx, ctx.company.id, created.id, extra.attachmentIds);
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: extra.action ?? 'created', entityType: 'document', entityId: created.id, entityLabel: created.number, version: created.version });
     if (status === draftStatus) return created;
+    // Over an approval rule's amount: it stays a draft until an owner or admin approves it.
+    if (needsApproval(ctx.company, ctx.user, created)) return sendForApproval(tx, ctx.deps, ctx.user, created, ctx.now);
     const done = await finalizeInTx(tx, ctx.company, ctx.user, created, status, ctx.now, { overrideCreditLimit: extra.overrideCreditLimit });
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'finalized', entityType: 'document', entityId: done.id, entityLabel: done.number, version: done.version });
     return done;
@@ -141,6 +144,7 @@ async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus, opts: {
     const prepared = await prepareDocument(tx, ctx.company, fieldsFromRow(row), linesFromRows(lines), { snapshotRates: true, documentId: row.id });
     const [recomputed] = await tx.update(D).set({ ...prepared.columns, updatedAt: ctx.now }).where(eq(D.id, row.id)).returning();
     await writeLines(tx, row.id, prepared);
+    if (needsApproval(ctx.company, ctx.user, recomputed)) return sendForApproval(tx, ctx.deps, ctx.user, recomputed, ctx.now);
     const done = await finalizeInTx(tx, ctx.company, ctx.user, recomputed, target, ctx.now, opts);
     await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'finalized', entityType: 'document', entityId: done.id, entityLabel: done.number, version: done.version, after: { status: done.status, number: done.number } });
     return done;
@@ -371,6 +375,29 @@ export const documentsHandlers = defineHandlers({
       });
       return updated;
     });
+    setEtag(ctx.reply, row.version);
+    return toWire(ctx, row);
+  },
+
+  async listApprovals(ctx) {
+    const rows = await pendingApprovals(ctx.db, ctx.company.id);
+    return { data: await documentsToWire(ctx.db, rows.filter((r) => branchVisible(ctx.user, r.branchId)), ctx.now, ctx.company.baseCurrency.trim()) };
+  },
+
+  async approveDocument(ctx) {
+    const current = await findDocument(ctx, ctx.db, ctx.params.id);
+    if ((current.approval as Approval | null)?.status !== 'pending') throw conflict('NOT_AWAITING_APPROVAL', `${current.number} is not waiting for approval`);
+    await ctx.db.transaction((tx) => decide(tx, ctx.user, current, 'approved', ctx.now));
+    // Issued as the approver, the way its creator asked.
+    const row = await finalizeDraft(ctx, current.id, FINAL_STATUS[current.kind]);
+    setEtag(ctx.reply, row.version);
+    return toWire(ctx, row);
+  },
+
+  async rejectDocument(ctx) {
+    const current = await findDocument(ctx, ctx.db, ctx.params.id);
+    if ((current.approval as Approval | null)?.status !== 'pending') throw conflict('NOT_AWAITING_APPROVAL', `${current.number} is not waiting for approval`);
+    const row = await ctx.db.transaction((tx) => decide(tx, ctx.user, current, 'rejected', ctx.now, ctx.body.note.trim()));
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },

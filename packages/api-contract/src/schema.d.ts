@@ -1405,6 +1405,65 @@ export interface paths {
         patch: operations["updateDocument"];
         trace?: never;
     };
+    "/companies/{companyId}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** Documents waiting for an owner or admin to approve them, oldest first */
+        get: operations["listApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/documents/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approves a document waiting for approval and issues it (409 NOT_AWAITING_APPROVAL otherwise) */
+        post: operations["approveDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/documents/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a document waiting for approval back to its creator as a draft, with why */
+        post: operations["rejectDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/documents/{id}/finalize": {
         parameters: {
             query?: never;
@@ -4030,6 +4089,11 @@ export interface components {
             fiscalYearStartMonth: number;
             /** @description Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it. */
             disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
+            /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued. Only an owner can change them. */
+            approvalRules?: {
+                kind: components["schemas"]["DocumentKind"];
+                overMinor: number;
+            }[];
             /**
              * Format: date
              * @description Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.
@@ -4900,6 +4964,18 @@ export interface components {
             readonly recurrenceAutoSend?: boolean;
             /** @description On a copy, the recurring invoice it was issued from */
             readonly recurringParentId?: string;
+            /** @description Set when the document was sent for approval: it stays a draft until an owner or admin approves it (which issues it) or rejects it */
+            readonly approval?: {
+                /** @enum {string} */
+                status?: "pending" | "approved" | "rejected";
+                requestedBy?: string;
+                /** Format: date-time */
+                requestedAt?: string;
+                decidedBy?: string;
+                /** Format: date-time */
+                decidedAt?: string;
+                note?: string;
+            };
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
         };
@@ -9193,6 +9269,84 @@ export interface operations {
             };
             409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    listApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["BusinessDocument"][];
+                    };
+                };
+            };
+        };
+    };
+    approveDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDocument"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rejectDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Sent back */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDocument"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     finalizeDocument: {

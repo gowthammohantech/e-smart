@@ -2038,6 +2038,62 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/approvals:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Documents]
+      operationId: listApprovals
+      summary: Documents waiting for an owner or admin to approve them, oldest first
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/BusinessDocument' } }
+  /companies/{companyId}/documents/{id}/approve:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: approveDocument
+      summary: Approves a document waiting for approval and issues it (409 NOT_AWAITING_APPROVAL otherwise)
+      x-roles: [owner, admin]
+      responses:
+        '200':
+          description: Issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/documents/{id}/reject:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: rejectDocument
+      summary: Sends a document waiting for approval back to its creator as a draft, with why
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Sent back
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /companies/{companyId}/documents/{id}/finalize:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -5696,6 +5752,15 @@ components:
             taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
             fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
             disabledModules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables, books] }, description: 'Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it.' }
+            approvalRules:
+              type: array
+              description: 'Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued. Only an owner can change them.'
+              items:
+                type: object
+                required: [kind, overMinor]
+                properties:
+                  kind: { $ref: '#/components/schemas/DocumentKind' }
+                  overMinor: { type: integer, minimum: 0 }
             lockedThroughDate: { type: [string, 'null'], format: date, description: 'Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.' }
             perpetualStockFrom: { type: [string, 'null'], format: date, description: 'Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.' }
             tan: { type: string, pattern: '^([A-Z]{4}[0-9]{5}[A-Z])?$', description: 'Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it.' }
@@ -6462,6 +6527,17 @@ components:
             recurrenceEndDate: { type: string, format: date, readOnly: true }
             recurrenceAutoSend: { type: boolean, readOnly: true }
             recurringParentId: { type: string, readOnly: true, description: "On a copy, the recurring invoice it was issued from" }
+            approval:
+              type: object
+              readOnly: true
+              description: 'Set when the document was sent for approval: it stays a draft until an owner or admin approves it (which issues it) or rejects it'
+              properties:
+                status: { type: string, enum: [pending, approved, rejected] }
+                requestedBy: { type: string }
+                requestedAt: { type: string, format: date-time }
+                decidedBy: { type: string }
+                decidedAt: { type: string, format: date-time }
+                note: { type: string }
             compliance: { $ref: '#/components/schemas/ComplianceInfo' }
             createdBy: { type: string, readOnly: true }
     DocumentSummary:
