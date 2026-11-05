@@ -3514,6 +3514,116 @@ paths:
       responses:
         '204': { description: Removed }
 
+  /companies/{companyId}/fixed-assets:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: listFixedAssets
+      x-plan-module: books
+      summary: The fixed asset register
+      description: Every asset, with what has been written off and what it stands at as of `asOf` (default today). `status` keeps those still held (`active`) or gone (`disposed`).
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [active, disposed] } }
+        - { name: asOf, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/FixedAsset' } }
+    post:
+      tags: [Books]
+      operationId: createFixedAsset
+      description: |
+        Adds an asset to the register (RULES 6.15). Its cost is in the books already, on the bill or voucher it was
+        bought on, in `account` (`sys:fixedAssets` or a fixed-asset ledger account); the register posts its
+        depreciation by the day, at each month's end, and its disposal. Straight line (`slm`) needs `lifeMonths`,
+        written down value (`wdv`) a `rate`. Bought before the books began, give the depreciation already written
+        off (`openingDepreciation`) and the day it stood at (`openingAsOf`). Nothing it posts may fall in a closed
+        period (409 PERIOD_LOCKED).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FixedAsset' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FixedAsset' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/fixed-assets/schedule:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: getFixedAssetSchedule
+      x-plan-module: books
+      summary: The fixed asset schedule for a period
+      description: "Asset by asset, as the notes to the accounts show it: cost and depreciation at the start of `from`, what was bought, written off and disposed of, and at the end of `to`. Base-currency paise."
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FixedAssetSchedule' }
+  /companies/{companyId}/fixed-assets/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Books]
+      operationId: getFixedAsset
+      x-plan-module: books
+      description: The asset, with its depreciation year by year through the year it is fully written off (or disposed of).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FixedAsset' }
+    put:
+      tags: [Books]
+      operationId: saveFixedAsset
+      description: Saves the asset, a disposal among it (`disposedOn`). Refused when what it posts would change in a closed period (409 PERIOD_LOCKED).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FixedAsset' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FixedAsset' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Books]
+      operationId: removeFixedAsset
+      description: Takes the asset out of the register, and its depreciation out of the books; refused when any of it falls in a closed period (409 PERIOD_LOCKED). Its cost stays where its bill or voucher put it.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /companies/{companyId}/books/{view}:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -6374,6 +6484,76 @@ components:
             openingBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Debit positive, as of the day the books begin' }
             openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
             status: { type: string, enum: [active, inactive] }
+    FixedAsset:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, account, acquiredOn, inUseFrom, cost, method]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            branchId: { type: string }
+            name: { type: string, maxLength: 200 }
+            category: { type: string, maxLength: 60, description: 'What kind of asset: Computers, Vehicles, Furniture…' }
+            account: { type: string, description: "The fixed-asset account its cost sits in, by key: `sys:fixedAssets` or `acc:<id>`" }
+            assetCode: { type: string, maxLength: 60 }
+            acquiredOn: { type: string, format: date }
+            inUseFrom: { type: string, format: date, description: 'Depreciation runs from this day' }
+            cost: { $ref: '#/components/schemas/Money' }
+            residualValue: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'What it is expected to fetch at the end; never written off' }
+            method: { type: string, enum: [slm, wdv], description: 'Straight line over `lifeMonths`, or written down value at `rate` percent a year' }
+            lifeMonths: { type: integer, minimum: 1, maximum: 1200 }
+            rate: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            openingDepreciation: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Written off before the books began here, by `openingAsOf`' }
+            openingAsOf: { type: string, format: date }
+            sourceDocumentId: { type: string, description: 'The purchase bill it was bought on, when bought here' }
+            costCentreId: { type: string }
+            disposedOn: { type: string, format: date, description: 'Sold, scrapped or lost: depreciation stops and it leaves the books that day' }
+            disposalNote: { type: string, maxLength: 500 }
+            notes: { type: string, maxLength: 2000 }
+            status: { type: string, enum: [active, disposed], readOnly: true }
+            accumulatedDepreciation: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true, description: 'Written off by `asOf` (today, unless the list was asked for another day)' }
+            bookValue: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            years:
+              type: array
+              readOnly: true
+              description: 'Only from getFixedAsset: depreciation by financial year'
+              items:
+                type: object
+                required: [label, from, to, opening, depreciation, closing]
+                properties:
+                  label: { type: string }
+                  from: { type: string, format: date }
+                  to: { type: string, format: date }
+                  opening: { $ref: '#/components/schemas/Money' }
+                  depreciation: { $ref: '#/components/schemas/Money' }
+                  closing: { $ref: '#/components/schemas/Money' }
+    FixedAssetSchedule:
+      type: object
+      required: [from, to, rows, totals]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        rows: { type: array, items: { $ref: '#/components/schemas/FixedAssetScheduleRow' } }
+        totals: { $ref: '#/components/schemas/FixedAssetScheduleRow' }
+    FixedAssetScheduleRow:
+      type: object
+      required: [openingCost, additions, disposals, closingCost, openingDepreciation, depreciation, depreciationOnDisposals, closingDepreciation, openingValue, closingValue]
+      properties:
+        assetId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        account: { type: string }
+        openingCost: { type: integer }
+        additions: { type: integer }
+        disposals: { type: integer }
+        closingCost: { type: integer }
+        openingDepreciation: { type: integer }
+        depreciation: { type: integer }
+        depreciationOnDisposals: { type: integer }
+        closingDepreciation: { type: integer }
+        openingValue: { type: integer }
+        closingValue: { type: integer }
     CostCentre:
       allOf:
         - $ref: '#/components/schemas/Versioned'

@@ -68,6 +68,11 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:sales': { name: 'Sales', group: 'salesAccounts' },
   'sys:purchases': { name: 'Purchases', group: 'purchaseAccounts' },
   'sys:fixedAssets': { name: 'Plant and machinery', group: 'fixedAssets' },
+  // The fixed asset register (RULES 6.15): what has been written off, set against cost under fixed assets.
+  'sys:accumulatedDepreciation': { name: 'Accumulated depreciation', group: 'fixedAssets' },
+  'sys:depreciation': { name: 'Depreciation', group: 'indirectExpenses' },
+  // An asset sold or scrapped: what it stood at, against what it fetched.
+  'sys:assetDisposal': { name: 'Profit or loss on assets sold', group: 'indirectIncomes' },
   // Stock in hand. Periodic books carry only what was counted when the books began here, and value
   // closing stock from the stock ledger; perpetual books post every receipt and issue to it at cost.
   'sys:openingStock': { name: 'Opening stock', group: 'stockInHand' },

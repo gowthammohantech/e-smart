@@ -1,4 +1,5 @@
 import { BusinessDocument, Company, Branch, Expense, LedgerAccount, Party, Payment, PaymentAccount, StockMovement, TaxCategory, Voucher } from '../../types';
+import { assetEntries, type FixedAsset } from '../fixedAssets';
 import { openingDebit } from '../partyKinds';
 import { advanceTaxEvents } from '../advanceTax';
 import { CREDIT_KINDS } from '../documentStates';
@@ -20,7 +21,7 @@ export type Posting = {
   account: string;
   debit: number;
   credit: number;
-  source: { type: 'document' | 'payment' | 'expense' | 'voucher' | 'opening' | 'stock'; id: string; number: string; kind?: string };
+  source: { type: 'document' | 'payment' | 'expense' | 'voucher' | 'opening' | 'stock' | 'asset'; id: string; number: string; kind?: string };
   branchId?: string;
   partyId?: string;
   costCentreId?: string;
@@ -352,6 +353,19 @@ function billReceipts(received: Map<string, number>, documents: Map<string, Busi
   return out;
 }
 
+/**
+ * The fixed asset register's postings through `until` (RULES 6.15): depreciation at each month's end,
+ * depreciation written off before the books began, and disposals. Each under its asset, with its
+ * branch and cost centre.
+ */
+export function postAssets(assets: { list: FixedAsset[]; until: string; fyStartMonth?: number }): Posting[] {
+  return assets.list.flatMap((a) =>
+    assetEntries(a, assets.until, assets.fyStartMonth).flatMap((e) =>
+      toPostings(e.entries, { type: 'asset', id: a.id, number: a.assetCode || a.name, kind: e.kind }, e.date, { branchId: a.branchId, costCentreId: a.costCentreId }),
+    ),
+  );
+}
+
 /** Everything on the books, in date order. */
 export function allPostings(book: {
   baseCurrency: string;
@@ -368,6 +382,8 @@ export function allPostings(book: {
   openingStockMinor: number;
   /** Perpetual stock from its day; left out, the books are periodic. */
   stock?: PerpetualStock;
+  /** The fixed asset register, posted through `until`. */
+  assets?: { list: FixedAsset[]; until: string; fyStartMonth?: number };
 }): Posting[] {
   const dates = new Map(book.documents.map((d) => [d.id, d.date]));
   const documentDate = (id: string) => dates.get(id);
@@ -377,6 +393,7 @@ export function allPostings(book: {
     ...book.payments.flatMap((p) => postPayment(p, { homeState: homeStateCode(book.company, book.branches.find((b) => b.id === p.branchId)), documentDate })),
     ...book.expenses.flatMap((e) => postExpense(e, book)),
     ...book.vouchers.flatMap(postVoucher),
+    ...(book.assets ? postAssets(book.assets) : []),
     ...(book.stock ? postStock(book.stock, { openingStockMinor: book.openingStockMinor, documents: new Map(book.documents.filter((d) => !OFF_BOOKS.includes(d.status)).map((d) => [d.id, d])) }) : []),
   ].sort((a, b) => a.date.localeCompare(b.date));
 }

@@ -2434,6 +2434,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/fixed-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fixed asset register
+         * @description Every asset, with what has been written off and what it stands at as of `asOf` (default today). `status` keeps those still held (`active`) or gone (`disposed`).
+         */
+        get: operations["listFixedAssets"];
+        put?: never;
+        /**
+         * @description Adds an asset to the register (RULES 6.15). Its cost is in the books already, on the bill or voucher it was
+         *     bought on, in `account` (`sys:fixedAssets` or a fixed-asset ledger account); the register posts its
+         *     depreciation by the day, at each month's end, and its disposal. Straight line (`slm`) needs `lifeMonths`,
+         *     written down value (`wdv`) a `rate`. Bought before the books began, give the depreciation already written
+         *     off (`openingDepreciation`) and the day it stood at (`openingAsOf`). Nothing it posts may fall in a closed
+         *     period (409 PERIOD_LOCKED).
+         */
+        post: operations["createFixedAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fixed asset schedule for a period
+         * @description Asset by asset, as the notes to the accounts show it: cost and depreciation at the start of `from`, what was bought, written off and disposed of, and at the end of `to`. Base-currency paise.
+         */
+        get: operations["getFixedAssetSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** @description The asset, with its depreciation year by year through the year it is fully written off (or disposed of). */
+        get: operations["getFixedAsset"];
+        /** @description Saves the asset, a disposal among it (`disposedOn`). Refused when what it posts would change in a closed period (409 PERIOD_LOCKED). */
+        put: operations["saveFixedAsset"];
+        post?: never;
+        /** @description Takes the asset out of the register, and its depreciation out of the books; refused when any of it falls in a closed period (409 PERIOD_LOCKED). Its cost stays where its bill or voucher put it. */
+        delete: operations["removeFixedAsset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/books/{view}": {
         parameters: {
             query?: never;
@@ -4652,6 +4726,88 @@ export interface components {
             openingBalanceDate?: string;
             /** @enum {string} */
             status?: "active" | "inactive";
+        };
+        FixedAsset: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            branchId?: string;
+            name: string;
+            /** @description What kind of asset: Computers, Vehicles, Furniture… */
+            category?: string;
+            /** @description The fixed-asset account its cost sits in, by key: `sys:fixedAssets` or `acc:<id>` */
+            account: string;
+            assetCode?: string;
+            /** Format: date */
+            acquiredOn: string;
+            /**
+             * Format: date
+             * @description Depreciation runs from this day
+             */
+            inUseFrom: string;
+            cost: components["schemas"]["Money"];
+            /** @description What it is expected to fetch at the end; never written off */
+            residualValue?: components["schemas"]["Money"];
+            /**
+             * @description Straight line over `lifeMonths`, or written down value at `rate` percent a year
+             * @enum {string}
+             */
+            method: "slm" | "wdv";
+            lifeMonths?: number;
+            rate?: number;
+            /** @description Written off before the books began here, by `openingAsOf` */
+            openingDepreciation?: components["schemas"]["Money"];
+            /** Format: date */
+            openingAsOf?: string;
+            /** @description The purchase bill it was bought on, when bought here */
+            sourceDocumentId?: string;
+            costCentreId?: string;
+            /**
+             * Format: date
+             * @description Sold, scrapped or lost: depreciation stops and it leaves the books that day
+             */
+            disposedOn?: string;
+            disposalNote?: string;
+            notes?: string;
+            /** @enum {string} */
+            readonly status?: "active" | "disposed";
+            /** @description Written off by `asOf` (today, unless the list was asked for another day) */
+            readonly accumulatedDepreciation?: components["schemas"]["Money"];
+            readonly bookValue?: components["schemas"]["Money"];
+            /** @description Only from getFixedAsset: depreciation by financial year */
+            readonly years?: {
+                label: string;
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+                opening: components["schemas"]["Money"];
+                depreciation: components["schemas"]["Money"];
+                closing: components["schemas"]["Money"];
+            }[];
+        };
+        FixedAssetSchedule: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            rows: components["schemas"]["FixedAssetScheduleRow"][];
+            totals: components["schemas"]["FixedAssetScheduleRow"];
+        };
+        FixedAssetScheduleRow: {
+            assetId?: string;
+            name?: string;
+            category?: string;
+            account?: string;
+            openingCost: number;
+            additions: number;
+            disposals: number;
+            closingCost: number;
+            openingDepreciation: number;
+            depreciation: number;
+            depreciationOnDisposals: number;
+            closingDepreciation: number;
+            openingValue: number;
+            closingValue: number;
         };
         CostCentre: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -11476,6 +11632,168 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listFixedAssets: {
+        parameters: {
+            query?: {
+                status?: "active" | "disposed";
+                asOf?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FixedAsset"][];
+                    };
+                };
+            };
+        };
+    };
+    createFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FixedAsset"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getFixedAssetSchedule: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAssetSchedule"];
+                };
+            };
+        };
+    };
+    getFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+        };
+    };
+    saveFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FixedAsset"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     getBooksView: {

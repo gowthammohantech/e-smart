@@ -6,6 +6,7 @@ import type { Voucher } from '@esmart/core/types';
 import { goodsCostByDocument, perpetualStock } from '@esmart/core/domain/stockLedger';
 import type { BusinessDocument, Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';
+import { loadAssets } from '../assets/handlers';
 import { companyCore, partyCore } from '../documents/engine';
 import { coreMovements } from '../inventory/ledger';
 import { loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadPayments, type Scope } from '../reports/data';
@@ -64,6 +65,8 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
     paymentAccounts,
     ledgerAccounts,
     openingStockMinor,
+    // Depreciation through the day the book is read to (RULES 6.15).
+    assets: { list: await loadAssets(s.db, id), until: s.to, fyStartMonth: s.company.fiscalYearStartMonth },
     ...(perpetualFrom && perpetualFrom <= s.to && { stock: perpetualStock(items, movements, perpetualFrom, base, (id) => sourceOf.get(id)) }),
   });
   return { postings, book: { parties, paymentAccounts, expenseCategories, ledgerAccounts }, stock };
