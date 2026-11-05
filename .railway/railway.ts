@@ -75,7 +75,14 @@ export default defineRailway((ctx) => {
     OCR_PROVIDER: preserve(),
     FX_PROVIDER: preserve(),
     PAYMENTS_PROVIDER: preserve(),
+    // Lixi's model: anthropic, or any OpenAI-compatible server (see apps/api/.env.example).
     ASSISTANT_PROVIDER: preserve(),
+    LIXI_MODEL: preserve(),
+    ANTHROPIC_API_KEY: preserve(),
+    OPENAI_BASE_URL: preserve(),
+    OPENAI_API_KEY: preserve(),
+    OPENAI_RESPONSE_FORMAT: preserve(),
+    OPENAI_REASONING_EFFORT: preserve(),
     // The demo account (packages/db/src/seed.ts). Unset unless this
     // environment is a demo: SEED_DEMO_ACCOUNT=true and a strong password.
     SEED_DEMO_ACCOUNT: preserve(),

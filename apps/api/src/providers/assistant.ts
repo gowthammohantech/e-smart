@@ -33,6 +33,19 @@ export interface AssistantProvider {
   reply(req: AssistantRequest): Promise<AssistantReply>;
 }
 
+/** The model couldn't be reached or refused the call: timeouts, 429, 5xx, bad key. The app shows "Lixi is unavailable". */
+export class AssistantUnavailable extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'AssistantUnavailable';
+  }
+}
+
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
+
 const SYSTEM = `You are Lixi, the assistant inside Elixir Books, an invoicing and accounting app for small businesses.
 
 How you work:
@@ -134,7 +147,7 @@ export class AnthropicAssistant implements AssistantProvider {
     for (let round = 0; round <= this.config.LIXI_MAX_TOOL_ROUNDS; round++) {
       const last = round === this.config.LIXI_MAX_TOOL_ROUNDS;
       const response = await this.client.beta.messages.create({
-        model: this.config.LIXI_MODEL,
+        model: this.config.LIXI_MODEL ?? DEFAULT_ANTHROPIC_MODEL,
         max_tokens: 16000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
@@ -183,6 +196,141 @@ export class AnthropicAssistant implements AssistantProvider {
     return FALLBACK;
   }
 }
+
+// ------------------------------------------------------------ OpenAI-compatible
+
+type OaiToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
+type OaiMessage =
+  | { role: 'system' | 'user'; content: string }
+  | { role: 'assistant'; content: string | null; tool_calls?: OaiToolCall[] }
+  | { role: 'tool'; tool_call_id: string; content: string };
+type OaiChoice = { finish_reason: string | null; message: { content?: string | null; refusal?: string | null; tool_calls?: OaiToolCall[] } };
+
+const RETRYABLE = new Set([408, 409, 429, 500, 502, 503, 504]);
+
+/**
+ * Any server that speaks the OpenAI Chat Completions API: OpenAI, Azure
+ * OpenAI (v1 endpoint), OpenRouter, Groq, Together, Fireworks, DeepSeek,
+ * Mistral, Gemini's OpenAI endpoint, or a local Ollama / vLLM / LM Studio.
+ * Pick the server with OPENAI_BASE_URL and the model with LIXI_MODEL.
+ *
+ * Only the common subset is sent: messages, tools, tool_choice and, if the
+ * server supports it, a JSON response format. Anything vendor-specific stays
+ * opt-in (OPENAI_REASONING_EFFORT), because servers reject fields they don't know.
+ */
+export class OpenAICompatibleAssistant implements AssistantProvider {
+  readonly name = 'openai';
+  private readonly url: string;
+  private readonly model: string;
+  private readonly fetch: typeof globalThis.fetch;
+
+  constructor(
+    private readonly config: Pick<
+      Config,
+      'OPENAI_BASE_URL' | 'OPENAI_API_KEY' | 'OPENAI_RESPONSE_FORMAT' | 'OPENAI_REASONING_EFFORT' | 'LIXI_MODEL' | 'LIXI_MAX_TOOL_ROUNDS'
+    >,
+    /** Tests swap the transport. */
+    fetch?: typeof globalThis.fetch,
+  ) {
+    // No sensible default across vendors: config refuses to load without one.
+    if (!config.LIXI_MODEL) throw new Error('LIXI_MODEL must be set for ASSISTANT_PROVIDER=openai.');
+    this.model = config.LIXI_MODEL;
+    this.url = `${config.OPENAI_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
+    this.fetch = fetch ?? globalThis.fetch;
+  }
+
+  async reply(req: AssistantRequest): Promise<AssistantReply> {
+    const tools = req.tools.map((t) => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.inputSchema } }));
+    const messages: OaiMessage[] = [
+      { role: 'system', content: `${SYSTEM}\n\n${req.context}` },
+      ...req.history.map((turn): OaiMessage => ({ role: turn.role, content: turn.text })),
+    ];
+
+    for (let round = 0; round <= this.config.LIXI_MAX_TOOL_ROUNDS; round++) {
+      const last = round === this.config.LIXI_MAX_TOOL_ROUNDS;
+      const choice = await this.complete({
+        model: this.model,
+        messages,
+        ...(tools.length ? { tools, tool_choice: last ? 'none' : 'auto' } : {}),
+        ...this.responseFormat(req.routes),
+        ...(this.config.OPENAI_REASONING_EFFORT ? { reasoning_effort: this.config.OPENAI_REASONING_EFFORT } : {}),
+      });
+      const { message } = choice;
+
+      if (message.refusal) return { text: "I can't help with that one.", stats: [], actions: [] };
+      const calls = message.tool_calls ?? [];
+      if (!calls.length) {
+        if (choice.finish_reason === 'length') return FALLBACK;
+        return parseReply(message.content ?? '');
+      }
+
+      messages.push({ role: 'assistant', content: message.content ?? null, tool_calls: calls });
+      const results = await Promise.all(
+        calls.map(async (call): Promise<OaiMessage> => {
+          let input: unknown;
+          try {
+            input = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+          } catch {
+            return { role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 400, code: 'BAD_ARGUMENTS', detail: 'Arguments were not valid JSON' }) };
+          }
+          const outcome = await req.execute(call.function.name, input);
+          return { role: 'tool', tool_call_id: call.id, content: JSON.stringify(outcome.ok ? outcome.value : { error: outcome.error }) };
+        }),
+      );
+      messages.push(...results);
+    }
+    return FALLBACK;
+  }
+
+  private responseFormat(routes: readonly string[]) {
+    switch (this.config.OPENAI_RESPONSE_FORMAT) {
+      case 'json_schema':
+        return { response_format: { type: 'json_schema', json_schema: { name: 'lixi_reply', strict: true, schema: REPLY_SCHEMA(routes) } } };
+      case 'json_object':
+        return { response_format: { type: 'json_object' } };
+      default:
+        return {};
+    }
+  }
+
+  /** One call, retried twice on a timeout, 429 or 5xx. */
+  private async complete(body: Record<string, unknown>): Promise<OaiChoice> {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    const key = this.config.OPENAI_API_KEY;
+    if (key) {
+      headers.authorization = `Bearer ${key}`;
+      // Azure OpenAI takes its key in `api-key`.
+      if (/\.azure\.com$/i.test(new URL(this.url).hostname)) headers['api-key'] = key;
+    }
+
+    for (let attempt = 0; ; attempt++) {
+      let res: Response;
+      try {
+        res = await this.fetch(this.url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
+      } catch (err) {
+        if (attempt < 2) {
+          await sleep(500 * 2 ** attempt);
+          continue;
+        }
+        throw new AssistantUnavailable(`Model server unreachable: ${(err as Error).message}`);
+      }
+      if (res.ok) {
+        const data = (await res.json()) as { choices?: OaiChoice[] };
+        const choice = data.choices?.[0];
+        if (!choice?.message) throw new AssistantUnavailable('Model server returned no choices');
+        return choice;
+      }
+      if (RETRYABLE.has(res.status) && attempt < 2) {
+        await sleep(500 * 2 ** attempt);
+        continue;
+      }
+      const detail = (await res.text().catch(() => '')).slice(0, 500);
+      throw new AssistantUnavailable(`Model server answered ${res.status}: ${detail}`, res.status);
+    }
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * A stand-in with no network, for development and tests. It picks one tool
@@ -235,5 +383,12 @@ export class SimulatorAssistant implements AssistantProvider {
 }
 
 export function createAssistantProvider(config: Config): AssistantProvider {
-  return config.ASSISTANT_PROVIDER === 'anthropic' ? new AnthropicAssistant(config) : new SimulatorAssistant();
+  switch (config.ASSISTANT_PROVIDER) {
+    case 'anthropic':
+      return new AnthropicAssistant(config);
+    case 'openai':
+      return new OpenAICompatibleAssistant(config);
+    default:
+      return new SimulatorAssistant();
+  }
 }

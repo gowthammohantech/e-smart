@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AnthropicAssistant, parseReply, type ToolOutcome } from '../src/providers/assistant';
+import { AnthropicAssistant, AssistantUnavailable, OpenAICompatibleAssistant, parseReply, type ToolOutcome } from '../src/providers/assistant';
 
 const message = (content: unknown[], stop_reason: string) => ({
   id: `msg_${Math.random()}`,
@@ -80,6 +80,121 @@ describe('AnthropicAssistant', () => {
     });
     expect(reply.text).toBe("I can't help with that one.");
     expect(api.requests[1].body.messages.at(-1).content[0]).toMatchObject({ is_error: true });
+  });
+});
+
+const completion = (message: Record<string, unknown>, finish_reason: string) => ({
+  id: `chatcmpl_${Math.random()}`,
+  object: 'chat.completion',
+  model: 'gpt-5-mini',
+  choices: [{ index: 0, finish_reason, message: { role: 'assistant', content: null, ...message } }],
+});
+
+/** A fake Chat Completions server: canned replies (or statuses), every request recorded with its URL. */
+function fakeOpenAI(replies: (unknown | number)[]) {
+  const requests: { url: string; body: any; headers: Headers }[] = [];
+  const fetch = (async (url: string, init: RequestInit) => {
+    requests.push({ url, body: JSON.parse(String(init.body)), headers: new Headers(init.headers as HeadersInit) });
+    const next = replies[requests.length - 1];
+    if (typeof next === 'number') return new Response('{"error":{"message":"nope"}}', { status: next });
+    return new Response(JSON.stringify(next), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof globalThis.fetch;
+  return { fetch, requests };
+}
+
+const oaiConfig = {
+  OPENAI_BASE_URL: 'https://api.groq.com/openai/v1/',
+  OPENAI_API_KEY: 'sk-test',
+  OPENAI_RESPONSE_FORMAT: 'json_schema' as const,
+  OPENAI_REASONING_EFFORT: undefined,
+  LIXI_MODEL: 'llama-3.3-70b-versatile',
+  LIXI_MAX_TOOL_ROUNDS: 4,
+};
+
+describe('OpenAICompatibleAssistant', () => {
+  it('runs tool calls through Chat Completions and returns the structured reply', async () => {
+    const final = { text: 'Sunrise Retail owes ₹1,180.', stats: [{ label: 'Outstanding', value: '₹1,180' }], actions: [] };
+    const api = fakeOpenAI([
+      completion({ tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_receivables', arguments: '{"overdue":true}' } }] }, 'tool_calls'),
+      completion({ content: JSON.stringify(final) }, 'stop'),
+    ]);
+    const inputs: unknown[] = [];
+    const reply = await new OpenAICompatibleAssistant(oaiConfig, api.fetch).reply({
+      history: [{ role: 'user', text: 'who owes me?' }],
+      context: 'Today is 2026-09-29.',
+      tools,
+      execute: async (_name, input) => {
+        inputs.push(input);
+        return { ok: true, value: { total: { minor: 118000, currency: 'INR' } } };
+      },
+      routes: ['/(app)/receivables'],
+    });
+
+    expect(reply).toEqual(final);
+    expect(inputs).toEqual([{ overdue: true }]);
+    const [first, second] = api.requests;
+    expect(first.url).toBe('https://api.groq.com/openai/v1/chat/completions');
+    expect(first.headers.get('authorization')).toBe('Bearer sk-test');
+    expect(first.headers.get('api-key')).toBeNull();
+    expect(first.body).toMatchObject({
+      model: 'llama-3.3-70b-versatile',
+      tool_choice: 'auto',
+      tools: [{ type: 'function', function: { name: 'get_receivables', parameters: { type: 'object' } } }],
+      response_format: { type: 'json_schema', json_schema: { name: 'lixi_reply', strict: true } },
+    });
+    expect(first.body).not.toHaveProperty('reasoning_effort');
+    expect(first.body.messages[0]).toMatchObject({ role: 'system' });
+    expect(first.body.messages[0].content).toContain('Today is 2026-09-29.');
+    expect(second.body.messages.slice(-2)).toEqual([
+      { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_receivables', arguments: '{"overdue":true}' } }] },
+      { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify({ total: { minor: 118000, currency: 'INR' } }) },
+    ]);
+  });
+
+  it('stops calling tools on the last round, and sends vendor options only when set', async () => {
+    const call = completion({ tool_calls: [{ id: 'c', type: 'function', function: { name: 'get_receivables', arguments: '{}' } }] }, 'tool_calls');
+    const api = fakeOpenAI([call, completion({ content: 'Plain words.' }, 'stop')]);
+    const reply = await new OpenAICompatibleAssistant(
+      { ...oaiConfig, LIXI_MAX_TOOL_ROUNDS: 1, OPENAI_RESPONSE_FORMAT: 'none', OPENAI_REASONING_EFFORT: 'low' },
+      api.fetch,
+    ).reply({ history: [{ role: 'user', text: 'hi' }], context: '', tools, execute: async () => ({ ok: true, value: {} }), routes: [] });
+    expect(reply.text).toBe('Plain words.');
+    expect(api.requests[1].body.tool_choice).toBe('none');
+    expect(api.requests[0].body.reasoning_effort).toBe('low');
+    expect(api.requests[0].body).not.toHaveProperty('response_format');
+  });
+
+  it('sends Azure its api-key header', async () => {
+    const api = fakeOpenAI([completion({ content: '{"text":"Hi"}' }, 'stop')]);
+    await new OpenAICompatibleAssistant({ ...oaiConfig, OPENAI_BASE_URL: 'https://acme.openai.azure.com/openai/v1' }, api.fetch).reply({
+      history: [{ role: 'user', text: 'hi' }], context: '', tools, execute: async () => ({ ok: true, value: {} }), routes: [],
+    });
+    expect(api.requests[0].headers.get('api-key')).toBe('sk-test');
+  });
+
+  it('retries a 429, then reports a server that keeps failing as unavailable', async () => {
+    const ok = fakeOpenAI([429, completion({ content: '{"text":"Back."}' }, 'stop')]);
+    const req = { history: [{ role: 'user' as const, text: 'hi' }], context: '', tools, execute: async (): Promise<ToolOutcome> => ({ ok: true, value: {} }), routes: [] };
+    expect((await new OpenAICompatibleAssistant(oaiConfig, ok.fetch).reply(req)).text).toBe('Back.');
+
+    const down = fakeOpenAI([401]);
+    await expect(new OpenAICompatibleAssistant(oaiConfig, down.fetch).reply(req)).rejects.toBeInstanceOf(AssistantUnavailable);
+  });
+
+  it('tells the model when its arguments are not JSON, and handles a refusal', async () => {
+    const api = fakeOpenAI([
+      completion({ tool_calls: [{ id: 'c', type: 'function', function: { name: 'get_receivables', arguments: '{oops' } }] }, 'tool_calls'),
+      completion({ refusal: 'No.' }, 'stop'),
+    ]);
+    let ran = false;
+    const reply = await new OpenAICompatibleAssistant(oaiConfig, api.fetch).reply({
+      history: [{ role: 'user', text: 'hi' }], context: '', tools,
+      execute: async () => { ran = true; return { ok: true, value: {} }; },
+      routes: [],
+    });
+    expect(ran).toBe(false);
+    expect(api.requests[1].body.messages.at(-1).content).toContain('BAD_ARGUMENTS');
+    expect(reply.text).toBe("I can't help with that one.");
   });
 });
 

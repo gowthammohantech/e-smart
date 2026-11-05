@@ -7,7 +7,7 @@ import { badRequest, tooManyRequests, upstream } from '../../http/errors';
 import { takeAiAction } from '../../lib/aiUsage';
 import { confirm, propose, type PendingAction } from '../../lixi/confirm';
 import { jsonSchemaOf, runRead, TOOLS, ToolError, toolByName, type ToolCtx } from '../../lixi/tools';
-import type { AssistantReply, ToolOutcome, ToolSpec } from '../../providers/assistant';
+import { AssistantUnavailable, type AssistantReply, type ToolOutcome, type ToolSpec } from '../../providers/assistant';
 
 type LixiReply = Schema<'LixiReply'>;
 type DocumentKind = Schema<'DocumentKind'>;
@@ -124,7 +124,7 @@ export const lixiHandlers = defineHandlers({
     try {
       reply = await ctx.deps.providers.assistant.reply({ history, context: contextFor(ctx, locale.slice(0, 2)), tools: SPECS, execute, routes: LIXI_ROUTES });
     } catch (err) {
-      if (err instanceof Anthropic.APIError) {
+      if (err instanceof Anthropic.APIError || err instanceof AssistantUnavailable) {
         ctx.req.log.warn({ err }, 'lixi model call failed');
         await giveBack();
         throw upstream('LIXI_UNAVAILABLE', 'Lixi is unavailable right now');

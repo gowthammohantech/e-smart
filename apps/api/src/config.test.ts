@@ -105,6 +105,15 @@ describe('production config guards', () => {
     expect(() => loadConfig({ ...ready, [key]: undefined })).toThrow(pattern);
   });
 
+  it('takes any OpenAI-compatible server for Lixi, naming the model', () => {
+    const openai = { ...ready, ASSISTANT_PROVIDER: 'openai', ANTHROPIC_API_KEY: undefined, OPENAI_API_KEY: 'sk-x', LIXI_MODEL: 'gpt-5-mini' };
+    expect(loadConfig(openai).OPENAI_BASE_URL).toBe('https://api.openai.com/v1');
+    expect(() => loadConfig({ ...openai, LIXI_MODEL: undefined })).toThrow(/LIXI_MODEL/);
+    expect(() => loadConfig({ ...openai, OPENAI_API_KEY: undefined })).toThrow(/OPENAI_API_KEY/);
+    // A local Ollama or vLLM server needs no key.
+    expect(loadConfig({ ...openai, OPENAI_API_KEY: undefined, OPENAI_BASE_URL: 'http://localhost:11434/v1' }).OPENAI_API_KEY).toBeUndefined();
+  });
+
   it('requires AWS credentials for SES', () => {
     // Azure storage, so the AWS keys are only SES's to need.
     const ses = { ...ready, EMAIL_PROVIDER: 'ses', STORAGE_PROVIDER: 'azure', AZURE_STORAGE_CONNECTION_STRING: 'x', AWS_ACCESS_KEY_ID: undefined, AWS_SECRET_ACCESS_KEY: undefined };
