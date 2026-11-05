@@ -41,9 +41,9 @@ function params(value: string): string[] {
  */
 const TA_LATIN_ALLOWLIST = new RegExp(
   `^(${[
-    'GST|GSTIN|GSTN|GSTR|IFF|PMT|HSN|SAC|ITC|RCM|QRMP|TDS|TAN|BSR|GTA|MSME|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|LUT|B2B|B2C|FY|PDF|OTP|CSV|PNG|JPEG|MB|QR|UPI|IFSC|OCR|SKU|HSN|PO|SEZ|UTR|LR|ID|URP|GSP|EVC|ARN|IRN|IRP|EWB|EWBs|HDFC|ERP|SDK|Expo|Storyset|Gati|Logistics|TRANSIN|JSON|Part-A|Part-B|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E',
+    'GST|GSTIN|GSTN|GSTR|IFF|PMT|HSN|SAC|ITC|RCM|QRMP|TDS|TAN|BSR|GTA|MSME|UQC|IRN|IRP|PAN|TRN|CGST|SGST|IGST|VAT|LUT|B2B|B2C|FY|PDF|OTP|CSV|PNG|JPEG|MB|QR|UPI|IFSC|ISD|RBI|MSMED|OCR|SKU|HSN|PO|SEZ|UTR|LR|ID|URP|GSP|EVC|ARN|IRN|IRP|EWB|EWBs|HDFC|ERP|SDK|Expo|Storyset|Gati|Logistics|TRANSIN|JSON|Part-A|Part-B|AI|Google|WhatsApp|Lixi|Elixir|Books|Smart|ERP|Basic|Pro|Business|Free|K|L|Cr|M|B|AM|PM|e|E',
     // Platforms and products, named as their makers write them ("Expo Go").
-    'Android|iPhone|Go|Excel|xlsx|Tally|XML',
+    'Android|iPhone|Go|Excel|xlsx|Tally|XML|SKF',
     // Keyboard keys, as printed on the key.
     'Enter|Esc',
     // The GST portal's own menu, which is English only ("Profile → Manage API Access").
