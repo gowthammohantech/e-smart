@@ -315,7 +315,17 @@
     "deactivated_one": "{{count}} deactivated",
     "deactivated_other": "{{count}} deactivated",
     "duplicate": "Duplicate",
-    "preview": "Preview"
+    "preview": "Preview",
+    "markSent": "Mark sent",
+    "markedSent_one": "{{count}} marked sent",
+    "markedSent_other": "{{count}} marked sent",
+    "deleteDrafts": "Delete drafts",
+    "deleteDraftsTitle_one": "Delete {{count}} draft?",
+    "deleteDraftsTitle_other": "Delete {{count}} drafts?",
+    "deleteDraftsBody": "Drafts have no number yet, so none is lost. This can’t be undone. Selected documents that aren’t drafts are left alone.",
+    "deletedDrafts_one": "{{count}} draft deleted",
+    "deletedDrafts_other": "{{count}} drafts deleted",
+    "someFailed": "{{count}} couldn’t be changed: {{reason}}"
   },
   "toast": {
     "success": "Done",

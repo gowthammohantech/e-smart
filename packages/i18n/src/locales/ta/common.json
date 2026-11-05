@@ -315,7 +315,17 @@
     "deactivated_one": "{{count}} செயலிழக்கப்பட்டது",
     "deactivated_other": "{{count}} செயலிழக்கப்பட்டன",
     "duplicate": "நகல் எடு",
-    "preview": "முன்னோட்டம்"
+    "preview": "முன்னோட்டம்",
+    "markSent": "அனுப்பியதாகக் குறி",
+    "markedSent_one": "{{count}} அனுப்பியதாகக் குறிக்கப்பட்டது",
+    "markedSent_other": "{{count}} அனுப்பியதாகக் குறிக்கப்பட்டன",
+    "deleteDrafts": "வரைவுகளை நீக்கு",
+    "deleteDraftsTitle_one": "{{count}} வரைவை நீக்கவா?",
+    "deleteDraftsTitle_other": "{{count}} வரைவுகளை நீக்கவா?",
+    "deleteDraftsBody": "வரைவுகளுக்கு இன்னும் எண் இல்லை, எனவே எந்த எண்ணும் வீணாகாது. இதைத் திரும்பப் பெற முடியாது. வரைவு அல்லாத தேர்ந்தெடுத்த ஆவணங்கள் அப்படியே இருக்கும்.",
+    "deletedDrafts_one": "{{count}} வரைவு நீக்கப்பட்டது",
+    "deletedDrafts_other": "{{count}} வரைவுகள் நீக்கப்பட்டன",
+    "someFailed": "{{count}} மாற்ற முடியவில்லை: {{reason}}"
   },
   "toast": {
     "success": "முடிந்தது",

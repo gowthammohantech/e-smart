@@ -18,7 +18,7 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { Cell, DataTable, type Column, type Sort } from '@esmart/ui/components/DataTable';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
-import { PURCHASE_KINDS, STATUS_TONE } from '@esmart/core/domain/documentStates';
+import { PURCHASE_KINDS, STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { dateRangeLabel, documentKindLabel, statusLabel } from '@esmart/core/labels';
 import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -26,6 +26,10 @@ import { StatTile } from '@esmart/ui/components/StatTile';
 import { StatGrid } from '@esmart/ui/components/Layout';
 import { zero, type Money } from '@esmart/core/lib/money';
 import { useAppStore } from '../store/appStore';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { useToast } from '@esmart/ui/components/Toast';
+import { api } from '../remote/api';
+import { describeError } from '../remote/errors';
 import { useBaseCurrency } from '../store/selectors';
 import { isOpen } from '../remote/outbox';
 import { useDocumentPages, useDocumentSummary, type DocumentQuery } from '../remote/queries';
@@ -49,7 +53,7 @@ const DEFAULT_FILTERS: DocumentListFilters = {
 };
 
 /** One row of a list: a server summary, or a document still waiting to sync. */
-type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyName: string; grandTotal: Money; outstanding?: Money; waiting?: boolean };
+type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; partyName: string; grandTotal: Money; outstanding?: Money; waiting?: boolean };
 const asRowData = (r: Row) => ({ number: r.number, date: r.date, status: r.status, totals: { grandTotal: r.grandTotal } });
 
 /** The server sorts these columns; the rest keep the server's order. */
@@ -76,7 +80,7 @@ export function DocumentListView({
 }) {
   useRefreshOnFocus();
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const router = useRouter();
   const baseCurrency = useBaseCurrency();
 
@@ -131,7 +135,7 @@ export function DocumentListView({
     const seen = new Set(waiting.map((r) => r.id));
     const fromServer = pages.rows
       .filter((d) => !seen.has(d.id!))
-      .map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined }));
+      .map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined }));
     return [...waiting, ...fromServer];
   }, [pages.rows, waiting]);
 
@@ -182,6 +186,44 @@ export function DocumentListView({
   const tileStatuses = (TILE_STATUSES[kind] ?? [...byStatus].sort((a, b) => b.count - a.count).map((b) => b.status as DocStatus))
     .filter((st) => byStatus.some((b) => b.status === st && b.count > 0))
     .slice(0, 3);
+
+  // Bulk changes, straight to the server (list rows aren't in the store): delete the drafts among
+  // the chosen, or mark the ones that can go draft → sent (a quote). Each says how it went.
+  const toast = useToast();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
+  const chosenRows = (keys: string[]) => rows.filter((r) => keys.includes(r.id) && !r.waiting);
+  const draftsIn = (keys: string[]) => chosenRows(keys).filter((r) => r.status === 'draft');
+  const sendableIn = (keys: string[]) => chosenRows(keys).filter((r) => nextStatuses(kind, r.status).includes('sent'));
+  const runBulk = async (targets: Row[], call: (r: Row) => Promise<{ error?: unknown }>, doneKey: 'common:table.deletedDrafts' | 'common:table.markedSent') => {
+    setBulkBusy(true);
+    let ok = 0;
+    let firstError: unknown;
+    for (const r of targets) {
+      const res = await call(r).catch((error: unknown) => ({ error }));
+      if (res.error) firstError ??= res.error;
+      else ok++;
+    }
+    setBulkBusy(false);
+    selection.clear();
+    void pages.refetch();
+    void summary.refetch();
+    if (ok) toast.show(tr(doneKey, { count: ok }), 'success');
+    if (firstError) toast.show(tr('common:table.someFailed', { count: targets.length - ok, reason: describeError(firstError, tr) }), 'error');
+  };
+  const deleteDrafts = (ids: string[]) =>
+    runBulk(
+      draftsIn(ids),
+      (r) => api.DELETE('/companies/{companyId}/documents/{id}', { params: { path: { companyId, id: r.id } } }),
+      'common:table.deletedDrafts',
+    );
+  const markSent = (keys: string[]) =>
+    runBulk(
+      sendableIn(keys),
+      (r) => api.POST('/companies/{companyId}/documents/{id}/status', { params: { path: { companyId, id: r.id } }, body: { status: 'sent' } }),
+      'common:table.markedSent',
+    );
+  const payable = (d: Row) => (kind === 'invoice' || kind === 'purchaseBill') && isFinalized(d.status) && !!d.partyId && (d.outstanding?.minor ?? 0) > 0;
 
   const toggleStatus = (s: DocStatus) =>
     setFilters((f) => ({
@@ -345,13 +387,32 @@ export function DocumentListView({
           selectedKeys={selection.selected}
           onSelectionChange={selection.setSelected}
           bulkActions={(keys) => (
-            <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+            <>
+              <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+              {sendableIn(keys).length ? (
+                <Button title={tr('common:table.markSent')} icon="send-outline" variant="ghost" size="sm" loading={bulkBusy} onPress={() => void markSent(keys)} />
+              ) : null}
+              {draftsIn(keys).length ? (
+                <Button title={tr('common:table.deleteDrafts')} icon="trash-can-outline" variant="danger" size="sm" disabled={bulkBusy} onPress={() => setConfirmDelete(keys)} />
+              ) : null}
+            </>
           )}
           rowActions={(d) => [
             { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(routeFor(d) as never) },
             // As on the detail screen: only a draft is edited in place.
             ...(d.status === 'draft' && !d.waiting
               ? [{ key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${routeFor(d)}/edit` as never) }]
+              : []),
+            ...(payable(d)
+              ? [
+                  {
+                    key: 'pay',
+                    label: kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
+                    icon: 'cash-plus' as const,
+                    onPress: () =>
+                      router.push(`/(app)/payments/new?direction=${kind === 'invoice' ? 'received' : 'paid'}&partyId=${d.partyId}&documentId=${d.id}` as never),
+                  },
+                ]
               : []),
             { key: 'preview', label: tr('common:table.preview'), icon: 'file-document-outline', onPress: () => router.push(`/(app)/documents/${d.id}` as never) },
           ]}
@@ -368,6 +429,20 @@ export function DocumentListView({
               />
             )
           }
+        />
+        <ConfirmDialog
+          visible={!!confirmDelete}
+          title={tr('common:table.deleteDraftsTitle', { count: confirmDelete ? draftsIn(confirmDelete).length : 0 })}
+          message={tr('common:table.deleteDraftsBody')}
+          confirmLabel={tr('common:table.deleteDrafts')}
+          destructive
+          icon="trash-can-outline"
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            const ids = confirmDelete ?? [];
+            setConfirmDelete(null);
+            void deleteDrafts(ids);
+          }}
         />
       </View>
     );
