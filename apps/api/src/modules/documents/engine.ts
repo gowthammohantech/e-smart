@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
+import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues } from '../settings/customFields';
 import { bankDetailsOf } from '../companies/wire';
@@ -545,7 +546,8 @@ export async function prepareDocument(
       tdsRate: tds.section ? String(tds.rate) : null,
       tdsAmountMinor,
       costCentreId: f.costCentreId,
-      customFields: await cleanCustomValues(db, company.id, 'document', f.customFields as CustomValues | undefined),
+      // A balance brought in from before the books began isn't filled in like a new document.
+      customFields: OPENING_KINDS.includes(f.kind) ? {} : await cleanCustomValues(db, company.id, 'document', f.customFields as CustomValues | undefined),
       notes: f.notes,
       terms: f.terms,
       sourceDocumentId: f.sourceDocumentId,

@@ -81,3 +81,24 @@ describe('opening invoices and bills (RULES 6.12)', () => {
     expect((await t.del(`${m.c}/documents/${id}`, { token: m.token })).status).toBe(409);
   });
 });
+
+describe('opening documents with the rest of the books', () => {
+  it('stand on party statements, so the integrity check agrees, and skip required document fields', async () => {
+    const m = await moneySetup(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    await t.post(`${m.c}/custom-fields`, { entity: 'document', label: 'Vehicle no.', kind: 'text', required: true }, { token: m.token });
+    const res = await t.post(
+      `${m.c}/documents/openings/import`,
+      { rows: [{ kind: 'openingInvoice', party: 'Sunrise Retail', number: 'OLD/1', date: '2026-03-10', amount: inr(500_000) }, { kind: 'openingBill', party: 'Konkan Steel', number: 'KS-1', date: '2026-03-12', amount: inr(80_000) }] },
+      { token: m.token },
+    );
+    expect(res.body.created).toBe(2);
+    const customer = await t.get(`${m.c}/parties/${m.mumbai.id}/statement`, { token: m.token });
+    expect(customer.body.entries.map((e: { number: string }) => e.number)).toContain('OLD/1');
+    expect(customer.body.closingBalance.minor).toBe(500_000);
+    const supplier = await t.get(`${m.c}/parties/${m.supplier!.id}/statement`, { token: m.token });
+    expect(supplier.body.closingBalance.minor).toBe(80_000);
+    const integrity = await t.get(`${m.c}/books/integrity`, { token: m.token, query: { to: '2026-09-30' } });
+    expect(integrity.body.checks.filter((c: { ok: boolean }) => !c.ok)).toEqual([]);
+  });
+});

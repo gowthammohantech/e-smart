@@ -35,8 +35,9 @@ export async function partyStatement(db: DbOrTx, company: CompanyRow, party: Par
   const supplier = party.kind === 'supplier';
   const D = schema.documents;
   const kinds = [
-    ...(sellsTo(party.kind) ? (['invoice', 'salesReturn', 'creditNote', 'debitNote'] as const) : []),
-    ...(buysFrom(party.kind) ? (['purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'] as const) : []),
+    // What was owed when the books began (RULES 6.12) stands on the statement like any invoice or bill.
+    ...(sellsTo(party.kind) ? (['invoice', 'salesReturn', 'creditNote', 'debitNote', 'openingInvoice'] as const) : []),
+    ...(buysFrom(party.kind) ? (['purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote', 'openingBill'] as const) : []),
   ];
   const docs = await db
     .select()
