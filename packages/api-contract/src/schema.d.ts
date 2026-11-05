@@ -1769,6 +1769,235 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/bank-statements/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read an Excel (.xlsx) or CSV bank statement into rows of text
+         * @description The first worksheet of an .xlsx (dates as dd/mm/yyyy, numbers as plain text), or a CSV
+         *     (UTF-8). At most 5 MB once decoded. The app maps the rows to lines with core's
+         *     `readStatement` and imports them with `importBankStatement`. A legacy .xls gets
+         *     422 `UNSUPPORTED_FILE`.
+         */
+        post: operations["parseBankStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/bank-statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a bank statement's lines into a bank account
+         * @description Lines already imported on this account (same date, amount, narration and running balance)
+         *     are skipped as duplicates. New lines are matched to the account's payments, expenses and
+         *     posted vouchers where there is no doubt (`autoMatched`). With `dryRun` nothing is written
+         *     and the lines come back flagged `duplicate` (200). Only a bank account
+         *     (422 `NOT_A_BANK_ACCOUNT`), in its own currency.
+         */
+        post: operations["importBankStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/bank-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A bank account's statement lines, newest first
+         * @description A matched line carries `match`; an unmatched one up to three `suggestions`.
+         */
+        get: operations["listBankLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/bank-lines/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** How many of a bank account's lines are matched, waiting and excluded, and the latest statement balance */
+        get: operations["summarizeBankLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Bank reconciliation statement as of a day */
+        get: operations["getBankReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match a line to the payment, expense or voucher it is
+         * @description The record must be on the line's account with the same signed amount
+         *     (422 `MATCH_AMOUNT_DIFFERS`), and not matched to another line (409 `ALREADY_MATCHED`).
+         *     A matched line is unmatched first.
+         */
+        post: operations["matchBankLine"];
+        /** Undo a line's match */
+        delete: operations["unmatchBankLine"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/exclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a line aside as needing no record in the books */
+        post: operations["excludeBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/include": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring an excluded line back, unmatched */
+        post: operations["includeBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record the payment a line is, and match it
+         * @description Money in is a payment received, money out a payment made, on the line's date, for its
+         *     amount, through its account, with its reference. Same checks as
+         *     `createPayment` (open period, party kind, allocations; money paid needs the payables module).
+         */
+        post: operations["createPaymentFromBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/expense": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a debit line as an expense, and match it
+         * @description Only money out (422 `NOT_MONEY_OUT`). The expense takes the line's date, amount, account and reference; needs the expenses module.
+         */
+        post: operations["createExpenseFromBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/expenses/summary": {
         parameters: {
             query?: never;
@@ -4793,6 +5022,148 @@ export interface components {
             notes?: string;
             attachmentIds?: string[];
             readonly createdBy?: string;
+        };
+        /** @enum {string} */
+        BankLineStatus: "unmatched" | "matched" | "excluded";
+        /** @enum {string} */
+        BankMatchType: "payment" | "expense" | "voucher";
+        /** @description A payment, expense or voucher in the books, as a bank line matches it. `amount` is signed as the bank sees it (+ money into the account). */
+        BankLineRecord: {
+            type: components["schemas"]["BankMatchType"];
+            id: string;
+            number?: string;
+            /** Format: date */
+            date: string;
+            amount: components["schemas"]["Money"];
+            reference?: string;
+            partyName?: string;
+        };
+        BankLineSuggestion: components["schemas"]["BankLineRecord"] & {
+            score: number;
+            /** @description The record's reference or number (a UTR, a cheque number) is in the line */
+            referenceHit: boolean;
+        };
+        BankStatementLine: {
+            id: string;
+            statementId: string;
+            accountId: string;
+            /** Format: date */
+            date: string;
+            description: string;
+            reference?: string;
+            /** @description + money into the account (a credit on the statement), − money out */
+            amount: components["schemas"]["Money"];
+            /** @description The running balance the bank printed */
+            balance?: components["schemas"]["Money"];
+            status: components["schemas"]["BankLineStatus"];
+            excludedReason?: string;
+            match?: components["schemas"]["BankLineRecord"];
+            suggestions?: components["schemas"]["BankLineSuggestion"][];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        BankStatement: {
+            id: string;
+            accountId: string;
+            fileName: string;
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            openingBalance?: components["schemas"]["Money"];
+            closingBalance?: components["schemas"]["Money"];
+            /** @description Lines it added (duplicates are not counted) */
+            lineCount: number;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        BankStatementImport: {
+            fileName: string;
+            /** @default false */
+            dryRun: boolean;
+            lines: {
+                /** Format: date */
+                date: string;
+                description: string;
+                /** @description Cut to 100 characters */
+                reference?: string;
+                /** @description + money in, − money out; not zero */
+                amount: components["schemas"]["Money"];
+                balance?: components["schemas"]["Money"];
+            }[];
+        };
+        BankStatementImportResult: {
+            statement?: components["schemas"]["BankStatement"];
+            imported: number;
+            duplicates: number;
+            autoMatched: number;
+            /** @description The file's lines in its order, each flagged when it was already imported (or repeats an earlier line of this file with no running balance to tell them apart) */
+            lines: {
+                /** Format: date */
+                date: string;
+                description: string;
+                reference?: string;
+                amount: components["schemas"]["Money"];
+                balance?: components["schemas"]["Money"];
+                duplicate: boolean;
+            }[];
+        };
+        BankLineSummary: {
+            unmatched: number;
+            matched: number;
+            excluded: number;
+            lastStatement?: components["schemas"]["BankStatement"];
+            /** @description The running balance on the latest line that has one */
+            statementBalance?: components["schemas"]["Money"];
+            /** Format: date */
+            statementBalanceDate?: string;
+        };
+        /**
+         * @description Bank reconciliation statement. `adjustedBookBalance` = book balance + lines the books
+         *     don't have yet (credits − debits). `adjustedStatementBalance` = statement balance +
+         *     deposits not yet credited − payments not yet debited. They agree (`difference` 0) when
+         *     every difference is explained. Records dated before the account's first imported
+         *     statement (`since`) are taken as cleared.
+         */
+        BankReconciliation: {
+            /** Format: date */
+            asOf: string;
+            /**
+             * Format: date
+             * @description First day of the earliest statement imported
+             */
+            since?: string;
+            bookBalance: components["schemas"]["Money"];
+            /** @description The running balance on the last line on or before `asOf` that has one; absent when none does */
+            statementBalance?: components["schemas"]["Money"];
+            /** Format: date */
+            statementBalanceDate?: string;
+            /** @description In the books, on or before `asOf`, matched to no line */
+            unclearedPayments: {
+                /** @description Deposited but not yet credited by the bank */
+                deposits: components["schemas"]["BankLineRecord"][];
+                /** @description Paid but not yet debited by the bank */
+                payments: components["schemas"]["BankLineRecord"][];
+                depositsTotal: components["schemas"]["Money"];
+                /** @description As a positive amount */
+                paymentsTotal: components["schemas"]["Money"];
+            };
+            /** @description On the statement, on or before `asOf`, neither matched nor excluded */
+            unrecordedLines: {
+                credits: components["schemas"]["BankStatementLine"][];
+                debits: components["schemas"]["BankStatementLine"][];
+                creditsTotal: components["schemas"]["Money"];
+                /** @description As a positive amount */
+                debitsTotal: components["schemas"]["Money"];
+            };
+            adjustedBookBalance: components["schemas"]["Money"];
+            adjustedStatementBalance?: components["schemas"]["Money"];
+            /** @description adjustedBookBalance − adjustedStatementBalance */
+            difference?: components["schemas"]["Money"];
         };
         Expense: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -9290,6 +9661,356 @@ export interface operations {
                     "application/pdf": string;
                 };
             };
+        };
+    };
+    parseBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fileName: string;
+                    /** @description The file, base64 encoded */
+                    contentBase64: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The rows, as text */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows: string[][];
+                    };
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    importBankStatement: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankStatementImport"];
+            };
+        };
+        responses: {
+            /** @description Dry run; nothing written */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementImportResult"];
+                };
+            };
+            /** @description Imported */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementImportResult"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    listBankLines: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["BankLineStatus"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["BankStatementLine"][];
+                    };
+                };
+            };
+        };
+    };
+    summarizeBankLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankLineSummary"];
+                };
+            };
+        };
+    };
+    getBankReconciliation: {
+        parameters: {
+            query?: {
+                /** @description Defaults to today */
+                asOf?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankReconciliation"];
+                };
+            };
+        };
+    };
+    matchBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    type: components["schemas"]["BankMatchType"];
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    unmatchBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unmatched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+        };
+    };
+    excludeBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Excluded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+        };
+    };
+    includeBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Included */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+        };
+    };
+    createPaymentFromBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    partyId: string;
+                    /** @description Defaults to bank */
+                    method?: components["schemas"]["PaymentMethod"];
+                    allocations?: components["schemas"]["PaymentAllocation"][];
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded and matched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        line: components["schemas"]["BankStatementLine"];
+                        payment: components["schemas"]["Payment"];
+                    };
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    createExpenseFromBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    categoryId: string;
+                    supplierId?: string;
+                    taxCategoryId?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded and matched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        line: components["schemas"]["BankStatementLine"];
+                        expense: components["schemas"]["Expense"];
+                    };
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
         };
     };
     summarizeExpenseList: {

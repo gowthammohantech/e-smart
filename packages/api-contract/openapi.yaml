@@ -64,6 +64,7 @@ tags:
   - { name: Documents, description: 'Quotes, orders, deliveries, invoices, returns, POs, receipts, bills' }
   - { name: Compliance, description: 'GST e-invoice (IRP) and e-way bills' }
   - { name: Payments, description: 'Payments received and made' }
+  - { name: Banking, description: 'Bank statement import and reconciliation' }
   - { name: Expenses, description: 'Business expenses, recurring and billable' }
   - { name: Inventory, description: 'Stock levels, movements, adjustments, transfers' }
   - { name: Attachments, description: 'File uploads (receipts, logos, scans)' }
@@ -2509,6 +2510,299 @@ paths:
           content:
             application/pdf:
               schema: { type: string, format: binary }
+
+  # ------------------------------------------------------------------ Banking
+  /companies/{companyId}/bank-statements/parse:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Banking]
+      operationId: parseBankStatement
+      summary: Read an Excel (.xlsx) or CSV bank statement into rows of text
+      description: |
+        The first worksheet of an .xlsx (dates as dd/mm/yyyy, numbers as plain text), or a CSV
+        (UTF-8). At most 5 MB once decoded. The app maps the rows to lines with core's
+        `readStatement` and imports them with `importBankStatement`. A legacy .xls gets
+        422 `UNSUPPORTED_FILE`.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, contentBase64]
+              properties:
+                fileName: { type: string, maxLength: 200 }
+                contentBase64: { type: string, description: 'The file, base64 encoded' }
+      responses:
+        '200':
+          description: The rows, as text
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rows]
+                properties:
+                  rows: { type: array, items: { type: array, items: { type: string } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/payment-accounts/{id}/bank-statements:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: importBankStatement
+      summary: Import a bank statement's lines into a bank account
+      description: |
+        Lines already imported on this account (same date, amount, narration and running balance)
+        are skipped as duplicates. New lines are matched to the account's payments, expenses and
+        posted vouchers where there is no doubt (`autoMatched`). With `dryRun` nothing is written
+        and the lines come back flagged `duplicate` (200). Only a bank account
+        (422 `NOT_A_BANK_ACCOUNT`), in its own currency.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankStatementImport' }
+      responses:
+        '200':
+          description: Dry run; nothing written
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementImportResult' }
+        '201':
+          description: Imported
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementImportResult' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/payment-accounts/{id}/bank-lines:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: listBankLines
+      summary: A bank account's statement lines, newest first
+      description: A matched line carries `match`; an unmatched one up to three `suggestions`.
+      x-plan-module: books
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/BankLineStatus' } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/BankStatementLine' } }
+  /companies/{companyId}/payment-accounts/{id}/bank-lines/summary:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: summarizeBankLines
+      summary: How many of a bank account's lines are matched, waiting and excluded, and the latest statement balance
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankLineSummary' }
+  /companies/{companyId}/payment-accounts/{id}/reconciliation:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: getBankReconciliation
+      summary: Bank reconciliation statement as of a day
+      x-plan-module: books
+      parameters:
+        - { name: asOf, in: query, description: Defaults to today, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankReconciliation' }
+  /companies/{companyId}/bank-lines/{id}/match:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: matchBankLine
+      summary: Match a line to the payment, expense or voucher it is
+      description: |
+        The record must be on the line's account with the same signed amount
+        (422 `MATCH_AMOUNT_DIFFERS`), and not matched to another line (409 `ALREADY_MATCHED`).
+        A matched line is unmatched first.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, id]
+              properties:
+                type: { $ref: '#/components/schemas/BankMatchType' }
+                id: { type: string }
+      responses:
+        '200':
+          description: Matched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Banking]
+      operationId: unmatchBankLine
+      summary: Undo a line's match
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Unmatched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+  /companies/{companyId}/bank-lines/{id}/exclude:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: excludeBankLine
+      summary: Set a line aside as needing no record in the books
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Excluded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+  /companies/{companyId}/bank-lines/{id}/include:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: includeBankLine
+      summary: Bring an excluded line back, unmatched
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Included
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+  /companies/{companyId}/bank-lines/{id}/payment:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: createPaymentFromBankLine
+      summary: Record the payment a line is, and match it
+      description: |
+        Money in is a payment received, money out a payment made, on the line's date, for its
+        amount, through its account, with its reference. Same checks as
+        `createPayment` (open period, party kind, allocations; money paid needs the payables module).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyId]
+              properties:
+                partyId: { type: string }
+                method: { allOf: [{ $ref: '#/components/schemas/PaymentMethod' }], description: Defaults to bank }
+                allocations: { type: array, items: { $ref: '#/components/schemas/PaymentAllocation' } }
+                notes: { type: string }
+      responses:
+        '201':
+          description: Recorded and matched
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [line, payment]
+                properties:
+                  line: { $ref: '#/components/schemas/BankStatementLine' }
+                  payment: { $ref: '#/components/schemas/Payment' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/bank-lines/{id}/expense:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: createExpenseFromBankLine
+      summary: Record a debit line as an expense, and match it
+      description: Only money out (422 `NOT_MONEY_OUT`). The expense takes the line's date, amount, account and reference; needs the expenses module.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoryId]
+              properties:
+                categoryId: { type: string }
+                supplierId: { type: string }
+                taxCategoryId: { type: string }
+                notes: { type: string }
+      responses:
+        '201':
+          description: Recorded and matched
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [line, expense]
+                properties:
+                  line: { $ref: '#/components/schemas/BankStatementLine' }
+                  expense: { $ref: '#/components/schemas/Expense' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
 
   # ------------------------------------------------------------------ Expenses
   /companies/{companyId}/expenses/summary:
@@ -6217,6 +6511,148 @@ components:
             notes: { type: string }
             attachmentIds: { type: array, items: { type: string } }
             createdBy: { type: string, readOnly: true }
+    # ---------------------------------------------------------------- banking
+    BankLineStatus: { type: string, enum: [unmatched, matched, excluded] }
+    BankMatchType: { type: string, enum: [payment, expense, voucher] }
+    BankLineRecord:
+      type: object
+      description: A payment, expense or voucher in the books, as a bank line matches it. `amount` is signed as the bank sees it (+ money into the account).
+      required: [type, id, date, amount]
+      properties:
+        type: { $ref: '#/components/schemas/BankMatchType' }
+        id: { type: string }
+        number: { type: string }
+        date: { type: string, format: date }
+        amount: { $ref: '#/components/schemas/Money' }
+        reference: { type: string }
+        partyName: { type: string }
+    BankLineSuggestion:
+      allOf:
+        - $ref: '#/components/schemas/BankLineRecord'
+        - type: object
+          required: [score, referenceHit]
+          properties:
+            score: { type: integer, minimum: 0, maximum: 100 }
+            referenceHit: { type: boolean, description: "The record's reference or number (a UTR, a cheque number) is in the line" }
+    BankStatementLine:
+      type: object
+      required: [id, statementId, accountId, date, description, amount, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        statementId: { type: string }
+        accountId: { type: string }
+        date: { type: string, format: date }
+        description: { type: string }
+        reference: { type: string }
+        amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: '+ money into the account (a credit on the statement), − money out' }
+        balance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: The running balance the bank printed }
+        status: { $ref: '#/components/schemas/BankLineStatus' }
+        excludedReason: { type: string }
+        match: { $ref: '#/components/schemas/BankLineRecord' }
+        suggestions: { type: array, maxItems: 3, items: { $ref: '#/components/schemas/BankLineSuggestion' } }
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BankStatement:
+      type: object
+      required: [id, accountId, fileName, from, to, lineCount, createdBy, createdAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        fileName: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        openingBalance: { $ref: '#/components/schemas/Money' }
+        closingBalance: { $ref: '#/components/schemas/Money' }
+        lineCount: { type: integer, description: Lines it added (duplicates are not counted) }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    BankStatementImport:
+      type: object
+      required: [fileName, lines]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 200 }
+        dryRun: { type: boolean, default: false }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            type: object
+            required: [date, description, amount]
+            properties:
+              date: { type: string, format: date }
+              description: { type: string, maxLength: 1000 }
+              reference: { type: string, description: Cut to 100 characters }
+              amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: '+ money in, − money out; not zero' }
+              balance: { $ref: '#/components/schemas/Money' }
+    BankStatementImportResult:
+      type: object
+      required: [imported, duplicates, autoMatched, lines]
+      properties:
+        statement: { $ref: '#/components/schemas/BankStatement' }
+        imported: { type: integer }
+        duplicates: { type: integer }
+        autoMatched: { type: integer }
+        lines:
+          type: array
+          description: The file's lines in its order, each flagged when it was already imported (or repeats an earlier line of this file with no running balance to tell them apart)
+          items:
+            type: object
+            required: [date, description, amount, duplicate]
+            properties:
+              date: { type: string, format: date }
+              description: { type: string }
+              reference: { type: string }
+              amount: { $ref: '#/components/schemas/Money' }
+              balance: { $ref: '#/components/schemas/Money' }
+              duplicate: { type: boolean }
+    BankLineSummary:
+      type: object
+      required: [unmatched, matched, excluded]
+      properties:
+        unmatched: { type: integer }
+        matched: { type: integer }
+        excluded: { type: integer }
+        lastStatement: { $ref: '#/components/schemas/BankStatement' }
+        statementBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: The running balance on the latest line that has one }
+        statementBalanceDate: { type: string, format: date }
+    BankReconciliation:
+      type: object
+      description: |
+        Bank reconciliation statement. `adjustedBookBalance` = book balance + lines the books
+        don't have yet (credits − debits). `adjustedStatementBalance` = statement balance +
+        deposits not yet credited − payments not yet debited. They agree (`difference` 0) when
+        every difference is explained. Records dated before the account's first imported
+        statement (`since`) are taken as cleared.
+      required: [asOf, bookBalance, adjustedBookBalance, unclearedPayments, unrecordedLines]
+      properties:
+        asOf: { type: string, format: date }
+        since: { type: string, format: date, description: First day of the earliest statement imported }
+        bookBalance: { $ref: '#/components/schemas/Money' }
+        statementBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: The running balance on the last line on or before `asOf` that has one; absent when none does }
+        statementBalanceDate: { type: string, format: date }
+        unclearedPayments:
+          type: object
+          description: In the books, on or before `asOf`, matched to no line
+          required: [deposits, payments, depositsTotal, paymentsTotal]
+          properties:
+            deposits: { type: array, description: Deposited but not yet credited by the bank, items: { $ref: '#/components/schemas/BankLineRecord' } }
+            payments: { type: array, description: Paid but not yet debited by the bank, items: { $ref: '#/components/schemas/BankLineRecord' } }
+            depositsTotal: { $ref: '#/components/schemas/Money' }
+            paymentsTotal: { allOf: [{ $ref: '#/components/schemas/Money' }], description: As a positive amount }
+        unrecordedLines:
+          type: object
+          description: On the statement, on or before `asOf`, neither matched nor excluded
+          required: [credits, debits, creditsTotal, debitsTotal]
+          properties:
+            credits: { type: array, items: { $ref: '#/components/schemas/BankStatementLine' } }
+            debits: { type: array, items: { $ref: '#/components/schemas/BankStatementLine' } }
+            creditsTotal: { $ref: '#/components/schemas/Money' }
+            debitsTotal: { allOf: [{ $ref: '#/components/schemas/Money' }], description: As a positive amount }
+        adjustedBookBalance: { $ref: '#/components/schemas/Money' }
+        adjustedStatementBalance: { $ref: '#/components/schemas/Money' }
+        difference: { allOf: [{ $ref: '#/components/schemas/Money' }], description: adjustedBookBalance − adjustedStatementBalance }
     Expense:
       allOf:
         - $ref: '#/components/schemas/Versioned'

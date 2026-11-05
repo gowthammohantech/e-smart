@@ -181,6 +181,7 @@ export const accountHandlers = defineHandlers({
     const used = await firstUse(ctx.db, [
       ['payments', sql`select 1 from payments where account_id = ${current.id} limit 1`],
       ['expenses', sql`select 1 from expenses where account_id = ${current.id} limit 1`],
+      ['bank statements', sql`select 1 from bank_statements where account_id = ${current.id} limit 1`],
     ]);
     if (used) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account has ${used}; it can't be deleted`);
     await ctx.db.transaction(async (tx) => {

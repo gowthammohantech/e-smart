@@ -40,7 +40,7 @@ async function toWire(db: DbOrTx, row: ExpenseRow) {
  * the server owns: the branch, the exchange rate, the input tax and the
  * next recurrence. Returns the columns to write.
  */
-async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current?: ExpenseRow) {
+export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current?: ExpenseRow) {
   const issues: Issue[] = [];
   const blocking = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
   const companyId = ctx.company.id;

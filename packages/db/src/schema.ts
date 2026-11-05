@@ -2380,3 +2380,87 @@ export const gstr2bEntries = pgTable("gstr2b_entries", {
 			name: "gstr2b_entries_company_id_fkey"
 		}),
 ]);
+
+export const bankLineStatus = pgEnum("bank_line_status", ['unmatched', 'matched', 'excluded'])
+export const bankMatchType = pgEnum("bank_match_type", ['payment', 'expense', 'voucher'])
+
+/** One bank statement file imported into a bank account. */
+export const bankStatements = pgTable("bank_statements", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	accountId: varchar("account_id", { length: 40 }).notNull(),
+	fileName: varchar("file_name", { length: 200 }).notNull(),
+	fromDate: date("from_date").notNull(),
+	toDate: date("to_date").notNull(),
+	// The balance before its first line and after its last, when the bank printed running balances.
+	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }),
+	closingBalanceMinor: bigint("closing_balance_minor", { mode: "number" }),
+	// Lines it added; repeats of lines already imported are not counted.
+	lineCount: integer("line_count").notNull(),
+	createdBy: varchar("created_by", { length: 40 }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	index("bank_statements_account_id_to_date_idx").using("btree", table.accountId.asc().nullsLast(), table.toDate.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "bank_statements_company_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.accountId],
+			foreignColumns: [paymentAccounts.id],
+			name: "bank_statements_account_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [users.id],
+			name: "bank_statements_created_by_fkey"
+		}),
+]);
+
+/**
+ * A line of a bank statement, signed as the bank sees it (+ money in). Matched to the one payment,
+ * expense or voucher in the books that it is, excluded (a person said it needs no record), or
+ * waiting. `line_key` spots the same line in an overlapping statement.
+ */
+export const bankStatementLines = pgTable("bank_statement_lines", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	statementId: varchar("statement_id", { length: 40 }).notNull(),
+	accountId: varchar("account_id", { length: 40 }).notNull(),
+	// Its place in the statement, oldest first, so the last running balance of a day is known.
+	position: integer().notNull(),
+	date: date().notNull(),
+	description: text().notNull(),
+	reference: varchar({ length: 100 }),
+	amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+	balanceMinor: bigint("balance_minor", { mode: "number" }),
+	status: bankLineStatus().default('unmatched').notNull(),
+	matchType: bankMatchType("match_type"),
+	matchId: varchar("match_id", { length: 40 }),
+	excludedReason: text("excluded_reason"),
+	lineKey: varchar("line_key", { length: 200 }).notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("bank_statement_lines_account_id_line_key_idx").using("btree", table.accountId.asc().nullsLast(), table.lineKey.asc().nullsLast()),
+	index("bank_statement_lines_company_id_account_id_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.accountId.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
+	index("bank_statement_lines_statement_id_idx").using("btree", table.statementId.asc().nullsLast()),
+	uniqueIndex("bank_statement_lines_match_idx").using("btree", table.companyId.asc().nullsLast(), table.matchType.asc().nullsLast(), table.matchId.asc().nullsLast()).where(sql`${table.matchId} IS NOT NULL`),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "bank_statement_lines_company_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.statementId],
+			foreignColumns: [bankStatements.id],
+			name: "bank_statement_lines_statement_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.accountId],
+			foreignColumns: [paymentAccounts.id],
+			name: "bank_statement_lines_account_id_fkey"
+		}),
+]);

@@ -65,6 +65,8 @@ export function registerRoutes(app: FastifyInstance, deps: Deps, operations: Ope
       url: `/v1${op.path.replace(/\{([^}]+)\}/g, ':$1')}`,
       schema: isWebhook ? undefined : Object.fromEntries(Object.entries(op.schema).filter(([, v]) => v !== undefined)),
       exposeHeadRoute: false,
+      // A 5 MB statement file is about 6.7 MB as base64.
+      ...(op.id === 'parseBankStatement' ? { bodyLimit: 8 * 1024 * 1024 } : {}),
       preValidation: async (req) => splitCommaArrays(req.query as Record<string, unknown>, op),
       config: { op, ...(isWebhook ? { rawBody: true } : {}), ...(rateLimitFor(deps, op) ? { rateLimit: rateLimitFor(deps, op) } : {}) },
       handler: async (req, reply) => {

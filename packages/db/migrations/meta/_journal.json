@@ -288,6 +288,13 @@
       "when": 1793846603940,
       "tag": "0040_company_bank_signature",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793846991298,
+      "tag": "0041_bank_statements",
+      "breakpoints": true
     }
   ]
 }

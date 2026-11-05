@@ -33,6 +33,7 @@ import { referenceHandlers } from './reference/handlers';
 import { lixiHandlers } from './lixi/handlers';
 import { platformHandlers } from './platform/handlers';
 import { mfaHandlers } from './platform/mfa';
+import { bankingHandlers } from './banking/handlers';
 export { webhookHandlers } from './webhooks/handlers';
 
 /** Every module's handlers, keyed by operationId. */
@@ -72,4 +73,5 @@ export const handlers: Handlers = {
   ...lixiHandlers,
   ...platformHandlers,
   ...mfaHandlers,
+  ...bankingHandlers,
 };
