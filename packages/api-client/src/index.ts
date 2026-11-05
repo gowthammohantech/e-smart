@@ -32,6 +32,8 @@ export type ApiClientOptions = {
   fetch?: typeof fetch;
   /** Gives up on a request after this long, as if the connection had dropped. Defaults to two minutes. */
   timeoutMs?: number;
+  /** Told of every refused request before it is thrown, e.g. to ask for an authenticator code on MFA_REQUIRED. */
+  onProblem?: (error: ApiError) => void;
 };
 
 // The contract's routes with `security: []`. Reference data is public, but a
@@ -160,7 +162,9 @@ export function createApiClient(options: ApiClientOptions) {
         const problem: Problem = type.includes('json')
           ? ((await final.clone().json()) as Problem)
           : { status: final.status, title: final.statusText };
-        throw new ApiError(final.status, problem);
+        const error = new ApiError(final.status, problem);
+        options.onProblem?.(error);
+        throw error;
       }
       // openapi-fetch only takes a returned value that is `instanceof Response`.
       // In Expo, fetch comes from expo/fetch and its responses aren't the global

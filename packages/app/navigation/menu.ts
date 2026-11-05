@@ -176,6 +176,7 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
     pages: [
       { key: 'profile', labelKey: 'nav:title.yourProfile', icon: 'account-circle-outline', route: '/settings/profile' },
       { key: 'devices', labelKey: 'nav:more.entry.devicesAndSessions', icon: 'cellphone-link', route: '/settings/devices' },
+      { key: 'security', labelKey: 'nav:more.entry.security', icon: 'shield-check-outline', route: '/settings/security' },
       { key: 'notificationSettings', labelKey: 'nav:more.entry.notificationSettings', icon: 'bell-outline', route: '/settings/notifications' },
       { key: 'plan', labelKey: 'nav:more.entry.planAndBilling', icon: 'credit-card-outline', route: '/settings/plan' },
       { key: 'appearance', labelKey: 'nav:more.entry.appearanceAndLanguage', icon: 'theme-light-dark', route: '/settings/appearance' },

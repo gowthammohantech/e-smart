@@ -7,6 +7,7 @@ import { usePlanGuard } from '../../navigation/usePlanGuard';
 import { useIntentEntitySync } from '../../features/intents/useIntentEntitySync';
 import { useIntentHandoff } from '../../features/intents/useIntentHandoff';
 import { PageSurface } from '@esmart/ui/components/Doodles';
+import { MfaGate } from '../../features/security/MfaGate';
 
 /** A crash inside the signed-in app keeps the way home. */
 export function ErrorBoundary(props: ErrorBoundaryProps) {
@@ -30,6 +31,8 @@ function AppStack() {
   useIntentEntitySync();
   useIntentHandoff();
   return (
+    <>
+    <MfaGate />
     <Stack
       screenLayout={({ children, route }) =>
         // The tabs draw a surface per tab themselves.
@@ -52,5 +55,6 @@ function AppStack() {
         options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
       />
     </Stack>
+    </>
   );
 }

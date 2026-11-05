@@ -576,5 +576,32 @@
       "lowStock": "Low stock",
       "system": "Exports, backups and everything else"
     }
+  },
+  "security": {
+    "title": "Sign-in security",
+    "authenticator": "Authenticator app",
+    "on": "On",
+    "off": "Off",
+    "onBody": "Each time you sign in on a new device, you also give a code from your authenticator app.",
+    "offBody": "Add a second step to signing in: a code from an app such as Google Authenticator, Microsoft Authenticator or 1Password.",
+    "codesLeft_one": "{{count}} recovery code left",
+    "codesLeft_other": "{{count}} recovery codes left",
+    "turnOn": "Turn on",
+    "turnOff": "Turn off",
+    "scan": "Scan this with your authenticator app, then type the 6-digit code it shows.",
+    "qrLabel": "Authenticator set-up code",
+    "manual": "Can’t scan? Enter this key instead: {{secret}}",
+    "code": "Code from the app",
+    "confirm": "Turn on",
+    "codesTitle": "Save your recovery codes",
+    "codesBody": "Each one signs you in once if you lose your phone. They are shown only now; keep them somewhere safe.",
+    "codesSaved": "I have saved them",
+    "disableBody": "Give a code from the app, or a recovery code, to turn it off.",
+    "codeOrRecovery": "Code or recovery code",
+    "cancel": "Cancel",
+    "turnedOff": "Authenticator turned off",
+    "gateTitle": "Enter your code",
+    "gateBody": "Your account uses an authenticator app. Enter the 6-digit code from it, or a recovery code, to continue.",
+    "verify": "Continue"
   }
 }
