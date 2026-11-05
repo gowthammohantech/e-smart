@@ -1675,6 +1675,70 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/custom-fields:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listCustomFields
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/CustomField' } }
+    post:
+      tags: [Settings]
+      operationId: createCustomField
+      x-roles: [owner, admin]
+      description: '`422 CUSTOM_FIELD_EXISTS` when the record type already has a field by that label.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomField' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomField' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/custom-fields/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveCustomField
+      description: The record type and kind stay as they were; a select can gain choices but not lose one a record holds.
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomField' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomField' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Settings]
+      operationId: removeCustomField
+      description: The field goes; values records held for it are no longer shown. To keep them, mark it inactive instead.
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '204': { description: Removed }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
   /companies/{companyId}/brands:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -5725,6 +5789,22 @@ components:
             name: { type: string }
             icon: { type: string }
             color: { type: string }
+    CustomField:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [entity, label, kind]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            entity: { type: string, enum: [party, item, document] }
+            label: { type: string, maxLength: 60 }
+            kind: { type: string, enum: [text, number, date, select, checkbox] }
+            options: { type: array, items: { type: string }, description: "A select's choices, in order" }
+            required: { type: boolean }
+            showOnPdf: { type: boolean, description: 'Printed on documents: a document field on its own PDF, a party field on documents to that party' }
+            position: { type: integer }
+            status: { type: string, enum: [active, inactive] }
     ItemCategory:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -5875,6 +5955,7 @@ components:
             paymentTermsDays: { type: integer, minimum: 0 }
             notes: { type: string }
             status: { type: string, enum: [active, inactive] }
+            customFields: { type: object, additionalProperties: true, description: 'Values of the company custom fields, by field id (listCustomFields); checked against them' }
     PartyWithBalance:
       allOf:
         - $ref: '#/components/schemas/Party'
@@ -5910,6 +5991,7 @@ components:
           properties:
             id: { type: string, readOnly: true }
             companyId: { type: string, readOnly: true }
+            customFields: { type: object, additionalProperties: true, description: 'Values of the company custom fields, by field id (listCustomFields); checked against them' }
             sku: { type: string }
             name: { type: string }
             description: { type: string }
@@ -6311,6 +6393,7 @@ components:
       properties:
         kind: { $ref: '#/components/schemas/DocumentKind' }
         partyId: { type: string }
+        customFields: { type: object, additionalProperties: true, description: 'Values of the company custom fields, by field id (listCustomFields); checked against them' }
         branchId: { type: string, description: Defaults to the user's active branch }
         date: { type: string, format: date }
         dueDate: { type: string, format: date }

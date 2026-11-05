@@ -1,4 +1,6 @@
 import { and, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import type { CustomValues } from '@esmart/core/domain/customFields';
+import { cleanCustomValues } from '../settings/customFields';
 import { buysFrom, hasLedger } from '@esmart/core/domain/partyKinds';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
 import { isValidGstin } from '@esmart/core/domain/gstin';
@@ -140,13 +142,14 @@ export const partiesHandlers = defineHandlers({
   async createParty(ctx) {
     assertKindAllowed(ctx, ctx.body.kind);
     await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
+    const customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'party', ctx.body.customFields as CustomValues | undefined);
     const row = await ctx.db.transaction(async (tx) => {
       const code = ctx.body.code?.trim() || (await nextCode(tx, ctx.company.id, ctx.body.kind));
       const [dupe] = await tx.select({ id: P.id }).from(P).where(and(eq(P.companyId, ctx.company.id), eq(P.code, code)));
       if (dupe) throw conflict('PARTY_CODE_TAKEN', `Another party already uses the code ${code}`);
       const [created] = await tx
         .insert(P)
-        .values({ id: newId('pty'), companyId: ctx.company.id, code, ...partyColumns(ctx.body) })
+        .values({ id: newId('pty'), companyId: ctx.company.id, code, ...partyColumns(ctx.body), customFields })
         .returning();
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'party', entityId: created.id, entityLabel: created.name, version: created.version, after: partyToWire(created) });
       return created;
@@ -227,7 +230,7 @@ export const partiesHandlers = defineHandlers({
       }
       const [updated] = await tx
         .update(P)
-        .set({ ...partyColumns(ctx.body), code, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...partyColumns(ctx.body), code, customFields: await cleanCustomValues(tx, ctx.company.id, 'party', ctx.body.customFields as CustomValues | undefined, current.customFields), version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(P.id, current.id), eq(P.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();

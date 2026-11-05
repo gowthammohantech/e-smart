@@ -150,6 +150,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       itcReclaimedOn: row.itcReclaimedOn,
       itcClaimPeriod: row.itcClaimPeriod,
       costCentreId: row.costCentreId,
+      customFields: row.customFields as Record<string, unknown>,
       recurrence: row.recurrence,
       nextRecurrenceDate: row.nextRecurrenceDate,
       recurrenceEndDate: row.recurrenceEndDate,

@@ -40,6 +40,7 @@ export function itemToWire(row: ItemRow, imageUri?: string): Schema<'Item'> {
     imageUri,
     categoryId: row.categoryId,
     brandId: row.brandId,
+    customFields: row.customFields as Record<string, unknown>,
     status: row.status,
     ...versioned(row),
   });

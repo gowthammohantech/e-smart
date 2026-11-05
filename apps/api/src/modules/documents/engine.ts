@@ -1,4 +1,6 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
+import type { CustomValues } from '@esmart/core/domain/customFields';
+import { cleanCustomValues } from '../settings/customFields';
 import { bankDetailsOf } from '../companies/wire';
 import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import { NOTE_KINDS, PURCHASE_KINDS, initialStatus, isPayableDocument } from '@esmart/core/domain/documentStates';
@@ -157,6 +159,8 @@ export type DocFields = {
   /** A TDS section, `none`, or unset for the supplier's own. */
   tdsSection?: string;
   costCentreId: string | null;
+  /** Undefined keeps what the document had. */
+  customFields?: Record<string, unknown>;
   notes: string | null;
   terms: string | null;
   sourceDocumentId: string | null;
@@ -235,6 +239,7 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     // A stored document keeps what it had; a new one takes the supplier's section unless told otherwise.
     tdsSection: body.tdsSection ?? (base ? (base.tdsSection ?? 'none') : undefined),
     costCentreId: keep(body.costCentreId, base?.costCentreId),
+    customFields: (body.customFields as Record<string, unknown> | undefined) ?? (base?.customFields as Record<string, unknown> | undefined),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
     sourceDocumentId: keep(body.sourceDocumentId, base?.sourceDocumentId),
@@ -265,6 +270,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     noteReason: row.noteReason,
     tdsSection: row.tdsSection ?? (row.finalizedAt ? 'none' : undefined),
     costCentreId: row.costCentreId,
+    customFields: row.customFields as Record<string, unknown>,
     notes: row.notes,
     terms: row.terms,
     sourceDocumentId: row.sourceDocumentId,
@@ -539,6 +545,7 @@ export async function prepareDocument(
       tdsRate: tds.section ? String(tds.rate) : null,
       tdsAmountMinor,
       costCentreId: f.costCentreId,
+      customFields: await cleanCustomValues(db, company.id, 'document', f.customFields as CustomValues | undefined),
       notes: f.notes,
       terms: f.terms,
       sourceDocumentId: f.sourceDocumentId,

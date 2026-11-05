@@ -33,6 +33,7 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
     openingBalanceSide: row.openingBalanceSide ?? undefined,
     paymentTermsDays: row.paymentTermsDays,
     notes: row.notes,
+    customFields: row.customFields as Record<string, unknown>,
     status: row.status,
     ...versioned(row),
   });

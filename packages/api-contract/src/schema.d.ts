@@ -1183,6 +1183,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/custom-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listCustomFields"];
+        put?: never;
+        /** @description `422 CUSTOM_FIELD_EXISTS` when the record type already has a field by that label. */
+        post: operations["createCustomField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/custom-fields/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The record type and kind stay as they were; a select can gain choices but not lose one a record holds. */
+        put: operations["saveCustomField"];
+        post?: never;
+        /** @description The field goes; values records held for it are no longer shown. To keep them, mark it inactive instead. */
+        delete: operations["removeCustomField"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/brands": {
         parameters: {
             query?: never;
@@ -4102,6 +4142,23 @@ export interface components {
             icon?: string;
             color?: string;
         };
+        CustomField: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            /** @enum {string} */
+            entity: "party" | "item" | "document";
+            label: string;
+            /** @enum {string} */
+            kind: "text" | "number" | "date" | "select" | "checkbox";
+            /** @description A select's choices, in order */
+            options?: string[];
+            required?: boolean;
+            /** @description Printed on documents: a document field on its own PDF, a party field on documents to that party */
+            showOnPdf?: boolean;
+            position?: number;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
         ItemCategory: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
@@ -4266,6 +4323,10 @@ export interface components {
             notes?: string;
             /** @enum {string} */
             status?: "active" | "inactive";
+            /** @description Values of the company custom fields, by field id (listCustomFields); checked against them */
+            customFields?: {
+                [key: string]: unknown;
+            };
         };
         PartyWithBalance: components["schemas"]["Party"] & {
             readonly outstanding?: components["schemas"]["Money"];
@@ -4294,6 +4355,10 @@ export interface components {
         Item: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
+            /** @description Values of the company custom fields, by field id (listCustomFields); checked against them */
+            customFields?: {
+                [key: string]: unknown;
+            };
             sku: string;
             name: string;
             description?: string;
@@ -4730,6 +4795,10 @@ export interface components {
         NewDocumentInput: {
             kind: components["schemas"]["DocumentKind"];
             partyId: string;
+            /** @description Values of the company custom fields, by field id (listCustomFields); checked against them */
+            customFields?: {
+                [key: string]: unknown;
+            };
             /** @description Defaults to the user's active branch */
             branchId?: string;
             /** Format: date */
@@ -8613,6 +8682,116 @@ export interface operations {
                 content?: never;
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    listCustomFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["CustomField"][];
+                    };
+                };
+            };
+        };
+    };
+    createCustomField: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomField"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveCustomField: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomField"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeCustomField: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     listBrands: {

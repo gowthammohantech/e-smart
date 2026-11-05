@@ -1,4 +1,6 @@
 import { businessDate } from '@esmart/core/lib/date';
+import type { CustomValues } from '@esmart/core/domain/customFields';
+import { cleanCustomValues } from '../settings/customFields';
 import { and, asc, desc, eq, getTableColumns, gt, ilike, ne, not, or, sql, lte, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
@@ -168,6 +170,7 @@ export const catalogHandlers = defineHandlers({
     const today = businessDate(ctx.now);
     await validate(ctx.db, ctx.company.id, base, ctx.body, today, true);
     const cols = itemColumns(ctx.body, base);
+    const customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'item', ctx.body.customFields as CustomValues | undefined);
     const openingStock = ctx.body.openingStock ?? 0;
     // The day the stock was counted; only a tracked item has stock to date.
     const openingStockDate = cols.trackInventory ? (ctx.body.openingStockDate ?? today) : null;
@@ -178,7 +181,7 @@ export const catalogHandlers = defineHandlers({
       const hsnCode = ctx.body.hsnCode ? await ensureHsn(tx, ctx.body.hsnCode) : null;
       const [created] = await tx
         .insert(I)
-        .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, hsnCode, openingStock: String(openingStock), openingStockDate })
+        .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, customFields, hsnCode, openingStock: String(openingStock), openingStockDate })
         .returning();
       if (created.trackInventory && openingStock > 0) {
         await tx.insert(schema.stockMovements).values({
@@ -292,7 +295,7 @@ export const catalogHandlers = defineHandlers({
       const hsnCode = ctx.body.hsnCode ? await ensureHsn(tx, ctx.body.hsnCode) : null;
       const [updated] = await tx
         .update(I)
-        .set({ ...cols, hsnCode, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...cols, hsnCode, customFields: await cleanCustomValues(tx, ctx.company.id, 'item', ctx.body.customFields as CustomValues | undefined, current.customFields), version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(I.id, current.id), eq(I.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
