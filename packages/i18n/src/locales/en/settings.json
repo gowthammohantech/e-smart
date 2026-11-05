@@ -670,5 +670,21 @@
     "overHint": "0 holds every one.",
     "save": "Save",
     "saved": "Approval rules saved"
+  },
+  "invoiceDesign": {
+    "title": "Invoice design",
+    "hint": "How your invoices, quotes and other documents look. GSTIN, HSN, tax, place of supply and the e-invoice always print.",
+    "accent": "Accent colour",
+    "discountColumn": "Discount column",
+    "taxColumn": "Tax rate column",
+    "hsn": "HSN/SAC under each item",
+    "logo": "Logo",
+    "compact": "Compact",
+    "compactHint": "Smaller type, so long invoices take fewer pages.",
+    "footer": "Footer line",
+    "footerHint": "For example: Thank you for your business.",
+    "save": "Save",
+    "saved": "Invoice design saved",
+    "noInvoice": "Issue an invoice to see a preview here."
   }
 }

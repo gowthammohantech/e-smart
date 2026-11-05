@@ -4144,6 +4144,16 @@ export interface components {
              */
             readonly signatureUri?: string;
             bankDetails?: components["schemas"]["BankDetails"];
+            /** @description How its documents look. Statutory content always prints; every option defaults to the standard page. */
+            invoiceTemplate?: {
+                accentColor?: string;
+                showDiscountColumn?: boolean;
+                showTaxColumn?: boolean;
+                showHsn?: boolean;
+                showLogo?: boolean;
+                footerText?: string;
+                compact?: boolean;
+            };
             /** @description Stable slug, e.g. `wholesale` */
             businessType: string;
             country: string;

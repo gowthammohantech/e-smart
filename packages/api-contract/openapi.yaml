@@ -5849,6 +5849,17 @@ components:
             logoUri: { type: string, format: uri, readOnly: true }
             signatureUri: { type: string, format: uri, readOnly: true, description: "The authorised signatory's signature, printed above that line on documents. Set through /signature." }
             bankDetails: { $ref: '#/components/schemas/BankDetails' }
+            invoiceTemplate:
+              type: object
+              description: How its documents look. Statutory content always prints; every option defaults to the standard page.
+              properties:
+                accentColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+                showDiscountColumn: { type: boolean }
+                showTaxColumn: { type: boolean }
+                showHsn: { type: boolean }
+                showLogo: { type: boolean }
+                footerText: { type: string, maxLength: 200 }
+                compact: { type: boolean }
             businessType: { type: string, description: 'Stable slug, e.g. `wholesale`' }
             country: { type: string }
             baseCurrency: { type: string }

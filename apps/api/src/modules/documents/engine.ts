@@ -68,6 +68,7 @@ export function companyCore(row: CompanyRow): Company {
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     allowNegativeStock: row.allowNegativeStock,
     bankDetails: bankDetailsOf(row),
+    invoiceTemplate: (row.invoiceTemplate as Company['invoiceTemplate']) ?? undefined,
     plan: row.plan,
     createdAt: iso(row.createdAt)!,
   };

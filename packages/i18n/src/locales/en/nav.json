@@ -160,7 +160,8 @@
       "security": "Sign-in security",
       "modules": "Modules",
       "customFields": "Custom fields",
-      "approvalRules": "Approvals"
+      "approvalRules": "Approvals",
+      "invoiceDesign": "Invoice design"
     },
     "signOut": {
       "row": "Sign out",

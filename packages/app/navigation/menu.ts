@@ -181,6 +181,7 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
       { key: 'devices', labelKey: 'nav:more.entry.devicesAndSessions', icon: 'cellphone-link', route: '/settings/devices' },
       { key: 'security', labelKey: 'nav:more.entry.security', icon: 'shield-check-outline', route: '/settings/security' },
       { key: 'modules', labelKey: 'nav:more.entry.modules', icon: 'toggle-switch-outline', route: '/settings/modules' },
+      { key: 'invoiceDesign', labelKey: 'nav:more.entry.invoiceDesign', icon: 'file-document-outline', route: '/settings/invoice-design' },
       { key: 'customFields', labelKey: 'nav:more.entry.customFields', icon: 'text-box-check-outline', route: '/settings/custom-fields' },
       { key: 'approvalRules', labelKey: 'nav:more.entry.approvalRules', icon: 'clipboard-check-outline', route: '/settings/approvals' },
       { key: 'notificationSettings', labelKey: 'nav:more.entry.notificationSettings', icon: 'bell-outline', route: '/settings/notifications' },
