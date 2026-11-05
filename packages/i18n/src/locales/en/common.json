@@ -63,7 +63,7 @@
     "separator": "{{list}}, {{item}}"
   },
   "documentList": {
-    "search": "Search {{kind, lowercase}}",
+    "search": "Search {{kind, lowercase}} by number, reference or contact",
     "count_one": "{{count}} {{kind, lowercase}}",
     "count_other": "{{count}} {{kind, lowercase}}",
     "filterByStatus": "Filter by {{status}}",

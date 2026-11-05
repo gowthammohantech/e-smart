@@ -179,7 +179,7 @@ export default function ExpensesList() {
       <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
         <Stack.Screen options={{ title: tr('nav:title.expenses') }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
-          <View style={{ width: 300 }}>
+          <View style={{ width: 380 }}>
             <SearchBar value={query} onChangeText={setQuery} placeholder={tr('purchases:expense.search')} />
           </View>
           <FilterMenu

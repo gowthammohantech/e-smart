@@ -141,7 +141,7 @@ export default function ContactsTab() {
           />
           </View>
         ) : null}
-        <View style={desktop ? { width: 300 } : undefined}>
+        <View style={desktop ? { width: 380 } : undefined}>
           <SearchBar value={query} onChangeText={setQuery} placeholder={tab === 'customer' ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>

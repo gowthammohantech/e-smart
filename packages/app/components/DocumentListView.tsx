@@ -233,7 +233,8 @@ export function DocumentListView({
     return (
       <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
-          <View style={{ width: 300 }}>
+          {/* Wide enough for the hint naming what it searches. */}
+          <View style={{ width: 380 }}>
             <SearchBar
               value={filters.query}
               onChangeText={(query) => setFilters((f) => ({ ...f, query }))}

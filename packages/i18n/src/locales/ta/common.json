@@ -63,7 +63,7 @@
     "separator": "{{list}}, {{item}}"
   },
   "documentList": {
-    "search": "தேடு: {{kind}}",
+    "search": "{{kind}}: எண், குறிப்பு அல்லது தொடர்பு மூலம் தேடு",
     "count_one": "{{count}} {{kind}}",
     "count_other": "{{count}} {{kind}}",
     "filterByStatus": "{{status}} மூலம் வடிகட்டு",
