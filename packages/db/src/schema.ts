@@ -75,6 +75,9 @@ export const balanceSide = pgEnum("balance_side", ['dr', 'cr'])
 /** What a custom field belongs to, and the kind of value it holds. */
 export const customFieldEntity = pgEnum("custom_field_entity", ['party', 'item', 'document'])
 export const customFieldKind = pgEnum("custom_field_kind", ['text', 'number', 'date', 'select', 'checkbox'])
+/** What a monthly AI allowance counts. */
+export const aiFeature = pgEnum("ai_feature", ['lixi', 'ocr'])
+export const requestStatus = pgEnum("request_status", ['pending', 'approved', 'rejected'])
 export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank', 'wallet'])
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
@@ -684,6 +687,11 @@ export const documents = pgTable("documents", {
 	customFields: jsonb("custom_fields").default({}).notNull(),
 	// Waiting for, approved or rejected by an owner or admin: { status, requestedBy, requestedAt, decidedBy?, decidedAt?, note? }.
 	approval: jsonb(),
+	// TCS collected on a sale (s.206C): its section and rate; the amount is in the totals.
+	tcsSection: varchar("tcs_section", { length: 20 }),
+	tcsRate: numeric("tcs_rate", { precision: 5, scale: 2 }),
+	// The vehicle it moved on or was for.
+	vehicleId: varchar("vehicle_id", { length: 40 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -1324,6 +1332,8 @@ export const expenses = pgTable("expenses", {
 	ocrExtractionId: varchar("ocr_extraction_id", { length: 40 }),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
+	// The vehicle it was spent on (fuel, repairs, tolls).
+	vehicleId: varchar("vehicle_id", { length: 40 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -1795,6 +1805,10 @@ export const companies = pgTable("companies", {
 	disabledModules: jsonb("disabled_modules").default([]).notNull(),
 	// Documents over these amounts wait for an owner or admin: [{ kind, overMinor }] in base currency.
 	approvalRules: jsonb("approval_rules").default([]).notNull(),
+	// How its documents look (core render/invoiceTemplate); unset is the standard page.
+	invoiceTemplate: jsonb("invoice_template"),
+	// Lixi messages and bill scans a month together; unset takes the plan's allowance.
+	aiMonthlyLimit: integer("ai_monthly_limit"),
 	lockedThroughDate: date("locked_through_date"),
 	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
 	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
@@ -1980,6 +1994,90 @@ export const customFields = pgTable("custom_fields", {
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
 			name: "custom_fields_company_id_fkey"
+		}),
+]);
+
+/** A company's vehicles, to tag what is spent on each and what each carries. */
+export const vehicles = pgTable("vehicles", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	// As on the registration certificate, without spaces: TN09AB1234.
+	registration: varchar({ length: 20 }).notNull(),
+	name: varchar({ length: 100 }),
+	status: activeStatus().default('active').notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("vehicles_company_id_registration_idx").using("btree", table.companyId.asc().nullsLast(), table.registration.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "vehicles_company_id_fkey"
+		}),
+]);
+
+/** A journal kept to reuse: its kind, narration and lines; amounts may be left for each use. */
+export const voucherTemplates = pgTable("voucher_templates", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 100 }).notNull(),
+	kind: voucherKind().notNull(),
+	narration: text(),
+	lines: jsonb().notNull(),
+	createdBy: varchar("created_by", { length: 40 }).notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("voucher_templates_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "voucher_templates_company_id_fkey"
+		}),
+]);
+
+/** Lixi messages and bill scans used by a company in a month, against its allowance. */
+export const aiUsage = pgTable("ai_usage", {
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	// YYYY-MM, in India time.
+	month: char({ length: 7 }).notNull(),
+	feature: aiFeature().notNull(),
+	count: integer().default(0).notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	primaryKey({ columns: [table.companyId, table.month, table.feature], name: "ai_usage_pkey" }),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "ai_usage_company_id_fkey"
+		}),
+]);
+
+/** A payment over an approval rule, held until an owner or admin approves it into a payment. */
+export const paymentRequests = pgTable("payment_requests", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	// The payment as it was asked for (the createPayment body).
+	body: jsonb().notNull(),
+	partyId: varchar("party_id", { length: 40 }).notNull(),
+	direction: varchar({ length: 10 }).notNull(),
+	amountBaseMinor: bigint("amount_base_minor", { mode: "number" }).notNull(),
+	status: requestStatus().default('pending').notNull(),
+	requestedBy: varchar("requested_by", { length: 40 }).notNull(),
+	decidedBy: varchar("decided_by", { length: 40 }),
+	decidedAt: timestamp("decided_at", { withTimezone: true, mode: 'date' }),
+	note: text(),
+	paymentId: varchar("payment_id", { length: 40 }),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	index("payment_requests_company_id_status_idx").using("btree", table.companyId.asc().nullsLast(), table.status.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "payment_requests_company_id_fkey"
 		}),
 ]);
 

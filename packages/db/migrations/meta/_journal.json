@@ -330,6 +330,13 @@
       "when": 1793855355353,
       "tag": "0046_opening_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793866002679,
+      "tag": "0047_templates_tcs_vehicles_ai_requests",
+      "breakpoints": true
     }
   ]
 }
