@@ -70,6 +70,9 @@ export const otpChannel = pgEnum("otp_channel", ['sms', 'whatsapp'])
 /** both: one ledger that buys and sells (Sundry Debtors, as Tally); general: a contact with no ledger or documents. */
 export const partyKind = pgEnum("party_kind", ['customer', 'supplier', 'both', 'general'])
 export const balanceSide = pgEnum("balance_side", ['dr', 'cr'])
+/** What a custom field belongs to, and the kind of value it holds. */
+export const customFieldEntity = pgEnum("custom_field_entity", ['party', 'item', 'document'])
+export const customFieldKind = pgEnum("custom_field_kind", ['text', 'number', 'date', 'select', 'checkbox'])
 export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank', 'wallet'])
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
@@ -554,6 +557,8 @@ export const items = pgTable("items", {
 	brandId: varchar("brand_id", { length: 40 }),
 	status: activeStatus().default('active').notNull(),
 	version: integer().default(1).notNull(),
+	// Values of the company's custom fields, by field id.
+	customFields: jsonb("custom_fields").default({}).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -673,6 +678,8 @@ export const documents = pgTable("documents", {
 	finalizedAt: timestamp("finalized_at", { withTimezone: true, mode: 'date' }),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
+	// Values of the company's custom fields, by field id.
+	customFields: jsonb("custom_fields").default({}).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -882,6 +889,8 @@ export const parties = pgTable("parties", {
 	notes: text(),
 	status: activeStatus().default('active').notNull(),
 	version: integer().default(1).notNull(),
+	// Values of the company's custom fields, by field id.
+	customFields: jsonb("custom_fields").default({}).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -1939,6 +1948,32 @@ export const itemCategories = pgTable("item_categories", {
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
 			name: "item_categories_company_id_fkey"
+		}),
+]);
+
+/** A field of a company's own on its contacts, items or documents. Values live with the records, keyed by this id. */
+export const customFields = pgTable("custom_fields", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	entity: customFieldEntity().notNull(),
+	label: varchar({ length: 60 }).notNull(),
+	kind: customFieldKind().notNull(),
+	// A select's choices, in order.
+	options: jsonb().default([]).notNull(),
+	required: boolean().default(false).notNull(),
+	// Printed on the document's PDF (document fields), or on documents to the party (party fields).
+	showOnPdf: boolean("show_on_pdf").default(false).notNull(),
+	position: smallint().default(0).notNull(),
+	status: activeStatus().default('active').notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("custom_fields_company_id_entity_label_idx").using("btree", table.companyId.asc().nullsLast(), table.entity.asc().nullsLast(), table.label.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "custom_fields_company_id_fkey"
 		}),
 ]);
 
