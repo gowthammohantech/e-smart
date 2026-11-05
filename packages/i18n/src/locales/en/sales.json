@@ -106,7 +106,13 @@
     "searchSuppliers": "Search suppliers",
     "addCustomer": "Add new customer",
     "addSupplier": "Add new supplier",
-    "searchItems": "Search by name or SKU"
+    "searchItems": "Search by name or SKU",
+    "amountsAre": "Rates are",
+    "taxExclusive": "Before tax",
+    "taxInclusive": "Tax included",
+    "taxMixed": "Some lines include tax and some don’t. Pick one to set them all.",
+    "saveAndSend": "Save & send",
+    "saveAndSendHint": "Finalise, then email it to the customer"
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",
@@ -416,5 +422,13 @@
     "listTitle": "Refunded out of this advance",
     "emptyTitle": "Paid back out of an advance",
     "emptyBody": "A refund settles no invoices: it returns part of the advance the customer paid."
+  },
+  "grid": {
+    "lineNo": "#",
+    "cellLabel": "{{column}}, line {{n}}",
+    "moreDetails": "More details",
+    "lineActions": "Actions for line {{n}}",
+    "discountMode": "Discount as {{mode}}, line {{n}}. Change",
+    "enterHint": "Enter moves down a column; on the last line it adds an item."
   }
 }

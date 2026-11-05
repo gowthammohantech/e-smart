@@ -39,7 +39,29 @@ export type DraftState = {
   branchId?: string;
   /** The invoice/bill a return (or conversion) was raised against. */
   sourceDocumentId?: string;
+  /**
+   * Rates are typed with tax included: the editor's whole-document switch. Lines
+   * the editor creates from now on start that way (`newLineInclusive`). On the
+   * device only; each line's own `taxInclusive` is what is saved.
+   */
+  pricesIncludeTax?: boolean;
 };
+
+/** A reimbursement is recovered at cost, with no tax, so it is never tax-inclusive. */
+const takesInclusive = (l: DocumentLine) => !l.gst?.reimbursement;
+
+/** A freshly made line (from an item, or blank) set as the whole-document switch says. */
+export function newLineInclusive(line: DocumentLine, draft: Pick<DraftState, 'pricesIncludeTax'>): DocumentLine {
+  return draft.pricesIncludeTax && takesInclusive(line) ? { ...line, taxInclusive: true } : line;
+}
+
+/** Whether the lines' rates include tax: all of them, none, or a mix. */
+export function inclusiveState(lines: DocumentLine[]): 'inclusive' | 'exclusive' | 'mixed' {
+  const taxed = lines.filter(takesInclusive);
+  if (!taxed.length) return 'exclusive';
+  const n = taxed.filter((l) => l.taxInclusive).length;
+  return n === 0 ? 'exclusive' : n === taxed.length ? 'inclusive' : 'mixed';
+}
 
 /** `invoiceTerms` is the default terms text for an invoice, in the user's language (`sales:editor.defaultTerms`). */
 export function emptyDraft(baseCurrency: string, kind: DocumentKind, invoiceTerms = ''): DraftState {
@@ -197,7 +219,11 @@ export function useDocumentDraft(options: {
   initial?: DraftState;
 }) {
   const { kind, baseCurrency, taxCategories, taxContext, initial } = options;
-  const [draft, setDraft] = useState<DraftState>(() => alignCurrency(initial ?? emptyDraft(baseCurrency, kind), baseCurrency));
+  const [draft, setDraft] = useState<DraftState>(() => {
+    const start = alignCurrency(initial ?? emptyDraft(baseCurrency, kind), baseCurrency);
+    // An existing document opens with the switch where its lines are.
+    return start.pricesIncludeTax === undefined && start.lines.length ? { ...start, pricesIncludeTax: inclusiveState(start.lines) === 'inclusive' } : start;
+  });
 
   // A party in another currency moves the whole draft into it.
   const patch = useCallback(
@@ -218,6 +244,15 @@ export function useDocumentDraft(options: {
       return alignCurrency({ ...d, lines: [...d.lines, line] }, baseCurrency);
     });
   }, [baseCurrency]);
+
+  /** The whole-document switch: every line's rate read with tax included (or not), and new lines alike. */
+  const setPricesIncludeTax = useCallback((on: boolean) => {
+    setDraft((d) => ({
+      ...d,
+      pricesIncludeTax: on,
+      lines: d.lines.map((l) => (takesInclusive(l) ? { ...l, taxInclusive: on } : l)),
+    }));
+  }, []);
 
   const updateLine = useCallback((id: string, p: Partial<DocumentLine>) => {
     setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.id === id ? { ...l, ...p } : l)) }));
@@ -255,7 +290,7 @@ export function useDocumentDraft(options: {
     [draft, baseCurrency, taxCategories, taxContext],
   );
 
-  return { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, totals };
+  return { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, setPricesIncludeTax, totals };
 }
 
 export function parseAmount(value: string, currency: string): Money {

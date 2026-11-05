@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
 import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -286,6 +286,22 @@ ${url}`;
     if (!hasContact || (Platform.OS === 'web' && channel === 'whatsapp')) compose(channel);
     else send(channel);
   };
+
+  // The editor's "Save & send" lands here with ?send=email: send it once, as soon as the
+  // document reads as finalised, and drop the flag so a reload or Back doesn't send again.
+  const { send: sendParam } = useLocalSearchParams<{ send?: string }>();
+  const sentFromEditor = useRef(false);
+  const sendNow = useRef(sendVia);
+  // Kept current after each render, as the editor does for its finalise shortcut.
+  useEffect(() => {
+    sendNow.current = sendVia;
+  });
+  useEffect(() => {
+    if (sendParam !== 'email' || sentFromEditor.current || !isFinalized(doc.status)) return;
+    sentFromEditor.current = true;
+    router.setParams({ send: undefined });
+    sendNow.current('email');
+  }, [sendParam, doc.status, router]);
 
   const convert = async (target: DocumentKind) => {
     setActionsOpen(false);

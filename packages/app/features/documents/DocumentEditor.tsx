@@ -56,11 +56,14 @@ import {
   blankLine,
   emptyDraft,
   inCurrency,
+  inclusiveState,
   lineFromItem,
+  newLineInclusive,
   reprice,
   useDocumentDraft,
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
+import { LineGrid } from './LineGrid';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useCanWrite } from '../../remote/connectivity';
@@ -228,7 +231,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     [company, parties, isPurchase, branches, defaultBranchId],
   );
 
-  const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, totals } = useDocumentDraft({
+  const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, setPricesIncludeTax, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
@@ -294,6 +297,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [branchOpen, setBranchOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
+  // "Save & send": finalise as usual, then the detail screen emails it.
+  const [sendAfter, setSendAfter] = useState(false);
+  const canSend = !isPurchase && kind !== 'delivery' && kind !== 'salesReturn';
   const [creditWarning, setCreditWarning] = useState<string | null>(null);
   // Set once the user accepts the credit-limit warning, so the server lets the invoice through.
   const [creditOverride, setCreditOverride] = useState(false);
@@ -395,6 +401,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   };
 
   const docTaxContext = draftTaxContext(draft);
+  const inclusive = inclusiveState(draft.lines);
   const interState =
     taxContext.regime === 'GST' &&
     (!!docTaxContext.crossBorder ||
@@ -501,6 +508,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
       // Not over another sheet (picking an item, editing a line…): finish that first.
       if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
+      setSendAfter(false);
       requestFinalize();
     };
   });
@@ -602,7 +610,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     // Saved: leaving for the saved document isn't leaving changes behind.
     await leaveGuard.release();
     if (onSaved) onSaved(id);
-    else router.replace(detailRouteFor(kind, id) as never);
+    // Sent from the detail screen, the same way its own Send by email does it.
+    else router.replace(`${detailRouteFor(kind, id)}${finalize && sendAfter ? '?send=email' : ''}` as never);
   };
 
   const finalizeLocal = (id: string) => {
@@ -849,6 +858,33 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
       {kind === 'invoice' ? <BillableExpenses partyId={draft.partyId ?? undefined} currency={draft.currency} documentId={documentId} lines={draft.lines} onAdd={addLine} /> : null}
 
+      {/* Whether rates are typed with tax in them, for the whole document; a line can still differ. */}
+      {draft.lines.length > 0 && taxContext.regime !== 'NONE' ? (
+        <View style={{ gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, flexWrap: 'wrap' }}>
+            <Text variant="small" tone="muted" weight="500">
+              {tr('sales:editor.amountsAre')}
+            </Text>
+            <View style={{ minWidth: 240 }}>
+              <Segmented
+                options={[
+                  { value: 'exclusive', label: tr('sales:editor.taxExclusive') },
+                  { value: 'inclusive', label: tr('sales:editor.taxInclusive') },
+                ]}
+                // Neither is picked while the lines disagree.
+                value={inclusive === 'mixed' ? '' : inclusive}
+                onChange={(v) => setPricesIncludeTax(v === 'inclusive')}
+              />
+            </View>
+          </View>
+          {inclusive === 'mixed' ? (
+            <Text variant="caption" tone="warn">
+              {tr('sales:editor.taxMixed')}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       {draft.lines.length === 0 ? (
         <Card padded={false}>
           <EmptyState
@@ -860,6 +896,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             compact
           />
         </Card>
+      ) : desktop ? (
+        <LineGrid
+          lines={draft.lines}
+          currency={draft.currency}
+          taxContext={docTaxContext}
+          taxCategories={taxCategories}
+          onUpdate={updateLine}
+          onRemove={removeLine}
+          onEdit={setEditingLine}
+          onAddRequest={() => setItemOpen(true)}
+          maxQuantity={(line) => maxReturnQty(line)}
+        />
       ) : (
         <Card padded={false}>
           {draft.lines.map((line, i) => {
@@ -1139,7 +1187,31 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 headerRight: () => (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
                     <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
-                    <Button shortcut="Enter" title={tr('sales:editor.finalise')} icon="check-decagram-outline" onPress={requestFinalize} loading={saving} disabled={blocked || !draft.partyId || draft.lines.length === 0} />
+                    {canSend && !onSaved ? (
+                      <Button
+                        title={tr('sales:editor.saveAndSend')}
+                        tooltip={tr('sales:editor.saveAndSendHint')}
+                        icon="email-fast-outline"
+                        variant="secondary"
+                        onPress={() => {
+                          setSendAfter(true);
+                          requestFinalize();
+                        }}
+                        loading={saving}
+                        disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                      />
+                    ) : null}
+                    <Button
+                      shortcut="Enter"
+                      title={tr('sales:editor.finalise')}
+                      icon="check-decagram-outline"
+                      onPress={() => {
+                        setSendAfter(false);
+                        requestFinalize();
+                      }}
+                      loading={saving}
+                      disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                    />
                   </View>
                 ),
               }}
@@ -1151,6 +1223,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             >
               <SplitPane
                 sideWidth={360}
+                // The totals and what's left to fill in stay beside a long list of lines.
+                stickySide
                 main={
                   <View style={{ gap: t.spacing.xxl }}>
                     {(
@@ -1316,7 +1390,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               const item = items.find((i) => i.id === id);
               // An item is priced in base; the line takes the document's currency.
               const line = item && lineFromItem(item, isPurchase, taxCategories);
-              if (line) addLine({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) });
+              if (line) addLine(newLineInclusive({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }, draft));
             })
           }
           searchPlaceholder={tr('sales:editor.searchItems')}
@@ -1331,7 +1405,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   onPress={() => {
                     // Added to the draft only when saved, so closing the sheet leaves no blank line behind.
                     setItemOpen(false);
-                    setEditingLine(blankLine(draft.currency, taxCategories));
+                    setEditingLine(newLineInclusive(blankLine(draft.currency, taxCategories), draft));
                   }}
                 />
                 <Button
@@ -1406,7 +1480,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           message={creditWarning ?? ''}
           confirmLabel={tr('sales:editor.creditLimitProceed')}
           icon="alert-outline"
-          onCancel={() => setCreditWarning(null)}
+          onCancel={() => {
+            setCreditWarning(null);
+            setSendAfter(false);
+          }}
           onConfirm={() => {
             setCreditWarning(null);
             setCreditOverride(true);
@@ -1418,9 +1495,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           visible={confirmFinalize}
           title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
           message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
-          confirmLabel={tr('sales:editor.finalise')}
-          icon="check-decagram-outline"
-          onCancel={() => setConfirmFinalize(false)}
+          confirmLabel={sendAfter ? tr('sales:editor.saveAndSend') : tr('sales:editor.finalise')}
+          icon={sendAfter ? 'email-fast-outline' : 'check-decagram-outline'}
+          onCancel={() => {
+            setConfirmFinalize(false);
+            setSendAfter(false);
+          }}
           onConfirm={() => {
             setConfirmFinalize(false);
             void save(true);
