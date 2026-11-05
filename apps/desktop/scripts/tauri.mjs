@@ -1,6 +1,6 @@
 // Runs the Tauri CLI around the web app's static export (apps/web/dist). A build gets the same
 // Content-Security-Policy the Railway deploy serves (tools/static-server.mjs); Tauri adds its own
-// IPC origins to it. Dev runs without one so Metro's hot reload can connect.
+// IPC origins and script hashes to it. Dev runs without one so Metro's hot reload can connect.
 //
 //   EXPO_PUBLIC_API_URL  the API this build talks to, inlined into the bundle by Expo
 //   STORAGE_ORIGIN       where uploads go directly (S3 or https://<account>.blob.core.windows.net)
@@ -32,7 +32,10 @@ if (command === 'build') {
   }
   console.log(`Desktop build talks to ${api}`);
   const csp = contentSecurityPolicy({ connect: [originOf(api), originOf(webEnv('STORAGE_ORIGIN'))] });
-  args.push('--config', JSON.stringify({ app: { security: { csp } } }));
+  // Tauri hashes the page's inline styles into style-src, and a hash there makes the webview ignore
+  // 'unsafe-inline', which drops every style react-native-web inserts at runtime.
+  const security = { csp, dangerousDisableAssetCspModification: ['style-src'] };
+  args.push('--config', JSON.stringify({ app: { security } }));
 }
 
 const result = spawnSync('tauri', args, { stdio: 'inherit', shell: process.platform === 'win32' });
