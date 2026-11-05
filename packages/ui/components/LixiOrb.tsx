@@ -97,6 +97,9 @@ export function LixiOrb({ size = 56, thinking = false, face = false }: { size?: 
           contentFit="contain"
           autoplay
           accessibilityIgnoresInvertColors
+          // Decorative: whatever holds the orb carries the name. An empty alt
+          // tells a screen reader to skip the image.
+          accessibilityLabel=""
         />
       </Animated.View>
     </View>
@@ -105,5 +108,5 @@ export function LixiOrb({ size = 56, thinking = false, face = false }: { size?: 
 
 /** The logo without the motion, for small places like a chat avatar. */
 export function LixiMark({ size = 26 }: { size?: number }) {
-  return <Image source={LOGO} style={{ width: size, height: size }} contentFit="contain" accessibilityIgnoresInvertColors />;
+  return <Image source={LOGO} style={{ width: size, height: size }} contentFit="contain" accessibilityIgnoresInvertColors accessibilityLabel="" />;
 }

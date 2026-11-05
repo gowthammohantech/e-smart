@@ -25,7 +25,7 @@ if (typeof document !== 'undefined' && !document.getElementById('esmart-fonts'))
     /* react-native-web gives every input its own system font class; inputs
        should read in the same face as the labels above them. */
     input, textarea, select, button { font-family: ${WEB_FONT_FAMILY} !important; }
-    ::selection { background: rgba(10,108,240,0.22); }
+    ::selection { background: rgba(8,91,204,0.22); }
   `;
   document.head.appendChild(style);
 }

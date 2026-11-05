@@ -25,6 +25,8 @@ export function CompanyLogo({ uri, name, size = 84 }: { uri?: string; name: stri
         contentFit="contain"
         onError={() => setFailedUri(uri)}
         accessibilityIgnoresInvertColors
+        // Decorative: the company's name is always written beside it.
+        accessibilityLabel=""
       />
     );
   }

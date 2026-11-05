@@ -80,7 +80,8 @@ export function Button({
     if (variant === 'primary') return pressed ? t.c.primaryPressed : hovered ? t.c.primaryHover : t.c.primary;
     if (variant === 'ghost') return pressed || hovered ? t.c.card2 : t.c.card;
     if (!pressed && !hovered) return p.bg;
-    if (variant === 'secondary') return t.scheme === 'dark' ? 'rgba(59,139,255,0.22)' : 'rgba(10,108,240,0.14)';
+    // The chip tint, a little stronger; still 4.5:1 under the primary label.
+    if (variant === 'secondary') return t.scheme === 'dark' ? 'rgba(85,155,255,0.20)' : 'rgba(8,91,204,0.14)';
     return p.bg;
   };
 

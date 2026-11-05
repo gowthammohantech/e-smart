@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
+import { readableOn } from '@esmart/ui/theme/contrast';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -107,7 +108,8 @@ function LixiButton({ label }: { label: string }) {
       }}
     >
       <LixiMark size={22} />
-      <Text variant="small" weight="600" style={{ color: LIXI.blue }}>
+      {/* Lixi's own blue, lightened in dark mode until it reads on the bar (3.1:1 as is). */}
+      <Text variant="small" weight="600" style={{ color: readableOn(LIXI.blue, t.c.paper, t.c.text) }}>
         Lixi
       </Text>
     </Pressable>

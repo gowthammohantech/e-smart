@@ -1,19 +1,6 @@
+import { blend, contrast, readableOn } from '../contrast';
 import { palettes, type ColorTokens } from '../tokens';
 import { webPalettes } from '../webTokens';
-
-/** WCAG 2.x relative luminance of a #RRGGBB colour. */
-function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
 
 const sets: [string, ColorTokens][] = [
   ['web light', webPalettes.light],
@@ -42,5 +29,42 @@ describe.each(sets.slice(0, 2))('%s primary button', (_name, c) => {
   it('label reads on the button', () => {
     expect(contrast(c.onPrimary, c.primary)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(c.onPrimary, c.primaryHover)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // A selected nav item, a secondary button, a chip: primary text on the
+  // chip tint laid over a surface, and on the stronger hovered tint.
+  it.each([
+    ['paper', 'chip'],
+    ['card2', 'chip'],
+    ['card2', 'hover'],
+  ] as const)('primary text reads on its tint over %s (%s)', (surface, tint) => {
+    const alpha = Number(/,\s*([\d.]+)\)$/.exec(c.chip)![1]) + (tint === 'hover' ? 0.06 : 0);
+    expect(contrast(c.primary, blend(c.primary, c[surface], alpha))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+// Badges and status chips: a tone's text on its own soft tint, over the page and the grey card.
+describe.each(sets.slice(0, 2))('%s status tones on their tints', (_name, c) => {
+  const alphaOf = (rgba: string) => Number(/,\s*([\d.]+)\)$/.exec(rgba)![1]);
+  it.each([
+    ['good', 'goodSoft'],
+    ['warn', 'warnSoft'],
+    ['bad', 'badSoft'],
+    ['muted', 'mutedSoft'],
+  ] as const)('%s reads on %s', (tone, soft) => {
+    for (const surface of [c.paper, c.card2, c.bg]) {
+      expect(contrast(c[tone], blend(c[tone], surface, alphaOf(c[soft])))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+describe('readableOn', () => {
+  it('keeps a colour that already reads', () => {
+    expect(readableOn('#101828', '#FFFFFF', '#000000')).toBe('#101828');
+  });
+
+  it('pulls a pale colour towards the text colour until it reads', () => {
+    const out = readableOn('#00C2C7', '#DEF7F8', '#101828');
+    expect(contrast(out, '#DEF7F8')).toBeGreaterThanOrEqual(4.5);
   });
 });
