@@ -14,14 +14,8 @@ import { newId } from '../../lib/ids';
 import { addressTo } from '../../lib/wire';
 import { branchHandlers } from './branches';
 import { createNumberingSeries, logCompanyDefaults, seedCompanyDefaults } from './defaults';
-import { logoHandlers } from './logo';
+import { companyImageHandlers, companyWithImages } from './logo';
 import { branchToWire, companyColumns, companyToWire } from './wire';
-
-export async function logoKeyOf(db: DbOrTx, attachmentId: string | null): Promise<string | null> {
-  if (!attachmentId) return null;
-  const [a] = await db.select({ key: schema.attachments.storageKey }).from(schema.attachments).where(eq(schema.attachments.id, attachmentId));
-  return a?.key ?? null;
-}
 
 /** GSTIN check digit, and the reference data the foreign keys need. */
 async function validateCompany(db: DbOrTx, body: { country: string; baseCurrency: string; taxRegistration?: { regime: string; identifier?: string } }) {
@@ -42,7 +36,7 @@ export const companiesHandlers = defineHandlers({
     const ids = ctx.user.companyIds;
     if (!ids.length) return { data: [] };
     const rows = await ctx.db.select().from(schema.companies).where(inArray(schema.companies.id, ids)).orderBy(asc(schema.companies.createdAt));
-    return { data: await Promise.all(rows.map(async (r) => companyToWire(ctx.deps, r, await logoKeyOf(ctx.db, r.logoAttachmentId)))) };
+    return { data: await Promise.all(rows.map(async (r) => companyWithImages(ctx.deps, ctx.db, r))) };
   },
 
   async createCompany(ctx) {
@@ -98,7 +92,7 @@ export const companiesHandlers = defineHandlers({
 
   async getCompany(ctx) {
     setEtag(ctx.reply, ctx.company.version);
-    return companyToWire(ctx.deps, ctx.company, await logoKeyOf(ctx.db, ctx.company.logoAttachmentId));
+    return companyWithImages(ctx.deps, ctx.db, ctx.company);
   },
 
   /**
@@ -159,10 +153,10 @@ export const companiesHandlers = defineHandlers({
       return updated;
     });
     setEtag(ctx.reply, row.version);
-    return companyToWire(ctx.deps, row, await logoKeyOf(ctx.db, row.logoAttachmentId));
+    return companyWithImages(ctx.deps, ctx.db, row);
   },
 
-  ...logoHandlers,
+  ...companyImageHandlers,
   ...branchHandlers,
 });
 

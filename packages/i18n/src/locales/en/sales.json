@@ -386,7 +386,15 @@
     "validUntil": "Valid until",
     "ackNo": "Ack no.",
     "ackDate": "Ack date",
-    "amountInWords": "Amount in words"
+    "amountInWords": "Amount in words",
+    "bankDetails": "Bank details",
+    "accountName": "Account name",
+    "accountNumber": "Account no.",
+    "ifsc": "IFSC",
+    "bank": "Bank",
+    "branch": "Branch",
+    "upi": "UPI",
+    "scanToPay": "Scan to pay with any UPI app"
   },
   "returnPicker": {
     "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",

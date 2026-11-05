@@ -334,6 +334,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** The authorised signatory's signature, as printed on documents */
+        put: operations["uploadCompanySignature"];
+        post?: never;
+        delete: operations["removeCompanySignature"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/branches": {
         parameters: {
             query?: never;
@@ -3581,6 +3600,22 @@ export interface components {
              */
             returnFrequency?: "monthly" | "qrmp";
         };
+        /**
+         * @description The account customers pay into, printed on invoices; with `upiId`, a UPI QR for the amount
+         *     due too. Sent whole: an empty string clears a field, and an absent object leaves them all as they are.
+         */
+        BankDetails: {
+            bankName?: string;
+            /** @description Name the account is held in */
+            accountName?: string;
+            /** @description Up to 34 letters and digits; single spaces between groups are allowed and dropped when saved */
+            accountNumber?: string;
+            /** @description Indian Financial System Code */
+            ifsc?: string;
+            branch?: string;
+            /** @description Virtual payment address, e.g. `vertex@okhdfc` */
+            upiId?: string;
+        };
         Company: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly accountId?: string;
@@ -3588,6 +3623,12 @@ export interface components {
             legalName?: string;
             /** Format: uri */
             readonly logoUri?: string;
+            /**
+             * Format: uri
+             * @description The authorised signatory's signature, printed above that line on documents. Set through /signature.
+             */
+            readonly signatureUri?: string;
+            bankDetails?: components["schemas"]["BankDetails"];
             /** @description Stable slug, e.g. `wholesale` */
             businessType: string;
             country: string;
@@ -6152,6 +6193,58 @@ export interface operations {
         };
     };
     removeCompanyLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    uploadCompanySignature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PNG or JPEG, up to 5 MB; a transparent PNG prints best
+                     */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Signature stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+        };
+    };
+    removeCompanySignature: {
         parameters: {
             query?: never;
             header?: never;

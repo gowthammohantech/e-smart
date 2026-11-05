@@ -1,4 +1,4 @@
-import { Branch, BusinessDocument, Company, EwayBill, Party } from '../types';
+import { BankDetails, Branch, BusinessDocument, Company, DocumentKind, EwayBill, Party } from '../types';
 import { documentKindLabel, type Translate } from '../labels';
 import { flattenTaxComponents } from '../domain/lineCalc';
 import { formatMoney, formatPercent, formatQty } from '../lib/format';
@@ -55,10 +55,60 @@ function addressBlock(a?: { line1?: string; line2?: string; city?: string; state
  * for sharing and shown in the in-app preview by the app, and rendered to PDF
  * by the API (`getDocumentPdf`), so both print the same page.
  */
+/** The signatory's signature above the line, from the same kinds of source as the logo. */
+function signatureTag(src: string | undefined): string {
+  if (!src || !/^(https?:|data:image\/|file:|blob:)/i.test(src)) return '';
+  return `<img class="signature" src="${esc(src)}" alt="">`;
+}
+
 /** The business logo above its name, from a link, a data URI or a file just picked on the device. */
 function logoTag(src: string | undefined, name: string | undefined): string {
   if (!src || !/^(https?:|data:image\/|file:|blob:)/i.test(src)) return '';
   return `<img class="logo" src="${esc(src)}" alt="${esc(name)}">`;
+}
+
+/** Documents a customer pays against, which print the bank account (and a UPI QR) to pay into. */
+const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'quote', 'salesOrder'];
+
+/**
+ * `upi://pay` for the amount, read by every UPI app: the payee address and name,
+ * the amount in rupees, and the document number as the note, so the payment is
+ * easy to match. INR only; UPI carries nothing else.
+ */
+export function upiPayLink(upiId: string, payee: string, amountMinor: number, note: string): string {
+  // Spaces as '+', and the payee's '@' left as is: some UPI apps don't decode %40.
+  const q = (s: string) => encodeURIComponent(s).replace(/%20/g, '+').replace(/%40/g, '@');
+  return `upi://pay?pa=${q(upiId)}&pn=${q(payee)}&am=${(amountMinor / 100).toFixed(2)}&cu=INR&tn=${q(note)}`;
+}
+
+/** The bank account block beside the notes, with a UPI QR for the total when the document is in rupees. */
+function bankBlock(doc: BusinessDocument, company: Company | undefined, bi: (key: string) => string): string {
+  const b: BankDetails | undefined = company?.bankDetails;
+  if (!b || !PAYABLE_KINDS.includes(doc.kind) || !(b.accountNumber || b.upiId)) return '';
+  const row = (key: string, value?: string) => (value ? `<tr><td class="muted">${bi(key)}</td><td>${esc(value)}</td></tr>` : '');
+  let qr = '';
+  if (b.upiId && doc.currency === 'INR' && doc.totals.grandTotal.minor > 0) {
+    try {
+      const link = upiPayLink(b.upiId, b.accountName || company?.name || '', doc.totals.grandTotal.minor, doc.number);
+      qr = `<div class="upi-qr">${qrSvgString(qrMatrix(link, 'M'), { size: 112, quietZone: 2 })}<div class="muted">${bi('sales:pdf.scanToPay')}</div></div>`;
+    } catch {
+      qr = '';
+    }
+  }
+  return `<div class="bank">
+      <div class="cap">${bi('sales:pdf.bankDetails')}</div>
+      <div class="bank-body">
+        <table class="bank-rows"><tbody>
+          ${row('sales:pdf.accountName', b.accountName)}
+          ${row('sales:pdf.bank', b.bankName)}
+          ${row('sales:pdf.accountNumber', b.accountNumber)}
+          ${row('sales:pdf.ifsc', b.ifsc)}
+          ${row('sales:pdf.branch', b.branch)}
+          ${row('sales:pdf.upi', b.upiId)}
+        </tbody></table>
+        ${qr}
+      </div>
+    </div>`;
 }
 
 export function buildDocumentHtml({
@@ -69,6 +119,7 @@ export function buildDocumentHtml({
   branch,
   ewayBill,
   logoSrc,
+  signatureSrc,
   source,
   t,
   language,
@@ -84,6 +135,8 @@ export function buildDocumentHtml({
   source?: Pick<BusinessDocument, 'number' | 'date'>;
   /** The business logo, when not `company.logoUri`: the server passes it inline, as a data URI, so a PDF never waits on a link. */
   logoSrc?: string;
+  /** The signature, when not `company.signatureUri`: inline from the server, as the logo is. */
+  signatureSrc?: string;
   /** Translator for the descriptive labels. Statutory field names stay English. */
   t: Translate;
   language: LanguageCode;
@@ -225,7 +278,13 @@ export function buildDocumentHtml({
   .words { margin-top: 10px; text-align: right; font-size: 12px; }
   .notes { margin-top: 26px; display: flex; gap: 28px; }
   .notes > div { flex: 1; }
+  .bank { flex: 1; page-break-inside: avoid; }
+  .bank-body { display: flex; gap: 14px; align-items: flex-start; }
+  .bank-rows td { padding: 2px 10px 2px 0; border: 0; font-size: 11px; }
+  .upi-qr { text-align: center; font-size: 9px; max-width: 120px; }
+  .upi-qr svg { display: block; margin: 0 auto 4px; }
   .sign { margin-top: 34px; text-align: right; }
+  .sign .signature { display: block; margin: 8px 0 -34px auto; max-width: 180px; max-height: 60px; object-fit: contain; }
   .sign .line { margin-top: 42px; border-top: 1px solid #E2E8F1; display: inline-block; padding-top: 5px; min-width: 190px; }
   .foot { margin-top: 26px; text-align: center; color: #5A6478; font-size: 10px; }
   .badge { display: inline-block; padding: 3px 9px; border-radius: 99px; background: rgba(0,122,255,0.10); color: #007AFF; font-size: 10px; font-weight: 700; }
@@ -316,10 +375,12 @@ export function buildDocumentHtml({
       ${doc.notes ? `<div class="cap">${bi('sales:pdf.notes')}</div><div>${esc(doc.notes)}</div>` : ''}
       ${doc.terms ? `<div class="cap" style="margin-top:12px">Terms &amp; conditions</div><div class="muted">${esc(doc.terms)}</div>` : ''}
     </div>
+    ${bankBlock(doc, company, bi)}
   </div>
 
   <div class="sign">
     <div class="muted">For ${esc(company?.name)}</div>
+    ${signatureTag(signatureSrc ?? company?.signatureUri)}
     <div class="line muted">${bi('sales:pdf.authorisedSignatory')}</div>
   </div>
 

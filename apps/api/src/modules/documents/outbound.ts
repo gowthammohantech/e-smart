@@ -11,7 +11,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { requiredAddressFrom } from '../../lib/wire';
-import { companyLogoDataUri } from '../companies/logo';
+import { companyLogoDataUri, companySignatureDataUri } from '../companies/logo';
 import { companyCore, partyCore, type DocRow } from './engine';
 import { effectiveStatus, today } from './lifecycle';
 import { documentsToWire, toCoreDocument } from './wire';
@@ -71,6 +71,7 @@ export async function renderDocumentHtml(
     ewayBill,
     source: AGAINST_SOURCE.includes(row.kind) ? source : undefined,
     logoSrc: await companyLogoDataUri(db, deps, company),
+    signatureSrc: await companySignatureDataUri(db, deps, company),
     t: i18n.getFixedT(language),
     language,
   });

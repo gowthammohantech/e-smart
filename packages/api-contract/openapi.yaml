@@ -474,6 +474,33 @@ paths:
       x-roles: [owner, admin]
       responses:
         '204': { description: Removed }
+  /companies/{companyId}/signature:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    put:
+      tags: [Companies]
+      operationId: uploadCompanySignature
+      x-roles: [owner, admin]
+      summary: The authorised signatory's signature, as printed on documents
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary, description: 'PNG or JPEG, up to 5 MB; a transparent PNG prints best' }
+      responses:
+        '200':
+          description: Signature stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+    delete:
+      tags: [Companies]
+      operationId: removeCompanySignature
+      x-roles: [owner, admin]
+      responses:
+        '204': { description: Removed }
   /companies/{companyId}/branches:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -5104,6 +5131,18 @@ components:
         lutNumber: { type: string, description: 'Letter of Undertaking. While valid, exports and SEZ supplies are zero-rated instead of charged IGST.' }
         lutValidTill: { type: string, format: date, description: Last day the LUT covers; absent means open-ended }
         returnFrequency: { type: string, enum: [monthly, qrmp], description: 'Unset reads as monthly. How GSTR-1 and GSTR-3B are filed. QRMP: quarterly returns with monthly payment.' }
+    BankDetails:
+      type: object
+      description: |
+        The account customers pay into, printed on invoices; with `upiId`, a UPI QR for the amount
+        due too. Sent whole: an empty string clears a field, and an absent object leaves them all as they are.
+      properties:
+        bankName: { type: string, maxLength: 100 }
+        accountName: { type: string, maxLength: 100, description: Name the account is held in }
+        accountNumber: { type: string, pattern: '^((?:[0-9A-Za-z] ?){6,34})?$', description: 'Up to 34 letters and digits; single spaces between groups are allowed and dropped when saved' }
+        ifsc: { type: string, pattern: '^([A-Za-z]{4}0[A-Za-z0-9]{6})?$', description: Indian Financial System Code }
+        branch: { type: string, maxLength: 100 }
+        upiId: { type: string, pattern: '^([A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63})?$', description: 'Virtual payment address, e.g. `vertex@okhdfc`' }
     Company:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -5115,6 +5154,8 @@ components:
             name: { type: string }
             legalName: { type: string }
             logoUri: { type: string, format: uri, readOnly: true }
+            signatureUri: { type: string, format: uri, readOnly: true, description: "The authorised signatory's signature, printed above that line on documents. Set through /signature." }
+            bankDetails: { $ref: '#/components/schemas/BankDetails' }
             businessType: { type: string, description: 'Stable slug, e.g. `wholesale`' }
             country: { type: string }
             baseCurrency: { type: string }

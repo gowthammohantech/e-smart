@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
+import { bankDetailsOf } from '../companies/wire';
 import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import { NOTE_KINDS, PURCHASE_KINDS, initialStatus, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { resolveRate } from '@esmart/core/domain/fx';
@@ -63,6 +64,7 @@ export function companyCore(row: CompanyRow): Company {
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     allowNegativeStock: row.allowNegativeStock,
+    bankDetails: bankDetailsOf(row),
     plan: row.plan,
     createdAt: iso(row.createdAt)!,
   };

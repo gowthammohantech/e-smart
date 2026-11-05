@@ -17,12 +17,25 @@ export type Address = {
 /** Subscription tier. Free and Basic sell; Pro and Business run the whole business. */
 export type PlanTier = 'free' | 'basic' | 'pro' | 'business';
 
+/** The account customers pay into, printed on invoices (with a UPI QR when there's a UPI ID). */
+export type BankDetails = {
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  branch?: string;
+  upiId?: string;
+};
+
 export type Company = {
   id: string;
   accountId: string;
   name: string;
   legalName?: string;
   logoUri?: string;
+  /** The authorised signatory's signature, printed above that line. Set by upload, not by saving the company. */
+  signatureUri?: string;
+  bankDetails?: BankDetails;
   businessType: string;
   country: string;
   baseCurrency: string;
