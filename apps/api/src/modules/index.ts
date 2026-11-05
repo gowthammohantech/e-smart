@@ -1,6 +1,7 @@
 import type { Handlers } from '../context';
 import { authHandlers } from './auth/handlers';
 import { meHandlers } from './me/handlers';
+import { myMfaHandlers } from './me/mfa';
 import { deleteAccountHandlers } from './me/deleteAccount';
 import { companiesHandlers } from './companies/handlers';
 import { usersHandlers } from './users/handlers';
@@ -40,6 +41,7 @@ export { webhookHandlers } from './webhooks/handlers';
 export const handlers: Handlers = {
   ...authHandlers,
   ...meHandlers,
+  ...myMfaHandlers,
   ...deleteAccountHandlers,
   ...companiesHandlers,
   ...usersHandlers,

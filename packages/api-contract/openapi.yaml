@@ -275,6 +275,87 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
+  /me/mfa:
+    get:
+      tags: [Me]
+      operationId: getMyMfa
+      summary: Whether I have an authenticator app turned on, and whether this session has passed it
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+    delete:
+      tags: [Me]
+      operationId: disableMyMfa
+      summary: Turns my authenticator off, on a code from it or a recovery code
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '204': { description: Turned off }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /me/mfa/enrollment:
+    post:
+      tags: [Me]
+      operationId: startMyMfaEnrollment
+      summary: A new authenticator secret to scan; replaces one not yet confirmed
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaEnrollment' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /me/mfa/enrollment/confirm:
+    post:
+      tags: [Me]
+      operationId: confirmMyMfaEnrollment
+      summary: Turns the authenticator on with a code from it, passes this session, and returns the recovery codes, shown this once
+      description: From then on every new session of mine is refused (403 MFA_REQUIRED) until it passes verifyMyMfa.
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryCodes' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /me/mfa/verify:
+    post:
+      tags: [Me]
+      operationId: verifyMyMfa
+      summary: Passes this session with a code from my authenticator, or one unused recovery code
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
   /me/delete:
     post:
       tags: [Me]

@@ -105,6 +105,9 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
       return;
     }
 
+    // A business user who turned on an authenticator passes it once per session before anything else.
+    if (user.mfaEnrolled && !user.mfaVerified && !op.mfaExempt) throw forbidden('MFA_REQUIRED', 'Enter the code from your authenticator app');
+
     const companyId = (req.params as { companyId?: string }).companyId;
     if (companyId) {
       req.company = await companyFor(deps, user, companyId);
