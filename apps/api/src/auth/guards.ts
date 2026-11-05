@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { schema } from '@esmart/db';
-import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
+import { FULL_PLAN, hasModule, moduleEnabled, type Module } from '@esmart/core/domain/plan';
 import type { AuthUser, CompanyRow, Deps } from '../context';
 import { ApiError, forbidden, planUpgradeRequired, unauthorized } from '../http/errors';
 import type { AccessClaims } from './sessions';
@@ -122,6 +122,10 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
 
     if (op.planModule && req.company && !hasModule(req.company.plan, op.planModule)) {
       throw planUpgradeRequired(FULL_PLAN, op.planModule);
+    }
+    // In the plan but switched off by the owner (or something it needs is).
+    if (op.planModule && req.company && !moduleEnabled(req.company.plan, req.company.disabledModules as Module[], op.planModule)) {
+      throw forbidden('MODULE_OFF', `${op.planModule} is switched off for this business; an owner can switch it on in Settings`);
     }
   });
 }

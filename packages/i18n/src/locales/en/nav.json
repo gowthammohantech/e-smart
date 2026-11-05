@@ -155,7 +155,8 @@
       "notificationSettings": "Notification preferences",
       "books": "Books",
       "gstPortal": "GST portal connection",
-      "security": "Sign-in security"
+      "security": "Sign-in security",
+      "modules": "Modules"
     },
     "signOut": {
       "row": "Sign out",

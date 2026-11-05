@@ -49,6 +49,7 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     lockedThroughDate: row.lockedThroughDate,
+    disabledModules: (row.disabledModules as Schema<'Company'>['disabledModules']) ?? [],
     perpetualStockFrom: row.perpetualStockFrom,
     allowNegativeStock: row.allowNegativeStock,
     msmeBankRate: Number(row.msmeBankRate),

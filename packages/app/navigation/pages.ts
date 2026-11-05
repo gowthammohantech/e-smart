@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { IconName } from '@esmart/ui/components/Icon';
 import { canOpen } from '@esmart/core/domain/plan';
-import { usePlan } from '../store/selectors';
+import { useDisabledModules, usePlan } from '../store/selectors';
 import { MENU, SETTINGS, TOOLS, appHref, sectionPath, type SettingsGroupKey } from './menu';
 import type { TabName } from './tabs';
 
@@ -39,10 +39,11 @@ export type AppPage = {
 export function useAppPages(): AppPage[] {
   const { t: tr } = useTranslation(['nav']);
   const plan = usePlan();
+  const disabled = useDisabledModules();
 
   return useMemo(() => {
     const list: AppPage[] = [];
-    const add = (page: AppPage) => canOpen(plan, page.route) && list.push({ ...page, route: appHref(page.route) });
+    const add = (page: AppPage) => canOpen(plan, page.route, disabled) && list.push({ ...page, route: appHref(page.route) });
 
     MENU.filter((s) => s.name !== 'more').forEach((s) => {
       const name = tr(`nav:tab.${s.name}` as 'nav:tab.index');
@@ -70,7 +71,7 @@ export function useAppPages(): AppPage[] {
     });
 
     return list;
-  }, [tr, plan]);
+  }, [tr, plan, disabled]);
 }
 
 /** Pages whose name matches, then pages in a matching section ("sales" finds the Sales pages). */

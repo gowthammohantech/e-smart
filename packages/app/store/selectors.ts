@@ -30,7 +30,7 @@ import { isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { resolveRate } from '@esmart/core/domain/fx';
-import { Module, ModuleSet, canOpen, hasModule, moduleSetFor } from '@esmart/core/domain/plan';
+import { Module, ModuleSet, canOpen, moduleSetFor, moduleEnabled } from '@esmart/core/domain/plan';
 
 /**
  * Every read below is scoped by the active company, which is how the
@@ -49,15 +49,22 @@ export function useModuleSet(): ModuleSet {
   return moduleSetFor(usePlan());
 }
 
-/** Whether the active company's plan includes a module. Data exists either way. */
+/** Modules the owner switched off for the active company. */
+export function useDisabledModules(): Module[] {
+  return useAppStore((s) => s.companies.find((c) => c.id === s.activeCompanyId)?.disabledModules) ?? NO_MODULES;
+}
+const NO_MODULES: Module[] = [];
+
+/** Whether a module is on for the active company: in its plan and not switched off. Data exists either way. */
 export function useHasModule(module: Module): boolean {
-  return hasModule(usePlan(), module);
+  return moduleEnabled(usePlan(), useDisabledModules(), module);
 }
 
-/** A filter for lists of routes: keeps what the active plan can open. */
+/** A filter for lists of routes: keeps what the active plan can open and the owner hasn't switched off. */
 export function useCanOpen(): (route: string) => boolean {
   const plan = usePlan();
-  return useMemo(() => (route: string) => canOpen(plan, route), [plan]);
+  const disabled = useDisabledModules();
+  return useMemo(() => (route: string) => canOpen(plan, route, disabled), [plan, disabled]);
 }
 
 export function useBaseCurrency(): string {

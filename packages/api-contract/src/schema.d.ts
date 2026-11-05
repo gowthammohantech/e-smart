@@ -3988,6 +3988,8 @@ export interface components {
             website?: string;
             taxRegistration?: components["schemas"]["TaxRegistration"];
             fiscalYearStartMonth: number;
+            /** @description Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it. */
+            disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
             /**
              * Format: date
              * @description Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.

@@ -1,4 +1,5 @@
 import { Money } from '../lib/money';
+import type { Module } from '../domain/plan';
 
 /* ------------------------------------------------------------------ */
 /* Tenancy: CustomerAccount -> Company -> Branch -> User  (FRD 2)      */
@@ -47,6 +48,8 @@ export type Company = {
   fiscalYearStartMonth: number;
   /** Books are closed up to and including this date. */
   lockedThroughDate?: string | null;
+  /** Modules the owner switched off within the plan (domain/plan moduleEnabled). */
+  disabledModules?: Module[];
   /**
    * Perpetual stock from this day (the start of a financial year): purchases of tracked goods post to
    * Stock in hand at cost and the goods sold to Cost of goods sold. Unset, the books are periodic.

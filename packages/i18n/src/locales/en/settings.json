@@ -603,5 +603,24 @@
     "gateTitle": "Enter your code",
     "gateBody": "Your account uses an authenticator app. Enter the 6-digit code from it, or a recovery code, to continue.",
     "verify": "Continue"
+  },
+  "modules": {
+    "title": "Modules",
+    "hint": "Switch off what this business does not use: it leaves the menus, and its records stay for when you switch it back on.",
+    "ownerOnly": "Only an owner can switch modules on or off.",
+    "on": "{{module}} switched on",
+    "off": "{{module}} switched off",
+    "needs": "Needs {{list}}.",
+    "takes": "Switching it off also switches off {{list}}.",
+    "about": {
+      "purchases": "Purchase orders, goods received, bills and suppliers.",
+      "inventory": "Stock levels, movements and valuation.",
+      "expenses": "Expenses and their categories.",
+      "ocr": "Reading bills and receipts from a photo.",
+      "fx": "Customers and suppliers billed in other currencies.",
+      "branches": "More than one branch or godown.",
+      "payables": "What you owe suppliers, TDS and MSME dues.",
+      "books": "Chart of accounts, vouchers, bank reconciliation and the statements."
+    }
   }
 }

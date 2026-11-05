@@ -112,12 +112,14 @@ export const companiesHandlers = defineHandlers({
     // Left out by an app that doesn't know about it: that isn't reopening the books.
     const lockedThroughDate = ctx.body.lockedThroughDate === undefined ? current.lockedThroughDate : ctx.body.lockedThroughDate;
     if (lockedThroughDate !== current.lockedThroughDate && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can close or reopen the books');
+    const disabledModules = ctx.body.disabledModules === undefined ? (current.disabledModules as string[]) : [...new Set(ctx.body.disabledModules)].sort();
+    if (JSON.stringify(disabledModules) !== JSON.stringify([...(current.disabledModules as string[])].sort()) && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can switch modules on or off');
     const perpetualStockFrom = ctx.body.perpetualStockFrom === undefined ? current.perpetualStockFrom : ctx.body.perpetualStockFrom;
     if (perpetualStockFrom !== current.perpetualStockFrom) checkPerpetualFrom(ctx.user.role, current.fiscalYearStartMonth, lockedThroughDate, current.perpetualStockFrom, perpetualStockFrom);
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(schema.companies)
-        .set({ ...companyColumns(body), lockedThroughDate, perpetualStockFrom, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...companyColumns(body), lockedThroughDate, perpetualStockFrom, disabledModules, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(schema.companies.id, current.id), eq(schema.companies.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
