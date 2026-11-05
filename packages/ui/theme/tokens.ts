@@ -16,8 +16,14 @@ export type ColorTokens = {
   card2: string;
   paper: string;
   line: string;
-  /** A firmer border, for inputs and hovered cards. */
+  /** A firmer border, for hovered cards and controls. */
   lineStrong: string;
+  /**
+   * The resting border of a text field or picker. WCAG 1.4.11 needs a
+   * control's edge at 3:1 against what it sits on, which `line` (a divider)
+   * is nowhere near; keep `line` for dividers and card edges.
+   */
+  inputBorder: string;
   text: string;
   muted: string;
   good: string;
@@ -45,6 +51,7 @@ const dark: ColorTokens = {
   paper: '#141A24',
   line: '#1D273B',
   lineStrong: '#2A3650',
+  inputBorder: '#65708A',
   text: '#FFFFFF',
   muted: '#8E98AC',
   good: '#34C88A',
@@ -72,6 +79,7 @@ const light: ColorTokens = {
   paper: '#FFFFFF',
   line: '#E2E8F1',
   lineStrong: '#C9D1DF',
+  inputBorder: '#7D879A',
   text: '#0E121A',
   muted: '#5A6478',
   good: '#12855C',

@@ -11,7 +11,9 @@ const dark: ColorTokens = {
   primary: '#3B8BFF',
   primaryPressed: '#2F74DB',
   primaryHover: '#5A9DFF',
-  onPrimary: '#FFFFFF',
+  // Dark text: white on this blue is 3.3:1, under the 4.5:1 a button label needs.
+  // Darkening the blue instead would fail it as link text on the dark page.
+  onPrimary: '#0B0F17',
   bg: '#0B0F17',
   canvas: '#070A10',
   card: '#121826',
@@ -19,6 +21,7 @@ const dark: ColorTokens = {
   paper: '#121826',
   line: '#1F2737',
   lineStrong: '#2C3649',
+  inputBorder: '#636D80',
   text: '#E9EDF5',
   muted: '#8B95A8',
   good: '#3CCB7F',
@@ -46,6 +49,7 @@ const light: ColorTokens = {
   paper: '#FFFFFF',
   line: '#E4E7EC',
   lineStrong: '#D0D5DD',
+  inputBorder: '#7D879A',
   text: '#101828',
   muted: '#5D6B82',
   good: '#067647',

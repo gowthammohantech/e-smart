@@ -57,7 +57,7 @@ export function DateField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error || stray ? t.c.bad : focused ? t.c.primary : t.c.line,
+          borderColor: error || stray ? t.c.bad : focused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: desktop ? 42 : 48,
           ...webFocusHalo(t, focused && !error && !stray),
