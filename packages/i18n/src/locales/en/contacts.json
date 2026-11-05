@@ -127,6 +127,32 @@
     "editContact": "Edit contact",
     "sendReminder": "Send payment reminder",
     "deleteContact": "Delete contact",
-    "deleteTitle": "Delete {{name}}?"
+    "deleteTitle": "Delete {{name}}?",
+    "statement": "Statement of account"
+  },
+  "statement": {
+    "title": "Statement · {{name}}",
+    "from": "From",
+    "to": "To",
+    "opening": "Opening on {{date}}",
+    "closing": "Balance on {{date}}",
+    "openingEntry": "Opening balance",
+    "advance": "advance",
+    "dr": "Dr",
+    "cr": "Cr",
+    "type": {
+      "document": "Document",
+      "payment": "Payment",
+      "voucher": "Voucher",
+      "opening": "Opening"
+    },
+    "empty": "Nothing in this period",
+    "emptyBody": "No documents, payments or vouchers between these dates.",
+    "loadFailed": "Could not load the statement",
+    "download": "Download PDF",
+    "preparing": "Preparing the statement…",
+    "downloaded": "Statement downloaded",
+    "ready": "Statement ready",
+    "failed": "Could not make the PDF."
   }
 }

@@ -447,6 +447,7 @@ export function PartyDetail({ party }: { party: Party }) {
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={party.name}>
         {[
           { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
+          { label: tr('contacts:detail.statement'), icon: 'book-open-outline' as const, onPress: () => router.push(`/(app)/contacts/${isCustomer ? 'customers' : 'suppliers'}/${party.id}/statement` as never) },
           ...(isCustomer
             ? [
                 { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
