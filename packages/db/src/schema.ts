@@ -1778,6 +1778,8 @@ export const companies = pgTable("companies", {
 	lutValidTill: date("lut_valid_till", { mode: 'string' }),
 	returnFrequency: returnFrequency("return_frequency").default('monthly').notNull(),
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
+	// Modules the owner switched off within the plan; their records stay.
+	disabledModules: jsonb("disabled_modules").default([]).notNull(),
 	lockedThroughDate: date("locked_through_date"),
 	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
 	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
