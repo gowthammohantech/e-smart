@@ -323,6 +323,26 @@
       "invalid": "Fix",
       "duplicate": "Already there",
       "ready": "Ready"
+    },
+    "field": {
+      "name": "Name",
+      "sku": "SKU",
+      "description": "Description",
+      "type": "Goods or service",
+      "unit": "Unit",
+      "salePrice": "Sale price",
+      "purchasePrice": "Purchase price",
+      "taxRate": "GST rate",
+      "hsnCode": "HSN/SAC",
+      "barcode": "Barcode",
+      "openingStock": "Opening stock",
+      "reorderLevel": "Reorder level"
+    },
+    "dryRun": "{{created}} new, {{skipped}} already there, {{invalid}} to fix",
+    "col": {
+      "price": "Price",
+      "tax": "GST",
+      "stock": "Opening stock"
     }
   }
 }
