@@ -37,6 +37,12 @@ describe('cost centres', () => {
     );
     expect(jv.status).toBe(201);
     expect(jv.body.lines[0].costCentreId).toBe(wing.body.id);
+    // The report from the server keeps the voucher's line on its centre: the wing earned the invoice and bore the journal.
+    const report = await t.get(`${m.c}/books/cost-centres`, { token: m.token, query: { from: '2026-04-01', to: '2027-03-31' } });
+    expect(report.status).toBe(200);
+    const centre = (id: string) => report.body.rows.find((r: { costCentreId?: string }) => r.costCentreId === id);
+    expect(centre(wing.body.id).expense).toBe(10_000);
+    expect(centre(site.body.id).expense).toBe(50_000);
 
     const remove = await t.del(`${m.c}/cost-centres/${wing.body.id}`, { token: m.token, headers: { 'if-match': `"${wing.body.version}"` } });
     expect(remove.status).toBe(409);
