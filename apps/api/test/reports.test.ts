@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { schema } from '@esmart/db';
 import { setupApi } from './helpers';
 import { issueInvoice, moneySetup, pdfText } from './money-fixtures';
 import { INR, books } from './report-fixtures';
@@ -10,6 +12,9 @@ const range = { from: '2026-08-01', to: '2026-09-30' };
 describe('reports', () => {
   it('builds every report from the books with core reports', async () => {
     const m = await moneySetup(t);
+    // Periodic books: the profit snapshot costs goods at the average the bills paid (RULES 6.2).
+    // Under perpetual stock it takes the posted cost of goods sold (api `perpetual stock`).
+    await t.deps.db.update(schema.companies).set({ perpetualStockFrom: null }).where(eq(schema.companies.id, m.companyId));
     const k = await books(t, m);
     const report = async (key: string, query: Record<string, string> = {}) => {
       const res = await t.get(`${m.c}/reports/${key}`, { token: m.token, query: { ...range, ...query } });
@@ -72,6 +77,7 @@ describe('reports', () => {
 
   it('exports CSV and PDF', async () => {
     const m = await moneySetup(t);
+    await t.deps.db.update(schema.companies).set({ perpetualStockFrom: null }).where(eq(schema.companies.id, m.companyId));
     const k = await books(t, m);
     const csv = await t.get(`${m.c}/reports/sales-summary`, { token: m.token, query: range, headers: { accept: 'text/csv' } });
     expect(csv.status).toBe(200);
