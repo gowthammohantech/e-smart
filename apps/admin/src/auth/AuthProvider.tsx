@@ -13,15 +13,15 @@ type AuthState =
   | { status: 'loading' }
   | { status: 'signedOut'; notice?: string }
   /** Signed in, but this session hasn't passed the authenticator check (or has none set up yet). */
-  | { status: 'mfa'; operator: Operator; enrolled: boolean }
+  | { status: 'mfa'; enrolled: boolean }
   | { status: 'signedIn'; operator: Operator };
 
 type AuthContextValue = {
   state: AuthState;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  /** The session passed the authenticator check. */
-  mfaPassed: () => void;
+  /** The session passed the authenticator check: loads the operator and opens the console. */
+  mfaPassed: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -39,29 +39,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<AuthState>(() => (tokenStore.get() ? { status: 'loading' } : { status: 'signedOut' }));
 
-  const finish = useCallback(
-    async (operator: Operator | null) => {
-      if (operator) {
-        // Every /admin route but the MFA ones answers 403 until this session passes the check.
-        const { data: mfa } = await api.GET('/admin/mfa');
-        setState(mfa?.verified ? { status: 'signedIn', operator } : { status: 'mfa', operator, enrolled: !!mfa?.enrolled });
-        return;
-      }
-      // Not an operator: end the session the sign-in just opened.
-      await api.POST('/auth/sign-out').catch(() => {});
-      tokenStore.set(null);
-      queryClient.clear();
-      setState({ status: 'signedOut', notice: NOT_OPERATOR });
-    },
-    [queryClient],
-  );
+  const notOperator = useCallback(async () => {
+    // End the session the sign-in just opened.
+    await api.POST('/auth/sign-out').catch(() => {});
+    tokenStore.set(null);
+    queryClient.clear();
+    setState({ status: 'signedOut', notice: NOT_OPERATOR });
+  }, [queryClient]);
+
+  const open = useCallback(async () => {
+    const operator = await loadOperator();
+    if (operator) setState({ status: 'signedIn', operator });
+    else await notOperator();
+  }, [notOperator]);
+
+  /**
+   * The authenticator check comes first: an operator with one set up (and, since business users can turn one on,
+   * anyone) gets 403 MFA_REQUIRED from /me until this session passes it. /admin/mfa answers before the check,
+   * and its PLATFORM_FORBIDDEN is how a tenant user shows up.
+   */
+  const finish = useCallback(async () => {
+    let mfa: Schema<'MfaStatus'> | undefined;
+    try {
+      mfa = (await api.GET('/admin/mfa')).data;
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'PLATFORM_FORBIDDEN') return notOperator();
+      throw err;
+    }
+    if (mfa?.verified) await open();
+    else setState({ status: 'mfa', enrolled: !!mfa?.enrolled });
+  }, [notOperator, open]);
 
   // Restore a session from this tab.
   useEffect(() => {
     if (state.status !== 'loading') return;
-    loadOperator()
-      .then(finish)
-      .catch(() => {
+    Promise.resolve().then(finish).catch(() => {
         tokenStore.set(null);
         setState({ status: 'signedOut' });
       });
@@ -89,21 +101,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (!data?.accessToken || !data.refreshToken) throw new Error('Sign-in failed');
       tokenStore.set({ accessToken: data.accessToken, refreshToken: data.refreshToken });
-      await finish(await loadOperator());
+      await finish();
     },
     [finish],
   );
 
-  const mfaPassed = useCallback(() => {
-    setState((s) => (s.status === 'mfa' ? { status: 'signedIn', operator: s.operator } : s));
-  }, []);
+  const mfaPassed = open;
 
   // A page that gets MFA_REQUIRED (an authenticator reset from the command line, say) goes back to the check.
   useEffect(() => {
     return queryClient.getQueryCache().subscribe((event) => {
       const err = event.type === 'updated' ? event.query.state.error : null;
       if (err instanceof ApiError && (err.code === 'MFA_REQUIRED' || err.code === 'MFA_ENROLLMENT_REQUIRED')) {
-        setState((s) => (s.status === 'signedIn' ? { status: 'mfa', operator: s.operator, enrolled: err.code === 'MFA_REQUIRED' } : s));
+        setState((s) => (s.status === 'signedIn' ? { status: 'mfa', enrolled: err.code === 'MFA_REQUIRED' } : s));
       }
     });
   }, [queryClient]);

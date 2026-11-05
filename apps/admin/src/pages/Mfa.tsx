@@ -84,7 +84,7 @@ function Verify() {
         submitLabel="Continue"
         onCode={async (code) => {
           need(await api.POST('/admin/mfa/verify', { body: { code } }));
-          mfaPassed();
+          await mfaPassed();
         }}
       />
     </>
@@ -132,7 +132,7 @@ function Enroll() {
           <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
           I’ve saved them somewhere safe
         </label>
-        <button className="btn primary" type="button" disabled={!saved} onClick={mfaPassed}>
+        <button className="btn primary" type="button" disabled={!saved} onClick={() => mfaPassed().catch((err) => setError(errorMessage(err)))}>
           Continue
         </button>
       </>
