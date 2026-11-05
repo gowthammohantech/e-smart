@@ -2934,6 +2934,20 @@ paths:
               schema: { type: string, format: binary }
 
   # ------------------------------------------------------------------ Banking
+  /companies/{companyId}/bank-statements/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    delete:
+      tags: [Banking]
+      operationId: removeBankStatement
+      summary: Undo an import
+      description: Takes the statement and all its lines away. Whatever its lines were matched to stays in the books, free to match again; payments, expenses and vouchers recorded from its lines are not removed.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/NotFound' }
   /companies/{companyId}/bank-statements/parse:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -2972,6 +2986,32 @@ paths:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
       - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: listBankStatements
+      summary: The statements imported into a bank account, newest first
+      description: Each with how many of its lines are still to explain, matched and excluded.
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/BankStatement'
+                        - type: object
+                          required: [unmatched, matched, excluded]
+                          properties:
+                            unmatched: { type: integer }
+                            matched: { type: integer }
+                            excluded: { type: integer }
     post:
       tags: [Banking]
       operationId: importBankStatement
@@ -3060,6 +3100,31 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BankReconciliation' }
+  /companies/{companyId}/bank-lines/{id}/candidates:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: listBankLineCandidates
+      summary: What in the books a line could be matched to
+      description: |
+        The payments, expenses and posted vouchers through the line's account, dated within 30 days of it either
+        way, that no other line is matched to, whatever their amount: those of the line's amount first, then by
+        how near their date. `q` keeps those whose number, reference or party's name contains it. At most 100.
+      x-plan-module: books
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/BankLineRecord' } }
   /companies/{companyId}/bank-lines/{id}/match:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }

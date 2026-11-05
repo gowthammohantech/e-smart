@@ -2064,6 +2064,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/bank-statements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Undo an import
+         * @description Takes the statement and all its lines away. Whatever its lines were matched to stays in the books, free to match again; payments, expenses and vouchers recorded from its lines are not removed.
+         */
+        delete: operations["removeBankStatement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/bank-statements/parse": {
         parameters: {
             query?: never;
@@ -2099,7 +2122,11 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * The statements imported into a bank account, newest first
+         * @description Each with how many of its lines are still to explain, matched and excluded.
+         */
+        get: operations["listBankStatements"];
         put?: never;
         /**
          * Import a bank statement's lines into a bank account
@@ -2171,6 +2198,31 @@ export interface paths {
         };
         /** Bank reconciliation statement as of a day */
         get: operations["getBankReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What in the books a line could be matched to
+         * @description The payments, expenses and posted vouchers through the line's account, dated within 30 days of it either
+         *     way, that no other line is matched to, whatever their amount: those of the line's amount first, then by
+         *     how near their date. `q` keeps those whose number, reference or party's name contains it. At most 100.
+         */
+        get: operations["listBankLineCandidates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10935,6 +10987,28 @@ export interface operations {
             };
         };
     };
+    removeBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     parseBankStatement: {
         parameters: {
             query?: never;
@@ -10966,6 +11040,35 @@ export interface operations {
                 };
             };
             422: components["responses"]["Unprocessable"];
+        };
+    };
+    listBankStatements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: (components["schemas"]["BankStatement"] & {
+                            unmatched: number;
+                            matched: number;
+                            excluded: number;
+                        })[];
+                    };
+                };
+            };
         };
     };
     importBankStatement: {
@@ -11083,6 +11186,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BankReconciliation"];
+                };
+            };
+        };
+    };
+    listBankLineCandidates: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BankLineRecord"][];
+                    };
                 };
             };
         };

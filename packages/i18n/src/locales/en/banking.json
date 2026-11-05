@@ -4,7 +4,8 @@
     "unmatched": "To explain",
     "matched": "Matched",
     "excluded": "Excluded",
-    "reconciliation": "Reconciliation"
+    "reconciliation": "Reconciliation",
+    "imports": "Imports"
   },
   "accounts": {
     "intro": "Import your bank's statement, match each line to what the books recorded, and see what is still to explain.",
@@ -74,7 +75,14 @@
     "voucherInHint": "For money in that isn't a customer's payment, such as interest, a loan or capital brought in. A receipt voucher is recorded on this line's date and matched to it.",
     "voucherOutHint": "For money out that isn't a supplier's payment or an expense, such as drawings, a loan repaid or tax paid. A journal is recorded on this line's date and matched to it.",
     "saveVoucher": "Record and match",
-    "voucherSaved": "Voucher recorded and matched"
+    "voucherSaved": "Voucher recorded and matched",
+    "settlesInvoices": "Settles",
+    "settlesBills": "Pays",
+    "allocates": "{{amount}} of {{due}} due",
+    "due": "{{due}} due, left open",
+    "advanceIn": "{{amount}} left over is held as an advance from the customer",
+    "advanceOut": "{{amount}} left over is held as an advance to the supplier",
+    "allAllocated": "All of it settles what is due"
   },
   "lines": {
     "match": "Match {{record}}",
@@ -214,5 +222,16 @@
     "noBalance": "The statement has no running balance, so the bank side can't be totalled. Import a statement with a balance column to compare.",
     "noBalanceShort": "Not on the statement",
     "since": "Records dated before {{date}}, the start of the first imported statement, are taken as cleared."
+  },
+  "imports": {
+    "empty": "Nothing imported yet",
+    "emptyBody": "Each statement you import shows here, and one imported by mistake can be undone.",
+    "covers": "{{from}} to {{to}}",
+    "counts": "{{lines}} lines: {{unmatched}} to explain, {{matched}} matched, {{excluded}} excluded",
+    "on": "imported {{date}}",
+    "undo": "Undo import",
+    "undoTitle": "Undo the import of {{name}}?",
+    "undoBody": "Its {{count}} lines are taken away. Payments, expenses and vouchers they were matched to, or recorded from, stay in the books and can be matched again.",
+    "undone": "Import undone"
   }
 }

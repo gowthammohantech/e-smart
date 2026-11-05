@@ -38,6 +38,9 @@ import {
 } from './engine';
 import { statementRows } from './parse';
 
+/** How far either side of a line's date Find looks. */
+const FIND_DAYS = 30;
+
 type AnyCtx = Pick<Ctx<'matchBankLine'>, 'company' | 'user' | 'db' | 'now' | 'req' | 'reply' | 'deps'>;
 
 const squash = (s: string) => s.replace(/\s+/g, ' ').trim();
@@ -152,6 +155,33 @@ type ImportLine = Schema<'BankStatementImport'>['lines'][number];
 export const bankingHandlers = defineHandlers({
   async parseBankStatement(ctx) {
     return { rows: await statementRows(ctx.body.fileName, ctx.body.contentBase64) };
+  },
+
+  async listBankStatements(ctx) {
+    const account = await bankAccount(ctx.db, ctx.company, ctx.params.id);
+    const cur = account.currency.trim();
+    const rows = await ctx.db.select().from(S).where(and(eq(S.companyId, ctx.company.id), eq(S.accountId, account.id))).orderBy(desc(S.createdAt), desc(S.id));
+    const counts = rows.length
+      ? await ctx.db
+          .select({ statementId: L.statementId, status: L.status, n: sql<number>`count(*)::int` })
+          .from(L)
+          .where(and(eq(L.companyId, ctx.company.id), inArray(L.statementId, rows.map((r) => r.id))))
+          .groupBy(L.statementId, L.status)
+      : [];
+    const n = (id: string, status: string) => counts.find((c) => c.statementId === id && c.status === status)?.n ?? 0;
+    return { data: rows.map((r) => ({ ...statementToWire(r, cur), unmatched: n(r.id, 'unmatched'), matched: n(r.id, 'matched'), excluded: n(r.id, 'excluded') })) };
+  },
+
+  async removeBankStatement(ctx) {
+    const [row] = await ctx.db.select().from(S).where(and(eq(S.companyId, ctx.company.id), eq(S.id, ctx.params.id)));
+    if (!row) throw notFound('Bank statement');
+    await bankAccount(ctx.db, ctx.company, row.accountId);
+    await ctx.db.transaction(async (tx) => {
+      await tx.delete(L).where(and(eq(L.companyId, ctx.company.id), eq(L.statementId, row.id)));
+      await tx.delete(S).where(eq(S.id, row.id));
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'bank_statement', entityId: row.id, entityLabel: row.fileName ?? row.id, version: 1, deleted: true });
+    });
+    return undefined;
   },
 
   async importBankStatement(ctx) {
@@ -308,6 +338,21 @@ export const bankingHandlers = defineHandlers({
       ...(last && { lastStatement: statementToWire(last, cur) }),
       ...(balance && { statementBalance: money(balance.balanceMinor, cur), statementBalanceDate: balance.date }),
     };
+  },
+
+  async listBankLineCandidates(ctx) {
+    const line = await findLine(ctx, ctx.db, ctx.params.id);
+    const account = await bankAccount(ctx.db, ctx.company, line.accountId);
+    const cur = account.currency.trim();
+    const all = await bookRecords(ctx.db, account, { from: addDaysISO(line.date, -FIND_DAYS), to: addDaysISO(line.date, FIND_DAYS), unmatched: {} });
+    const q = ctx.query.q?.trim().toLowerCase();
+    const expenses = hasModule(ctx.company.plan, 'expenses');
+    const day = (iso: string) => Math.abs(Date.parse(iso) - Date.parse(line.date));
+    const found = all
+      .filter((c) => (c.type !== 'expense' || expenses) && (!q || [c.number, c.reference, c.partyName].some((v) => v?.toLowerCase().includes(q))))
+      .sort((a, b) => Number(b.amountMinor === line.amountMinor) - Number(a.amountMinor === line.amountMinor) || day(a.date) - day(b.date) || a.id.localeCompare(b.id))
+      .slice(0, 100);
+    return { data: found.map((c) => recordToWire(c, cur)) };
   },
 
   async matchBankLine(ctx) {

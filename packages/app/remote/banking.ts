@@ -59,13 +59,18 @@ export async function includeBankLine(line: BankLine): Promise<BankLine> {
   return data!;
 }
 
-export type PaymentFromLine = { partyId: string; method?: Schema<'PaymentMethod'>; notes?: string };
+export type PaymentFromLine = { partyId: string; method?: Schema<'PaymentMethod'>; notes?: string; allocations?: { documentId: string; amountMinor: number }[] };
 
 /** Money in becomes a payment received, money out a payment made, matched to the line. */
 export async function createPaymentFromBankLine(line: BankLine, body: PaymentFromLine) {
   const { data } = await api.POST('/companies/{companyId}/bank-lines/{id}/payment', {
     params: { path: { companyId: companyId(), id: line.id } },
-    body: { partyId: body.partyId, method: body.method, notes: body.notes?.trim() || undefined },
+    body: {
+      partyId: body.partyId,
+      method: body.method,
+      notes: body.notes?.trim() || undefined,
+      allocations: body.allocations?.filter((a) => a.amountMinor > 0).map((a) => ({ documentId: a.documentId, amount: { minor: a.amountMinor, currency: line.amount.currency } })),
+    },
   });
   changed(line.accountId, true);
   return data!;
@@ -96,6 +101,22 @@ export async function createVoucherFromBankLine(line: BankLine, body: { account:
   return data!;
 }
 
+/** The statements imported into a bank account, newest first, with their lines' counts. */
+export function useBankStatements(accountId: string) {
+  const c = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...bankingKeys.account(c, accountId), 'statements'],
+    enabled: !!c,
+    queryFn: async () => (await api.GET('/companies/{companyId}/payment-accounts/{id}/bank-statements', { params: { path: { companyId: c, id: accountId } } })).data!.data,
+  });
+}
+
+/** Undoes an import: its lines go, and what they were matched to is free to match again. */
+export async function removeBankStatement(accountId: string, statementId: string) {
+  await api.DELETE('/companies/{companyId}/bank-statements/{id}', { params: { path: { companyId: companyId(), id: statementId } } });
+  changed(accountId);
+}
+
 /** An Excel (.xlsx) or CSV statement as rows of text, read by the server. */
 export async function parseBankStatement(fileName: string, contentBase64: string): Promise<string[][]> {
   const { data } = await api.POST('/companies/{companyId}/bank-statements/parse', { params: { path: { companyId: companyId() } }, body: { fileName, contentBase64 } });
@@ -114,46 +135,22 @@ export async function importBankStatement(accountId: string, body: StatementImpo
 /** A payment or expense on the account that a line could be, signed as the bank sees it. */
 export type MatchCandidate = BankRecordRef & { number?: string; date: string; amountMinor: number; partyName?: string; reference?: string };
 
-/** How far either side of a line's date Find looks. */
-export const FIND_WINDOW_DAYS = 30;
 
 /**
- * The payments (and, for money out, expenses) on this account dated within a
- * month of the line, matching what's typed (a number, a reference, a name).
- * Payments filter by account on the server; expenses can't (listExpenses has
- * no accountId), so they are filtered here from the 200 in the window.
+ * What in the books a line could be: the payments, expenses and vouchers on its account dated within a
+ * month of it that no other line is matched to, matching what's typed (a number, a reference, a name),
+ * the same amount first, then the nearest date.
  */
-export function useBankMatchSearch(line: BankLine | null, q: string, opts: { paymentsMade: boolean; expenses: boolean }) {
+export function useBankMatchSearch(line: BankLine | null, q: string) {
   const c = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: [...bankingKeys.account(c, line?.accountId ?? ''), 'find', line?.id ?? '', q.trim(), opts.paymentsMade, opts.expenses],
+    queryKey: [...bankingKeys.account(c, line?.accountId ?? ''), 'find', line?.id ?? '', q.trim()],
     enabled: !!c && !!line,
     staleTime: 0,
     placeholderData: keepPreviousData,
     queryFn: async ({ signal }): Promise<MatchCandidate[]> => {
-      const l = line!;
-      const into = l.amount.minor > 0;
-      const window = { from: addDaysISO(l.date, -FIND_WINDOW_DAYS), to: addDaysISO(l.date, FIND_WINDOW_DAYS), q: q.trim() || undefined };
-      const out: MatchCandidate[] = [];
-      if (into || opts.paymentsMade) {
-        const { data } = await api.GET('/companies/{companyId}/payments', {
-          params: { path: { companyId: c }, query: { ...window, accountId: l.accountId, direction: into ? 'received' : 'paid', limit: 100 } },
-          signal,
-        });
-        for (const p of data?.data ?? []) {
-          out.push({ type: 'payment', id: p.id!, number: p.number, date: p.date, amountMinor: (into ? 1 : -1) * p.amount.minor, partyName: p.partyName, reference: p.reference ?? undefined });
-        }
-      }
-      if (!into && opts.expenses) {
-        const { data } = await api.GET('/companies/{companyId}/expenses', { params: { path: { companyId: c }, query: { ...window, limit: 200 } }, signal });
-        for (const e of data?.data ?? []) {
-          if (e.accountId !== l.accountId) continue;
-          out.push({ type: 'expense', id: e.id!, number: e.number, date: e.date, amountMinor: -e.amount.minor, reference: e.reference ?? undefined });
-        }
-      }
-      // The same amount first, then the nearest date.
-      const day = (iso: string) => Math.abs(Date.parse(iso) - Date.parse(l.date));
-      return out.sort((a, b) => Number(b.amountMinor === l.amount.minor) - Number(a.amountMinor === l.amount.minor) || day(a.date) - day(b.date));
+      const { data } = await api.GET('/companies/{companyId}/bank-lines/{id}/candidates', { params: { path: { companyId: c, id: line!.id }, query: { q: q.trim() || undefined } }, signal });
+      return (data?.data ?? []).map((r) => ({ type: r.type, id: r.id, number: r.number, date: r.date, amountMinor: r.amount.minor, partyName: r.partyName, reference: r.reference }));
     },
   });
 }
