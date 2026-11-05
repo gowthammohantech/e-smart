@@ -11,7 +11,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, formatDateTime, resolveRange } from '@esmart/core/lib/date';
 import { dateRangeLabel } from '@esmart/core/labels';
 import { useActiveCompany, useBranches, useParties } from '../../store/selectors';
 import { usePartyRecord, usePartySearch } from '../../remote/queries';
@@ -40,6 +40,7 @@ export function ReportShell({
   children,
   exportRows,
   extraExports = [],
+  generatedAt,
 }: {
   title: string;
   subtitle?: string;
@@ -50,6 +51,11 @@ export function ReportShell({
   exportRows?: () => ReportTable;
   /** Files only this report offers, e.g. GSTR-1 for the portal; listed after the standard formats. */
   extraExports?: { key: string; icon: IconName; label: string; run: () => Promise<void> }[];
+  /**
+   * When the figures were fetched (ms, a query's `dataUpdatedAt`), printed as "Generated …" on the
+   * report and its PDF. Left out, it is when the report was opened or its filters last changed.
+   */
+  generatedAt?: number;
 }) {
   const t = useTheme();
   const { t: tr, i18n } = useTranslation(['common', 'reports']);
@@ -78,7 +84,7 @@ export function ReportShell({
     : tr('common:dateRange.custom');
 
   const setPreset = (preset: DateRangePreset) =>
-    onScopeChange({ preset, filters: { ...scope.filters, range: resolveRange(preset) } });
+    changeScope({ preset, filters: { ...scope.filters, range: resolveRange(preset) } });
 
   const basisParams = {
     company: company?.name ?? '',
@@ -87,7 +93,15 @@ export function ReportShell({
     branch: branch?.name ?? tr('reports:shell.allBranches'),
     currency: company?.baseCurrency ?? '',
   };
-  const basisLine = () => tr('reports:shell.basisLine', basisParams);
+  // When the figures are from: the caller's fetch time, or else when the report was opened or
+  // its filters last changed (set where they change, not while rendering).
+  const [askedAt, setAskedAt] = useState(() => Date.now());
+  const changeScope = (next: ReportScope) => {
+    setAskedAt(new Date().getTime());
+    onScopeChange(next);
+  };
+  const generatedLine = tr('reports:shell.generatedAt', { at: formatDateTime(new Date(generatedAt || askedAt).toISOString()) });
+  const basisLine = () => `${tr('reports:shell.basisLine', basisParams)} · ${generatedLine}`;
 
   const doExport = async (format: 'pdf' | 'xlsx' | 'csv') => {
     if (!exportRows) return;
@@ -163,12 +177,12 @@ export function ReportShell({
           {chip(rangeLabel, true, () => setFilterOpen(true))}
           {branches.length > 1
             ? chip(branch?.name ?? tr('common:component.allBranches'), !!branch, () => setBranchOpen(true), () =>
-                onScopeChange({ ...scope, filters: { ...scope.filters, branchId: null } }),
+                changeScope({ ...scope, filters: { ...scope.filters, branchId: null } }),
               )
             : null}
           {showPartyFilter
             ? chip(party?.name ?? tr('reports:shell.allContacts'), !!party, () => setPartyOpen(true), () =>
-                onScopeChange({ ...scope, filters: { ...scope.filters, partyId: null } }),
+                changeScope({ ...scope, filters: { ...scope.filters, partyId: null } }),
               )
             : null}
         </ScrollView>
@@ -183,6 +197,9 @@ export function ReportShell({
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {tr('reports:shell.basisFull', basisParams)}
+          </Text>
+          <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+            {generatedLine}
           </Text>
           {subtitle ? (
             <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
@@ -281,7 +298,7 @@ export function ReportShell({
           ...branches.map((b) => ({ value: b.id, label: b.name, description: b.code })),
         ]}
         value={scope.filters.branchId ?? ''}
-        onSelect={(v) => onScopeChange({ ...scope, filters: { ...scope.filters, branchId: v || null } })}
+        onSelect={(v) => changeScope({ ...scope, filters: { ...scope.filters, branchId: v || null } })}
         searchable={false}
       />
 
@@ -296,7 +313,7 @@ export function ReportShell({
         onQueryChange={setPartyQuery}
         loading={partySearch.isFetching}
         value={scope.filters.partyId ?? ''}
-        onSelect={(v) => onScopeChange({ ...scope, filters: { ...scope.filters, partyId: v || null } })}
+        onSelect={(v) => changeScope({ ...scope, filters: { ...scope.filters, partyId: v || null } })}
       />
     </View>
   );

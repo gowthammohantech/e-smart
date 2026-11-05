@@ -109,7 +109,8 @@
     "clearFilter": "வடிகட்டியை அழி: {{label}}",
     "basisLine": "{{company}} · {{from}} முதல் {{to}} வரை · {{branch}} · {{currency}}",
     "basisFull": "{{company}} · {{from}} முதல் {{to}} வரை · {{branch}} · தொகைகள் {{currency}} நாணயத்தில்; வெளிநாட்டு நாணய ஆவணங்கள் ஒவ்வொன்றிலும் சேமிக்கப்பட்ட மாற்று விகிதத்தில் மாற்றப்பட்டுள்ளன.",
-    "exportTitle": "{{title}} ஏற்றுமதி"
+    "exportTitle": "{{title}} ஏற்றுமதி",
+    "generatedAt": "உருவாக்கப்பட்டது {{at}}"
   },
   "detail": {
     "openAdvances": "திறந்த முன்பணங்கள்",

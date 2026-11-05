@@ -109,7 +109,8 @@
     "clearFilter": "Clear {{label}}",
     "basisLine": "{{company}} · {{from}} to {{to}} · {{branch}} · {{currency}}",
     "basisFull": "{{company}} · {{from}} to {{to}} · {{branch}} · presented in {{currency}}, foreign-currency documents converted at the rate stored on each document.",
-    "exportTitle": "{{title}} export"
+    "exportTitle": "{{title}} export",
+    "generatedAt": "Generated {{at}}"
   },
   "detail": {
     "openAdvances": "Open advances",

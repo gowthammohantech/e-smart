@@ -717,6 +717,7 @@ export default function Report() {
         onScopeChange={setScope}
         showPartyFilter={['sales-summary', 'purchase-summary', 'payments', 'advances'].includes(key)}
         exportRows={exportRows}
+        generatedAt={remote.dataUpdatedAt || undefined}
       >
         {body}
       </ReportShell>
