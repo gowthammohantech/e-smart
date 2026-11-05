@@ -155,7 +155,9 @@
   "statement": {
     "opening": "Opening balance",
     "closing": "Closing balance",
-    "empty": "Nothing in this period"
+    "empty": "Nothing in this period",
+    "trend": "Balance trend",
+    "trendCaption": "Balance at each month end"
   },
   "tb": {
     "basis": "Balances for the period; income and expenses start the financial year at zero",

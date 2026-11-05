@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { USER_GROUPS, accountFor, chartOfAccounts, type Book } from '@esmart/core/domain/ledger/accounts';
-import { balanceSheet, costCentreProfit, dayBook, ledgerStatement, profitAndLoss, trialBalance } from '@esmart/core/domain/ledger/reports';
+import { balanceSheet, costCentreProfit, dayBook, ledgerStatement, monthEndBalances, profitAndLoss, trialBalance } from '@esmart/core/domain/ledger/reports';
 import type { LedgerGroup } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
@@ -182,7 +182,7 @@ export const booksHandlers = defineHandlers({
         return balanceSheet(postings, book, to, stock, fy) as never;
       case 'ledger':
         if (!account) throw invalid('account', 'Which account?');
-        return { account: accountFor(account, book) ?? null, ...ledgerStatement(postings, account, range) } as never;
+        return { account: accountFor(account, book) ?? null, ...ledgerStatement(postings, account, range), trend: monthEndBalances(postings, account, range) } as never;
       case 'day-book':
         return { entries: dayBook(postings, range) } as never;
       case 'cost-centres':

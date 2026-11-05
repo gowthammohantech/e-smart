@@ -2,8 +2,10 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Card } from '@esmart/ui/components/Card';
+import { BarChart } from '@esmart/ui/components/charts/BarChart';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
-import { ledgerStatement } from '@esmart/core/domain/ledger/reports';
+import { ledgerStatement, type BalancePoint } from '@esmart/core/domain/ledger/reports';
 import { formatDate } from '@esmart/core/lib/date';
 import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../../features/reports/reportParts';
@@ -23,9 +25,12 @@ export default function AccountStatement() {
   const nameOf = useAccountName();
   const drCr = useDrCr();
   const account = accountFor(key, book) ?? (key.startsWith('sys:tdsPayable:') ? { key, name: key, group: 'dutiesTaxes' as const, kind: 'system' as const } : undefined);
-  const s = useBooksView<ReturnType<typeof ledgerStatement>>('ledger', { ...scope.filters.range, account: key }).data;
+  const s = useBooksView<ReturnType<typeof ledgerStatement> & { trend?: BalancePoint[] }>('ledger', { ...scope.filters.range, account: key }).data;
   if (!s) return <LoadingView />;
   const title = account ? nameOf(account) : key;
+  // Cash and bank: how the balance moved, month end by month end.
+  const showTrend = (account?.group === 'cashInHand' || account?.group === 'bankAccounts') && (s.trend?.length ?? 0) > 1;
+  const trend = (s.trend ?? []).map((p) => ({ label: formatDate(`${p.month}-01`, 'MMM'), value: { minor: p.balance, currency: baseCurrency } }));
 
   const exportRows = () =>
     reportTable(
@@ -44,6 +49,13 @@ export default function AccountStatement() {
             { label: tr('books:statement.closing'), value: drCr(s.closing, baseCurrency) },
           ]}
         />
+        {showTrend ? (
+          <ReportSection title={tr('books:statement.trend')}>
+            <Card>
+              <BarChart data={trend} caption={tr('books:statement.trendCaption')} />
+            </Card>
+          </ReportSection>
+        ) : null}
         {s.rows.length ? (
           <ReportSection title={title}>
             <DataTable

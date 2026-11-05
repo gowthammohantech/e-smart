@@ -198,6 +198,35 @@ export function ledgerStatement(postings: Posting[], account: string, range: { f
   return { opening, rows, closing: balance };
 }
 
+export type BalancePoint = { month: string; balance: number };
+
+/**
+ * An account's balance at the end of each month of a period (debit positive), for its trend.
+ * A month still running ends at `range.to`. At most the last `months` months are given.
+ */
+export function monthEndBalances(postings: Posting[], account: string, range: { from: string; to: string }, months = 12): BalancePoint[] {
+  const mine = postings.filter((p) => p.account === account && p.date <= range.to).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const end = range.to.slice(0, 7);
+  let [y, m] = end.split('-').map(Number);
+  const keys: string[] = [];
+  for (let i = 0; i < months; i++) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    if (`${key}-31` < range.from) break;
+    keys.unshift(key);
+    m -= 1;
+    if (m === 0) { m = 12; y -= 1; }
+  }
+  let balance = 0;
+  let i = 0;
+  return keys.map((month) => {
+    while (i < mine.length && mine[i].date.slice(0, 7) <= month) {
+      balance += mine[i].debit - mine[i].credit;
+      i++;
+    }
+    return { month, balance };
+  });
+}
+
 export type DayBookEntry = { source: Posting['source']; date: string; postings: Posting[] };
 
 /** Every voucher in a period, each with its debits and credits. */
