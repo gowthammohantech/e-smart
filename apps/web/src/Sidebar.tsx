@@ -434,6 +434,8 @@ export function Sidebar() {
 
   return (
     <Animated.View
+      role="navigation"
+      aria-label={tr('nav:shell.mainNavigation')}
       style={{
         width,
         backgroundColor: t.c.card,

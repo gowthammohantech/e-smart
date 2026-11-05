@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
@@ -62,11 +63,12 @@ function Entry({ entry, active }: { entry: MoreEntry; active: boolean }) {
  */
 export function SettingsNav() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const pathname = usePathname();
   const groups = useSettingsGroups();
 
   return (
-    <View style={{ width: SETTINGS_NAV_WIDTH, paddingTop: t.spacing.xxl }}>
+    <View style={{ width: SETTINGS_NAV_WIDTH, paddingTop: t.spacing.xxl }} role="navigation" aria-label={tr('nav:shell.settingsNavigation')}>
       <ScrollView contentContainerStyle={{ gap: t.spacing.lg, paddingBottom: t.spacing.xl }}>
         {groups.map((g) => (
           <View key={g.key} style={{ gap: 2 }}>

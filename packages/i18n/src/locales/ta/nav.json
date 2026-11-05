@@ -182,7 +182,11 @@
     "expandSidebar": "பக்கப்பட்டியை விரி",
     "collapseSidebar": "பக்கப்பட்டியைச் சுருக்கு",
     "searchFor": "{{query}} — தேடு",
-    "noMatchesInBusiness": "இந்த வணிகத்தில் “{{query}}” உடன் பொருந்துவது எதுவும் இல்லை."
+    "noMatchesInBusiness": "இந்த வணிகத்தில் “{{query}}” உடன் பொருந்துவது எதுவும் இல்லை.",
+    "mainNavigation": "முதன்மை",
+    "settingsNavigation": "அமைப்புப் பக்கங்கள்",
+    "skipToContent": "உள்ளடக்கத்துக்குச் செல்",
+    "assistant": "Lixi உதவியாளர்"
   },
   "home": {
     "emptyTitle": "தொடங்கலாம் வாருங்கள்",

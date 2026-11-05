@@ -162,6 +162,7 @@ export function TopBar() {
 
   return (
     <View
+      role="banner"
       style={{
         height: TOP_BAR_HEIGHT,
         flexDirection: 'row',

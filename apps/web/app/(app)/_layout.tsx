@@ -8,6 +8,7 @@ import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth } from '../../src/si
 import { TopBar } from '../../src/shell/TopBar';
 import { LixiPanel } from '../../src/shell/LixiPanel';
 import { SettingsNav } from '../../src/shell/SettingsNav';
+import { MAIN_ID, SkipLink } from '../../src/shell/SkipLink';
 import { CONTENT_MAX_WIDTH, useBreakpoint, useIsDesktop } from '../../src/layout';
 import { PageSurface } from '@esmart/ui/components/Doodles';
 
@@ -64,11 +65,17 @@ export default function WebAppLayout() {
     </Stack>
   );
 
-  if (!desktop) return <View style={{ flex: 1, backgroundColor: t.c.bg }}>{stack}</View>;
+  if (!desktop)
+    return (
+      <View style={{ flex: 1, backgroundColor: t.c.bg, outlineStyle: 'none' } as object} role="main" id={MAIN_ID} tabIndex={-1}>
+        {stack}
+      </View>
+    );
 
   return (
     <PageActionsProvider>
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.c.bg }}>
+        <SkipLink />
         <Sidebar />
         <View style={{ flex: 1 }}>
           <TopBar />
@@ -90,7 +97,15 @@ export default function WebAppLayout() {
             >
               {/* Kept in place (null when hidden) so the Stack never remounts. */}
               {inSettings ? <SettingsNav /> : null}
-              <View style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined }}>{stack}</View>
+              {/* The landmark the skip link lands on: focusable by script, not by Tab. */}
+              <View
+                role="main"
+                id={MAIN_ID}
+                tabIndex={-1}
+                style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined, outlineStyle: 'none' } as object}
+              >
+                {stack}
+              </View>
             </Animated.View>
           </View>
         </View>

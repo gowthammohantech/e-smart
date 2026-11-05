@@ -182,7 +182,11 @@
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
     "searchFor": "Search {{query}}",
-    "noMatchesInBusiness": "Nothing in this business matches “{{query}}”."
+    "noMatchesInBusiness": "Nothing in this business matches “{{query}}”.",
+    "mainNavigation": "Main",
+    "settingsNavigation": "Settings pages",
+    "skipToContent": "Skip to content",
+    "assistant": "Lixi assistant"
   },
   "home": {
     "emptyTitle": "Let's get you started",
