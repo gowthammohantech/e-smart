@@ -101,6 +101,7 @@ function NavItem({
   onPress,
   compact,
   expanded,
+  dropsDown,
   onHoverIn,
   onHoverOut,
 }: {
@@ -112,8 +113,10 @@ function NavItem({
   href?: string;
   onPress?: (rect: Rect) => void;
   compact?: boolean;
-  /** For a section that opens a panel: whether it's open now. */
+  /** For a section with pages: whether they're showing now. */
   expanded?: boolean;
+  /** Its pages drop down under it (rather than opening a panel beside it). */
+  dropsDown?: boolean;
   onHoverIn?: (rect: Rect) => void;
   onHoverOut?: () => void;
 }) {
@@ -129,7 +132,7 @@ function NavItem({
         // react-native-web renders `href` as a real link, so middle-click and
         // "open in new tab" work; a plain click still navigates in the app.
         {...(href ? ({ href } as object) : null)}
-        {...(opensPanel ? ({ 'aria-haspopup': 'dialog' } as object) : null)}
+        {...(opensPanel && !dropsDown ? ({ 'aria-haspopup': 'dialog' } as object) : null)}
         onPress={(e) => {
           if (href) {
             e.preventDefault();
@@ -156,7 +159,7 @@ function NavItem({
             borderRadius: t.radius.md,
             // The page you're on is tinted, not filled: the blue marks it
             // without outshouting the page's own primary button.
-            backgroundColor: active ? t.c.chip : expanded || pressed || hovered ? t.c.mutedSoft : 'transparent',
+            backgroundColor: active ? t.c.chip : (expanded && !dropsDown) || pressed || hovered ? t.c.mutedSoft : 'transparent',
             ...focusRing(t, focused),
           };
         }}
@@ -173,7 +176,9 @@ function NavItem({
           </Text>
         )}
         {badge ? <BadgePill value={badge} floating={compact} /> : null}
-        {opensPanel && !compact ? <Icon name="chevron-right" size={16} color={expanded ? t.c.text : t.c.muted} /> : null}
+        {opensPanel && !compact ? (
+          <Icon name={dropsDown && expanded ? 'chevron-down' : 'chevron-right'} size={16} color={expanded ? t.c.text : t.c.muted} />
+        ) : null}
       </Pressable>
     </View>
   );
@@ -229,14 +234,26 @@ function Tooltip({ rect, label }: { rect: Rect; label: string }) {
   );
 }
 
-/** One page in a section's panel: the link, its badge, and a "+" that starts a new one. */
-function PanelItem({ page, label, active, badge, onNavigate }: { page: MenuPage; label: string; active: boolean; badge: BadgeValue; onNavigate: () => void }) {
+/** One page under a section, inline or in its panel: the link, its badge, and a "+" that starts a new one. */
+function PanelItem({
+  page,
+  label,
+  active,
+  badge,
+  onNavigate,
+}: {
+  page: MenuPage;
+  label: string;
+  active: boolean;
+  badge: BadgeValue;
+  onNavigate?: () => void;
+}) {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const go = (route: string) => leaveGuarded(() => {
     router.navigate(appHref(route) as never);
-    onNavigate();
+    onNavigate?.();
   });
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -302,8 +319,84 @@ function PanelItem({ page, label, active, badge, onNavigate }: { page: MenuPage;
   );
 }
 
+/** A section's pages the plan opens, split into lists by category and the actions (Scan a bill). */
+function sectionLayout(tab: TabName, plan: ReturnType<typeof usePlan>) {
+  const pages = section(tab).pages.filter((p) => canOpen(plan, p.route));
+  const columns: { group: PageGroup | null; pages: MenuPage[] }[] = [];
+  pages
+    .filter((p) => !p.action)
+    .forEach((p) => {
+      const key = p.group ?? null;
+      const col = columns.find((c) => c.group === key);
+      if (col) col.pages.push(p);
+      else columns.push({ group: key, pages: [p] });
+    });
+  return { columns, actions: pages.filter((p) => p.action) };
+}
+
 /**
- * A section's pages, beside the sidebar: its overview, then its pages under
+ * A section's pages, dropped down under its row in the sidebar: an overview
+ * link, then the pages under their category headings, then its actions, on a
+ * guide line in from the section's icon.
+ */
+function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['nav', 'reports']);
+  const plan = usePlan();
+  const badges = useMenuBadges();
+  const { columns, actions } = sectionLayout(tab, plan);
+  const name = tr(`nav:tab.${tab}` as 'nav:tab.index');
+  const hub: MenuPage = { key: `hub-${tab}`, labelKey: '', icon: 'view-dashboard-outline', route: tabPath(tab) };
+  return (
+    <View
+      role="group"
+      aria-label={tr('nav:shell.openPanel', { label: name })}
+      style={{
+        // The line runs down from the middle of the section's icon.
+        marginLeft: t.spacing.md - 2 + ICON_SIZE / 2,
+        paddingLeft: t.spacing.xs,
+        borderLeftWidth: 1,
+        borderLeftColor: t.c.line,
+        marginTop: t.spacing.xxs,
+        marginBottom: t.spacing.xs,
+        gap: 1,
+      }}
+    >
+      <PanelItem page={hub} label={tr('nav:shell.overview', { label: name })} active={pathname === hub.route} badge={undefined} />
+      {columns.map((col) => (
+        <View key={col.group ?? 'all'} role="group" aria-label={col.group ? tr(`nav:menuGroup.${col.group}`) : undefined} style={{ gap: 1 }}>
+          {col.group ? (
+            <Text
+              variant="micro"
+              weight="600"
+              tone="muted"
+              numberOfLines={1}
+              style={{ textTransform: 'uppercase', letterSpacing: 0.6, paddingHorizontal: t.spacing.sm, paddingTop: t.spacing.sm, paddingBottom: 2 }}
+            >
+              {tr(`nav:menuGroup.${col.group}`)}
+            </Text>
+          ) : null}
+          {col.pages.map((p) => (
+            <PanelItem
+              key={p.key}
+              page={p}
+              label={tr(p.labelKey as 'nav:title.invoices')}
+              active={isOn(pathname, p.route)}
+              badge={p.badge ? badges[p.badge] : undefined}
+            />
+          ))}
+        </View>
+      ))}
+      {actions.length ? <View style={{ height: t.spacing.xs }} /> : null}
+      {actions.map((a) => (
+        <PanelItem key={a.key} page={a} label={tr(a.labelKey as 'nav:title.invoices')} active={isOn(pathname, a.route)} badge={undefined} />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Beside a folded sidebar, a section's pages: its overview, then its pages under
  * their categories in columns, each with a "+" to start a new one, and the
  * section's actions (Scan a bill). Escape, a click outside or picking a page
  * closes it.
@@ -331,16 +424,7 @@ function SectionPanel({
   const [height, setHeight] = useState(0);
 
   const name = tr(`nav:tab.${tab}` as 'nav:tab.index');
-  const pages = section(tab).pages.filter((p) => canOpen(plan, p.route));
-  const lists = pages.filter((p) => !p.action);
-  const actions = pages.filter((p) => p.action);
-  const columns: { group: PageGroup | null; pages: MenuPage[] }[] = [];
-  lists.forEach((p) => {
-    const key = p.group ?? null;
-    const col = columns.find((c) => c.group === key);
-    if (col) col.pages.push(p);
-    else columns.push({ group: key, pages: [p] });
-  });
+  const { columns, actions } = sectionLayout(tab, plan);
   // Four categories sit two by two; up to three sit side by side.
   const across = columns.length <= 3 ? columns.length : 2;
   const top = Math.max(8, Math.min(rect.y - 6, window.height - height - 8));
@@ -505,9 +589,10 @@ function rollUp(pages: MenuPage[], badges: ReturnType<typeof useMenuBadges>): Ba
 
 /**
  * The desktop replacement for the tab bar: the pages you visited last, then
- * the sections in bands. A section with pages opens a panel beside the
- * sidebar with them under their categories; its row carries their badges.
- * Folded to icons, hovering a row shows its name. The business and branch,
+ * the sections in bands. A section's pages drop down under it, one section
+ * at a time, under their category headings; a closed row carries their
+ * badges. Folded to icons, hovering a row shows its name and a section opens
+ * its pages in a panel beside the sidebar. The business and branch,
  * search, notifications and Lixi live in the top bar. A plan that can't open
  * a section doesn't list it, exactly as the tab bar hides it.
  */
@@ -561,7 +646,12 @@ export function Sidebar() {
     .filter((p): p is MenuPage => !!p && canOpen(plan, p.route))
     .slice(0, RECENT_LIMIT);
 
-  // One section's panel at a time, closed by moving to another page.
+  // One section's pages drop down at a time. Arriving in a section opens its
+  // list, so you can see where you are; its row's chevron closes it again.
+  const [dropped, setDropped] = useState<{ tab: TabName | null; at: TabName }>({ tab: current, at: current });
+  if (dropped.at !== current) setDropped({ tab: current, at: current });
+
+  // Folded, there's no room below a row: a section's pages open in a panel beside it, closed by moving to another page.
   const [panel, setPanel] = useState<{ tab: TabName; rect: Rect; on: string; opener: HTMLElement | null } | null>(null);
   const opener = panel?.opener ?? null;
   const closePanel = React.useCallback(
@@ -623,20 +713,26 @@ export function Sidebar() {
                 const active = current === tab.name && !inSettings;
                 const label = labelFor(tab.name);
                 const pages = section(tab.name).pages.filter((p) => canOpen(plan, p.route));
-                const open = panel?.tab === tab.name && panel.on === pathname;
+                const open = compact ? panel?.tab === tab.name && panel.on === pathname : dropped.tab === tab.name;
                 return (
+                  <React.Fragment key={tab.name}>
                   <NavItem
-                    key={tab.name}
                     icon={active ? tab.activeIcon : tab.icon}
                     label={label}
                     active={active}
                     compact={compact}
-                    badge={rollUp(pages, badges)}
+                    // Open, the pages show their own badges.
+                    badge={open && !compact ? undefined : rollUp(pages, badges)}
+                    dropsDown={!compact}
                     {...(pages.length > 0
                       ? {
                           expanded: open,
                           onPress: (rect: Rect) => {
                             setTip(null);
+                            if (!compact) {
+                              setDropped({ tab: open ? null : tab.name, at: current });
+                              return;
+                            }
                             setPanel(
                               open
                                 ? null
@@ -647,6 +743,8 @@ export function Sidebar() {
                       : { href: tabPath(tab.name) })}
                     {...tipProps(label)}
                   />
+                  {open && !compact && pages.length > 0 ? <SectionDropdown tab={tab.name} pathname={pathname} /> : null}
+                  </React.Fragment>
                 );
               })}
             </React.Fragment>
@@ -695,7 +793,7 @@ export function Sidebar() {
       </View>
       {tip && compact && !panel && tip.on === pathname ? <Tooltip rect={tip.rect} label={tip.label} /> : null}
       {/* Opened on another page: stale, so not shown. */}
-      {panel && panel.on === pathname ? (
+      {panel && compact && panel.on === pathname ? (
         <SectionPanel
           tab={panel.tab}
           rect={panel.rect}
