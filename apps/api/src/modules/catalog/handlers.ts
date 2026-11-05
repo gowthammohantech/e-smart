@@ -10,6 +10,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { storageKeyFor } from '../attachments/keys';
 import { ensureHsn } from './hsn';
+import { catalogMasterHandlers } from './masters';
 import { onHandSql, stockOnHand } from './stock';
 import { itemColumns, itemToWire, itemWithStock } from './wire';
 
@@ -45,6 +46,16 @@ async function validate(db: DbOrTx, companyId: string, baseCurrency: string, bod
   const T = schema.taxCategories;
   const [tax] = await db.select({ id: T.id }).from(T).where(and(eq(T.companyId, companyId), eq(T.id, body.taxCategoryId)));
   if (!tax) blocking('taxCategoryId', 'No such tax category in this company');
+  if (body.categoryId) {
+    const C = schema.itemCategories;
+    const [cat] = await db.select({ id: C.id }).from(C).where(and(eq(C.companyId, companyId), eq(C.id, body.categoryId)));
+    if (!cat) blocking('categoryId', 'No such item category in this company');
+  }
+  if (body.brandId) {
+    const B = schema.brands;
+    const [brand] = await db.select({ id: B.id }).from(B).where(and(eq(B.companyId, companyId), eq(B.id, body.brandId)));
+    if (!brand) blocking('brandId', 'No such brand in this company');
+  }
   for (const f of ['salePrice', 'purchasePrice'] as const) {
     if (body[f].currency !== baseCurrency) blocking(`${f}.currency`, `Item prices are in the company's currency (${baseCurrency})`);
     if (body[f].minor < 0) blocking(`${f}.minor`, 'Prices cannot be negative');
@@ -105,17 +116,22 @@ async function usage(db: DbOrTx, companyId: string, itemId: string): Promise<str
 }
 
 /**
- * Catalog: listItems, createItem, getItem, saveItem, removeItem, uploadItemImage.
+ * Catalog: listItems, createItem, getItem, saveItem, removeItem, uploadItemImage, and the item
+ * category and brand masters (./masters).
  */
 export const catalogHandlers = defineHandlers({
+  ...catalogMasterHandlers,
+
   async listItems(ctx) {
-    const { type, status, barcode, lowStock, stock, branchId, q, limit, cursor } = ctx.query;
+    const { type, status, barcode, lowStock, stock, branchId, categoryId, brandId, q, limit, cursor } = ctx.query;
     const onHand = onHandSql(ctx.company.id, I.id, branchId);
     const k = keyset({ cursor, limit, sort: I.name, id: I.id, order: 'asc' });
     const filters = [eq(I.companyId, ctx.company.id)];
     if (type) filters.push(eq(I.type, type));
     if (status) filters.push(eq(I.status, status));
     if (barcode) filters.push(eq(I.barcode, barcode));
+    if (categoryId) filters.push(eq(I.categoryId, categoryId));
+    if (brandId) filters.push(eq(I.brandId, brandId));
     if (lowStock !== undefined) {
       const low = and(eq(I.trackInventory, true), gt(I.reorderLevel, '0'), lte(onHand, I.reorderLevel))!;
       filters.push(lowStock ? low : not(low));

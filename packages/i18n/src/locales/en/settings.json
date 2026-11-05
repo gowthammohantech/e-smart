@@ -431,6 +431,36 @@
     "editTitle": "Edit category",
     "deleteTitle": "Delete {{name}}?"
   },
+  "itemCategories": {
+    "add": "Add category",
+    "delete": "Delete",
+    "save": "Save",
+    "name": "Category name",
+    "namePlaceholder": "e.g. Bearings",
+    "colour": "Colour",
+    "colourOption": "Colour {{n}}",
+    "deleteMessage": "A category that items are filed under can’t be deleted. Move those items to another category first.",
+    "saved": "Category saved",
+    "deleted": "Category deleted",
+    "editTitle": "Edit category",
+    "deleteTitle": "Delete {{name}}?",
+    "emptyTitle": "No item categories yet",
+    "emptyMessage": "Group your items, such as Bearings or Belts, to find and filter them faster."
+  },
+  "brands": {
+    "add": "Add brand",
+    "delete": "Delete",
+    "save": "Save",
+    "name": "Brand name",
+    "namePlaceholder": "e.g. SKF",
+    "deleteMessage": "A brand that items carry can’t be deleted. Change those items’ brand first.",
+    "saved": "Brand saved",
+    "deleted": "Brand deleted",
+    "editTitle": "Edit brand",
+    "deleteTitle": "Delete {{name}}?",
+    "emptyTitle": "No brands yet",
+    "emptyMessage": "Add the makers of what you sell, then pick one on each item."
+  },
   "appearance": {
     "lixiWays": "Ways to open Lixi",
     "showTipsAgain": "Show gesture tips again",

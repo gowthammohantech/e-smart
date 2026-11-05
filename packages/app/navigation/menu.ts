@@ -137,6 +137,8 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
       { key: 'numbering', labelKey: 'nav:more.entry.documentNumbering', icon: 'numeric', route: '/settings/numbering' },
       { key: 'accounts', labelKey: 'nav:more.entry.paymentAccounts', icon: 'bank-outline', route: '/settings/accounts' },
       { key: 'expenseCategories', labelKey: 'nav:more.entry.expenseCategories', icon: 'shape-outline', route: '/settings/expense-categories' },
+      { key: 'itemCategories', labelKey: 'nav:more.entry.itemCategories', icon: 'tag-outline', route: '/settings/item-categories' },
+      { key: 'brands', labelKey: 'nav:more.entry.brands', icon: 'star-circle-outline', route: '/settings/brands' },
     ],
   },
   {

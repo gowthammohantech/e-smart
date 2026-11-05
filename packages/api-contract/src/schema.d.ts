@@ -1009,6 +1009,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/item-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listItemCategories"];
+        put?: never;
+        /** @description `422 ITEM_CATEGORY_EXISTS` when the company already has one by that name. */
+        post: operations["createItemCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/item-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveItemCategory"];
+        post?: never;
+        /** @description `409 ITEM_CATEGORY_IN_USE` when items reference it. */
+        delete: operations["removeItemCategory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/brands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listBrands"];
+        put?: never;
+        /** @description `422 BRAND_EXISTS` when the company already has one by that name. */
+        post: operations["createBrand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/brands/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveBrand"];
+        post?: never;
+        /** @description `409 BRAND_IN_USE` when items reference it. */
+        delete: operations["removeBrand"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/items/{id}/image": {
         parameters: {
             query?: never;
@@ -3605,6 +3683,18 @@ export interface components {
             icon?: string;
             color?: string;
         };
+        ItemCategory: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @description Hex, like #4DA3FF; a neutral grey when left out */
+            color?: string;
+        };
+        Brand: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+        };
         PaymentAccount: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
@@ -3799,6 +3889,10 @@ export interface components {
             reorderLevel?: number;
             /** Format: uri */
             readonly imageUri?: string;
+            /** @description An item category of this company, or null for none */
+            categoryId?: string | null;
+            /** @description A brand of this company, or null for none */
+            brandId?: string | null;
             /** @enum {string} */
             status?: "active" | "inactive";
         };
@@ -3873,6 +3967,13 @@ export interface components {
                 /** Format: date */
                 depositedOn: string;
             };
+            /**
+             * @description Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft.
+             * @enum {string}
+             */
+            status?: "draft" | "posted";
+            /** Format: date-time */
+            readonly postedAt?: string;
             lines: components["schemas"]["VoucherLine"][];
             readonly createdBy?: string;
         };
@@ -3967,13 +4068,6 @@ export interface components {
                 reverseCharge?: boolean;
                 itcAvailable?: boolean;
                 itcReason?: string;
-            /**
-             * @description Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft.
-             * @enum {string}
-             */
-            status?: "draft" | "posted";
-            /** Format: date-time */
-            readonly postedAt?: string;
                 /**
                  * @description matchedWithinTolerance: amounts agree, dated a few days apart. partial: number agrees, amount or date doesn't (see reasons). claimed: its bill's credit is claimed for this period.
                  * @enum {string}
@@ -7433,6 +7527,10 @@ export interface operations {
                 stock?: "low" | "out" | "tracked" | "untracked";
                 /** @description Branch for `stockOnHand` */
                 branchId?: string;
+                /** @description Items in this item category */
+                categoryId?: string;
+                /** @description Items of this brand */
+                brandId?: string;
                 /** @description Free-text search */
                 q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];
@@ -7549,6 +7647,220 @@ export interface operations {
         };
     };
     removeItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listItemCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["ItemCategory"][];
+                    };
+                };
+            };
+        };
+    };
+    createItemCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemCategory"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCategory"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveItemCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemCategory"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCategory"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeItemCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listBrands: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Brand"][];
+                    };
+                };
+            };
+        };
+    };
+    createBrand: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Brand"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveBrand: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Brand"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeBrand: {
         parameters: {
             query?: never;
             header?: never;
@@ -9199,6 +9511,7 @@ export interface operations {
         parameters: {
             query?: {
                 kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                status?: "draft" | "posted";
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
                 limit?: components["parameters"]["Limit"];
@@ -9511,7 +9824,6 @@ export interface operations {
                     toBranchId: string;
                     quantity: number;
                     /** Format: date */
-                status?: "draft" | "posted";
                     date: string;
                     notes?: string;
                 };

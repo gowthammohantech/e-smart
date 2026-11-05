@@ -70,7 +70,10 @@
       "pricingHint": "What you charge and what it costs you",
       "summary": "Summary",
       "unitStock": "Unit and stock"
-    }
+    },
+    "category": "Category",
+    "brand": "Brand",
+    "none": "None"
   },
   "gst": {
     "supplyType": "GST treatment",
@@ -283,7 +286,9 @@
     "noMatch": "No match",
     "noMatchBody": "No item matches that search.",
     "noItems": "No items yet",
-    "noItemsBody": "Add what you sell to put it on invoices in a tap."
+    "noItemsBody": "Add what you sell to put it on invoices in a tap.",
+    "allCategories": "All categories",
+    "allBrands": "All brands"
   },
   "type": {
     "goods": "Product",

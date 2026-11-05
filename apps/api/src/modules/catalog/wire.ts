@@ -5,6 +5,16 @@ import type { schema } from '@esmart/db';
 import { compact, gstColumns, gstFlagsFrom, money, versioned } from '../../lib/wire';
 
 type ItemRow = typeof schema.items.$inferSelect;
+type ItemCategoryRow = typeof schema.itemCategories.$inferSelect;
+type BrandRow = typeof schema.brands.$inferSelect;
+
+export function itemCategoryToWire(row: ItemCategoryRow): Schema<'ItemCategory'> {
+  return { id: row.id, companyId: row.companyId, name: row.name, color: row.color, ...versioned(row) };
+}
+
+export function brandToWire(row: BrandRow): Schema<'Brand'> {
+  return { id: row.id, companyId: row.companyId, name: row.name, ...versioned(row) };
+}
 
 /** `imageUri` is a short-lived signed URL, so the caller resolves it. */
 export function itemToWire(row: ItemRow, imageUri?: string): Schema<'Item'> {
@@ -28,6 +38,8 @@ export function itemToWire(row: ItemRow, imageUri?: string): Schema<'Item'> {
     openingStockDate: row.openingStockDate,
     reorderLevel: Number(row.reorderLevel),
     imageUri,
+    categoryId: row.categoryId,
+    brandId: row.brandId,
     status: row.status,
     ...versioned(row),
   });
@@ -55,6 +67,8 @@ export function itemColumns(body: Schema<'Item'>, currency: string) {
     trackInventory: body.trackInventory ?? body.type === 'goods',
     ...gstColumns(body.gst),
     reorderLevel: String(body.reorderLevel ?? 0),
+    categoryId: body.categoryId || null,
+    brandId: body.brandId || null,
     status: body.status ?? 'active',
   };
 }

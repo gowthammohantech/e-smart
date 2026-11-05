@@ -485,7 +485,7 @@ export function useServerReport<T = unknown>(key: ReportKey, scope: { from: stri
   });
 }
 
-export type ItemQuery = { q?: string; type?: 'goods' | 'service'; stock?: 'low' | 'out' | 'tracked' | 'untracked'; branchId?: string; status?: 'active' | 'inactive'; barcode?: string };
+export type ItemQuery = { q?: string; type?: 'goods' | 'service'; stock?: 'low' | 'out' | 'tracked' | 'untracked'; branchId?: string; status?: 'active' | 'inactive'; barcode?: string; categoryId?: string; brandId?: string };
 const itemKeys = {
   all: (companyId: string) => ['items', companyId] as const,
 };
@@ -499,7 +499,7 @@ export function useItemPages(f: ItemQuery, enabled = true) {
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
       const { data } = await api.GET('/companies/{companyId}/items', {
-        params: { path: { companyId }, query: { q: f.q?.trim() || undefined, type: f.type, stock: f.stock, branchId: f.branchId || undefined, status: f.status, barcode: f.barcode || undefined, limit: PAGE, cursor: pageParam } },
+        params: { path: { companyId }, query: { q: f.q?.trim() || undefined, type: f.type, stock: f.stock, branchId: f.branchId || undefined, status: f.status, barcode: f.barcode || undefined, categoryId: f.categoryId || undefined, brandId: f.brandId || undefined, limit: PAGE, cursor: pageParam } },
         signal,
       });
       return data!;

@@ -25,6 +25,8 @@ import {
   Expense,
   ExpenseCategory,
   Integration,
+  ItemCategory,
+  Brand,
   Item,
   NotificationKind,
   NumberingSeries,
@@ -71,6 +73,9 @@ export type AppData = {
   items: Item[];
   taxCategories: TaxCategory[];
   expenseCategories: ExpenseCategory[];
+  /** The catalogue's own groupings: an item may have one category and one brand. */
+  itemCategories: ItemCategory[];
+  brands: Brand[];
   paymentAccounts: PaymentAccount[];
   exchangeRates: ExchangeRate[];
   numberingSeries: NumberingSeries[];
@@ -112,6 +117,8 @@ export function emptyData(): AppData {
     items: [],
     taxCategories: [],
     expenseCategories: [],
+    itemCategories: [],
+    brands: [],
     paymentAccounts: [],
     exchangeRates: [],
     numberingSeries: [],
@@ -159,6 +166,10 @@ type Actions = {
   removeTaxCategory: (id: string) => void;
   saveExpenseCategory: (cat: ExpenseCategory) => void;
   removeExpenseCategory: (id: string) => void;
+  saveItemCategory: (cat: ItemCategory) => void;
+  removeItemCategory: (id: string) => void;
+  saveBrand: (brand: Brand) => void;
+  removeBrand: (id: string) => void;
   savePaymentAccount: (acc: PaymentAccount) => void;
   removePaymentAccount: (id: string) => void;
   saveExchangeRate: (rate: ExchangeRate) => void;
@@ -738,6 +749,19 @@ export const useAppStore = create<AppState>()(
           });
         },
         removeExpenseCategory: (id) => set({ expenseCategories: get().expenseCategories.filter((c) => c.id !== id) }),
+        // A book saved before these existed has no list yet.
+        saveItemCategory: (cat) => {
+          const list = get().itemCategories ?? [];
+          const exists = list.some((c) => c.id === cat.id);
+          set({ itemCategories: exists ? list.map((c) => (c.id === cat.id ? cat : c)) : [...list, cat] });
+        },
+        removeItemCategory: (id) => set({ itemCategories: (get().itemCategories ?? []).filter((c) => c.id !== id) }),
+        saveBrand: (brand) => {
+          const list = get().brands ?? [];
+          const exists = list.some((b) => b.id === brand.id);
+          set({ brands: exists ? list.map((b) => (b.id === brand.id ? brand : b)) : [...list, brand] });
+        },
+        removeBrand: (id) => set({ brands: (get().brands ?? []).filter((b) => b.id !== id) }),
         savePaymentAccount: (acc) => {
           const exists = get().paymentAccounts.some((a) => a.id === acc.id);
           const next = exists

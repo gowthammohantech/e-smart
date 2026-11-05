@@ -9,7 +9,7 @@ describe('contract coverage', () => {
       .filter((op) => (op.tag === 'Webhooks' ? !(op.id in webhookHandlers) : !(op.id in handlers)))
       .map((op) => `${op.method} ${op.path} (${op.id})`);
     expect(missing).toEqual([]);
-    expect(operations.length).toBe(221);
+    expect(operations.length).toBe(229);
   });
 
   it('implements nothing the contract does not declare', async () => {

@@ -19,7 +19,7 @@ import { formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
-import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCategories, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { GstTreatmentFields } from './GstTreatmentFields';
@@ -33,6 +33,8 @@ export function ItemForm({ item }: { item?: Item }) {
 
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
+  const itemCategories = useItemCategories();
+  const brands = useBrands();
   const existing = useItems();
   // Read live, so a business that registers for GST gets the rule on its next edit.
   const taxRegistration = useActiveCompany()?.taxRegistration;
@@ -62,9 +64,13 @@ export function ItemForm({ item }: { item?: Item }) {
   const [openingStockDate, setOpeningStockDate] = useState(item?.openingStockDate ?? today());
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
+  const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
+  const [brandId, setBrandId] = useState(item?.brandId ?? '');
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
   // Only a new tracked item takes an opening stock, and so its date.
   const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
@@ -108,6 +114,8 @@ export function ItemForm({ item }: { item?: Item }) {
       openingStockDate: takesOpeningStock ? openingStockDate : item?.openingStockDate,
       reorderLevel: Number(reorderLevel) || 0,
       imageUri: item?.imageUri,
+      categoryId: categoryId || undefined,
+      brandId: brandId || undefined,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
     };
@@ -153,6 +161,8 @@ export function ItemForm({ item }: { item?: Item }) {
             error={errors.sku}
           />
           <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
+          <PickerField label={tr('inventory:form.category')} value={itemCategories.find((c) => c.id === categoryId)?.name ?? tr('inventory:form.none')} onPress={() => setCategoryOpen(true)} icon="tag-outline" />
+          <PickerField label={tr('inventory:form.brand')} value={brands.find((b) => b.id === brandId)?.name ?? tr('inventory:form.none')} onPress={() => setBrandOpen(true)} icon="star-circle-outline" />
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
@@ -251,6 +261,22 @@ export function ItemForm({ item }: { item?: Item }) {
           value={taxCategoryId}
           onSelect={setTaxCategoryId}
           searchable={false}
+        />
+        <SelectSheet
+          visible={categoryOpen}
+          onClose={() => setCategoryOpen(false)}
+          title={tr('inventory:form.category')}
+          options={[{ value: '', label: tr('inventory:form.none') }, ...itemCategories.map((c) => ({ value: c.id, label: c.name }))]}
+          value={categoryId}
+          onSelect={setCategoryId}
+        />
+        <SelectSheet
+          visible={brandOpen}
+          onClose={() => setBrandOpen(false)}
+          title={tr('inventory:form.brand')}
+          options={[{ value: '', label: tr('inventory:form.none') }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+          value={brandId}
+          onSelect={setBrandId}
         />
       </FormContainer>
     </KeyboardAvoidingView>

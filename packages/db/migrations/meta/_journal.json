@@ -253,6 +253,13 @@
       "when": 1793843607252,
       "tag": "0035_voucher_status",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793843649047,
+      "tag": "0036_item_categories_brands",
+      "breakpoints": true
     }
   ]
 }

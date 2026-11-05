@@ -12,10 +12,12 @@ import { Fab } from '@esmart/ui/components/Fab';
 import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
+import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import { useItemPages } from '../../../../remote/queries';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../../../components/pagedTable';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
+import { useBrands, useItemCategories } from '../../../../store/selectors';
 import { useDebounced } from '../../../../components/useDebounced';
 import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
@@ -35,11 +37,17 @@ export default function ItemList() {
   const desktop = useIsDesktop();
   // Read from the server by name, 50 at a time, each with what's on hand; search runs there too.
   const search = useDebounced(query);
-  const pages = useItemPages({ type: tab, q: search });
+  // By the company's own item category and brand ('all' is no filter).
+  const [categoryId, setCategoryId] = useState('all');
+  const [brandId, setBrandId] = useState('all');
+  const categories = useItemCategories();
+  const brands = useBrands();
+  const filtering = categoryId !== 'all' || brandId !== 'all';
+  const pages = useItemPages({ type: tab, q: search, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
   const filtered = pages.rows as unknown as (Item & { stockOnHand?: number })[];
   const stock: Record<string, number> = Object.fromEntries(filtered.map((i) => [i.id, i.stockOnHand ?? 0]));
   // Nothing in this tab at all, as against nothing matching the search.
-  const inTab = search || pages.isLoading ? [true] : filtered;
+  const inTab = search || filtering || pages.isLoading ? [true] : filtered;
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -51,7 +59,7 @@ export default function ItemList() {
   ) : null;
 
   // Desktop bulk actions: the chosen rows as a CSV, or set inactive in one save.
-  const selection = useTableSelection(`${tab}|${search}`);
+  const selection = useTableSelection(`${tab}|${search}|${categoryId}|${brandId}`);
   const exportRows = useRowsExport();
   const saveItem = useAppStore((s) => s.saveItem);
   const { run: serverSave, saving } = useServerSave();
@@ -94,6 +102,30 @@ export default function ItemList() {
       onChange={(v) => setTab(v as 'goods' | 'service')}
     />
   );
+  const filters = (
+    <>
+      {categories.length ? (
+        <FilterMenu
+          icon="tag-outline"
+          label={tr('inventory:catalog.allCategories')}
+          value={categoryId}
+          neutralValue="all"
+          options={[{ value: 'all', label: tr('inventory:catalog.allCategories') }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+          onChange={setCategoryId}
+        />
+      ) : null}
+      {brands.length ? (
+        <FilterMenu
+          icon="star-circle-outline"
+          label={tr('inventory:catalog.allBrands')}
+          value={brandId}
+          neutralValue="all"
+          options={[{ value: 'all', label: tr('inventory:catalog.allBrands') }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+          onChange={setBrandId}
+        />
+      ) : null}
+    </>
+  );
   // Nothing in this tab at all (rather than nothing matching the search).
   const emptyTitle = inTab.length ? tr('inventory:catalog.noMatch') : tab === 'service' ? tr('inventory:catalog.noServices') : tr('inventory:catalog.noItems');
   const emptyMessage = inTab.length
@@ -112,6 +144,7 @@ export default function ItemList() {
             <View style={{ width: 340 }}>
               <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
             </View>
+            {filters}
           </View>
           <DataTable
             columns={([
@@ -180,6 +213,7 @@ export default function ItemList() {
       >
         {tabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
+        {categories.length || brands.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{filters}</View> : null}
         {pages.isLoading && !filtered.length ? (
           <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
         ) : filtered.length === 0 ? (

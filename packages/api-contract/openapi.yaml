@@ -1347,6 +1347,8 @@ paths:
         - { name: lowStock, in: query, schema: { type: boolean } }
         - { name: stock, in: query, description: 'low: in stock but at or under its reorder level; out: tracked and none on hand; tracked: every item that keeps stock; untracked: services and items without stock', schema: { type: string, enum: [low, out, tracked, untracked] } }
         - { name: branchId, in: query, description: Branch for `stockOnHand`, schema: { type: string } }
+        - { name: categoryId, in: query, description: Items in this item category, schema: { type: string } }
+        - { name: brandId, in: query, description: Items of this brand, schema: { type: string } }
         - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
@@ -1413,6 +1415,130 @@ paths:
       operationId: removeItem
       x-roles: [owner, admin]
       description: '`409 ITEM_IN_USE` when documents or stock movements reference it. Set it inactive instead.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/item-categories:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Catalog]
+      operationId: listItemCategories
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ItemCategory' } }
+    post:
+      tags: [Catalog]
+      operationId: createItemCategory
+      x-roles: [owner, admin, accountant]
+      description: '`422 ITEM_CATEGORY_EXISTS` when the company already has one by that name.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ItemCategory' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemCategory' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/item-categories/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catalog]
+      operationId: saveItemCategory
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ItemCategory' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemCategory' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Catalog]
+      operationId: removeItemCategory
+      x-roles: [owner, admin, accountant]
+      description: '`409 ITEM_CATEGORY_IN_USE` when items reference it.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/brands:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Catalog]
+      operationId: listBrands
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Brand' } }
+    post:
+      tags: [Catalog]
+      operationId: createBrand
+      x-roles: [owner, admin, accountant]
+      description: '`422 BRAND_EXISTS` when the company already has one by that name.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Brand' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/brands/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catalog]
+      operationId: saveBrand
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Brand' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Catalog]
+      operationId: removeBrand
+      x-roles: [owner, admin, accountant]
+      description: '`409 BRAND_IN_USE` when items reference it.'
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -2588,6 +2714,7 @@ paths:
       x-plan-module: books
       parameters:
         - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, posted] } }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
         - { $ref: '#/components/parameters/Limit' }
@@ -2714,7 +2841,6 @@ paths:
                   value: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "Weighted-average value of what is on hand, in base currency" }
                   low: { type: boolean }
                   soldQuantity: { type: number, description: "Sold on finalised invoices, all time" }
-        - { name: status, in: query, schema: { type: string, enum: [draft, posted] } }
                   rows:
                     type: array
                     items:
@@ -5053,6 +5179,25 @@ components:
             name: { type: string }
             icon: { type: string }
             color: { type: string }
+    ItemCategory:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, maxLength: 100 }
+            color: { type: string, description: 'Hex, like #4DA3FF; a neutral grey when left out' }
+    Brand:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, maxLength: 100 }
     PaymentAccount:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -5233,6 +5378,8 @@ components:
             openingStockDate: { type: string, format: date, description: "The day the opening stock was counted; not after today, and no document with this item can be dated before it. Used only on create, and only when trackInventory is set." }
             reorderLevel: { type: number }
             imageUri: { type: string, format: uri, readOnly: true }
+            categoryId: { type: [string, 'null'], description: 'An item category of this company, or null for none' }
+            brandId: { type: [string, 'null'], description: 'A brand of this company, or null for none' }
             status: { type: string, enum: [active, inactive] }
     ItemWithStock:
       allOf:

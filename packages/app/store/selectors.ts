@@ -144,6 +144,19 @@ export function useExpenseCategories() {
   return useMemo(() => cats.filter((c) => c.companyId === companyId), [cats, companyId]);
 }
 
+/** The company's item categories and brands, by name. */
+export function useItemCategories() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const cats = useAppStore((s) => s.itemCategories);
+  return useMemo(() => (cats ?? []).filter((c) => c.companyId === companyId).sort((a, b) => a.name.localeCompare(b.name)), [cats, companyId]);
+}
+
+export function useBrands() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const brands = useAppStore((s) => s.brands);
+  return useMemo(() => (brands ?? []).filter((b) => b.companyId === companyId).sort((a, b) => a.name.localeCompare(b.name)), [brands, companyId]);
+}
+
 export function usePaymentAccounts() {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const accs = useAppStore((s) => s.paymentAccounts);

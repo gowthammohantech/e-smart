@@ -211,6 +211,9 @@ export type Item = {
   openingStockDate?: string;
   reorderLevel: number;
   imageUri?: string;
+  /** The company's own grouping (ItemCategory) and maker (Brand); both optional. */
+  categoryId?: string;
+  brandId?: string;
   status: 'active' | 'inactive';
   createdAt: string;
 };
@@ -774,6 +777,20 @@ export type ExpenseCategory = {
   color: string;
 };
 
+/** How a company groups its items; each item may have one. */
+export type ItemCategory = {
+  id: string;
+  companyId: string;
+  name: string;
+  color: string;
+};
+
+export type Brand = {
+  id: string;
+  companyId: string;
+  name: string;
+};
+
 export type RecurrenceFrequency = 'none' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 export type Expense = {
@@ -1006,6 +1023,8 @@ export type CostCentre = {
 /** Journal: any adjustment. Contra: money between cash and bank. GST journal: adjustments to the GST ledgers. TDS challan: TDS paid to the government. */
 /** `receipt`: money in that isn't from a customer's invoice: interest, rent, a refund, capital brought in. */
 export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt';
+/** A draft is kept but not in the books (no number, no postings) until it is posted. */
+export type VoucherStatus = 'draft' | 'posted';
 
 /** Where a TDS challan was deposited, as printed on it (ITNS 281). */
 export type TdsChallan = { bsrCode: string; serial: string; depositedOn: string };
@@ -1023,10 +1042,11 @@ export type Voucher = {
   id: string;
   companyId: string;
   branchId: string;
-/** A draft is kept but not in the books (no number, no postings) until it is posted. */
-export type VoucherStatus = 'draft' | 'posted';
   kind: VoucherKind;
   number: string;
+  /** Absent on records from before drafts existed, which are posted. */
+  status?: VoucherStatus;
+  postedAt?: string;
   date: string;
   narration?: string;
   /** TDS challan: the challan's number and BSR code. */
@@ -1038,6 +1058,3 @@ export type VoucherStatus = 'draft' | 'posted';
   createdAt: string;
   updatedAt?: string;
 };
-  /** Absent on records from before drafts existed, which are posted. */
-  status?: VoucherStatus;
-  postedAt?: string;

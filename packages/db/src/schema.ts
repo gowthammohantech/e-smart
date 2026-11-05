@@ -548,6 +548,8 @@ export const items = pgTable("items", {
 	openingStockDate: date("opening_stock_date"),
 	reorderLevel: numeric("reorder_level", { precision: 18, scale:  3 }).default('0').notNull(),
 	imageAttachmentId: varchar("image_attachment_id", { length: 40 }),
+	categoryId: varchar("category_id", { length: 40 }),
+	brandId: varchar("brand_id", { length: 40 }),
 	status: activeStatus().default('active').notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -556,6 +558,17 @@ export const items = pgTable("items", {
 	index("items_company_id_barcode_idx").using("btree", table.companyId.asc().nullsLast(), table.barcode.asc().nullsLast()),
 	uniqueIndex("items_company_id_sku_idx").using("btree", table.companyId.asc().nullsLast(), table.sku.asc().nullsLast()),
 	index("items_company_id_status_idx").using("btree", table.companyId.asc().nullsLast(), table.status.asc().nullsLast()),
+	index("items_company_id_category_id_idx").using("btree", table.companyId.asc().nullsLast(), table.categoryId.asc().nullsLast()),
+	foreignKey({
+			columns: [table.categoryId],
+			foreignColumns: [itemCategories.id],
+			name: "items_category_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.brandId],
+			foreignColumns: [brands.id],
+			name: "items_brand_id_fkey"
+		}),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
@@ -1879,6 +1892,40 @@ export const expenseCategories = pgTable("expense_categories", {
 		}),
 ]);
 
+/** A company's own grouping of its items, for the catalogue and its filters. */
+export const itemCategories = pgTable("item_categories", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 100 }).notNull(),
+	color: varchar({ length: 9 }).notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("item_categories_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "item_categories_company_id_fkey"
+		}),
+]);
+
+export const brands = pgTable("brands", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 100 }).notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("brands_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "brands_company_id_fkey"
+		}),
+]);
+
 export const userCompanies = pgTable("user_companies", {
 	userId: varchar("user_id", { length: 40 }).notNull(),
 	companyId: varchar("company_id", { length: 40 }).notNull(),
@@ -2151,7 +2198,11 @@ export const vouchers = pgTable("vouchers", {
 	companyId: varchar("company_id", { length: 40 }).notNull(),
 	branchId: varchar("branch_id", { length: 40 }).notNull(),
 	kind: voucherKind().notNull(),
+	// A draft's number is its id until it is posted, which keeps the per-kind number index unique.
 	number: varchar({ length: 40 }).notNull(),
+	status: voucherStatus().default('posted').notNull(),
+	postedAt: timestamp("posted_at", { withTimezone: true, mode: 'date' }),
+	postedBy: varchar("posted_by", { length: 40 }),
 	date: date().notNull(),
 	narration: text(),
 	reference: varchar({ length: 100 }),
@@ -2198,11 +2249,7 @@ export const gstPortalSessions = pgTable("gst_portal_sessions", {
 	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'date' }),
 	refreshableUntil: timestamp("refreshable_until", { withTimezone: true, mode: 'date' }),
 	otpRequestedAt: timestamp("otp_requested_at", { withTimezone: true, mode: 'date' }),
-	// A draft's number is its id until it is posted, which keeps the per-kind number index unique.
 	connectedBy: varchar("connected_by", { length: 40 }),
-	status: voucherStatus().default('posted').notNull(),
-	postedAt: timestamp("posted_at", { withTimezone: true, mode: 'date' }),
-	postedBy: varchar("posted_by", { length: 40 }),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	primaryKey({ columns: [table.companyId, table.gstin], name: "gst_portal_sessions_pkey" }),
