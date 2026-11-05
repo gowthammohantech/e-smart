@@ -67,7 +67,9 @@ export const ocrFieldKey = pgEnum("ocr_field_key", ['vendor', 'gstin', 'date', '
 export const ocrKind = pgEnum("ocr_kind", ['expense', 'purchaseBill'])
 export const ocrStatus = pgEnum("ocr_status", ['queued', 'processing', 'completed', 'failed'])
 export const otpChannel = pgEnum("otp_channel", ['sms', 'whatsapp'])
-export const partyKind = pgEnum("party_kind", ['customer', 'supplier'])
+/** both: one ledger that buys and sells (Sundry Debtors, as Tally); general: a contact with no ledger or documents. */
+export const partyKind = pgEnum("party_kind", ['customer', 'supplier', 'both', 'general'])
+export const balanceSide = pgEnum("balance_side", ['dr', 'cr'])
 export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank', 'wallet'])
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
@@ -872,6 +874,8 @@ export const parties = pgTable("parties", {
 	shippingCountry: char("shipping_country", { length: 2 }),
 	creditLimitMinor: bigint("credit_limit_minor", { mode: "number" }),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
+	// Which side the opening balance is on; unset is the kind's usual side (customer Dr, supplier Cr).
+	openingBalanceSide: balanceSide("opening_balance_side"),
 	// The day the opening balance stands at; unset reads as the start of the books.
 	openingBalanceDate: date("opening_balance_date", { mode: 'string' }),
 	paymentTermsDays: smallint("payment_terms_days").default(0).notNull(),
