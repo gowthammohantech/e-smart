@@ -263,7 +263,7 @@ describe('numbering series', () => {
   it('lists every kind, only moves forward, and previews with the branch code', async () => {
     const { token, c, company } = await ownerWithCompany(t);
     const list = await t.get(`${c}/numbering-series`, { token });
-    expect(list.body.data).toHaveLength(21);
+    expect(list.body.data).toHaveLength(22);
     const inv = list.body.data.find((s: { kind: string }) => s.kind === 'invoice');
     expect(inv).toMatchObject({ prefix: 'INV', nextNumber: 1, includeFiscalYear: true });
 
