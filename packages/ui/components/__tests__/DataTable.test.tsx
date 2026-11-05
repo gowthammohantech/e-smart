@@ -180,3 +180,23 @@ describe('DataTable paging', () => {
     expect(text(root)).toContain('6–10 of 12');
   });
 });
+
+describe('DataTable fitting', () => {
+  it('drops secondary columns, first declared first, when the table is too narrow', () => {
+    const wide: Column<Row>[] = [
+      { key: 'name', header: 'Name', width: 300, render: (r) => r.name },
+      { key: 'first', header: 'First extra', width: 200, secondary: true, render: () => '' },
+      { key: 'second', header: 'Second extra', width: 200, secondary: true, render: () => '' },
+      { key: 'amount', header: 'Amount', width: 150, render: (r) => String(r.amount) },
+    ];
+    const root = render({ columns: wide });
+    expect(byRole(root, 'columnheader')).toHaveLength(4);
+    const box = root.root.find((n) => typeof n.props.onLayout === 'function' && n.type === View);
+    // 300 + 200 + 150 + 8 fits in 700; the first extra goes, the second stays.
+    act(() => box.props.onLayout({ nativeEvent: { layout: { width: 700, height: 400, x: 0, y: 0 } } }));
+    const headers = byRole(root, 'columnheader').map((h) => h.findAll((n) => typeof n.props.children === 'string').map((n) => n.props.children).join(' '));
+    expect(headers).toHaveLength(3);
+    expect(headers.some((h) => h.includes('First extra'))).toBe(false);
+    expect(headers.some((h) => h.includes('Second extra'))).toBe(true);
+  });
+});

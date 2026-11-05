@@ -161,12 +161,26 @@ export function DataTable<T>({
   const narrow = breakpoint === 'tablet';
   // Only a desktop window scrolls sideways; a phone never reaches this table.
   const desktop = breakpoint !== 'phone';
-  const columns = narrow ? allColumns.filter((c) => !c.secondary) : allColumns;
+  const canSelect = !!selectable && !!onSelectionChange;
+  const extrasWidth = 8 + (canSelect ? SELECT_WIDTH : 0) + (rowActions ? ACTIONS_WIDTH : 0);
+  // The table's own width, not the window's: a sidebar, Lixi's panel or a side
+  // column can leave it far narrower than the window suggests.
+  const [boxWidth, setBoxWidth] = useState(0);
+  const columns = useMemo(() => {
+    if (narrow) return allColumns.filter((c) => !c.secondary);
+    const need = (cols: Column<T>[]) => cols.reduce((sum, c) => sum + (c.width ?? 120), 0) + extrasWidth;
+    // Secondary columns go one at a time, in the order they're declared, until the rest fit.
+    let cols = allColumns;
+    for (const c of allColumns.filter((x) => x.secondary)) {
+      if (!boxWidth || need(cols) <= boxWidth) break;
+      cols = cols.filter((x) => x !== c);
+    }
+    return cols;
+  }, [allColumns, narrow, boxWidth, extrasWidth]);
   const [localSort, setSort] = useState<Sort | null>(initialSort ?? null);
   const controlled = onSortChange !== undefined;
   const sort = controlled ? (sortProp ?? null) : localSort;
   const selection = useMemo(() => new Set(selectedKeys ?? []), [selectedKeys]);
-  const canSelect = !!selectable && !!onSelectionChange;
 
   const [size, setSize] = useState<number | undefined>(
     () => storedPageSize(tableKey, pageSizeOptions) ?? pageSize ?? pageSizeOptions?.[0],
@@ -521,10 +535,10 @@ export function DataTable<T>({
       </View>
     ) : null;
 
-  // The pager sits outside the table element: it controls the table but is not part of it.
+  // The pager and the bulk bar sit outside the table element (they control it but are not
+  // part of it) and outside the sideways scroll, so they stay in view.
   const content = (
     <>
-      {bulkBar}
       <View role="table" aria-busy={loading || short || undefined} style={{ flex: scroll ? 1 : undefined }}>
         <View role="rowgroup">{header}</View>
         {scroll ? (
@@ -536,15 +550,13 @@ export function DataTable<T>({
         )}
         {footerRow ? <View role="rowgroup">{footerRow}</View> : null}
       </View>
-      {pager}
     </>
   );
 
   // Every column keeps at least its minimum width, so when the window is
   // squeezed (Lixi's panel open, say) the table scrolls sideways instead of
   // crushing its columns.
-  const minWidth =
-    columns.reduce((sum, c) => sum + (c.width ?? 120), 0) + 8 + (canSelect ? SELECT_WIDTH : 0) + (hasActionsColumn ? ACTIONS_WIDTH : 0);
+  const minWidth = columns.reduce((sum, c) => sum + (c.width ?? 120), 0) + extrasWidth;
 
   return (
     <View
@@ -557,7 +569,9 @@ export function DataTable<T>({
         overflow: 'hidden',
         ...t.shadow.card,
       }}
+      onLayout={(e) => setBoxWidth(Math.round(e.nativeEvent.layout.width))}
     >
+      {bulkBar}
       {desktop ? (
         <ScrollView
           horizontal
@@ -565,11 +579,14 @@ export function DataTable<T>({
           contentContainerStyle={{ flexGrow: 1, minWidth }}
           showsHorizontalScrollIndicator={SHOW_SCROLLBAR}
         >
-          <View style={{ flexGrow: 1 }}>{content}</View>
+          {/* An explicit width: inside a sideways scroller the content would otherwise take
+              its natural width, and a long name would widen its column instead of truncating. */}
+          <View style={{ flexGrow: 1, width: boxWidth ? Math.max(minWidth, boxWidth - 2) : undefined }}>{content}</View>
         </ScrollView>
       ) : (
         content
       )}
+      {pager}
     </View>
   );
 }
