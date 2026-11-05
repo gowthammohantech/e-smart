@@ -83,3 +83,15 @@ describe('contacts from a CSV', () => {
     expect(row.problems).toEqual(["State Kerala does not match the GSTIN's state"]);
   });
 });
+
+describe('custom fields from a CSV', () => {
+  it('fills a contact field from the column named after it', () => {
+    const rows = parseCsv('Name,Drug Licence,Zone\nMurugan Traders,TN/MDU/20B/1,\nKumar Stores,,North');
+    const out = partiesFromCsv(rows, guessColumns(rows[0]), { kind: 'customer', currency: 'INR' }, [
+      { id: 'cf_dl', label: 'Drug licence' },
+      { id: 'cf_zone', label: 'zone' },
+    ]);
+    expect(out[0].party!.customFields).toEqual({ cf_dl: 'TN/MDU/20B/1' });
+    expect(out[1].party!.customFields).toEqual({ cf_zone: 'North' });
+  });
+});

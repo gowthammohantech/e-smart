@@ -18,6 +18,7 @@ import { describeError } from '../../remote/errors';
 import { syncSoon } from '../../remote/sync';
 import { useBaseCurrency } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
+import { useCustomFields } from '../customFields/CustomFieldsSection';
 
 type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; issues?: { message?: string }[] };
 const KINDS: ImportKind[] = ['customer', 'supplier', 'both', 'general'];
@@ -55,14 +56,16 @@ export function ImportContacts() {
   const [kind, setKind] = useState<ImportKind>('customer');
   const [outcomes, setOutcomes] = useState<Outcome[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // The company's contact fields: columns named after them fill them in.
+  const contactFields = useCustomFields('party');
 
   // Read on every change: the preview shows what the sheet holds before anything is sent.
   const parsed = useMemo(() => {
     const rows = parseCsv(text);
     if (rows.length < 2) return { rows: [] as ImportRow[], columns: {} };
     const columns = guessColumns(rows[0]);
-    return { rows: partiesFromCsv(rows, columns, { kind, currency }), columns };
-  }, [text, kind, currency]);
+    return { rows: partiesFromCsv(rows, columns, { kind, currency }, contactFields), columns };
+  }, [text, kind, currency, contactFields]);
   const good = parsed.rows.filter((r) => r.party);
   const noName = parsed.rows.length > 0 && parsed.columns.name === undefined;
 

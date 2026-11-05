@@ -80,3 +80,16 @@ describe('books and branches', () => {
     expect((await view(all.token)).status).toBe(200);
   });
 });
+
+describe('contacts import with custom fields', () => {
+  it('stores the company contact fields and refuses a row whose value does not fit', async () => {
+    const m = await moneySetup(t);
+    const zone = await t.post(`${m.c}/custom-fields`, { entity: 'party', label: 'Zone', kind: 'select', options: ['North', 'South'] }, { token: m.token });
+    const rows = [party({ name: 'Zone North Traders', customFields: { [zone.body.id]: 'North' } }), party({ name: 'Zone East Traders', customFields: { [zone.body.id]: 'East' } })];
+    const done = await t.post(`${m.c}/parties/import`, { rows }, { token: m.token });
+    expect(done.body.results.map((r: { status: string }) => r.status)).toEqual(['created', 'invalid']);
+    expect(done.body.results[1].issues[0].field).toBe(`customFields.${zone.body.id}`);
+    const created = await t.get(`${m.c}/parties/${done.body.results[0].id}`, { token: m.token });
+    expect(created.body.customFields).toEqual({ [zone.body.id]: 'North' });
+  });
+});

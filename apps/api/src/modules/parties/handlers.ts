@@ -169,9 +169,11 @@ export const partiesHandlers = defineHandlers({
     const results: Result[] = [];
     const good: { index: number; body: Schema<'Party'> }[] = [];
     for (const [index, body] of rows.entries()) {
+      let customFields: CustomValues = {};
       try {
         assertKindAllowed(ctx, body.kind);
         await validate(ctx.db, body, day);
+        customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'party', body.customFields as CustomValues | undefined);
       } catch (err) {
         const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: 'kind', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
@@ -184,7 +186,7 @@ export const partiesHandlers = defineHandlers({
       }
       if (body.taxId) gstins.add(body.taxId);
       names.add(name);
-      good.push({ index, body });
+      good.push({ index, body: { ...body, customFields } });
     }
     if (!dryRun && good.length) {
       await ctx.db.transaction(async (tx) => {
@@ -197,7 +199,7 @@ export const partiesHandlers = defineHandlers({
             code = `${CODE_PREFIX[body.kind]}${String(n).padStart(3, '0')}`;
             next.set(body.kind, n + 1);
           }
-          const [created] = await tx.insert(P).values({ id: newId('pty'), companyId: ctx.company.id, code, ...partyColumns(body) }).returning();
+          const [created] = await tx.insert(P).values({ id: newId('pty'), companyId: ctx.company.id, code, ...partyColumns(body), customFields: (body.customFields as CustomValues) ?? {} }).returning();
           await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'party', entityId: created.id, entityLabel: created.name, version: created.version, after: partyToWire(created) });
           results.push({ index, status: 'created', id: created.id });
         }
