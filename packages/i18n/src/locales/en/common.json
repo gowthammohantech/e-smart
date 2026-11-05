@@ -292,7 +292,18 @@
     "range": "{{from}}–{{to}} of {{total}}",
     "pageOf": "Page {{page}} of {{count}}",
     "previousPage": "Previous page",
-    "nextPage": "Next page"
+    "nextPage": "Next page",
+    "perPage": "{{n}} per page",
+    "rowsPerPage": "Rows per page: {{n}}",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "clearSelection": "Clear selection",
+    "selectPage": "Select all on this page",
+    "selectRow": "Select {{label}}",
+    "rowActions": "Actions for {{label}}",
+    "actions": "Actions",
+    "loading": "Loading",
+    "loadFailed": "This list couldn’t load."
   },
   "toast": {
     "success": "Done",

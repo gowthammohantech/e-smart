@@ -292,7 +292,18 @@
     "range": "{{total}} இல் {{from}}–{{to}}",
     "pageOf": "பக்கம் {{page}} / {{count}}",
     "previousPage": "முந்தைய பக்கம்",
-    "nextPage": "அடுத்த பக்கம்"
+    "nextPage": "அடுத்த பக்கம்",
+    "perPage": "பக்கத்துக்கு {{n}}",
+    "rowsPerPage": "பக்கத்துக்கு வரிசைகள்: {{n}}",
+    "selected_one": "{{count}} தேர்ந்தெடுக்கப்பட்டது",
+    "selected_other": "{{count}} தேர்ந்தெடுக்கப்பட்டன",
+    "clearSelection": "தேர்வை அழி",
+    "selectPage": "இந்தப் பக்கத்தில் உள்ள அனைத்தையும் தேர்ந்தெடு",
+    "selectRow": "{{label}} ஐத் தேர்ந்தெடு",
+    "rowActions": "{{label}} க்கான செயல்கள்",
+    "actions": "செயல்கள்",
+    "loading": "ஏற்றுகிறது",
+    "loadFailed": "இந்தப் பட்டியலை ஏற்ற முடியவில்லை."
   },
   "toast": {
     "success": "முடிந்தது",
