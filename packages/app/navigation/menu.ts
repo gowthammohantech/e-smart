@@ -230,11 +230,3 @@ export function pageForPath(pathname: string): MenuPage | undefined {
   }
   return best;
 }
-
-/** How many pages the desktop's Recent list keeps. */
-export const RECENT_LIMIT = 5;
-
-/** Puts a page at the front of a recent list, once, keeping the newest few. */
-export function pushRecent(list: readonly string[], key: string, limit = RECENT_LIMIT): string[] {
-  return [key, ...list.filter((k) => k !== key)].slice(0, limit);
-}

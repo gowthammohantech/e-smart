@@ -11,12 +11,12 @@ import { BrandLogo } from '@esmart/ui/components/BrandLogo';
 import { canOpen } from '@esmart/core/domain/plan';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
-import { ALL_PAGES, RECENT_LIMIT, appHref, pageForPath, section, type MenuPage, type PageGroup, type SidebarGroup } from '@esmart/app/navigation/menu';
+import { appHref, section, type MenuPage, type PageGroup, type SidebarGroup } from '@esmart/app/navigation/menu';
 import { useMenuBadges } from '@esmart/app/navigation/moreGroups';
 import { usePlan } from '@esmart/app/store/selectors';
 // A page swap the open form can't see coming; it asks first when there are unsaved changes.
 import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
-import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth as width, useRecentPages, useSidebarCollapsed, visitPage } from './sidebarState';
+import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth as width, useSidebarCollapsed } from './sidebarState';
 import { SETTINGS_HREF } from './navLinks';
 import { TOP_BAR_HEIGHT } from './shell/TopBar';
 
@@ -181,21 +181,6 @@ function NavItem({
         ) : null}
       </Pressable>
     </View>
-  );
-}
-
-function Heading({ label }: { label: string }) {
-  const t = useTheme();
-  return (
-    <Text
-      variant="micro"
-      weight="600"
-      tone="muted"
-      numberOfLines={1}
-      style={{ textTransform: 'uppercase', letterSpacing: 0.6, paddingHorizontal: t.spacing.md - 2, paddingTop: t.spacing.sm, paddingBottom: t.spacing.xs }}
-    >
-      {label}
-    </Text>
   );
 }
 
@@ -604,7 +589,6 @@ export function Sidebar() {
   const badges = useMenuBadges();
   const breakpoint = useBreakpoint();
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
-  const recentKeys = useRecentPages();
   // A narrow window, such as a tablet, starts icons-only and opens by hand
   // for a moment: picking a page folds it again to give the room back. A
   // wider one stays as it was folded.
@@ -633,18 +617,6 @@ export function Sidebar() {
 
   const current = tabForPath(pathname);
   const inSettings = pathname.startsWith('/settings');
-
-  // Every menu page you land on, deep links included, goes to the front of Recent.
-  useEffect(() => {
-    const page = pageForPath(pathname);
-    if (page) visitPage(page.key);
-  }, [pathname]);
-  const here = pageForPath(pathname)?.key;
-  const recent = recentKeys
-    .filter((k) => k !== here)
-    .map((k) => ALL_PAGES.find((p) => p.key === k))
-    .filter((p): p is MenuPage => !!p && canOpen(plan, p.route))
-    .slice(0, RECENT_LIMIT);
 
   // One section's pages drop down at a time. Arriving in a section opens its
   // list, so you can see where you are; its row's chevron closes it again.
@@ -697,15 +669,6 @@ export function Sidebar() {
           <HomeLogo compact={!!compact} />
         </View>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: t.spacing.sm, gap: t.spacing.xxs }}>
-          {recent.length > 0 && !compact ? (
-            <View role="group" aria-label={tr('nav:shell.recent')} style={{ gap: t.spacing.xxs }}>
-              <Heading label={tr('nav:shell.recent')} />
-              {recent.map((p) => (
-                <NavItem key={p.key} icon={p.icon} label={tr(p.labelKey as 'nav:title.invoices')} href={p.route} />
-              ))}
-              <Rule />
-            </View>
-          ) : null}
           {groups.map((group, i) => (
             <React.Fragment key={group.key ?? 'top'}>
               {i > 0 ? <Rule /> : null}
