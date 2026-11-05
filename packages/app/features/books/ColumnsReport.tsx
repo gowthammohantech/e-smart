@@ -1,9 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Segmented } from '@esmart/ui/components/Field';
 import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import { variance, type BalanceSheetColumns, type ColumnRow, type ProfitAndLossColumns } from '@esmart/core/domain/ledger/comparative';
 import { DataTable, ReportSection } from '../reports/reportParts';
@@ -43,6 +44,8 @@ export function useColumnsTables(kind: 'profit-loss' | 'balance-sheet', range: {
   const nameOf = useAccountName();
   const data = useBooksView<ProfitAndLossColumns | BalanceSheetColumns>(kind, { ...range, ...queryOf(view) }, view !== 'single').data;
   if (!data || view === 'single') return undefined;
+  // While the columns load, the query still holds the single statement it showed before: wait for columns.
+  if (kind === 'profit-loss' ? !('periods' in data) : !('dates' in data)) return undefined;
 
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const comparing = view === 'previousPeriod' || view === 'previousYear';
@@ -60,7 +63,7 @@ export function useColumnsTables(kind: 'profit-loss' | 'balance-sheet', range: {
 
   if (kind === 'profit-loss') {
     const pl = data as ProfitAndLossColumns;
-    const t = tableOf(pl.periods.map((p) => (comparing ? `${p.from} – ${p.to}` : p.label)));
+    const t = tableOf(pl.periods.map((p) => (comparing ? `${formatDate(p.from)} – ${formatDate(p.to)}` : p.label)));
     return [
       {
         title: tr('books:pl.trading'),
@@ -77,7 +80,7 @@ export function useColumnsTables(kind: 'profit-loss' | 'balance-sheet', range: {
     ];
   }
   const bs = data as BalanceSheetColumns;
-  const t = tableOf(bs.dates);
+  const t = tableOf(bs.dates.map((d) => formatDate(d)));
   const side = (groups: BalanceSheetColumns['assets']) =>
     groups.flatMap((g) => [line(tr(`books:bs.heading.${g.heading}` as 'books:bs.heading.capital').toUpperCase(), g.totals), ...accountRows(g.rows).map(([a, ...rest]) => [`   ${a}`, ...rest])]);
   return [
@@ -96,11 +99,19 @@ export function ColumnsReport({ sections }: { sections: ColumnsSection[] | undef
   if (!sections) return <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />;
   return (
     <>
-      {sections.map((s) => (
-        <ReportSection key={s.title} title={s.title}>
-          <DataTable headers={s.headers} widths={s.widths} rows={s.rows} />
-        </ReportSection>
-      ))}
+      {sections.map((s) => {
+        // Months side by side need more room than the page has: a column keeps a readable width and the table scrolls sideways.
+        const minWidth = 220 + 150 * (s.headers.length - 1);
+        return (
+          <ReportSection key={s.title} title={s.title}>
+            <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ flexGrow: 1 }}>
+              <View style={{ flex: 1, minWidth }}>
+                <DataTable headers={s.headers} widths={s.widths} rows={s.rows} />
+              </View>
+            </ScrollView>
+          </ReportSection>
+        );
+      })}
     </>
   );
 }

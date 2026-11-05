@@ -77,7 +77,7 @@ export function ImportContacts() {
       setOutcomes((data.results ?? []) as Outcome[]);
       if (!dryRun) {
         syncSoon();
-        toast.show(tr('contacts:import.done', { count: data.created ?? 0 }), 'success', { icon: 'account-check-outline', detail: tr('contacts:import.skipped', { count: (data.skipped ?? 0) + (data.invalid ?? 0) }) });
+        toast.show(tr('contacts:import.done', { count: data.created ?? 0 }), 'success', { icon: 'account-check-outline', detail: tr('contacts:import.skipped', { count: parsed.rows.length - (data.created ?? 0) }) });
         router.replace('/(app)/(tabs)/contacts');
       }
     } catch (err) {
