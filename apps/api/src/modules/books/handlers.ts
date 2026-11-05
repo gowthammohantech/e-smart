@@ -205,7 +205,11 @@ async function findVoucher(ctx: AnyCtx, db: DbOrTx, id: string): Promise<Voucher
 export const booksHandlers = defineHandlers({
   async getBooksView(ctx) {
     // The books are one set across branches; a user limited to some of them sees the branch reports instead.
-    if (ctx.user.branchIds.length) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
+    // Listed against every branch is the same as not limited.
+    if (ctx.user.branchIds.length) {
+      const branches = await ctx.db.select({ id: schema.branches.id }).from(schema.branches).where(eq(schema.branches.companyId, ctx.company.id));
+      if (branches.some((b) => !ctx.user.branchIds.includes(b.id))) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
+    }
     const { from = '1900-01-01', to, account, breakdown, compare } = ctx.query;
     const { postings, book, stock } = await loadBook({ db: ctx.db, company: ctx.company, user: ctx.user, now: ctx.now, from, to });
     const range = { from, to };
