@@ -110,6 +110,20 @@ describe('documents: numbering and lifecycle', () => {
     expect(done.map((r) => r.body.document.number).sort()).toEqual(['INV/26-27/0001', 'INV/26-27/0002', 'INV/26-27/0003', 'INV/26-27/0004', 'INV/26-27/0005']);
   });
 
+  it('deletes a draft with a pending e-invoice record, but not one with an IRN', async () => {
+    const m = await moneySetup(t);
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    await t.deps.db.insert(schema.eInvoices).values({ documentId: draft.body.id, companyId: m.companyId, status: 'pending' } as never);
+    expect((await t.del(`${m.c}/documents/${draft.body.id}`, { token: m.token })).status).toBe(204);
+    expect(await t.deps.db.select().from(schema.eInvoices).where(eq(schema.eInvoices.documentId, draft.body.id))).toHaveLength(0);
+
+    const other = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    await t.deps.db.insert(schema.eInvoices).values({ documentId: other.body.id, companyId: m.companyId, status: 'pending', irn: 'a'.repeat(64) } as never);
+    const refused = await t.del(`${m.c}/documents/${other.body.id}`, { token: m.token });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('DOCUMENT_IN_USE');
+  });
+
   it('deletes drafts only; a finalised document is cancelled and keeps its number', async () => {
     const m = await moneySetup(t);
     const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });

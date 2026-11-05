@@ -482,7 +482,12 @@ export const documentsHandlers = defineHandlers({
     }
     const [child] = await ctx.db.select({ number: D.number }).from(D).where(eq(D.sourceDocumentId, current.id)).limit(1);
     if (child) throw conflict('DOCUMENT_IN_USE', `${child.number} was created from this draft`);
+    // A draft's e-invoice record is only a pending one (a check run, or an attempt that failed):
+    // an IRN is issued on a finalised invoice. One with an IRN is never thrown away.
+    const [einv] = await ctx.db.select({ irn: schema.eInvoices.irn }).from(schema.eInvoices).where(eq(schema.eInvoices.documentId, current.id));
+    if (einv?.irn) throw conflict('DOCUMENT_IN_USE', `${current.number} has an IRN; cancel the e-invoice instead`);
     await ctx.db.transaction(async (tx) => {
+      await tx.delete(schema.eInvoices).where(eq(schema.eInvoices.documentId, current.id));
       await linkAttachments(tx, ctx.company.id, current.id, []);
       await tx.delete(schema.shareLinks).where(eq(schema.shareLinks.documentId, current.id));
       await tx.delete(schema.reminderDocuments).where(eq(schema.reminderDocuments.documentId, current.id));
