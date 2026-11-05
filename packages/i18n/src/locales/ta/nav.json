@@ -105,7 +105,8 @@
     "yourProfile": "உங்கள் விவரம்",
     "editNamed": "திருத்து: {{name}}",
     "notifications": "அறிவிப்புகள்",
-    "receipts": "வரவுகள்"
+    "receipts": "வரவுகள்",
+    "documentPreview": "{{kind}} முன்னோட்டம்"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {
@@ -186,7 +187,8 @@
     "mainNavigation": "முதன்மை",
     "settingsNavigation": "அமைப்புப் பக்கங்கள்",
     "skipToContent": "உள்ளடக்கத்துக்குச் செல்",
-    "assistant": "Lixi உதவியாளர்"
+    "assistant": "Lixi உதவியாளர்",
+    "escKey": "Esc"
   },
   "home": {
     "emptyTitle": "தொடங்கலாம் வாருங்கள்",

@@ -304,7 +304,9 @@
     "unallocatedNote": "{{amount}} is unallocated and available as an advance.",
     "tdsSection": "TDS section",
     "tdsSectionPick": "Pick the section",
-    "tdsSectionHint": "The TDS kept back here is reported under this section in 26Q and TDS payable."
+    "tdsSectionHint": "The TDS kept back here is reported under this section in 26Q and TDS payable.",
+    "received": "Payment received",
+    "totalApplied": "Total applied"
   },
   "aging": {
     "overdue": "Overdue",

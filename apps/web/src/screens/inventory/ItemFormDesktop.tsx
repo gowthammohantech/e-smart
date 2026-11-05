@@ -30,7 +30,7 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
  */
 export function ItemFormDesktop({ item }: { item?: Item }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const router = useRouter();
   const goBack = useGoBack();
   const { run: serverSave, saving } = useServerSave();
@@ -75,7 +75,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
 
   const save = async () => {
     const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
-      name: required(name, 'Item name'),
+      name: required(name, tr('inventory:form.itemName')),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
       openingStockDate: takesOpeningStock && openingStockDate > today() ? tr('inventory:form.openingStockDateFuture') : undefined,
     };
@@ -112,7 +112,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
       createdAt: item?.createdAt ?? nowISO(),
     };
 
-    const res = await serverSave(() => saveItem(record), item ? 'Item updated' : 'Item added', { icon: 'tag-check-outline', detail: record.name });
+    const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'), { icon: 'tag-check-outline', detail: record.name });
     if (!res) return;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
@@ -127,8 +127,8 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           // The page's actions sit in the header, right of the title.
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-              <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/catalog/items')} />
-              <Button shortcut="S" title={item ? 'Save changes' : 'Add item'} onPress={() => void save()} loading={saving} />
+              <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/catalog/items')} />
+              <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} />
             </View>
           ),
         }}
@@ -139,15 +139,15 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           fill
           main={
             <>
-              <Panel title="Item details" subtitle="What you sell and how it is identified" icon="tag-outline">
+              <Panel title={tr('inventory:form.section.details')} subtitle={tr('inventory:form.section.detailsHint')} icon="tag-outline">
                 {/* What it is on the left, and whether it is offered on new documents on the right. */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: t.spacing.lg }}>
                   <FieldShell label={tr('inventory:form.type')}>
                     <Segmented
                       style={{ width: 280 }}
                       options={[
-                        { value: 'goods', label: 'Product' },
-                        { value: 'service', label: 'Service' },
+                        { value: 'goods', label: tr('inventory:type.goods') },
+                        { value: 'service', label: tr('inventory:type.service') },
                       ]}
                       value={type}
                       onChange={(v) => {
@@ -181,7 +181,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                 <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
               </Panel>
 
-              <Panel title="Pricing and tax" subtitle="What you charge and what it costs you" icon="currency-inr">
+              <Panel title={tr('inventory:form.section.pricing')} subtitle={tr('inventory:form.section.pricingHint')} icon="currency-inr">
                 <Row>
                   <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} />
                   <AmountField label={tr('inventory:form.purchasePrice')} value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} />
@@ -189,12 +189,12 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                 <Row>
                   <PickerField
                     label={tr('inventory:form.taxRate')}
-                    value={category ? `${category.name} (${formatPercent(category.rate)})` : 'Select'}
+                    value={category ? `${category.name} (${formatPercent(category.rate)})` : tr('inventory:form.select')}
                     onPress={() => setTaxOpen(true)}
                     icon="percent-outline"
                   />
                   <TextField
-                    label={type === 'goods' ? 'HSN code' : 'SAC code'}
+                    label={type === 'goods' ? tr('inventory:form.hsnCode') : tr('inventory:form.sacCode')}
                     value={hsnCode}
                     onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
                     placeholder={type === 'goods' ? '84821011' : '998719'}
@@ -210,23 +210,23 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
           }
           side={
             <>
-              <Panel title="Summary" icon="clipboard-text-outline">
+              <Panel title={tr('inventory:form.section.summary')} icon="clipboard-text-outline">
                 <Text variant="title" weight="700" numberOfLines={2}>
-                  {name.trim() || 'New item'}
+                  {name.trim() || tr('nav:title.newItem')}
                 </Text>
                 <Divider />
-                <SummaryRow label="Type" value={type === 'goods' ? 'Product' : 'Service'} />
-                <SummaryRow label="Sale price" value={formatMoney(money(Math.round(sale * 100), baseCurrency))} />
-                <SummaryRow label="Purchase price" value={formatMoney(money(Math.round(cost * 100), baseCurrency))} />
+                <SummaryRow label={tr('inventory:form.type')} value={type === 'goods' ? tr('inventory:type.goods') : tr('inventory:type.service')} />
+                <SummaryRow label={tr('inventory:form.salePrice')} value={formatMoney(money(Math.round(sale * 100), baseCurrency))} />
+                <SummaryRow label={tr('inventory:form.purchasePrice')} value={formatMoney(money(Math.round(cost * 100), baseCurrency))} />
                 <SummaryRow
-                  label="Margin"
+                  label={tr('inventory:detail.margin')}
                   value={margin === null ? '—' : `${margin.toFixed(1)}%`}
                   tone={margin === null ? undefined : margin >= 0 ? 'good' : 'bad'}
                 />
-                <SummaryRow label="Tax" value={category ? formatPercent(category.rate) : '—'} />
+                <SummaryRow label={tr('common:table.tax')} value={category ? formatPercent(category.rate) : '—'} />
               </Panel>
 
-              <Panel title="Unit and stock" icon="package-variant-closed">
+              <Panel title={tr('inventory:form.section.unitStock')} icon="package-variant-closed">
                 <PickerField
                   label={tr('inventory:form.unit')}
                   value={UNITS.find((u) => u.code === unit)?.name ?? unit}
@@ -252,7 +252,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                           placeholder="0"
                           keyboardType="decimal-pad"
                           editable={!item}
-                          hint={item ? 'Use a stock adjustment to change this.' : undefined}
+                          hint={item ? tr('inventory:form.openingLocked') : undefined}
                         />
                         <TextField
                           label={tr('inventory:form.reorderLevel')}

@@ -289,7 +289,21 @@
       "failed": "Failed",
       "offline": "Offline"
     },
-    "storageFull": "This device is out of storage space, so recent changes are only kept until the app closes. Free some space, then sync."
+    "storageFull": "This device is out of storage space, so recent changes are only kept until the app closes. Free some space, then sync.",
+    "online": "Online",
+    "tile": {
+      "waitingToSend": "Waiting to send",
+      "sentWhenOnline": "Sent when online",
+      "needsAttention": "Needs attention",
+      "refusedOrConflicted": "Refused or conflicted",
+      "noProblems": "No problems",
+      "connection": "Connection"
+    },
+    "col": {
+      "change": "Change",
+      "queued": "Queued",
+      "attempts": "Attempts"
+    }
   },
   "transporters": {
     "none": "No transporters yet",

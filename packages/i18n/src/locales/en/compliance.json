@@ -127,7 +127,15 @@
     "extendIntro": "The new validity is worked out from the distance still to cover, not the original journey, and counted from now.",
     "inMovement": "In movement",
     "inTransit": "In transit",
-    "cancelIntro": "A bill can be cancelled within 24 hours of being raised, and only if it has not already been verified in transit. This one can be cancelled until {{deadline}}."
+    "cancelIntro": "A bill can be cancelled within 24 hours of being raised, and only if it has not already been verified in transit. This one can be cancelled until {{deadline}}.",
+    "distance": "Distance",
+    "historyEmptyTitle": "No changes yet",
+    "historyEmptyBody": "Part-B updates and extensions appear here.",
+    "openDocument": "Open {{number}}",
+    "validityDaysToMidnight_one": "{{count}} day · to midnight",
+    "validityDaysToMidnight_other": "{{count}} days · to midnight",
+    "ruleUpdates": "It updates as you change the distance or the cargo.",
+    "transportPartB": "Transport · Part-B"
   },
   "einv": {
     "cancelIrn": "Cancel the IRN",

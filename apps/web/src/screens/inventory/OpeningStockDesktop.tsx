@@ -85,9 +85,7 @@ export function OpeningStockDesktop() {
         <TwoColumns
           main={
             <>
-              <Note>
-                Enter what you already had on hand when you started using the app. This posts an opening movement and does not affect your sales or purchase figures.
-              </Note>
+              <Note>{tr('inventory:opening.intro')}</Note>
               <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:opening.search')} />
               {filtered.length === 0 ? (
                 <Card padded={false}>
@@ -100,7 +98,7 @@ export function OpeningStockDesktop() {
                   columns={[
                     {
                       key: 'item',
-                      header: 'Item',
+                      header: tr('nav:title.item'),
                       flex: 3,
                       render: (i) => (
                         <View style={{ flexShrink: 1 }}>
@@ -111,7 +109,7 @@ export function OpeningStockDesktop() {
                     },
                     {
                       key: 'current',
-                      header: 'Current',
+                      header: tr('inventory:opening.current'),
                       flex: 1.2,
                       align: 'right',
                       render: (i) => (
@@ -122,7 +120,7 @@ export function OpeningStockDesktop() {
                     },
                     {
                       key: 'opening',
-                      header: 'Opening quantity',
+                      header: tr('inventory:opening.openingQty'),
                       width: 150,
                       align: 'right',
                       render: (i) => (
@@ -143,11 +141,11 @@ export function OpeningStockDesktop() {
             </>
           }
           side={
-            <Panel title="Opening stock" subtitle="Applies to the branch you are in" icon="database-outline">
+            <Panel title={tr('inventory:form.openingStock')} subtitle={tr('inventory:opening.branchHint')} icon="database-outline">
               <DateField label={tr('inventory:opening.asOn')} value={date} onChange={setDate} />
               <Divider />
-              <SummaryRow label="Items entered" value={String(entered.length)} />
-              <SummaryRow label="Stock value" value={formatMoney(money(totalValue, baseCurrency))} strong />
+              <SummaryRow label={tr('inventory:opening.itemsEntered')} value={String(entered.length)} />
+              <SummaryRow label={tr('inventory:detail.stockValue')} value={formatMoney(money(totalValue, baseCurrency))} strong />
               <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={entered.length === 0} />
             </Panel>
           }

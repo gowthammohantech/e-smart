@@ -60,7 +60,7 @@ export function ScanBarcodeDesktop() {
                 </Text>
               </Card>
 
-              <Panel title="Look up a code" subtitle="Type or paste it, or use a scanner that types for you" icon="barcode-scan">
+              <Panel title={tr('inventory:scan.lookUp')} subtitle={tr('inventory:scan.lookUpHint')} icon="barcode-scan">
                 <TextField
                   label={tr('inventory:scan.barcode')}
                   value={code}
@@ -105,7 +105,7 @@ export function ScanBarcodeDesktop() {
                       <View style={{ flex: 1, gap: 3 }}>
                         <Text weight="600">{match.name}</Text>
                         <Text variant="caption" tone="muted">
-                          {formatMoney(match.salePrice)} · {formatQty(stock[match.id] ?? 0)} {match.unit} in stock
+                          {formatMoney(match.salePrice)} · {tr('inventory:scan.inStock', { qty: formatQty(stock[match.id] ?? 0), unit: match.unit })}
                         </Text>
                       </View>
                       <Icon name="chevron-right" size={20} color={t.c.muted} />
@@ -128,14 +128,14 @@ export function ScanBarcodeDesktop() {
             </>
           }
           side={
-            <Panel title={tr('inventory:scan.tryOne')} subtitle="Sample barcodes from your items" icon="format-list-bulleted">
+            <Panel title={tr('inventory:scan.tryOne')} subtitle={tr('inventory:scan.samplesHint')} icon="format-list-bulleted">
               <View style={{ marginHorizontal: -t.spacing.xl, marginBottom: -t.spacing.lg }}>
                 {withBarcodes.slice(0, 8).map((i, idx, arr) => (
                   <Pressable
                     key={i.id}
                     onPress={() => setCode(i.barcode ?? '')}
                     accessibilityRole="button"
-                    accessibilityLabel={`Use barcode for ${i.name}`}
+                    accessibilityLabel={tr('inventory:scan.a11yUse', { name: i.name })}
                     style={(state) => {
                       const { hovered, focused } = state as WebPressState;
                       return [

@@ -101,7 +101,7 @@ export default function DocumentPreview() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      <Stack.Screen options={{ title: `${label} preview` }} />
+      <Stack.Screen options={{ title: tr('nav:title.documentPreview', { kind: label }) }} />
 
       {desktop ? (
         // A desktop shows the page as a sheet of paper on the canvas.

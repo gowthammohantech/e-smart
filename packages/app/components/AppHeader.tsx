@@ -142,7 +142,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           <Pressable
             onPress={() => setSwitcherOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Switch business. Current: ${company?.name}`}
+            accessibilityLabel={tr('common:component.switchBusiness', { name: company?.name ?? '' })}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',

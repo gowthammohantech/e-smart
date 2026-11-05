@@ -26,7 +26,7 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
  */
 export function StockTransferDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const router = useRouter();
   const goBack = useGoBack();
   const { run: serverSave } = useServerSave();
@@ -85,7 +85,7 @@ export function StockTransferDesktop() {
         <TwoColumns
           main={
             <>
-              <Panel title="What to move" subtitle="The item and how much of it" icon="package-variant-closed">
+              <Panel title={tr('inventory:transfer.whatTitle')} subtitle={tr('inventory:transfer.whatHint')} icon="package-variant-closed">
                 <PickerField
                   label={tr('inventory:transfer.item')}
                   value={item ? `${item.name} (${item.sku})` : undefined}
@@ -101,15 +101,15 @@ export function StockTransferDesktop() {
                     placeholder="0"
                     keyboardType="decimal-pad"
                     icon="counter"
-                    error={exceeds ? `Only ${formatQty(available)} ${item?.unit ?? ''} available at the source branch` : undefined}
-                    hint={item ? `${formatQty(available)} ${item.unit} available` : undefined}
+                    error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit: item?.unit ?? '' }) : undefined}
+                    hint={item ? tr('inventory:transfer.available', { qty: formatQty(available), unit: item.unit }) : undefined}
                     required
                   />
                   <DateField label={tr('inventory:transfer.date')} value={date} onChange={setDate} />
                 </Row>
               </Panel>
 
-              <Panel title="Where" subtitle="From one branch to another" icon="swap-horizontal">
+              <Panel title={tr('inventory:transfer.whereTitle')} subtitle={tr('inventory:transfer.whereHint')} icon="swap-horizontal">
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md }}>
                   <View style={{ flexGrow: 1, flexBasis: 200 }}>
                     <PickerField
@@ -141,33 +141,31 @@ export function StockTransferDesktop() {
           }
           side={
             <>
-              <Panel title="After the transfer" subtitle={item ? item.name : 'Pick an item to see the effect'} icon="clipboard-text-outline">
+              <Panel title={tr('inventory:transfer.afterTitle')} subtitle={item ? item.name : tr('inventory:transfer.pickItemHint')} icon="clipboard-text-outline">
                 {item ? (
                   <>
-                    <SummaryRow label={`${nameOf(fromBranchId)} now`} value={`${formatQty(available)} ${item.unit}`} />
-                    <SummaryRow label={`${nameOf(fromBranchId)} after`} value={`${formatQty(available - qty)} ${item.unit}`} tone={exceeds ? 'bad' : undefined} strong />
+                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(fromBranchId) })} value={`${formatQty(available)} ${item.unit}`} />
+                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(fromBranchId) })} value={`${formatQty(available - qty)} ${item.unit}`} tone={exceeds ? 'bad' : undefined} strong />
                     <Divider />
-                    <SummaryRow label={`${nameOf(toBranchId)} now`} value={`${formatQty(atDestination)} ${item.unit}`} />
-                    <SummaryRow label={`${nameOf(toBranchId)} after`} value={`${formatQty(atDestination + qty)} ${item.unit}`} tone="good" strong />
+                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination)} ${item.unit}`} />
+                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination + qty)} ${item.unit}`} tone="good" strong />
                     {exceeds ? (
                       <Text variant="caption" tone="bad">
-                        This is more than the source branch holds.
+                        {tr('inventory:transfer.exceedsSource')}
                       </Text>
                     ) : null}
                   </>
                 ) : (
-                  <Note>The stock at both branches, before and after, appears here once you choose an item.</Note>
+                  <Note>{tr('inventory:transfer.afterEmpty')}</Note>
                 )}
               </Panel>
-              <Note>
-                Transfers post two movements — one out of the source branch and one into the destination — so total stock stays unchanged.
-              </Note>
+              <Note>{tr('inventory:transfer.twoMovesNote')}</Note>
             </>
           }
         />
 
         <FormFooter>
-          <Button title="Cancel" variant="ghost" onPress={() => goBack(itemId ? `/(app)/catalog/items/${itemId}` : '/(app)/(tabs)/inventory')} />
+          <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(itemId ? `/(app)/catalog/items/${itemId}` : '/(app)/(tabs)/inventory')} />
           <Button
             title={tr('inventory:transfer.submit')}
             disabled={!canSave}

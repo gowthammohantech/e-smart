@@ -13,7 +13,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import type { StockMovement, StockMovementType } from '@esmart/core/types';
-import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger';
+import { signedQuantity } from '@esmart/core/domain/stockLedger';
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { useBranches } from '@esmart/app/store/selectors';
@@ -62,7 +62,7 @@ export function StockMovementsDesktop() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg }}>
             <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:movements.search')} style={{ flex: 1, maxWidth: 520 }} />
             <Text variant="small" tone="muted">
-              {filtered.length} movements
+              {tr('inventory:movements.count', { count: filtered.length })}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
@@ -90,7 +90,7 @@ export function StockMovementsDesktop() {
                   }}
                 >
                   <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                    {ty === 'all' ? 'All' : MOVEMENT_LABELS[ty]}
+                    {ty === 'all' ? tr('inventory:movements.all') : tr(`inventory:movementType.${ty}`)}
                   </Text>
                 </Pressable>
               );
@@ -110,19 +110,19 @@ export function StockMovementsDesktop() {
             columns={[
               {
                 key: 'date',
-                header: 'Date',
+                header: tr('common:table.date'),
                 width: 110,
                 render: (m) => <Cell tone="muted">{formatDate(m.date, 'dd MMM yyyy')}</Cell>,
               },
               {
                 key: 'item',
-                header: 'Item',
+                header: tr('nav:title.item'),
                 flex: 3,
                 render: (m) => {
                   const item = itemOf(m.itemId);
                   return (
                     <View style={{ flexShrink: 1 }}>
-                      <Cell weight="600">{item?.name ?? 'Unknown item'}</Cell>
+                      <Cell weight="600">{item?.name ?? tr('inventory:movements.unknownItem')}</Cell>
                       {item ? <Cell tone="muted">{item.sku}</Cell> : null}
                     </View>
                   );
@@ -130,7 +130,7 @@ export function StockMovementsDesktop() {
               },
               {
                 key: 'type',
-                header: 'Type',
+                header: tr('common:table.type'),
                 flex: 1.6,
                 render: (m) => {
                   const delta = signedQuantity(m);
@@ -141,14 +141,14 @@ export function StockMovementsDesktop() {
                         size={18}
                         color={delta >= 0 ? t.c.good : t.c.bad}
                       />
-                      <Cell>{MOVEMENT_LABELS[m.type]}</Cell>
+                      <Cell>{tr(`inventory:movementType.${m.type}`)}</Cell>
                     </View>
                   );
                 },
               },
               {
                 key: 'reference',
-                header: 'Reference',
+                header: tr('common:table.reference'),
                 flex: 1.4,
                 secondary: true,
                 render: (m) => <Cell tone="muted">{m.referenceNumber ?? '—'}</Cell>,
@@ -157,7 +157,7 @@ export function StockMovementsDesktop() {
                 ? [
                     {
                       key: 'branch',
-                      header: 'Branch',
+                      header: tr('common:business.branch'),
                       width: 100,
                       secondary: true,
                       render: (m: StockMovement) => {
@@ -169,7 +169,7 @@ export function StockMovementsDesktop() {
                 : []),
               {
                 key: 'qty',
-                header: 'Quantity',
+                header: tr('common:component.quantity'),
                 width: 120,
                 align: 'right' as const,
                 render: (m) => {
@@ -188,7 +188,13 @@ export function StockMovementsDesktop() {
               const item = itemOf(m.itemId);
               if (item) router.push(`/(app)/catalog/items/${item.id}`);
             }}
-            rowLabel={(m) => `${itemOf(m.itemId)?.name ?? 'Item'}, ${MOVEMENT_LABELS[m.type]}, ${signedQuantity(m)}`}
+            rowLabel={(m) =>
+              tr('inventory:movements.a11yRow', {
+                name: itemOf(m.itemId)?.name ?? tr('inventory:movements.unknownItem'),
+                type: tr(`inventory:movementType.${m.type}`),
+                qty: signedQuantity(m),
+              })
+            }
           />
         )}
         {pages.hasNextPage ? (

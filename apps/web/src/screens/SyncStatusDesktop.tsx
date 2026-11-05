@@ -82,7 +82,7 @@ function Tile({
  */
 export function SyncStatusDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'common']);
   const toast = useToast();
   const sync = useSyncToasts();
 
@@ -119,7 +119,7 @@ export function SyncStatusDesktop() {
             <View style={{ flexGrow: 1, flexBasis: 320, gap: t.spacing.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
                 <Badge
-                  label={offline ? 'Offline' : 'Online'}
+                  label={offline ? tr('settings:sync.status.offline') : tr('settings:sync.online')}
                   tone={offline ? 'warning' : 'success'}
                   icon={offline ? 'cloud-off-outline' : 'cloud-check-outline'}
                   size="sm"
@@ -129,12 +129,10 @@ export function SyncStatusDesktop() {
                 </Text>
               </View>
               <Text variant="h2" weight="700">
-                {offline ? 'Working offline' : queue.length ? `${queue.length} waiting to sync` : 'Everything is synced'}
+                {offline ? tr('settings:sync.workingOffline') : queue.length ? tr('settings:sync.waiting', { count: queue.length }) : tr('settings:sync.allSynced')}
               </Text>
               <Text tone="muted" style={{ maxWidth: 520, lineHeight: 22 }}>
-                {offline
-                  ? 'You can keep drafting. Anything you create is queued and sent as soon as you are back online.'
-                  : 'Finalised financial records are validated on the server before they count, so your books stay authoritative.'}
+                {offline ? tr('settings:sync.offlineBody') : tr('settings:sync.onlineBody')}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
                 {lastError ? (
@@ -158,22 +156,22 @@ export function SyncStatusDesktop() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.lg }}>
           <Tile
             icon="cloud-upload-outline"
-            label="Waiting to send"
+            label={tr('settings:sync.tile.waitingToSend')}
             value={String(queue.length)}
-            caption={queue.length ? 'Sent when online' : 'Nothing queued'}
+            caption={queue.length ? tr('settings:sync.tile.sentWhenOnline') : tr('settings:sync.none')}
             color={t.c.primary}
           />
           <Tile
             icon="cloud-alert"
-            label="Needs attention"
+            label={tr('settings:sync.tile.needsAttention')}
             value={String(failed)}
-            caption={failed ? 'Refused or conflicted' : 'No problems'}
+            caption={failed ? tr('settings:sync.tile.refusedOrConflicted') : tr('settings:sync.tile.noProblems')}
             color={failed ? t.c.bad : t.c.good}
           />
           <Tile
             icon={offline ? 'cloud-off-outline' : 'cloud-check-outline'}
-            label="Connection"
-            value={offline ? 'Offline' : 'Online'}
+            label={tr('settings:sync.tile.connection')}
+            value={offline ? tr('settings:sync.status.offline') : tr('settings:sync.online')}
             caption={lastSynced}
             color={offline ? t.c.warn : t.c.good}
           />
@@ -223,7 +221,7 @@ export function SyncStatusDesktop() {
                 columns={[
                   {
                     key: 'change',
-                    header: 'Change',
+                    header: tr('settings:sync.col.change'),
                     flex: 3,
                     render: (q) => (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
@@ -241,14 +239,14 @@ export function SyncStatusDesktop() {
                   },
                   {
                     key: 'queued',
-                    header: 'Queued',
+                    header: tr('settings:sync.col.queued'),
                     flex: 1.2,
                     secondary: true,
                     render: (q) => <Cell tone="muted">{formatRelative(q.queuedAt.slice(0, 10))}</Cell>,
                   },
                   {
                     key: 'attempts',
-                    header: 'Attempts',
+                    header: tr('settings:sync.col.attempts'),
                     width: 90,
                     align: 'right',
                     secondary: true,
@@ -260,10 +258,10 @@ export function SyncStatusDesktop() {
                   },
                   {
                     key: 'status',
-                    header: 'Status',
+                    header: tr('common:table.status'),
                     width: 110,
                     align: 'right',
-                    render: (q) => <Badge label={q.status} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />,
+                    render: (q) => <Badge label={tr(`settings:sync.status.${q.status}`)} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />,
                   },
                 ]}
                 rows={queue}

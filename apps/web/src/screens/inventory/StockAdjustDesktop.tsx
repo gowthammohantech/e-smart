@@ -25,7 +25,7 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
  */
 export function StockAdjustDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const goBack = useGoBack();
   const { run: serverSave, saving } = useServerSave();
   const params = useLocalSearchParams<{ itemId?: string }>();
@@ -53,10 +53,12 @@ export function StockAdjustDesktop() {
   const delta = direction === 'increase' ? qty : -qty;
   const resulting = current + delta;
 
-  const REASONS =
+  // The chosen reason is saved as the movement's note, in the words the user picked it in.
+  const REASON_KEYS =
     direction === 'decrease'
-      ? ['Damaged', 'Lost or stolen', 'Expired', 'Sample given', 'Stock count correction', 'Internal use']
-      : ['Found stock', 'Stock count correction', 'Returned from customer', 'Production output'];
+      ? (['damaged', 'lost', 'expired', 'sample', 'countCorrection', 'internalUse'] as const)
+      : (['found', 'countCorrection', 'customerReturn', 'production'] as const);
+  const REASONS = REASON_KEYS.map((k) => tr(`inventory:adjust.reasons.${k}`));
 
   const canSave = !!itemId && qty > 0 && !!branchId;
 
@@ -85,7 +87,7 @@ export function StockAdjustDesktop() {
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
           main={
-            <Panel title="Adjustment" subtitle="Correct the stock on hand for one item" icon="tune-variant">
+            <Panel title={tr('inventory:adjust.adjustment')} subtitle={tr('inventory:adjust.panelHint')} icon="tune-variant">
               <Row>
                 <PickerField
                   label={tr('inventory:adjust.item')}
@@ -107,8 +109,8 @@ export function StockAdjustDesktop() {
               <Segmented
                 style={{ alignSelf: 'flex-start', width: 280 }}
                 options={[
-                  { value: 'decrease', label: 'Decrease' },
-                  { value: 'increase', label: 'Increase' },
+                  { value: 'decrease', label: tr('inventory:adjust.decrease') },
+                  { value: 'increase', label: tr('inventory:adjust.increase') },
                 ]}
                 value={direction}
                 onChange={(v) => {
@@ -147,12 +149,12 @@ export function StockAdjustDesktop() {
             </Panel>
           }
           side={
-            <Panel title="Result" subtitle={item ? item.name : 'Pick an item to see its stock'} icon="clipboard-text-outline">
+            <Panel title={tr('inventory:adjust.result')} subtitle={item ? item.name : tr('inventory:adjust.pickItemHint')} icon="clipboard-text-outline">
               {item ? (
                 <>
-                  <SummaryRow label="Current stock" value={`${formatQty(current)} ${item.unit}`} />
+                  <SummaryRow label={tr('inventory:adjust.currentStock')} value={`${formatQty(current)} ${item.unit}`} />
                   <SummaryRow
-                    label="Adjustment"
+                    label={tr('inventory:adjust.adjustment')}
                     value={`${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}`}
                     tone={delta === 0 ? undefined : delta > 0 ? 'good' : 'bad'}
                   />
@@ -170,14 +172,14 @@ export function StockAdjustDesktop() {
                   ) : null}
                 </>
               ) : (
-                <Note>The stock before and after the change appears here once you choose an item.</Note>
+                <Note>{tr('inventory:adjust.resultEmpty')}</Note>
               )}
             </Panel>
           }
         />
 
         <FormFooter>
-          <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/(tabs)/inventory')} />
+          <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/(tabs)/inventory')} />
           <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} />
         </FormFooter>
       </ScrollView>

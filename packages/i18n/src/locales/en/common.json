@@ -174,7 +174,8 @@
     "offlineWaiting": "Offline · {{count}} waiting",
     "draining": "Syncing {{count}}…",
     "loadingBooks": "Loading your books…",
-    "required": "required"
+    "required": "required",
+    "switchBusiness": "Switch business. Current: {{name}}"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -228,7 +229,9 @@
     "clear": "Clear",
     "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched.",
     "allRead": "All caught up",
-    "cleared": "Notifications cleared"
+    "cleared": "Notifications cleared",
+    "filterAll": "All ({{n}})",
+    "filterUnread": "Unread ({{n}})"
   },
   "search": {
     "placeholder": "Invoices, contacts, items, payments…",

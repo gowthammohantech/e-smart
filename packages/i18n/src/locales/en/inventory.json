@@ -62,7 +62,15 @@
     "openingLocked": "Use a stock adjustment to change this.",
     "saveChanges": "Save changes",
     "type": "Type",
-    "status": "Status"
+    "status": "Status",
+    "section": {
+      "details": "Item details",
+      "detailsHint": "What you sell and how it is identified",
+      "pricing": "Pricing and tax",
+      "pricingHint": "What you charge and what it costs you",
+      "summary": "Summary",
+      "unitStock": "Unit and stock"
+    }
   },
   "gst": {
     "supplyType": "GST treatment",
@@ -145,7 +153,17 @@
     "done": "Stock transferred",
     "onlyAvailable": "Only {{qty}} {{unit}} available at the source branch",
     "available": "{{qty}} {{unit}} available",
-    "twoMovesNote": "Transfers post two movements — one out of the source branch and one into the destination — so total stock stays unchanged."
+    "twoMovesNote": "Transfers post two movements — one out of the source branch and one into the destination — so total stock stays unchanged.",
+    "whatTitle": "What to move",
+    "whatHint": "The item and how much of it",
+    "whereTitle": "Where",
+    "whereHint": "From one branch to another",
+    "afterTitle": "After the transfer",
+    "pickItemHint": "Pick an item to see the effect",
+    "branchNow": "{{branch}} now",
+    "branchAfter": "{{branch}} after",
+    "exceedsSource": "This is more than the source branch holds.",
+    "afterEmpty": "The stock at both branches, before and after, appears here once you choose an item."
   },
   "adjust": {
     "item": "Item",
@@ -173,7 +191,11 @@
       "found": "Found stock",
       "customerReturn": "Returned from customer",
       "production": "Production output"
-    }
+    },
+    "panelHint": "Correct the stock on hand for one item",
+    "result": "Result",
+    "pickItemHint": "Pick an item to see its stock",
+    "resultEmpty": "The stock before and after the change appears here once you choose an item."
   },
   "scan": {
     "barcode": "Barcode",
@@ -186,7 +208,10 @@
     "tryOne": "Try one of these",
     "manualNote": "Camera scanning is not available yet. Type or paste the code from the label, or pick an item below.",
     "inStock": "{{qty}} {{unit}} in stock",
-    "a11yUse": "Use barcode for {{name}}"
+    "a11yUse": "Use barcode for {{name}}",
+    "lookUp": "Look up a code",
+    "lookUpHint": "Type or paste it, or use a scanner that types for you",
+    "samplesHint": "Sample barcodes from your items"
   },
   "lowStock": {
     "needAttention": "Need attention",
@@ -210,7 +235,11 @@
     "done_other": "Opening stock set for {{count}} items",
     "currently": "currently {{qty}} {{unit}}",
     "entered_one": "{{count}} item entered",
-    "entered_other": "{{count}} items entered"
+    "entered_other": "{{count}} items entered",
+    "current": "Current",
+    "openingQty": "Opening quantity",
+    "branchHint": "Applies to the branch you are in",
+    "itemsEntered": "Items entered"
   },
   "movements": {
     "search": "Search by item or reference",

@@ -58,7 +58,7 @@ function SectionTitle({ children }: { children: string }) {
  */
 export function PaymentDetailDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
@@ -95,14 +95,14 @@ export function PaymentDetailDesktop() {
   const allocated = money(payment.amount.minor - payment.unallocated.minor, payment.amount.currency);
 
   const details = [
-    { label: 'Date', value: formatDate(payment.date) },
-    { label: 'Method', value: paymentMethodLabel(tr, payment.method) },
-    { label: isIn ? 'Deposited into' : 'Paid from', value: account?.name ?? '—' },
-    ...(payment.reference ? [{ label: 'Reference', value: payment.reference }] : []),
+    { label: tr('common:table.date'), value: formatDate(payment.date) },
+    { label: tr('common:table.method'), value: paymentMethodLabel(tr, payment.method) },
+    { label: isIn ? tr('sales:payment.depositedInto') : tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
+    ...(payment.reference ? [{ label: tr('common:table.reference'), value: payment.reference }] : []),
     ...(payment.currency !== baseCurrency
-      ? [{ label: 'Exchange rate', value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
+      ? [{ label: tr('common:totals.exchangeRate'), value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
       : []),
-    { label: 'Recorded', value: formatDateTime(payment.createdAt) },
+    { label: tr('sales:payment.recordedAt'), value: formatDateTime(payment.createdAt) },
   ];
 
   const openDocument = (a: Allocation) =>
@@ -130,13 +130,12 @@ export function PaymentDetailDesktop() {
             </View>
 
             <View style={{ flexGrow: 1, flexBasis: 280, gap: 4 }}>
-              <SectionTitle>{isIn ? 'Payment received' : 'Payment made'}</SectionTitle>
+              <SectionTitle>{isIn ? tr('sales:payment.received') : tr('sales:payment.made')}</SectionTitle>
               <Text variant="display" weight="700" style={{ color: tone }}>
                 {formatMoney(payment.amount)}
               </Text>
               <Text tone="muted">
-                {isIn ? 'Received from' : 'Paid to'}{' '}
-                <Text weight="600">{party?.name ?? 'Unknown'}</Text>
+                {tr(isIn ? 'sales:payment.receivedFrom' : 'sales:payment.paidTo', { name: party?.name ?? tr('common:placeholder.unknown') })}
               </Text>
             </View>
 
@@ -155,10 +154,10 @@ export function PaymentDetailDesktop() {
           <View style={{ height: 1, backgroundColor: t.c.line }} />
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.xl }}>
-            <Fact label="Date" value={formatDate(payment.date)} />
-            <Fact label="Method" value={paymentMethodLabel(tr, payment.method)} />
-            <Fact label={isIn ? 'Deposited into' : 'Paid from'} value={account?.name ?? '—'} />
-            <Fact label="Reference" value={payment.reference || '—'} />
+            <Fact label={tr('common:table.date')} value={formatDate(payment.date)} />
+            <Fact label={tr('common:table.method')} value={paymentMethodLabel(tr, payment.method)} />
+            <Fact label={isIn ? tr('sales:payment.depositedInto') : tr('purchases:form.paidFrom')} value={account?.name ?? '—'} />
+            <Fact label={tr('common:table.reference')} value={payment.reference || '—'} />
           </View>
         </Card>
 
@@ -182,7 +181,7 @@ export function PaymentDetailDesktop() {
                 columns={[
                   {
                     key: 'document',
-                    header: isIn ? 'Invoice' : 'Bill',
+                    header: isIn ? tr('nav:title.invoice') : tr('purchases:hub.bill'),
                     flex: 2,
                     render: (a) => (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
@@ -193,7 +192,7 @@ export function PaymentDetailDesktop() {
                   },
                   {
                     key: 'amount',
-                    header: 'Applied',
+                    header: tr('common:table.applied'),
                     flex: 1,
                     align: 'right',
                     render: (a) => (
@@ -206,9 +205,9 @@ export function PaymentDetailDesktop() {
                 rows={payment.allocations}
                 rowKey={(a) => a.documentId}
                 onRowPress={openDocument}
-                rowLabel={(a) => `Open ${a.documentNumber}`}
+                rowLabel={(a) => tr('sales:payment.openDocument', { number: a.documentNumber })}
                 footer={{
-                  document: <Cell weight="700">Total applied</Cell>,
+                  document: <Cell weight="700">{tr('sales:payment.totalApplied')}</Cell>,
                   amount: (
                     <Cell weight="700" mono>
                       {formatMoney(allocated)}
@@ -222,7 +221,7 @@ export function PaymentDetailDesktop() {
               <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
                 <Icon name="wallet-outline" size={20} color={t.c.warn} />
                 <Text variant="small" style={{ flex: 1 }}>
-                  {formatMoney(payment.unallocated)} is unallocated and available as an advance.
+                  {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
                 </Text>
                 {isIn ? <Button title={tr('sales:refund.action')} size="sm" variant="ghost" icon="cash-refund" onPress={() => setRefunding(true)} /> : null}
                 <Button
@@ -282,7 +281,7 @@ export function PaymentDetailDesktop() {
             {payment.fxGainLoss && payment.fxGainLoss.minor !== 0 ? (
               <Card style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="small" tone="muted">
-                  FX {payment.fxGainLoss.minor >= 0 ? 'gain' : 'loss'} on settlement
+                  {payment.fxGainLoss.minor >= 0 ? tr('sales:payment.fxGainSettlement') : tr('sales:payment.fxLossSettlement')}
                 </Text>
                 <Text variant="small" weight="700" tone={payment.fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
                   {formatMoney(payment.fxGainLoss, { signed: true })}
@@ -294,7 +293,7 @@ export function PaymentDetailDesktop() {
           {/* The record, the party and the notes */}
           <View style={{ flexGrow: 2, flexBasis: 320, gap: t.spacing.lg, minWidth: 0 }}>
             <View style={{ gap: t.spacing.md }}>
-              <SectionTitle>Details</SectionTitle>
+              <SectionTitle>{tr('sales:detail.tabDetails')}</SectionTitle>
               <Card style={{ gap: t.spacing.md }}>
                 {details.map((r, i) => (
                   <View
@@ -321,7 +320,7 @@ export function PaymentDetailDesktop() {
 
             {party ? (
               <View style={{ gap: t.spacing.md }}>
-                <SectionTitle>{party.kind === 'customer' ? 'Customer' : 'Supplier'}</SectionTitle>
+                <SectionTitle>{party.kind === 'customer' ? tr('common:table.customer') : tr('common:table.supplier')}</SectionTitle>
                 <Pressable
                   onPress={() =>
                     router.push(party.kind === 'customer' ? `/(app)/contacts/customers/${party.id}` : `/(app)/contacts/suppliers/${party.id}`)

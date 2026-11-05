@@ -105,7 +105,8 @@
     "yourProfile": "Your profile",
     "editNamed": "Edit {{name}}",
     "notifications": "Notifications",
-    "receipts": "Receipts"
+    "receipts": "Receipts",
+    "documentPreview": "{{kind}} preview"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -186,7 +187,8 @@
     "mainNavigation": "Main",
     "settingsNavigation": "Settings pages",
     "skipToContent": "Skip to content",
-    "assistant": "Lixi assistant"
+    "assistant": "Lixi assistant",
+    "escKey": "ESC"
   },
   "home": {
     "emptyTitle": "Let's get you started",

@@ -129,7 +129,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               style={{ flex: 1, height: 56, fontSize: t.fontSize.title, color: t.c.text, outlineStyle: 'none' } as object}
             />
             <Text variant="micro" tone="muted" weight="700">
-              ESC
+              {tr('nav:shell.escKey')}
             </Text>
           </View>
 

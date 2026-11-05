@@ -55,7 +55,7 @@ export default function Notifications() {
     <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
-          title: 'Notifications',
+          title: tr('common:component.notifications'),
           headerRight: desktop
             ? () => (
                 // A desktop keeps the page actions together, top right, instead of a bar at the bottom.
@@ -87,8 +87,8 @@ export default function Notifications() {
       >
         <Segmented
           options={[
-            { value: 'all', label: `All (${notifications.length})` },
-            { value: 'unread', label: `Unread (${unread})` },
+            { value: 'all', label: tr('common:notifications.filterAll', { n: notifications.length }) },
+            { value: 'unread', label: tr('common:notifications.filterUnread', { n: unread }) },
           ]}
           value={filter}
           onChange={(v) => setFilter(v as 'all' | 'unread')}
