@@ -18,6 +18,7 @@ import { useAppStore } from '../../../store/appStore';
 import { isOpen } from '../../../remote/outbox';
 import { useExpensePages, useExpenseSummary } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
+import { pagedTableProps, useRowsExport, useTableSelection } from '../../../components/pagedTable';
 import type { Expense } from '@esmart/core/types';
 import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -83,6 +84,22 @@ export default function ExpensesList() {
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
+  // Desktop bulk action: the chosen expenses as a CSV.
+  const selection = useTableSelection(filter);
+  const exportRows = useRowsExport();
+  const categoryName = (id?: string) => categories.find((c) => c.id === id)?.name ?? tr('purchases:expense.uncategorised');
+  const exportChosen = (keys: string[]) =>
+    exportRows(
+      tr('nav:title.expenses'),
+      {
+        headers: [tr('common:table.number'), tr('common:table.date'), tr('common:table.category'), tr('common:table.reference'), tr('common:table.tax'), tr('common:table.amount')],
+        rows: filtered
+          .filter((e) => keys.includes(e.id))
+          .map((e) => [e.number, e.date, categoryName(e.categoryId), e.notes || e.reference || '', e.taxAmount.minor / 100, e.amount.minor / 100]),
+      },
+      tr('common:table.exportCancelled'),
+    );
+
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
       {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
@@ -221,21 +238,29 @@ export default function ExpensesList() {
                 rowKey={(e) => e.id}
                 onRowPress={(e) => router.push(`/(app)/expenses/${e.id}`)}
                 rowLabel={(e) => `${e.number}, ${formatMoney(e.amount)}`}
+                {...pagedTableProps(pages, tr('common:table.loadFailed'), 'expenses')}
+                loading={loading}
+                totalCount={summary.data ? summary.data.count + (filtered.length - pages.rows.length) : undefined}
+                selectable
+                selectedKeys={selection.selected}
+                onSelectionChange={selection.setSelected}
+                bulkActions={(keys) => (
+                  <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+                )}
+                rowActions={(e) => [
+                  { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(`/(app)/expenses/${e.id}`) },
+                  { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`/(app)/expenses/${e.id}/edit`) },
+                ]}
                 empty={
-                  loading ? (
-                    <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
-                  ) : (
-                    <EmptyState
-                      illustration="no-expenses"
-                      icon="receipt-text-outline"
-                      title={tr('purchases:expense.noExpenses')}
-                      message={noneAtAll ? tr('purchases:expense.emptyFirst') : tr('purchases:expense.emptyFiltered')}
-                      compact
-                    />
-                  )
+                  <EmptyState
+                    illustration="no-expenses"
+                    icon="receipt-text-outline"
+                    title={tr('purchases:expense.noExpenses')}
+                    message={noneAtAll ? tr('purchases:expense.emptyFirst') : tr('purchases:expense.emptyFiltered')}
+                    compact
+                  />
                 }
               />
-              {moreFooter}
             </View>
           }
           side={

@@ -23,12 +23,13 @@ import { useBaseCurrency } from '../../store/selectors';
 import { isOpen } from '../../remote/outbox';
 import { usePaymentPages, usePaymentSummary } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
+import { pagedTableProps, useRowsExport, useTableSelection } from '../../components/pagedTable';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'nav']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -71,6 +72,21 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
+  // Desktop bulk action: the chosen payments as a CSV.
+  const selection = useTableSelection(filter);
+  const exportRows = useRowsExport();
+  const exportChosen = (keys: string[]) =>
+    exportRows(
+      direction === 'received' ? tr('nav:title.paymentsReceived') : tr('nav:title.paymentsMade'),
+      {
+        headers: [tr('common:table.number'), direction === 'received' ? tr('common:table.customer') : tr('common:table.supplier'), tr('common:table.date'), tr('common:table.method'), tr('common:table.reference'), tr('common:table.amount')],
+        rows: filtered
+          .filter((p) => keys.includes(p.id))
+          .map((p) => [p.number, nameOf(p), p.date, paymentMethodLabel(tr, p.method), p.reference ?? '', p.amount.minor / 100]),
+      },
+      tr('common:table.exportCancelled'),
+    );
+
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
       {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
@@ -197,15 +213,18 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             rowKey={(p) => p.id}
             onRowPress={(p) => router.push(`/(app)/payments/${p.id}`)}
             rowLabel={(p) => `${p.number}, ${formatMoney(p.amount)}`}
-            empty={
-              loading ? (
-                <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
-              ) : (
-                <EmptyState illustration="no-payments" icon="cash-remove" title={tr('sales:list.none')} message={noneAtAll ? tr('sales:list.emptyBody') : tr('common:filters.noMatch')} compact />
-              )
-            }
+            {...pagedTableProps(pages, tr('common:table.loadFailed'), `payments-${direction}`)}
+            loading={loading}
+            totalCount={summary.data ? summary.data.count + (filtered.length - pages.rows.length) : undefined}
+            selectable
+            selectedKeys={selection.selected}
+            onSelectionChange={selection.setSelected}
+            bulkActions={(keys) => (
+              <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+            )}
+            rowActions={(p) => [{ key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(`/(app)/payments/${p.id}`) }]}
+            empty={<EmptyState illustration="no-payments" icon="cash-remove" title={tr('sales:list.none')} message={noneAtAll ? tr('sales:list.emptyBody') : tr('common:filters.noMatch')} compact />}
           />
-          {moreFooter}
         </View>
       ) : (
       <ScrollView
