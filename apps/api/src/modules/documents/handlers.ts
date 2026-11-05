@@ -42,6 +42,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate } from '@esmart/core/lib/date';
 import { nextRecurrence } from '../expenses/engine';
 import { documentsToWire, summariesToWire, type DocumentWire, type SummaryRow } from './wire';
+import { openingDocumentHandlers } from './openings';
 
 /** How the email's HTML refers to the business logo it carries. */
 const BUSINESS_LOGO_CID = 'business-logo';
@@ -50,6 +51,8 @@ const LOGO_EMAIL_MAX_BYTES = 1024 * 1024;
 
 /** What a sent document calls itself in the email, as the app names it. */
 const EMAIL_TITLES: Record<DocumentKind, string> = {
+  openingInvoice: 'Opening invoice',
+  openingBill: 'Opening bill',
   quote: 'Quotation',
   proforma: 'Proforma invoice',
   salesOrder: 'Sales order',
@@ -285,6 +288,7 @@ function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' |
 }
 
 export const documentsHandlers = defineHandlers({
+  ...openingDocumentHandlers,
   async listDocuments(ctx) {
     const q = ctx.query;
     const filters = listFilters(ctx, q);

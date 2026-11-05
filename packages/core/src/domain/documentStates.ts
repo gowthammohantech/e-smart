@@ -111,6 +111,19 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     overdue: ['partiallyPaid', 'paid', 'cancelled'],
     paid: [],
   },
+  // What was owed when the books started: imported issued, then paid off (or cancelled if entered wrongly).
+  openingInvoice: {
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
+    paid: [],
+  },
+  openingBill: {
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
+    paid: [],
+  },
 };
 
 export function nextStatuses(kind: DocumentKind, status: DocStatus): DocStatus[] {
@@ -181,9 +194,11 @@ export function isPayableDocument(kind: DocumentKind): boolean {
   return PAYABLE_KINDS.includes(kind);
 }
 
-export const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'purchaseBill', 'debitNote', 'supplierDebitNote'];
+export const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'purchaseBill', 'debitNote', 'supplierDebitNote', 'openingInvoice', 'openingBill'];
 /** Settled by money received; the rest by money paid. */
-export const RECEIVABLE_KINDS: DocumentKind[] = ['invoice', 'debitNote'];
+export const RECEIVABLE_KINDS: DocumentKind[] = ['invoice', 'debitNote', 'openingInvoice'];
+/** Owed from before the books started here: on the party's account, never in sales, purchases or GST (RULES 6.12). */
+export const OPENING_KINDS: DocumentKind[] = ['openingInvoice', 'openingBill'];
 
-export const SALES_KINDS: DocumentKind[] = ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote'];
-export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'];
+export const SALES_KINDS: DocumentKind[] = ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote', 'openingInvoice'];
+export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote', 'openingBill'];

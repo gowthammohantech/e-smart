@@ -10,7 +10,8 @@ import { companyCore, partyCore } from '../documents/engine';
 import { coreMovements } from '../inventory/ledger';
 import { loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadPayments, type Scope } from '../reports/data';
 
-const KINDS = ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote'] as const;
+// Opening invoices and bills too: they post to the party and Opening balances (RULES 6.12), nothing else.
+const KINDS = ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote', 'openingInvoice', 'openingBill'] as const;
 
 /**
  * The whole book up to `s.to`, as postings: every sale, purchase, note, payment, expense and voucher

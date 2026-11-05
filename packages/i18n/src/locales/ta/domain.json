@@ -47,7 +47,11 @@
     "supplierDebitNote_one": "விற்பனையாளர் பற்றுக் குறிப்பு",
     "supplierDebitNote_other": "விற்பனையாளர் பற்றுக் குறிப்புகள்",
     "proforma_one": "முன்மாதிரி விலைப்பட்டியல்",
-    "proforma_other": "முன்மாதிரி விலைப்பட்டியல்கள்"
+    "proforma_other": "முன்மாதிரி விலைப்பட்டியல்கள்",
+    "openingInvoice_one": "தொடக்க விலைப்பட்டியல்",
+    "openingInvoice_other": "தொடக்க விலைப்பட்டியல்கள்",
+    "openingBill_one": "தொடக்க பில்",
+    "openingBill_other": "தொடக்க பில்கள்"
   },
   "series": {
     "quote": "விலைப்புள்ளி",

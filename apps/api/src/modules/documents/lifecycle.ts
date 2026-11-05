@@ -38,6 +38,9 @@ export const FINAL_STATUS: Record<DocumentKind, DocStatus> = {
   debitNote: 'issued',
   supplierCreditNote: 'issued',
   supplierDebitNote: 'issued',
+  // Imported already issued; never finalised from a draft.
+  openingInvoice: 'issued',
+  openingBill: 'issued',
 };
 
 /** Which kinds each kind converts into (quote → proforma → order → delivery → invoice, PO → receipt → bill, invoice/bill → return). */
@@ -56,6 +59,8 @@ export const CONVERSIONS: Record<DocumentKind, DocumentKind[]> = {
   debitNote: [],
   supplierCreditNote: [],
   supplierDebitNote: [],
+  openingInvoice: [],
+  openingBill: [],
 };
 
 export const today = (d: Date) => businessDate(d);
@@ -314,6 +319,8 @@ export async function finalizeInTx(
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (againstSource(row)) await checkAgainstSource(tx, row);
   if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
+  // Opening invoices and bills keep their own numbers and are never drafts to finalise.
+  if (row.kind === 'openingInvoice' || row.kind === 'openingBill') throw conflict('INVALID_TRANSITION', 'An opening invoice or bill is already issued');
   const number = await assignNumber(tx, { companyId: row.companyId, kind: row.kind, branchId: row.branchId, date: row.date });
   const status = effectiveStatus({ ...row, status: target }, today(now));
   // The returns report the party as registered when the document was issued, whatever changes later.

@@ -1379,6 +1379,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/documents/openings/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What customers owed, and what was owed to suppliers, invoice by invoice, when the books started here
+         * @description Each row becomes an openingInvoice (a customer owes it) or openingBill (we owe a supplier), issued under its original number and due date, for the amount still outstanding. They are paid, aged and shown on statements like an invoice or bill, and post only Dr party / Cr Opening balances (or the other way for a bill), never sales, purchases or GST (RULES 6.12). The party is found by GSTIN, or failing that by name in any case, and must be on that side (customer or supplier, or both). A party that already has an opening balance is refused, so nothing is counted twice: clear the balance, or leave its rows out. A number already used for that kind, here or earlier in the batch, is a duplicate. With `dryRun` nothing is written; otherwise every good row is created in one transaction.
+         */
+        post: operations["importOpeningDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/documents/{id}": {
         parameters: {
             query?: never;
@@ -4483,10 +4505,10 @@ export interface components {
             readonly low?: boolean;
         };
         /**
-         * @description creditNote and debitNote lower or raise what an invoice charged, with no goods moving; supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually raised against its invoice or bill (sourceDocumentId); a direct note, against no one invoice or bill, must give its noteReason. Credit notes, like returns, settle what the source still owes, and a direct one is credit the party holds, like an advance; debit notes are owed and paid like an invoice or bill.
+         * @description creditNote and debitNote lower or raise what an invoice charged, with no goods moving; supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually raised against its invoice or bill (sourceDocumentId); a direct note, against no one invoice or bill, must give its noteReason. Credit notes, like returns, settle what the source still owes, and a direct one is credit the party holds, like an advance; debit notes are owed and paid like an invoice or bill. openingInvoice and openingBill are what was still owed, invoice by invoice, when the books started here (importOpeningDocuments): paid and aged like an invoice or bill, posted only to Opening balances, never in sales, purchases or GST.
          * @enum {string}
          */
-        DocumentKind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote";
+        DocumentKind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "openingInvoice" | "openingBill";
         /** @enum {string} */
         DocStatus: "draft" | "sent" | "accepted" | "rejected" | "expired" | "confirmed" | "fulfilled" | "cancelled" | "delivered" | "issued" | "partiallyPaid" | "paid" | "overdue" | "requested" | "approved" | "processed" | "received" | "billed";
         LedgerAccount: components["schemas"]["Versioned"] & {
@@ -9218,6 +9240,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentTotals"];
+                };
+            };
+        };
+    };
+    importOpeningDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: {
+                        /** @enum {string} */
+                        kind: "openingInvoice" | "openingBill";
+                        /** @description GSTIN or name of the customer or supplier */
+                        party: string;
+                        /** @description The invoice or bill number it was raised under */
+                        number: string;
+                        /** Format: date */
+                        date: string;
+                        /** Format: date */
+                        dueDate?: string;
+                        /** @description What is still outstanding on it, in the company's currency */
+                        amount: components["schemas"]["Money"];
+                    }[];
+                    /** @default false */
+                    dryRun?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        skipped?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "duplicate" | "invalid";
+                            id?: string;
+                            partyName?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
                 };
             };
         };

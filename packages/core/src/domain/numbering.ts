@@ -1,4 +1,4 @@
-import { DocumentKind, NumberingSeries } from '../types';
+import { DocumentKind, NumberingSeries, SeriesDocumentKind } from '../types';
 import { financialYearOf } from '../lib/date';
 
 export type SeriesKind = NumberingSeries['kind'];
@@ -92,6 +92,7 @@ export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   receipt: 'RV',
 };
 
-export function seriesKindForDocument(kind: DocumentKind): SeriesKind {
+/** The series a document numbers from. An opening invoice or bill keeps its own number and has none. */
+export function seriesKindForDocument(kind: SeriesDocumentKind): SeriesKind {
   return kind;
 }

@@ -17,6 +17,7 @@ import {
   DeviceSession,
   DocStatus,
   DocumentKind,
+  SeriesDocumentKind,
   DocumentLine,
   EwayBill,
   EwayExtendReasonCode,
@@ -816,7 +817,8 @@ export const useAppStore = create<AppState>()(
           const s = get();
           const status = draft.status ?? initialStatus(draft.kind);
           const finalized = isFinalized(status);
-          const number = finalized ? consumeSeriesNumber(draft.kind, draft.date) : `${draft.kind.toUpperCase()}-DRAFT`;
+          // Opening invoices and bills are only ever imported by the server, never made here.
+          const number = finalized ? consumeSeriesNumber(draft.kind as SeriesDocumentKind, draft.date) : `${draft.kind.toUpperCase()}-DRAFT`;
           const party = s.parties.find((p) => p.id === draft.partyId);
 
           const doc: BusinessDocument = {
@@ -905,7 +907,7 @@ export const useAppStore = create<AppState>()(
           let number = existing.number;
           // A draft withdrawn never takes a number from the series.
           if (!isFinalized(existing.status) && isFinalized(status) && status !== 'cancelled') {
-            number = consumeSeriesNumber(existing.kind, existing.date);
+            number = consumeSeriesNumber(existing.kind as SeriesDocumentKind, existing.date);
           }
           const updated = { ...existing, status, number, updatedAt: nowISO() };
           set({ documents: get().documents.map((d) => (d.id === id ? updated : d)) });

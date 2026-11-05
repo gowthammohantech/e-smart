@@ -323,7 +323,17 @@ export type DocumentKind =
   /** A supplier's credit note against their bill. */
   | 'supplierCreditNote'
   /** A supplier's debit note: more owed on their bill. */
-  | 'supplierDebitNote';
+  | 'supplierDebitNote'
+  /**
+   * What a customer still owed on an invoice raised before the books started here, under its
+   * original number. Paid and aged like an invoice; posts only to Opening balances (no sales, GST or stock).
+   */
+  | 'openingInvoice'
+  /** What was still owed to a supplier on a bill from before the books started here: as openingInvoice, the other way. */
+  | 'openingBill';
+
+/** Kinds that take their number from a series: every kind but the opening ones, which keep their own. */
+export type SeriesDocumentKind = Exclude<DocumentKind, 'openingInvoice' | 'openingBill'>;
 
 /** Why a credit or debit note was raised, as GSTR-1 and the e-invoice describe it. */
 export type NoteReason = 'discount' | 'priceChange' | 'taxCorrection' | 'deficiency' | 'other';
@@ -958,7 +968,8 @@ export type AuditEvent = {
 export type NumberingSeries = {
   id: string;
   companyId: string;
-  kind: DocumentKind | 'payment' | 'expense' | 'selfInvoice' | VoucherKind;
+  /** Opening invoices and bills keep the numbers they were raised under, so they have no series. */
+  kind: SeriesDocumentKind | 'payment' | 'expense' | 'selfInvoice' | VoucherKind;
   prefix: string;
   nextNumber: number;
   padding: number;

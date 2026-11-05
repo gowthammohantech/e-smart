@@ -47,7 +47,11 @@
     "supplierDebitNote_one": "Supplier debit note",
     "supplierDebitNote_other": "Supplier debit notes",
     "proforma_one": "Proforma invoice",
-    "proforma_other": "Proforma invoices"
+    "proforma_other": "Proforma invoices",
+    "openingInvoice_one": "Opening invoice",
+    "openingInvoice_other": "Opening invoices",
+    "openingBill_one": "Opening bill",
+    "openingBill_other": "Opening bills"
   },
   "series": {
     "quote": "Quotation",

@@ -76,6 +76,21 @@ const splitTotal = (s: TaxSplit) => s.igst + s.cgst + s.sgst + s.cess;
 /** A sale, a purchase, or a note or return against one. */
 export function postDocument(doc: BusinessDocument, baseCurrency: string): Posting[] {
   if (OFF_BOOKS.includes(doc.status)) return [];
+  // What was owed when the books started (RULES 6.12): only the party's account and Opening balances
+  // move, on the invoice's own date. It was a sale (or purchase) of an earlier year, under the old books.
+  if (doc.kind === 'openingInvoice' || doc.kind === 'openingBill') {
+    const amount = Math.round(doc.totals.grandTotal.minor * (doc.currency === baseCurrency ? 1 : doc.exchangeRate || 1));
+    const side = doc.kind === 'openingInvoice' ? 1 : -1;
+    return toPostings(
+      [
+        [`party:${doc.partyId}`, side * amount],
+        ['sys:openingDifference', -side * amount],
+      ],
+      { type: 'document', id: doc.id, number: doc.number, kind: doc.kind },
+      doc.date,
+      { branchId: doc.branchId, partyId: doc.partyId },
+    );
+  }
   const sales = SALES.includes(doc.kind);
   if (!sales && !PURCHASES.includes(doc.kind)) return [];
   const rate = doc.currency === baseCurrency ? 1 : doc.exchangeRate || 1;

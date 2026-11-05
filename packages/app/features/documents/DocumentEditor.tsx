@@ -1571,6 +1571,9 @@ export function detailRouteFor(kind: DocumentKind, id: string): string {
     debitNote: '/(app)/sales/debit-notes',
     supplierCreditNote: '/(app)/purchases/credit-notes',
     supplierDebitNote: '/(app)/purchases/debit-notes',
+    // No editor of their own: an opening invoice or bill opens as the document itself.
+    openingInvoice: '/(app)/documents',
+    openingBill: '/(app)/documents',
   };
   return `${map[kind]}/${id}`;
 }

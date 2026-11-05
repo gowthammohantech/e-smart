@@ -332,3 +332,38 @@ describe('books', () => {
     expect(keys).toEqual(expect.arrayContaining(['sys:sales', 'party:cus', 'pay:bank', 'exp:rent', 'acc:loan', 'sys:inputIgst']));
   });
 });
+
+describe('opening invoices and bills (RULES 6.12)', () => {
+  const opening = (kind: 'openingInvoice' | 'openingBill', status = 'issued') =>
+    ({
+      id: `${kind}-1`,
+      kind,
+      status,
+      number: 'OLD/1',
+      date: '2026-03-10',
+      partyId: 'p1',
+      branchId: 'b',
+      currency: 'INR',
+      exchangeRate: 1,
+      lines: [],
+      totals: { grandTotal: { minor: 50_000, currency: 'INR' }, taxableAmount: { minor: 50_000, currency: 'INR' }, taxLines: [], documentDiscount: { minor: 0, currency: 'INR' }, charges: { minor: 0, currency: 'INR' }, roundOff: { minor: 0, currency: 'INR' } },
+    }) as never;
+
+  it('posts only to the party and Opening balances, on its own date', () => {
+    const inv = postDocument(opening('openingInvoice'), 'INR');
+    expect(inv.map((p) => [p.account, p.debit, p.credit])).toEqual([
+      ['party:p1', 50_000, 0],
+      ['sys:openingDifference', 0, 50_000],
+    ]);
+    expect(inv.every((p) => p.date === '2026-03-10')).toBe(true);
+    const bill = postDocument(opening('openingBill'), 'INR');
+    expect(bill.map((p) => [p.account, p.debit, p.credit])).toEqual([
+      ['party:p1', 0, 50_000],
+      ['sys:openingDifference', 50_000, 0],
+    ]);
+  });
+
+  it('posts nothing once cancelled', () => {
+    expect(postDocument(opening('openingInvoice', 'cancelled'), 'INR')).toEqual([]);
+  });
+});
