@@ -303,5 +303,26 @@
     "transferIn": "Transfer in",
     "transferOut": "Transfer out",
     "adjustment": "Adjustment"
+  },
+  "import": {
+    "title": "Import items",
+    "action": "Import",
+    "hint": "Paste or choose a CSV saved from Excel, Google Sheets, Tally or another app. Columns are found by their names (Name, SKU, Unit, Sale price, Purchase price, GST %, HSN, Barcode, Opening stock, Reorder level, Type). Check it first; nothing is saved until you import.",
+    "chooseFile": "Choose CSV file",
+    "paste": "Or paste the CSV here",
+    "noNameColumn": "No column called Name (or Item name, Product…) was found in the first row.",
+    "summary": "{{good}} of {{total}} rows can be imported",
+    "line": "Line {{line}}",
+    "more": "and {{count}} more rows",
+    "check": "Check",
+    "import": "Import {{count}}",
+    "done": "{{count}} items imported",
+    "skipped": "{{count}} left out",
+    "tooMany": "Up to 1,000 at a time; split the sheet.",
+    "status": {
+      "invalid": "Fix",
+      "duplicate": "Already there",
+      "ready": "Ready"
+    }
   }
 }

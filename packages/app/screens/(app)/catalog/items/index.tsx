@@ -145,6 +145,8 @@ export default function ItemList() {
               <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
             </View>
             {filters}
+            <View style={{ flex: 1 }} />
+            <Button title={tr('inventory:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
           </View>
           <DataTable
             columns={([
@@ -213,6 +215,7 @@ export default function ItemList() {
       >
         {tabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
+        <Button title={tr('inventory:import.title')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
         {categories.length || brands.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{filters}</View> : null}
         {pages.isLoading && !filtered.length ? (
           <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
