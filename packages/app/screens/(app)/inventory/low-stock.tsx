@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,9 +11,11 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
-import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '../../../store/selectors';
-import { summarizeStock } from '@esmart/core/domain/reports';
-import { isLowStock } from '@esmart/core/domain/stockLedger';
+import { useBaseCurrency } from '../../../store/selectors';
+import { useAppStore } from '../../../store/appStore';
+import { keep, useServerReport } from '../../../remote/queries';
+import { today } from '@esmart/core/lib/date';
+import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { multiply } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -24,22 +26,21 @@ export default function LowStock() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
-  const items = useItems({ activeOnly: true });
-  const stock = useStockLevels();
-  const movements = useStockMovements();
   const baseCurrency = useBaseCurrency();
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
 
-  const report = useMemo(() => summarizeStock(items, movements, baseCurrency), [items, movements, baseCurrency]);
-
+  // The server's stock report: every tracked item with what's on hand and whether it is low.
+  const day = today();
+  const report = useServerReport<{ rows?: { item: Item; onHand: number; low: boolean }[]; outCount?: number }>('stock', { from: day, to: day, branchId }).data;
   const rows = useMemo(
-    () =>
-      items
-        .filter((i) => i.trackInventory)
-        .map((i) => ({ item: i, onHand: stock[i.id] ?? 0 }))
-        .filter((r) => isLowStock(r.item, r.onHand))
-        .sort((a, b) => a.onHand - b.onHand),
-    [items, stock],
+    () => (report?.rows ?? []).filter((r) => r.low && r.item.status === 'active').sort((a, b) => a.onHand - b.onHand),
+    [report],
   );
+  // A purchase order raised from here starts with these items, which the editor looks up in the store.
+  useEffect(() => {
+    if (rows.length) keep('item', companyId, rows.map((r) => r.item as never));
+  }, [rows, companyId]);
 
   const suggestedValue = rows.reduce((acc, r) => {
     const shortfall = Math.max(0, r.item.reorderLevel * 2 - r.onHand);
@@ -47,12 +48,12 @@ export default function LowStock() {
   }, 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.lowStock') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
-          <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={tr('inventory:hub.outOfStock', { count: report.outCount })} />
+          <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={tr('inventory:hub.outOfStock', { count: report?.outCount ?? 0 })} />
           <StatTile
             label={tr('inventory:lowStock.restockCost')}
             value={{ minor: suggestedValue, currency: baseCurrency }}
@@ -125,7 +126,17 @@ export default function LowStock() {
       </ScrollView>
 
       {rows.length > 0 ? (
-        <PrimaryActionBar title={tr('inventory:lowStock.raisePo')} icon="cart-plus" onPress={() => router.push('/(app)/purchases/orders/new')} />
+        <PrimaryActionBar
+          title={tr('inventory:lowStock.raisePo')}
+          icon="cart-plus"
+          onPress={() => {
+            // Each short item at what brings it back to twice its reorder level, as suggested above.
+            const reorder = rows
+              .map((r) => `${r.item.id}:${Math.max(0, r.item.reorderLevel * 2 - r.onHand)}`)
+              .filter((pair) => !pair.endsWith(':0'));
+            router.push(`/(app)/purchases/orders/new${reorder.length ? `?items=${encodeURIComponent(reorder.join(','))}` : ''}` as never);
+          }}
+        />
       ) : null}
     </View>
   );

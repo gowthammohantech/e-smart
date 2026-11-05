@@ -12,7 +12,7 @@ export type PlatformTarget = { type: 'account' | 'company' | 'user'; id: string;
  */
 export async function recordPlatformAction(
   db: DbOrTx,
-  actor: AuthUser,
+  actor: Pick<AuthUser, 'id' | 'email'>,
   req: FastifyRequest,
   action: { action: string; target: PlatformTarget; reason: string; before?: unknown; after?: unknown },
 ) {

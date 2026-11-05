@@ -17,6 +17,9 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBaseCurrency, useParty, usePayment, usePaymentAccounts } from '@esmart/app/store/selectors';
+import { usePaymentRecord } from '@esmart/app/remote/queries';
+import { LoadingView } from '@esmart/app/components/LoadingView';
+import { RefundAdvanceSheet } from '@esmart/app/features/payments/RefundAdvanceSheet';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
@@ -55,7 +58,7 @@ function SectionTitle({ children }: { children: string }) {
  */
 export function PaymentDetailDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
@@ -63,6 +66,8 @@ export function PaymentDetailDesktop() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const payment = usePayment(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = usePaymentRecord(id);
   const party = useParty(payment?.partyId);
   const accounts = usePaymentAccounts();
   const baseCurrency = useBaseCurrency();
@@ -70,10 +75,14 @@ export function PaymentDetailDesktop() {
   const applyAdvances = useAppStore((s) => s.applyAdvances);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  // A refund names the receipt it paid back; fetched so its number shows.
+  const refundOf = usePaymentRecord(payment?.refundOf).data;
 
+  if (!payment && remote.isLoading) return <LoadingView />;
   if (!payment) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.payment') }} />
         <EmptyState illustration="not-found" icon="cash-remove" title={tr('common:notFound.title')} message={tr('common:notFound.payment')} />
       </View>
@@ -86,21 +95,21 @@ export function PaymentDetailDesktop() {
   const allocated = money(payment.amount.minor - payment.unallocated.minor, payment.amount.currency);
 
   const details = [
-    { label: 'Date', value: formatDate(payment.date) },
-    { label: 'Method', value: paymentMethodLabel(tr, payment.method) },
-    { label: isIn ? 'Deposited into' : 'Paid from', value: account?.name ?? '—' },
-    ...(payment.reference ? [{ label: 'Reference', value: payment.reference }] : []),
+    { label: tr('common:table.date'), value: formatDate(payment.date) },
+    { label: tr('common:table.method'), value: paymentMethodLabel(tr, payment.method) },
+    { label: isIn ? tr('sales:payment.depositedInto') : tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
+    ...(payment.reference ? [{ label: tr('common:table.reference'), value: payment.reference }] : []),
     ...(payment.currency !== baseCurrency
-      ? [{ label: 'Exchange rate', value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
+      ? [{ label: tr('common:totals.exchangeRate'), value: `1 ${payment.currency} = ${payment.exchangeRate.toFixed(4)} ${baseCurrency}` }]
       : []),
-    { label: 'Recorded', value: formatDateTime(payment.createdAt) },
+    { label: tr('sales:payment.recordedAt'), value: formatDateTime(payment.createdAt) },
   ];
 
   const openDocument = (a: Allocation) =>
     router.push(isIn ? `/(app)/sales/invoices/${a.documentId}` : `/(app)/purchases/bills/${a.documentId}`);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: payment.number }} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }}>
@@ -121,13 +130,12 @@ export function PaymentDetailDesktop() {
             </View>
 
             <View style={{ flexGrow: 1, flexBasis: 280, gap: 4 }}>
-              <SectionTitle>{isIn ? 'Payment received' : 'Payment made'}</SectionTitle>
+              <SectionTitle>{isIn ? tr('sales:payment.received') : tr('sales:payment.made')}</SectionTitle>
               <Text variant="display" weight="700" style={{ color: tone }}>
                 {formatMoney(payment.amount)}
               </Text>
               <Text tone="muted">
-                {isIn ? 'Received from' : 'Paid to'}{' '}
-                <Text weight="600">{party?.name ?? 'Unknown'}</Text>
+                {tr(isIn ? 'sales:payment.receivedFrom' : 'sales:payment.paidTo', { name: party?.name ?? tr('common:placeholder.unknown') })}
               </Text>
             </View>
 
@@ -146,10 +154,10 @@ export function PaymentDetailDesktop() {
           <View style={{ height: 1, backgroundColor: t.c.line }} />
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.xl }}>
-            <Fact label="Date" value={formatDate(payment.date)} />
-            <Fact label="Method" value={paymentMethodLabel(tr, payment.method)} />
-            <Fact label={isIn ? 'Deposited into' : 'Paid from'} value={account?.name ?? '—'} />
-            <Fact label="Reference" value={payment.reference || '—'} />
+            <Fact label={tr('common:table.date')} value={formatDate(payment.date)} />
+            <Fact label={tr('common:table.method')} value={paymentMethodLabel(tr, payment.method)} />
+            <Fact label={isIn ? tr('sales:payment.depositedInto') : tr('purchases:form.paidFrom')} value={account?.name ?? '—'} />
+            <Fact label={tr('common:table.reference')} value={payment.reference || '—'} />
           </View>
         </Card>
 
@@ -161,8 +169,8 @@ export function PaymentDetailDesktop() {
               <Card padded={false}>
                 <EmptyState
                   icon="wallet-outline"
-                  title={tr('sales:payment.heldAsAdvance')}
-                  message={tr('sales:payment.advanceBody')}
+                  title={payment.refundOf ? tr('sales:refund.emptyTitle') : tr('sales:payment.heldAsAdvance')}
+                  message={payment.refundOf ? tr('sales:refund.emptyBody') : tr('sales:payment.advanceBody')}
                   compact
                 />
               </Card>
@@ -173,7 +181,7 @@ export function PaymentDetailDesktop() {
                 columns={[
                   {
                     key: 'document',
-                    header: isIn ? 'Invoice' : 'Bill',
+                    header: isIn ? tr('nav:title.invoice') : tr('purchases:hub.bill'),
                     flex: 2,
                     render: (a) => (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
@@ -184,7 +192,7 @@ export function PaymentDetailDesktop() {
                   },
                   {
                     key: 'amount',
-                    header: 'Applied',
+                    header: tr('common:table.applied'),
                     flex: 1,
                     align: 'right',
                     render: (a) => (
@@ -197,9 +205,9 @@ export function PaymentDetailDesktop() {
                 rows={payment.allocations}
                 rowKey={(a) => a.documentId}
                 onRowPress={openDocument}
-                rowLabel={(a) => `Open ${a.documentNumber}`}
+                rowLabel={(a) => tr('sales:payment.openDocument', { number: a.documentNumber })}
                 footer={{
-                  document: <Cell weight="700">Total applied</Cell>,
+                  document: <Cell weight="700">{tr('sales:payment.totalApplied')}</Cell>,
                   amount: (
                     <Cell weight="700" mono>
                       {formatMoney(allocated)}
@@ -213,8 +221,9 @@ export function PaymentDetailDesktop() {
               <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
                 <Icon name="wallet-outline" size={20} color={t.c.warn} />
                 <Text variant="small" style={{ flex: 1 }}>
-                  {formatMoney(payment.unallocated)} is unallocated and available as an advance.
+                  {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
                 </Text>
+                {isIn ? <Button title={tr('sales:refund.action')} size="sm" variant="ghost" icon="cash-refund" onPress={() => setRefunding(true)} /> : null}
                 <Button
                   title={tr('sales:payment.adjustAdvance')}
                   size="sm"
@@ -232,10 +241,47 @@ export function PaymentDetailDesktop() {
               </Card>
             ) : null}
 
+            {payment.refundOf ? (
+              <Card onPress={() => router.push(`/(app)/payments/${payment.refundOf}`)} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+                <Icon name="cash-refund" size={20} color={t.c.primary} />
+                <Text variant="small" style={{ flex: 1 }}>
+                  {tr('sales:refund.of', { number: refundOf?.number ?? '…' })}
+                </Text>
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
+              </Card>
+            ) : null}
+
+            {payment.refunds?.length ? (
+              <Card padded={false}>
+                <Text variant="caption" tone="muted" weight="600" style={{ padding: t.spacing.lg, paddingBottom: t.spacing.sm }}>
+                  {tr('sales:refund.listTitle')}
+                </Text>
+                {payment.refunds.map((r) => (
+                  <Pressable
+                    key={r.paymentId}
+                    onPress={() => router.push(`/(app)/payments/${r.paymentId}`)}
+                    accessibilityRole="button"
+                    style={(state) => {
+                      const { hovered, focused } = state as WebPressState;
+                      return [{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.md, backgroundColor: hovered ? t.c.card2 : 'transparent' }, focusRing(t, focused)];
+                    }}
+                  >
+                    <Text variant="small" weight="600" style={{ flex: 1 }}>
+                      {`${r.number ?? ''} · ${formatDate(r.date)}`}
+                    </Text>
+                    <Text variant="small" weight="700" tone="bad">
+                      {formatMoney(r.amount)}
+                    </Text>
+                    <Icon name="chevron-right" size={18} color={t.c.muted} />
+                  </Pressable>
+                ))}
+              </Card>
+            ) : null}
+
             {payment.fxGainLoss && payment.fxGainLoss.minor !== 0 ? (
               <Card style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="small" tone="muted">
-                  FX {payment.fxGainLoss.minor >= 0 ? 'gain' : 'loss'} on settlement
+                  {payment.fxGainLoss.minor >= 0 ? tr('sales:payment.fxGainSettlement') : tr('sales:payment.fxLossSettlement')}
                 </Text>
                 <Text variant="small" weight="700" tone={payment.fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
                   {formatMoney(payment.fxGainLoss, { signed: true })}
@@ -247,7 +293,7 @@ export function PaymentDetailDesktop() {
           {/* The record, the party and the notes */}
           <View style={{ flexGrow: 2, flexBasis: 320, gap: t.spacing.lg, minWidth: 0 }}>
             <View style={{ gap: t.spacing.md }}>
-              <SectionTitle>Details</SectionTitle>
+              <SectionTitle>{tr('sales:detail.tabDetails')}</SectionTitle>
               <Card style={{ gap: t.spacing.md }}>
                 {details.map((r, i) => (
                   <View
@@ -274,10 +320,10 @@ export function PaymentDetailDesktop() {
 
             {party ? (
               <View style={{ gap: t.spacing.md }}>
-                <SectionTitle>{party.kind === 'customer' ? 'Customer' : 'Supplier'}</SectionTitle>
+                <SectionTitle>{party.kind !== 'supplier' ? tr('common:table.customer') : tr('common:table.supplier')}</SectionTitle>
                 <Pressable
                   onPress={() =>
-                    router.push(party.kind === 'customer' ? `/(app)/contacts/customers/${party.id}` : `/(app)/contacts/suppliers/${party.id}`)
+                    router.push(party.kind !== 'supplier' ? `/(app)/contacts/customers/${party.id}` : `/(app)/contacts/suppliers/${party.id}`)
                   }
                   accessibilityRole="link"
                   accessibilityLabel={party.name}
@@ -325,6 +371,8 @@ export function PaymentDetailDesktop() {
           </View>
         </View>
       </ScrollView>
+
+      {isIn && refunding ? <RefundAdvanceSheet receipt={payment} visible onClose={() => setRefunding(false)} onSaved={(rid) => router.push(`/(app)/payments/${rid}`)} /> : null}
 
       <ConfirmDialog
         visible={confirmDelete}

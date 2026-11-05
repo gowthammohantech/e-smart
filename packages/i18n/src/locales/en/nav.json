@@ -7,7 +7,8 @@
     "gst": "GST",
     "contacts": "People",
     "reports": "Reports",
-    "more": "More"
+    "more": "More",
+    "money": "Money"
   },
   "title": {
     "about": "About",
@@ -30,6 +31,8 @@
     "editItem": "Edit item",
     "expense": "Expense",
     "expenseCategories": "Expense categories",
+    "itemCategories": "Item categories",
+    "brands": "Brands",
     "expenses": "Expenses",
     "gstr1": "GSTR-1",
     "goodsReceipt": "Goods receipt",
@@ -58,7 +61,7 @@
     "payment": "Payment",
     "paymentAccounts": "Payment accounts",
     "paymentsMade": "Payments made",
-    "paymentsReceived": "Payments received",
+    "paymentsReceived": "Income received",
     "preview": "Preview",
     "purchaseBill": "Purchase bill",
     "purchaseBills": "Purchase bills",
@@ -76,6 +79,21 @@
     "salesOrders": "Sales orders",
     "salesReturn": "Sales return",
     "salesReturns": "Sales returns",
+    "gstPortal": "GST portal",
+    "gstr2b": "GSTR-2B",
+    "gstReturns": "GST returns",
+    "creditNotes": "Credit notes",
+    "newCreditNote": "New credit note",
+    "creditNoteOne": "Credit note",
+    "debitNotes": "Debit notes",
+    "newDebitNote": "New debit note",
+    "debitNoteOne": "Debit note",
+    "supplierCreditNotes": "Supplier credit notes",
+    "newSupplierCreditNote": "New supplier credit note",
+    "supplierCreditNoteOne": "Supplier credit note",
+    "supplierDebitNotes": "Supplier debit notes",
+    "newSupplierDebitNote": "New supplier debit note",
+    "supplierDebitNoteOne": "Supplier debit note",
     "scanABill": "Scan a bill",
     "scanBarcode": "Scan barcode",
     "search": "Search",
@@ -87,7 +105,15 @@
     "transporters": "Transporters",
     "usersAndRoles": "Users & roles",
     "yourProfile": "Your profile",
-    "editNamed": "Edit {{name}}"
+    "editNamed": "Edit {{name}}",
+    "notifications": "Notifications",
+    "receipts": "Receipts",
+    "bankReconciliation": "Bank reconciliation",
+    "documentPreview": "{{kind}} preview",
+    "proformas": "Proforma invoices",
+    "newProforma": "New proforma invoice",
+    "proforma": "Proforma invoice",
+    "approvals": "Waiting for approval"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -96,27 +122,16 @@
       "subtitle": "Settings and tools"
     },
     "group": {
-      "sales": "Sales",
-      "money": "Money",
       "tools": "Tools",
       "businessSetup": "Business setup",
-      "dataCompliance": "Data & compliance",
       "account": "Account",
-      "business": "People & reports"
+      "gstSetup": "GST & e-invoicing",
+      "data": "Data",
+      "moreSections": "More sections"
     },
     "entry": {
-      "customers": "Customers",
-      "itemsAndServices": "Items & services",
-      "reports": "Reports",
-      "receivables": "Receivables",
-      "payables": "Payables",
-      "paymentsReceived": "Payments received",
-      "paymentsMade": "Payments made",
-      "expenses": "Expenses",
-      "scanBill": "Scan a bill or receipt",
       "askLixi": "Ask Lixi",
       "globalSearch": "Global search",
-      "notifications": "Notifications",
       "businessProfile": "Business profile",
       "branches": "Branches",
       "usersAndRoles": "Users & roles",
@@ -125,8 +140,9 @@
       "documentNumbering": "Document numbering",
       "paymentAccounts": "Payment accounts",
       "expenseCategories": "Expense categories",
+      "itemCategories": "Item categories",
+      "brands": "Brands",
       "gstCompliance": "GST compliance",
-      "gstr1": "GSTR-1",
       "eInvoicing": "E-invoicing & e-way bill",
       "transporters": "Transporters",
       "integrations": "Integrations",
@@ -136,7 +152,14 @@
       "devicesAndSessions": "Devices & sessions",
       "planAndBilling": "Plan & billing",
       "appearanceAndLanguage": "Appearance & language",
-      "about": "About"
+      "about": "About",
+      "notificationSettings": "Notification preferences",
+      "books": "Books",
+      "gstPortal": "GST portal connection",
+      "security": "Sign-in security",
+      "modules": "Modules",
+      "customFields": "Custom fields",
+      "approvalRules": "Approvals"
     },
     "signOut": {
       "row": "Sign out",
@@ -165,15 +188,26 @@
     "allSettings": "All settings",
     "group": {
       "transactions": "Transactions",
-      "compliance": "Compliance",
-      "manage": "Manage"
+      "manage": "Manage",
+      "finance": "Finance"
     },
     "showPages": "Show {{label}} pages",
     "hidePages": "Hide {{label}} pages",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
     "searchFor": "Search {{query}}",
-    "noMatchesInBusiness": "Nothing in this business matches “{{query}}”."
+    "noMatchesInBusiness": "Nothing in this business matches “{{query}}”.",
+    "mainNavigation": "Main",
+    "settingsNavigation": "Settings pages",
+    "skipToContent": "Skip to content",
+    "assistant": "Lixi assistant",
+    "escKey": "ESC",
+    "recent": "Recent",
+    "overview": "{{label}} overview",
+    "createIn": "Create in {{label}}",
+    "openPanel": "{{label}} pages",
+    "branch": "Branch",
+    "business": "Business"
   },
   "home": {
     "emptyTitle": "Let's get you started",
@@ -195,5 +229,18 @@
     "openBills_other": "{{count}} open bills",
     "daysOverdue_one": "{{count}}d overdue",
     "daysOverdue_other": "{{count}}d overdue"
+  },
+  "money": {
+    "subtitle": "Payments, dues, expenses and your books"
+  },
+  "menuGroup": {
+    "documents": "Documents",
+    "adjustments": "Adjustments",
+    "accounts": "Accounts",
+    "cashFlow": "Cash flow",
+    "dues": "Dues",
+    "spending": "Spending",
+    "compliance": "Compliance",
+    "returns": "Returns"
   }
 }

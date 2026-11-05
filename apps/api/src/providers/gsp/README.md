@@ -1,4 +1,4 @@
-# GSP gateway: e-invoice, e-way bill, GSTIN search
+# GSP gateway: e-invoice, e-way bill, GSTIN search, GST returns
 
 Adaequare and Whitebooks behind the `ComplianceProvider` and `GstinProvider`
 interfaces. Ported from the Elixir Books platform's taxation service
@@ -109,10 +109,33 @@ GSTIN details, public search and standalone `canewb`; Adaequare generate and
   maps GSTN's public-search field names (`lgnm`, `tradeNam`, `pradr.addr`, …).
 - Whitebooks' sandbox register knows four GSTINs; any other is searched as the
   first of them, so a sandbox lookup can answer for a different taxpayer.
+- **Reverse charge and cess on an IRN.** A reverse-charge invoice goes with
+  `RegRev: 'Y'`, each item's tax in its amounts, and `TotInvVal` including that
+  tax, so the totals add up the way the portal checks them, though the buyer, not
+  the seller, pays it. Cess goes as `CesRt`/`CesAmt` per item and `CesVal`. Both
+  follow NIC's schema notes; file one of each in the sandbox.
 
 PIN code lookup and the EWB portal's road distance have no route on either
 gateway here, so with `GSTIN_PROVIDER=gsp` they answer 503 FEATURE_UNAVAILABLE
 and the apps fall back to manual entry.
+
+## GST returns (RETURNS_PROVIDER=gsp)
+
+`gsp/returns.ts` talks to Adaequare's taxpayer API (`/enriched/gsp/taxpayerapi/…`), acting for the
+taxpayer with their portal username and an OTP to their registered phone, not our API login. The
+taxpayer switches API access on in the portal first (Profile → Manage API Access).
+
+**Nothing in it is confirmed.** The routes and action names follow GSTN's taxpayer API (OTPREQUEST,
+AUTHTOKEN, REFRESHTOKEN, RETSAVE, RETOFFSET, RETSTATUS, RETSUM, RETNEWPTF, EVCOTP, RETFILE, RETTRACK,
+ledgers BAL) and the GSTR-2B JSON GSTN publishes, which `parseGstr2b` reads. Before filing for anyone:
+
+1. Ask Adaequare to enable the returns (taxpayer) API on the account, and for its sandbox GSTINs.
+2. Run each call against the sandbox and correct the paths, headers and answer fields in `gsp/returns.ts`.
+3. Keep `GST_FILING_ENABLED=false` until then and until a CA has signed off the returns. Saving and
+   GSTR-2B can be tried with filing off.
+
+Filing can't be undone. A save or file whose answer is lost is settled by `returnStatus` or
+`trackReturns`, never sent again.
 
 ## Rules worth keeping
 
@@ -121,13 +144,20 @@ and the apps fall back to manual entry.
 - **NIC 9999 "invoice is not active" stays a refusal**, not a quiet success.
 - **No retry.** A filing that timed out may already be registered. Recovery is
   the by-document lookup (Adaequare also tries it after a transport failure).
+- **Lost answers are settled later, not retried.** An e-way bill generate or an
+  IRN cancel that gets `GSP_UNAVAILABLE` leaves a `compliance_attempts` row; the
+  `compliance.recover` job asks the portal (`findEwayBillByDocument`,
+  `getIrnStatus`) and records what it holds. On Adaequare those two routes,
+  `…/ewayapi/GetEwayBillGeneratedByConsigner` and `…/invoice/irn`, are by analogy
+  with NIC's API and **unconfirmed**: run both against the sandbox before relying
+  on them. Whitebooks has neither yet; its attempts go to a person after a day.
 - **Codes, never wording**, decide behaviour (`hasErrorCode` is word-bounded).
 - Reason codes: the IRN's `CnlRsn` is a string and its 2/3 are *data entry
   mistake / order cancelled*; the e-way bill's `cancelRsnCode` is a number and
   its 2/3 are the other way round. The app's two reason tables already follow
   that, so the codes go through untouched.
-- Cess fields are sent at zero (NIC 2194) and blank strings are dropped from
-  every payload.
+- Every cess field is sent, at zero when there's none (NIC 2194), and blank
+  strings are dropped from every payload.
 
 ## Tests
 

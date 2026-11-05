@@ -16,5 +16,7 @@ const ACTIONS: Record<string, string> = {
   'company.plan.override': 'Changed plan',
   'user.disable': 'Disabled user',
   'user.enable': 'Enabled user',
+  'operator.role_granted': 'Changed platform role',
+  'operator.role_removed': 'Removed platform access',
 };
 export const actionLabel = (action: string) => ACTIONS[action] ?? action;

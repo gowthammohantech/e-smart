@@ -10,12 +10,15 @@ export const EMAIL = process.env.DEMO_EMAIL ?? 'e2e@vertextraders.in';
 export const PASSWORD = process.env.DEMO_PASSWORD ?? 'e2e-pass-1234';
 const DB = process.env.E2E_DB ?? 'esmart_e2e';
 const COMPOSE = fileURLToPath(new URL('../../../docker-compose.yml', import.meta.url));
+/** A Mac's cached Chrome for Testing; elsewhere (CI) the browser `npx playwright-core install chromium` put in place. */
 function findChrome() {
   const cache = join(homedir(), 'Library/Caches/ms-playwright');
+  if (!existsSync(cache)) return undefined;
   for (const d of readdirSync(cache).filter((d) => /^chromium-\d+$/.test(d)).sort().reverse()) {
     const bin = join(cache, d, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
     if (existsSync(bin)) return bin;
   }
+  return undefined;
 }
 export const launch = () => chromium.launch({ executablePath: findChrome() });
 export async function device(browser, view = { width: 1280, height: 860 }) {
@@ -31,10 +34,38 @@ export async function signIn(page) {
   await page.waitForURL((u) => !u.pathname.includes('sign-in'), { timeout: 90_000 });
   await page.waitForTimeout(3000);
 }
-export const queue = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('ebs.remote.v1') ?? '{"state":{}}').state.syncQueue ?? []);
-export const book = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('ebs.remote.v1') ?? '{"state":{}}').state);
+/**
+ * The book as the web app saved it: IndexedDB `ebs-book`, one record per collection
+ * (packages/app/store/bookBackend.web.ts). Never creates the database itself.
+ */
+export const book = (page) =>
+  page.evaluate(async () => {
+    const known = (await indexedDB.databases?.()) ?? [];
+    if (!known.some((d) => d.name === 'ebs-book')) return {};
+    return new Promise((resolve, reject) => {
+      const open = indexedDB.open('ebs-book');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        if (!db.objectStoreNames.contains('book')) return resolve({});
+        const store = db.transaction('book', 'readonly').objectStore('book');
+        const keys = store.getAllKeys();
+        const values = store.getAll();
+        store.transaction.oncomplete = () => {
+          const out = {};
+          keys.result.forEach((k, i) => (out[k] = JSON.parse(values.result[i])));
+          db.close();
+          resolve(out);
+        };
+      };
+    });
+  });
+export const queue = async (page) => (await book(page)).syncQueue ?? [];
 
+/** A query against the e2e database: `psql` on E2E_DATABASE_URL (CI), or inside the compose Postgres. */
 export function sql(q) {
+  const url = process.env.E2E_DATABASE_URL;
+  if (url) return execFileSync('psql', [url, '-At', '-c', q]).toString().trim();
   return execFileSync('docker', ['compose', '-f', COMPOSE, 'exec', '-T', 'postgres', 'psql', '-U', 'esmart', '-d', DB, '-At', '-c', q]).toString().trim();
 }
 export const serverParties = (name) => Number(sql(`select count(*) from parties where name = '${name.replace(/'/g, "''")}'`));

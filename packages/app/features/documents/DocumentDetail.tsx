@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
 import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -22,17 +22,19 @@ import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
-import { STATUS_TONE, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { tdsSection } from '@esmart/core/data/tdsSections';
+import { NOTE_SOURCE, STATUS_TONE, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
-import { stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
-import { money } from '@esmart/core/lib/money';
+import { money, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
+import { useCostCentres } from '../../store/books';
 import {
   useActiveCompany,
   useActiveEwayBill,
@@ -40,11 +42,14 @@ import {
   useBranches,
   useComplianceSettings,
   useDocument,
+  useHasModule,
   useParty,
   usePayments,
 } from '../../store/selectors';
+import { useDocumentRecord, useEwayBillRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
+import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
@@ -56,13 +61,16 @@ import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
+import { RecurrenceSheet } from './RecurrenceSheet';
+import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   useRefreshOnFocus();
   const t = useTheme();
+  const costCentre = useCostCentres(true).find((c) => c.id === doc.costCentreId);
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance', 'purchases']);
   const language = useResolvedLanguage();
   const router = useRouter();
   const goBack = useGoBack();
@@ -74,12 +82,20 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const branches = useBranches();
   const party = useParty(doc.partyId);
   // The order, receipt or invoice this one was made from, e.g. the PO behind a goods receipt.
+  useDocumentRecord(doc.sourceDocumentId);
   const sourceDoc = useDocument(doc.sourceDocumentId);
+  // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
+  const record = useDocumentRecord(doc.id).data;
   const allPayments = usePayments();
+  // Its current e-way bill, fetched into the store: the device keeps only the bills it has seen.
+  useEwayBillRecord(doc.compliance?.ewayBillId);
   const ewayBill = useActiveEwayBill(doc.id);
   const complianceSettings = useComplianceSettings();
+  const hasInventory = useHasModule('inventory');
   const storeItems = useAppStore((s) => s.items);
-  const stockMovements = useAppStore((s) => s.stockMovements);
+  // Finalising from here checks stock as the editor does: what the server says is there on the date.
+  const sourceMoved = useStockMovedBy(doc.sourceDocumentId).data ?? false;
+  const available = useStockAvailable(doc.branchId, doc.date, !isFinalized(doc.status) && OUTBOUND_KINDS.includes(doc.kind) && !sourceMoved && hasInventory).data;
 
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
   const removeDocument = useAppStore((s) => s.removeDocument);
@@ -88,6 +104,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const allDocuments = useAppStore((s) => s.documents);
 
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -124,10 +141,14 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [allPayments, doc.id],
   );
 
-  const outstanding = useMemo(() => outstandingOf(doc, allPayments), [doc, allPayments]);
+  const outstanding = useMemo(
+    () => (record?.outstanding as Money | undefined) ?? outstandingOf(doc, allPayments, allDocuments),
+    [record?.outstanding, doc, allPayments, allDocuments],
+  );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
+  const customFields = useAppStore((s) => s.customFields);
   const documentHtml = () =>
     buildDocumentHtml({
       t: tr,
@@ -137,6 +158,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       party,
       branch,
       ewayBill,
+      // Returns and notes name the invoice or bill they're against.
+      source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
+      customFields,
     });
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
@@ -155,7 +179,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           icon: 'file-pdf-box',
         },
       );
-      if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
+      if ((doc.kind === 'quote' || doc.kind === 'proforma') && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
     } catch {
       // The toast has said what went wrong.
     } finally {
@@ -189,7 +213,11 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const send = (channel: SendChannel) =>
     runRemote(
-      () => sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 }),
+      async () => {
+        await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
+        // The first invoice out is when "tell me when it's paid" makes sense: ask for notifications now.
+        if (doc.kind === 'invoice') void ensurePushRegistered({ ask: true });
+      },
       { loading: tr('sales:detail.sending'), success: tr('common:documentDetail.sent'), icon: channel === 'whatsapp' ? 'whatsapp' : 'email-fast-outline' },
     );
 
@@ -264,6 +292,22 @@ ${url}`;
     else send(channel);
   };
 
+  // The editor's "Save & send" lands here with ?send=email: send it once, as soon as the
+  // document reads as finalised, and drop the flag so a reload or Back doesn't send again.
+  const { send: sendParam } = useLocalSearchParams<{ send?: string }>();
+  const sentFromEditor = useRef(false);
+  const sendNow = useRef(sendVia);
+  // Kept current after each render, as the editor does for its finalise shortcut.
+  useEffect(() => {
+    sendNow.current = sendVia;
+  });
+  useEffect(() => {
+    if (sendParam !== 'email' || sentFromEditor.current || !isFinalized(doc.status)) return;
+    sentFromEditor.current = true;
+    router.setParams({ send: undefined });
+    sendNow.current('email');
+  }, [sendParam, doc.status, router]);
+
   const convert = async (target: DocumentKind) => {
     setActionsOpen(false);
     const res = await serverSave(() => convertDocument(doc.id, target), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }), {
@@ -274,8 +318,10 @@ ${url}`;
   };
 
   const offered: { target: DocumentKind; label: string; icon: IconName }[] =
-    doc.kind === 'quote'
+    doc.kind === 'quote' || doc.kind === 'proforma'
       ? [
+          // A quote can become a proforma for the customer to pay an advance against.
+          ...(doc.kind === 'quote' ? [{ target: 'proforma' as DocumentKind, label: tr('sales:detail.convertToProforma'), icon: 'file-document-outline' as IconName }] : []),
           { target: 'salesOrder', label: tr('sales:detail.convertToSalesOrder'), icon: 'clipboard-list-outline' },
           { target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' },
         ]
@@ -287,7 +333,11 @@ ${url}`;
         : doc.kind === 'delivery'
           ? [{ target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' }]
           : doc.kind === 'invoice'
-            ? [{ target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' }]
+            ? [
+                { target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' },
+                { target: 'creditNote', label: tr('sales:detail.createCreditNote'), icon: 'file-document-minus-outline' },
+                { target: 'debitNote', label: tr('sales:detail.createDebitNote'), icon: 'file-document-plus-outline' },
+              ]
             : doc.kind === 'purchaseOrder'
               ? [
                   { target: 'goodsReceipt', label: tr('sales:detail.createGoodsReceipt'), icon: 'package-down' },
@@ -296,11 +346,19 @@ ${url}`;
               : doc.kind === 'goodsReceipt'
                 ? [{ target: 'purchaseBill', label: tr('sales:detail.convertToBill'), icon: 'file-document-outline' }]
                 : doc.kind === 'purchaseBill'
-                  ? [{ target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' }]
+                  ? [
+                      { target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' },
+                      { target: 'supplierCreditNote', label: tr('sales:detail.recordSupplierCreditNote'), icon: 'file-document-minus-outline' },
+                      { target: 'supplierDebitNote', label: tr('sales:detail.recordSupplierDebitNote'), icon: 'file-document-plus-outline' },
+                    ]
                   : [];
   // Only what can be made now: nothing from a draft or a cancelled document,
   // and an order or quote carried forward once (conversionBlock).
-  const conversions = offered.filter((c) => !conversionBlock(doc, c.target, allDocuments));
+  // What was made from it, as the server knows; the store's copy until that lands.
+  const made = record?.linkedDocuments
+    ? record.linkedDocuments.map((d) => ({ kind: d.kind!, status: d.status!, sourceDocumentId: doc.id }))
+    : allDocuments;
+  const conversions = offered.filter((c) => !conversionBlock(doc, c.target, made));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
   // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
@@ -309,7 +367,8 @@ ${url}`;
   const markAs = (s: DocStatus, message = tr('common:documentDetail.marked', { status: statusLabel(tr, s) })) => {
     // Finalising from here must pass the same stock check as the editor.
     const short = !isFinalized(doc.status) && isFinalized(s)
-      ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
+      && available && !company?.allowNegativeStock
+      ? shortfallsAgainst(available, doc.lines, storeItems)
       : [];
     if (short.length) {
       toast.show(
@@ -376,7 +435,7 @@ ${url}`;
           onPress={() =>
             party &&
             router.push(
-              party.kind === 'customer'
+              party.kind !== 'supplier'
                 ? `/(app)/contacts/customers/${party.id}`
                 : `/(app)/contacts/suppliers/${party.id}`,
             )
@@ -406,6 +465,7 @@ ${url}`;
           ) : null}
           {doc.reference ? <Badge label={tr('sales:detail.referenceBadge', { reference: doc.reference })} tone="neutral" /> : null}
           {doc.supplierDocNumber ? <Badge label={tr('sales:detail.theirNumber', { number: doc.supplierDocNumber })} tone="neutral" /> : null}
+          {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
         </View>
       </Card>
     </>
@@ -413,7 +473,7 @@ ${url}`;
   const paymentCard = (
     <>
       {/* Payment status */}
-      {isPayable && isFinalized(doc.status) ? (
+      {isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' ? (
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
@@ -506,7 +566,18 @@ ${url}`;
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}
+          tds={doc.tds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount } : undefined}
         />
+        {doc.selfInvoiceNumber ? (
+          <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.selfInvoice', { number: doc.selfInvoiceNumber })}
+          </Text>
+        ) : null}
+        {doc.itcReversedOn && !doc.itcReclaimedOn ? (
+          <Text variant="caption" tone="warn" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.itcReversed', { date: formatDate(doc.itcReversedOn) })}
+          </Text>
+        ) : null}
       </Card>
     </>
   );
@@ -559,6 +630,7 @@ ${url}`;
   const complianceSection = (
     <>
       {/* Compliance */}
+      <ApprovalBanner doc={doc} />
       <ComplianceCard document={doc} />
     </>
   );
@@ -666,7 +738,7 @@ ${url}`;
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       {desktop ? (
         <>
           <Stack.Screen options={{ headerRight: () => desktopActions }} />
@@ -760,6 +832,8 @@ ${url}`;
         </>
       )}
 
+      <RecurrenceSheet doc={doc} visible={recurrenceOpen} onClose={() => setRecurrenceOpen(false)} />
+
       {/* Action sheet */}
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>
         {[
@@ -768,6 +842,10 @@ ${url}`;
                 { label: tr('sales:print.sharePdf'), icon: 'file-pdf-box' as const, onPress: shareDocument },
                 { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
                 { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
+                // An issued invoice, not itself a copy, can repeat; the server says if it can't.
+                ...(doc.kind === 'invoice' && !doc.recurringParentId && doc.status !== 'cancelled'
+                  ? [{ label: doc.recurrence && doc.recurrence !== 'none' ? `${tr('sales:recurring.action')} · ${tr(`sales:recurring.frequency.${doc.recurrence}`)}` : tr('sales:recurring.action'), icon: 'repeat' as const, onPress: () => setRecurrenceOpen(true) }]
+                  : []),
                 { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () =>
                     runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id)), {
                       loading: tr('sales:detail.creatingLink'),
@@ -816,7 +894,8 @@ ${url}`;
             });
           } },
           ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
-          ...(doc.status !== 'cancelled' && isFinalized(doc.status)
+          // A draft quote can be withdrawn too, where its kind allows that.
+          ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
             ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => {
                 setActionsOpen(false);
                 // The server refuses while the e-way bill or the IRN is live (in that

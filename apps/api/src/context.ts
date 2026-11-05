@@ -33,6 +33,9 @@ export type AuthUser = {
   /** Branches the user is limited to; empty means every branch. */
   branchIds: string[];
   sessionId: string;
+  /** Operators only: an authenticator is set up, and this session has passed it. */
+  mfaEnrolled: boolean;
+  mfaVerified: boolean;
 };
 
 export type CompanyRow = typeof schema.companies.$inferSelect;

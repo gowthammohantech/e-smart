@@ -315,7 +315,10 @@ export const footer = {
   copyright: '© 2026 Elixir Business Solutions India Pvt. Ltd. All rights reserved.',
   legal: [
     { label: 'Cookbook', href: '/docs' },
-    { label: 'Privacy Policy', href: 'https://elixir-books.com/privacy-policy' },
-    { label: 'Terms & Conditions', href: 'https://elixir-books.com/terms-and-conditions' },
+    { label: 'Privacy Policy', href: '/privacy' },
+    { label: 'Terms', href: '/terms' },
+    { label: 'Refunds', href: '/refund' },
+    { label: 'Delete your account', href: '/delete-account' },
+    { label: 'Support', href: '/support' },
   ],
 } as const;

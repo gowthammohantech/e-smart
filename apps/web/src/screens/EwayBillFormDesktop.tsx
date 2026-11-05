@@ -156,15 +156,13 @@ function ValidityCard({ form }: { form: EwayBillFormState }) {
             {formatDate(preview.validUpto.slice(0, 10))}
           </Text>
           <Text variant="small" tone="muted">
-            {preview.days} {preview.days === 1 ? 'day' : 'days'} · to midnight
+            {tr('compliance:ewb.validityDaysToMidnight', { count: preview.days })}
           </Text>
         </View>
       </View>
       <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-        {vehicleType === 'overDimensional'
-          ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
-          : 'One day per 200 km, or part thereof.'}{' '}
-        It updates as you change the distance or the cargo.
+        {vehicleType === 'overDimensional' ? tr('compliance:ewb.ruleOdc') : tr('compliance:ewb.ruleRegular')}{' '}
+        {tr('compliance:ewb.ruleUpdates')}
       </Text>
     </Card>
   );
@@ -178,13 +176,12 @@ function ValidityCard({ form }: { form: EwayBillFormState }) {
  * and submit as the phone form (`useEwayBillForm`), whose pickers it reuses.
  */
 export function NewEwayBillDesktop() {
-  const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'nav']);
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const document = useDocument(documentId);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.newEWayBill') }} />
       {document ? (
         <EwayBillFormDesktop doc={document} />
@@ -245,7 +242,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
       value={distanceKm}
       onChangeText={setDistanceKm}
       keyboardType="number-pad"
-      suffix="km"
+      suffix={tr('compliance:ewb.km')}
       error={errors.distanceKm}
     />
   );
@@ -276,7 +273,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
         </View>
       </FormSection>
 
-      <FormSection title={`${tr('compliance:ewb.transport')} · Part-B`}>
+      <FormSection title={tr('compliance:ewb.transportPartB')}>
         {transporters.length ? (
           <PickerField
             label={tr('compliance:ewb.savedTransporter')}
@@ -293,7 +290,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
             onChangeText={setTransporterId}
             autoCapitalize="characters"
             error={errors.transporterId}
-            placeholder="15-character GSTIN or TRANSIN"
+            placeholder={tr('compliance:ewb.transporterIdHint')}
           />
           <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
         </FieldRow>
@@ -304,10 +301,10 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
             </Text>
             <Segmented
               options={[
-                { value: 'road', label: 'Road' },
-                { value: 'rail', label: 'Rail' },
-                { value: 'air', label: 'Air' },
-                { value: 'ship', label: 'Ship' },
+                { value: 'road', label: tr('compliance:mode.road') },
+                { value: 'rail', label: tr('compliance:mode.rail') },
+                { value: 'air', label: tr('compliance:mode.air') },
+                { value: 'ship', label: tr('compliance:mode.ship') },
               ]}
               value={transportMode}
               onChange={setTransportMode}
@@ -319,8 +316,8 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
             </Text>
             <Segmented
               options={[
-                { value: 'regular', label: 'Regular' },
-                { value: 'overDimensional', label: 'Over-dimensional' },
+                { value: 'regular', label: tr('compliance:cargo.regular') },
+                { value: 'overDimensional', label: tr('compliance:cargo.overDimensional') },
               ]}
               value={vehicleType}
               onChange={setVehicleType}

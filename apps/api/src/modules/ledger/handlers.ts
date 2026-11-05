@@ -1,6 +1,7 @@
 import { and, eq, getTableColumns, inArray, notInArray } from 'drizzle-orm';
+import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
-import type { BusinessDocument, Payment } from '@esmart/core/types';
+import type { BusinessDocument, DocumentKind, Payment } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { defineHandlers, type Ctx } from '../../context';
@@ -23,10 +24,10 @@ type Aging = Schema<'AgingReport'>;
  * `amount_paid_minor`, which the Payments module keeps equal to the sum of
  * its allocations; it is handed to the engine as one allocation per document.
  */
-async function agingReport(ctx: AgingCtx, kind: 'invoice' | 'purchaseBill', q: { asOf?: string; partyId?: string; branchId?: string }): Promise<Aging> {
+async function agingReport(ctx: AgingCtx, kinds: DocumentKind[], q: { asOf?: string; partyId?: string; branchId?: string }): Promise<Aging> {
   const asOf = q.asOf ?? today(ctx.now);
   const baseCurrency = ctx.company.baseCurrency.trim();
-  const filters = [eq(D.companyId, ctx.company.id), eq(D.kind, kind), notInArray(D.status, ['draft', 'cancelled', 'rejected'])];
+  const filters = [eq(D.companyId, ctx.company.id), inArray(D.kind, kinds), notInArray(D.status, ['draft', 'cancelled', 'rejected'])];
   if (q.partyId) filters.push(eq(D.partyId, q.partyId));
   if (q.branchId) filters.push(eq(D.branchId, q.branchId));
   if (ctx.user.branchIds.length) filters.push(inArray(D.branchId, ctx.user.branchIds));
@@ -70,6 +71,8 @@ async function agingReport(ctx: AgingCtx, kind: 'invoice' | 'purchaseBill', q: {
   return {
     asOf,
     total: summary.total,
+    overdue: summary.overdue,
+    dueSoon: summary.dueSoon,
     buckets: summary.buckets.map((b) => ({ key: b.key, amount: b.amount, count: b.count })),
     byParty: [...parties.values()]
       .sort((a, b) => b.outstanding - a.outstanding || a.partyName.localeCompare(b.partyName))
@@ -85,11 +88,11 @@ const fmt = (minor: number, currency: string) => `${currency} ${(minor / 100).to
 /** Ledger: getReceivables, getPayables, sendPaymentReminder. */
 export const ledgerHandlers = defineHandlers({
   async getReceivables(ctx) {
-    return agingReport(ctx, 'invoice', ctx.query);
+    return agingReport(ctx, RECEIVABLE_KINDS, ctx.query);
   },
 
   async getPayables(ctx) {
-    return agingReport(ctx, 'purchaseBill', ctx.query);
+    return agingReport(ctx, PAYABLE_KINDS.filter((k) => !RECEIVABLE_KINDS.includes(k)), ctx.query);
   },
 
   async sendPaymentReminder(ctx) {
@@ -100,7 +103,7 @@ export const ledgerHandlers = defineHandlers({
     const recipient = body.channel === 'email' ? party.email : party.phone;
     if (!recipient) throw invalid('partyId', `${party.name} has no ${body.channel === 'email' ? 'email address' : 'phone number'}`);
 
-    const filters = [eq(D.companyId, ctx.company.id), eq(D.partyId, party.id), eq(D.kind, 'invoice'), notInArray(D.status, ['draft', 'cancelled'])];
+    const filters = [eq(D.companyId, ctx.company.id), eq(D.partyId, party.id), inArray(D.kind, RECEIVABLE_KINDS), notInArray(D.status, ['draft', 'cancelled'])];
     if (body.documentIds?.length) filters.push(inArray(D.id, body.documentIds));
     const docs = (await ctx.db.select().from(D).where(and(...filters)).orderBy(D.dueDate, D.date)).filter((d) => d.grandTotalMinor > d.amountPaidMinor);
     const missing = (body.documentIds ?? []).filter((id) => !docs.some((d) => d.id === id));

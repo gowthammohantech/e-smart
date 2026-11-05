@@ -55,6 +55,7 @@ tags:
   - { name: Auth, description: 'Sign-up, sign-in, OTP, tokens' }
   - { name: Me, description: 'Current user, profile, devices, push tokens' }
   - { name: Companies, description: 'Companies, branches, onboarding' }
+  - { name: Books, description: 'The general ledger: accounts a business adds, and journal, contra, GST journal and TDS challan vouchers' }
   - { name: Users, description: 'Team members and invitations' }
   - { name: Billing, description: 'Plans and subscriptions' }
   - { name: Settings, description: 'Tax, expense categories, payment accounts, currencies, numbering, transporters' }
@@ -63,13 +64,14 @@ tags:
   - { name: Documents, description: 'Quotes, orders, deliveries, invoices, returns, POs, receipts, bills' }
   - { name: Compliance, description: 'GST e-invoice (IRP) and e-way bills' }
   - { name: Payments, description: 'Payments received and made' }
+  - { name: Banking, description: 'Bank statement import and reconciliation' }
   - { name: Expenses, description: 'Business expenses, recurring and billable' }
   - { name: Inventory, description: 'Stock levels, movements, adjustments, transfers' }
   - { name: Attachments, description: 'File uploads (receipts, logos, scans)' }
   - { name: OCR, description: 'Bill and receipt extraction' }
   - { name: Ledger, description: 'Receivables, payables, reminders' }
   - { name: Reports, description: 'The nine PRD reports, with CSV and PDF export' }
-  - { name: GST, description: 'GSTR-1' }
+  - { name: GST, description: 'GSTR-1, GSTR-2B, GSTR-3B and the GST portal session they are filed through' }
   - { name: Dashboard, description: 'Home-tab summary' }
   - { name: Search, description: 'Global search' }
   - { name: Assistant, description: 'Lixi: answers from the books, and prepares writes for the user to confirm' }
@@ -103,6 +105,7 @@ paths:
                 phoneVerificationId: { type: string, description: 'The `requestId` of an OTP just verified for a phone with no account (`PHONE_NOT_REGISTERED`). The account takes that phone, marked verified.' }
                 password: { type: string, minLength: 8, writeOnly: true }
                 locale: { type: string, example: en }
+                termsVersion: { type: string, maxLength: 20, description: 'The terms and privacy policy version the person agreed to (the date on the pages, e.g. 2026-11-02); stored with when.' }
       responses:
         '201': { $ref: '#/components/responses/AuthSession' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -272,6 +275,107 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
+  /me/mfa:
+    get:
+      tags: [Me]
+      operationId: getMyMfa
+      summary: Whether I have an authenticator app turned on, and whether this session has passed it
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+    delete:
+      tags: [Me]
+      operationId: disableMyMfa
+      summary: Turns my authenticator off, on a code from it or a recovery code
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '204': { description: Turned off }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /me/mfa/enrollment:
+    post:
+      tags: [Me]
+      operationId: startMyMfaEnrollment
+      summary: A new authenticator secret to scan; replaces one not yet confirmed
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaEnrollment' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /me/mfa/enrollment/confirm:
+    post:
+      tags: [Me]
+      operationId: confirmMyMfaEnrollment
+      summary: Turns the authenticator on with a code from it, passes this session, and returns the recovery codes, shown this once
+      description: From then on every new session of mine is refused (403 MFA_REQUIRED) until it passes verifyMyMfa.
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryCodes' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /me/mfa/verify:
+    post:
+      tags: [Me]
+      operationId: verifyMyMfa
+      summary: Passes this session with a code from my authenticator, or one unused recovery code
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /me/delete:
+    post:
+      tags: [Me]
+      operationId: deleteMe
+      summary: >-
+        Deletes the caller's account (app store rule). Their name, email, phone and logins are erased and every
+        session ends. Refused while they are the only owner of a business other people use (transfer ownership
+        first), and for platform operators. When nobody else is on the account it is closed: the subscription is
+        cancelled and the books are kept, unreadable, for the 8 years GST law requires, then erased.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteAccountRequest' }
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
   /me/onboarding/complete:
     post:
       tags: [Me]
@@ -301,6 +405,32 @@ paths:
       responses:
         '204': { description: Revoked }
         '404': { $ref: '#/components/responses/NotFound' }
+  /me/notification-preferences:
+    get:
+      tags: [Me]
+      operationId: getNotificationPreferences
+      summary: Which kinds of notification this person gets on their phone (all of them still show in the app)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+    put:
+      tags: [Me]
+      operationId: saveNotificationPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPreferences' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /me/push-tokens:
     post:
       tags: [Me]
@@ -423,6 +553,33 @@ paths:
     delete:
       tags: [Companies]
       operationId: removeCompanyLogo
+      x-roles: [owner, admin]
+      responses:
+        '204': { description: Removed }
+  /companies/{companyId}/signature:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    put:
+      tags: [Companies]
+      operationId: uploadCompanySignature
+      x-roles: [owner, admin]
+      summary: The authorised signatory's signature, as printed on documents
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary, description: 'PNG or JPEG, up to 5 MB; a transparent PNG prints best' }
+      responses:
+        '200':
+          description: Signature stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+    delete:
+      tags: [Companies]
+      operationId: removeCompanySignature
       x-roles: [owner, admin]
       responses:
         '204': { description: Removed }
@@ -591,6 +748,7 @@ paths:
               type: object
               properties:
                 password: { type: string, writeOnly: true }
+                termsVersion: { type: string, maxLength: 20, description: As in signUp }
       responses:
         '200': { $ref: '#/components/responses/AuthSession' }
 
@@ -789,6 +947,53 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/usage:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: getCompanyUsage
+      summary: How much the business holds and what its setup is used by
+      description: |
+        Record counts for backup and plan usage, whether anything has been posted, documents per
+        branch, how many items and documents use each tax category, expenses per category, and each
+        payment account's balance (in base currency) and whether money has gone through it.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts, postedDocuments, documentsByBranch, taxCategoryUse, expenseCategories, paymentAccounts]
+                properties:
+                  counts:
+                    type: object
+                    required: [parties, customers, items, documents, invoices, payments, expenses, stockMovements, auditEvents]
+                    properties:
+                      auditEvents: { type: integer }
+                      parties: { type: integer }
+                      customers: { type: integer }
+                      items: { type: integer }
+                      documents: { type: integer }
+                      invoices: { type: integer }
+                      payments: { type: integer }
+                      expenses: { type: integer }
+                      stockMovements: { type: integer }
+                  postedDocuments: { type: integer, description: Documents past draft }
+                  documentsByBranch: { type: object, additionalProperties: { type: integer } }
+                  taxCategoryUse: { type: object, description: Items plus documents with a line in each category, additionalProperties: { type: integer } }
+                  expenseCategories:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      required: [count, total]
+                      properties: { count: { type: integer }, total: { $ref: '#/components/schemas/Money' } }
+                  paymentAccounts:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      required: [balance, inUse]
+                      properties: { balance: { $ref: '#/components/schemas/Money' }, inUse: { type: boolean } }
   /companies/{companyId}/payment-accounts:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -1110,6 +1315,30 @@ paths:
                   ewb: { type: object, properties: { ok: { type: boolean }, message: { type: string } } }
 
   # ------------------------------------------------------------------ Parties
+  /companies/{companyId}/parties/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Parties]
+      operationId: summarizePartyList
+      summary: How many parties a list's filters match, and what they owe or are owed, in base currency
+      description: Takes the filters of `listParties`. A party in another currency is counted at its latest rate.
+      parameters:
+        - { name: kind, in: query, schema: { $ref: '#/components/schemas/PartyKind' } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, outstanding, overdue, advance]
+                properties:
+                  count: { type: integer }
+                  outstanding: { $ref: '#/components/schemas/Money' }
+                  overdue: { $ref: '#/components/schemas/Money' }
+                  advance: { $ref: '#/components/schemas/Money' }
   /companies/{companyId}/parties:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -1210,7 +1439,93 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
 
+  /companies/{companyId}/parties/import:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Parties]
+      operationId: importParties
+      summary: Create many contacts at once, from a spreadsheet the app has read
+      description: >-
+        Each row is checked as createParty checks it. A row whose GSTIN, or failing that whose name (in any
+        case), matches a contact already there or an earlier row is skipped as a duplicate. With `dryRun`
+        nothing is written and the results say what would happen; otherwise every good row is created in
+        one transaction.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/Party' } }
+                dryRun: { type: boolean, default: false }
+      responses:
+        '200':
+          description: What happened to each row
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+                  skipped: { type: integer }
+                  invalid: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index: { type: integer }
+                        status: { type: string, enum: [created, duplicate, invalid] }
+                        id: { type: string }
+                        issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
+
   # ------------------------------------------------------------------ Catalog
+  /companies/{companyId}/items/import:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Catalog]
+      operationId: importItems
+      summary: Create many items at once, from a spreadsheet the app has read
+      description: >-
+        Each row is checked as createItem checks it (unit, tax category, prices, opening stock).
+        A row whose SKU or barcode is already taken, by an item there or an earlier row, or whose name
+        (in any case) matches one, is skipped as a duplicate. A blank SKU takes the next free number.
+        With `dryRun` nothing is written and the results say what would happen; otherwise every good row
+        is created in one transaction, opening stock posted at the primary branch as createItem does.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/Item' } }
+                dryRun: { type: boolean, default: false }
+      responses:
+        '200':
+          description: What happened to each row
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+                  skipped: { type: integer }
+                  invalid: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index: { type: integer }
+                        status: { type: string, enum: [created, duplicate, invalid] }
+                        id: { type: string }
+                        issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
   /companies/{companyId}/items:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -1221,7 +1536,10 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
         - { name: barcode, in: query, description: 'Exact match, used by the scanner', schema: { type: string } }
         - { name: lowStock, in: query, schema: { type: boolean } }
+        - { name: stock, in: query, description: 'low: in stock but at or under its reorder level; out: tracked and none on hand; tracked: every item that keeps stock; untracked: services and items without stock', schema: { type: string, enum: [low, out, tracked, untracked] } }
         - { name: branchId, in: query, description: Branch for `stockOnHand`, schema: { type: string } }
+        - { name: categoryId, in: query, description: Items in this item category, schema: { type: string } }
+        - { name: brandId, in: query, description: Items of this brand, schema: { type: string } }
         - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
@@ -1291,6 +1609,194 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/item-categories:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Catalog]
+      operationId: listItemCategories
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ItemCategory' } }
+    post:
+      tags: [Catalog]
+      operationId: createItemCategory
+      x-roles: [owner, admin, accountant]
+      description: '`422 ITEM_CATEGORY_EXISTS` when the company already has one by that name.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ItemCategory' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemCategory' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/item-categories/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catalog]
+      operationId: saveItemCategory
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ItemCategory' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemCategory' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Catalog]
+      operationId: removeItemCategory
+      x-roles: [owner, admin, accountant]
+      description: '`409 ITEM_CATEGORY_IN_USE` when items reference it.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/custom-fields:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listCustomFields
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/CustomField' } }
+    post:
+      tags: [Settings]
+      operationId: createCustomField
+      x-roles: [owner, admin]
+      description: '`422 CUSTOM_FIELD_EXISTS` when the record type already has a field by that label.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomField' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomField' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/custom-fields/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveCustomField
+      description: The record type and kind stay as they were; a select can gain choices but not lose one a record holds.
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomField' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomField' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Settings]
+      operationId: removeCustomField
+      description: The field goes; values records held for it are no longer shown. To keep them, mark it inactive instead.
+      x-roles: [owner, admin]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '204': { description: Removed }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /companies/{companyId}/brands:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Catalog]
+      operationId: listBrands
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Brand' } }
+    post:
+      tags: [Catalog]
+      operationId: createBrand
+      x-roles: [owner, admin, accountant]
+      description: '`422 BRAND_EXISTS` when the company already has one by that name.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Brand' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/brands/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catalog]
+      operationId: saveBrand
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Brand' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Catalog]
+      operationId: removeBrand
+      x-roles: [owner, admin, accountant]
+      description: '`409 BRAND_IN_USE` when items reference it.'
+      responses:
+        '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
   /companies/{companyId}/items/{id}/image:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -1319,7 +1825,7 @@ paths:
     get:
       tags: [Documents]
       operationId: listDocuments
-      description: 'Purchase-side kinds (`purchaseOrder`, `goodsReceipt`, `purchaseBill`, `purchaseReturn`) need the `purchases` module.'
+      description: 'Purchase-side kinds (`purchaseOrder`, `goodsReceipt`, `purchaseBill`, `purchaseReturn`, `supplierCreditNote`, `supplierDebitNote`) need the `purchases` module.'
       parameters:
         - name: kind
           in: query
@@ -1333,6 +1839,7 @@ paths:
           explode: false
           schema: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
         - { name: partyId, in: query, schema: { type: string } }
+        - { name: recurring, in: query, description: 'true: only invoices that repeat', schema: { type: boolean } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -1379,6 +1886,90 @@ paths:
               schema: { $ref: '#/components/schemas/BusinessDocument' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/documents/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Documents]
+      operationId: summarizeDocumentList
+      summary: How many documents a list's filters match, what they add up to, and how many are in each status
+      description: |
+        Takes the filters of `listDocuments`, so a paged list can show its count, total and status
+        chips without loading every page. `byStatus` ignores the `status` filter (the chips show every
+        status there is); `count` and `total` apply it. The total is in base currency and leaves out
+        cancelled and rejected documents.
+      parameters:
+        - name: kind
+          in: query
+          style: form
+          explode: false
+          schema: { type: array, items: { $ref: '#/components/schemas/DocumentKind' } }
+        - name: status
+          in: query
+          style: form
+          explode: false
+          schema: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total, byStatus]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  byStatus:
+                    type: array
+                    items:
+                      type: object
+                      required: [status, count, total]
+                      properties:
+                        status: { $ref: '#/components/schemas/DocStatus' }
+                        count: { type: integer }
+                        total: { allOf: [{ $ref: '#/components/schemas/Money' }], description: In base currency }
+  /companies/{companyId}/tds/preview:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Documents]
+      operationId: previewTds
+      x-plan-module: payables
+      summary: The TDS a supplier's bill would keep back, as saving it would work it out
+      description: |
+        Thresholds and catch-up count the deductee's earlier bills in the financial year (by PAN),
+        so the editor doesn't need every bill on the device. Nothing is saved. A company with no TAN
+        deducts nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyId, date, taxable]
+              properties:
+                partyId: { type: string }
+                date: { type: string, format: date }
+                taxable: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "The bill's taxable value, in base currency" }
+                section: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], description: "The bill's own choice; defaults to the supplier's" }
+                documentId: { type: string, description: "The bill being edited, left out of the year so far" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rate, amount]
+                properties:
+                  section: { type: string, description: "The section TDS was worked under; absent when none applies" }
+                  rate: { type: number }
+                  amount: { $ref: '#/components/schemas/Money' }
+                  reason: { type: string }
   /companies/{companyId}/documents/calculate:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -1397,6 +1988,66 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DocumentTotals' }
+  /companies/{companyId}/documents/openings/import:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Documents]
+      operationId: importOpeningDocuments
+      summary: What customers owed, and what was owed to suppliers, invoice by invoice, when the books started here
+      description: >-
+        Each row becomes an openingInvoice (a customer owes it) or openingBill (we owe a supplier), issued
+        under its original number and due date, for the amount still outstanding. They are paid, aged and
+        shown on statements like an invoice or bill, and post only Dr party / Cr Opening balances (or the
+        other way for a bill), never sales, purchases or GST (RULES 6.12). The party is found by GSTIN, or
+        failing that by name in any case, and must be on that side (customer or supplier, or both). A party
+        that already has an opening balance is refused, so nothing is counted twice: clear the balance, or
+        leave its rows out. A number already used for that kind, here or earlier in the batch, is a
+        duplicate. With `dryRun` nothing is written; otherwise every good row is created in one transaction.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  items:
+                    type: object
+                    required: [kind, party, number, date, amount]
+                    properties:
+                      kind: { type: string, enum: [openingInvoice, openingBill] }
+                      party: { type: string, description: GSTIN or name of the customer or supplier }
+                      number: { type: string, minLength: 1, maxLength: 40, description: The invoice or bill number it was raised under }
+                      date: { type: string, format: date }
+                      dueDate: { type: string, format: date }
+                      amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "What is still outstanding on it, in the company's currency" }
+                dryRun: { type: boolean, default: false }
+      responses:
+        '200':
+          description: What happened to each row
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+                  skipped: { type: integer }
+                  invalid: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index: { type: integer }
+                        status: { type: string, enum: [created, duplicate, invalid] }
+                        id: { type: string }
+                        partyName: { type: string }
+                        issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
   /companies/{companyId}/documents/{id}:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -1442,6 +2093,62 @@ paths:
       x-roles: [owner, admin]
       responses:
         '204': { description: Removed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/approvals:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Documents]
+      operationId: listApprovals
+      summary: Documents waiting for an owner or admin to approve them, oldest first
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/BusinessDocument' } }
+  /companies/{companyId}/documents/{id}/approve:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: approveDocument
+      summary: Approves a document waiting for approval and issues it (409 NOT_AWAITING_APPROVAL otherwise)
+      x-roles: [owner, admin]
+      responses:
+        '200':
+          description: Issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/documents/{id}/reject:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Documents]
+      operationId: rejectDocument
+      summary: Sends a document waiting for approval back to its creator as a draft, with why
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Sent back
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
         '409': { $ref: '#/components/responses/Conflict' }
   /companies/{companyId}/documents/{id}/finalize:
     parameters:
@@ -1557,6 +2264,42 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BusinessDocument' }
+  /companies/{companyId}/documents/{id}/recurrence:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Documents]
+      operationId: setDocumentRecurrence
+      summary: Repeat an issued invoice weekly, monthly, quarterly or yearly
+      description: >-
+        The invoice becomes the template: each day the scheduler issues a copy for every date that has
+        fallen due (same customer, lines and prices at the tax rates of the day, due the same number of
+        days after its date), numbered from the series and e-invoiced like any other, and emails it when
+        `autoSend` is on. Counting from the template's date keeps a series on the 31st at month ends.
+        `none` stops it. Only an issued, uncancelled invoice that is not itself a copy can repeat
+        (422 NOT_RECURRABLE).
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recurrence]
+              properties:
+                recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly] }
+                endDate: { type: string, format: date, description: No copy is dated after this }
+                autoSend: { type: boolean, default: false, description: Email each copy to the customer when it is issued }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/documents/{id}/pdf:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -1723,6 +2466,71 @@ paths:
         '409': { description: 'Outside the 24-hour window, or an active e-way bill must be cancelled first' }
         '502': { $ref: '#/components/responses/UpstreamError' }
 
+  # ------------------------------------------------------------------ Compliance: summary
+  /companies/{companyId}/compliance/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Compliance]
+      operationId: getComplianceSummary
+      summary: E-invoice and e-way bill counts for badges and the compliance hub
+      description: |
+        E-invoices by status (a finalised invoice or credit note that must be reported and has no
+        attempt yet counts as pending), e-way bills by status as of now, live bills that run out
+        within 24 hours, and finalised documents that need an e-way bill and have no live one.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [eInvoice, eway, expiringSoon, ewayOutstanding]
+                properties:
+                  eInvoice:
+                    type: object
+                    required: [notApplicable, pending, generated, cancelled, failed]
+                    properties:
+                      notApplicable: { type: integer }
+                      pending: { type: integer }
+                      generated: { type: integer }
+                      cancelled: { type: integer }
+                      failed: { type: integer }
+                  eway:
+                    type: object
+                    required: [active, expired, cancelled]
+                    properties: { active: { type: integer }, expired: { type: integer }, cancelled: { type: integer } }
+                  expiringSoon: { type: integer }
+                  ewayOutstanding: { type: integer }
+
+  /companies/{companyId}/compliance/documents:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Compliance]
+      operationId: listComplianceDocuments
+      summary: The documents behind the compliance register, newest first
+      description: |
+        `need=eInvoice` lists invoices and credit notes that are or must be reported, by e-invoice
+        status (one that must be reported and has no attempt yet is pending). `need=ewayBill` lists
+        finalised documents that need an e-way bill and have no live one.
+      parameters:
+        - { name: need, in: query, required: true, schema: { type: string, enum: [eInvoice, ewayBill] } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/EInvoiceStatus' }, description: For `eInvoice` only }
+        - { name: q, in: query, schema: { type: string }, description: "Number, party or IRN" }
+        - { name: limit, in: query, schema: { type: integer, default: 100, minimum: 1, maximum: 500 } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+
   # ------------------------------------------------------------------ Compliance: e-way bills
   /companies/{companyId}/eway-bills:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
@@ -1733,6 +2541,7 @@ paths:
         - { name: status, in: query, description: '`expired` is derived from `validUpto`', schema: { $ref: '#/components/schemas/EwayBillStatus' } }
         - { name: documentId, in: query, schema: { type: string } }
         - { name: expiringWithinHours, in: query, schema: { type: integer } }
+        - { name: q, in: query, schema: { type: string }, description: "Bill number, document number or consignee" }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -1875,6 +2684,33 @@ paths:
         '502': { $ref: '#/components/responses/UpstreamError' }
 
   # ------------------------------------------------------------------ Payments
+  /companies/{companyId}/payments/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: summarizePaymentList
+      summary: How many payments a list's filters match, and what they add up to in base currency
+      description: Takes the filters of `listPayments`, so a paged list can show its count and total without loading every page.
+      parameters:
+        - { name: direction, in: query, schema: { $ref: '#/components/schemas/PaymentDirection' } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { name: method, in: query, schema: { $ref: '#/components/schemas/PaymentMethod' } }
+        - { name: accountId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
   /companies/{companyId}/payments:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -1975,7 +2811,335 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
 
+  # ------------------------------------------------------------------ Banking
+  /companies/{companyId}/bank-statements/parse:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Banking]
+      operationId: parseBankStatement
+      summary: Read an Excel (.xlsx) or CSV bank statement into rows of text
+      description: |
+        The first worksheet of an .xlsx (dates as dd/mm/yyyy, numbers as plain text), or a CSV
+        (UTF-8). At most 5 MB once decoded. The app maps the rows to lines with core's
+        `readStatement` and imports them with `importBankStatement`. A legacy .xls gets
+        422 `UNSUPPORTED_FILE`.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, contentBase64]
+              properties:
+                fileName: { type: string, maxLength: 200 }
+                contentBase64: { type: string, description: 'The file, base64 encoded' }
+      responses:
+        '200':
+          description: The rows, as text
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rows]
+                properties:
+                  rows: { type: array, items: { type: array, items: { type: string } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/payment-accounts/{id}/bank-statements:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: importBankStatement
+      summary: Import a bank statement's lines into a bank account
+      description: |
+        Lines already imported on this account (same date, amount, narration and running balance)
+        are skipped as duplicates. New lines are matched to the account's payments, expenses and
+        posted vouchers where there is no doubt (`autoMatched`). With `dryRun` nothing is written
+        and the lines come back flagged `duplicate` (200). Only a bank account
+        (422 `NOT_A_BANK_ACCOUNT`), in its own currency.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankStatementImport' }
+      responses:
+        '200':
+          description: Dry run; nothing written
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementImportResult' }
+        '201':
+          description: Imported
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementImportResult' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/payment-accounts/{id}/bank-lines:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: listBankLines
+      summary: A bank account's statement lines, newest first
+      description: A matched line carries `match`; an unmatched one up to three `suggestions`.
+      x-plan-module: books
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/BankLineStatus' } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/BankStatementLine' } }
+  /companies/{companyId}/payment-accounts/{id}/bank-lines/summary:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: summarizeBankLines
+      summary: How many of a bank account's lines are matched, waiting and excluded, and the latest statement balance
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankLineSummary' }
+  /companies/{companyId}/payment-accounts/{id}/reconciliation:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Banking]
+      operationId: getBankReconciliation
+      summary: Bank reconciliation statement as of a day
+      x-plan-module: books
+      parameters:
+        - { name: asOf, in: query, description: Defaults to today, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankReconciliation' }
+  /companies/{companyId}/bank-lines/{id}/match:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: matchBankLine
+      summary: Match a line to the payment, expense or voucher it is
+      description: |
+        The record must be on the line's account with the same signed amount
+        (422 `MATCH_AMOUNT_DIFFERS`), and not matched to another line (409 `ALREADY_MATCHED`).
+        A matched line is unmatched first.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, id]
+              properties:
+                type: { $ref: '#/components/schemas/BankMatchType' }
+                id: { type: string }
+      responses:
+        '200':
+          description: Matched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Banking]
+      operationId: unmatchBankLine
+      summary: Undo a line's match
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Unmatched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+  /companies/{companyId}/bank-lines/{id}/exclude:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: excludeBankLine
+      summary: Set a line aside as needing no record in the books
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Excluded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+  /companies/{companyId}/bank-lines/{id}/include:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: includeBankLine
+      summary: Bring an excluded line back, unmatched
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Included
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatementLine' }
+  /companies/{companyId}/bank-lines/{id}/payment:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: createPaymentFromBankLine
+      summary: Record the payment a line is, and match it
+      description: |
+        Money in is a payment received, money out a payment made, on the line's date, for its
+        amount, through its account, with its reference. Same checks as
+        `createPayment` (open period, party kind, allocations; money paid needs the payables module).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyId]
+              properties:
+                partyId: { type: string }
+                method: { allOf: [{ $ref: '#/components/schemas/PaymentMethod' }], description: Defaults to bank }
+                allocations: { type: array, items: { $ref: '#/components/schemas/PaymentAllocation' } }
+                notes: { type: string }
+      responses:
+        '201':
+          description: Recorded and matched
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [line, payment]
+                properties:
+                  line: { $ref: '#/components/schemas/BankStatementLine' }
+                  payment: { $ref: '#/components/schemas/Payment' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/bank-lines/{id}/expense:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Banking]
+      operationId: createExpenseFromBankLine
+      summary: Record a debit line as an expense, and match it
+      description: Only money out (422 `NOT_MONEY_OUT`). The expense takes the line's date, amount, account and reference; needs the expenses module.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoryId]
+              properties:
+                categoryId: { type: string }
+                supplierId: { type: string }
+                taxCategoryId: { type: string }
+                notes: { type: string }
+      responses:
+        '201':
+          description: Recorded and matched
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [line, expense]
+                properties:
+                  line: { $ref: '#/components/schemas/BankStatementLine' }
+                  expense: { $ref: '#/components/schemas/Expense' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
   # ------------------------------------------------------------------ Expenses
+  /companies/{companyId}/expenses/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Expenses]
+      operationId: summarizeExpenseList
+      x-plan-module: expenses
+      summary: How many expenses a list's filters match, what they add up to, and the split by category
+      description: Takes the filters of `listExpenses`. Amounts are in base currency.
+      parameters:
+        - { name: categoryId, in: query, schema: { type: string } }
+        - { name: supplierId, in: query, schema: { type: string } }
+        - { name: billable, in: query, schema: { type: boolean } }
+        - { name: recurring, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total, tax, byCategory]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  tax: { $ref: '#/components/schemas/Money' }
+                  byCategory:
+                    type: array
+                    items:
+                      type: object
+                      required: [categoryId, total]
+                      properties: { categoryId: { type: string }, total: { $ref: '#/components/schemas/Money' } }
   /companies/{companyId}/expenses:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -1987,6 +3151,9 @@ paths:
         - { name: supplierId, in: query, schema: { type: string } }
         - { name: billable, in: query, schema: { type: boolean } }
         - { name: recurring, in: query, schema: { type: boolean } }
+        - { name: unrecovered, in: query, description: Only billable expenses no live invoice has recovered yet, schema: { type: boolean } }
+        - { name: forCustomer, in: query, description: Billable to this customer or to no one in particular, schema: { type: string } }
+        - { name: exceptDocumentId, in: query, description: "With `unrecovered`: this document's own lines don't count as recovering", schema: { type: string } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -2057,6 +3224,274 @@ paths:
       responses:
         '204': { description: Removed }
 
+  /companies/{companyId}/ledger-accounts:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: listLedgerAccounts
+      x-plan-module: books
+      parameters:
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/LedgerAccount' } }
+    post:
+      tags: [Books]
+      operationId: createLedgerAccount
+      description: An account the business adds itself. System accounts and those mirroring parties, cash and bank accounts and expense categories are derived and need no record. An account a voucher uses cannot be removed (409 ACCOUNT_IN_USE).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LedgerAccount' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerAccount' }
+  /companies/{companyId}/ledger-accounts/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Books]
+      operationId: getLedgerAccount
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerAccount' }
+    put:
+      tags: [Books]
+      operationId: saveLedgerAccount
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LedgerAccount' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerAccount' }
+    delete:
+      tags: [Books]
+      operationId: removeLedgerAccount
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      responses:
+        '204': { description: Removed }
+
+  /companies/{companyId}/cost-centres:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: listCostCentres
+      x-plan-module: books
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/CostCentre' } }
+    post:
+      tags: [Books]
+      operationId: createCostCentre
+      description: A project, department or the like. Documents, expenses and voucher lines can carry one, for profit by cost centre. One in use cannot be removed (409 COST_CENTRE_IN_USE).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CostCentre' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CostCentre' }
+  /companies/{companyId}/cost-centres/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Books]
+      operationId: getCostCentre
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CostCentre' }
+    put:
+      tags: [Books]
+      operationId: saveCostCentre
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CostCentre' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CostCentre' }
+    delete:
+      tags: [Books]
+      operationId: removeCostCentre
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      responses:
+        '204': { description: Removed }
+
+  /companies/{companyId}/books/{view}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - name: view
+        in: path
+        required: true
+        schema: { type: string, enum: [trial-balance, profit-loss, balance-sheet, ledger, day-book, cost-centres, accounts, integrity] }
+    get:
+      tags: [Books]
+      operationId: getBooksView
+      x-plan-module: books
+      summary: One of the books' statements, worked out from the whole book
+      description: |
+        The same `@esmart/core` ledger functions the app ran on the device, on the server's book:
+        `trial-balance` (core trialBalance over from–to), `profit-loss` (ProfitAndLoss over from–to), `balance-sheet` (BalanceSheet as of `to`), `ledger`
+        (one account's LedgerStatement over from–to; needs `account`), `day-book` (DayBookEntry[] over
+        from–to), `cost-centres` (CostCentreRow[] over from–to) and `accounts` (the chart of accounts,
+        the book it names accounts from, and each account's balance as of `to`) and `integrity` (IntegrityCheck[] as of
+        `to`: the ledger against the records it comes from). `profit-loss` and `balance-sheet` take `breakdown`
+        (ProfitAndLossColumns / BalanceSheetColumns, a column per month or quarter of from–to) or `compare` (two
+        columns: the range and the one before it, or the same dates last year). Amounts are base-currency
+        paise, as core gives them. The books cover every branch, so a user limited to some is refused.
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: account, in: query, description: "The account key, for `ledger`", schema: { type: string } }
+        - { name: breakdown, in: query, description: "For `profit-loss` and `balance-sheet`: a column per month or quarter", schema: { type: string, enum: [month, quarter] } }
+        - { name: compare, in: query, description: "For `profit-loss` and `balance-sheet`: beside the period before, or the same dates last year", schema: { type: string, enum: [previousPeriod, previousYear] } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /companies/{companyId}/vouchers:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: listVouchers
+      x-plan-module: books
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, posted] } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Voucher' } }
+    post:
+      tags: [Books]
+      operationId: createVoucher
+      description: The server assigns `number` from the kind's series. A voucher sent with status `draft` is kept out of the books and takes no number (its `number` is its id) until a save sets status `posted`; a draft may be unbalanced or have one line, and is not refused in a closed period. A posted voucher must follow every rule. Debits must equal credits; a contra moves money only between cash and bank accounts; a GST journal touches a GST ledger; a TDS challan clears TDS payable. Refused in a closed period (409 PERIOD_LOCKED).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Voucher' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Voucher' }
+  /companies/{companyId}/vouchers/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Books]
+      operationId: getVoucher
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Voucher' }
+    put:
+      tags: [Books]
+      operationId: saveVoucher
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Voucher' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Voucher' }
+    delete:
+      tags: [Books]
+      operationId: removeVoucher
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      responses:
+        '204': { description: Removed }
+
   # ------------------------------------------------------------------ Inventory
   /companies/{companyId}/stock/levels:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
@@ -2069,6 +3504,7 @@ paths:
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { name: itemId, in: query, schema: { type: string } }
         - { name: lowStock, in: query, description: Only items at or below `reorderLevel`, schema: { type: boolean } }
+        - { name: asOf, in: query, description: "What a document dated this day can take out: stock by the end of it, never more than the lowest on a later day", schema: { type: string, format: date } }
       responses:
         '200':
           description: OK
@@ -2088,6 +3524,38 @@ paths:
                         reorderLevel: { type: number }
                         low: { type: boolean }
                         value: { $ref: '#/components/schemas/Money' }
+  /companies/{companyId}/items/{id}/ledger:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }, { $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Inventory]
+      operationId: getItemLedger
+      x-plan-module: inventory
+      summary: One item's stock on hand, value and movements with a running balance
+      description: The movements come newest first, at most 200; the balance after each is counted from the first.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [onHand, value, low, soldQuantity, rows]
+                properties:
+                  onHand: { type: number }
+                  value: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "Weighted-average value of what is on hand, in base currency" }
+                  low: { type: boolean }
+                  soldQuantity: { type: number, description: "Sold on finalised invoices, all time" }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      required: [movement, delta, balance]
+                      properties:
+                        movement: { $ref: '#/components/schemas/StockMovement' }
+                        delta: { type: number }
+                        balance: { type: number }
   /companies/{companyId}/stock/movements:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -2102,6 +3570,7 @@ paths:
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
@@ -2375,6 +3844,34 @@ paths:
         '202': { description: Queued }
 
   # ------------------------------------------------------------------ Reports
+  /companies/{companyId}/report-data/{reportKey}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - name: reportKey
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, advances, profit, tds-register, tds-payable, tds-receivable, tds-26q, tds-challans, msme-payables, gstr1]
+    get:
+      tags: [Reports]
+      operationId: getReportData
+      summary: A report as the app shows it, worked out on the server
+      description: |
+        The same `@esmart/core` reports function the app ran on the device, on the server's records
+        (the whole book up to `to`, so balances carry their history), with the same filters. Shaped as
+        core returns it, amounts as Money in base currency. A report outside the plan is refused.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { name: partyId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
   /companies/{companyId}/reports/{reportKey}:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -2383,7 +3880,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, profit]
+          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, profit, tds-register, trial-balance, msme-payables]
     get:
       tags: [Reports]
       operationId: getReport
@@ -2394,7 +3891,9 @@ paths:
         The response schema depends on `reportKey`: sales/purchase-summary →
         TransactionSummary, expense-summary → ExpenseSummary, receivables/payables →
         AgingReport, stock → StockReport, tax-summary → TaxSummary, payments →
-        PaymentSummary, profit → ProfitSnapshot.
+        PaymentSummary, profit → ProfitSnapshot, tds-register → TdsRegister,
+        trial-balance → TrialBalance (the whole books, not only the period's documents),
+        msme-payables → MsmePayables (as of `to`; `from` is ignored).
       parameters:
         - { name: from, in: query, required: true, schema: { type: string, format: date } }
         - { name: to, in: query, required: true, schema: { type: string, format: date } }
@@ -2414,7 +3913,10 @@ paths:
                   - $ref: '#/components/schemas/StockReport'
                   - $ref: '#/components/schemas/TaxSummary'
                   - $ref: '#/components/schemas/PaymentSummary'
+                  - $ref: '#/components/schemas/MsmePayables'
                   - $ref: '#/components/schemas/ProfitSnapshot'
+                  - $ref: '#/components/schemas/TdsRegister'
+                  - $ref: '#/components/schemas/TrialBalance'
             text/csv:
               schema: { type: string }
             application/pdf:
@@ -2422,6 +3924,333 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   # ------------------------------------------------------------------ GST
+  /companies/{companyId}/gst/portal-sessions:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [GST]
+      operationId: listGstPortalSessions
+      summary: The business's GSTINs and whether each is connected to the GST portal
+      x-roles: [owner, admin, accountant]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/GstPortalSession' } } } }
+    post:
+      tags: [GST]
+      operationId: connectGstPortal
+      summary: Opens the taxpayer's GST portal session with the OTP sent to their registered phone
+      description: >-
+        The taxpayer switches API access on in the portal (Profile → Manage API Access) first. The
+        session lasts six hours and refreshes on its own for as long as they chose there (up to 30 days).
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, otp]
+              properties:
+                gstin: { type: string }
+                otp: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: Connected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstPortalSession' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/gst/portal-sessions/otp:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [GST]
+      operationId: requestGstPortalOtp
+      summary: Asks the GST portal to send an OTP to the taxpayer's registered phone
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, username]
+              properties:
+                gstin: { type: string }
+                username: { type: string, description: The GST portal username }
+      responses:
+        '202': { description: OTP sent }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/gst/portal-sessions/{gstin}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: gstin, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [GST]
+      operationId: disconnectGstPortal
+      x-roles: [owner, admin, accountant]
+      responses:
+        '204': { description: Disconnected }
+  /companies/{companyId}/gst/returns:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [GST]
+      operationId: listGstReturns
+      summary: GSTR-1 and GSTR-3B for a financial year, as recorded here and, when connected, as the portal tracks them
+      x-roles: [owner, admin, accountant]
+      parameters:
+        - { name: fy, in: query, required: true, schema: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$', example: '2026-27' } }
+        - { name: gstin, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/GstReturn' } }, portal: { type: boolean, description: Whether the portal was asked } } }
+
+  /companies/{companyId}/gst/gstr2b:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [GST]
+      operationId: getGstr2b
+      summary: A period's GSTR-2B matched against the purchase register
+      x-roles: [owner, admin, accountant]
+      x-plan-module: purchases
+      parameters:
+        - { name: gstin, in: query, required: true, schema: { type: string } }
+        - { name: period, in: query, required: true, schema: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$', example: '092026' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Gstr2bReconciliation' }
+  /companies/{companyId}/gst/gstr2b/fetch:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [GST]
+      operationId: fetchGstr2b
+      summary: Downloads a period's GSTR-2B through the GST portal session, keeping decisions already made
+      description: 409 GSTR2B_NOT_GENERATED until GSTN has made it (the 14th of the next month, for most).
+      x-roles: [owner, admin, accountant]
+      x-plan-module: purchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+      responses:
+        '200':
+          description: Downloaded and matched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Gstr2bReconciliation' }
+  /companies/{companyId}/gst/gstr2b/claim:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [GST]
+      operationId: claimGstr2b
+      summary: Claims the period's credit on every matched bill (GSTR-3B reads it from there)
+      x-roles: [owner, admin, accountant]
+      x-plan-module: purchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+      responses:
+        '200':
+          description: Claimed
+          content:
+            application/json:
+              schema: { type: object, properties: { claimed: { type: integer } } }
+  /companies/{companyId}/gst/gstr2b/lines/{id}/decision:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [GST]
+      operationId: decideGstr2bLine
+      summary: A person's call on one line of 2B
+      x-roles: [owner, admin, accountant]
+      x-plan-module: purchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [accepted, notOurs, claimLater, undecided] }
+                documentId: { type: string, description: 'With accepted: the bill this line is, when the matcher did not find it' }
+      responses:
+        '204': { description: Recorded }
+
+  /companies/{companyId}/gst/gstr3b:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [GST]
+      operationId: getGstr3b
+      summary: A period's GSTR-3B worked out from the books, with the tax set off from credit and cash
+      x-roles: [owner, admin, accountant]
+      parameters:
+        - { name: gstin, in: query, required: true, schema: { type: string } }
+        - { name: period, in: query, required: true, schema: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Gstr3bView' }
+  /companies/{companyId}/gst/returns/{returnType}/save:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: returnType, in: path, required: true, schema: { type: string, enum: [gstr1, gstr3b] } }
+    post:
+      tags: [GST]
+      operationId: saveGstReturn
+      summary: Saves the period’s return to the GST portal (again, if it changed)
+      description: >-
+        GSTR-1 from the period’s sales; GSTR-3B from the books, with the set-off. Saving replaces
+        what was saved before. 409 RETURN_FILED once filed.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstReturn' }
+  /companies/{companyId}/gst/returns/{returnType}/offset:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: returnType, in: path, required: true, schema: { type: string, enum: [gstr1, gstr3b] } }
+    post:
+      tags: [GST]
+      operationId: offsetGstReturn
+      summary: 'GSTR-3B: sets off the liability from credit and cash, as the saved return says'
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstReturn' }
+  /companies/{companyId}/gst/returns/{returnType}/proceed:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: returnType, in: path, required: true, schema: { type: string, enum: [gstr1, gstr3b] } }
+    post:
+      tags: [GST]
+      operationId: proceedGstReturn
+      summary: 'GSTR-1: freezes the saved data for filing'
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstReturn' }
+  /companies/{companyId}/gst/returns/{returnType}/evc:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: returnType, in: path, required: true, schema: { type: string, enum: [gstr1, gstr3b] } }
+    post:
+      tags: [GST]
+      operationId: requestGstReturnEvc
+      summary: Sends the EVC OTP to the authorised signatory’s phone
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+                pan: { type: string, description: 'The authorised signatory’s PAN; defaults to the one in the GSTIN' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstReturn' }
+  /companies/{companyId}/gst/returns/{returnType}/file:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: returnType, in: path, required: true, schema: { type: string, enum: [gstr1, gstr3b] } }
+    post:
+      tags: [GST]
+      operationId: fileGstReturn
+      summary: Files the return with the EVC OTP. Cannot be undone.
+      description: >-
+        503 FILING_DISABLED until GST_FILING_ENABLED is on. GSTR-3B needs the period’s GSTR-1 filed
+        first. The portal is asked first whether it is already filed, so a return is never filed twice;
+        an answer lost on the way is settled by the portal’s tracker. Filing GSTR-3B closes the books
+        through the period and posts the set-off as a GST journal.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period, otp]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+                pan: { type: string }
+                otp: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstReturn' }
+
   /companies/{companyId}/gst/gstr1:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -2469,6 +4298,397 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Dashboard' }
+  /companies/{companyId}/hubs/sales:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getSalesHub
+      summary: Everything the Sales tab shows, in one call
+      description: |
+        The period's invoicing and collections (this month unless `range` says otherwise, with the
+        period before when `compare=previous`), its sales trend, what customers owe (as the receivables
+        aging works it out), how many of each sales document there are, the top five customers by value
+        invoiced in the period, and the six latest invoices. Fields named `…ThisMonth` hold the period's
+        figure. Amounts are in base currency; drafts and cancelled invoices count
+        towards nothing but the document counts.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [period, invoicedThisMonth, invoicesThisMonth, collectedThisMonth, outstanding, overdue, counts, paymentsReceived, eInvoicesGenerated, topCustomers, salesTrend, recentInvoices]
+                properties:
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  invoicedThisMonth: { $ref: '#/components/schemas/Money', description: 'In the period (named for the default, this month)' }
+                  invoicesThisMonth: { type: integer, description: Invoices issued in the period }
+                  collectedThisMonth: { $ref: '#/components/schemas/Money', description: Received in the period }
+                  previous:
+                    type: object
+                    description: The same figures for the period before, with `compare=previous`
+                    required: [invoiced, invoices, collected]
+                    properties:
+                      invoiced: { $ref: '#/components/schemas/Money' }
+                      invoices: { type: integer }
+                      collected: { $ref: '#/components/schemas/Money' }
+                  salesTrend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+                  outstanding:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer, description: Open invoices and debit notes } }
+                  overdue:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer } }
+                  counts:
+                    type: object
+                    description: Documents of each sales kind, in every status
+                    additionalProperties: { type: integer }
+                  paymentsReceived: { type: integer }
+                  eInvoicesGenerated: { type: integer }
+                  topCustomers: { type: array, description: The five who were invoiced most in the period, items: { $ref: '#/components/schemas/PartyTotal' } }
+                  recentInvoices: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+  /companies/{companyId}/hubs/purchases:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getPurchasesHub
+      x-plan-module: purchases
+      summary: Everything the Purchases tab shows, in one call
+      description: |
+        The period's bills and expenses (this month unless `range` says otherwise, with the period
+        before when `compare=previous`), what the business owes suppliers (as the payables aging works
+        it out), how many of each purchase document there are, the period's expenses by category with
+        the Expenses tab's figures, and the six latest bills. Fields named `…ThisMonth` hold the
+        period's figure. Amounts are in base currency. The expense figures are left
+        out on a plan without expenses.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [period, billedThisMonth, payable, overdue, counts, paymentsMade, recentBills]
+                properties:
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  billedThisMonth: { $ref: '#/components/schemas/Money', description: 'In the period (named for the default, this month)' }
+                  expensesThisMonth: { $ref: '#/components/schemas/Money', description: In the period }
+                  previous:
+                    type: object
+                    description: The same figures for the period before, with `compare=previous`
+                    required: [billed]
+                    properties:
+                      billed: { $ref: '#/components/schemas/Money' }
+                      expenses: { $ref: '#/components/schemas/Money' }
+                  expenseInsights:
+                    type: object
+                    description: The Expenses tab, for the period. Left out on a plan without expenses.
+                    required: [count, tax, itcEligibleTax, billable, trend, topSuppliers, upcomingRecurring]
+                    properties:
+                      count: { type: integer }
+                      tax: { $ref: '#/components/schemas/Money', description: GST on the period's expenses }
+                      itcEligibleTax: { $ref: '#/components/schemas/Money', description: The part of that tax the business can claim as credit }
+                      billable: { $ref: '#/components/schemas/Money', description: Spent on customers' behalf, to be recovered on an invoice }
+                      trend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+                      topSuppliers: { type: array, description: The five paid most, items: { $ref: '#/components/schemas/PartyTotal' } }
+                      upcomingRecurring:
+                        type: array
+                        description: Recurring expenses due in the next 30 days, soonest first
+                        items:
+                          type: object
+                          required: [id, nextDate, amount, category, recurrence]
+                          properties:
+                            id: { type: string }
+                            nextDate: { type: string, format: date }
+                            amount: { $ref: '#/components/schemas/Money' }
+                            category: { type: string }
+                            description: { type: string }
+                            recurrence: { type: string, enum: [weekly, monthly, quarterly, yearly] }
+                  payable:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer, description: Open bills and supplier debit notes } }
+                  overdue:
+                    type: object
+                    required: [amount, count]
+                    properties: { amount: { $ref: '#/components/schemas/Money' }, count: { type: integer } }
+                  counts:
+                    type: object
+                    description: Documents of each purchase kind, in every status
+                    additionalProperties: { type: integer }
+                  expenses: { type: integer }
+                  paymentsMade: { type: integer }
+                  expensesByCategory:
+                    type: array
+                    description: In the period, largest first
+                    items:
+                      type: object
+                      required: [categoryId, name, total]
+                      properties: { categoryId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
+                  recentBills: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+  /companies/{companyId}/hubs/home:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getHomeHub
+      summary: Everything the Home tab shows, in one call
+      description: |
+        The period's sales, collections, expenses and profit (this month unless `range` says
+        otherwise, with the period before when `compare=previous`), the sales trend and cash in and out
+        at the chosen grain, invoices by status, cash and bank balances, stock health, the latest money
+        in and out, receivables (with the four most overdue invoices) and payables as the aging works
+        them out, counts that need attention, and the five latest invoices. Fields named `…ThisMonth`
+        hold the period's figure; profit is the profit report's. Amounts are in base currency. Expense, payable and
+        stock figures are left out on a plan without them.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [period, salesThisMonth, invoicesThisMonth, collectedThisMonth, salesTrend, cashFlow, invoiceStatus, cash, moneyMovement, receivable, overdueInvoices, draftInvoices, openQuotes, recentInvoices, firstRun]
+                properties:
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  salesThisMonth: { $ref: '#/components/schemas/Money', description: 'In the period (named for the default, this month)' }
+                  invoicesThisMonth: { type: integer }
+                  collectedThisMonth: { $ref: '#/components/schemas/Money' }
+                  expensesThisMonth: { $ref: '#/components/schemas/Money' }
+                  expenseEntriesThisMonth: { type: integer }
+                  profit: { $ref: '#/components/schemas/Money', description: 'Net profit as the profit report gives it for the same period and branch. Left out on a plan without expenses.' }
+                  previous:
+                    type: object
+                    description: The same figures for the period before, with `compare=previous`
+                    required: [sales, invoices, collected]
+                    properties:
+                      sales: { $ref: '#/components/schemas/Money' }
+                      invoices: { type: integer }
+                      collected: { $ref: '#/components/schemas/Money' }
+                      expenses: { $ref: '#/components/schemas/Money' }
+                      profit: { $ref: '#/components/schemas/Money' }
+                  cashFlow: { type: array, description: 'Money into and out of cash and bank per trend bucket: receipts, payments, expenses and vouchers; transfers between own accounts left out', items: { $ref: '#/components/schemas/CashFlowPoint' } }
+                  invoiceStatus: { type: array, description: "The period's invoices by the status they're in today", items: { $ref: '#/components/schemas/StatusCount' } }
+                  cash:
+                    type: object
+                    description: What each cash and bank account holds now. The accounts are the company's, whichever branch is chosen.
+                    required: [total, accounts]
+                    properties:
+                      total: { $ref: '#/components/schemas/Money' }
+                      accounts:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, name, type, balance]
+                          properties:
+                            id: { type: string }
+                            name: { type: string }
+                            type: { type: string }
+                            balance: { $ref: '#/components/schemas/Money' }
+                  inventory:
+                    type: object
+                    description: Stock health now. Left out on a plan without inventory.
+                    required: [value, tracked, low, out, dead]
+                    properties:
+                      value: { $ref: '#/components/schemas/Money', description: At weighted-average cost }
+                      tracked: { type: integer }
+                      low: { type: integer, description: 'At or below the reorder level, not yet out' }
+                      out: { type: integer }
+                      dead: { type: integer, description: 'In stock, nothing taken out in 90 days' }
+                      deadValue: { $ref: '#/components/schemas/Money' }
+                  moneyMovement: { type: array, description: "The period's latest ten receipts, payments and expenses, newest first", items: { $ref: '#/components/schemas/MoneyMovement' } }
+                  salesTrend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+                  receivable:
+                    type: object
+                    required: [total, overdue, dueSoon, overdueCount, buckets]
+                    properties:
+                      total: { $ref: '#/components/schemas/Money' }
+                      overdue: { $ref: '#/components/schemas/Money' }
+                      dueSoon: { $ref: '#/components/schemas/Money', description: Due within the next seven days }
+                      overdueCount: { type: integer }
+                      buckets:
+                        type: array
+                        items:
+                          type: object
+                          required: [key, amount, count]
+                          properties:
+                            key: { type: string, enum: [current, d1_30, d31_60, d61_90, d90plus] }
+                            amount: { $ref: '#/components/schemas/Money' }
+                            count: { type: integer }
+                  overdueInvoices:
+                    type: array
+                    description: The four most overdue
+                    items:
+                      type: object
+                      required: [document, daysOverdue]
+                      properties: { document: { $ref: '#/components/schemas/DocumentSummary' }, daysOverdue: { type: integer } }
+                  payable:
+                    type: object
+                    required: [total, overdue, count]
+                    properties: { total: { $ref: '#/components/schemas/Money' }, overdue: { $ref: '#/components/schemas/Money' }, count: { type: integer } }
+                  lowStockCount: { type: integer }
+                  draftInvoices: { type: integer }
+                  openQuotes: { type: integer, description: Quotes sent and not yet answered }
+                  recentInvoices: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
+                  firstRun: { type: boolean, description: 'No invoices, payments or expenses yet' }
+  /companies/{companyId}/hubs/accounts:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getAccountsHub
+      x-plan-module: books
+      summary: Everything the Accounts & P&L tab shows, in one call
+      description: |
+        The period's profit (as the profit report gives it), cash in and out of cash and bank by kind,
+        the GST position, and, for a user who sees every branch, the balance sheet at the period's end
+        and the accounts that moved most. The books cover every branch, so a user limited to some gets
+        `books: false` and no balance sheet or account movement.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [period, profit, profitTrend, cash, tax, books]
+                properties:
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  profit: { $ref: '#/components/schemas/ProfitFigures' }
+                  previousProfit: { $ref: '#/components/schemas/ProfitFigures' }
+                  profitTrend: { type: array, description: Net profit per trend bucket, items: { $ref: '#/components/schemas/MonthValue' } }
+                  cash:
+                    type: object
+                    description: Direct-method cash movement. Opening and closing only without a branch, as the accounts are the company's.
+                    required: [inflow, outflow, net, receipts, payments, expenses, tax, other]
+                    properties:
+                      opening: { $ref: '#/components/schemas/Money' }
+                      inflow: { $ref: '#/components/schemas/Money' }
+                      outflow: { $ref: '#/components/schemas/Money' }
+                      net: { $ref: '#/components/schemas/Money' }
+                      closing: { $ref: '#/components/schemas/Money' }
+                      receipts: { $ref: '#/components/schemas/Money', description: From customers and receipt vouchers }
+                      payments: { $ref: '#/components/schemas/Money', description: To suppliers and others (negative) }
+                      expenses: { $ref: '#/components/schemas/Money', description: Negative }
+                      tax: { $ref: '#/components/schemas/Money', description: TDS challans and GST payments (negative) }
+                      other: { $ref: '#/components/schemas/Money', description: Other vouchers }
+                  tax:
+                    type: object
+                    description: As the tax summary report gives it for the period
+                    required: [output, input, netPayable]
+                    properties:
+                      output: { $ref: '#/components/schemas/Money', description: GST on sales }
+                      input: { $ref: '#/components/schemas/Money', description: GST on purchases and expenses }
+                      netPayable: { $ref: '#/components/schemas/Money' }
+                  books: { type: boolean, description: Whether the user sees the books (every branch) }
+                  balanceSheet:
+                    type: object
+                    required: [asOf, assets, liabilities, totalAssets, totalLiabilities, currentProfit]
+                    properties:
+                      asOf: { type: string, format: date }
+                      assets: { type: array, items: { type: object, required: [heading, total], properties: { heading: { type: string }, total: { $ref: '#/components/schemas/Money' } } } }
+                      liabilities: { type: array, items: { type: object, required: [heading, total], properties: { heading: { type: string }, total: { $ref: '#/components/schemas/Money' } } } }
+                      totalAssets: { $ref: '#/components/schemas/Money' }
+                      totalLiabilities: { $ref: '#/components/schemas/Money' }
+                      currentProfit: { $ref: '#/components/schemas/Money', description: The year's profit so far, as the books give it }
+                  accountMovement:
+                    type: array
+                    description: The eight accounts with the most debits and credits in the period
+                    items:
+                      type: object
+                      required: [account, name, group, opening, debit, credit, closing]
+                      properties:
+                        account: { type: string }
+                        name: { type: string }
+                        group: { type: string }
+                        opening: { $ref: '#/components/schemas/Money' }
+                        debit: { $ref: '#/components/schemas/Money' }
+                        credit: { $ref: '#/components/schemas/Money' }
+                        closing: { $ref: '#/components/schemas/Money' }
+  /companies/{companyId}/hubs/compliance:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getComplianceHub
+      summary: What's due to the tax department, and where the credit stands
+      description: |
+        Returns and deposits due in the 45 days behind and 60 ahead (GSTR-1 or IFF and GSTR-3B or
+        PMT-06 for each GSTIN, by its filing frequency, and the TDS deposit for a business with a TAN),
+        with whether each was filed as recorded here; the last month's GSTR-2B against the purchase
+        register (on a plan with purchases); and the TDS still to deposit (for a user who sees the books).
+        Informational: it files nothing.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [calendar]
+                properties:
+                  calendar: { type: array, items: { $ref: '#/components/schemas/FilingDue' } }
+                  itc:
+                    type: object
+                    description: The latest period fetched in the last three months, or last month's when none is
+                    required: [gstin, period, fetched]
+                    properties:
+                      gstin: { type: string }
+                      period: { type: string, description: MMYYYY }
+                      fetched: { type: boolean }
+                      lines: { type: integer }
+                      matched: { type: integer, description: 'Matched exactly, within tolerance or by hand, or claimed' }
+                      mismatched: { type: integer, description: Partly matched or only probably }
+                      missingInBooks: { type: integer, description: On 2B with no bill recorded }
+                      missingIn2b: { type: integer, description: Bills the suppliers haven't reported }
+                      missingIn2bTax: { $ref: '#/components/schemas/Money', description: Tax on those bills, not yet claimable }
+                      claimableTax: { $ref: '#/components/schemas/Money' }
+                  tdsDue:
+                    type: object
+                    required: [total, overdue, rows]
+                    properties:
+                      total: { $ref: '#/components/schemas/Money' }
+                      overdue: { $ref: '#/components/schemas/Money' }
+                      rows:
+                        type: array
+                        items:
+                          type: object
+                          required: [section, month, balance, dueDate, overdue]
+                          properties:
+                            section: { type: string }
+                            month: { type: string, description: yyyy-mm deducted }
+                            balance: { $ref: '#/components/schemas/Money' }
+                            dueDate: { type: string, format: date }
+                            overdue: { type: boolean }
   /companies/{companyId}/search:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -2487,7 +4707,7 @@ paths:
                 type: object
                 properties:
                   parties: { type: array, items: { $ref: '#/components/schemas/Party' } }
-                  items: { type: array, items: { $ref: '#/components/schemas/Item' } }
+                  items: { type: array, items: { $ref: '#/components/schemas/ItemWithStock' } }
                   documents: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
                   payments: { type: array, items: { $ref: '#/components/schemas/Payment' } }
 
@@ -2609,6 +4829,7 @@ paths:
         - { name: entityType, in: query, schema: { type: string } }
         - { name: entityId, in: query, schema: { type: string } }
         - { name: actorId, in: query, schema: { type: string } }
+        - { name: q, in: query, description: "Action, record or who did it", schema: { type: string } }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
         - { $ref: '#/components/parameters/Limit' }
@@ -2812,6 +5033,13 @@ paths:
         - { name: since, in: query, description: Cursor from the previous pull; omit for a full snapshot, schema: { type: string } }
         - { name: companyId, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer, default: 500, maximum: 2000 } }
+        - name: entityTypes
+          in: query
+          description: "Snapshot only: these entity types in full (e.g. the setup a device needs to work). With neither this nor `changedSince`, every type is sent in full; changes after a cursor always cover every type."
+          style: form
+          explode: false
+          schema: { type: array, items: { type: string } }
+        - { name: changedSince, in: query, description: "Snapshot only: other entity types too, but only those whose latest change is at or after this", schema: { type: string, format: date-time } }
       responses:
         '200':
           description: OK
@@ -3023,6 +5251,85 @@ paths:
   # Cross-tenant routes for platform operators (`users.platform_role`).
   # `x-platform-roles` replaces `x-roles` here: tenant roles never apply, and a
   # caller without a platform role gets 403 PLATFORM_FORBIDDEN.
+  # Operators prove a second factor (an authenticator app) once per session. Every other
+  # /admin route answers 403 MFA_ENROLLMENT_REQUIRED or MFA_REQUIRED until they have;
+  # `x-mfa-exempt` marks the four routes that get them there.
+  /admin/mfa:
+    get:
+      tags: [Platform]
+      operationId: getMfaStatus
+      summary: Whether the operator has an authenticator set up, and whether this session has passed it
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/mfa/enrollment:
+    post:
+      tags: [Platform]
+      operationId: startMfaEnrollment
+      summary: A new authenticator secret to scan. Replaces one not yet confirmed; refused once set up (reset from the command line).
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaEnrollment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/mfa/enrollment/confirm:
+    post:
+      tags: [Platform]
+      operationId: confirmMfaEnrollment
+      summary: Turns the authenticator on with a code from it, verifies this session, and returns the recovery codes. They are shown this once.
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryCodes' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /admin/mfa/verify:
+    post:
+      tags: [Platform]
+      operationId: verifyMfa
+      summary: Passes this session with a code from the authenticator, or one unused recovery code
+      x-platform-roles: [superadmin, support]
+      x-mfa-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaStatus' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
   /admin/metrics/overview:
     get:
       tags: [Platform]
@@ -3239,6 +5546,34 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/users/{userId}/platform-role:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+    put:
+      tags: [Platform]
+      operationId: setPlatformUserRole
+      summary: Make a user a platform superadmin or support operator, or remove their platform access
+      description: >-
+        Signs the user out everywhere, so their next session opens under the new role's rules (an authenticator, 12-hour sessions).
+        `SELF`: you can't change your own role. `USER_DISABLED`: enable the user first. `LAST_SUPERADMIN`: there must always be one.
+        `NO_CHANGE`: they already have that role.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformRoleChange' }
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /admin/audit-events:
     get:
       tags: [Platform]
@@ -3310,6 +5645,23 @@ components:
     From: { name: from, in: query, schema: { type: string, format: date } }
     To: { name: to, in: query, schema: { type: string, format: date } }
     BranchIdQuery: { name: branchId, in: query, schema: { type: string } }
+    DashboardRange:
+      name: range
+      in: query
+      description: The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`.
+      schema: { type: string, enum: [today, week, month, quarter, year, custom], default: month }
+    DashboardFrom: { name: from, in: query, description: 'First day, with `range=custom`', schema: { type: string, format: date } }
+    DashboardTo: { name: to, in: query, description: 'Last day, with `range=custom`', schema: { type: string, format: date } }
+    DashboardCompare:
+      name: compare
+      in: query
+      description: '`previous` adds the same figures for the period just before, the same length'
+      schema: { type: string, enum: [none, previous], default: none }
+    DashboardGrain:
+      name: grain
+      in: query
+      description: Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least.
+      schema: { type: string, enum: [day, week, month], default: month }
 
   headers:
     ETag: { schema: { type: string }, description: 'Weak ETag of `version`, e.g. W/"7"' }
@@ -3448,6 +5800,19 @@ components:
         placeOfSupplyStateCode: { type: string }
         lutNumber: { type: string, description: 'Letter of Undertaking. While valid, exports and SEZ supplies are zero-rated instead of charged IGST.' }
         lutValidTill: { type: string, format: date, description: Last day the LUT covers; absent means open-ended }
+        returnFrequency: { type: string, enum: [monthly, qrmp], description: 'Unset reads as monthly. How GSTR-1 and GSTR-3B are filed. QRMP: quarterly returns with monthly payment.' }
+    BankDetails:
+      type: object
+      description: |
+        The account customers pay into, printed on invoices; with `upiId`, a UPI QR for the amount
+        due too. Sent whole: an empty string clears a field, and an absent object leaves them all as they are.
+      properties:
+        bankName: { type: string, maxLength: 100 }
+        accountName: { type: string, maxLength: 100, description: Name the account is held in }
+        accountNumber: { type: string, pattern: '^((?:[0-9A-Za-z] ?){6,34})?$', description: 'Up to 34 letters and digits; single spaces between groups are allowed and dropped when saved' }
+        ifsc: { type: string, pattern: '^([A-Za-z]{4}0[A-Za-z0-9]{6})?$', description: Indian Financial System Code }
+        branch: { type: string, maxLength: 100 }
+        upiId: { type: string, pattern: '^([A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63})?$', description: 'Virtual payment address, e.g. `vertex@okhdfc`' }
     Company:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -3459,6 +5824,8 @@ components:
             name: { type: string }
             legalName: { type: string }
             logoUri: { type: string, format: uri, readOnly: true }
+            signatureUri: { type: string, format: uri, readOnly: true, description: "The authorised signatory's signature, printed above that line on documents. Set through /signature." }
+            bankDetails: { $ref: '#/components/schemas/BankDetails' }
             businessType: { type: string, description: 'Stable slug, e.g. `wholesale`' }
             country: { type: string }
             baseCurrency: { type: string }
@@ -3468,8 +5835,22 @@ components:
             website: { type: string }
             taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
             fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
+            disabledModules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables, books] }, description: 'Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it.' }
+            approvalRules:
+              type: array
+              description: 'Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued. Only an owner can change them.'
+              items:
+                type: object
+                required: [kind, overMinor]
+                properties:
+                  kind: { $ref: '#/components/schemas/DocumentKind' }
+                  overMinor: { type: integer, minimum: 0 }
             lockedThroughDate: { type: [string, 'null'], format: date, description: 'Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.' }
+            perpetualStockFrom: { type: [string, 'null'], format: date, description: 'Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.' }
+            tan: { type: string, pattern: '^([A-Z]{4}[0-9]{5}[A-Z])?$', description: 'Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it.' }
             allowNegativeStock: { type: boolean, default: false, description: 'When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.' }
+            msmeBankRate: { type: number, minimum: 0, maximum: 50, default: 5.5, description: "RBI's bank rate in percent; MSME late-payment interest is three times it (MSMED Act s.16)" }
+            gstr2bDateToleranceDays: { type: integer, minimum: 0, maximum: 30, default: 3, description: 'How many days apart a GSTR-2B line and a bill with the same amounts may be dated and still be claimable without a person accepting it; 0 means the same day only.' }
             plan: { allOf: [{ $ref: '#/components/schemas/PlanTier' }], readOnly: true, description: Changed only through billing }
     Branch:
       allOf:
@@ -3518,7 +5899,7 @@ components:
         monthly: { type: number, description: INR }
         yearly: { type: number }
         features: { type: array, items: { type: string } }
-        modules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables] } }
+        modules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables, books] } }
         popular: { type: boolean }
     Subscription:
       type: object
@@ -3541,7 +5922,7 @@ components:
             id: { type: string, readOnly: true }
             companyId: { type: string, readOnly: true }
             name: { type: string, example: GST 18% }
-            rate: { type: number, description: 'Combined percentage, split at calculation time' }
+            rate: { type: number, minimum: 0, maximum: 999.999, description: 'Combined percentage, split at calculation time. Up to 100, or 999.999 for CESS' }
             type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
             hsnCode: { type: string }
             effectiveFrom: { type: string, format: date }
@@ -3557,6 +5938,41 @@ components:
             name: { type: string }
             icon: { type: string }
             color: { type: string }
+    CustomField:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [entity, label, kind]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            entity: { type: string, enum: [party, item, document] }
+            label: { type: string, maxLength: 60 }
+            kind: { type: string, enum: [text, number, date, select, checkbox] }
+            options: { type: array, items: { type: string }, description: "A select's choices, in order" }
+            required: { type: boolean }
+            showOnPdf: { type: boolean, description: 'Printed on documents: a document field on its own PDF, a party field on documents to that party' }
+            position: { type: integer }
+            status: { type: string, enum: [active, inactive] }
+    ItemCategory:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, maxLength: 100 }
+            color: { type: string, description: 'Hex, like #4DA3FF; a neutral grey when left out' }
+    Brand:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, maxLength: 100 }
     PaymentAccount:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -3571,7 +5987,8 @@ components:
             accountNumber: { type: string }
             openingBalance: { $ref: '#/components/schemas/Money' }
             openingBalanceDate: { type: string, format: date, description: "The day the opening balance was counted; not after today." }
-            currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            openingRate: { type: number, readOnly: true, description: "A foreign-currency account: the opening balance's rate to base on its date, from the company's exchange rates" }
+            currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true, description: 'In base currency' }
             isDefault: { type: boolean }
     ExchangeRate:
       allOf:
@@ -3596,7 +6013,7 @@ components:
             companyId: { type: string, readOnly: true }
             kind:
               type: string
-              enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, payment, expense]
+              enum: [quote, proforma, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, selfInvoice, payment, expense, journal, contra, gstJournal, tdsChallan, receipt]
             prefix: { type: string, example: INV }
             nextNumber: { type: integer, minimum: 1 }
             padding: { type: integer, minimum: 1, maximum: 8 }
@@ -3647,7 +6064,7 @@ components:
         lastBackupAt: { type: string, format: date-time, readOnly: true }
 
     # ---------------------------------------------------------------- parties & items
-    PartyKind: { type: string, enum: [customer, supplier] }
+    PartyKind: { type: string, enum: [customer, supplier, both, general], description: "both: buys and sells, one ledger under Sundry Debtors, on sales and purchase documents. general: a contact only, on no document or payment. Listing customers or suppliers includes both." }
     GstRegistrationType: { type: string, enum: [regular, composition, unregistered, sez, overseas] }
     Party:
       allOf:
@@ -3663,6 +6080,18 @@ components:
             displayName: { type: string }
             taxId: { type: string, description: GSTIN }
             gstRegistrationType: { $ref: '#/components/schemas/GstRegistrationType' }
+            pan: { type: string, pattern: '^[A-Z]{5}[0-9]{4}[A-Z]$', description: Income-tax PAN; read from the GSTIN when not given }
+            msmeType: { type: string, enum: [micro, small, medium], description: "The supplier's Udyam category; their bills fall due within 45 days (MSMED Act s.15)" }
+            udyamNumber: { type: string, example: UDYAM-MH-26-0012345 }
+            reverseCharge: { type: boolean, description: Bills from this supplier are under reverse charge unless a line says otherwise }
+            tdsSection: { allOf: [{ $ref: '#/components/schemas/TdsSectionCode' }], description: "The TDS section this supplier's bills fall under by default" }
+            lowerTdsCertificate:
+              type: object
+              description: A lower or nil deduction certificate (s.197)
+              required: [rate, validTill]
+              properties:
+                rate: { type: number, minimum: 0, maximum: 100 }
+                validTill: { type: string, format: date }
             email: { type: string, format: email }
             phone: { type: string }
             currency: { type: string }
@@ -3670,9 +6099,12 @@ components:
             shippingAddress: { $ref: '#/components/schemas/Address' }
             creditLimit: { $ref: '#/components/schemas/Money' }
             openingBalance: { $ref: '#/components/schemas/Money' }
+            openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
+            openingBalanceSide: { type: string, enum: [dr, cr], description: "dr: they owe us; cr: we owe them. Unset is the kind's usual side (customer and both dr, supplier cr). A general contact has no opening balance." }
             paymentTermsDays: { type: integer, minimum: 0 }
             notes: { type: string }
             status: { type: string, enum: [active, inactive] }
+            customFields: { type: object, additionalProperties: true, description: 'Values of the company custom fields, by field id (listCustomFields); checked against them' }
     PartyWithBalance:
       allOf:
         - $ref: '#/components/schemas/Party'
@@ -3681,6 +6113,7 @@ components:
             outstanding: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
             overdue: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
             advance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true, description: Unallocated payments }
+            payable: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true, description: "Only for a party that is both: what we owe them on bills (outstanding is what they owe on invoices)" }
     PartyStatement:
       type: object
       properties:
@@ -3693,7 +6126,7 @@ components:
             type: object
             properties:
               date: { type: string, format: date }
-              entityType: { type: string, enum: [document, payment, opening] }
+              entityType: { type: string, enum: [document, payment, voucher, opening] }
               entityId: { type: string }
               number: { type: string }
               debit: { $ref: '#/components/schemas/Money' }
@@ -3707,6 +6140,7 @@ components:
           properties:
             id: { type: string, readOnly: true }
             companyId: { type: string, readOnly: true }
+            customFields: { type: object, additionalProperties: true, description: 'Values of the company custom fields, by field id (listCustomFields); checked against them' }
             sku: { type: string }
             name: { type: string }
             description: { type: string }
@@ -3718,10 +6152,13 @@ components:
             hsnCode: { type: string }
             barcode: { type: string }
             trackInventory: { type: boolean }
+            gst: { $ref: '#/components/schemas/GstFlags' }
             openingStock: { type: number, description: Used only on create }
             openingStockDate: { type: string, format: date, description: "The day the opening stock was counted; not after today, and no document with this item can be dated before it. Used only on create, and only when trackInventory is set." }
             reorderLevel: { type: number }
             imageUri: { type: string, format: uri, readOnly: true }
+            categoryId: { type: [string, 'null'], description: 'An item category of this company, or null for none' }
+            brandId: { type: [string, 'null'], description: 'A brand of this company, or null for none' }
             status: { type: string, enum: [active, inactive] }
     ItemWithStock:
       allOf:
@@ -3734,10 +6171,321 @@ components:
     # ---------------------------------------------------------------- documents
     DocumentKind:
       type: string
-      enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn]
+      enum: [quote, proforma, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, openingInvoice, openingBill]
+      description: >-
+        creditNote and debitNote lower or raise what an invoice charged, with no goods moving;
+        supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually
+        raised against its invoice or bill (sourceDocumentId); a direct note, against no one invoice
+        or bill, must give its noteReason. Credit notes, like returns, settle what the source still
+        owes, and a direct one is credit the party holds, like an advance; debit notes are owed and
+        paid like an invoice or bill. openingInvoice and openingBill are what was still owed, invoice by
+        invoice, when the books started here (importOpeningDocuments): paid and aged like an invoice or bill,
+        posted only to Opening balances, never in sales, purchases or GST.
     DocStatus:
       type: string
       enum: [draft, sent, accepted, rejected, expired, confirmed, fulfilled, cancelled, delivered, issued, partiallyPaid, paid, overdue, requested, approved, processed, received, billed]
+    LedgerAccount:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, group, openingBalance]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, maxLength: 200 }
+            group: { type: string, enum: [capital, reserves, loans, sundryCreditors, dutiesTaxes, provisions, currentLiabilities, fixedAssets, investments, sundryDebtors, cashInHand, bankAccounts, stockInHand, loansAdvances, currentAssets, salesAccounts, directIncomes, indirectIncomes, purchaseAccounts, directExpenses, indirectExpenses] }
+            openingBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Debit positive, as of the day the books begin' }
+            openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
+            status: { type: string, enum: [active, inactive] }
+    CostCentre:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, maxLength: 200 }
+            category: { type: string, maxLength: 60, example: Project }
+            parentId: { type: string, description: The centre this one sits under }
+            status: { type: string, enum: [active, inactive] }
+    VoucherLine:
+      type: object
+      required: [account, debit, credit]
+      properties:
+        account: { type: string, description: 'An account key: sys:<name>, sys:tdsPayable:<section>, party:<id>, pay:<id>, exp:<id> or acc:<id>', example: 'pay:pac_123' }
+        debit: { $ref: '#/components/schemas/Money' }
+        credit: { $ref: '#/components/schemas/Money' }
+        narration: { type: string }
+        costCentreId: { type: string }
+    Voucher:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [kind, date, lines]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            branchId: { type: string }
+            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt], description: "receipt: money in that isn't from an invoice (interest, rent, a refund); it debits cash or bank only" }
+            number: { type: string, readOnly: true }
+            date: { type: string, format: date }
+            narration: { type: string }
+            reference: { type: string, description: "A TDS challan's number and BSR code, a cheque number" }
+            challan:
+              type: object
+              description: A TDS challan's deposit details (ITNS 281), for the challan register and Form 26Q
+              required: [bsrCode, serial, depositedOn]
+              properties:
+                bsrCode: { type: string, pattern: '^[0-9]{7}$' }
+                serial: { type: string, pattern: '^[0-9]{1,5}$' }
+                depositedOn: { type: string, format: date }
+            status: { type: string, enum: [draft, posted], description: "Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft." }
+            postedAt: { type: string, format: date-time, readOnly: true }
+            lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/VoucherLine' } }
+            createdBy: { type: string, readOnly: true }
+    TrialBalance:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              account: { type: string }
+              name: { type: string }
+              group: { type: string }
+              opening: { allOf: [{ $ref: '#/components/schemas/Money' }], description: Debit positive }
+              debit: { $ref: '#/components/schemas/Money' }
+              credit: { $ref: '#/components/schemas/Money' }
+              closing: { allOf: [{ $ref: '#/components/schemas/Money' }], description: Debit positive }
+        totalDebit: { $ref: '#/components/schemas/Money' }
+        totalCredit: { $ref: '#/components/schemas/Money' }
+    GstPortalSession:
+      type: object
+      properties:
+        gstin: { type: string }
+        username: { type: string }
+        connected: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+        refreshableUntil: { type: string, format: date-time, description: Until when it renews without a new OTP }
+        otpRequestedAt: { type: string, format: date-time }
+    GstReturn:
+      type: object
+      properties:
+        id: { type: string }
+        gstin: { type: string }
+        returnType: { type: string, enum: [gstr1, gstr3b] }
+        period: { type: string, description: MMYYYY }
+        status: { type: string, enum: [prepared, saved, submitted, filed, failed, notFiled] }
+        arn: { type: string }
+        filedOn: { type: string, format: date }
+        referenceId: { type: string }
+        lastError: { type: string }
+    Gstr2bBill:
+      type: object
+      properties:
+        documentId: { type: string }
+        kind: { type: string, enum: [purchaseBill, supplierCreditNote, supplierDebitNote] }
+        number: { type: string }
+        supplierNumber: { type: string }
+        date: { type: string, format: date }
+        taxable: { $ref: '#/components/schemas/Money' }
+        tax: { $ref: '#/components/schemas/Money' }
+        claimedIn: { type: string }
+    Gstr2bReconciliation:
+      type: object
+      properties:
+        gstin: { type: string }
+        period: { type: string }
+        fetched: { type: boolean }
+        fetchedAt: { type: string, format: date-time }
+        generatedOn: { type: string, format: date }
+        summary:
+          type: object
+          properties:
+            lines: { type: integer }
+            matched: { type: integer }
+            matchedWithinTolerance: { type: integer }
+            manuallyLinked: { type: integer }
+            claimed: { type: integer }
+            partial: { type: integer }
+            probable: { type: integer }
+            missingInBooks: { type: integer }
+            missingIn2b: { type: integer }
+            claimableTax: { $ref: '#/components/schemas/Money' }
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              section: { type: string }
+              supplierGstin: { type: string }
+              supplierName: { type: string }
+              documentType: { type: string, enum: [I, C, D, BOE, ISD] }
+              number: { type: string }
+              date: { type: string, format: date }
+              taxable: { $ref: '#/components/schemas/Money' }
+              tax: { $ref: '#/components/schemas/Money' }
+              reverseCharge: { type: boolean }
+              itcAvailable: { type: boolean }
+              itcReason: { type: string }
+              status:
+                type: string
+                enum: [matched, matchedWithinTolerance, manuallyLinked, claimed, partial, probable, missingInBooks, notOurs, claimLater]
+                description: "matchedWithinTolerance: amounts agree, dated a few days apart. partial: number agrees, amount or date doesn't (see reasons). claimed: its bill's credit is claimed for this period."
+              reasons: { type: array, items: { type: string, enum: [taxable, tax, date, number] }, description: What differs between the line and its bill }
+              decision: { type: string, enum: [accepted, notOurs, claimLater] }
+              bill: { $ref: '#/components/schemas/Gstr2bBill' }
+              difference:
+                type: object
+                properties:
+                  taxable: { $ref: '#/components/schemas/Money' }
+                  tax: { $ref: '#/components/schemas/Money' }
+                  days: { type: integer }
+        missingIn2b: { type: array, items: { $ref: '#/components/schemas/Gstr2bBill' } }
+    GstAmounts:
+      type: object
+      properties:
+        taxable: { $ref: '#/components/schemas/Money' }
+        igst: { $ref: '#/components/schemas/Money' }
+        cgst: { $ref: '#/components/schemas/Money' }
+        sgst: { $ref: '#/components/schemas/Money' }
+        cess: { $ref: '#/components/schemas/Money' }
+    Gstr3bView:
+      type: object
+      properties:
+        gstin: { type: string }
+        period: { type: string }
+        dueDate: { type: string, format: date }
+        filingEnabled: { type: boolean, description: Whether this server files returns (GST_FILING_ENABLED) }
+        outward:
+          type: object
+          properties:
+            taxable: { $ref: '#/components/schemas/GstAmounts' }
+            zeroRated: { $ref: '#/components/schemas/GstAmounts' }
+            nilExempt: { $ref: '#/components/schemas/GstAmounts' }
+            reverseCharge: { $ref: '#/components/schemas/GstAmounts' }
+            nonGst: { $ref: '#/components/schemas/GstAmounts' }
+        interStateUnregistered: { type: array, items: { type: object, properties: { placeOfSupply: { type: string }, taxable: { $ref: '#/components/schemas/Money' }, igst: { $ref: '#/components/schemas/Money' } } } }
+        itc:
+          type: object
+          properties:
+            importOfGoods: { $ref: '#/components/schemas/GstAmounts' }
+            importOfServices: { $ref: '#/components/schemas/GstAmounts' }
+            reverseCharge: { $ref: '#/components/schemas/GstAmounts' }
+            isd: { $ref: '#/components/schemas/GstAmounts' }
+            allOther: { $ref: '#/components/schemas/GstAmounts' }
+            reversedRules: { $ref: '#/components/schemas/GstAmounts' }
+            reversedOther: { $ref: '#/components/schemas/GstAmounts' }
+            net: { $ref: '#/components/schemas/GstAmounts' }
+            reclaimed: { $ref: '#/components/schemas/GstAmounts' }
+        inwardExempt: { type: object, properties: { interState: { $ref: '#/components/schemas/Money' }, intraState: { $ref: '#/components/schemas/Money' } } }
+        interest: { $ref: '#/components/schemas/GstAmounts' }
+        lateFee: { $ref: '#/components/schemas/GstAmounts' }
+        setOff:
+          type: object
+          description: How the tax is paid. credit[from][to], cash by kind, credit carried in from last month and forward to the next.
+          properties:
+            liability: { $ref: '#/components/schemas/GstAmounts' }
+            credit: { type: object, additionalProperties: { $ref: '#/components/schemas/GstAmounts' } }
+            cash: { $ref: '#/components/schemas/GstAmounts' }
+            carriedIn: { $ref: '#/components/schemas/GstAmounts' }
+            carriedForward: { $ref: '#/components/schemas/GstAmounts' }
+        returns: { type: array, items: { $ref: '#/components/schemas/GstReturn' }, description: This period's GSTR-1 and GSTR-3B as recorded }
+        breakup:
+          type: object
+          description: "What makes up each table, keyed as the portal numbers them (3.1a … 3.1e, 3.2, 4A1 … 4A5, 4B1, 4B2, 4D1, 5): one row per document, expense or advance, signed (a credit note takes away)."
+          additionalProperties:
+            type: array
+            items:
+              allOf:
+                - $ref: '#/components/schemas/GstAmounts'
+                - type: object
+                  properties:
+                    type: { type: string, enum: [document, expense, advance] }
+                    id: { type: string }
+                    kind: { type: string }
+                    number: { type: string }
+                    date: { type: string, format: date }
+                    partyId: { type: string }
+                    partyName: { type: string }
+    TdsSectionCode:
+      type: string
+      enum: [194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q]
+      description: '194J(a) is 194JA, 194I(b) is 194IB, and so on.'
+    TdsDeduction:
+      type: object
+      readOnly: true
+      required: [section, rate, amount]
+      properties:
+        section: { $ref: '#/components/schemas/TdsSectionCode' }
+        rate: { type: number }
+        amount: { $ref: '#/components/schemas/Money' }
+    MsmePayables:
+      type: object
+      description: "Bills of micro and small suppliers still unpaid (MSMED Act s.15: by the agreed day, at most 45 days, else 15), and for the CA what wasn't paid in time this financial year (s.43B(h))"
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              documentId: { type: string }
+              number: { type: string }
+              supplierDocNumber: { type: string }
+              partyId: { type: string }
+              partyName: { type: string }
+              msmeType: { type: string, enum: [micro, small] }
+              date: { type: string, format: date }
+              dueDate: { type: string, format: date }
+              outstanding: { $ref: '#/components/schemas/Money' }
+              daysLeft: { type: integer, description: Negative once overdue }
+              interest: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 's.16 interest so far, at three times the bank rate, compounded monthly' }
+        notPaidInTime:
+          type: array
+          items:
+            type: object
+            properties:
+              documentId: { type: string }
+              number: { type: string }
+              partyId: { type: string }
+              partyName: { type: string }
+              date: { type: string, format: date }
+              dueDate: { type: string, format: date }
+              amount: { $ref: '#/components/schemas/Money' }
+        bankRate: { type: number, description: "RBI's bank rate used for the interest, percent" }
+        outstanding: { $ref: '#/components/schemas/Money' }
+        overdue: { $ref: '#/components/schemas/Money' }
+    TdsRegister:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              section: { type: string }
+              sectionLabel: { type: string }
+              partyId: { type: string }
+              partyName: { type: string }
+              pan: { type: string }
+              quarter: { type: string, example: FY 2026-27 Q1 }
+              base: { $ref: '#/components/schemas/Money' }
+              tds: { $ref: '#/components/schemas/Money' }
+              documents: { type: integer }
+        total: { $ref: '#/components/schemas/Money' }
+    GstFlags:
+      type: object
+      description: How GST treats an item. Kept on each document line as it was when the line was written.
+      properties:
+        supplyType: { type: string, enum: [taxable, nil, exempt, nonGst], description: 'Unset reads as taxable. Nil-rated, exempt and non-GST supplies carry no tax and are reported separately' }
+        reimbursement: { type: boolean, description: "Recovered at cost as the customer's pure agent (Rule 33): no tax, outside the taxable value" }
+        capitalGoods: { type: boolean, description: An asset; its input tax credit is reported separately }
+        itcEligibility: { type: string, enum: [eligible, blocked, ineligible], description: 'Unset reads as eligible. Whether GST paid on it can be claimed; blocked is s.17(5)' }
+        reverseCharge: { type: boolean, description: A notified reverse-charge supply; the buyer pays the GST }
+        cessRate: { type: number, minimum: 0, maximum: 999, description: 'Compensation cess, percent of the taxable value' }
     DocumentLine:
       type: object
       required: [name, quantity, unit, unitPrice, taxCategoryId]
@@ -3755,6 +6503,8 @@ components:
         taxCategoryId: { type: string }
         taxRate: { type: number, readOnly: true, description: Snapshot of the rate applied }
         taxInclusive: { type: boolean, default: false }
+        gst: { allOf: [{ $ref: '#/components/schemas/GstFlags' }], description: "Defaults to the item's; kept as it was once the document is finalised" }
+        expenseId: { type: string, description: "A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED)" }
     TaxComponent:
       type: object
       properties:
@@ -3768,6 +6518,7 @@ components:
         categoryId: { type: string }
         categoryName: { type: string }
         rate: { type: number }
+        reverseCharge: { type: boolean, description: Tax the buyer pays the government; not part of the total }
         taxableAmount: { $ref: '#/components/schemas/Money' }
         components: { type: array, items: { $ref: '#/components/schemas/TaxComponent' } }
         totalTax: { $ref: '#/components/schemas/Money' }
@@ -3780,7 +6531,9 @@ components:
         documentDiscount: { $ref: '#/components/schemas/Money' }
         taxableAmount: { $ref: '#/components/schemas/Money' }
         taxLines: { type: array, items: { $ref: '#/components/schemas/TaxLine' } }
-        totalTax: { $ref: '#/components/schemas/Money' }
+        totalTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Tax charged on the document, cess included; reverse-charge tax is not' }
+        reverseChargeTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: Tax the buyer owes under reverse charge; not in the grand total }
+        reimbursements: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Pure-agent reimbursements, added after tax' }
         charges: { $ref: '#/components/schemas/Money' }
         roundOff: { $ref: '#/components/schemas/Money' }
         grandTotal: { $ref: '#/components/schemas/Money' }
@@ -3791,6 +6544,7 @@ components:
       properties:
         kind: { $ref: '#/components/schemas/DocumentKind' }
         partyId: { type: string }
+        customFields: { type: object, additionalProperties: true, description: 'Values of the company custom fields, by field id (listCustomFields); checked against them' }
         branchId: { type: string, description: Defaults to the user's active branch }
         date: { type: string, format: date }
         dueDate: { type: string, format: date }
@@ -3807,9 +6561,25 @@ components:
         terms: { type: string }
         reference: { type: string }
         supplierDocNumber: { type: string }
+        billOfEntry:
+          type: object
+          description: "On an import bill (a purchase bill from an overseas supplier): the bill of entry customs assessed it on, with the IGST and cess paid there. That IGST is input credit, claimed in 3B 4A(1) once 2B shows the bill of entry."
+          required: [number, date, portCode, assessableValue, igst]
+          properties:
+            number: { type: string, maxLength: 20 }
+            date: { type: string, format: date }
+            portCode: { type: string, pattern: '^[A-Z0-9]{6}$' }
+            assessableValue: { $ref: '#/components/schemas/Money' }
+            igst: { $ref: '#/components/schemas/Money' }
+            cess: { $ref: '#/components/schemas/Money' }
+        isdInvoice: { type: boolean, description: "A purchase bill that is an Input Service Distributor's invoice: its credit goes to 3B 4A(4)" }
         placeOfSupplyStateCode: { type: string }
+        reverseCharge: { type: boolean, description: The whole document is under reverse charge; the buyer pays the GST }
         attachmentIds: { type: array, items: { type: string } }
         sourceDocumentId: { type: string }
+        noteReason: { type: string, enum: [discount, priceChange, taxCorrection, deficiency, other], description: Why a credit or debit note was raised }
+        costCentreId: { type: string, description: The project or department it belongs to }
+        tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN." }
         overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
         status:
           allOf: [{ $ref: '#/components/schemas/DocStatus' }]
@@ -3831,6 +6601,29 @@ components:
             number: { type: string, readOnly: true, example: INV/25-26/MUM/0042 }
             status: { $ref: '#/components/schemas/DocStatus' }
             totals: { $ref: '#/components/schemas/DocumentTotals' }
+            partyGstin: { type: string, readOnly: true, description: "The party's GSTIN when the document was finalised" }
+            tds: { allOf: [{ $ref: '#/components/schemas/TdsDeduction' }], description: 'TDS deducted on the bill: what is owed the supplier is the grand total less this' }
+            selfInvoiceNumber: { type: string, readOnly: true, description: 'The self-invoice for a reverse-charge purchase from an unregistered supplier (Rule 46(f))' }
+            itcReversedOn: { type: string, format: date, readOnly: true, description: 'Input tax credit reversed after 180 days unpaid' }
+            itcReclaimedOn: { type: string, format: date, readOnly: true, description: 'Credit claimed again once paid' }
+            itcClaimPeriod: { type: string, readOnly: true, description: 'The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return' }
+            partyStateCode: { type: string, readOnly: true }
+            recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly], readOnly: true, description: Set with setDocumentRecurrence }
+            nextRecurrenceDate: { type: string, format: date, readOnly: true, description: The date of the next copy; unset once the series has ended }
+            recurrenceEndDate: { type: string, format: date, readOnly: true }
+            recurrenceAutoSend: { type: boolean, readOnly: true }
+            recurringParentId: { type: string, readOnly: true, description: "On a copy, the recurring invoice it was issued from" }
+            approval:
+              type: object
+              readOnly: true
+              description: 'Set when the document was sent for approval: it stays a draft until an owner or admin approves it (which issues it) or rejects it'
+              properties:
+                status: { type: string, enum: [pending, approved, rejected] }
+                requestedBy: { type: string }
+                requestedAt: { type: string, format: date-time }
+                decidedBy: { type: string }
+                decidedAt: { type: string, format: date-time }
+                note: { type: string }
             compliance: { $ref: '#/components/schemas/ComplianceInfo' }
             createdBy: { type: string, readOnly: true }
     DocumentSummary:
@@ -3846,9 +6639,14 @@ components:
         branchId: { type: string }
         date: { type: string, format: date }
         dueDate: { type: string, format: date }
+        supplierDocNumber: { type: string, description: "On a purchase: the supplier's own number for it" }
+        itcClaimPeriod: { type: string, description: The GSTR-2B period (MMYYYY) its credit was claimed in }
         grandTotal: { $ref: '#/components/schemas/Money' }
+        exchangeRate: { type: number, description: To base currency }
+        totalTax: { $ref: '#/components/schemas/Money' }
         outstanding: { $ref: '#/components/schemas/Money' }
         eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }
+        irn: { type: string, description: The IRN once one is issued }
         ewayBillStatus: { type: string, enum: [notApplicable, notRequired, pending, generated, cancelled, expired] }
     DocumentDetail:
       allOf:
@@ -4031,7 +6829,11 @@ components:
       properties:
         documentId: { type: string }
         documentNumber: { type: string, readOnly: true }
-        amount: { $ref: '#/components/schemas/Money' }
+        documentKind: { allOf: [{ $ref: '#/components/schemas/DocumentKind' }], readOnly: true }
+        amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Cash: what the payment itself settles; may be zero when an adjustment below settles the document' }
+        tdsDeducted: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Settled without cash: TDS the customer deducted, or the business deducted from a supplier' }
+        discount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Settled without cash: a discount allowed or received' }
+        writeOff: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Settled without cash: written off as bad debt (owner, admin or accountant)' }
     Payment:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -4044,6 +6846,7 @@ components:
             number: { type: string, readOnly: true }
             direction: { $ref: '#/components/schemas/PaymentDirection' }
             partyId: { type: string }
+            partyName: { type: string, readOnly: true, description: "The customer's or supplier's name, so a list needn't look each one up" }
             date: { type: string, format: date }
             amount: { $ref: '#/components/schemas/Money' }
             currency: { type: string }
@@ -4054,10 +6857,172 @@ components:
             allocations: { type: array, items: { $ref: '#/components/schemas/PaymentAllocation' } }
             unallocated: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
             fxGainLoss: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true }
+            advanceTax:
+              type: object
+              description: "A receipt that is an advance for services owes GST when received (s.13(2)), at this rate and place of supply; invoices raised against it later take the tax back (GSTR-1 table 11). Advances for goods carry none."
+              required: [taxCategoryId, placeOfSupplyStateCode]
+              properties:
+                taxCategoryId: { type: string }
+                rate: { type: number, readOnly: true, description: The rate on the day received }
+                placeOfSupplyStateCode: { type: string, pattern: '^\d{2}$' }
+            tdsSection: { type: string, description: "On money paid: the TDS section of what its allocations kept back (tdsDeducted), so it is reported under that section in 26Q and TDS payable" }
+            refundOf:
+              type: string
+              description: "Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date."
+            refunds:
+              type: array
+              readOnly: true
+              description: On a receipt, what has been paid back out of it
+              items:
+                type: object
+                required: [paymentId, date, amount]
+                properties: { paymentId: { type: string }, number: { type: string }, date: { type: string, format: date }, amount: { $ref: '#/components/schemas/Money' } }
             source: { type: string, enum: [manual, gateway], readOnly: true }
             notes: { type: string }
             attachmentIds: { type: array, items: { type: string } }
             createdBy: { type: string, readOnly: true }
+    # ---------------------------------------------------------------- banking
+    BankLineStatus: { type: string, enum: [unmatched, matched, excluded] }
+    BankMatchType: { type: string, enum: [payment, expense, voucher] }
+    BankLineRecord:
+      type: object
+      description: A payment, expense or voucher in the books, as a bank line matches it. `amount` is signed as the bank sees it (+ money into the account).
+      required: [type, id, date, amount]
+      properties:
+        type: { $ref: '#/components/schemas/BankMatchType' }
+        id: { type: string }
+        number: { type: string }
+        date: { type: string, format: date }
+        amount: { $ref: '#/components/schemas/Money' }
+        reference: { type: string }
+        partyName: { type: string }
+    BankLineSuggestion:
+      allOf:
+        - $ref: '#/components/schemas/BankLineRecord'
+        - type: object
+          required: [score, referenceHit]
+          properties:
+            score: { type: integer, minimum: 0, maximum: 100 }
+            referenceHit: { type: boolean, description: "The record's reference or number (a UTR, a cheque number) is in the line" }
+    BankStatementLine:
+      type: object
+      required: [id, statementId, accountId, date, description, amount, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        statementId: { type: string }
+        accountId: { type: string }
+        date: { type: string, format: date }
+        description: { type: string }
+        reference: { type: string }
+        amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: '+ money into the account (a credit on the statement), − money out' }
+        balance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: The running balance the bank printed }
+        status: { $ref: '#/components/schemas/BankLineStatus' }
+        excludedReason: { type: string }
+        match: { $ref: '#/components/schemas/BankLineRecord' }
+        suggestions: { type: array, maxItems: 3, items: { $ref: '#/components/schemas/BankLineSuggestion' } }
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BankStatement:
+      type: object
+      required: [id, accountId, fileName, from, to, lineCount, createdBy, createdAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        fileName: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        openingBalance: { $ref: '#/components/schemas/Money' }
+        closingBalance: { $ref: '#/components/schemas/Money' }
+        lineCount: { type: integer, description: Lines it added (duplicates are not counted) }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    BankStatementImport:
+      type: object
+      required: [fileName, lines]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 200 }
+        dryRun: { type: boolean, default: false }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            type: object
+            required: [date, description, amount]
+            properties:
+              date: { type: string, format: date }
+              description: { type: string, maxLength: 1000 }
+              reference: { type: string, description: Cut to 100 characters }
+              amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: '+ money in, − money out; not zero' }
+              balance: { $ref: '#/components/schemas/Money' }
+    BankStatementImportResult:
+      type: object
+      required: [imported, duplicates, autoMatched, lines]
+      properties:
+        statement: { $ref: '#/components/schemas/BankStatement' }
+        imported: { type: integer }
+        duplicates: { type: integer }
+        autoMatched: { type: integer }
+        lines:
+          type: array
+          description: The file's lines in its order, each flagged when it was already imported (or repeats an earlier line of this file with no running balance to tell them apart)
+          items:
+            type: object
+            required: [date, description, amount, duplicate]
+            properties:
+              date: { type: string, format: date }
+              description: { type: string }
+              reference: { type: string }
+              amount: { $ref: '#/components/schemas/Money' }
+              balance: { $ref: '#/components/schemas/Money' }
+              duplicate: { type: boolean }
+    BankLineSummary:
+      type: object
+      required: [unmatched, matched, excluded]
+      properties:
+        unmatched: { type: integer }
+        matched: { type: integer }
+        excluded: { type: integer }
+        lastStatement: { $ref: '#/components/schemas/BankStatement' }
+        statementBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: The running balance on the latest line that has one }
+        statementBalanceDate: { type: string, format: date }
+    BankReconciliation:
+      type: object
+      description: |
+        Bank reconciliation statement. `adjustedBookBalance` = book balance + lines the books
+        don't have yet (credits − debits). `adjustedStatementBalance` = statement balance +
+        deposits not yet credited − payments not yet debited. They agree (`difference` 0) when
+        every difference is explained. Records dated before the account's first imported
+        statement (`since`) are taken as cleared.
+      required: [asOf, bookBalance, adjustedBookBalance, unclearedPayments, unrecordedLines]
+      properties:
+        asOf: { type: string, format: date }
+        since: { type: string, format: date, description: First day of the earliest statement imported }
+        bookBalance: { $ref: '#/components/schemas/Money' }
+        statementBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], description: The running balance on the last line on or before `asOf` that has one; absent when none does }
+        statementBalanceDate: { type: string, format: date }
+        unclearedPayments:
+          type: object
+          description: In the books, on or before `asOf`, matched to no line
+          required: [deposits, payments, depositsTotal, paymentsTotal]
+          properties:
+            deposits: { type: array, description: Deposited but not yet credited by the bank, items: { $ref: '#/components/schemas/BankLineRecord' } }
+            payments: { type: array, description: Paid but not yet debited by the bank, items: { $ref: '#/components/schemas/BankLineRecord' } }
+            depositsTotal: { $ref: '#/components/schemas/Money' }
+            paymentsTotal: { allOf: [{ $ref: '#/components/schemas/Money' }], description: As a positive amount }
+        unrecordedLines:
+          type: object
+          description: On the statement, on or before `asOf`, neither matched nor excluded
+          required: [credits, debits, creditsTotal, debitsTotal]
+          properties:
+            credits: { type: array, items: { $ref: '#/components/schemas/BankStatementLine' } }
+            debits: { type: array, items: { $ref: '#/components/schemas/BankStatementLine' } }
+            creditsTotal: { $ref: '#/components/schemas/Money' }
+            debitsTotal: { allOf: [{ $ref: '#/components/schemas/Money' }], description: As a positive amount }
+        adjustedBookBalance: { $ref: '#/components/schemas/Money' }
+        adjustedStatementBalance: { $ref: '#/components/schemas/Money' }
+        difference: { allOf: [{ $ref: '#/components/schemas/Money' }], description: adjustedBookBalance − adjustedStatementBalance }
     Expense:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -4065,6 +7030,11 @@ components:
           required: [categoryId, date, amount, currency, accountId, method]
           properties:
             id: { type: string, readOnly: true }
+            recoveredBy:
+              type: object
+              readOnly: true
+              description: The live invoice that recovered it as a reimbursement line
+              properties: { documentId: { type: string }, number: { type: string } }
             companyId: { type: string, readOnly: true }
             branchId: { type: string }
             number: { type: string, readOnly: true }
@@ -4077,11 +7047,17 @@ components:
             taxCategoryId: { type: string }
             taxAmount: { $ref: '#/components/schemas/Money' }
             taxInclusive: { type: boolean }
+            placeOfSupplyStateCode: { type: string, description: "Decides CGST+SGST or IGST; defaults to the company's state" }
+            supplierGstin: { type: string, description: "The supplier's GSTIN on the bill, when there's no saved supplier" }
+            itcEligibility: { type: string, enum: [eligible, blocked, ineligible], description: Unset reads as eligible }
+            reverseCharge: { type: boolean, description: "The business pays this tax itself under reverse charge; amount is then the supplier's price without it" }
             accountId: { type: string }
             method: { $ref: '#/components/schemas/PaymentMethod' }
             reference: { type: string }
             notes: { type: string }
             billable: { type: boolean }
+            customerId: { type: string, description: 'Billable: the customer it is recovered from, as a reimbursement line on their invoice' }
+            costCentreId: { type: string }
             recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly] }
             nextRecurrenceDate: { type: string, format: date, readOnly: true }
             attachmentIds: { type: array, items: { type: string } }
@@ -4095,6 +7071,8 @@ components:
         companyId: { type: string }
         branchId: { type: string }
         itemId: { type: string }
+        itemName: { type: string, description: "On lists: the item's name, so a list needn't look each one up" }
+        itemSku: { type: string, description: "On lists: the item's SKU" }
         type: { $ref: '#/components/schemas/StockMovementType' }
         quantity: { type: number }
         unitCost: { $ref: '#/components/schemas/Money' }
@@ -4180,6 +7158,12 @@ components:
       type: object
       required: [reason]
       properties:
+        reason: { type: string, minLength: 3, maxLength: 500, description: Why; kept in the platform audit log }
+    PlatformRoleChange:
+      type: object
+      required: [platformRole, reason]
+      properties:
+        platformRole: { oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }], description: '`null` removes platform access' }
         reason: { type: string, minLength: 3, maxLength: 500, description: Why; kept in the platform audit log }
     PlatformAccount:
       type: object
@@ -4316,6 +7300,46 @@ components:
             properties:
               date: { type: string, format: date }
               count: { type: integer }
+    DeleteAccountRequest:
+      type: object
+      required: [confirm]
+      description: Proof it's really them, as at sign-in. The password if they have one, otherwise a fresh code sent to their verified phone.
+      properties:
+        confirm: { type: string, enum: [DELETE], description: Typed by the user }
+        password: { type: string, format: password }
+        otpRequestId: { type: string }
+        otpCode: { type: string }
+    NotificationPreferences:
+      type: object
+      required: [pushMuted]
+      properties:
+        pushMuted:
+          type: array
+          description: Kinds not pushed to this person's devices
+          items: { type: string, enum: [invoiceSent, paymentReceived, invoiceOverdue, lowStock, compliance, syncFailure, system] }
+    MfaStatus:
+      type: object
+      required: [enrolled, verified, recoveryCodesLeft]
+      properties:
+        enrolled: { type: boolean, description: An authenticator is set up }
+        verified: { type: boolean, description: This session passed it }
+        recoveryCodesLeft: { type: integer }
+    MfaEnrollment:
+      type: object
+      required: [secret, otpauthUri]
+      properties:
+        secret: { type: string, description: 'Base32, for typing into the app by hand' }
+        otpauthUri: { type: string, description: What the QR code holds }
+    MfaCode:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, minLength: 6, maxLength: 20, description: 'Six digits from the app, or a recovery code' }
+    MfaRecoveryCodes:
+      type: object
+      required: [recoveryCodes]
+      properties:
+        recoveryCodes: { type: array, items: { type: string } }
     PlatformAuditEvent:
       type: object
       required: [id, actorId, actorEmail, action, targetType, targetId, targetLabel, reason, createdAt]
@@ -4341,6 +7365,7 @@ components:
         icon: { type: string }
         category: { type: string, enum: [payments, compliance, messaging, accounting, storage] }
         connected: { type: boolean }
+        available: { type: boolean, description: 'False while the integration is coming soon: connecting it is refused (409 INTEGRATION_COMING_SOON).' }
         configRoute: { type: string }
     ExportJob:
       type: object
@@ -4402,6 +7427,8 @@ components:
       properties:
         asOf: { type: string, format: date }
         total: { $ref: '#/components/schemas/Money' }
+        overdue: { $ref: '#/components/schemas/Money' }
+        dueSoon: { $ref: '#/components/schemas/Money', description: Not yet overdue and due within seven days }
         buckets:
           type: array
           items:
@@ -4547,6 +7574,17 @@ components:
         to: { type: string }
         total: { type: integer }
         cancelled: { type: integer }
+    Gstr1AdvanceRow:
+      type: object
+      properties:
+        placeOfSupply: { type: string }
+        rate: { type: number }
+        interState: { type: boolean }
+        taxable: { $ref: '#/components/schemas/Money' }
+        igst: { $ref: '#/components/schemas/Money' }
+        cgst: { $ref: '#/components/schemas/Money' }
+        sgst: { $ref: '#/components/schemas/Money' }
+        cess: { $ref: '#/components/schemas/Money' }
     Gstr1Summary:
       type: object
       properties:
@@ -4560,6 +7598,12 @@ components:
         hsn: { type: array, items: { $ref: '#/components/schemas/HsnRow' } }
         nil: { type: array, items: { $ref: '#/components/schemas/NilRow' } }
         docs: { type: array, items: { $ref: '#/components/schemas/DocIssueRow' } }
+        advances:
+          type: object
+          description: 'Table 11: tax on advances for services received in the period and not yet invoiced (11A), and on earlier advances invoiced in it (11B)'
+          properties:
+            received: { type: array, items: { $ref: '#/components/schemas/Gstr1AdvanceRow' } }
+            adjusted: { type: array, items: { $ref: '#/components/schemas/Gstr1AdvanceRow' } }
         totals:
           type: object
           properties:
@@ -4582,6 +7626,68 @@ components:
         pendingCompliance: { type: integer, description: Invoices awaiting IRN plus e-way bills expiring soon }
         recentDocuments: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
         unreadNotifications: { type: integer }
+    DashboardPeriod:
+      type: object
+      description: The dates a hub's figures cover, and the period `previous` figures cover when compared
+      required: [range, from, to, grain]
+      properties:
+        range: { type: string, enum: [today, week, month, quarter, year, custom] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        grain: { type: string, enum: [day, week, month], description: 'The trend''s grain, after any step up' }
+        previous:
+          type: object
+          required: [from, to]
+          properties: { from: { type: string, format: date }, to: { type: string, format: date } }
+    CashFlowPoint:
+      type: object
+      required: [key, inflow, outflow]
+      properties:
+        key: { type: string, description: 'The bucket: yyyy-mm-dd (a day, or a week''s Monday) or yyyy-mm' }
+        inflow: { $ref: '#/components/schemas/Money' }
+        outflow: { $ref: '#/components/schemas/Money' }
+    StatusCount:
+      type: object
+      required: [status, count, total]
+      properties:
+        status: { $ref: '#/components/schemas/DocStatus' }
+        count: { type: integer }
+        total: { $ref: '#/components/schemas/Money' }
+    PartyTotal:
+      type: object
+      required: [partyId, name, total]
+      properties: { partyId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
+    ProfitFigures:
+      type: object
+      description: 'As the profit report works it out (core `profitSnapshot`): taxable revenue less the average cost of goods sold, less expenses that are not billable'
+      required: [revenue, costOfGoods, grossProfit, expenses, netProfit, margin]
+      properties:
+        revenue: { $ref: '#/components/schemas/Money' }
+        costOfGoods: { $ref: '#/components/schemas/Money' }
+        grossProfit: { $ref: '#/components/schemas/Money' }
+        expenses: { $ref: '#/components/schemas/Money' }
+        netProfit: { $ref: '#/components/schemas/Money' }
+        margin: { type: number, description: Net profit as a percentage of revenue }
+    MoneyMovement:
+      type: object
+      required: [id, kind, date, amount, label]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [received, paid, expense] }
+        date: { type: string, format: date }
+        amount: { $ref: '#/components/schemas/Money' }
+        label: { type: string, description: 'The party, or the expense''s category' }
+        accountName: { type: string }
+    FilingDue:
+      type: object
+      required: [kind, period, due, optional, status]
+      properties:
+        kind: { type: string, enum: [gstr1, iff, gstr3b, pmt06, tds] }
+        period: { type: string, description: 'MMYYYY for GST; yyyy-mm (the month deducted) for TDS' }
+        gstin: { type: string, description: 'The registration it is for; absent for TDS' }
+        due: { type: string, format: date }
+        optional: { type: boolean, description: 'IFF is a choice under QRMP' }
+        status: { type: string, enum: [filed, pending, overdue], description: 'Filed as recorded here; TDS is filed once the month''s deductions are deposited; PMT-06 shows pending or overdue only' }
 
     # ---------------------------------------------------------------- assistant
     LixiChatRequest:

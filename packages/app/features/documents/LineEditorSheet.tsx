@@ -56,7 +56,7 @@ function LineEditorForm({
   maxQuantity,
 }: EditorProps & { line: DocumentLine }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common']);
+  const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
 
   const [name, setName] = useState(line?.name ?? '');
   // The line's own description, filled from the item's when it was added.
@@ -70,6 +70,9 @@ function LineEditorForm({
   const [discountValue, setDiscountValue] = useState(line?.discountValue ? String(line.discountValue) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(line?.taxCategoryId ?? '');
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
+  // A pure-agent reimbursement (Rule 33): recovered at cost, with no tax and outside the taxable value.
+  const [reimbursement, setReimbursement] = useState(!!line?.gst?.reimbursement);
+  const gst = line?.gst || reimbursement ? { ...line?.gst, reimbursement: reimbursement || undefined } : undefined;
   const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
@@ -94,6 +97,7 @@ function LineEditorForm({
       taxCategoryId,
       taxRate: category?.rate ?? 0,
       taxInclusive,
+      gst,
     },
     currency,
     taxContext,
@@ -126,8 +130,9 @@ function LineEditorForm({
       discountMode,
       discountValue: Number(discountValue) || 0,
       taxCategoryId,
-      taxRate: category?.rate ?? 0,
-      taxInclusive,
+      taxRate: reimbursement ? 0 : (category?.rate ?? 0),
+      taxInclusive: reimbursement ? false : taxInclusive,
+      gst,
     });
     onClose();
   };
@@ -252,11 +257,20 @@ function LineEditorForm({
           icon="percent-outline"
         />
 
+        {reimbursement ? null : (
+          <SwitchField
+            label={tr('sales:line.rateIncludesTax')}
+            description={tr('sales:line.inclusiveHint')}
+            value={taxInclusive}
+            onValueChange={setTaxInclusive}
+          />
+        )}
+
         <SwitchField
-          label={tr('sales:line.rateIncludesTax')}
-          description={tr('sales:line.inclusiveHint')}
-          value={taxInclusive}
-          onValueChange={setTaxInclusive}
+          label={tr('inventory:gst.reimbursement')}
+          description={tr('inventory:gst.reimbursementHint')}
+          value={reimbursement}
+          onValueChange={setReimbursement}
         />
 
         <View

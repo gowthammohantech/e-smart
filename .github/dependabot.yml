@@ -1,0 +1,20 @@
+# Weekly dependency updates, grouped so they arrive as a few PRs, not dozens. Expo's packages move
+# together with the SDK, so they're left to a deliberate upgrade (npx expo install --fix).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: 'expo'
+      - dependency-name: 'expo-*'
+      - dependency-name: '@expo/*'
+      - dependency-name: 'react-native'
+      - dependency-name: 'react-native-*'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Animated } from 'react-native';
+import { pushRecent, RECENT_LIMIT } from '@esmart/app/navigation/menu';
 
 export const SIDEBAR_WIDTH = 248;
 
@@ -49,56 +50,45 @@ export function useSidebarCollapsed(): [boolean, () => void] {
   return [value, toggle];
 }
 
-const EXPANDED_KEY = 'esmart.sidebar.expanded';
-const NONE_EXPANDED: readonly string[] = [];
+const RECENT_KEY = 'esmart.sidebar.recent';
+const NONE: readonly string[] = [];
 
-function readExpanded(): readonly string[] {
+function readRecent(): readonly string[] {
   try {
-    const parsed: unknown = JSON.parse(globalThis.localStorage?.getItem(EXPANDED_KEY) ?? '[]');
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : NONE_EXPANDED;
+    const parsed: unknown = JSON.parse(globalThis.localStorage?.getItem(RECENT_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string').slice(0, RECENT_LIMIT + 1) : NONE;
   } catch {
-    // Blocked or garbled storage: every section starts closed.
-    return NONE_EXPANDED;
+    // Blocked or garbled storage: the list starts empty and fills as you go.
+    return NONE;
   }
 }
 
-let expanded = readExpanded();
-const expandedListeners = new Set<() => void>();
+let recent = readRecent();
+const recentListeners = new Set<() => void>();
 
-function saveExpanded(next: readonly string[]) {
-  expanded = next;
+// One more than the list shows: the page you're on is left out of it.
+const KEEP = RECENT_LIMIT + 1;
+
+/** Notes a visit to a menu page (by key); the newest comes first. */
+export function visitPage(key: string) {
+  if (recent[0] === key) return;
+  recent = pushRecent(recent, key, KEEP);
   try {
-    globalThis.localStorage?.setItem(EXPANDED_KEY, JSON.stringify(next));
+    globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(recent));
   } catch {
     // Not remembering is fine.
   }
-  expandedListeners.forEach((l) => l());
+  recentListeners.forEach((l) => l());
 }
 
-/**
- * Which sidebar sections have their pages listed, remembered per browser.
- * `open` only ever adds, so landing in a section shows its pages without
- * undoing a section the person closed elsewhere.
- */
-export function useExpandedSections(): {
-  isOpen: (section: string) => boolean;
-  toggle: (section: string) => void;
-  open: (section: string) => void;
-} {
-  const value = useSyncExternalStore(
+/** The menu pages visited last, newest first, remembered per browser. */
+export function useRecentPages(): readonly string[] {
+  return useSyncExternalStore(
     (cb) => {
-      expandedListeners.add(cb);
-      return () => expandedListeners.delete(cb);
+      recentListeners.add(cb);
+      return () => recentListeners.delete(cb);
     },
-    () => expanded,
-    () => NONE_EXPANDED,
+    () => recent,
+    () => NONE,
   );
-  return {
-    isOpen: (section) => value.includes(section),
-    toggle: (section) =>
-      saveExpanded(expanded.includes(section) ? expanded.filter((s) => s !== section) : [...expanded, section]),
-    open: (section) => {
-      if (!expanded.includes(section)) saveExpanded([...expanded, section]);
-    },
-  };
 }

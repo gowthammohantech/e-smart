@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { schema } from '@esmart/db';
+import { totpCode, totpStep } from '../src/lib/totp';
 import { createCompany, ownerWithCompany, setupApi, signUpOwner, type TestContext } from './helpers';
 import { joinTeam } from './team-helpers';
 
 const t = setupApi();
 
-/** A user on their own account with a platform role, set straight in the DB as db:platform-admin does. */
+/**
+ * A user on their own account with a platform role, set straight in the DB as db:platform-admin does,
+ * who has set up an authenticator and passed it on this session.
+ */
 async function platformOperator(t: TestContext, role: 'superadmin' | 'support') {
   const op = await signUpOwner(t, { name: role === 'superadmin' ? 'Sam Super' : 'Sue Support' });
   await t.deps.db.update(schema.users).set({ platformRole: role }).where(eq(schema.users.id, op.user.id!));
-  return op;
+  const { secret } = (await t.post('/admin/mfa/enrollment', {}, { token: op.token })).body;
+  const code = totpCode(secret, totpStep(t.deps.now().getTime()));
+  const confirmed = await t.post('/admin/mfa/enrollment/confirm', { code }, { token: op.token });
+  if (confirmed.status !== 200) throw new Error(`MFA enrollment failed: ${confirmed.raw}`);
+  return { ...op, totpSecret: secret as string, recoveryCodes: confirmed.body.recoveryCodes as string[] };
 }
 
 const REASON = { reason: 'Support ticket #1234' };
@@ -140,7 +148,7 @@ describe('accounts', () => {
     expect(blank.status).toBe(422);
     const missing = await t.post(`/admin/accounts/${tenant.user.accountId}/suspend`, {}, { token: admin.token, unchecked: true });
     expect(missing.status).toBeGreaterThanOrEqual(400);
-    expect(await t.deps.db.select().from(schema.platformAuditEvents)).toHaveLength(0);
+    expect(await t.deps.db.select().from(schema.platformAuditEvents).where(eq(schema.platformAuditEvents.action, 'account.suspend'))).toHaveLength(0);
   });
 });
 
@@ -166,7 +174,7 @@ describe('plan override', () => {
     const tenantAudit = await t.get(`${tenant.c}/audit-events`, { token: tenant.token, query: { entityType: 'company' } });
     expect(tenantAudit.body.data[0]).toMatchObject({ action: 'plan changed to business', actorName: 'Sam Super (platform support)' });
 
-    const [row] = await t.deps.db.select().from(schema.platformAuditEvents);
+    const [row] = await t.deps.db.select().from(schema.platformAuditEvents).where(eq(schema.platformAuditEvents.action, 'company.plan.override'));
     expect(row).toMatchObject({ action: 'company.plan.override', targetId: tenant.company.id, reason: 'Pilot partner' });
     expect(row.before).toMatchObject({ plan: 'free', status: 'none' });
     expect(row.after).toMatchObject({ plan: 'business', status: 'trialing' });
@@ -222,6 +230,40 @@ describe('users', () => {
 
     const tenantAudit = await t.get(`${tenant.c}/audit-events`, { token: tenant.token, query: { entityType: 'user', entityId: member.user.id } });
     expect(tenantAudit.body.data.slice(0, 2).map((e: { action: string }) => e.action)).toEqual(['enabled', 'disabled']);
+  });
+
+  it('makes a user a superadmin, signing them out, and takes it away again', async () => {
+    const admin = await platformOperator(t, 'superadmin');
+    const tenant = await ownerWithCompany(t);
+    const url = `/admin/users/${tenant.user.id}/platform-role`;
+
+    const up = await t.put(url, { platformRole: 'superadmin', reason: 'New ops hire' }, { token: admin.token });
+    expect(up.status).toBe(200);
+    expect(up.body.platformRole).toBe('superadmin');
+    expect((await t.get('/me', { token: tenant.token })).status).toBe(401);
+    expect((await t.put(url, { platformRole: 'superadmin', ...REASON }, { token: admin.token })).body.code).toBe('NO_CHANGE');
+
+    const down = await t.put(url, { platformRole: null, reason: 'Left ops' }, { token: admin.token });
+    expect(down.status).toBe(200);
+    expect(down.body.platformRole).toBeNull();
+
+    const audit = await t.get('/admin/audit-events', { token: admin.token, query: { targetType: 'user', targetId: tenant.user.id } });
+    expect(audit.body.data.map((e: { action: string }) => e.action)).toEqual(['operator.role_removed', 'operator.role_granted']);
+  });
+
+  it('guards platform role changes', async () => {
+    const admin = await platformOperator(t, 'superadmin');
+    const support = await platformOperator(t, 'support');
+    const tenant = await ownerWithCompany(t);
+
+    const bySupport = await t.put(`/admin/users/${tenant.user.id}/platform-role`, { platformRole: 'superadmin', ...REASON }, { token: support.token });
+    expect(bySupport.body.code).toBe('PLATFORM_FORBIDDEN');
+    const self = await t.put(`/admin/users/${admin.user.id}/platform-role`, { platformRole: null, ...REASON }, { token: admin.token });
+    expect(self.body.code).toBe('SELF');
+
+    await t.post(`/admin/users/${tenant.user.id}/disable`, REASON, { token: admin.token });
+    const disabled = await t.put(`/admin/users/${tenant.user.id}/platform-role`, { platformRole: 'support', ...REASON }, { token: admin.token });
+    expect(disabled.body.code).toBe('USER_DISABLED');
   });
 
   it("won't disable a platform operator", async () => {

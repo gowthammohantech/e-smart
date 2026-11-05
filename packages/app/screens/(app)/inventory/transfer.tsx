@@ -14,8 +14,8 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
-import { useBranches, useDefaultBranchId, useItems, useStockMovements } from '../../../store/selectors';
-import { stockMapOn } from '@esmart/core/domain/stockLedger';
+import { useBranches, useDefaultBranchId } from '../../../store/selectors';
+import { useServerStockLevels, useTrackedItems } from '../../../remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -30,11 +30,11 @@ export default function StockTransfer() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
-  const items = useItems().filter((i) => i.trackInventory);
+  // Every tracked item, from the server.
+  const { items } = useTrackedItems();
   const branches = useBranches();
   // From the branch picked in the switcher, to the first other one.
   const defaultBranchId = useDefaultBranchId();
-  const movements = useStockMovements();
   const transferStock = useAppStore((s) => s.transferStock);
 
   const [itemId, setItemId] = useState<string | null>(params.itemId ?? null);
@@ -50,14 +50,16 @@ export default function StockTransfer() {
 
   const item = items.find((i) => i.id === itemId);
   // What the source branch holds on the transfer date, not today.
-  const available = item ? (stockMapOn(movements, date, fromBranchId)[item.id] ?? 0) : 0;
+  // On hand at each branch now, from the server, which checks the transfer again on saving.
+  const fromLevels = useServerStockLevels(fromBranchId, !!fromBranchId).data;
+  const available = item ? (fromLevels?.[item.id] ?? 0) : 0;
   const qty = Number(quantity) || 0;
   const exceeds = qty > available;
   const canSave = !!itemId && qty > 0 && fromBranchId !== toBranchId && !!toBranchId && !exceeds;
 
   if (branches.length < 2) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.branchTransfer') }} />
         <EmptyState
           illustration="single-location"
@@ -72,7 +74,7 @@ export default function StockTransfer() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.branchTransfer') }} />
 
       <ScrollView

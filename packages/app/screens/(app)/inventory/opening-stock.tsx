@@ -14,7 +14,8 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
+import { useBaseCurrency, useDefaultBranchId } from '../../../store/selectors';
+import { useTrackedItems } from '../../../remote/queries';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
@@ -25,11 +26,11 @@ export default function OpeningStock() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const insets = useSafeAreaInsets();
 
-  const items = useItems().filter((i) => i.trackInventory);
-  const stock = useStockLevels();
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
@@ -74,7 +75,7 @@ export default function OpeningStock() {
   useSaveShortcut(() => void save(), !saving && entered.length > 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.openingStock') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
@@ -147,7 +148,7 @@ export default function OpeningStock() {
             {formatMoney(money(totalValue, baseCurrency))}
           </Text>
         </View>
-        <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={entered.length === 0} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={blocked || entered.length === 0} fullWidth size="lg" />
       </View>
     </View>
   );

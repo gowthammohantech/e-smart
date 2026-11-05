@@ -14,6 +14,9 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
 import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
+import { useExpenseRecord } from '../../../../remote/queries';
+import { LoadingView } from '../../../../components/LoadingView';
+import { useCostCentres } from '../../../../store/books';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
@@ -37,6 +40,19 @@ export default function ExpenseDetail() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const expense = useExpense(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = useExpenseRecord(id);
+  const costCentre = useCostCentres(true).find((c) => c.id === expense?.costCentreId);
+  const billTo = useParty(expense?.customerId);
+  // The invoice that recovered it, when one has.
+  const recoveredOn = remote.data?.recoveredBy;
+  const extraBadges = (
+    <>
+      {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
+      {expense?.billable && billTo ? <Badge label={tr('purchases:expense.billTo', { name: billTo.name })} tone="neutral" /> : null}
+      {recoveredOn ? <Badge label={tr('purchases:expense.recoveredOn', { number: recoveredOn.number })} tone="success" /> : null}
+    </>
+  );
   const categories = useExpenseCategories();
   const accounts = usePaymentAccounts();
   const taxCategories = useTaxCategories();
@@ -45,9 +61,10 @@ export default function ExpenseDetail() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  if (!expense && remote.isLoading) return <LoadingView />;
   if (!expense) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.expense') }} />
         <EmptyState illustration="not-found" icon="receipt-text-outline" title={tr('common:notFound.title')} message={tr('common:notFound.expense')} />
       </View>
@@ -103,6 +120,7 @@ export default function ExpenseDetail() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 }}>
             {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" icon="repeat" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
+            {extraBadges}
           </View>
         </Card>
 
@@ -199,7 +217,7 @@ export default function ExpenseDetail() {
     const stacked = bp === 'tablet';
 
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen
           options={{
             title: expense.number || tr('nav:title.expense'),
@@ -228,7 +246,7 @@ export default function ExpenseDetail() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: expense.number || tr('nav:title.expense') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -259,6 +277,7 @@ export default function ExpenseDetail() {
             <Badge label={expense.number} tone="neutral" />
             {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
+            {extraBadges}
           </View>
         </Card>
 

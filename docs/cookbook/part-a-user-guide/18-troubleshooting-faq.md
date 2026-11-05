@@ -110,10 +110,13 @@ Nothing is deleted. Purchases, stock and expenses are hidden until you upgrade a
 Most screens, yes, and PDFs are generated in your chosen language. A few things stay in English: GST terms by design, plus server messages, some GST tab tiles, and parts of the server-made PDFs.
 
 **Where's the balance sheet / TDS / GSTR-3B?**
-These are outside the product's scope, along with payroll and batch/serial tracking. The app prepares GSTR-1 for filing; the rest is done in your accounting or filing software.
+On full plans: the balance sheet, trial balance and P&L are under **More › Books** ([19](19-books.md)); TDS and reverse charge are worked out on bills ([20](20-tds-rcm-itc.md)); GSTR-2B and GSTR-3B are under **Data & compliance** ([21](21-gst-returns.md)). Payroll and batch/serial tracking are still outside the product.
 
 **How do I close the books for a period?**
-Only an owner can, and only through the API today. There's no screen yet. Once closed, any change to a document dated in that period is refused with `PERIOD_LOCKED`.
+**Books › Close the books**, owner only ([19](19-books.md#close-the-books)). Filing GSTR-3B through the app closes its month on its own. Once closed, any change dated in that period is refused with `PERIOD_LOCKED`.
+
+**Can I file GSTR-1 and GSTR-3B from the app?**
+The app saves both to the portal. Filing from the app stays switched off until a chartered accountant signs off the rules ([`docs/accounting/RULES.md`](../../accounting/RULES.md)) and the GSP's returns routes pass its sandbox. Until then, file on the portal, where the saved return is waiting.
 
 ---
 
@@ -135,7 +138,11 @@ These features are planned or partly built. They are **not working today**, and 
 | **GSTIN lookup** (fill in a business from its GSTIN) | Partly built; some PIN codes and road distances aren't found | Enter the details by hand |
 | **Camera barcode scanning** | The scan screen accepts a typed or pasted code only | Type or paste the code |
 | **Google sign-in** | Not built | Use email and password, or phone OTP |
-| **Close the books (period lock) screen** | API only, owner only | — |
+| **Filing GSTR-1 and GSTR-3B from the app** | Built; switched off until CA sign-off and the GSP sandbox | Save from the app, file on the portal |
+| **Filing with a DSC** | EVC only | Companies save from the app and file on the portal |
+| **Refunding an advance** | Built | Open the receipt, tap **Refund** under the advance it holds; the refund prints as the refund voucher |
+| **Imports of goods (bill of entry) and ISD credit in 3B** | Always zero | Adjust on the portal before filing |
+| **GSTR-1 amendment tables** (B2BA, CDNRA) | Not produced | Correct in a later period's ordinary tables |
 | **Delete my account** in the app | Not built (app stores require it) | Contact support |
 | **Push notifications** | The phone app doesn't register for push yet | Check **Notifications** in the app |
 | **"3 of 6 users" on Plan & billing** | Shows plain counts only | Count against the plan table ([14](14-team-roles-plans.md#compare-plans-and-see-usage)) |
@@ -152,7 +159,7 @@ The production server won't start until each of these is set up. In demo and dev
 | SMS (OTP) | Phone sign-in. In demo, `123456` works. |
 | Email | Password reset, invitations, sending documents by email |
 | WhatsApp Business | Sending documents and reminders on WhatsApp |
-| GST gateway (GSP) | Real IRNs and e-way bills. The adapters are built, but not yet certified on the government sandboxes, and the QR signature is generated locally. |
+| GST gateway (GSP) | Real IRNs and e-way bills; the GST portal connection, GSTR-2B and filing. The adapters are built, but not yet certified on the government sandboxes, and the QR signature is generated locally. |
 | Razorpay | Plan checkout and payment links |
 | PDF rendering | Server-made PDFs (with IRN, QR and e-way bill number) |
 | File storage | Logos, receipts, attachments |

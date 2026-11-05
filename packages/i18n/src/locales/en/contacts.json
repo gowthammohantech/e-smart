@@ -8,8 +8,8 @@
     "subtitleCustomersOnly": "Who you sell to",
     "customers": "Customers",
     "suppliers": "Suppliers",
-    "searchCustomers": "Search customers",
-    "searchSuppliers": "Search suppliers",
+    "searchCustomers": "Search customers by name, GSTIN, phone or email",
+    "searchSuppliers": "Search suppliers by name, GSTIN, phone or email",
     "customerCount_one": "{{count}} customer",
     "customerCount_other": "{{count}} customers",
     "supplierCount_one": "{{count}} supplier",
@@ -22,7 +22,16 @@
     "noMatchesBody": "Try a different search term.",
     "addContact": "Add contact",
     "owesYou": "owes you",
-    "youOwe": "you owe"
+    "youOwe": "you owe",
+    "tile": {
+      "toReceive": "To receive",
+      "toPay": "To pay",
+      "overdue": "Overdue",
+      "advance": "Advances",
+      "advanceCaption": "Paid ahead, not yet applied",
+      "overdueCaption": "Past the due date"
+    },
+    "tabOther": "Other"
   },
   "form": {
     "businessName": "Business name",
@@ -30,6 +39,23 @@
     "contactPlaceholder": "Who you deal with",
     "businessDetails": "Business details",
     "gstinHint": "Leave blank for unregistered contacts.",
+    "panHint": "Needed for TDS. Filled from the GSTIN when left blank.",
+    "msme": "MSME (Udyam) registration",
+    "msmeHint": "Bills from a micro or small enterprise must be paid within 45 days.",
+    "msmeType": {
+      "none": "Not registered",
+      "micro": "Micro",
+      "small": "Small",
+      "medium": "Medium"
+    },
+    "udyam": "Udyam number",
+    "reverseCharge": "Bills are under reverse charge",
+    "reverseChargeHint": "You pay the GST on this supplier’s bills to the government yourself, such as a goods transport agency or an advocate.",
+    "tdsSection": "TDS section",
+    "tdsSectionHint": "TDS on their bills, once your business has a TAN.",
+    "lowerTds": "Lower deduction certificate (s.197)",
+    "lowerTdsRate": "Certificate rate (%)",
+    "lowerTdsValidTill": "Valid till",
     "gstRegistration": "GST registration",
     "sezHint": "SEZ and overseas buyers are reported differently on e-invoices.",
     "phone": "Phone",
@@ -72,7 +98,12 @@
     "customerAdded": "Customer added",
     "customerUpdated": "Customer updated",
     "supplierAdded": "Supplier added",
-    "supplierUpdated": "Supplier updated"
+    "supplierUpdated": "Supplier updated",
+    "openingSide": {
+      "dr": "They owe you (Dr)",
+      "cr": "You owe them (Cr)"
+    },
+    "openingBalanceHintBoth": "What stood between you when you started; choose who owed whom."
   },
   "detail": {
     "inactive": "Inactive",
@@ -110,6 +141,67 @@
     "editContact": "Edit contact",
     "sendReminder": "Send payment reminder",
     "deleteContact": "Delete contact",
-    "deleteTitle": "Delete {{name}}?"
+    "deleteTitle": "Delete {{name}}?",
+    "statement": "Statement of account",
+    "payable": "You owe them"
+  },
+  "statement": {
+    "title": "Statement · {{name}}",
+    "from": "From",
+    "to": "To",
+    "opening": "Opening on {{date}}",
+    "closing": "Balance on {{date}}",
+    "openingEntry": "Opening balance",
+    "advance": "advance",
+    "dr": "Dr",
+    "cr": "Cr",
+    "type": {
+      "document": "Document",
+      "payment": "Payment",
+      "voucher": "Voucher",
+      "opening": "Opening"
+    },
+    "empty": "Nothing in this period",
+    "emptyBody": "No documents, payments or vouchers between these dates.",
+    "loadFailed": "Could not load the statement",
+    "download": "Download PDF",
+    "preparing": "Preparing the statement…",
+    "downloaded": "Statement downloaded",
+    "ready": "Statement ready",
+    "failed": "Could not make the PDF."
+  },
+  "kind": {
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "both": "Both",
+    "general": "Other"
+  },
+  "kindHint": {
+    "customer": "You sell to them.",
+    "supplier": "You buy from them.",
+    "both": "You buy from and sell to them, on one account.",
+    "general": "A contact only, such as a landlord, auditor or transporter. Not on invoices, bills or payments."
+  },
+  "import": {
+    "title": "Import contacts",
+    "action": "Import",
+    "hint": "Paste or choose a CSV saved from Excel, Google Sheets, Tally or another app. Columns are found by their names (Name, GSTIN, Phone, Email, Address, City, State, PIN, Opening balance, Dr/Cr, Credit days, Type). Check it first; nothing is saved until you import.",
+    "defaultKind": "Type for rows that do not say",
+    "chooseFile": "Choose CSV file",
+    "paste": "Or paste the CSV here",
+    "noNameColumn": "No column called Name (or Party name, Customer name…) was found in the first row.",
+    "summary": "{{good}} of {{total}} rows can be imported",
+    "line": "Line {{line}}",
+    "more": "and {{count}} more rows",
+    "check": "Check",
+    "import": "Import {{count}}",
+    "done": "{{count}} contacts imported",
+    "skipped": "{{count}} left out",
+    "tooMany": "Up to 1,000 at a time; split the sheet.",
+    "status": {
+      "invalid": "Fix",
+      "duplicate": "Already there",
+      "ready": "Ready"
+    }
   }
 }

@@ -34,7 +34,8 @@ export function Screen({
 }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const bg = background === 'bg' ? t.c.bg : t.c.card;
+  // 'bg' stays clear so the navigator's doodle page (PageSurface) shows through.
+  const bg = background === 'bg' ? 'transparent' : t.c.card;
 
   const inner: StyleProp<ViewStyle> = [
     padded ? { paddingHorizontal: t.spacing.lg } : null,

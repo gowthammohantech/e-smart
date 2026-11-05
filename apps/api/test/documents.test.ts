@@ -110,6 +110,20 @@ describe('documents: numbering and lifecycle', () => {
     expect(done.map((r) => r.body.document.number).sort()).toEqual(['INV/26-27/0001', 'INV/26-27/0002', 'INV/26-27/0003', 'INV/26-27/0004', 'INV/26-27/0005']);
   });
 
+  it('deletes a draft with a pending e-invoice record, but not one with an IRN', async () => {
+    const m = await moneySetup(t);
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    await t.deps.db.insert(schema.eInvoices).values({ documentId: draft.body.id, companyId: m.companyId, status: 'pending' } as never);
+    expect((await t.del(`${m.c}/documents/${draft.body.id}`, { token: m.token })).status).toBe(204);
+    expect(await t.deps.db.select().from(schema.eInvoices).where(eq(schema.eInvoices.documentId, draft.body.id))).toHaveLength(0);
+
+    const other = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    await t.deps.db.insert(schema.eInvoices).values({ documentId: other.body.id, companyId: m.companyId, status: 'pending', irn: 'a'.repeat(64) } as never);
+    const refused = await t.del(`${m.c}/documents/${other.body.id}`, { token: m.token });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('DOCUMENT_IN_USE');
+  });
+
   it('deletes drafts only; a finalised document is cancelled and keeps its number', async () => {
     const m = await moneySetup(t);
     const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
@@ -175,7 +189,7 @@ describe('documents: numbering and lifecycle', () => {
 
     const detail = await t.get(url, { token: m.token });
     expect(detail.body.allowedTransitions).toEqual([]);
-    expect(detail.body.allowedConversions).toEqual(['salesOrder', 'invoice']);
+    expect(detail.body.allowedConversions).toEqual(['proforma', 'salesOrder', 'invoice']);
   });
 
   it('converts quote → order → delivery → invoice with source links, and duplicates into a new draft', async () => {
@@ -246,6 +260,27 @@ describe('documents: numbering and lifecycle', () => {
     const p2 = await t.get(`${m.c}/documents`, { token: m.token, query: { limit: 2, cursor: p1.body.nextCursor } });
     expect([...p1.body.data, ...p2.body.data].map((d: { id: string }) => d.id)).toEqual(all.body.data.map((d: { id: string }) => d.id));
     expect(p2.body.nextCursor).toBeNull();
+  });
+
+  it('sums up a list without paging through it: count, total and every status there is', async () => {
+    const m = await moneySetup(t);
+    await issueInvoice(t, m, { date: '2026-08-01', dueDate: '2026-08-31' });
+    await issueInvoice(t, m, { partyId: m.bengaluru.id, supplierDocNumber: undefined, reference: 'PO-7781' });
+    const cancelled = await issueInvoice(t, m);
+    await t.post(`${m.c}/documents/${cancelled.id}/status`, { status: 'cancelled' }, { token: m.token });
+    await t.post(`${m.c}/documents`, invoiceBody(m, { kind: 'quote' }), { token: m.token });
+
+    const all = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice' } });
+    expect(all.status).toBe(200);
+    // A cancelled invoice is counted but adds nothing to the total.
+    expect(all.body).toMatchObject({ count: 3, total: { minor: 236000 * 2, currency: 'INR' } });
+    expect(all.body.byStatus).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'overdue', count: 1, total: { minor: 236000, currency: 'INR' } }), expect.objectContaining({ status: 'cancelled', count: 1 })]));
+    // A status filter narrows the count and total, never the chips.
+    const overdue = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice', status: 'overdue' } });
+    expect(overdue.body).toMatchObject({ count: 1, total: { minor: 236000 } });
+    expect(overdue.body.byStatus).toEqual(all.body.byStatus);
+    const found = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice', q: '7781' } });
+    expect(found.body.count).toBe(1);
   });
 });
 

@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, type SQL } from 'drizzle-orm';
+import { and, eq, gte, ilike, lt, or, type SQL } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { defineHandlers } from '../../context';
@@ -32,7 +32,7 @@ const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_00
 export const auditHandlers = defineHandlers({
   /** Newest first. `from` and `to` are inclusive UTC dates. */
   async listAuditEvents(ctx) {
-    const { entityType, entityId, actorId, from, to, limit, cursor } = ctx.query;
+    const { entityType, entityId, actorId, q, from, to, limit, cursor } = ctx.query;
     const k = newestFirst({ cursor, limit, at: A.createdAt, id: A.id });
     const filters: SQL[] = [eq(A.companyId, ctx.company.id)];
     if (entityType) filters.push(eq(A.entityType, entityType));
@@ -40,6 +40,10 @@ export const auditHandlers = defineHandlers({
     if (actorId) filters.push(eq(A.actorId, actorId));
     if (from) filters.push(gte(A.createdAt, new Date(`${from}T00:00:00Z`)));
     if (to) filters.push(lt(A.createdAt, nextDay(to)));
+    if (q?.trim()) {
+      const like = `%${q.trim()}%`;
+      filters.push(or(ilike(A.action, like), ilike(A.entityType, like), ilike(A.entityLabel, like), ilike(A.actorName, like))!);
+    }
     const rows = await ctx.db
       .select({ row: A, cursorAt: k.cursorColumn })
       .from(A)

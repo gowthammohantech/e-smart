@@ -5,11 +5,14 @@ import { isPayableDocument } from '@esmart/core/domain/documentStates';
 import type { BusinessDocument } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from '../../lib/audit';
-import { compact, iso, money, versioned } from '../../lib/wire';
+import { compact, gstFlagsFrom, iso, money, versioned } from '../../lib/wire';
 import type { DocRow } from './engine';
 import { effectiveStatus } from './lifecycle';
 
 type Compliance = Schema<'ComplianceInfo'>;
+
+/** Tax components in the order an invoice prints them: centre and state, or integrated, then cess. */
+const TAX_ORDER: string[] = ['CGST', 'SGST', 'IGST', 'VAT', 'GST', 'CESS', 'NONE'];
 type EwayRow = Pick<typeof schema.ewayBills.$inferSelect, 'id' | 'ewayBillNumber' | 'validUpto' | 'status'>;
 type EInvoiceRow = typeof schema.eInvoices.$inferSelect;
 
@@ -61,6 +64,13 @@ async function complianceRows(db: DbOrTx, rows: DocRow[]) {
         .where(inArray(schema.ewayBills.id, ewayIds))
     : [];
   return { einv: new Map(einv.map((e) => [e.documentId, e])), eway: new Map(eway.map((e) => [e.id, e])) };
+}
+
+/** A stored bill of entry on the wire: amounts in base currency, as customs assessed them. */
+function boeToWire(raw: unknown, base: string): Schema<'BusinessDocument'>['billOfEntry'] {
+  const b = raw as { number: string; date: string; portCode: string; assessableMinor: number; igstMinor: number; cessMinor: number } | null;
+  if (!b) return undefined;
+  return { number: b.number, date: b.date, portCode: b.portCode, assessableValue: money(b.assessableMinor, base), igst: money(b.igstMinor, base), cess: b.cessMinor ? money(b.cessMinor, base) : undefined };
 }
 
 /** Full documents: lines, tax breakdown, attachments and compliance, batched. */
@@ -115,6 +125,8 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
           taxCategoryId: l.taxCategoryId,
           taxRate: Number(l.taxRate),
           taxInclusive: l.taxInclusive,
+          gst: gstFlagsFrom(l),
+          expenseId: l.expenseId ?? undefined,
         })),
       documentDiscountMode: row.documentDiscountMode,
       documentDiscountValue: Number(row.documentDiscountValue),
@@ -122,10 +134,29 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       applyRoundOff: row.applyRoundOff,
       roundOffManual: row.roundOffManualMinor !== null ? m(row.roundOffManualMinor) : undefined,
       placeOfSupplyStateCode: row.placeOfSupplyStateCode,
+      reverseCharge: row.reverseCharge || undefined,
+      partyGstin: row.partyGstin,
+      partyStateCode: row.partyStateCode,
       notes: row.notes,
       terms: row.terms,
       attachmentIds: attachments.filter((a) => a.entityId === row.id).map((a) => a.id),
       sourceDocumentId: row.sourceDocumentId,
+      noteReason: row.noteReason,
+      billOfEntry: boeToWire(row.billOfEntry, baseCurrency),
+      isdInvoice: row.isdInvoice || undefined,
+      tds: row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: m(row.tdsAmountMinor) } : undefined,
+      selfInvoiceNumber: row.selfInvoiceNumber,
+      itcReversedOn: row.itcReversedOn,
+      itcReclaimedOn: row.itcReclaimedOn,
+      itcClaimPeriod: row.itcClaimPeriod,
+      costCentreId: row.costCentreId,
+      customFields: row.customFields as Record<string, unknown>,
+      approval: (row.approval as DocumentWire['approval']) ?? undefined,
+      recurrence: row.recurrence,
+      nextRecurrenceDate: row.nextRecurrenceDate,
+      recurrenceEndDate: row.recurrenceEndDate,
+      recurrenceAutoSend: row.recurrence !== 'none' ? row.recurrenceAutoSend : undefined,
+      recurringParentId: row.recurringParentId,
       totals: {
         subtotal: m(row.subtotalMinor),
         lineDiscount: m(row.lineDiscountMinor),
@@ -137,13 +168,17 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
             categoryId: t.taxCategoryId,
             categoryName: t.categoryName,
             rate: Number(t.rate),
+            reverseCharge: t.reverseCharge || undefined,
             taxableAmount: m(t.taxableAmountMinor),
             components: components
               .filter((c) => c.taxLineId === t.id)
+              .sort((a, b) => TAX_ORDER.indexOf(a.type) - TAX_ORDER.indexOf(b.type))
               .map((c) => ({ type: c.type, label: c.label, rate: Number(c.rate), amount: m(c.amountMinor) })),
             totalTax: m(t.totalTaxMinor),
           })),
         totalTax: m(row.totalTaxMinor),
+        reverseChargeTax: m(row.reverseChargeTaxMinor),
+        reimbursements: m(row.reimbursementsMinor),
         charges: m(row.chargesMinor),
         roundOff: m(row.roundOffMinor),
         grandTotal: m(row.grandTotalMinor),
@@ -177,9 +212,14 @@ export async function summariesToWire(db: DbOrTx, rows: SummaryRow[], now: Date)
       branchId: row.branchId,
       date: row.date,
       dueDate: row.dueDate,
+      supplierDocNumber: row.supplierDocNumber,
+      itcClaimPeriod: row.itcClaimPeriod,
       grandTotal: money(row.grandTotalMinor, currency),
+      exchangeRate: Number(row.exchangeRate),
+      totalTax: money(row.totalTaxMinor, currency),
       outstanding: money(open ? Math.max(row.grandTotalMinor - row.amountPaidMinor, 0) : 0, currency),
       eInvoiceStatus: compliance.einv.get(row.id)?.status,
+      irn: compliance.einv.get(row.id)?.irn?.trim(),
       ewayBillStatus: ewayStatus(row.currentEwayBillId ? compliance.eway.get(row.currentEwayBillId) : undefined, now),
     });
   });

@@ -2,6 +2,8 @@
 // loading would buy only async complexity and a Suspense boundary this app
 // does not have.
 import auth from './auth.json';
+import banking from './banking.json';
+import books from './books.json';
 import common from './common.json';
 import compliance from './compliance.json';
 import contacts from './contacts.json';
@@ -19,6 +21,8 @@ import settings from './settings.json';
 
 export default {
   auth,
+  banking,
+  books,
   common,
   compliance,
   contacts,

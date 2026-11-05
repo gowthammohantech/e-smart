@@ -21,6 +21,17 @@ function multipart(name: string, filename: string, type: string, bytes: Buffer) 
 const branch = (over: Record<string, unknown> = {}) => ({ name: 'Bengaluru', code: 'blr', address: BENGALURU, ...over });
 
 describe('company profile', () => {
+  it('saves with a blank TAN, which clears it, and refuses a malformed one', async () => {
+    const { token, company, c } = await ownerWithCompany(t);
+    const withTan = await t.put(c, { ...company, tan: 'CHED12345A' }, { token });
+    expect(withTan.status).toBe(200);
+    expect(withTan.body.tan).toBe('CHED12345A');
+    const cleared = await t.put(c, { ...withTan.body, tan: '' }, { token });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.tan).toBeUndefined();
+    expect((await t.put(c, { ...company, tan: 'CHED123' }, { token })).status).toBe(422);
+  });
+
   it('saves with If-Match, ignores plan, and keeps the primary branch address in step', async () => {
     const { token, company, c } = await ownerWithCompany(t);
     const next = { ...company, name: 'Vertex Traders LLP', plan: 'business', phone: '+919876543210', address: { ...MUMBAI, line1: '99 New Road' } };
@@ -86,6 +97,48 @@ describe('company profile', () => {
     const got = await t.get(c, { token });
     expect(got.body.logoUri).toBeUndefined();
     expect(await t.deps.db.select().from(schema.attachments).where(eq(schema.attachments.companyId, company.id!))).toHaveLength(0);
+  });
+
+  it('uploads and removes the signature, next to the logo', async () => {
+    const { token, company, c } = await ownerWithCompany(t);
+    const logo = multipart('file', 'logo.png', 'image/png', PNG);
+    await t.put(`${c}/logo`, logo.body, { token, headers: logo.headers });
+    const sig = multipart('file', 'sign.png', 'image/png', PNG);
+    const res = await t.put(`${c}/signature`, sig.body, { token, headers: sig.headers });
+    expect(res.status).toBe(200);
+    expect(res.body.signatureUri).toMatch(/_storage/);
+    // The logo is still there: each image has its own slot.
+    expect(res.body.logoUri).toMatch(/_storage/);
+    const atts = await t.deps.db.select().from(schema.attachments).where(eq(schema.attachments.companyId, company.id!));
+    expect(atts.map((a) => a.storageKey.split('/')[0]).sort()).toEqual(['logos', 'signatures']);
+
+    expect((await t.del(`${c}/signature`, { token })).status).toBe(204);
+    const got = await t.get(c, { token });
+    expect(got.body.signatureUri).toBeUndefined();
+    expect(got.body.logoUri).toMatch(/_storage/);
+  });
+
+  it('saves the bank account customers pay into, tidied, and clears it field by field', async () => {
+    const { token, c } = await ownerWithCompany(t);
+    const current = (await t.get(c, { token })).body;
+    const bankDetails = { bankName: 'HDFC Bank', accountName: 'Vertex Traders', accountNumber: '5020 0012 3456 78', ifsc: 'hdfc0001234', branch: 'Andheri', upiId: 'Vertex@OKHDFC' };
+    const saved = await t.put(c, { ...current, bankDetails }, { token });
+    expect(saved.status).toBe(200);
+    expect(saved.body.bankDetails).toEqual({ ...bankDetails, accountNumber: '50200012345678', ifsc: 'HDFC0001234', upiId: 'vertex@okhdfc' });
+
+    // Saved without the field (an older client), the account stays.
+    const { bankDetails: _kept, ...withoutBank } = saved.body;
+    const kept = await t.put(c, withoutBank, { token });
+    expect(kept.body.bankDetails).toEqual(saved.body.bankDetails);
+
+    // An empty string clears that one field.
+    const cleared = await t.put(c, { ...kept.body, bankDetails: { ...kept.body.bankDetails, upiId: '' } }, { token });
+    expect(cleared.body.bankDetails.upiId).toBeUndefined();
+    expect(cleared.body.bankDetails.ifsc).toBe('HDFC0001234');
+
+    // A malformed IFSC doesn't get in.
+    const bad = await t.put(c, { ...cleared.body, bankDetails: { ifsc: 'HDFC1234' } }, { token });
+    expect(bad.status).toBe(422);
   });
 });
 

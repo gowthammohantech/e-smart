@@ -12,11 +12,13 @@ import {
   type IrpInvoicePayload,
 } from '@esmart/core/domain/eInvoice';
 import { isFinalized } from '@esmart/core/domain/documentStates';
-import type { ComplianceIssue } from '@esmart/core/types';
+import type { CancelReasonCode, ComplianceIssue } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { defineHandlers, type AuthUser, type CompanyRow, type Deps } from '../../context';
-import { conflict, invalid, unprocessable } from '../../http/errors';
+import { ApiError, conflict, invalid, unprocessable } from '../../http/errors';
+import { newId } from '../../lib/ids';
+import { isUnanswered } from '../../providers/compliance';
 import type { DbOrTx } from '../../lib/audit';
 import { notify } from '../../lib/notify';
 import { companyCore, partyCore, type DocRow } from '../documents/engine';
@@ -178,14 +180,38 @@ export async function generateEInvoiceFor(
   });
 }
 
+const CA = schema.complianceAttempts;
+
+/** No answer yet to a cancel: the portal may have cancelled the IRN. */
+const cancelStillChecking = () =>
+  new ApiError(502, 'IRP_PENDING', "The e-invoice portal didn't answer. We're checking whether it cancelled the IRN and will update this document in a few minutes.");
+
+/** Records a cancel the portal made: on the request's answer, or found by the recovery lookup. */
+export async function recordIrnCancelled(
+  db: Deps['db'],
+  deps: Deps,
+  company: CompanyRow,
+  actor: AuthUser,
+  documentId: string,
+  c: { reasonCode: CancelReasonCode; remark?: string | null; reason: string; irn: string; now: Date; attemptId?: string },
+) {
+  await db.transaction(async (tx) => {
+    const row = await findDocument(tx, company, actor, documentId, { lock: true });
+    await writeEInvoice(tx, row, { status: 'cancelled', cancelledAt: c.now, cancelReasonCode: c.reasonCode, cancelRemark: c.remark?.slice(0, 100) ?? null }, false, c.now);
+    await touchDocument(tx, actor, row, c.now, { complianceLastMessage: `IRN cancelled on the portal: ${c.reason.toLowerCase()}` }, { action: 'cancelled e-invoice', before: c.irn, after: c.reason });
+    await notify(tx, deps, { companyId: row.companyId, kind: 'compliance', title: 'IRN cancelled', body: `${row.number} · ${c.reason}`, entityType: 'document', entityId: row.id });
+    if (c.attemptId) await tx.update(CA).set({ status: 'settled', settledAt: c.now }).where(eq(CA.id, c.attemptId));
+  });
+}
+
 /** How old an unanswered attempt must be before the job takes it up, and how long it keeps trying. */
 const RECONCILE_AFTER_MS = 5 * 60_000;
 const RECONCILE_UNTIL_MS = 24 * 3_600_000;
 
 /**
  * Settles e-invoices whose portal call never got an answer, by asking again:
- * the portal recognises a document it already has and hands back its IRN. Called
- * on an interval by the server.
+ * the portal recognises a document it already has and hands back its IRN. Run by
+ * the `einvoice.reconcile` job every 5 minutes.
  */
 export async function reconcileEInvoices(deps: Deps): Promise<number> {
   const now = deps.now();
@@ -195,6 +221,14 @@ export async function reconcileEInvoices(deps: Deps): Promise<number> {
     .where(and(eq(E.status, 'pending'), lt(E.lastAttemptAt, new Date(now.getTime() - RECONCILE_AFTER_MS)), gt(E.lastAttemptAt, new Date(now.getTime() - RECONCILE_UNTIL_MS))));
   let settled = 0;
   for (const { documentId, companyId } of stuck) {
+    // Claim it: only the instance whose update moves the attempt time on asks the portal. Another
+    // running the same reconcile finds the row too fresh and leaves it, so the invoice isn't sent twice.
+    const [claimed] = await deps.db
+      .update(E)
+      .set({ lastAttemptAt: now })
+      .where(and(eq(E.documentId, documentId), eq(E.status, 'pending'), lt(E.lastAttemptAt, new Date(now.getTime() - RECONCILE_AFTER_MS))))
+      .returning({ documentId: E.documentId });
+    if (!claimed) continue;
     try {
       const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
       const [doc] = await deps.db.select({ createdBy: D.createdBy }).from(D).where(eq(D.id, documentId));
@@ -266,6 +300,8 @@ export const eInvoiceHandlers = defineHandlers({
     const { reasonCode, remark } = ctx.body;
     if (requiresCancelRemark(reasonCode) && !remark?.trim()) throw invalid('remark', 'Say why the IRN is being cancelled');
     const now = ctx.now.toISOString();
+    const [open] = await ctx.db.select({ id: CA.id }).from(CA).where(and(eq(CA.documentId, ctx.params.id), eq(CA.operation, 'irn.cancel'), eq(CA.status, 'pending')));
+    if (open) throw cancelStillChecking();
     const checked = await ctx.db.transaction(async (tx) => {
       const row = await findDocument(tx, ctx.company, ctx.user, ctx.params.id, { lock: true });
       const [e] = await tx.select().from(E).where(eq(E.documentId, row.id));
@@ -284,17 +320,21 @@ export const eInvoiceHandlers = defineHandlers({
       const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'einvoice');
       return { creds, irn: e!.irn!.trim(), generatedAt: e!.generatedAt!.toISOString() };
     });
-    // Outside the transaction: a cancel the portal has made can't be rolled back with it.
+    // Outside the transaction: a cancel the portal has made can't be rolled back with it. The attempt is
+    // written first, so a lost answer is settled later by asking the portal for the IRN's status.
+    const attemptId = newId('cat');
+    try {
+      await ctx.db.insert(CA).values({ id: attemptId, companyId: ctx.company.id, documentId: ctx.params.id, operation: 'irn.cancel', request: { irn: checked.irn, reasonCode, remark: remark ?? null }, actorId: ctx.user.id, startedAt: ctx.now });
+    } catch {
+      throw cancelStillChecking();
+    }
     const response = await ctx.deps.providers.compliance.cancelIrn(checked.creds, { irn: checked.irn, irnGeneratedAt: checked.generatedAt, reasonCode, remark, now });
-    if (!response.ok) throw portalRejected(response.errors, 'IRP_REJECTED');
-
-    await ctx.db.transaction(async (tx) => {
-      const row = await findDocument(tx, ctx.company, ctx.user, ctx.params.id, { lock: true });
-
-      await writeEInvoice(tx, row, { status: 'cancelled', cancelledAt: ctx.now, cancelReasonCode: reasonCode, cancelRemark: remark?.slice(0, 100) ?? null }, false, ctx.now);
-      await touchDocument(tx, ctx.user, row, ctx.now, { complianceLastMessage: `IRN cancelled on the portal: ${response.reason.toLowerCase()}` }, { action: 'cancelled e-invoice', before: checked.irn, after: response.reason });
-      await notify(tx, ctx.deps, { companyId: row.companyId, kind: 'compliance', title: 'IRN cancelled', body: `${row.number} · ${response.reason}`, entityType: 'document', entityId: row.id });
-    });
+    if (!response.ok) {
+      if (isUnanswered(response)) throw cancelStillChecking();
+      await ctx.db.update(CA).set({ status: 'failed', settledAt: ctx.now, lastError: response.errors[0]?.message ?? 'rejected' }).where(eq(CA.id, attemptId));
+      throw portalRejected(response.errors, 'IRP_REJECTED');
+    }
+    await recordIrnCancelled(ctx.db, ctx.deps, ctx.company, ctx.user, ctx.params.id, { reasonCode, remark, reason: response.reason, irn: checked.irn, now: ctx.now, attemptId });
     return { ok: true, issues: [] };
   },
 });

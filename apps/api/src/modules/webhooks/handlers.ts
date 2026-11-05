@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { accountTypesFor } from '@esmart/core/domain/paymentAccounts';
 import type { PaymentMethod, PlanTier } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -29,7 +29,7 @@ export async function actorFor(db: DbOrTx, userId: string | null | undefined, so
   if (!userId) return null;
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
   if (!u) return null;
-  return { id: u.id, accountId: u.accountId, name: source, email: u.email, role: u.role, platformRole: null, status: u.status, locale: u.locale, companyIds: [], branchIds: [], sessionId: '' };
+  return { id: u.id, accountId: u.accountId, name: source, email: u.email, role: u.role, platformRole: null, status: u.status, locale: u.locale, companyIds: [], branchIds: [], sessionId: '', mfaEnrolled: false, mfaVerified: false };
 }
 
 async function ownerOf(db: DbOrTx, companyId: string, source: string): Promise<AuthUser | null> {
@@ -200,7 +200,7 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
 
 /**
  * `refund.processed`: a full refund undoes the payment it refunds, reopening
- * what it settled. A partial one is left for a person to record.
+ * what it settled. A partial one makes the payment smaller by that much.
  */
 async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Promise<string | void> {
   const refund = obj(obj(payload.refund).entity);
@@ -213,11 +213,53 @@ async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Prom
   const actor = await ownerOf(tx, payment.companyId, 'Razorpay');
   if (!company || !actor) return 'the payment no longer resolves to a company';
   const amount = num(refund.amount) ?? 0;
-  if (amount < payment.amountMinor) {
-    await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Partial refund to record', body: `${payment.number}: ${payment.currency.trim()} ${(amount / 100).toFixed(2)} was refunded online. Update the payment to match.`, entityType: 'payment', entityId: payment.id });
-    return 'partial refund left for the user to record';
+  if (!(amount > 0)) return 'refund has no amount';
+  if (amount >= payment.amountMinor) {
+    await deletePayment(tx, company, actor, payment, ctx.now);
+    return;
   }
-  await deletePayment(tx, company, actor, payment, ctx.now);
+  // Part of it went back: the payment shrinks by that much. Its unallocated part (an advance) goes
+  // first, then what it paid on the newest invoices, so the oldest stay settled.
+  const A = schema.paymentAllocations;
+  const allocations = await tx
+    .select({ documentId: A.documentId, amountMinor: A.amountMinor, tdsMinor: A.tdsMinor, discountMinor: A.discountMinor, writeOffMinor: A.writeOffMinor, date: schema.documents.date })
+    .from(A)
+    .innerJoin(schema.documents, eq(schema.documents.id, A.documentId))
+    .where(eq(A.paymentId, payment.id))
+    .orderBy(desc(schema.documents.date), desc(schema.documents.id));
+  const remaining = payment.amountMinor - amount;
+  let release = Math.max(0, allocations.reduce((sum, a) => sum + a.amountMinor, 0) - remaining);
+  const kept = allocations
+    .map((a) => {
+      const cut = Math.min(a.amountMinor, release);
+      release -= cut;
+      // Only the cash is refunded; TDS, discount and write-off stay as they were.
+      return { documentId: a.documentId, amountMinor: a.amountMinor - cut, tdsMinor: a.tdsMinor, discountMinor: a.discountMinor, writeOffMinor: a.writeOffMinor };
+    })
+    .filter((a) => a.amountMinor + a.tdsMinor + a.discountMinor + a.writeOffMinor > 0);
+  const refunded = `${payment.currency.trim()} ${(amount / 100).toFixed(2)}`;
+  await writePayment(
+    tx,
+    ctx.deps,
+    company,
+    actor,
+    {
+      direction: 'received',
+      partyId: payment.partyId,
+      branchId: payment.branchId,
+      date: payment.date,
+      amountMinor: remaining,
+      currency: payment.currency.trim(),
+      exchangeRate: Number(payment.exchangeRate),
+      method: payment.method,
+      reference: payment.reference,
+      accountId: payment.accountId,
+      notes: [payment.notes, `${refunded} refunded online`].filter(Boolean).join(' · ').slice(0, 500),
+      allocations: kept,
+    },
+    { now: ctx.now, existing: payment },
+  );
+  await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Partial refund recorded', body: `${payment.number}: ${refunded} was refunded online, so the payment is now ${payment.currency.trim()} ${(remaining / 100).toFixed(2)}.`, entityType: 'payment', entityId: payment.id });
 }
 
 /** `subscription.cancelled` (and `.completed`, `.halted`): back to Free; no records are lost. */

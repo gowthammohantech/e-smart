@@ -33,7 +33,7 @@ export const LIXI_ROUTES = [
   '/(app)/settings/plan',
 ] as const;
 
-const DOC_KINDS = new Set<string>(['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn']);
+const DOC_KINDS = new Set<string>(['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote']);
 const LANGUAGES: Record<string, string> = { en: 'English', ta: 'Tamil' };
 
 const SPECS: ToolSpec[] = TOOLS.map((t) => ({

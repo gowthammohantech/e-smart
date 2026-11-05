@@ -8,10 +8,14 @@ import type { ColorTokens } from './tokens';
  */
 
 const dark: ColorTokens = {
-  primary: '#3B8BFF',
-  primaryPressed: '#2F74DB',
-  primaryHover: '#5A9DFF',
-  onPrimary: '#FFFFFF',
+  // Light enough to read at 4.5:1 on its own chip tint, as a selected nav item or
+  // a secondary button's label (#3B8BFF was 4.4:1 there).
+  primary: '#559BFF',
+  primaryPressed: '#4A8EF0',
+  primaryHover: '#6FAAFF',
+  // Dark text: white on this blue is 3.3:1, under the 4.5:1 a button label needs.
+  // Darkening the blue instead would fail it as link text on the dark page.
+  onPrimary: '#0B0F17',
   bg: '#0B0F17',
   canvas: '#070A10',
   card: '#121826',
@@ -19,13 +23,14 @@ const dark: ColorTokens = {
   paper: '#121826',
   line: '#1F2737',
   lineStrong: '#2C3649',
+  inputBorder: '#636D80',
   text: '#E9EDF5',
   muted: '#8B95A8',
   good: '#3CCB7F',
   warn: '#F5B544',
   bad: '#F97066',
-  info: '#5A9DFF',
-  chip: 'rgba(59,139,255,0.14)',
+  info: '#6FAAFF',
+  chip: 'rgba(85,155,255,0.14)',
   bezel: '#2C3649',
   overlay: 'rgba(3,6,12,0.66)',
   goodSoft: 'rgba(60,203,127,0.14)',
@@ -35,9 +40,11 @@ const dark: ColorTokens = {
 };
 
 const light: ColorTokens = {
-  primary: '#0A6CF0',
-  primaryPressed: '#0749A6',
-  primaryHover: '#0859C9',
+  // Dark enough to read at 4.5:1 on its own chip tint, hovered or not, as a
+  // selected nav item or a secondary button's label (#0A6CF0 was 3.6 to 4.3:1).
+  primary: '#085BCC',
+  primaryPressed: '#06429A',
+  primaryHover: '#074FB3',
   onPrimary: '#FFFFFF',
   bg: '#F7F8FA',
   canvas: '#EEF1F5',
@@ -46,19 +53,22 @@ const light: ColorTokens = {
   paper: '#FFFFFF',
   line: '#E4E7EC',
   lineStrong: '#D0D5DD',
+  inputBorder: '#7D879A',
   text: '#101828',
-  muted: '#5D6B82',
+  // Status tones deep enough to read at 4.5:1 on their own soft tints over the
+  // grey card (badges, the overdue chip); the earlier red was 3.9:1 there.
+  muted: '#556279',
   good: '#067647',
-  warn: '#B54708',
-  bad: '#D92D20',
-  info: '#0A6CF0',
-  chip: 'rgba(10,108,240,0.08)',
+  warn: '#A8420A',
+  bad: '#BF261B',
+  info: '#085BCC',
+  chip: 'rgba(8,91,204,0.08)',
   bezel: '#D0D5DD',
   overlay: 'rgba(16,24,40,0.48)',
   goodSoft: 'rgba(6,118,71,0.09)',
-  warnSoft: 'rgba(181,71,8,0.09)',
-  badSoft: 'rgba(217,45,32,0.08)',
-  mutedSoft: 'rgba(93,107,130,0.10)',
+  warnSoft: 'rgba(168,66,10,0.09)',
+  badSoft: 'rgba(191,38,27,0.08)',
+  mutedSoft: 'rgba(85,98,121,0.10)',
 };
 
 export const webPalettes = { dark, light };

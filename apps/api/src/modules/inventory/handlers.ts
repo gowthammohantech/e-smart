@@ -1,8 +1,8 @@
-import { and, asc, eq, gte, inArray, lte, type SQL } from 'drizzle-orm';
-import { isLowStock, stockMapOn, stockValue } from '@esmart/core/domain/stockLedger';
+import { and, asc, eq, exists, gte, ilike, inArray, lte, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { isLowStock, ledgerFor, stockMapOn, stockOnHand as coreStockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
-import { invalid, unprocessable, type Issue } from '../../http/errors';
+import { invalid, notFound, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -85,6 +85,31 @@ const insufficient = (issues: Issue[]) => unprocessable(issues, 'INSUFFICIENT_ST
 
 /** Inventory: getStockLevels, listStockMovements, adjustStock, transferStock. */
 export const inventoryHandlers = defineHandlers({
+  async getItemLedger(ctx) {
+    const [row] = await ctx.db.select().from(I).where(and(eq(I.companyId, ctx.company.id), eq(I.id, ctx.params.id)));
+    if (!row) throw notFound('Item');
+    const item = toCoreItem(row);
+    const branchIds = ctx.query.branchId ? [ctx.query.branchId] : ctx.user.branchIds;
+    const movements = await coreMovements(ctx.db, ctx.company.id, { itemIds: [item.id], branchIds });
+    const base = ctx.company.baseCurrency.trim();
+    const onHand = coreStockOnHand(item.id, movements);
+    const D = schema.documents;
+    const L = schema.documentLines;
+    const [sold] = await ctx.db
+      .select({ q: sql<string>`coalesce(sum(${L.quantity}), 0)` })
+      .from(L)
+      .innerJoin(D, eq(D.id, L.documentId))
+      .where(and(eq(D.companyId, ctx.company.id), eq(D.kind, 'invoice'), notInArray(D.status, ['draft', 'cancelled']), eq(L.itemId, item.id)));
+    return {
+      onHand,
+      value: stockValue(item, movements, base),
+      low: isLowStock(item, onHand),
+      soldQuantity: Number(sold?.q ?? 0),
+      // Newest first, as the screen lists them; the balance runs from the first movement.
+      rows: ledgerFor(item.id, movements).reverse().slice(0, 200).map((r) => ({ movement: r.movement as never, delta: r.delta, balance: r.balance })),
+    };
+  },
+
   /**
    * One row per tracked item per branch (the caller's branches, or the one
    * asked for), including branches where it has never moved.
@@ -99,7 +124,12 @@ export const inventoryHandlers = defineHandlers({
     const items = (await ctx.db.select().from(I).where(and(...filters)).orderBy(I.name, I.id)).map(toCoreItem);
     if (!items.length || !branches.length) return { data: [] };
     const movements = await coreMovements(ctx.db, ctx.company.id, { itemIds: items.map((i) => i.id), branchIds: branches.map((b) => b.id) });
-    const data = items.flatMap((item) => branches.map((b) => levelAt(item, b.id, movements, base)));
+    let data = items.flatMap((item) => branches.map((b) => levelAt(item, b.id, movements, base)));
+    if (q.asOf) {
+      // The same figure finalising checks a document against.
+      const on = new Map(branches.map((b) => [b.id, stockMapOn(movements, q.asOf!, b.id)]));
+      data = data.map((l) => ({ ...l, onHand: on.get(l.branchId!)?.[l.itemId!] ?? 0 }));
+    }
     return { data: q.lowStock === undefined ? data : data.filter((l) => l.low === q.lowStock) };
   },
 
@@ -113,6 +143,11 @@ export const inventoryHandlers = defineHandlers({
     if (ctx.user.branchIds.length) filters.push(inArray(M.branchId, ctx.user.branchIds));
     if (q.from) filters.push(gte(M.date, q.from));
     if (q.to) filters.push(lte(M.date, q.to));
+    if (q.q) {
+      // The item's name or SKU, the reference or the notes.
+      const like = `%${q.q.trim()}%`;
+      filters.push(or(ilike(M.referenceNumber, like), ilike(M.notes, like), exists(ctx.db.select({ one: sql`1` }).from(I).where(and(eq(I.id, M.itemId), or(ilike(I.name, like), ilike(I.sku, like)))))));
+    }
     const k = keyset({ cursor: q.cursor, limit: q.limit, sort: M.date, id: M.id, order: 'desc' });
     const rows = await ctx.db
       .select()
@@ -120,7 +155,10 @@ export const inventoryHandlers = defineHandlers({
       .where(and(...filters, k.where))
       .orderBy(...k.orderBy)
       .limit(k.take);
-    return k.page(rows.slice(0, k.take - 1).map(movementToWire), rows);
+    const page = rows.slice(0, k.take - 1);
+    const ids = [...new Set(page.map((r) => r.itemId))];
+    const names = new Map(ids.length ? (await ctx.db.select({ id: I.id, name: I.name, sku: I.sku }).from(I).where(inArray(I.id, ids))).map((i) => [i.id, i]) : []);
+    return k.page(page.map((r) => ({ ...movementToWire(r), itemName: names.get(r.itemId)?.name, itemSku: names.get(r.itemId)?.sku })), rows);
   },
 
   /**

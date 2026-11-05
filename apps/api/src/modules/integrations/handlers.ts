@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { defineHandlers, type Deps } from '../../context';
-import { notFound, planUpgradeRequired } from '../../http/errors';
+import { conflict, notFound, planUpgradeRequired } from '../../http/errors';
 import { recordChange } from '../../lib/audit';
 import { encrypt } from '../../lib/crypto';
 import { compact } from '../../lib/wire';
@@ -76,6 +76,12 @@ const OAUTH: Record<string, (deps: Deps, state: string) => string> = {
     })}`,
 };
 
+/**
+ * Connected through a consent screen whose callback isn't built yet: shown as coming soon, and a connect without
+ * credentials is refused rather than left half-done. Razorpay keys sent directly still connect.
+ */
+const COMING_SOON = new Set(['int_drive', 'int_razorpay']);
+
 function integrationToWire(row: IntegrationRow, connected: boolean): Schema<'Integration'> {
   return compact({
     id: row.id,
@@ -84,6 +90,7 @@ function integrationToWire(row: IntegrationRow, connected: boolean): Schema<'Int
     icon: row.icon,
     category: row.category,
     connected,
+    available: connected || !COMING_SOON.has(row.id),
     configRoute: row.configRoute,
   });
 }
@@ -132,6 +139,7 @@ export const integrationsHandlers = defineHandlers({
     }
     const { plain, secrets } = splitConfig(ctx.body?.config ?? {});
     const hasSecrets = Object.keys(secrets).length > 0;
+    if (COMING_SOON.has(integration.id) && !hasSecrets) throw conflict('INTEGRATION_COMING_SOON', `${integration.name} isn't available yet`);
     const oauth = OAUTH[integration.id];
     const pending = !!oauth && !hasSecrets;
     const state = pending ? randomBytes(16).toString('base64url') : null;

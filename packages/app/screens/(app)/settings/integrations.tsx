@@ -42,7 +42,7 @@ export default function Integrations() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.integrations') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -98,6 +98,7 @@ export default function Integrations() {
                           {i.name}
                         </Text>
                         {i.connected ? <Badge label={tr('settings:integrations.connected')} tone="success" size="sm" /> : null}
+                        {!i.connected && i.available === false ? <Badge label={tr('settings:integrations.comingSoon')} tone="neutral" size="sm" /> : null}
                       </View>
                       <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
                         {i.description}
@@ -117,6 +118,8 @@ export default function Integrations() {
                     </View>
                     <Switch
                       value={i.connected}
+                      // Coming soon: nothing to switch on yet (one already connected can still be switched off).
+                      disabled={!i.connected && i.available === false}
                       onValueChange={() => {
                         // A portal with no login yet cannot be switched on: ask for the login instead. With one saved,
                         // the switch simply turns it on or off.

@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { settledContent, settledText, type ToastApi, type ToastOptions, type ToastTone } from './toastTypes';
+import { usePop } from '../illustrations/motion';
 
 export type { ToastApi, ToastContent, ToastIcon, ToastOptions, ToastTone } from './toastTypes';
 export { TOAST_ANCHOR_ID } from './toastTypes';
@@ -67,6 +68,8 @@ function ToastView({ message, onDone }: { message: ToastMessage; onDone: (id: nu
   const insets = useSafeAreaInsets();
   const [anim] = useState(() => new Animated.Value(0));
   const sticky = message.tone === 'loading';
+  // The tone's icon springs in just after the toast lands.
+  const pop = usePop({ delay: 140, from: 0.3 });
 
   useEffect(() => {
     const enter = Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 18, stiffness: 220 });
@@ -101,7 +104,13 @@ function ToastView({ message, onDone }: { message: ToastMessage; onDone: (id: nu
         : message.tone === 'warning'
           ? t.c.warn
           : t.c.primary;
-  const glyph = sticky ? <ActivityIndicator size="small" color={t.c.primary} /> : <Icon name={icon} size={19} color={color} />;
+  const glyph = sticky ? (
+    <ActivityIndicator size="small" color={t.c.primary} />
+  ) : (
+    <Animated.View style={pop}>
+      <Icon name={icon} size={19} color={color} />
+    </Animated.View>
+  );
   const action = message.action ? (
     <Pressable
       onPress={() => {

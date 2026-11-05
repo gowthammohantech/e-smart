@@ -28,7 +28,8 @@ export function BrandLogo({ variant = 'full', height = 48 }: { variant?: 'full' 
       source={asset[t.scheme]}
       style={{ height, width: height * asset.ratio }}
       contentFit="contain"
-      accessibilityRole="image"
+      // The label becomes the <img>'s alt on the web. No role on the wrapper:
+      // expo-image would put role="img" on a div that has no name of its own.
       accessibilityLabel="Elixir Books"
     />
   );

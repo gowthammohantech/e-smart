@@ -10,7 +10,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { TextField } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
-import { useItems, useStockLevels } from '../../../store/selectors';
+import { useItemPages } from '../../../remote/queries';
+import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 
 /**
@@ -22,15 +23,17 @@ export default function ScanBarcode() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
-  const items = useItems();
-  const stock = useStockLevels();
   const [code, setCode] = useState('');
 
-  const withBarcodes = items.filter((i) => i.barcode);
-  const match = items.find((i) => i.barcode === code.trim());
+  // Samples from the first page of items; the code typed is looked up on the server, exactly.
+  const firstPage = useItemPages({}).rows as unknown as (Item & { stockOnHand?: number })[];
+  const withBarcodes = firstPage.filter((i) => i.barcode);
+  const found = useItemPages({ barcode: code.trim() }, !!code.trim()).rows as unknown as (Item & { stockOnHand?: number })[];
+  const match = code.trim() ? found[0] : undefined;
+  const stock: Record<string, number> = match ? { [match.id]: match.stockOnHand ?? 0 } : {};
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.scanBarcode') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">

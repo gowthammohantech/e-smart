@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useCallback} from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTranslation } from 'react-i18next';
@@ -10,20 +10,31 @@ import { Text } from '@esmart/ui/components/Text';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Stagger } from '@esmart/ui/components/Stagger';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Button } from '@esmart/ui/components/Button';
 import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
 import { Avatar } from '@esmart/ui/components/Avatar';
-import { Cell, DataTable, TABLE_PAGE_SIZE, type Column } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, type Column, type Sort } from '@esmart/ui/components/DataTable';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
-import { outstandingOf } from '@esmart/core/domain/receivables';
-import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
-import { PURCHASE_KINDS, STATUS_TONE } from '@esmart/core/domain/documentStates';
+import type { DocStatus, DocumentKind } from '@esmart/core/types';
+import { PURCHASE_KINDS, STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { dateRangeLabel, documentKindLabel, statusLabel } from '@esmart/core/labels';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, inRange, resolveRange } from '@esmart/core/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
-import { money, sum, zero } from '@esmart/core/lib/money';
-import { useBaseCurrency, useParties, usePayments } from '../store/selectors';
+import { StatTile } from '@esmart/ui/components/StatTile';
+import { StatGrid } from '@esmart/ui/components/Layout';
+import { zero, type Money } from '@esmart/core/lib/money';
+import { useAppStore } from '../store/appStore';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { useToast } from '@esmart/ui/components/Toast';
+import { api } from '../remote/api';
+import { describeError } from '../remote/errors';
+import { useBaseCurrency } from '../store/selectors';
+import { isOpen } from '../remote/outbox';
+import { useDocumentPages, useDocumentSummary, type DocumentQuery } from '../remote/queries';
+import { useDebounced } from './useDebounced';
+import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { listParam, presetParam, useQueryParams } from '../navigation/queryParams';
 
@@ -41,36 +52,43 @@ const DEFAULT_FILTERS: DocumentListFilters = {
   partyId: null,
 };
 
+/** One row of a list: a server summary, or a document still waiting to sync. */
+type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; partyName: string; grandTotal: Money; outstanding?: Money; waiting?: boolean };
+const asRowData = (r: Row) => ({ number: r.number, date: r.date, status: r.status, totals: { grandTotal: r.grandTotal } });
+
+/** The server sorts these columns; the rest keep the server's order. */
+const SERVER_SORT: Record<string, 'date' | 'number' | 'total'> = { date: 'date', number: 'number', amount: 'total' };
+
 /**
  * Shared list view for every document kind: search, status chips, date range
- * and party filter, with a running total of what is on screen.
+ * and party filter, with a running total of what matches. Rows come from the
+ * server 50 at a time (more as the list scrolls); the count, total and chips
+ * come from its summary of the same filters, so they cover every page.
  */
 export function DocumentListView({
-  documents,
   kind,
   routeFor,
   emptyAction,
   onEmptyAction,
   headerExtra,
 }: {
-  documents: BusinessDocument[];
   kind: DocumentKind;
-  routeFor: (doc: BusinessDocument) => string;
+  routeFor: (doc: { id: string }) => string;
   emptyAction?: string;
   onEmptyAction?: () => void;
   headerExtra?: React.ReactNode;
 }) {
   useRefreshOnFocus();
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
   const router = useRouter();
   const baseCurrency = useBaseCurrency();
-  const parties = useParties();
 
   // Status, date range and party live in the URL (`?status=draft&range=thisMonth&party=…`);
   // the search box stays local so typing doesn't rewrite the URL on every key.
   const [params, setParams] = useQueryParams();
   const [query, setQuery] = useState('');
+  const search = useDebounced(query);
   const filters = useMemo<DocumentListFilters>(
     () => ({
       query,
@@ -92,47 +110,120 @@ export function DocumentListView({
   };
   const [filterOpen, setFilterOpen] = useState(false);
   const desktop = useIsDesktop();
-  const payments = usePayments();
+  const [sort, setSort] = useState<Sort | null>(null);
 
-  const nameOf = useCallback(
-    (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown',
-    [parties],
-  );
+  const serverQuery = useMemo<DocumentQuery>(() => {
+    const range = filters.range === 'all' ? undefined : resolveRange(filters.range);
+    return { kinds: [kind], statuses: filters.statuses, partyId: filters.partyId ?? undefined, from: range?.from, to: range?.to, q: search };
+  }, [kind, filters.statuses, filters.partyId, filters.range, search]);
+  const pages = useDocumentPages({ ...serverQuery, sort: sort && SERVER_SORT[sort.key] ? ((sort.dir === 'desc' ? '-' : '') + SERVER_SORT[sort.key]) as DocumentQuery['sort'] : undefined });
+  const summary = useDocumentSummary(serverQuery);
 
-  const availableStatuses = useMemo(() => {
-    const set = new Set<DocStatus>();
-    documents.forEach((d) => set.add(d.status));
-    return Array.from(set);
-  }, [documents]);
+  // Made offline and not on the server yet: shown first, so a new document doesn't seem lost.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const documents = useAppStore((s) => s.documents);
+  const syncQueue = useAppStore((s) => s.syncQueue);
+  const waiting = useMemo<Row[]>(() => {
+    const unsent = new Set(syncQueue.filter(isOpen).map((e) => e.entityId));
+    if (!unsent.size) return [];
+    const parties = useAppStore.getState().parties;
+    return documents
+      .filter((d) => d.companyId === companyId && d.kind === kind && unsent.has(d.id))
+      .map((d) => ({ id: d.id, number: d.number, date: d.date, dueDate: d.dueDate ?? d.validUntil, status: d.status, partyName: parties.find((p) => p.id === d.partyId)?.name ?? '—', grandTotal: d.totals.grandTotal, waiting: true }));
+  }, [documents, syncQueue, companyId, kind]);
+  const rows = useMemo<Row[]>(() => {
+    const seen = new Set(waiting.map((r) => r.id));
+    const fromServer = pages.rows
+      .filter((d) => !seen.has(d.id!))
+      .map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined }));
+    return [...waiting, ...fromServer];
+  }, [pages.rows, waiting]);
 
-  const filtered = useMemo(() => {
-    const range = resolveRange(filters.range);
-    const q = filters.query.trim().toLowerCase();
-    return documents.filter((d) => {
-      if (filters.statuses.length && !filters.statuses.includes(d.status)) return false;
-      if (filters.partyId && d.partyId !== filters.partyId) return false;
-      if (filters.range !== 'all' && !inRange(d.date, range)) return false;
-      if (q) {
-        const haystack = `${d.number} ${nameOf(d.partyId)} ${d.reference ?? ''} ${d.supplierDocNumber ?? ''}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [documents, filters, nameOf]);
-
-  const total = useMemo(
-    () =>
-      filtered.length
-        ? sum(
-            filtered.map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
-            baseCurrency,
-          )
-        : zero(baseCurrency),
-    [filtered, baseCurrency],
-  );
+  const availableStatuses = useMemo(() => (summary.data?.byStatus ?? []).map((b) => b.status as DocStatus), [summary.data]);
+  const statusCount = (st: DocStatus) => summary.data?.byStatus.find((b) => b.status === st)?.count ?? 0;
+  const count = summary.data?.count ?? rows.length;
+  const total = (summary.data?.total as Money | undefined) ?? zero(baseCurrency);
+  const filtered = rows;
 
   const activeFilterCount =
     filters.statuses.length + (filters.partyId ? 1 : 0) + (filters.range !== 'all' ? 1 : 0);
+  // Nothing of this kind at all, as against nothing matching the filters.
+  const noneAtAll = !activeFilterCount && !search && summary.data?.count === 0 && !waiting.length;
+  const loading = (pages.isLoading || summary.isLoading) && !rows.length;
+  const loadMore = () => {
+    if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+  };
+  // Desktop bulk action: the chosen documents as a CSV.
+  const selection = useTableSelection(`${kind}|${search}|${JSON.stringify(filters)}`);
+  const exportRows = useRowsExport();
+  const exportChosen = (keys: string[]) =>
+    exportRows(
+      documentKindLabel(tr, kind, 2),
+      {
+        headers: [tr('common:table.number'), tr('common:table.party'), tr('common:table.date'), tr('common:table.due'), tr('common:table.status'), tr('common:table.amount'), tr('common:table.outstanding')],
+        rows: rows
+          .filter((d) => keys.includes(d.id))
+          .map((d) => [d.number, d.partyName, d.date, d.dueDate ?? '', statusLabel(tr, d.status), d.grandTotal.minor / 100, d.outstanding ? d.outstanding.minor / 100 : '']),
+      },
+      tr('common:table.exportCancelled'),
+    );
+
+  const moreFooter = pages.hasNextPage ? (
+    <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
+      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+    </View>
+  ) : null;
+
+  // The KPI tiles over the desktop table: the list's total, and the statuses that matter for
+  // this kind (only those it has). Each one toggles that status filter, like its chip.
+  const TILE_STATUSES: Partial<Record<DocumentKind, DocStatus[]>> = {
+    invoice: ['overdue', 'issued', 'paid'],
+    purchaseBill: ['overdue', 'issued', 'paid'],
+    quote: ['draft', 'sent', 'accepted'],
+  };
+  const TILE_TONE = { success: 'good', warning: 'warn', danger: 'bad', info: 'primary', neutral: 'default' } as const;
+  const byStatus = summary.data?.byStatus ?? [];
+  const tileStatuses = (TILE_STATUSES[kind] ?? [...byStatus].sort((a, b) => b.count - a.count).map((b) => b.status as DocStatus))
+    .filter((st) => byStatus.some((b) => b.status === st && b.count > 0))
+    .slice(0, 3);
+
+  // Bulk changes, straight to the server (list rows aren't in the store): delete the drafts among
+  // the chosen, or mark the ones that can go draft → sent (a quote). Each says how it went.
+  const toast = useToast();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
+  const chosenRows = (keys: string[]) => rows.filter((r) => keys.includes(r.id) && !r.waiting);
+  const draftsIn = (keys: string[]) => chosenRows(keys).filter((r) => r.status === 'draft');
+  const sendableIn = (keys: string[]) => chosenRows(keys).filter((r) => nextStatuses(kind, r.status).includes('sent'));
+  const runBulk = async (targets: Row[], call: (r: Row) => Promise<{ error?: unknown }>, doneKey: 'common:table.deletedDrafts' | 'common:table.markedSent') => {
+    setBulkBusy(true);
+    let ok = 0;
+    let firstError: unknown;
+    for (const r of targets) {
+      const res = await call(r).catch((error: unknown) => ({ error }));
+      if (res.error) firstError ??= res.error;
+      else ok++;
+    }
+    setBulkBusy(false);
+    selection.clear();
+    void pages.refetch();
+    void summary.refetch();
+    if (ok) toast.show(tr(doneKey, { count: ok }), 'success');
+    if (firstError) toast.show(tr('common:table.someFailed', { count: targets.length - ok, reason: describeError(firstError, tr) }), 'error');
+  };
+  const deleteDrafts = (ids: string[]) =>
+    runBulk(
+      draftsIn(ids),
+      (r) => api.DELETE('/companies/{companyId}/documents/{id}', { params: { path: { companyId, id: r.id } } }),
+      'common:table.deletedDrafts',
+    );
+  const markSent = (keys: string[]) =>
+    runBulk(
+      sendableIn(keys),
+      (r) => api.POST('/companies/{companyId}/documents/{id}/status', { params: { path: { companyId, id: r.id } }, body: { status: 'sent' } }),
+      'common:table.markedSent',
+    );
+  const payable = (d: Row) => (kind === 'invoice' || kind === 'purchaseBill') && isFinalized(d.status) && !!d.partyId && (d.outstanding?.minor ?? 0) > 0;
 
   const toggleStatus = (s: DocStatus) =>
     setFilters((f) => ({
@@ -144,19 +235,18 @@ export function DocumentListView({
   if (desktop) {
     const purchase = PURCHASE_KINDS.includes(kind);
     const owes = kind === 'invoice' || kind === 'purchaseBill';
-    const columns: Column<BusinessDocument>[] = [
-      { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number}</Cell>, sortValue: (d) => d.number },
+    const columns: Column<Row>[] = [
+      { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number || tr('common:documentList.waiting')}</Cell>, sortValue: (d) => d.number },
       {
         key: 'party',
         header: purchase ? tr('common:table.supplier') : tr('common:table.customer'),
         flex: 2,
         render: (d) => (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
-            <Avatar name={nameOf(d.partyId)} size={26} />
-            <Cell>{nameOf(d.partyId)}</Cell>
+            <Avatar name={d.partyName} size={26} />
+            <Cell>{d.partyName}</Cell>
           </View>
         ),
-        sortValue: (d) => nameOf(d.partyId),
       },
       { key: 'date', header: tr('common:table.date'), width: 120, render: (d) => <Cell tone="muted">{formatDate(d.date, 'dd MMM yyyy')}</Cell>, sortValue: (d) => d.date },
       {
@@ -164,17 +254,16 @@ export function DocumentListView({
         header: tr('common:table.due'),
         width: 120,
         secondary: true,
-        render: (d) => <Cell tone="muted">{d.dueDate || d.validUntil ? formatDate((d.dueDate ?? d.validUntil) as string, 'dd MMM yyyy') : '—'}</Cell>,
-        sortValue: (d) => d.dueDate ?? d.validUntil ?? '',
+        render: (d) => <Cell tone="muted">{d.dueDate ? formatDate(d.dueDate, 'dd MMM yyyy') : '—'}</Cell>,
       },
-      { key: 'status', header: tr('common:table.status'), width: 130, render: (d) => <StatusBadge status={d.status} size="sm" />, sortValue: (d) => d.status },
+      { key: 'status', header: tr('common:table.status'), width: 130, render: (d) => <StatusBadge status={d.status} size="sm" /> },
       {
         key: 'amount',
         header: tr('common:table.amount'),
         width: 150,
         align: 'right',
-        render: (d) => <Cell weight="600" mono>{formatMoney(d.totals.grandTotal)}</Cell>,
-        sortValue: (d) => d.totals.grandTotal.minor * (d.exchangeRate || 1),
+        render: (d) => <Cell weight="600" mono>{formatMoney(d.grandTotal)}</Cell>,
+        sortValue: (d) => d.grandTotal.minor,
       },
       ...(owes
         ? [
@@ -184,16 +273,15 @@ export function DocumentListView({
               width: 150,
               secondary: true,
               align: 'right' as const,
-              render: (d: BusinessDocument) => {
-                if (['draft', 'cancelled'].includes(d.status)) return <Cell tone="muted">—</Cell>;
-                const due = outstandingOf(d, payments);
+              // The server works out what each still owes, returns and notes included.
+              render: (d: Row) => {
+                if (['draft', 'cancelled'].includes(d.status) || !d.outstanding) return <Cell tone="muted">—</Cell>;
                 return (
-                  <Cell tone={due.minor > 0 ? 'default' : 'muted'} mono>
-                    {formatMoney(due)}
+                  <Cell tone={d.outstanding.minor > 0 ? 'default' : 'muted'} mono>
+                    {formatMoney(d.outstanding)}
                   </Cell>
                 );
               },
-              sortValue: (d: BusinessDocument) => outstandingOf(d, payments).minor,
             },
           ]
         : []),
@@ -201,8 +289,32 @@ export function DocumentListView({
 
     return (
       <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
+        {summary.data && summary.data.count + byStatus.length > 0 ? (
+          <StatGrid>
+            <StatTile
+              label={documentKindLabel(tr, kind, 2)}
+              value={total}
+              icon="file-document-multiple-outline"
+              caption={tr('common:documentList.tileCount', { count: summary.data.count })}
+            />
+            {tileStatuses.map((st) => {
+              const b = byStatus.find((x) => x.status === st)!;
+              return (
+                <StatTile
+                  key={st}
+                  label={statusLabel(tr, st)}
+                  value={b.total as Money}
+                  tone={TILE_TONE[STATUS_TONE[st] as keyof typeof TILE_TONE] ?? 'default'}
+                  caption={tr('common:documentList.tileCount', { count: b.count })}
+                  onPress={() => toggleStatus(st)}
+                />
+              );
+            })}
+          </StatGrid>
+        ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
-          <View style={{ width: 300 }}>
+          {/* Wide enough for the hint naming what it searches. */}
+          <View style={{ width: 380 }}>
             <SearchBar
               value={filters.query}
               onChangeText={(query) => setFilters((f) => ({ ...f, query }))}
@@ -237,7 +349,7 @@ export function DocumentListView({
                 }}
               >
                 <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                  {statusLabel(tr, st)} · {documents.filter((d) => d.status === st).length}
+                  {statusLabel(tr, st)} · {statusCount(st)}
                 </Text>
               </Pressable>
             );
@@ -250,7 +362,7 @@ export function DocumentListView({
           {/* How many match and what they add up to, at the right end of the filter row. */}
           <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
-              {tr('common:documentList.count', { count: filtered.length, kind: documentKindLabel(tr, kind, filtered.length) })}
+              {tr('common:documentList.count', { count, kind: documentKindLabel(tr, kind, count) })}
             </Text>
             <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(total)}
@@ -261,31 +373,76 @@ export function DocumentListView({
         {headerExtra}
 
         <DataTable
-          pageSize={TABLE_PAGE_SIZE}
           columns={columns}
           rows={filtered}
           rowKey={(d) => d.id}
+          sort={sort}
+          onSortChange={setSort}
           onRowPress={(d) => router.push(routeFor(d) as never)}
-          rowLabel={(d) => `${d.number}, ${nameOf(d.partyId)}, ${formatMoney(d.totals.grandTotal)}`}
+          rowLabel={(d) => `${d.number}, ${d.partyName}, ${formatMoney(d.grandTotal)}`}
+          {...pagedTableProps(pages, tr('common:table.loadFailed'), `documents-${kind}`)}
+          loading={loading}
+          totalCount={summary.data ? summary.data.count + waiting.length : undefined}
+          selectable
+          selectedKeys={selection.selected}
+          onSelectionChange={selection.setSelected}
+          bulkActions={(keys) => (
+            <>
+              <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+              {sendableIn(keys).length ? (
+                <Button title={tr('common:table.markSent')} icon="send-outline" variant="ghost" size="sm" loading={bulkBusy} onPress={() => void markSent(keys)} />
+              ) : null}
+              {draftsIn(keys).length ? (
+                <Button title={tr('common:table.deleteDrafts')} icon="trash-can-outline" variant="danger" size="sm" disabled={bulkBusy} onPress={() => setConfirmDelete(keys)} />
+              ) : null}
+            </>
+          )}
+          rowActions={(d) => [
+            { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(routeFor(d) as never) },
+            // As on the detail screen: only a draft is edited in place.
+            ...(d.status === 'draft' && !d.waiting
+              ? [{ key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${routeFor(d)}/edit` as never) }]
+              : []),
+            ...(payable(d)
+              ? [
+                  {
+                    key: 'pay',
+                    label: kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
+                    icon: 'cash-plus' as const,
+                    onPress: () =>
+                      router.push(`/(app)/payments/new?direction=${kind === 'invoice' ? 'received' : 'paid'}&partyId=${d.partyId}&documentId=${d.id}` as never),
+                  },
+                ]
+              : []),
+            { key: 'preview', label: tr('common:table.preview'), icon: 'file-document-outline', onPress: () => router.push(`/(app)/documents/${d.id}` as never) },
+          ]}
           empty={
-            <EmptyState
-              illustration="no-documents"
-              icon="file-search-outline"
-              title={
-                documents.length === 0
-                  ? tr('common:documentList.emptyNoneTitle', { kind: documentKindLabel(tr, kind, 2) })
-                  : tr('common:documentList.emptyNoMatchTitle')
-              }
-              message={
-                documents.length === 0
-                  ? tr('common:documentList.emptyNoneMessage', { kind: documentKindLabel(tr, kind, 1) })
-                  : tr('common:documentList.emptyNoMatchMessage')
-              }
-              actionLabel={documents.length === 0 ? emptyAction : tr('common:documentList.clearFilters')}
-              onAction={documents.length === 0 ? onEmptyAction : () => setFilters(DEFAULT_FILTERS)}
-              compact
-            />
+            loading ? null : (
+              <EmptyState
+                illustration="no-documents"
+                icon="file-search-outline"
+                title={noneAtAll ? tr('common:documentList.emptyNoneTitle', { kind: documentKindLabel(tr, kind, 2) }) : tr('common:documentList.emptyNoMatchTitle')}
+                message={noneAtAll ? tr('common:documentList.emptyNoneMessage', { kind: documentKindLabel(tr, kind, 1) }) : tr('common:documentList.emptyNoMatchMessage')}
+                actionLabel={noneAtAll ? emptyAction : tr('common:documentList.clearFilters')}
+                onAction={noneAtAll ? onEmptyAction : () => setFilters(DEFAULT_FILTERS)}
+                compact
+              />
+            )
           }
+        />
+        <ConfirmDialog
+          visible={!!confirmDelete}
+          title={tr('common:table.deleteDraftsTitle', { count: confirmDelete ? draftsIn(confirmDelete).length : 0 })}
+          message={tr('common:table.deleteDraftsBody')}
+          confirmLabel={tr('common:table.deleteDrafts')}
+          destructive
+          icon="trash-can-outline"
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            const ids = confirmDelete ?? [];
+            setConfirmDelete(null);
+            void deleteDrafts(ids);
+          }}
         />
       </View>
     );
@@ -346,7 +503,7 @@ export function DocumentListView({
                   }}
                 >
                   <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                    {label} · {documents.filter((d) => d.status === s).length}
+                    {label} · {statusCount(s)}
                   </Text>
                 </Pressable>
               );
@@ -359,8 +516,8 @@ export function DocumentListView({
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text variant="caption" tone="muted">
             {tr('common:documentList.count', {
-              count: filtered.length,
-              kind: documentKindLabel(tr, kind, filtered.length),
+              count,
+              kind: documentKindLabel(tr, kind, count),
             })}
           </Text>
           <Text variant="caption" weight="600">
@@ -372,37 +529,38 @@ export function DocumentListView({
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        // The next page loads before the end is reached, so scrolling rarely waits.
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600) loadMore();
+        }}
+        scrollEventThrottle={200}
       >
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-documents" icon="file-search-outline"
-              title={
-                documents.length === 0
-                  ? tr('common:documentList.emptyNoneTitle', { kind: documentKindLabel(tr, kind, 2) })
-                  : tr('common:documentList.emptyNoMatchTitle')
-              }
-              message={
-                documents.length === 0
-                  ? tr('common:documentList.emptyNoneMessage', { kind: documentKindLabel(tr, kind, 1) })
-                  : tr('common:documentList.emptyNoMatchMessage')
-              }
-              actionLabel={documents.length === 0 ? emptyAction : tr('common:documentList.clearFilters')}
-              onAction={documents.length === 0 ? onEmptyAction : () => setFilters(DEFAULT_FILTERS)}
+              title={noneAtAll ? tr('common:documentList.emptyNoneTitle', { kind: documentKindLabel(tr, kind, 2) }) : tr('common:documentList.emptyNoMatchTitle')}
+              message={noneAtAll ? tr('common:documentList.emptyNoneMessage', { kind: documentKindLabel(tr, kind, 1) }) : tr('common:documentList.emptyNoMatchMessage')}
+              actionLabel={noneAtAll ? emptyAction : tr('common:documentList.clearFilters')}
+              onAction={noneAtAll ? onEmptyAction : () => setFilters(DEFAULT_FILTERS)}
               compact
             />
           ) : (
             filtered.map((d, i) => (
-              <DocumentRow
-                key={d.id}
-                document={d}
-                partyName={nameOf(d.partyId)}
-                divider={i < filtered.length - 1}
-                onPress={() => router.push(routeFor(d) as never)}
-              />
+              <Stagger key={d.id} index={i}>
+                <DocumentRow
+                  document={asRowData(d)}
+                  partyName={d.partyName}
+                  divider={i < filtered.length - 1}
+                  onPress={() => router.push(routeFor(d) as never)}
+                />
+              </Stagger>
             ))
           )}
         </Card>
+        {moreFooter}
       </ScrollView>
 
       <Sheet

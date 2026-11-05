@@ -7,20 +7,15 @@ import type { Schema } from '@esmart/api-contract';
 import type { DbOrTx } from '../../lib/audit';
 import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { forbidden, invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { conflict, forbidden, invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { financialYearOf } from '@esmart/core/lib/date';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { addressTo } from '../../lib/wire';
 import { branchHandlers } from './branches';
 import { createNumberingSeries, logCompanyDefaults, seedCompanyDefaults } from './defaults';
-import { logoHandlers } from './logo';
+import { companyImageHandlers, companyWithImages } from './logo';
 import { branchToWire, companyColumns, companyToWire } from './wire';
-
-export async function logoKeyOf(db: DbOrTx, attachmentId: string | null): Promise<string | null> {
-  if (!attachmentId) return null;
-  const [a] = await db.select({ key: schema.attachments.storageKey }).from(schema.attachments).where(eq(schema.attachments.id, attachmentId));
-  return a?.key ?? null;
-}
 
 /** GSTIN check digit, and the reference data the foreign keys need. */
 async function validateCompany(db: DbOrTx, body: { country: string; baseCurrency: string; taxRegistration?: { regime: string; identifier?: string } }) {
@@ -41,7 +36,7 @@ export const companiesHandlers = defineHandlers({
     const ids = ctx.user.companyIds;
     if (!ids.length) return { data: [] };
     const rows = await ctx.db.select().from(schema.companies).where(inArray(schema.companies.id, ids)).orderBy(asc(schema.companies.createdAt));
-    return { data: await Promise.all(rows.map(async (r) => companyToWire(ctx.deps, r, await logoKeyOf(ctx.db, r.logoAttachmentId)))) };
+    return { data: await Promise.all(rows.map(async (r) => companyWithImages(ctx.deps, ctx.db, r))) };
   },
 
   async createCompany(ctx) {
@@ -60,7 +55,8 @@ export const companiesHandlers = defineHandlers({
     const row = await ctx.db.transaction(async (tx) => {
       const [company] = await tx
         .insert(schema.companies)
-        .values({ id: companyId, accountId: ctx.user.accountId, ...cols, plan: 'free' })
+        // A new business keeps stock perpetually from its first financial year (RULES 6.2).
+        .values({ id: companyId, accountId: ctx.user.accountId, ...cols, perpetualStockFrom: financialYearOf(ctx.now.toISOString().slice(0, 10), cols.fiscalYearStartMonth).start, plan: 'free' })
         .returning();
       await tx.insert(schema.branches).values(
         branches.map((b, i) => ({
@@ -96,7 +92,7 @@ export const companiesHandlers = defineHandlers({
 
   async getCompany(ctx) {
     setEtag(ctx.reply, ctx.company.version);
-    return companyToWire(ctx.deps, ctx.company, await logoKeyOf(ctx.db, ctx.company.logoAttachmentId));
+    return companyWithImages(ctx.deps, ctx.db, ctx.company);
   },
 
   /**
@@ -116,10 +112,16 @@ export const companiesHandlers = defineHandlers({
     // Left out by an app that doesn't know about it: that isn't reopening the books.
     const lockedThroughDate = ctx.body.lockedThroughDate === undefined ? current.lockedThroughDate : ctx.body.lockedThroughDate;
     if (lockedThroughDate !== current.lockedThroughDate && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can close or reopen the books');
+    const disabledModules = ctx.body.disabledModules === undefined ? (current.disabledModules as string[]) : [...new Set(ctx.body.disabledModules)].sort();
+    if (JSON.stringify(disabledModules) !== JSON.stringify([...(current.disabledModules as string[])].sort()) && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can switch modules on or off');
+    const approvalRules = ctx.body.approvalRules === undefined ? current.approvalRules : ctx.body.approvalRules.filter((r, i, all) => all.findIndex((x) => x.kind === r.kind) === i);
+    if (JSON.stringify(approvalRules) !== JSON.stringify(current.approvalRules) && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can set what needs approval');
+    const perpetualStockFrom = ctx.body.perpetualStockFrom === undefined ? current.perpetualStockFrom : ctx.body.perpetualStockFrom;
+    if (perpetualStockFrom !== current.perpetualStockFrom) checkPerpetualFrom(ctx.user.role, current.fiscalYearStartMonth, lockedThroughDate, current.perpetualStockFrom, perpetualStockFrom);
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(schema.companies)
-        .set({ ...companyColumns(body), lockedThroughDate, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...companyColumns(body), lockedThroughDate, perpetualStockFrom, disabledModules, approvalRules, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(schema.companies.id, current.id), eq(schema.companies.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
@@ -155,10 +157,10 @@ export const companiesHandlers = defineHandlers({
       return updated;
     });
     setEtag(ctx.reply, row.version);
-    return companyToWire(ctx.deps, row, await logoKeyOf(ctx.db, row.logoAttachmentId));
+    return companyWithImages(ctx.deps, ctx.db, row);
   },
 
-  ...logoHandlers,
+  ...companyImageHandlers,
   ...branchHandlers,
 });
 
@@ -175,3 +177,18 @@ function addressChanged(a: AddressRow, b: AddressRow): boolean {
   return keys.some((k) => (a[k] ?? '').trim() !== (b[k] ?? '').trim());
 }
 
+/**
+ * Moving the books to perpetual stock, or back, or to another day (RULES 6.2). Only an owner may; the
+ * day starts a financial year, so no year is half one way and half the other; and every year it
+ * changes must still be open, so a closed period's stock and profit never change.
+ */
+function checkPerpetualFrom(role: string, fyStartMonth: number, lockedThroughDate: string | null, from: string | null, to: string | null) {
+  if (role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can change how stock is kept in the books');
+  if (to && financialYearOf(to, fyStartMonth).start !== to) {
+    throw unprocessable([{ field: 'perpetualStockFrom', message: `Perpetual stock starts on the first day of a financial year, ${financialYearOf(to, fyStartMonth).start} for ${to}`, severity: 'blocking' }], 'PERPETUAL_NOT_YEAR_START');
+  }
+  const earliest = [from, to].filter((d): d is string => !!d).sort()[0];
+  if (lockedThroughDate && earliest && earliest <= lockedThroughDate) {
+    throw conflict('PERIOD_LOCKED', `The books are closed through ${lockedThroughDate}; stock can only change to perpetual, or back, from a year after it`);
+  }
+}

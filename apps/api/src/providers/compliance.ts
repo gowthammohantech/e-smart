@@ -31,6 +31,11 @@ export type SubmitEwayBillResult = { ok: true; ewayBillNumber: string; generated
 export type UpdatePartBResult = { ok: true; updatedAt: string } | Failure;
 export type ExtendResult = { ok: true; newValidUpto: string } | Failure;
 export type CancelEwayBillResult = { ok: true; cancelledAt: string; reason: string } | Failure;
+/** A bill the portal has for a document, or null when it has none. */
+export type FindEwayBillResult = { ok: true; found: Extract<SubmitEwayBillResult, { ok: true }> | null } | Failure;
+export type IrnStatusResult = { ok: true; status: 'active' | 'cancelled'; cancelDate?: string } | Failure;
+/** What a lost answer looks like: no answer at all. The call may or may not have reached the portal. */
+export const isUnanswered = (r: { ok: boolean; errors?: { code: string }[] }) => !r.ok && !!r.errors?.some((e) => e.code === 'GSP_UNAVAILABLE');
 /**
  * The e-invoice (IRP) and e-way bill portals take separate logins, which need not match. Each call that
  * reaches a portal gets the login for that portal; a connection test gets both.
@@ -80,6 +85,13 @@ export interface ComplianceProvider {
     req: { bill: EwayBill; remainingDistanceKm: number; reasonCode: EwayExtendReasonCode; remark?: string; currentPlace: string; currentPincode: string; currentStateCode: string; transitType: 'inTransit' | 'inMovement'; now: string },
   ): Promise<ExtendResult>;
   cancelEwayBill(creds: PortalCredentials | null, req: { ewayBillNumber: string; reasonCode: CancelReasonCode; remark?: string; now: string }): Promise<CancelEwayBillResult>;
+  /**
+   * Recovery after a lost answer: the bill the portal raised for this document, if it raised one.
+   * Optional: a gateway without the lookup leaves the attempt for a person to check on the portal.
+   */
+  findEwayBillByDocument?(creds: PortalCredentials | null, req: { docType: string; docNo: string; docDate: string; fromGstin: string; now: string }): Promise<FindEwayBillResult>;
+  /** Recovery after a cancel whose answer was lost: whether the IRN is still active. */
+  getIrnStatus?(creds: PortalCredentials | null, req: { irn: string; now: string }): Promise<IrnStatusResult>;
 }
 
 export type PortalOperation = Exclude<keyof ComplianceProvider, 'name'>;
@@ -95,6 +107,21 @@ export type PortalOperation = Exclude<keyof ComplianceProvider, 'name'>;
 export class SimulatedComplianceProvider implements ComplianceProvider {
   readonly name = 'simulator' as const;
   private readonly faults = new Map<PortalOperation, IrpSimulation[]>();
+  /** Operations whose next call goes through at the "portal" but whose answer never arrives. */
+  private readonly lost = new Set<PortalOperation>();
+  /** What the "portal" holds, for the recovery lookups. */
+  private readonly bills = new Map<string, Extract<SubmitEwayBillResult, { ok: true }>>();
+  private readonly cancelledIrns = new Map<string, string>();
+
+  /** The next call of `operation` takes effect, but the caller sees GSP_UNAVAILABLE, as on a timeout. */
+  loseNext(operation: PortalOperation) {
+    this.lost.add(operation);
+  }
+
+  private unanswered<T extends { ok: boolean }>(operation: PortalOperation, result: T): T | Failure {
+    if (!this.lost.delete(operation)) return result;
+    return { ok: false, errors: [{ code: 'GSP_UNAVAILABLE', field: 'document', message: 'No answer from the portal (simulated)', severity: 'blocking' }] } as Failure;
+  }
 
   failNext(operation: PortalOperation, code: IrpErrorCode, message?: string) {
     const queue = this.faults.get(operation) ?? [];
@@ -104,6 +131,14 @@ export class SimulatedComplianceProvider implements ComplianceProvider {
 
   clearFaults() {
     this.faults.clear();
+  }
+
+  /** Forget everything, as a fresh portal: faults, lost answers and what it holds. */
+  reset() {
+    this.faults.clear();
+    this.lost.clear();
+    this.bills.clear();
+    this.cancelledIrns.clear();
   }
 
   private fault(operation: PortalOperation): IrpSimulation | undefined {
@@ -133,11 +168,24 @@ export class SimulatedComplianceProvider implements ComplianceProvider {
   }
 
   async cancelIrn(_creds: PortalCredentials | null, req: Parameters<ComplianceProvider['cancelIrn']>[1]) {
-    return simulateCancelIrn({ ...req, simulation: this.fault('cancelIrn') });
+    const result = simulateCancelIrn({ ...req, simulation: this.fault('cancelIrn') });
+    if (result.ok) this.cancelledIrns.set(req.irn, result.cancelDate);
+    return this.unanswered('cancelIrn', result);
   }
 
   async submitEwayBill(_creds: PortalCredentials | null, req: { payload: EwbPayload; vehicleType: VehicleType; now: string }) {
-    return simulateSubmitEwayBill({ ...req, simulation: this.fault('submitEwayBill') });
+    const result = simulateSubmitEwayBill({ ...req, simulation: this.fault('submitEwayBill') });
+    if (result.ok) this.bills.set(billKey(req.payload), result);
+    return this.unanswered('submitEwayBill', result);
+  }
+
+  async findEwayBillByDocument(_creds: PortalCredentials | null, req: { docType: string; docNo: string; docDate: string; fromGstin: string }): Promise<FindEwayBillResult> {
+    return { ok: true, found: this.bills.get(billKey(req)) ?? null };
+  }
+
+  async getIrnStatus(_creds: PortalCredentials | null, req: { irn: string }): Promise<IrnStatusResult> {
+    const cancelDate = this.cancelledIrns.get(req.irn);
+    return cancelDate ? { ok: true, status: 'cancelled', cancelDate } : { ok: true, status: 'active' };
   }
 
   async updatePartB(_creds: PortalCredentials | null, req: PartBUpdateRequest): Promise<UpdatePartBResult> {
@@ -154,6 +202,9 @@ export class SimulatedComplianceProvider implements ComplianceProvider {
     return cancelEwayBillAtPortal({ ...req, simulation: this.fault('cancelEwayBill') });
   }
 }
+
+/** A document's identity at the e-way bill portal: who raised it, and its type, number and date. */
+const billKey = (d: { docType: string; docNo: string; docDate: string; fromGstin: string }) => `${d.fromGstin}|${d.docType}|${d.docNo}|${d.docDate}`;
 
 // ------------------------------------------------------------------ GSP
 

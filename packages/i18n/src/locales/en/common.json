@@ -16,7 +16,9 @@
     "reset": "Reset",
     "confirm": "Confirm",
     "recordPayment": "Record payment",
-    "seeAll": "See all"
+    "seeAll": "See all",
+    "saveAndAddAnother": "Save & add another",
+    "saveAndAddAnotherShortcut": "Save, then start the next one ({{keys}})"
   },
   "placeholder": {
     "none": "—",
@@ -63,7 +65,7 @@
     "separator": "{{list}}, {{item}}"
   },
   "documentList": {
-    "search": "Search {{kind, lowercase}}",
+    "search": "Search {{kind, lowercase}} by number, reference or contact",
     "count_one": "{{count}} {{kind, lowercase}}",
     "count_other": "{{count}} {{kind, lowercase}}",
     "filterByStatus": "Filter by {{status}}",
@@ -72,7 +74,11 @@
     "emptyNoMatchTitle": "Nothing matches",
     "emptyNoMatchMessage": "Try clearing a filter or searching for something else.",
     "clearFilters": "Clear filters",
-    "statusSection": "Status"
+    "statusSection": "Status",
+    "loadMore": "Load more",
+    "waiting": "Waiting to sync",
+    "tileCount_one": "{{count}} document",
+    "tileCount_other": "{{count}} documents"
   },
   "documentEditor": {
     "finalised": "{{kind}} finalised",
@@ -115,7 +121,10 @@
   },
   "save": {
     "queued": "Saved on this device. It will sync when you are back online.",
-    "refused": "The server refused this: {{reason}}"
+    "refused": "The server refused this: {{reason}}",
+    "refusedLater": "{{label}} wasn't saved: {{reason}}. It's waiting in Settings → Sync.",
+    "unreachable": "Couldn't reach the server, so this wasn't saved. Try again when you're connected.",
+    "unconfirmed": "Couldn't confirm with the server. If it went through, it will appear here shortly; check before entering it again."
   },
   "component": {
     "confirm": "Confirm",
@@ -163,7 +172,14 @@
     "other": "Other",
     "chartSlice": "{{label}}: {{amount}}, {{percent}} percent",
     "nothingToShow": "Nothing to show yet",
-    "noSearchMatch": "Nothing matches that search."
+    "noSearchMatch": "Nothing matches that search.",
+    "viewOnly": "No internet · view only",
+    "workOffline": "Work offline",
+    "offlineWaiting": "Offline · {{count}} waiting",
+    "draining": "Syncing {{count}}…",
+    "loadingBooks": "Loading your books…",
+    "required": "required",
+    "switchBusiness": "Switch business. Current: {{name}}"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -171,6 +187,10 @@
     "taxableValue": "Taxable value",
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
+    "tdsLabel": "TDS {{section}} at {{rate}}",
+    "payableToSupplier": "Payable to supplier",
+    "reimbursements": "Reimbursements at cost",
+    "reverseChargeTax": "Tax payable by the recipient (reverse charge)",
     "roundOff": "Round off",
     "fxNote": "≈ {{amount}} at 1 {{currency}} = {{rate}} {{baseCurrency}}",
     "total": "Total",
@@ -199,7 +219,9 @@
     "contact": "This contact may have been deleted.",
     "expense": "This expense may have been deleted.",
     "item": "This item may have been deleted.",
-    "payment": "This payment may have been deleted."
+    "payment": "This payment may have been deleted.",
+    "route": "There's nothing at this address. It may have moved, or the link may be wrong.",
+    "goHome": "Go to home"
   },
   "notifications": {
     "markAllRead": "Mark all read",
@@ -211,7 +233,9 @@
     "clear": "Clear",
     "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched.",
     "allRead": "All caught up",
-    "cleared": "Notifications cleared"
+    "cleared": "Notifications cleared",
+    "filterAll": "All ({{n}})",
+    "filterUnread": "Unread ({{n}})"
   },
   "search": {
     "placeholder": "Invoices, contacts, items, payments…",
@@ -265,7 +289,43 @@
     "reference": "Reference",
     "total": "Total",
     "allDates": "All dates",
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "sortBy": "Sort by {{column}}",
+    "sortedAsc": "{{column}}, sorted ascending",
+    "sortedDesc": "{{column}}, sorted descending",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "pageOf": "Page {{page}} of {{count}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "perPage": "{{n}} per page",
+    "rowsPerPage": "Rows per page: {{n}}",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "clearSelection": "Clear selection",
+    "selectPage": "Select all on this page",
+    "selectRow": "Select {{label}}",
+    "rowActions": "Actions for {{label}}",
+    "actions": "Actions",
+    "loading": "Loading",
+    "loadFailed": "This list couldn’t load.",
+    "open": "Open",
+    "exportCsv": "Export CSV",
+    "exportCancelled": "Export cancelled",
+    "deactivate": "Deactivate",
+    "deactivated_one": "{{count}} deactivated",
+    "deactivated_other": "{{count}} deactivated",
+    "duplicate": "Duplicate",
+    "preview": "Preview",
+    "markSent": "Mark sent",
+    "markedSent_one": "{{count}} marked sent",
+    "markedSent_other": "{{count}} marked sent",
+    "deleteDrafts": "Delete drafts",
+    "deleteDraftsTitle_one": "Delete {{count}} draft?",
+    "deleteDraftsTitle_other": "Delete {{count}} drafts?",
+    "deleteDraftsBody": "Drafts have no number yet, so none is lost. This can’t be undone. Selected documents that aren’t drafts are left alone.",
+    "deletedDrafts_one": "{{count}} draft deleted",
+    "deletedDrafts_other": "{{count}} drafts deleted",
+    "someFailed": "{{count}} couldn’t be changed: {{reason}}"
   },
   "toast": {
     "success": "Done",
@@ -290,5 +350,19 @@
     "message": "You have changes that aren't saved. If you leave now, they'll be lost.",
     "leave": "Leave",
     "stay": "Stay"
+  },
+  "crash": {
+    "title": "Something went wrong",
+    "body": "This screen hit an error. Your data is safe: anything you saved is still here. Try again, or go back to the home screen.",
+    "retry": "Try again",
+    "home": "Go to home",
+    "misconfigured": "This build of the app doesn't know where its server is. Please update the app, or contact support.",
+    "cantOpen": "Couldn't open {{what}} on this device."
+  },
+  "offlineMode": {
+    "title": "No internet connection",
+    "message": "You can keep working on this device. Your changes will be saved here and sent to the server once the connection has been back for a few seconds.",
+    "accept": "Work offline",
+    "decline": "Not now"
   }
 }

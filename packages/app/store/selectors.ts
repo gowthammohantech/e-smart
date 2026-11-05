@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useAppStore } from './appStore';
+import { useUiStore, type DashboardPeriod } from './uiStore';
 import { resolveId, useRemoteMeta } from '../remote/meta';
+import { useComplianceCounts, type ComplianceCounts } from '../remote/queries';
 import {
   BusinessDocument,
   Company,
@@ -9,23 +11,26 @@ import {
   EInvoiceStatus,
   EwayBill,
   EwayBillStatus,
+  ExchangeRate,
   Expense,
   Item,
   Party,
+  PartyKind,
   Payment,
   PlanTier,
   StockMovement,
   Transporter,
 } from '@esmart/core/types';
 import { Money, money, sum, zero } from '@esmart/core/lib/money';
-import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
+import { applyOpening, availableAdvance, buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
 import { stockMap } from '@esmart/core/domain/stockLedger';
 import { PURCHASE_KINDS, SALES_KINDS } from '@esmart/core/domain/documentStates';
 import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
-import { nowISO } from '@esmart/core/lib/date';
-import { Module, ModuleSet, canOpen, hasModule, moduleSetFor } from '@esmart/core/domain/plan';
+import { nowISO, today } from '@esmart/core/lib/date';
+import { resolveRate } from '@esmart/core/domain/fx';
+import { Module, ModuleSet, canOpen, moduleSetFor, moduleEnabled } from '@esmart/core/domain/plan';
 
 /**
  * Every read below is scoped by the active company, which is how the
@@ -44,15 +49,22 @@ export function useModuleSet(): ModuleSet {
   return moduleSetFor(usePlan());
 }
 
-/** Whether the active company's plan includes a module. Data exists either way. */
+/** Modules the owner switched off for the active company. */
+export function useDisabledModules(): Module[] {
+  return useAppStore((s) => s.companies.find((c) => c.id === s.activeCompanyId)?.disabledModules) ?? NO_MODULES;
+}
+const NO_MODULES: Module[] = [];
+
+/** Whether a module is on for the active company: in its plan and not switched off. Data exists either way. */
 export function useHasModule(module: Module): boolean {
-  return hasModule(usePlan(), module);
+  return moduleEnabled(usePlan(), useDisabledModules(), module);
 }
 
-/** A filter for lists of routes: keeps what the active plan can open. */
+/** A filter for lists of routes: keeps what the active plan can open and the owner hasn't switched off. */
 export function useCanOpen(): (route: string) => boolean {
   const plan = usePlan();
-  return useMemo(() => (route: string) => canOpen(plan, route), [plan]);
+  const disabled = useDisabledModules();
+  return useMemo(() => (route: string) => canOpen(plan, route, disabled), [plan, disabled]);
 }
 
 export function useBaseCurrency(): string {
@@ -88,13 +100,14 @@ export function useCompanies() {
   return useAppStore((s) => s.companies);
 }
 
-export function useParties(kind?: 'customer' | 'supplier'): Party[] {
+/** A company's parties; customers or suppliers include parties that are both, and the general contacts are asked for by name. */
+export function useParties(kind?: PartyKind): Party[] {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const parties = useAppStore((s) => s.parties);
   return useMemo(
     () =>
       parties
-        .filter((p) => p.companyId === companyId && (!kind || p.kind === kind))
+        .filter((p) => p.companyId === companyId && (!kind || p.kind === kind || ((kind === 'customer' || kind === 'supplier') && p.kind === 'both')))
         .sort((a, b) => a.name.localeCompare(b.name)),
     [parties, companyId, kind],
   );
@@ -138,6 +151,19 @@ export function useExpenseCategories() {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const cats = useAppStore((s) => s.expenseCategories);
   return useMemo(() => cats.filter((c) => c.companyId === companyId), [cats, companyId]);
+}
+
+/** The company's item categories and brands, by name. */
+export function useItemCategories() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const cats = useAppStore((s) => s.itemCategories);
+  return useMemo(() => (cats ?? []).filter((c) => c.companyId === companyId).sort((a, b) => a.name.localeCompare(b.name)), [cats, companyId]);
+}
+
+export function useBrands() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const brands = useAppStore((s) => s.brands);
+  return useMemo(() => (brands ?? []).filter((b) => b.companyId === companyId).sort((a, b) => a.name.localeCompare(b.name)), [brands, companyId]);
 }
 
 export function usePaymentAccounts() {
@@ -208,17 +234,42 @@ export function useExpense(id: string | undefined): Expense | undefined {
   return useAppStore((s) => s.expenses.find((e) => e.id === current));
 }
 
-export function useStockMovements(itemId?: string): StockMovement[] {
+/**
+ * What every dashboard hub is asked for: the branch picked in the header (undefined for all) and
+ * the period bar's period, which the tabs share.
+ */
+export function useDashboardScope(): { branchId?: string; period: DashboardPeriod } {
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const period = useUiStore((s) => s.dashboardPeriod);
+  return useMemo(() => ({ branchId, period }), [branchId, period]);
+}
+
+/** The branch picked in the header's switcher, or undefined when all branches are showing. */
+export function useSwitcherBranchId(): string | undefined {
+  const branches = useBranches();
+  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  return activeBranchId && branches.some((b) => b.id === activeBranchId) ? activeBranchId : undefined;
+}
+
+/**
+ * Stock movements of the active company. `branchScoped` keeps only the branch
+ * picked in the switcher, for views of what is on hand; posting, transfers and
+ * the books need every branch's.
+ */
+export function useStockMovements(itemId?: string, opts: { branchScoped?: boolean } = {}): StockMovement[] {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const movements = useAppStore((s) => s.stockMovements);
+  const switcherBranchId = useSwitcherBranchId();
+  const branchId = opts.branchScoped ? switcherBranchId : undefined;
   return useMemo(
-    () => movements.filter((m) => m.companyId === companyId && (!itemId || m.itemId === itemId)),
-    [movements, companyId, itemId],
+    () => movements.filter((m) => m.companyId === companyId && (!itemId || m.itemId === itemId) && (!branchId || m.branchId === branchId)),
+    [movements, companyId, itemId, branchId],
   );
 }
 
+/** On hand per item, at the branch picked in the switcher (all branches when none is). */
 export function useStockLevels(): Record<string, number> {
-  const movements = useStockMovements();
+  const movements = useStockMovements(undefined, { branchScoped: true });
   return useMemo(() => stockMap(movements), [movements]);
 }
 
@@ -258,29 +309,48 @@ export function useAttachments(entityId?: string) {
 /* ------------------------------------------------------------------ */
 
 export function useReceivables() {
-  const invoices = useDocuments('invoice');
+  const documents = useDocuments();
   const payments = usePayments('received');
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
-    const outstanding = buildOutstanding(invoices, payments);
+    const invoices = documents.filter((d) => d.kind === 'invoice');
+    const outstanding = buildOutstanding(invoices, payments, undefined, documents);
     return { outstanding, summary: summarizeAging(outstanding, baseCurrency) };
-  }, [invoices, payments, baseCurrency]);
+  }, [documents, payments, baseCurrency]);
 }
 
 export function usePayables() {
-  const bills = useDocuments('purchaseBill');
+  const documents = useDocuments();
   const payments = usePayments('paid');
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
-    const outstanding = buildOutstanding(bills, payments);
+    const bills = documents.filter((d) => d.kind === 'purchaseBill');
+    const outstanding = buildOutstanding(bills, payments, undefined, documents);
     return { outstanding, summary: summarizeAging(outstanding, baseCurrency) };
-  }, [bills, payments, baseCurrency]);
+  }, [documents, payments, baseCurrency]);
 }
 
-/** Outstanding amount for one party, in the company base currency. */
+/**
+ * What is left of a party's opening balance once its advances settle it, in
+ * the base currency. `partyPayments` are the party's payments in its direction.
+ */
+export function openingOwedInBase(
+  party: Party,
+  partyPayments: Payment[],
+  rates: ExchangeRate[],
+  baseCurrency: string,
+): number {
+  const { currency } = party.openingBalance;
+  const { opening } = applyOpening(party.openingBalance.minor, availableAdvance(partyPayments, currency).minor);
+  return Math.round(opening * resolveRate(rates, currency, baseCurrency, today()));
+}
+
+/** Outstanding amount for one party, in the company base currency, opening balance included. */
 export function usePartyOutstanding(partyId: string | undefined) {
   const documents = useDocuments();
   const payments = usePayments();
+  const party = useParty(partyId);
+  const rates = useExchangeRates();
   const baseCurrency = useBaseCurrency();
   return useMemo(() => {
     if (!partyId) return zero(baseCurrency);
@@ -288,12 +358,18 @@ export function usePartyOutstanding(partyId: string | undefined) {
       (d) => d.partyId === partyId && (d.kind === 'invoice' || d.kind === 'purchaseBill'),
     );
     const partyPayments = payments.filter((p) => p.partyId === partyId);
-    const rows = buildOutstanding(docs, partyPayments);
+    const rows = buildOutstanding(docs, partyPayments, undefined, documents);
+    const opening = party
+      ? openingOwedInBase(party, partyPayments.filter((p) => p.direction === (party.kind === 'supplier' ? 'paid' : 'received')), rates, baseCurrency)
+      : 0;
     return sum(
-      rows.map((r) => money(Math.round(r.outstanding.minor * (r.document.exchangeRate || 1)), baseCurrency)),
+      [
+        ...rows.map((r) => money(Math.round(r.outstanding.minor * (r.document.exchangeRate || 1)), baseCurrency)),
+        money(opening, baseCurrency),
+      ],
       baseCurrency,
     );
-  }, [documents, payments, partyId, baseCurrency]);
+  }, [documents, payments, party, rates, partyId, baseCurrency]);
 }
 
 export function usePartyHistory(partyId: string | undefined) {
@@ -426,46 +502,11 @@ export function useEInvoiceDocuments(status?: EInvoiceStatus): BusinessDocument[
   }, [documents, company, settings, parties, items, status]);
 }
 
-export type ComplianceSummary = {
-  eInvoice: Record<EInvoiceStatus, number>;
-  eway: Record<EwayBillStatus, number>;
-  expiringSoon: number;
-  /** Documents that need a bill and do not yet have a live one. */
-  ewayOutstanding: number;
-};
+export type ComplianceSummary = ComplianceCounts;
 
+/** E-invoice and e-way bill counts, from the server: the device no longer holds every document. */
 export function useComplianceSummary(): ComplianceSummary {
-  const documents = useEInvoiceDocuments();
-  const allDocuments = useDocuments();
-  const bills = useEwayBills();
-  const settings = useComplianceSettings();
-  const items = useAppStore((s) => s.items);
-
-  return useMemo(() => {
-    const now = nowISO();
-    const eInvoice: Record<EInvoiceStatus, number> = {
-      notApplicable: 0,
-      pending: 0,
-      generated: 0,
-      cancelled: 0,
-      failed: 0,
-    };
-    documents.forEach((d) => {
-      eInvoice[d.compliance?.eInvoiceStatus ?? 'pending'] += 1;
-    });
-
-    const eway: Record<EwayBillStatus, number> = { active: 0, expired: 0, cancelled: 0 };
-    let expiringSoon = 0;
-    bills.forEach((b) => {
-      const status = ewayBillStatusAt(b, now);
-      eway[status] += 1;
-      if (status === 'active' && hoursUntilExpiry(b, now) <= 24) expiringSoon += 1;
-    });
-
-    const ewayOutstanding = needingEwayBill(allDocuments, bills, items, settings, now).length;
-
-    return { eInvoice, eway, expiringSoon, ewayOutstanding };
-  }, [documents, allDocuments, bills, items, settings]);
+  return useComplianceCounts();
 }
 
 /** Documents that need an e-way bill and have no live one, newest first. */

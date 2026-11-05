@@ -119,3 +119,24 @@ describe('ocr', () => {
     expect(del.body.code).toBe('ATTACHMENT_IN_USE');
   });
 });
+
+describe('ocr with a network provider', () => {
+  it('queues an image-only read and finishes it in the background', async () => {
+    const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
+    const id = await uploadedScan(t, c, token);
+    const provider = t.deps.providers.ocr;
+    const realName = provider.name;
+    // Stand in for a provider that calls out over the network (Document AI).
+    Object.defineProperty(provider, 'name', { value: 'document-ai', configurable: true });
+    try {
+      const res = await t.post(`${c}/ocr/extractions`, { attachmentId: id, kind: 'expense' }, { token, headers: idem() });
+      expect(res.status).toBe(202);
+      expect(res.body.status).toBe('queued');
+      await t.runJobs();
+      const done = await t.get(`${c}/ocr/extractions/${res.body.id}`, { token });
+      expect(['completed', 'failed']).toContain(done.body.status);
+    } finally {
+      Object.defineProperty(provider, 'name', { value: realName, configurable: true });
+    }
+  });
+});

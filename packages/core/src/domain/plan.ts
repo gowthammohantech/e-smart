@@ -15,7 +15,9 @@ export type Module =
   | 'ocr'
   | 'fx'
   | 'branches'
-  | 'payables';
+  | 'payables'
+  /** The general ledger: chart of accounts, vouchers, trial balance, P&L, balance sheet. */
+  | 'books';
 
 export type PlanInfo = {
   key: PlanTier;
@@ -110,6 +112,23 @@ export function hasModule(tier: PlanTier, module: Module): boolean {
   return moduleSetFor(tier) === 'full';
 }
 
+/** What a module can't work without: payables are the buying side's bills, scanning fills in expenses. */
+export const MODULE_DEPENDS: Partial<Record<Module, Module[]>> = { payables: ['purchases'], ocr: ['expenses'] };
+
+/**
+ * Whether a module is on for a company: in its plan, not switched off by the owner, and with what it
+ * depends on on too. Switching a module off hides it; its records stay, and come back when it is on.
+ */
+export function moduleEnabled(tier: PlanTier, disabled: readonly Module[] | null | undefined, module: Module): boolean {
+  if (!hasModule(tier, module) || disabled?.includes(module)) return false;
+  return (MODULE_DEPENDS[module] ?? []).every((d) => moduleEnabled(tier, disabled, d));
+}
+
+/** The modules that need this one, which go off with it. */
+export function dependentsOf(module: Module): Module[] {
+  return (Object.keys(MODULE_DEPENDS) as Module[]).filter((m) => MODULE_DEPENDS[m]!.includes(module));
+}
+
 /** Every gateable module, for iterating. Names live in `domain:module.*`. */
 export const MODULES: Module[] = [
   'purchases',
@@ -119,6 +138,7 @@ export const MODULES: Module[] = [
   'fx',
   'branches',
   'payables',
+  'books',
 ];
 
 /** Reports that read the buying side of the books, and the module each needs. */
@@ -128,6 +148,12 @@ const FULL_PLAN_REPORTS: Record<string, Module> = {
   payables: 'payables',
   stock: 'inventory',
   profit: 'expenses',
+  'tds-register': 'payables',
+  'tds-payable': 'payables',
+  'tds-26q': 'payables',
+  'tds-challans': 'payables',
+  'trial-balance': 'books',
+  'msme-payables': 'payables',
 };
 
 export function moduleForReport(key: string): Module | null {
@@ -150,6 +176,13 @@ const GATED_PATHS: [prefix: string, module: Module][] = [
   ['/ocr', 'ocr'],
   // Currencies & rates is open on every plan: a customer on any plan can be billed in their currency.
   // Branches opens on every plan: Free has its one branch to name, and adding more is what is locked.
+  ['/books', 'books'],
+  // Accounts & P&L reads the books.
+  ['/accounts', 'books'],
+  // Receipts are receipt vouchers.
+  ['/receipts', 'books'],
+  // Matching 2B needs the purchase register.
+  ['/gst/gstr2b', 'purchases'],
 ];
 
 /** The module a route belongs to, or null when every plan can open it. */
@@ -165,8 +198,8 @@ export function moduleForPath(pathname: string): Module | null {
  * Whether a plan can open an app route. Takes either form the app uses —
  * `/(app)/purchases/bills` or `/purchases/bills` — and ignores any query.
  */
-export function canOpen(tier: PlanTier, route: string): boolean {
+export function canOpen(tier: PlanTier, route: string, disabled?: readonly Module[] | null): boolean {
   const pathname = route.split('?')[0].replace(/\/\([^/)]+\)/g, '') || '/';
   const module = moduleForPath(pathname);
-  return !module || hasModule(tier, module);
+  return !module || moduleEnabled(tier, disabled, module);
 }

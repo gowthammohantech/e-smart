@@ -6,15 +6,15 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { PhoneField, PickerField, Segmented, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useDocuments } from '../../../store/selectors';
+import { useActiveCompany } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
-import { isFinalized } from '@esmart/core/domain/documentStates';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Card } from '@esmart/ui/components/Card';
 import { Icon } from '@esmart/ui/components/Icon';
@@ -22,22 +22,28 @@ import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/mast
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
-import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
+import { SignatureSection } from '../../../features/company/SignatureSection';
 
+
+/** A sample UPI ID for the field's placeholder: an address, the same in every language. */
+const UPI_SAMPLE = 'business@okhdfc';
 export default function CompanySettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
   const months = monthNames();
   const goBack = useGoBack();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
 
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
   // After the first posted entry, the fields those entries depend on are frozen.
-  const posted = useDocuments().some((d) => isFinalized(d.status));
+  // Locked until the server says otherwise; it refuses the change either way.
+  const usage = useCompanyUsage().data;
+  const posted = !usage || usage.postedDocuments > 0;
   const locks = profileLocks(company, posted);
 
   const [name, setName] = useState(company?.name ?? '');
@@ -53,8 +59,19 @@ export default function CompanySettings() {
   const [taxRegistered, setTaxRegistered] = useState(!!company?.taxRegistration?.registered);
   const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
   const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
+  const [returnFrequency, setReturnFrequency] = useState(company?.taxRegistration?.returnFrequency ?? 'monthly');
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
   const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
+  const [bankRate, setBankRate] = useState(String(company?.msmeBankRate ?? 5.5));
+  const [toleranceDays, setToleranceDays] = useState(String(company?.gstr2bDateToleranceDays ?? 3));
+  const [tan, setTan] = useState(company?.tan ?? '');
+  const bank = company?.bankDetails;
+  const [bankName, setBankName] = useState(bank?.bankName ?? '');
+  const [accountName, setAccountName] = useState(bank?.accountName ?? '');
+  const [accountNumber, setAccountNumber] = useState(bank?.accountNumber ?? '');
+  const [ifsc, setIfsc] = useState(bank?.ifsc ?? '');
+  const [bankBranch, setBankBranch] = useState(bank?.branch ?? '');
+  const [upiId, setUpiId] = useState(bank?.upiId ?? '');
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
   const [lutValidTill, setLutValidTill] = useState(() => {
@@ -66,18 +83,23 @@ export default function CompanySettings() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = async () => {
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'> = {
       name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       postalCode: validPostalCode(postalCode, company?.country, stateCode),
+      tan: taxRegistered ? validTan(tan) : undefined,
+      // The same shapes the server checks, said here in words.
+      ifsc: ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
+      accountNumber: accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
+      upiId: upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
     };
     setErrors(next);
     if (hasErrors(next) || !company) return;
@@ -93,6 +115,20 @@ export default function CompanySettings() {
         website: website.trim() || undefined,
         fiscalYearStartMonth: fyMonth,
         allowNegativeStock,
+        // Typed values out of range fall back to the defaults the server also keeps.
+        msmeBankRate: Number(bankRate) >= 0 && Number(bankRate) <= 50 && bankRate.trim() ? Number(bankRate) : 5.5,
+        gstr2bDateToleranceDays: /^\d{1,2}$/.test(toleranceDays.trim()) && Number(toleranceDays) <= 30 ? Number(toleranceDays) : 3,
+        // Blank clears it; the server takes an empty TAN as "none".
+        tan: tan.trim().toUpperCase(),
+        // Sent whole: an empty field clears it on the server.
+        bankDetails: {
+          bankName: bankName.trim(),
+          accountName: accountName.trim(),
+          accountNumber: accountNumber.trim(),
+          ifsc: ifsc.trim().toUpperCase(),
+          branch: bankBranch.trim(),
+          upiId: upiId.trim(),
+        },
         address: {
           ...company.address,
           line1: line1.trim(),
@@ -111,6 +147,7 @@ export default function CompanySettings() {
           placeOfSupplyStateCode: stateCode || company.taxRegistration?.placeOfSupplyStateCode,
           lutNumber: taxRegistered && lutNumber.trim() ? lutNumber.trim().toUpperCase() : undefined,
           lutValidTill: taxRegistered && lutNumber.trim() && lutValidTill ? lutValidTill : undefined,
+          returnFrequency,
         },
       }),
       tr('settings:company.saved'),
@@ -122,7 +159,7 @@ export default function CompanySettings() {
   useSaveShortcut(() => void save(), !saving);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.businessProfile') }} />
 
       <ScrollView
@@ -155,6 +192,48 @@ export default function CompanySettings() {
           <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={errors.postalCode} containerStyle={{ flex: 1 }} />
         </View>
 
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }} nativeID="bank-and-signature">
+          {tr('settings:company.bankAndSignature')}
+        </Text>
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18, marginTop: -t.spacing.sm }}>
+          {tr('settings:company.bankHint')}
+        </Text>
+        <TextField label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} />
+        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <TextField label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={{ flex: 1 }} />
+          <TextField label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={{ flex: 1 }} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <TextField
+            label={tr('settings:company.accountNumber')}
+            value={accountNumber}
+            onChangeText={setAccountNumber}
+            keyboardType="number-pad"
+            error={errors.accountNumber}
+            containerStyle={{ flex: 1 }}
+          />
+          <TextField
+            label={tr('settings:company.ifsc')}
+            value={ifsc}
+            onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+            autoCapitalize="characters"
+            placeholder="HDFC0001234"
+            error={errors.ifsc}
+            containerStyle={{ flex: 1 }}
+          />
+        </View>
+        <TextField
+          label={tr('settings:company.upiId')}
+          value={upiId}
+          onChangeText={(v) => setUpiId(v.trim())}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          icon="qrcode"
+          placeholder={UPI_SAMPLE}
+          error={errors.upiId}
+        />
+        <SignatureSection />
+
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
         <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
         <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
@@ -186,6 +265,32 @@ export default function CompanySettings() {
             />
             {country?.regime === 'GST' ? (
               <>
+                <View style={{ gap: t.spacing.xs }}>
+                  <Text variant="small" tone="muted">
+                    {tr('settings:company.returnFrequency')}
+                  </Text>
+                  <Segmented
+                    options={[
+                      { value: 'monthly', label: tr('settings:company.returnMonthly') },
+                      { value: 'qrmp', label: tr('settings:company.returnQuarterly') },
+                    ]}
+                    value={returnFrequency}
+                    onChange={(v) => setReturnFrequency(v as 'monthly' | 'qrmp')}
+                  />
+                  <Text variant="micro" tone="muted">
+                    {tr('settings:company.returnFrequencyHint')}
+                  </Text>
+                </View>
+                <TextField
+                  label={tr('settings:company.tan')}
+                  value={tan}
+                  onChangeText={(v) => setTan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                  autoCapitalize="characters"
+                  icon="bank-minus"
+                  placeholder="MUMA12345B"
+                  hint={tr('settings:company.tanHint')}
+                  error={errors.tan}
+                />
                 <TextField
                   label={tr('settings:company.lutNumber')}
                   value={lutNumber}
@@ -210,10 +315,28 @@ export default function CompanySettings() {
           value={allowNegativeStock}
           onValueChange={setAllowNegativeStock}
         />
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.rules')}</Text>
+        <TextField
+          label={tr('settings:company.msmeBankRate')}
+          value={bankRate}
+          onChangeText={setBankRate}
+          keyboardType="decimal-pad"
+          hint={tr('settings:company.msmeBankRateHint')}
+          icon="percent-outline"
+        />
+        <TextField
+          label={tr('settings:company.gstr2bTolerance')}
+          value={toleranceDays}
+          onChangeText={setToleranceDays}
+          keyboardType="number-pad"
+          hint={tr('settings:company.gstr2bToleranceHint')}
+          icon="calendar-range"
+        />
       </ScrollView>
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
       </FormActions>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />

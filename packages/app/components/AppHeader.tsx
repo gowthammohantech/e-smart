@@ -14,7 +14,8 @@ import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
-import { useRemoteMeta } from '../remote';
+import { carriesQueue, ConnectionBadge } from './ConnectionBadge';
+import { useConnectivity } from '../remote';
 import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
 import { countLabel } from '@esmart/core/lib/format';
 
@@ -38,9 +39,10 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const setActiveCompany = useAppStore((s) => s.setActiveCompany);
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const unread = useUnreadCount();
-  const offline = !useRemoteMeta((m) => m.online);
   const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
   const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
+  const mode = useConnectivity((s) => s.mode);
+  const showQueued = pendingSync > 0 && !carriesQueue(mode);
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -116,7 +118,6 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         paddingTop: desktop ? t.spacing.xl : insets.top + t.spacing.sm,
         paddingHorizontal: t.spacing.lg,
         paddingBottom: t.spacing.md,
-        backgroundColor: t.c.bg,
         gap: t.spacing.sm,
       }}
     >
@@ -141,7 +142,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           <Pressable
             onPress={() => setSwitcherOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Switch business. Current: ${company?.name}`}
+            accessibilityLabel={tr('common:component.switchBusiness', { name: company?.name ?? '' })}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -170,11 +171,9 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         </View>
 
         {/* On a narrow phone the status badge gives way (shrinks) before the buttons do. */}
-        {offline ? (
-          <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
-        ) : null}
+        <ConnectionBadge style={{ flexShrink: 1, alignSelf: 'center' }} />
         {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
-        {failedSync > 0 || pendingSync > 0 ? (
+        {failedSync > 0 || showQueued ? (
           <Pressable
             onPress={() => router.push('/(app)/settings/sync')}
             hitSlop={6}
@@ -183,7 +182,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
             style={{ flexDirection: 'row', gap: t.spacing.xs, flexShrink: 1, alignSelf: 'center' }}
           >
             {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ flexShrink: 1 }} /> : null}
-            {pendingSync > 0 ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" style={{ flexShrink: 1 }} /> : null}
+            {showQueued ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" style={{ flexShrink: 1 }} /> : null}
           </Pressable>
         ) : null}
 

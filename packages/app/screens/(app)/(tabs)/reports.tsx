@@ -11,20 +11,11 @@ import { Text } from '@esmart/ui/components/Text';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { StatGrid } from '@esmart/ui/components/Layout';
 import { BarChart } from '@esmart/ui/components/charts/BarChart';
-import {
-  useBaseCurrency,
-  useCanOpen,
-  useModuleSet,
-  useDocuments,
-  useExpenses,
-  useItems,
-  usePayables,
-  useReceivables,
-  useStockMovements,
-} from '../../../store/selectors';
-import { profitSnapshot, summarizeStock } from '@esmart/core/domain/reports';
+import { useBaseCurrency, useCanOpen, useModuleSet } from '../../../store/selectors';
+import { profitSnapshot, type ProfitSnapshot, type StockReport } from '@esmart/core/domain/reports';
+import { useReportData } from '../../../remote/queries';
 import { lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/core/lib/date';
-import { money } from '@esmart/core/lib/money';
+import { money, type Money } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
@@ -39,7 +30,7 @@ type ReportLink = {
 /** Each report's route key, its catalogue entry under `reports:report`, and its icon. */
 const REPORTS: {
   key: string;
-  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'advances' | 'profit';
+  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'advances' | 'profit' | 'tdsRegister' | 'tdsPayable' | 'tdsReceivable' | 'tds26q' | 'tdsChallans' | 'msmePayables';
   icon: ReportLink['icon'];
 }[] = [
   { key: 'sales-summary', id: 'salesSummary', icon: 'trending-up' },
@@ -52,6 +43,12 @@ const REPORTS: {
   { key: 'payments', id: 'payments', icon: 'cash-sync' },
   { key: 'advances', id: 'advances', icon: 'cash-clock' },
   { key: 'profit', id: 'profit', icon: 'chart-line' },
+  { key: 'tds-register', id: 'tdsRegister', icon: 'bank-minus' },
+  { key: 'tds-payable', id: 'tdsPayable', icon: 'bank-outline' },
+  { key: 'tds-receivable', id: 'tdsReceivable', icon: 'bank-plus' },
+  { key: 'tds-26q', id: 'tds26q', icon: 'file-table-outline' },
+  { key: 'tds-challans', id: 'tdsChallans', icon: 'bank-transfer-out' },
+  { key: 'msme-payables', id: 'msmePayables', icon: 'timer-sand' },
 ];
 
 export default function ReportsTab() {
@@ -60,12 +57,6 @@ export default function ReportsTab() {
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  const documents = useDocuments();
-  const expenses = useExpenses();
-  const items = useItems();
-  const movements = useStockMovements();
-  const receivables = useReceivables();
-  const payables = usePayables();
 
   const canOpen = useCanOpen();
   const full = useModuleSet() === 'full';
@@ -82,12 +73,14 @@ export default function ReportsTab() {
   // The chart and the snapshot sit side by side once there is room for both.
   const wide = bp === 'desktop' || bp === 'wide';
 
-  const profit = useMemo(
-    () => profitSnapshot(documents, expenses, items, baseCurrency, { range }),
-    [documents, expenses, items, baseCurrency, range],
-  );
-
-  const stock = useMemo(() => summarizeStock(items, movements, baseCurrency), [items, movements, baseCurrency]);
+  // The figures come from the server's reports, each asked for only when the plan includes it.
+  const emptyProfit = useMemo(() => profitSnapshot([], [], [], baseCurrency, { range }), [baseCurrency, range]);
+  const profit = useReportData<ProfitSnapshot>(canOpen('/reports/profit') ? 'profit' : null, range).data ?? emptyProfit;
+  const stock = useReportData<StockReport>(canOpen('/reports/stock') ? 'stock' : null, range).data ?? { totalValue: money(0, baseCurrency) };
+  const none = money(0, baseCurrency);
+  type Aging = { summary: { total: Money } };
+  const receivables = useReportData<Aging>(canOpen('/reports/receivables') ? 'receivables' : null, range).data ?? { summary: { total: none } };
+  const payables = useReportData<Aging>(canOpen('/reports/payables') ? 'payables' : null, range).data ?? { summary: { total: none } };
 
   const trend = useMemo(() => {
     const keys = lastNMonths(6);
@@ -114,7 +107,7 @@ export default function ReportsTab() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <AppHeader title={tr('reports:hub.title')} subtitle={tr('reports:hub.subtitle', { currency: baseCurrency })} />
 
       <ScrollView

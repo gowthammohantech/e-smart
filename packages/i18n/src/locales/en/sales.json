@@ -41,6 +41,11 @@
     "otherChargesHint": "Freight, packing or installation added to the total.",
     "roundOff": "Round off the total",
     "roundOffHint": "Rounds the grand total to the nearest whole unit and shows the adjustment.",
+    "reverseCharge": "Reverse charge",
+    "reverseChargeBillHint": "You pay this GST to the government yourself, not to the supplier. Used for transport (GTA), legal services and other notified supplies.",
+    "reverseChargeSaleHint": "The buyer pays this GST to the government. The invoice shows it but doesn’t charge it.",
+    "noteReason": "Reason",
+    "noteReasonHint": "Printed on the note and reported with it.",
     "notes": "Notes",
     "notesHint": "Visible to the customer on the document",
     "terms": "Terms and conditions",
@@ -101,7 +106,25 @@
     "searchSuppliers": "Search suppliers",
     "addCustomer": "Add new customer",
     "addSupplier": "Add new supplier",
-    "searchItems": "Search by name or SKU"
+    "searchItems": "Search by name or SKU",
+    "amountsAre": "Rates are",
+    "taxExclusive": "Before tax",
+    "taxInclusive": "Tax included",
+    "taxMixed": "Some lines include tax and some don’t. Pick one to set them all.",
+    "saveAndSend": "Save & send",
+    "saveAndSendHint": "Finalise, then email it to the customer",
+    "bankCard": "Paid into",
+    "bankNone": "No bank account on your invoices yet.",
+    "bankEdit": "Change in settings",
+    "bankAdd": "Add bank details",
+    "bankUpiQr": "UPI QR for the total prints on the invoice"
+  },
+  "reimburse": {
+    "title": "{{count}} billable expenses to recover",
+    "body": "Add them at cost as reimbursements: no GST, outside the taxable value (Rule 33).",
+    "add": "Add",
+    "expense": "Expense recovered",
+    "creditClaimed": "Credit of {{tax}} was claimed on this expense. A pure agent recovers a cost paid in the customer’s name, without claiming its credit."
   },
   "detail": {
     "finalise": "Finalise",
@@ -148,6 +171,10 @@
     "convertToInvoice": "Convert to invoice",
     "createDelivery": "Create delivery note",
     "createReturn": "Create a return",
+    "createCreditNote": "Raise a credit note",
+    "createDebitNote": "Raise a debit note",
+    "recordSupplierCreditNote": "Record their credit note",
+    "recordSupplierDebitNote": "Record their debit note",
     "createGoodsReceipt": "Create goods receipt",
     "convertToBill": "Convert to bill",
     "daysLate_one": "{{count}} day late",
@@ -173,7 +200,8 @@
     "viewEwayBill": "View e-way bill",
     "duplicate": "Duplicate",
     "deleteDraft": "Delete draft",
-    "cancelTitle": "Cancel {{number}}?"
+    "cancelTitle": "Cancel {{number}}?",
+    "convertToProforma": "Make a proforma invoice"
   },
   "line": {
     "editLine": "Edit line",
@@ -217,8 +245,25 @@
     "nothingOutstanding": "Nothing outstanding",
     "advanceHint": "This payment will be held as an advance against the contact.",
     "applying": "Applying",
+    "adjustReceived": "Customer deducted TDS, or a discount or write-off",
+    "adjustPaid": "You deducted TDS, or got a discount",
+    "adjustment": {
+      "tdsDeducted": "TDS deducted",
+      "discount": "Discount",
+      "writeOff": "Write off"
+    },
+    "adjustmentHint": {
+      "tdsDeducted": "Settles the invoice with no money moving; claimed back against Form 26AS.",
+      "discount": "Settles the rest at a discount, such as for prompt payment.",
+      "writeOff": "What won’t be paid, booked as a bad debt."
+    },
+    "settledWithoutCash": "Settled without cash",
     "notes": "Notes",
     "notesPlaceholder": "Internal note",
+    "serviceAdvance": "Advance for services",
+    "serviceAdvanceHint": "GST is due on an advance for services when it is received; the invoice raised later takes it back. Advances for goods carry none.",
+    "advanceRate": "GST rate",
+    "advanceTaxIs": "GST on the advance: {{tax}}, inside the amount received",
     "applyTo": "Apply to",
     "summary": "Summary",
     "autoAllocateShort": "Auto-allocate",
@@ -268,7 +313,12 @@
     "depositedInto": "Deposited into",
     "recordedAt": "Recorded",
     "openDocument": "Open {{number}}",
-    "unallocatedNote": "{{amount}} is unallocated and available as an advance."
+    "unallocatedNote": "{{amount}} is unallocated and available as an advance.",
+    "tdsSection": "TDS section",
+    "tdsSectionPick": "Pick the section",
+    "tdsSectionHint": "The TDS kept back here is reported under this section in 26Q and TDS payable.",
+    "received": "Payment received",
+    "totalApplied": "Total applied"
   },
   "aging": {
     "overdue": "Overdue",
@@ -341,7 +391,16 @@
     "ewbNo": "E-way bill no.",
     "validUntil": "Valid until",
     "ackNo": "Ack no.",
-    "ackDate": "Ack date"
+    "ackDate": "Ack date",
+    "amountInWords": "Amount in words",
+    "bankDetails": "Bank details",
+    "accountName": "Account name",
+    "accountNumber": "Account no.",
+    "ifsc": "IFSC",
+    "bank": "Bank",
+    "branch": "Branch",
+    "upi": "UPI",
+    "scanToPay": "Scan to pay with any UPI app"
   },
   "returnPicker": {
     "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",
@@ -349,5 +408,77 @@
     "search": "Search by number or party",
     "empty": "Nothing to return against yet",
     "created": "Return draft created"
+  },
+  "notePicker": {
+    "created": "Note draft created",
+    "hint": {
+      "creditNote": "Pick the invoice this credit note lowers. Its lines are copied in: change them to the amount being credited, such as the discount or the price difference.",
+      "debitNote": "Pick the invoice this debit note adds to. Its lines are copied in: change them to the extra amount being charged.",
+      "supplierCreditNote": "Pick the supplier’s bill their credit note is against, then enter it as they issued it.",
+      "supplierDebitNote": "Pick the supplier’s bill their debit note is against, then enter it as they issued it."
+    },
+    "directInvoice": "Without an invoice",
+    "directBill": "Without a bill"
+  },
+  "refund": {
+    "action": "Refund",
+    "title": "Refund the advance",
+    "subtitle": "Out of {{number}}: {{amount}} still held",
+    "amount": "Amount to refund",
+    "tooMuch": "Only {{amount}} of the advance is left",
+    "beforeReceipt": "A refund can't be dated before the advance was received",
+    "paidFrom": "Paid from",
+    "hint": "The refund prints as the refund voucher (Rule 51). On an advance for services, the GST paid on what is refunded comes back in the month of the refund.",
+    "save": "Refund",
+    "saved": "Advance refunded",
+    "note": "Refund of the advance on {{number}}",
+    "of": "Refund of the advance on {{number}}",
+    "listTitle": "Refunded out of this advance",
+    "emptyTitle": "Paid back out of an advance",
+    "emptyBody": "A refund settles no invoices: it returns part of the advance the customer paid."
+  },
+  "grid": {
+    "lineNo": "#",
+    "cellLabel": "{{column}}, line {{n}}",
+    "moreDetails": "More details",
+    "lineActions": "Actions for line {{n}}",
+    "discountMode": "Discount as {{mode}}, line {{n}}. Change",
+    "enterHint": "Enter moves down a column; on the last line it adds an item."
+  },
+  "recurring": {
+    "title": "Repeat this invoice",
+    "hint": "A copy is issued on each date of the series, with the same customer, lines and prices, and its own number. It is e-invoiced like any other.",
+    "frequency": {
+      "none": "Off",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "yearly": "Yearly"
+    },
+    "endDate": "Last date (optional)",
+    "autoSend": "Email each copy",
+    "autoSendHint": "Sends it to the customer as soon as it is issued.",
+    "next": "Next copy on {{date}}",
+    "save": "Save",
+    "saved": "Repeats; next copy on {{date}}",
+    "stopped": "No longer repeats",
+    "action": "Repeat…",
+    "badge": "Repeats"
+  },
+  "approval": {
+    "title": "Waiting for approval",
+    "pending": "Waiting for approval",
+    "pendingBody": "Sent for approval on {{date}}. An owner or admin approves it, which issues it, or sends it back.",
+    "rejected": "Sent back",
+    "rejectedBody": "An owner or admin sent this back: {{note}}. Change it and issue it again.",
+    "approve": "Approve",
+    "reject": "Send back",
+    "why": "Why is it going back?",
+    "sendBack": "Send back",
+    "cancel": "Cancel",
+    "approved": "Approved and issued",
+    "sentBack": "Sent back to its creator",
+    "empty": "Nothing waiting",
+    "emptyBody": "Documents over the amounts set in Settings → Approvals wait here for an owner or admin."
   }
 }

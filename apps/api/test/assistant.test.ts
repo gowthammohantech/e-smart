@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AnthropicAssistant, type ToolOutcome } from '../src/providers/assistant';
+import { AnthropicAssistant, parseReply, type ToolOutcome } from '../src/providers/assistant';
 
 const message = (content: unknown[], stop_reason: string) => ({
   id: `msg_${Math.random()}`,
@@ -80,5 +80,17 @@ describe('AnthropicAssistant', () => {
     });
     expect(reply.text).toBe("I can't help with that one.");
     expect(api.requests[1].body.messages.at(-1).content[0]).toMatchObject({ is_error: true });
+  });
+});
+
+describe('reading the model\'s answer', () => {
+  it('takes JSON out of a code fence, or after a sentence', () => {
+    expect(parseReply('```json\n{"text":"You are owed ₹1,180."}\n```').text).toBe('You are owed ₹1,180.');
+    expect(parseReply('Here you go: {"text":"Two invoices are overdue."}').text).toBe('Two invoices are overdue.');
+  });
+
+  it('shows plain prose as it is, and never shows broken JSON', () => {
+    expect(parseReply('Sales are up this month.').text).toBe('Sales are up this month.');
+    expect(parseReply('{"text": "cut off').text).not.toContain('{');
   });
 });

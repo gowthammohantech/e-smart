@@ -11,11 +11,16 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:tools": "node --test tools/static-server.test.mjs",
+    "audit": "node tools/audit.mjs",
+    "check:migrations": "node tools/check-migrations.mjs",
     "mobile": "npm run start -w @esmart/mobile",
     "web": "npm run start -w @esmart/web",
     "admin": "npm run dev -w @esmart/admin",
     "api": "npm run dev -w @esmart/api",
-    "site": "npm run dev -w @esmart/site"
+    "site": "npm run dev -w @esmart/site",
+    "desktop": "npm run tauri:dev -w @esmart/desktop",
+    "desktop:build": "npm run tauri:build -w @esmart/desktop"
   },
   "devDependencies": {
     "@esmart/eslint-config": "*",

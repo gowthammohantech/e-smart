@@ -2,17 +2,15 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { ComplianceHub } from '../../../features/compliance/ComplianceHub';
 
 export default function Compliance() {
-  const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'nav']);
   const router = useRouter();
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           title: tr('nav:more.entry.gstCompliance'),

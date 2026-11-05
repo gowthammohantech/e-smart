@@ -16,6 +16,13 @@ const customer = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('parties', () => {
+  it('counts an opening balance as owed, less any advance', async () => {
+    const { token, c } = await ownerWithCompany(t);
+    const created = await t.post(`${c}/parties`, customer({ openingBalance: { minor: 50000, currency: 'INR' } }), { token });
+    const got = await t.get(`${c}/parties/${created.body.id}`, { token });
+    expect(got.body.outstanding).toEqual({ minor: 50000, currency: 'INR' });
+  });
+
   it('creates customers with sequential codes and lists them with balances', async () => {
     const { token, c } = await ownerWithCompany(t);
     const a = await t.post(`${c}/parties`, customer({ name: 'Sunrise Retail' }), { token });

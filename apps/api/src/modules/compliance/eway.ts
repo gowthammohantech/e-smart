@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
+import { and, eq, gte, ilike, inArray, lt, lte, or, type SQL } from 'drizzle-orm';
 import { mainHsnCodeOf, blockingIssues } from '@esmart/core/domain/eInvoice';
 import {
   EWAY_PART_B_REASONS,
@@ -22,6 +22,7 @@ import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { ApiError, conflict, invalid, notFound, unprocessable } from '../../http/errors';
+import { isUnanswered } from '../../providers/compliance';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -237,6 +238,246 @@ ${bill.cancelledAt ? `<p><b>Cancelled</b> ${ist(bill.cancelledAt)}</p>` : ''}
  * store action: core decides whether a bill is needed, validates Part-A and
  * Part-B, and owns the validity, extension and cancellation windows.
  */
+const CA = schema.complianceAttempts;
+
+type GenerateCtx = Pick<Ctx<'generateEwayBill'>, 'company' | 'user' | 'db' | 'now' | 'deps' | 'req' | 'reply' | 'query'>;
+type GenerateInput = Ctx<'generateEwayBill'>['body'];
+export type RecoveredBill = { ok: true; ewayBillNumber: string; generatedAt: string; validFrom: string; validUpto: string };
+
+/** No answer yet from the portal for this document's bill: it may exist there. */
+const stillChecking = () =>
+  new ApiError(502, 'EWB_PENDING', "The e-way bill portal didn't answer. We're checking whether it raised the bill and will update this document in a few minutes; don't generate it again meanwhile.");
+
+/**
+ * Raises a document's e-way bill. With `recovered`, the portal already raised it (found by the
+ * recovery lookup after a lost answer): it is recorded without calling the portal again.
+ */
+export async function generateEway(ctx: GenerateCtx, input: GenerateInput, opts: { recovered?: RecoveredBill; attemptId?: string } = {}) {
+  const now = ctx.now.toISOString();
+  const [exists] = await ctx.db.select({ id: D.id }).from(D).where(and(eq(D.companyId, ctx.company.id), eq(D.id, input.documentId)));
+  if (!exists) throw invalid('documentId', 'No such document in this company');
+  // A generate whose answer was lost is still being checked with the portal: a second one now could raise a second bill.
+  if (!opts.recovered) {
+    const [open] = await ctx.db.select({ id: CA.id }).from(CA).where(and(eq(CA.documentId, input.documentId), eq(CA.operation, 'ewb.generate'), eq(CA.status, 'pending')));
+    if (open) throw stillChecking();
+  }
+
+  // Distance 0 asks for the portal's road distance between the two PIN codes, as NIC does.
+  let distanceKm = input.distanceKm;
+  if (distanceKm === 0 && !validPincode(input.from.pincode) && !validPincode(input.to.pincode)) {
+    try {
+      distanceKm = (await ctx.deps.providers.gstin.distance(input.from.pincode, input.to.pincode)).distanceKm;
+    } catch (err) {
+      // No distance lookup on this server (GSTIN_PROVIDER=disabled): send 0 and let the portal work it out.
+      if (!(err instanceof ApiError && err.code === 'FEATURE_UNAVAILABLE')) throw err;
+    }
+  }
+
+  const prepared = await ctx.db.transaction(async (tx) => {
+    const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
+    const settings = await loadSettings(tx, ctx.company);
+    const core = await coreDocument(tx, ctx.company, doc, ctx.now);
+    const requirement = isEwayBillRequired({ document: core, items: await companyItems(tx, ctx.company.id), settings: settingsCore(settings) });
+    if (!requirement.required) throw unprocessable([{ code: 'EWB001', field: 'documentId', message: requirement.reason, severity: 'blocking' }], 'EWAY_BILL_NOT_REQUIRED');
+    if (doc.currentEwayBillId) {
+      const [live] = await tx.select().from(W).where(eq(W.id, doc.currentEwayBillId));
+      if (live && ewayBillStatusAt(coreBill(live), now) === 'active') {
+        throw unprocessable([{ code: 'EWB002', field: 'documentId', message: `E-way bill ${live.ewayBillNumber.trim()} is still active for ${doc.number}; cancel it first`, severity: 'blocking' }], 'EWAY_BILL_EXISTS');
+      }
+    }
+
+    const currency = core.totals.grandTotal.currency;
+    const componentTotal = (type: 'CGST' | 'SGST' | 'IGST') =>
+      core.totals.taxLines.flatMap((l) => l.components).filter((c) => c.type === type).reduce((acc, c) => acc + c.amount.minor, 0);
+    const partA = validatePartA({
+      from: input.from,
+      to: input.to,
+      subSupplyType: input.subSupplyType,
+      subSupplyDescription: input.subSupplyDescription,
+      documentNumber: core.number,
+      documentDate: core.date,
+      consignmentValueMinor: core.totals.grandTotal.minor,
+      mainHsnCode: mainHsnCodeOf(core),
+    });
+    const partB = validatePartB({
+      transportMode: input.transportMode,
+      vehicleNumber: input.vehicleNumber,
+      vehicleType: input.vehicleType,
+      transporterId: input.transporterId,
+      transportDocNumber: input.transportDocNumber,
+      transportDocDate: input.transportDocDate,
+      distanceKm,
+      now,
+    });
+    const issues = [...partA, ...partB];
+    const blocking = blockingIssues(issues);
+    if (blocking.length) throw unprocessable(issues as Issue[], 'EWAY_BILL_VALIDATION_FAILED', blocking[0].message);
+
+    const transporter = input.transporterId?.trim()
+      ? await resolveTransporter(tx, ctx.user, ctx.company.id, input.transporterId.trim(), input.transporterName, 'transporterId')
+      : undefined;
+    const draft = {
+      companyId: doc.companyId,
+      branchId: doc.branchId,
+      documentId: doc.id,
+      documentKind: doc.kind,
+      documentNumber: doc.number,
+      documentDate: doc.date,
+      partyId: doc.partyId,
+      docType: ewayDocTypeFor(doc.kind),
+      supplyType: 'outward' as const,
+      subSupplyType: input.subSupplyType,
+      subSupplyDescription: input.subSupplyDescription,
+      transactionType: input.transactionType,
+      from: input.from,
+      to: input.to,
+      consignmentValue: core.totals.grandTotal,
+      taxableValue: core.totals.taxableAmount,
+      cgst: { minor: componentTotal('CGST'), currency },
+      sgst: { minor: componentTotal('SGST'), currency },
+      igst: { minor: componentTotal('IGST'), currency },
+      mainHsnCode: mainHsnCodeOf(core),
+      itemCount: core.lines.length,
+      transporterId: transporter?.transporterId,
+      transporterName: input.transporterName ?? transporter?.name,
+      transportMode: input.transportMode,
+      vehicleNumber: input.vehicleNumber,
+      vehicleType: input.vehicleType,
+      transportDocNumber: input.transportDocNumber,
+      transportDocDate: input.transportDocDate,
+      distanceKm,
+      generatedAt: now,
+      generatedBy: ctx.user.id,
+    };
+    const payload = buildEwbPayload(draft);
+    if (ctx.query.dryRun) return { issues, submit: null };
+
+    const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
+    // A document with a live IRN gets its bill raised against it (Part B alone) where the portal supports that.
+    const [einvoice] = await tx.select({ irn: schema.eInvoices.irn }).from(schema.eInvoices).where(and(eq(schema.eInvoices.documentId, doc.id), eq(schema.eInvoices.status, 'generated')));
+    return { issues, submit: { draft, payload, creds, einvoice, transporter, distanceKm, currency } };
+  });
+  const { issues } = prepared;
+  if (!prepared.submit) return { ok: true, issues: issues as Issue[] };
+  const { draft, payload, creds, einvoice, transporter, currency } = prepared.submit;
+  distanceKm = prepared.submit.distanceKm;
+
+  // Outside the transaction: a bill the portal has raised can't be rolled back with it. The attempt is
+  // written first, so a lost answer leaves a record to settle by asking the portal (recovery.ts).
+  let attemptId = opts.attemptId ?? null;
+  let response: RecoveredBill;
+  if (opts.recovered) {
+    response = opts.recovered;
+  } else {
+    attemptId = newId('cat');
+    try {
+      await ctx.db.insert(CA).values({
+        id: attemptId,
+        companyId: ctx.company.id,
+        documentId: input.documentId,
+        operation: 'ewb.generate',
+        request: { input, docType: payload.docType, docNo: payload.docNo, docDate: payload.docDate, fromGstin: payload.fromGstin },
+        actorId: ctx.user.id,
+        startedAt: ctx.now,
+      });
+    } catch {
+      // Another request for the same document got there first.
+      throw stillChecking();
+    }
+    const answer = await ctx.deps.providers.compliance.submitEwayBill(creds, { companyId: ctx.company.id, payload, vehicleType: input.vehicleType, now, irn: einvoice?.irn?.trim() || undefined });
+    if (!answer.ok) {
+      if (isUnanswered(answer)) throw stillChecking();
+      await ctx.db.update(CA).set({ status: 'failed', settledAt: ctx.now, lastError: answer.errors[0]?.message ?? 'rejected' }).where(eq(CA.id, attemptId));
+      throw portalRejected(answer.errors, 'EWB_REJECTED');
+    }
+    response = answer;
+  }
+
+  const result = await ctx.db.transaction(async (tx) => {
+    const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
+    const [taken] = await tx.select({ id: W.id }).from(W).where(eq(W.ewayBillNumber, response.ewayBillNumber));
+    if (taken) throw portalRejected([{ code: 'EWB_DUPLICATE', field: 'document', message: 'The portal returned an e-way bill number already on record', severity: 'blocking' }], 'EWB_REJECTED');
+
+    const [bill] = await tx
+      .insert(W)
+      .values({
+        id: newId('ewb'),
+        companyId: doc.companyId,
+        branchId: doc.branchId,
+        ewayBillNumber: response.ewayBillNumber,
+        documentId: doc.id,
+        documentKind: doc.kind,
+        documentNumber: doc.number,
+        documentDate: doc.date,
+        partyId: doc.partyId,
+        docType: draft.docType,
+        supplyType: 'outward',
+        subSupplyType: input.subSupplyType,
+        subSupplyDescription: input.subSupplyDescription ?? null,
+        transactionType: input.transactionType,
+        fromLegalName: input.from.legalName,
+        fromGstin: input.from.gstin.trim().toUpperCase(),
+        fromAddress1: input.from.address1,
+        fromAddress2: input.from.address2 ?? null,
+        fromPlace: input.from.place,
+        fromPincode: input.from.pincode,
+        fromStateCode: input.from.stateCode,
+        toLegalName: input.to.legalName,
+        toGstin: input.to.gstin.trim().toUpperCase(),
+        toAddress1: input.to.address1,
+        toAddress2: input.to.address2 ?? null,
+        toPlace: input.to.place,
+        toPincode: input.to.pincode,
+        toStateCode: input.to.stateCode,
+        currency,
+        consignmentValueMinor: draft.consignmentValue.minor,
+        taxableValueMinor: draft.taxableValue.minor,
+        cgstMinor: draft.cgst.minor,
+        sgstMinor: draft.sgst.minor,
+        igstMinor: draft.igst.minor,
+        mainHsnCode: draft.mainHsnCode ?? null,
+        itemCount: draft.itemCount,
+        transporterId: transporter?.id ?? null,
+        transporterName: draft.transporterName ?? null,
+        transportMode: input.transportMode,
+        vehicleNumber: input.vehicleNumber ?? null,
+        vehicleType: input.vehicleType,
+        transportDocNumber: input.transportDocNumber ?? null,
+        transportDocDate: input.transportDocDate ?? null,
+        distanceKm,
+        generatedAt: new Date(response.generatedAt),
+        generatedBy: ctx.user.id,
+        validFrom: new Date(response.validFrom),
+        validUpto: new Date(response.validUpto),
+        createdAt: ctx.now,
+        updatedAt: ctx.now,
+      })
+      .returning();
+    // The first Part-B entry is the one the bill was raised with.
+    await tx.insert(PB).values({
+      id: newId('ewp'),
+      ewayBillId: bill.id,
+      mode: input.transportMode,
+      vehicleNumber: input.vehicleNumber ?? null,
+      vehicleType: input.vehicleType,
+      transportDocNumber: input.transportDocNumber ?? null,
+      transportDocDate: input.transportDocDate ?? null,
+      fromPlace: input.from.place,
+      fromStateCode: input.from.stateCode,
+      reasonCode: '1',
+      updatedBy: ctx.user.id,
+      updatedAt: ctx.now,
+    });
+    await recordChange(tx, ctx.user, { companyId: bill.companyId, action: 'generated e-way bill', entityType: 'eway_bill', entityId: bill.id, entityLabel: bill.ewayBillNumber, version: bill.version, after: { documentNumber: doc.number } });
+    await touchDocument(tx, ctx.user, doc, ctx.now, { currentEwayBillId: bill.id }, { action: 'generated e-way bill', after: bill.ewayBillNumber });
+    await notify(tx, ctx.deps, { companyId: bill.companyId, kind: 'compliance', title: `E-way bill ${bill.ewayBillNumber}`, body: `${doc.number} · valid until ${response.validUpto.slice(0, 10)}`, entityType: 'eway_bill', entityId: bill.id });
+    if (attemptId) await tx.update(CA).set({ status: 'settled', settledAt: ctx.now }).where(eq(CA.id, attemptId));
+    return { issues, row: bill };
+  });
+  const out = { ok: true, issues: result.issues as Issue[] };
+  return result.row ? { ...out, ewayBill: await toWire(ctx, ctx.db, result.row) } : out;
+}
+
 export const ewayHandlers = defineHandlers({
   async listEwayBills(ctx) {
     const q = ctx.query;
@@ -244,6 +485,10 @@ export const ewayHandlers = defineHandlers({
     if (ctx.user.branchIds.length) filters.push(inArray(W.branchId, ctx.user.branchIds));
     if (q.branchId) filters.push(eq(W.branchId, q.branchId));
     if (q.documentId) filters.push(eq(W.documentId, q.documentId));
+    if (q.q?.trim()) {
+      const like = `%${q.q.trim()}%`;
+      filters.push(or(ilike(W.ewayBillNumber, like), ilike(W.documentNumber, like), ilike(W.toLegalName, like)));
+    }
     // `expired` is derived: active in the table, past its validity on the clock.
     if (q.status === 'cancelled') filters.push(eq(W.status, 'cancelled'));
     if (q.status === 'active') filters.push(eq(W.status, 'active'), gte(W.validUpto, ctx.now));
@@ -264,197 +509,7 @@ export const ewayHandlers = defineHandlers({
   },
 
   async generateEwayBill(ctx) {
-    const input = ctx.body;
-    const now = ctx.now.toISOString();
-    const [exists] = await ctx.db.select({ id: D.id }).from(D).where(and(eq(D.companyId, ctx.company.id), eq(D.id, input.documentId)));
-    if (!exists) throw invalid('documentId', 'No such document in this company');
-
-    // Distance 0 asks for the portal's road distance between the two PIN codes, as NIC does.
-    let distanceKm = input.distanceKm;
-    if (distanceKm === 0 && !validPincode(input.from.pincode) && !validPincode(input.to.pincode)) {
-      try {
-        distanceKm = (await ctx.deps.providers.gstin.distance(input.from.pincode, input.to.pincode)).distanceKm;
-      } catch (err) {
-        // No distance lookup on this server (GSTIN_PROVIDER=disabled): send 0 and let the portal work it out.
-        if (!(err instanceof ApiError && err.code === 'FEATURE_UNAVAILABLE')) throw err;
-      }
-    }
-
-    const prepared = await ctx.db.transaction(async (tx) => {
-      const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
-      const settings = await loadSettings(tx, ctx.company);
-      const core = await coreDocument(tx, ctx.company, doc, ctx.now);
-      const requirement = isEwayBillRequired({ document: core, items: await companyItems(tx, ctx.company.id), settings: settingsCore(settings) });
-      if (!requirement.required) throw unprocessable([{ code: 'EWB001', field: 'documentId', message: requirement.reason, severity: 'blocking' }], 'EWAY_BILL_NOT_REQUIRED');
-      if (doc.currentEwayBillId) {
-        const [live] = await tx.select().from(W).where(eq(W.id, doc.currentEwayBillId));
-        if (live && ewayBillStatusAt(coreBill(live), now) === 'active') {
-          throw unprocessable([{ code: 'EWB002', field: 'documentId', message: `E-way bill ${live.ewayBillNumber.trim()} is still active for ${doc.number}; cancel it first`, severity: 'blocking' }], 'EWAY_BILL_EXISTS');
-        }
-      }
-
-      const currency = core.totals.grandTotal.currency;
-      const componentTotal = (type: 'CGST' | 'SGST' | 'IGST') =>
-        core.totals.taxLines.flatMap((l) => l.components).filter((c) => c.type === type).reduce((acc, c) => acc + c.amount.minor, 0);
-      const partA = validatePartA({
-        from: input.from,
-        to: input.to,
-        subSupplyType: input.subSupplyType,
-        subSupplyDescription: input.subSupplyDescription,
-        documentNumber: core.number,
-        documentDate: core.date,
-        consignmentValueMinor: core.totals.grandTotal.minor,
-        mainHsnCode: mainHsnCodeOf(core),
-      });
-      const partB = validatePartB({
-        transportMode: input.transportMode,
-        vehicleNumber: input.vehicleNumber,
-        vehicleType: input.vehicleType,
-        transporterId: input.transporterId,
-        transportDocNumber: input.transportDocNumber,
-        transportDocDate: input.transportDocDate,
-        distanceKm,
-        now,
-      });
-      const issues = [...partA, ...partB];
-      const blocking = blockingIssues(issues);
-      if (blocking.length) throw unprocessable(issues as Issue[], 'EWAY_BILL_VALIDATION_FAILED', blocking[0].message);
-
-      const transporter = input.transporterId?.trim()
-        ? await resolveTransporter(tx, ctx.user, ctx.company.id, input.transporterId.trim(), input.transporterName, 'transporterId')
-        : undefined;
-      const draft = {
-        companyId: doc.companyId,
-        branchId: doc.branchId,
-        documentId: doc.id,
-        documentKind: doc.kind,
-        documentNumber: doc.number,
-        documentDate: doc.date,
-        partyId: doc.partyId,
-        docType: ewayDocTypeFor(doc.kind),
-        supplyType: 'outward' as const,
-        subSupplyType: input.subSupplyType,
-        subSupplyDescription: input.subSupplyDescription,
-        transactionType: input.transactionType,
-        from: input.from,
-        to: input.to,
-        consignmentValue: core.totals.grandTotal,
-        taxableValue: core.totals.taxableAmount,
-        cgst: { minor: componentTotal('CGST'), currency },
-        sgst: { minor: componentTotal('SGST'), currency },
-        igst: { minor: componentTotal('IGST'), currency },
-        mainHsnCode: mainHsnCodeOf(core),
-        itemCount: core.lines.length,
-        transporterId: transporter?.transporterId,
-        transporterName: input.transporterName ?? transporter?.name,
-        transportMode: input.transportMode,
-        vehicleNumber: input.vehicleNumber,
-        vehicleType: input.vehicleType,
-        transportDocNumber: input.transportDocNumber,
-        transportDocDate: input.transportDocDate,
-        distanceKm,
-        generatedAt: now,
-        generatedBy: ctx.user.id,
-      };
-      const payload = buildEwbPayload(draft);
-      if (ctx.query.dryRun) return { issues, submit: null };
-
-      const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
-      // A document with a live IRN gets its bill raised against it (Part B alone) where the portal supports that.
-      const [einvoice] = await tx.select({ irn: schema.eInvoices.irn }).from(schema.eInvoices).where(and(eq(schema.eInvoices.documentId, doc.id), eq(schema.eInvoices.status, 'generated')));
-      return { issues, submit: { draft, payload, creds, einvoice, transporter, distanceKm, currency } };
-    });
-    const { issues } = prepared;
-    if (!prepared.submit) return { ok: true, issues: issues as Issue[] };
-    const { draft, payload, creds, einvoice, transporter, currency } = prepared.submit;
-    distanceKm = prepared.submit.distanceKm;
-
-    // Outside the transaction: a bill the portal has raised can't be rolled back with it.
-    const response = await ctx.deps.providers.compliance.submitEwayBill(creds, { companyId: ctx.company.id, payload, vehicleType: input.vehicleType, now, irn: einvoice?.irn?.trim() || undefined });
-    if (!response.ok) throw portalRejected(response.errors, 'EWB_REJECTED');
-
-    const result = await ctx.db.transaction(async (tx) => {
-      const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
-      const [taken] = await tx.select({ id: W.id }).from(W).where(eq(W.ewayBillNumber, response.ewayBillNumber));
-      if (taken) throw portalRejected([{ code: 'EWB_DUPLICATE', field: 'document', message: 'The portal returned an e-way bill number already on record', severity: 'blocking' }], 'EWB_REJECTED');
-
-      const [bill] = await tx
-        .insert(W)
-        .values({
-          id: newId('ewb'),
-          companyId: doc.companyId,
-          branchId: doc.branchId,
-          ewayBillNumber: response.ewayBillNumber,
-          documentId: doc.id,
-          documentKind: doc.kind,
-          documentNumber: doc.number,
-          documentDate: doc.date,
-          partyId: doc.partyId,
-          docType: draft.docType,
-          supplyType: 'outward',
-          subSupplyType: input.subSupplyType,
-          subSupplyDescription: input.subSupplyDescription ?? null,
-          transactionType: input.transactionType,
-          fromLegalName: input.from.legalName,
-          fromGstin: input.from.gstin.trim().toUpperCase(),
-          fromAddress1: input.from.address1,
-          fromAddress2: input.from.address2 ?? null,
-          fromPlace: input.from.place,
-          fromPincode: input.from.pincode,
-          fromStateCode: input.from.stateCode,
-          toLegalName: input.to.legalName,
-          toGstin: input.to.gstin.trim().toUpperCase(),
-          toAddress1: input.to.address1,
-          toAddress2: input.to.address2 ?? null,
-          toPlace: input.to.place,
-          toPincode: input.to.pincode,
-          toStateCode: input.to.stateCode,
-          currency,
-          consignmentValueMinor: draft.consignmentValue.minor,
-          taxableValueMinor: draft.taxableValue.minor,
-          cgstMinor: draft.cgst.minor,
-          sgstMinor: draft.sgst.minor,
-          igstMinor: draft.igst.minor,
-          mainHsnCode: draft.mainHsnCode ?? null,
-          itemCount: draft.itemCount,
-          transporterId: transporter?.id ?? null,
-          transporterName: draft.transporterName ?? null,
-          transportMode: input.transportMode,
-          vehicleNumber: input.vehicleNumber ?? null,
-          vehicleType: input.vehicleType,
-          transportDocNumber: input.transportDocNumber ?? null,
-          transportDocDate: input.transportDocDate ?? null,
-          distanceKm,
-          generatedAt: new Date(response.generatedAt),
-          generatedBy: ctx.user.id,
-          validFrom: new Date(response.validFrom),
-          validUpto: new Date(response.validUpto),
-          createdAt: ctx.now,
-          updatedAt: ctx.now,
-        })
-        .returning();
-      // The first Part-B entry is the one the bill was raised with.
-      await tx.insert(PB).values({
-        id: newId('ewp'),
-        ewayBillId: bill.id,
-        mode: input.transportMode,
-        vehicleNumber: input.vehicleNumber ?? null,
-        vehicleType: input.vehicleType,
-        transportDocNumber: input.transportDocNumber ?? null,
-        transportDocDate: input.transportDocDate ?? null,
-        fromPlace: input.from.place,
-        fromStateCode: input.from.stateCode,
-        reasonCode: '1',
-        updatedBy: ctx.user.id,
-        updatedAt: ctx.now,
-      });
-      await recordChange(tx, ctx.user, { companyId: bill.companyId, action: 'generated e-way bill', entityType: 'eway_bill', entityId: bill.id, entityLabel: bill.ewayBillNumber, version: bill.version, after: { documentNumber: doc.number } });
-      await touchDocument(tx, ctx.user, doc, ctx.now, { currentEwayBillId: bill.id }, { action: 'generated e-way bill', after: bill.ewayBillNumber });
-      await notify(tx, ctx.deps, { companyId: bill.companyId, kind: 'compliance', title: `E-way bill ${bill.ewayBillNumber}`, body: `${doc.number} · valid until ${response.validUpto.slice(0, 10)}`, entityType: 'eway_bill', entityId: bill.id });
-      return { issues, row: bill };
-    });
-    const out = { ok: true, issues: result.issues as Issue[] };
-    return result.row ? { ...out, ewayBill: await toWire(ctx, ctx.db, result.row) } : out;
+    return generateEway(ctx, ctx.body);
   },
 
   async getEwayBill(ctx) {

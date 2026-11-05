@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
@@ -9,6 +9,10 @@ import { Text } from './Text';
 import { BrandLogo } from './BrandLogo';
 import { SHOW_SCROLLBAR, useBreakpoint } from '../theme/breakpoints';
 import type { WebPressState } from '../theme/interaction';
+import { Illustration } from './Illustration';
+import { PageBackdrop } from './PageBackdrop';
+import type { IllustrationName } from '../illustrations/registry';
+import { useEntrance } from '../illustrations/motion';
 
 /** The sign-in form column on a desktop browser. */
 export const AUTH_FORM_WIDTH = 380;
@@ -19,6 +23,7 @@ export function AuthShell({
   children,
   hideBack,
   locked,
+  illustration = 'secure',
 }: {
   title: string;
   subtitle?: string;
@@ -26,21 +31,26 @@ export function AuthShell({
   hideBack?: boolean;
   /** Nothing on the screen responds, the back link included; for the moment a sign-in is in flight. */
   locked?: boolean;
+  /** The scene beside the logo on a phone; `null` when the content brings its own. */
+  illustration?: IllustrationName | null;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const breakpoint = useBreakpoint();
+  const enter = useEntrance({ rise: 12, duration: 320 });
 
   // A desktop browser shows this beside the brand panel: a centred form
   // column with a text back link, and no phone safe-area padding. The logo is
   // left to the panel. A tablet-width half is narrow, so the margin tightens.
   if (breakpoint !== 'phone') {
     return (
+      <View style={{ flex: 1, backgroundColor: t.c.paper }}>
+      <PageBackdrop surface={t.c.paper} />
       <ScrollView
         pointerEvents={locked ? 'none' : 'auto'}
-        style={{ flex: 1, backgroundColor: t.c.paper }}
+        style={{ flex: 1 }}
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: 'center',
@@ -49,7 +59,7 @@ export function AuthShell({
         }}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ width: '100%', maxWidth: AUTH_FORM_WIDTH, gap: t.spacing.xxl }}>
+        <Animated.View style={[{ width: '100%', maxWidth: AUTH_FORM_WIDTH, gap: t.spacing.xxl }, enter]}>
           {!hideBack && router.canGoBack() ? (
             <Pressable
               onPress={() => router.back()}
@@ -80,8 +90,9 @@ export function AuthShell({
           </View>
 
           <View style={{ gap: t.spacing.lg }}>{children}</View>
-        </View>
+        </Animated.View>
       </ScrollView>
+      </View>
     );
   }
 
@@ -91,6 +102,7 @@ export function AuthShell({
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <PageBackdrop />
       <ScrollView
         contentContainerStyle={{
           paddingTop: insets.top + t.spacing.lg,
@@ -120,9 +132,10 @@ export function AuthShell({
           </Pressable>
         ) : null}
 
-        <View style={{ gap: t.spacing.sm }}>
-          <View style={{ marginBottom: t.spacing.sm }}>
+        <Animated.View style={[{ gap: t.spacing.sm }, enter]}>
+          <View style={{ marginBottom: t.spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <BrandLogo height={36} />
+            {illustration ? <Illustration name={illustration} height={84} /> : null}
           </View>
           <Text variant="h2">{title}</Text>
           {subtitle ? (
@@ -130,7 +143,7 @@ export function AuthShell({
               {subtitle}
             </Text>
           ) : null}
-        </View>
+        </Animated.View>
 
         <View style={{ gap: t.spacing.lg }}>{children}</View>
       </ScrollView>

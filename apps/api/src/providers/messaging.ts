@@ -45,9 +45,21 @@ export interface WhatsAppProvider {
   /** Sends text, optionally with a document link (a PDF share link). */
   send(msg: { to: string; text: string; documentUrl?: string; filename?: string }): Promise<SendResult>;
 }
+export type PushMessage = { title: string; body: string; data?: Record<string, string>; /** Android channel. */ channelId?: string };
+/** What the push service said: a ticket per accepted message, and tokens it already knows are gone. */
+export type PushOutcome = { tickets: { token: string; ticketId: string }[]; deadTokens: string[] };
+
 export interface PushProvider {
-  send(tokens: string[], msg: { title: string; body: string; data?: Record<string, string> }): Promise<void>;
+  send(tokens: string[], msg: PushMessage): Promise<PushOutcome>;
+  /** Of these tickets, the ones whose device is gone (uninstalled, signed out of the store account). */
+  deadTickets(ticketIds: string[]): Promise<string[]>;
 }
+
+const EXPO_PUSH = 'https://exp.host/--/api/v2/push';
+/** Expo takes at most 100 messages, and 1000 receipt ids, per request. */
+const chunk = <T>(list: T[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size));
+
+type ExpoTicket = { status: 'ok' | 'error'; id?: string; details?: { error?: string } };
 
 /**
  * The bare address from `Name <addr>`. ACS takes only the address; the display
@@ -189,17 +201,46 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
     config.PUSH_PROVIDER === 'expo'
       ? {
           async send(tokens, msg) {
-            if (!tokens.length) return;
-            await fetch('https://exp.host/--/api/v2/push/send', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(tokens.map((to) => ({ to, title: msg.title, body: msg.body, data: msg.data }))),
-            });
+            const outcome: PushOutcome = { tickets: [], deadTokens: [] };
+            for (const part of chunk(tokens, 100)) {
+              const res = await fetch(`${EXPO_PUSH}/send`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', accept: 'application/json' },
+                body: JSON.stringify(part.map((to) => ({ to, title: msg.title, body: msg.body, data: msg.data, sound: 'default', channelId: msg.channelId }))),
+                signal: AbortSignal.timeout(15_000),
+              });
+              if (!res.ok) throw new Error(`Expo push ${res.status}`);
+              const { data } = (await res.json()) as { data?: ExpoTicket[] };
+              (data ?? []).forEach((ticket, i) => {
+                if (ticket.status === 'ok' && ticket.id) outcome.tickets.push({ token: part[i], ticketId: ticket.id });
+                else if (ticket.details?.error === 'DeviceNotRegistered') outcome.deadTokens.push(part[i]);
+              });
+            }
+            return outcome;
+          },
+          async deadTickets(ticketIds) {
+            const dead: string[] = [];
+            for (const part of chunk(ticketIds, 1000)) {
+              const res = await fetch(`${EXPO_PUSH}/getReceipts`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', accept: 'application/json' },
+                body: JSON.stringify({ ids: part }),
+                signal: AbortSignal.timeout(15_000),
+              });
+              if (!res.ok) throw new Error(`Expo receipts ${res.status}`);
+              const { data } = (await res.json()) as { data?: Record<string, ExpoTicket> };
+              for (const [id, receipt] of Object.entries(data ?? {})) if (receipt.details?.error === 'DeviceNotRegistered') dead.push(id);
+            }
+            return dead;
           },
         }
       : {
           async send(tokens, msg) {
             for (const to of tokens) outbox.push({ channel: 'push', to, subject: msg.title, text: msg.body });
+            return { tickets: [], deadTokens: [] };
+          },
+          async deadTickets() {
+            return [];
           },
         };
 

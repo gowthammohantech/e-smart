@@ -13,7 +13,7 @@ import type {
 } from '@esmart/core/types';
 import type { AppState } from '../store/appStore';
 import { companyPath as c } from './collections';
-import { knownToServer } from './meta';
+import { knownToServer, useRemoteMeta } from './meta';
 import * as outbox from './outbox';
 
 /**
@@ -107,6 +107,10 @@ function documentAction(path: (d: BusinessDocument) => string, body?: (call: Cal
       entityId: created ?? doc.id,
       label: doc.number,
       clientEntityId: created,
+      // A finalise or status change acts on the version this device saw: the server refuses it (a
+      // conflict, as for an edit) if another device changed the document since. A convert or duplicate
+      // makes something new and reads its source as it is.
+      baseVersion: created ? undefined : useRemoteMeta.getState().versions[doc.id],
     });
   };
 }
@@ -122,16 +126,17 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     const company = byId(after.companies, result as string);
     if (!company) return;
     // The logo goes up on its own (remote/logo.ts); here logoUri is only a path on this device.
-    const { id, accountId, createdAt, plan, logoUri, ...body } = company as Company & Record<string, unknown>;
-    void accountId; void createdAt; void plan; void logoUri;
+    const { id, accountId, createdAt, plan, logoUri, signatureUri, ...body } = company as Company & Record<string, unknown>;
+    void accountId; void createdAt; void plan; void logoUri; void signatureUri;
     outbox.push({ method: 'POST', path: '/companies', body: { ...body, seedDefaults: true, numberingSeries: [] }, entityType: 'company', entityId: id, label: company.name, clientEntityId: id });
   },
   saveCompany: ({ args, after }) => {
     const company = byId(after.companies, (args[0] as Company).id);
     if (!company) return;
-    // logoUri is the server's read-only link (or a local path); the logo has its own upload.
-    const { logoUri, ...body } = company;
+    // logoUri and signatureUri are the server's read-only links (or a local path); each image has its own upload.
+    const { logoUri, signatureUri, ...body } = company;
     void logoUri;
+    void signatureUri;
     // Still to be created: keep what the create carries besides the company itself.
     const create = outbox.pendingCreate(company.id)?.body as { seedDefaults?: boolean; numberingSeries?: unknown[] } | undefined;
     const saved = create ? { ...body, seedDefaults: create.seedDefaults, numberingSeries: create.numberingSeries } : body;
@@ -163,6 +168,12 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   removeTaxCategory: removal('tax_category', 'taxCategories', 'tax-categories', named),
   saveExpenseCategory: master('expense_category', 'expenseCategories', 'expense-categories', named),
   removeExpenseCategory: removal('expense_category', 'expenseCategories', 'expense-categories', named),
+  saveItemCategory: master('item_category', 'itemCategories', 'item-categories', named),
+  removeItemCategory: removal('item_category', 'itemCategories', 'item-categories', named),
+  saveBrand: master('brand', 'brands', 'brands', named),
+  removeBrand: removal('brand', 'brands', 'brands', named),
+  saveCustomField: master('custom_field', 'customFields', 'custom-fields', (f: { label: string }) => f.label),
+  removeCustomField: removal('custom_field', 'customFields', 'custom-fields', (f: { label: string }) => f.label),
   savePaymentAccount: master('payment_account', 'paymentAccounts', 'payment-accounts', named),
   removePaymentAccount: removal('payment_account', 'paymentAccounts', 'payment-accounts', named),
   saveExchangeRate: master('exchange_rate', 'exchangeRates', 'exchange-rates', (r) => `${r.currency} rate`),
@@ -229,6 +240,14 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   },
   saveExpense: master('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
   removeExpense: removal('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
+
+  /* books */
+  saveLedgerAccount: master('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  removeLedgerAccount: removal('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  saveVoucher: master('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  removeVoucher: removal('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  saveCostCentre: master('cost_centre', 'costCentres', 'cost-centres', named),
+  removeCostCentre: removal('cost_centre', 'costCentres', 'cost-centres', named),
 
   /* stock */
   addStockMovement: ({ args }) => {

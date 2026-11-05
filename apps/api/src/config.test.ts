@@ -7,6 +7,8 @@ const ready = {
   JWT_SECRET: 'x'.repeat(32),
   CREDENTIALS_KEY: Buffer.alloc(32, 1).toString('base64'),
   CORS_ORIGINS: 'https://app.example.in,https://admin.example.in',
+  APP_URL: 'https://app.example.in',
+  PUBLIC_BASE_URL: 'https://api.example.in',
   SMS_PROVIDER: 'msg91',
   MSG91_AUTH_KEY: 'k',
   MSG91_TEMPLATE_ID: 't',
@@ -19,6 +21,8 @@ const ready = {
   WHATSAPP_WEBHOOK_SECRET: 'whatsapp-live-secret',
   PUSH_PROVIDER: 'expo',
   STORAGE_PROVIDER: 's3',
+  AWS_ACCESS_KEY_ID: 'AKIA',
+  AWS_SECRET_ACCESS_KEY: 'secret',
   PDF_PROVIDER: 'chromium',
   COMPLIANCE_PROVIDER: 'gsp',
   TAXATION_ADAEQUARE_BASE_URL: 'https://gsp.example.in',
@@ -41,6 +45,10 @@ describe('production config guards', () => {
     const config = loadConfig(ready);
     expect(config.GSTIN_PROVIDER).toBe('disabled');
     expect(config.OCR_PROVIDER).toBe('disabled');
+    // Unset, returns are prepared but not filed, so a deployment from before them still starts.
+    expect(config.RETURNS_PROVIDER).toBe('disabled');
+    expect(config.GST_FILING_ENABLED).toBe(false);
+    expect(() => loadConfig({ ...ready, RETURNS_PROVIDER: 'simulator' })).toThrow(/RETURNS_PROVIDER=simulator/);
   });
 
   it('keeps every simulator available outside production', () => {
@@ -98,7 +106,8 @@ describe('production config guards', () => {
   });
 
   it('requires AWS credentials for SES', () => {
-    const ses = { ...ready, EMAIL_PROVIDER: 'ses' };
+    // Azure storage, so the AWS keys are only SES's to need.
+    const ses = { ...ready, EMAIL_PROVIDER: 'ses', STORAGE_PROVIDER: 'azure', AZURE_STORAGE_CONNECTION_STRING: 'x', AWS_ACCESS_KEY_ID: undefined, AWS_SECRET_ACCESS_KEY: undefined };
     expect(() => loadConfig(ses)).toThrow(/AWS credentials/);
     expect(loadConfig({ ...ses, AWS_ACCESS_KEY_ID: 'a', AWS_SECRET_ACCESS_KEY: 'b' }).EMAIL_PROVIDER).toBe('ses');
   });
@@ -111,6 +120,28 @@ describe('production config guards', () => {
   it("refuses CORS_ORIGINS='*', alone or in a list", () => {
     expect(() => loadConfig({ ...ready, CORS_ORIGINS: '*' })).toThrow(/CORS_ORIGINS/);
     expect(() => loadConfig({ ...ready, CORS_ORIGINS: 'https://app.example.in, *' })).toThrow(/CORS_ORIGINS/);
+  });
+
+  it.each([
+    ['APP_URL', 'http://localhost:8081'],
+    ['APP_URL', 'http://app.example.in'],
+    ['APP_URL', 'https://127.0.0.1:8081'],
+    ['APP_URL', 'not a url'],
+    ['PUBLIC_BASE_URL', 'http://localhost:4000'],
+  ])('refuses %s=%s', (key, value) => {
+    expect(() => loadConfig({ ...ready, [key]: value })).toThrow(new RegExp(`${key} must be the public https`));
+  });
+
+  it('requires the web app among the CORS origins', () => {
+    expect(() => loadConfig({ ...ready, CORS_ORIGINS: 'https://admin.example.in' })).toThrow(/CORS_ORIGINS must include the web app \(https:\/\/app.example.in\)/);
+  });
+
+  it('refuses a CREDENTIALS_KEY that is not 32 bytes', () => {
+    expect(() => loadConfig({ ...ready, CREDENTIALS_KEY: Buffer.alloc(16, 1).toString('base64') })).toThrow(/CREDENTIALS_KEY must be 32 bytes/);
+  });
+
+  it('refuses S3 without credentials', () => {
+    expect(() => loadConfig({ ...ready, AWS_ACCESS_KEY_ID: undefined })).toThrow(/STORAGE_PROVIDER=s3/);
   });
 
   it('still refuses the demo OTP and dev secrets', () => {
@@ -173,12 +204,15 @@ describe('production config guards', () => {
 
   it('ALLOW_UNCONFIGURED_PROVIDERS starts with providers unset, but not with dev secrets', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const base = { NODE_ENV: 'production', ALLOW_UNCONFIGURED_PROVIDERS: 'true', JWT_SECRET: 'x'.repeat(32), CREDENTIALS_KEY: ready.CREDENTIALS_KEY };
+    const base = { NODE_ENV: 'production', ALLOW_UNCONFIGURED_PROVIDERS: 'true', JWT_SECRET: 'x'.repeat(32), CREDENTIALS_KEY: ready.CREDENTIALS_KEY, APP_URL: ready.APP_URL, PUBLIC_BASE_URL: ready.PUBLIC_BASE_URL };
     expect(loadConfig(base).SMS_PROVIDER).toBe('log');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('STORAGE_PROVIDER=memory'));
     expect(() => loadConfig({ ...base, JWT_SECRET: undefined })).toThrow(/JWT_SECRET/);
     expect(() => loadConfig({ ...base, CREDENTIALS_KEY: undefined })).toThrow(/CREDENTIALS_KEY/);
     expect(() => loadConfig({ ...base, DEMO_OTP: 'true' })).toThrow(/DEMO_OTP/);
+    // Links in emails pointing at localhost are never waived either.
+    expect(() => loadConfig({ ...base, APP_URL: 'http://localhost:8081' })).toThrow(/APP_URL/);
+    expect(() => loadConfig({ ...base, PUBLIC_BASE_URL: undefined })).toThrow(/PUBLIC_BASE_URL/);
     warn.mockRestore();
   });
 });

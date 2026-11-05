@@ -13,7 +13,8 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
+import { useBranches, useDefaultBranchId } from '../../../store/selectors';
+import { useTrackedItems } from '../../../remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -23,13 +24,13 @@ export default function StockAdjust() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
-  const items = useItems().filter((i) => i.trackInventory);
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const branches = useBranches();
-  const stock = useStockLevels();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const defaultBranchId = useDefaultBranchId();
@@ -79,7 +80,7 @@ export default function StockAdjust() {
   useSaveShortcut(() => void save(), !saving && canSave);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.stockAdjustment') }} />
 
       <ScrollView
@@ -170,7 +171,7 @@ export default function StockAdjust() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} fullWidth size="lg" />
       </View>
 
       <SelectSheet

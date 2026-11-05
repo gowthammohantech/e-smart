@@ -129,6 +129,11 @@ h2 {
   flex-direction: column;
   gap: 8px;
 }
+.theme-select {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 13px;
+}
 .operator {
   display: flex;
   flex-direction: column;
@@ -610,4 +615,256 @@ details.table-view .table-wrap {
   font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ illustrations & motion */
+
+/* Accents for the art (components/Art.tsx). Lixi's colours are a brand mark, so fixed. */
+:root {
+  --art-cyan: #2bb6f0;
+  --art-yellow: #f6be1a;
+  --art-faint: color-mix(in srgb, var(--muted) 45%, transparent);
+  --art-blob: 0.12;
+}
+
+.art {
+  display: block;
+  margin: 0 auto;
+  overflow: visible;
+}
+.art .blob {
+  opacity: var(--art-blob);
+}
+.art .float,
+.art .sway,
+.art .pop,
+.art .twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.art .float {
+  animation: art-bob 3.6s ease-in-out infinite;
+}
+.art .float.d1 {
+  animation-delay: -1.3s;
+  animation-duration: 3.2s;
+}
+.art .sway {
+  animation: art-sway 4.2s ease-in-out infinite;
+}
+.art .twinkle {
+  animation: art-twinkle 2.4s ease-in-out infinite;
+}
+.art .twinkle.d1 {
+  animation-delay: -0.8s;
+}
+.art .twinkle.d2 {
+  animation-delay: -1.6s;
+}
+.art .pop {
+  animation: art-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+}
+.art .fill-in > * {
+  animation: art-fill 1.8s ease-in-out infinite;
+}
+.art .fill-in > :nth-child(2) { animation-delay: 0.15s; }
+.art .fill-in > :nth-child(3) { animation-delay: 0.3s; }
+.art .fill-in > :nth-child(4) { animation-delay: 0.45s; }
+.art .fill-in > :nth-child(5) { animation-delay: 0.6s; }
+
+@keyframes art-bob {
+  0%, 100% { transform: translateY(-4px); }
+  50% { transform: translateY(4px); }
+}
+@keyframes art-sway {
+  0%, 100% { transform: translate(-8px, -3px); }
+  50% { transform: translate(8px, 3px); }
+}
+@keyframes art-twinkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.2; transform: scale(0.7); }
+}
+@keyframes art-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes art-fill {
+  0%, 100% { opacity: 0.2; }
+  40%, 60% { opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+/* An illustrated empty, loading or error state. */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px 36px;
+  text-align: center;
+  animation: rise 0.32s ease-out both;
+}
+.state h3 {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.state p {
+  margin: 0;
+  max-width: 380px;
+  color: var(--muted);
+}
+.state .alert {
+  max-width: 480px;
+}
+
+/* Placeholder rows while a query loads. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 16px;
+}
+.skeleton i {
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--card2) 30%, var(--line) 50%, var(--card2) 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.skeleton i:nth-child(3n + 2) { width: 72%; }
+.skeleton i:nth-child(3n) { width: 48%; }
+
+/* A drifting doodle wallpaper with soft glows behind sign-in and the error pages. */
+.backdrop {
+  position: relative;
+  isolation: isolate;
+}
+.backdrop::before,
+.backdrop::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.backdrop::before {
+  /* The tile is drawn in black and used as a mask, so the doodles take the theme's muted ink. */
+  background: var(--muted);
+  opacity: 0.12;
+  -webkit-mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  animation: wallpaper 60s linear infinite;
+}
+@keyframes wallpaper {
+  to {
+    -webkit-mask-position: -260px -260px;
+    mask-position: -260px -260px;
+  }
+}
+
+/* The doodle wallpaper, plus a few larger doodles, behind every console page. */
+.main {
+  position: relative;
+  isolation: isolate;
+}
+.doodle-scatter {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.doodle-scatter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--muted);
+  opacity: 0.1;
+  -webkit-mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
+  animation: wallpaper 60s linear infinite;
+}
+.doodle-scatter svg {
+  position: absolute;
+  translate: -50% 0;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.16;
+  animation: art-bob 7s ease-in-out infinite;
+}
+.doodle-scatter svg.spark {
+  stroke: var(--primary);
+  opacity: 0.3;
+}
+.backdrop::after {
+  background:
+    radial-gradient(40vmax 40vmax at 85% 0%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 70%),
+    radial-gradient(32vmax 32vmax at 0% 35%, color-mix(in srgb, var(--art-cyan) 14%, transparent), transparent 70%);
+  animation: drift 14s ease-in-out infinite alternate;
+}
+@keyframes drift {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-2vw, 1.5vh); }
+}
+.auth .card {
+  animation: rise 0.36s ease-out both;
+  box-shadow: 0 10px 40px -18px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+.auth .art {
+  margin-bottom: -6px;
+}
+
+/* Pages ease in as they open; controls ease between states. */
+.main .page-head,
+.main .card,
+.main .stats {
+  animation: rise 0.28s ease-out both;
+}
+.main .card:nth-of-type(2) { animation-delay: 0.04s; }
+.main .card:nth-of-type(3) { animation-delay: 0.08s; }
+.btn,
+.nav a,
+.input,
+.select,
+table.data td {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.nav a svg {
+  transition: transform 0.15s ease;
+}
+.nav a:hover svg {
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* The art rests at its drawn pose rather than a frame of a loop. */
+  .art *,
+  .doodle-scatter svg,
+  .doodle-scatter::before,
+  .backdrop::before,
+  .backdrop::after {
+    animation: none !important;
+  }
 }

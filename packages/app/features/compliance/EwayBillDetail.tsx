@@ -24,6 +24,7 @@ import {
   VehicleType,
 } from '@esmart/core/types';
 import { useAppStore } from '../../store/appStore';
+import { useDocumentRecord } from '../../remote/queries';
 import { compliance } from '../../remote';
 import { useParties } from '../../store/selectors';
 import {
@@ -54,6 +55,8 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
   const { t: tr } = useTranslation(['compliance', 'common']);
   const router = useRouter();
 
+  // The document behind it, with its party, loaded into the store.
+  useDocumentRecord(bill.documentId);
   const documents = useAppStore((s) => s.documents);
   const parties = useParties();
 
@@ -73,7 +76,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
   const history = useEwayBillHistory(bill);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xl }}

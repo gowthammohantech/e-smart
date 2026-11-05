@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { accountBalances } from '@esmart/core/domain/paymentAccounts';
-import type { Expense, Payment, PaymentAccount } from '@esmart/core/types';
+import type { Expense, Payment, PaymentAccount, Voucher } from '@esmart/core/types';
 import { schema } from '@esmart/db';
-import { defineHandlers, type AuthUser } from '../../context';
+import { defineHandlers, type AuthUser, type CompanyRow } from '../../context';
+import { rateToBase } from '../documents/engine';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
@@ -22,14 +23,16 @@ async function findAccount(db: DbOrTx, companyId: string, id: string) {
 
 /**
  * Current balances through core's `accountBalances`: opening + received −
- * paid − expenses. SQL sums each account's movements (rounding each row to
- * base minor units first, as core does), and core applies the signs.
+ * paid − expenses ± contra and journal lines on the account. SQL sums each
+ * account's movements (rounding each row to base minor units first, as core
+ * does), and core applies the signs.
  */
 export async function paymentAccountBalances(db: DbOrTx, companyId: string, accounts: AccountRow[]): Promise<Record<string, number>> {
   if (!accounts.length) return {};
   const p = schema.payments;
   const e = schema.expenses;
-  const [pays, exps] = await Promise.all([
+  const V = schema.vouchers;
+  const [pays, exps, moved] = await Promise.all([
     db
       .select({ accountId: p.accountId, direction: p.direction, total: sql<string>`coalesce(sum(round(${p.amountMinor} * ${p.exchangeRate})), 0)` })
       .from(p)
@@ -40,16 +43,35 @@ export async function paymentAccountBalances(db: DbOrTx, companyId: string, acco
       .from(e)
       .where(eq(e.companyId, companyId))
       .groupBy(e.accountId),
+    db
+      .select({ account: sql<string>`l->>'account'`, debit: sql<string>`coalesce(sum((l->>'debitMinor')::bigint), 0)`, credit: sql<string>`coalesce(sum((l->>'creditMinor')::bigint), 0)` })
+      .from(sql`${V}, jsonb_array_elements(${V.lines}) as l`)
+      .where(and(eq(V.companyId, companyId), eq(V.status, 'posted'), sql`l->>'account' like 'pay:%'`))
+      .groupBy(sql`l->>'account'`),
   ]);
-  const coreAccounts = accounts.map((a) => ({ id: a.id, openingBalance: { minor: a.openingBalanceMinor, currency: a.currency.trim() } }) as PaymentAccount);
+  const coreAccounts = accounts.map((a) => ({ id: a.id, openingBalance: { minor: a.openingBalanceMinor, currency: a.currency.trim() }, openingRate: Number(a.openingRate) }) as PaymentAccount);
   const corePayments = pays.map((r) => ({ accountId: r.accountId, direction: r.direction, amount: { minor: Number(r.total) }, exchangeRate: 1 }) as Payment);
   const coreExpenses = exps.map((r) => ({ accountId: r.accountId, amount: { minor: Number(r.total) }, exchangeRate: 1 }) as Expense);
-  return accountBalances(coreAccounts, corePayments, coreExpenses);
+  const coreVouchers = [{ lines: moved.map((r) => ({ account: r.account, debit: { minor: Number(r.debit) }, credit: { minor: Number(r.credit) } })) } as Pick<Voucher, 'lines'>];
+  return accountBalances(coreAccounts, corePayments, coreExpenses, coreVouchers);
 }
 
-async function toWire(db: DbOrTx, row: AccountRow) {
+async function toWire(db: DbOrTx, row: AccountRow, base: string) {
   const balances = await paymentAccountBalances(db, row.companyId, [row]);
-  return paymentAccountToWire(row, balances[row.id] ?? row.openingBalanceMinor);
+  return paymentAccountToWire(row, balances[row.id] ?? row.openingBalanceMinor, base);
+}
+
+/**
+ * The opening balance's rate to base on the day it was counted: a foreign-currency account's
+ * opening is then the same in base everywhere (balances, the books). 422 when no rate is on file.
+ */
+async function openingRateFor(db: DbOrTx, company: CompanyRow, body: Schema<'PaymentAccount'>, today: string): Promise<string> {
+  const base = company.baseCurrency.trim();
+  if (body.currency === base || !body.openingBalance.minor) return '1';
+  const on = body.openingBalanceDate ?? today;
+  const rate = await rateToBase(db, company.id, body.currency, base, on);
+  if (!rate) throw unprocessable([{ field: 'openingBalance', message: `No ${body.currency}→${base} rate on or before ${on}; add one in exchange rates first`, severity: 'blocking' }]);
+  return String(rate);
 }
 
 async function validate(db: DbOrTx, body: Schema<'PaymentAccount'>, today: string) {
@@ -91,7 +113,7 @@ export const accountHandlers = defineHandlers({
   async listPaymentAccounts(ctx) {
     const rows = await ctx.db.select().from(A).where(eq(A.companyId, ctx.company.id)).orderBy(desc(A.isDefault), asc(A.name));
     const balances = await paymentAccountBalances(ctx.db, ctx.company.id, rows);
-    return { data: rows.map((r) => paymentAccountToWire(r, balances[r.id] ?? r.openingBalanceMinor)) };
+    return { data: rows.map((r) => paymentAccountToWire(r, balances[r.id] ?? r.openingBalanceMinor, ctx.company.baseCurrency.trim())) };
   },
 
   async createPaymentAccount(ctx) {
@@ -102,12 +124,12 @@ export const accountHandlers = defineHandlers({
       const isDefault = !!ctx.body.isDefault || !existingDefault;
       const id = newId('pac');
       if (isDefault) await clearOtherDefaults(tx, ctx.user, ctx.company.id, id, ctx.now);
-      const [created] = await tx.insert(A).values({ id, companyId: ctx.company.id, ...columns(ctx.body), isDefault }).returning();
+      const [created] = await tx.insert(A).values({ id, companyId: ctx.company.id, ...columns(ctx.body), openingRate: await openingRateFor(tx, ctx.company, ctx.body, ctx.now.toISOString().slice(0, 10)), isDefault }).returning();
       await audit(tx, ctx.user, ctx.company.id, 'payment_account', 'created', created, created.name, { after: paymentAccountToWire(created, created.openingBalanceMinor) });
       return created;
     });
     setEtag(ctx.reply, row.version);
-    return toWire(ctx.db, row);
+    return toWire(ctx.db, row, ctx.company.baseCurrency.trim());
   },
 
   async savePaymentAccount(ctx) {
@@ -139,7 +161,7 @@ export const accountHandlers = defineHandlers({
       if (isDefault && !current.isDefault) await clearOtherDefaults(tx, ctx.user, ctx.company.id, current.id, ctx.now);
       const [updated] = await tx
         .update(A)
-        .set({ ...columns(ctx.body), isDefault, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...columns(ctx.body), openingRate: await openingRateFor(tx, ctx.company, ctx.body, ctx.now.toISOString().slice(0, 10)), isDefault, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(A.id, current.id), eq(A.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
@@ -150,7 +172,7 @@ export const accountHandlers = defineHandlers({
       return updated;
     });
     setEtag(ctx.reply, row.version);
-    return toWire(ctx.db, row);
+    return toWire(ctx.db, row, ctx.company.baseCurrency.trim());
   },
 
   async removePaymentAccount(ctx) {
@@ -159,6 +181,7 @@ export const accountHandlers = defineHandlers({
     const used = await firstUse(ctx.db, [
       ['payments', sql`select 1 from payments where account_id = ${current.id} limit 1`],
       ['expenses', sql`select 1 from expenses where account_id = ${current.id} limit 1`],
+      ['bank statements', sql`select 1 from bank_statements where account_id = ${current.id} limit 1`],
     ]);
     if (used) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account has ${used}; it can't be deleted`);
     await ctx.db.transaction(async (tx) => {

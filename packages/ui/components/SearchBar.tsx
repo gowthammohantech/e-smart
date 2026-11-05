@@ -37,7 +37,7 @@ export function SearchBar({
           backgroundColor: t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: webFocused ? t.c.primary : t.c.line,
+          borderColor: webFocused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: 44,
           ...webFocusHalo(t, webFocused),

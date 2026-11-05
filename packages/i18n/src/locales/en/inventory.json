@@ -63,7 +63,53 @@
     "openingLocked": "Use a stock adjustment to change this.",
     "saveChanges": "Save changes",
     "type": "Type",
-    "status": "Status"
+    "status": "Status",
+    "section": {
+      "details": "Item details",
+      "detailsHint": "What you sell and how it is identified",
+      "pricing": "Pricing and tax",
+      "pricingHint": "What you charge and what it costs you",
+      "summary": "Summary",
+      "unitStock": "Unit and stock"
+    },
+    "category": "Category",
+    "brand": "Brand",
+    "none": "None"
+  },
+  "gst": {
+    "supplyType": "GST treatment",
+    "supply": {
+      "taxable": "Taxable",
+      "nil": "Nil-rated",
+      "exempt": "Exempt",
+      "nonGst": "Non-GST"
+    },
+    "supplyHint": {
+      "taxable": "GST at the rate above.",
+      "nil": "Taxed at 0% by the schedule, such as fresh vegetables or salt.",
+      "exempt": "Exempt by notification, such as healthcare or education services.",
+      "nonGst": "Outside GST altogether, such as petrol or alcohol for drinking."
+    },
+    "reimbursement": "Reimbursement at cost",
+    "reimbursementHint": "You pay this for the customer and recover exactly what you paid (pure agent, Rule 33). No GST, and it stays out of the taxable value.",
+    "reverseCharge": "Reverse charge",
+    "reverseChargeHint": "A notified supply where the buyer pays the GST, such as transport by a GTA or legal services.",
+    "cessRate": "Cess (%)",
+    "cessHint": "Compensation cess on top of GST, for goods like tobacco, aerated drinks and cars. Leave blank if none.",
+    "capitalGoods": "Capital goods",
+    "capitalGoodsHint": "Machinery or equipment you keep and use. Its input tax credit is reported separately.",
+    "itc": "Input tax credit",
+    "itcHint": "Whether the GST you pay when buying this can be claimed back.",
+    "itcOption": {
+      "eligible": "Can be claimed",
+      "blocked": "Blocked, section 17(5)",
+      "ineligible": "Not claimable"
+    },
+    "itcOptionHint": {
+      "eligible": "Used in the business: the GST paid is credit.",
+      "blocked": "Food, personal vehicles, club fees, works contracts for buildings and the like.",
+      "ineligible": "Used for exempt supplies or personal purposes."
+    }
   },
   "detail": {
     "inactive": "Inactive",
@@ -111,7 +157,17 @@
     "done": "Stock transferred",
     "onlyAvailable": "Only {{qty}} {{unit}} available at the source branch",
     "available": "{{qty}} {{unit}} available",
-    "twoMovesNote": "Transfers post two movements — one out of the source branch and one into the destination — so total stock stays unchanged."
+    "twoMovesNote": "Transfers post two movements — one out of the source branch and one into the destination — so total stock stays unchanged.",
+    "whatTitle": "What to move",
+    "whatHint": "The item and how much of it",
+    "whereTitle": "Where",
+    "whereHint": "From one branch to another",
+    "afterTitle": "After the transfer",
+    "pickItemHint": "Pick an item to see the effect",
+    "branchNow": "{{branch}} now",
+    "branchAfter": "{{branch}} after",
+    "exceedsSource": "This is more than the source branch holds.",
+    "afterEmpty": "The stock at both branches, before and after, appears here once you choose an item."
   },
   "adjust": {
     "item": "Item",
@@ -139,7 +195,11 @@
       "found": "Found stock",
       "customerReturn": "Returned from customer",
       "production": "Production output"
-    }
+    },
+    "panelHint": "Correct the stock on hand for one item",
+    "result": "Result",
+    "pickItemHint": "Pick an item to see its stock",
+    "resultEmpty": "The stock before and after the change appears here once you choose an item."
   },
   "scan": {
     "barcode": "Barcode",
@@ -152,7 +212,10 @@
     "tryOne": "Try one of these",
     "manualNote": "Camera scanning is not available yet. Type or paste the code from the label, or pick an item below.",
     "inStock": "{{qty}} {{unit}} in stock",
-    "a11yUse": "Use barcode for {{name}}"
+    "a11yUse": "Use barcode for {{name}}",
+    "lookUp": "Look up a code",
+    "lookUpHint": "Type or paste it, or use a scanner that types for you",
+    "samplesHint": "Sample barcodes from your items"
   },
   "lowStock": {
     "needAttention": "Need attention",
@@ -176,7 +239,11 @@
     "done_other": "Opening stock set for {{count}} items",
     "currently": "currently {{qty}} {{unit}}",
     "entered_one": "{{count}} item entered",
-    "entered_other": "{{count}} items entered"
+    "entered_other": "{{count}} items entered",
+    "current": "Current",
+    "openingQty": "Opening quantity",
+    "branchHint": "Applies to the branch you are in",
+    "itemsEntered": "Items entered"
   },
   "movements": {
     "search": "Search by item or reference",
@@ -220,7 +287,9 @@
     "noMatch": "No match",
     "noMatchBody": "No item matches that search.",
     "noItems": "No items yet",
-    "noItemsBody": "Add what you sell to put it on invoices in a tap."
+    "noItemsBody": "Add what you sell to put it on invoices in a tap.",
+    "allCategories": "All categories",
+    "allBrands": "All brands"
   },
   "type": {
     "goods": "Product",
@@ -235,5 +304,26 @@
     "transferIn": "Transfer in",
     "transferOut": "Transfer out",
     "adjustment": "Adjustment"
+  },
+  "import": {
+    "title": "Import items",
+    "action": "Import",
+    "hint": "Paste or choose a CSV saved from Excel, Google Sheets, Tally or another app. Columns are found by their names (Name, SKU, Unit, Sale price, Purchase price, GST %, HSN, Barcode, Opening stock, Reorder level, Type). Check it first; nothing is saved until you import.",
+    "chooseFile": "Choose CSV file",
+    "paste": "Or paste the CSV here",
+    "noNameColumn": "No column called Name (or Item name, Product…) was found in the first row.",
+    "summary": "{{good}} of {{total}} rows can be imported",
+    "line": "Line {{line}}",
+    "more": "and {{count}} more rows",
+    "check": "Check",
+    "import": "Import {{count}}",
+    "done": "{{count}} items imported",
+    "skipped": "{{count}} left out",
+    "tooMany": "Up to 1,000 at a time; split the sheet.",
+    "status": {
+      "invalid": "Fix",
+      "duplicate": "Already there",
+      "ready": "Ready"
+    }
   }
 }

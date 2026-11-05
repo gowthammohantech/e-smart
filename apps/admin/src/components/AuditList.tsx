@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { api, need, type Schema } from '../lib/api';
 import { actionLabel, fmtDateTime } from '../lib/format';
 import { useCursorPager } from '../lib/useCursorPager';
-import { Pager, QueryState } from './ui';
+import { Pager, QueryState, EmptyState } from './ui';
 
 type Filters = { targetType?: Schema<'PlatformAuditEvent'>['targetType']; targetId?: string; actorId?: string; from?: string; to?: string };
 
@@ -33,7 +33,7 @@ export function AuditList({ filters, limit = 25, compact = false }: { filters: F
     <QueryState isPending={query.isPending} error={query.error}>
       {() =>
         query.data!.data!.length === 0 ? (
-          <div className="empty">No operator actions recorded{compact ? ' here yet' : ''}.</div>
+          <EmptyState title={`No operator actions recorded${compact ? ' here yet' : ''}`} />
         ) : (
           <>
             <div className="table-wrap">

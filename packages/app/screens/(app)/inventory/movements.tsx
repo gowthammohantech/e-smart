@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback} from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -9,10 +9,13 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useBranches, useItems, useStockMovements } from '../../../store/selectors';
+import { useBranches } from '../../../store/selectors';
+import { useAppStore } from '../../../store/appStore';
+import { useMovementPages } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { useQueryParams } from '../../../navigation/queryParams';
 import { signedQuantity } from '@esmart/core/domain/stockLedger';
-import { StockMovementType } from '@esmart/core/types';
+import { StockMovement, StockMovementType } from '@esmart/core/types';
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -24,8 +27,6 @@ export default function StockMovements() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
-  const movements = useStockMovements();
-  const items = useItems();
   const branches = useBranches();
 
   const [query, setQuery] = useState('');
@@ -34,22 +35,17 @@ export default function StockMovements() {
   const type = (params.type ?? 'all') as StockMovementType | 'all';
   const setType = (ty: StockMovementType | 'all') => setParams({ type: ty === 'all' ? undefined : ty });
 
-  const nameOf = useCallback((id: string) => items.find((i) => i.id === id), [items]);
+  // Read from the server 50 at a time, newest first; type and search are filtered there, and each row names its item.
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const search = useDebounced(query);
+  const pages = useMovementPages({ branchId, type: type === 'all' ? undefined : type, q: search });
+  const filtered = pages.rows as unknown as (StockMovement & { itemName?: string; itemSku?: string })[];
+  const names = useMemo(() => new Map(filtered.map((m) => [m.itemId, { name: m.itemName ?? '', sku: m.itemSku ?? '' }])), [filtered]);
+  const nameOf = useCallback((id: string) => (names.has(id) ? { id, ...names.get(id)! } : undefined), [names]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return movements
-      .filter((m) => {
-        if (type !== 'all' && m.type !== type) return false;
-        if (!q) return true;
-        const item = nameOf(m.itemId);
-        return `${item?.name ?? ''} ${item?.sku ?? ''} ${m.referenceNumber ?? ''} ${m.notes ?? ''}`.toLowerCase().includes(q);
-      })
-      .sort((a, b) => (b.date === a.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
-  }, [movements, query, type, nameOf]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.stockMovements') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
@@ -84,12 +80,22 @@ export default function StockMovements() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        // The next page loads before the end is reached, so scrolling rarely waits.
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600 && pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+        }}
+        scrollEventThrottle={200}
+      >
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {pages.isLoading && !filtered.length ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : filtered.length === 0 ? (
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />
           ) : (
-            filtered.slice(0, 200).map((m, i) => {
+            filtered.map((m, i) => {
               const item = nameOf(m.itemId);
               const delta = signedQuantity(m);
               const branch = branches.find((b) => b.id === m.branchId);
@@ -108,7 +114,7 @@ export default function StockMovements() {
                     alignItems: 'center',
                     gap: t.spacing.md,
                     padding: t.spacing.lg,
-                    borderBottomWidth: i < Math.min(filtered.length, 200) - 1 ? 0.5 : 0,
+                    borderBottomWidth: i < filtered.length - 1 ? 0.5 : 0,
                     borderBottomColor: t.c.line,
                     backgroundColor: pressed ? t.c.card2 : 'transparent',
                   })}
@@ -139,6 +145,7 @@ export default function StockMovements() {
             })
           )}
         </Card>
+        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
       </ScrollView>
     </View>
   );

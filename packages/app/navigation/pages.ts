@@ -1,112 +1,89 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { IconName } from '@esmart/ui/components/Icon';
-import { canOpen } from '@esmart/core/domain/plan';
+import { canOpen, type Module } from '@esmart/core/domain/plan';
 import type { PlanTier } from '@esmart/core/types';
-import { usePlan } from '../store/selectors';
-import { TABS, tabPath, type TabName } from './tabs';
-import { useMoreGroups, type MoreGroupKey } from './moreGroups';
+import { useDisabledModules, usePlan } from '../store/selectors';
+import { MENU, SETTINGS, TOOLS, appHref, section, sectionPath, type SettingsGroupKey } from './menu';
+import type { TabName } from './tabs';
 
 export type SubLink = { href: string; labelKey: string };
 
 /**
- * The pages under each section. The desktop sidebar shows them under the
- * open section; search finds them by name on every platform.
+ * The pages under each section, from `MENU`. The desktop sidebar shows them
+ * under the open section; search finds them by name on every platform.
  */
-export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = {
-  sales: [
-    { href: '/sales/invoices', labelKey: 'nav:title.invoices' },
-    { href: '/sales/quotes', labelKey: 'nav:title.quotations' },
-    { href: '/sales/orders', labelKey: 'nav:title.salesOrders' },
-    { href: '/sales/deliveries', labelKey: 'nav:title.deliveryNotes' },
-    { href: '/sales/returns', labelKey: 'nav:title.salesReturns' },
-    { href: '/payments/received', labelKey: 'nav:title.paymentsReceived' },
-    { href: '/receivables', labelKey: 'nav:title.receivables' },
-  ],
-  purchases: [
-    { href: '/purchases/bills', labelKey: 'nav:title.purchaseBills' },
-    { href: '/purchases/orders', labelKey: 'nav:title.purchaseOrders' },
-    { href: '/purchases/receipts', labelKey: 'nav:title.goodsReceipts' },
-    { href: '/purchases/returns', labelKey: 'nav:title.purchaseReturns' },
-    { href: '/payments/made', labelKey: 'nav:title.paymentsMade' },
-    { href: '/payables', labelKey: 'nav:title.payables' },
-    { href: '/expenses', labelKey: 'nav:title.expenses' },
-  ],
-  inventory: [
-    { href: '/catalog/items', labelKey: 'nav:title.itemsAndServices' },
-    { href: '/inventory/movements', labelKey: 'nav:title.stockMovements' },
-    { href: '/inventory/low-stock', labelKey: 'nav:title.lowStock' },
-  ],
-  gst: [
-    { href: '/compliance', labelKey: 'nav:more.entry.gstCompliance' },
-    { href: '/gst/gstr1', labelKey: 'nav:title.gstr1' },
-  ],
-};
+export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = Object.fromEntries(
+  MENU.filter((s) => s.pages.length > 0).map((s) => [s.name, s.pages.map((p) => ({ href: p.route, labelKey: p.labelKey }))]),
+);
 
 /**
  * Where a section leads on a plan: its own page, or the first of its pages the
  * plan can open when the section's page is locked (Stock on Free still has
  * Items & services). Null when the plan can open none of it.
  */
-export function sectionHref(plan: PlanTier, name: TabName): string | null {
-  if (canOpen(plan, tabPath(name))) return tabPath(name);
-  return (SECTION_LINKS[name] ?? []).find((l) => canOpen(plan, l.href))?.href ?? null;
+export function sectionHref(plan: PlanTier, name: TabName, disabled?: readonly Module[] | null): string | null {
+  if (canOpen(plan, sectionPath(name), disabled)) return sectionPath(name);
+  return section(name).pages.find((p) => !p.action && canOpen(plan, p.route, disabled))?.route ?? null;
 }
 
-/** Where the desktop sidebar's Settings entry opens. */
-export const SETTINGS_HREF = '/settings/company';
+/** Where the desktop's Settings entry opens: the first settings page. */
+export const SETTINGS_HREF = SETTINGS[0].pages[0].route;
 
-/** The More groups that make up Settings (the desktop's settings navigation). */
-export const SETTINGS_GROUPS = ['businessSetup', 'dataCompliance', 'account'] as const satisfies readonly MoreGroupKey[];
+/** The groups that make up Settings (the desktop's settings navigation). */
+export const SETTINGS_GROUPS: readonly SettingsGroupKey[] = SETTINGS.map((g) => g.key);
 
 export type AppPage = {
   key: string;
   title: string;
-  /** The section it sits in, e.g. "Sell". */
+  /** Where it sits, e.g. "Sell" or "Settings · Account". */
   subtitle?: string;
   icon: IconName;
   route: string;
 };
 
 /**
- * Every page a person can navigate to: the sections, the pages under them,
- * and the More / settings entries (only `groups`, when given), minus what
- * the plan can't open. One entry per page.
+ * Every page a person can navigate to — the sections, the pages under them,
+ * the tools and the settings — minus what the plan can't open. One entry per
+ * page, in menu order.
  */
-export function useAppPages(groups?: readonly MoreGroupKey[]): AppPage[] {
+export function useAppPages(): AppPage[] {
   const { t: tr } = useTranslation(['nav']);
   const plan = usePlan();
-  const moreGroups = useMoreGroups();
+  const disabled = useDisabledModules();
 
   return useMemo(() => {
-    const list = new Map<string, AppPage>();
-    // `/(app)/gst/gstr1` and `/gst/gstr1` are the same page.
-    const add = (page: AppPage) => {
-      const at = page.route.replace(/\/\([^)]+\)/g, '') || '/';
-      if (!list.has(at)) list.set(at, page);
-    };
+    const list: AppPage[] = [];
+    const add = (page: AppPage) => canOpen(plan, page.route, disabled) && list.push({ ...page, route: appHref(page.route) });
 
-    TABS.filter((tab) => tab.name !== 'more').forEach((tab) => {
-      const href = sectionHref(plan, tab.name);
-      if (!href) return;
-      const section = tr(`nav:tab.${tab.name}` as 'nav:tab.index');
-      add({ key: `tab-${tab.name}`, title: section, icon: tab.icon, route: href });
-      (SECTION_LINKS[tab.name] ?? [])
-        .filter((l) => canOpen(plan, l.href))
-        .forEach((l) => add({ key: l.href, title: tr(l.labelKey as 'nav:title.invoices'), subtitle: section, icon: tab.icon, route: l.href }));
+    MENU.filter((s) => s.name !== 'more').forEach((s) => {
+      const name = tr(`nav:tab.${s.name}` as 'nav:tab.index');
+      const href = sectionHref(plan, s.name, disabled);
+      if (href) add({ key: `tab-${s.name}`, title: name, icon: s.icon, route: href });
+      s.pages.forEach((p) =>
+        add({
+          key: p.route,
+          title: tr(p.labelKey as 'nav:title.invoices'),
+          // "Sell · Adjustments": the section and, where it has one, the category inside it.
+          subtitle: p.group ? `${name} · ${tr(`nav:menuGroup.${p.group}`)}` : name,
+          icon: p.icon,
+          route: p.route,
+        }),
+      );
     });
 
-    const settings = tr('nav:shell.settings');
-    moreGroups
-      .filter((g) => !groups || groups.includes(g.key))
-      .forEach((g) => {
-        // "Settings · Business setup", so searching "settings" finds them too.
-        const subtitle = (SETTINGS_GROUPS as readonly string[]).includes(g.key) ? `${settings} · ${g.title}` : g.title;
-        g.entries.forEach((e) => add({ key: e.route, title: e.label, subtitle, icon: e.icon, route: e.route }));
-      });
+    const tools = tr('nav:more.group.tools');
+    TOOLS.forEach((p) => add({ key: p.route, title: tr(p.labelKey as 'nav:title.invoices'), subtitle: tools, icon: p.icon, route: p.route }));
 
-    return Array.from(list.values());
-  }, [tr, plan, moreGroups, groups]);
+    // "Settings · Account", so searching "settings" finds them too.
+    const settings = tr('nav:shell.settings');
+    SETTINGS.forEach((g) => {
+      const subtitle = `${settings} · ${tr(g.labelKey as 'nav:more.group.account')}`;
+      g.pages.forEach((p) => add({ key: p.route, title: tr(p.labelKey as 'nav:title.invoices'), subtitle, icon: p.icon, route: p.route }));
+    });
+
+    return list;
+  }, [tr, plan, disabled]);
 }
 
 /** Pages whose name matches, then pages in a matching section ("sales" finds the Sales pages). */

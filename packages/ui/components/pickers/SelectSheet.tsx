@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Icon, type IconName } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Sheet } from '../Sheet';
@@ -53,6 +53,8 @@ export function SelectSheet({
   footer,
   onCreate,
   createLabel,
+  onQueryChange,
+  loading,
   multiple = false,
   onConfirm,
   confirmLabel,
@@ -71,6 +73,13 @@ export function SelectSheet({
   /** Offer the typed search text as a value of its own, for lists that aren't exhaustive. */
   onCreate?: (query: string) => void;
   createLabel?: (query: string) => string;
+  /**
+   * The search is done elsewhere (on the server): the sheet reports what's typed and shows the
+   * options it is given as they are, rather than filtering them itself.
+   */
+  onQueryChange?: (query: string) => void;
+  /** While the options for what's typed are on their way. */
+  loading?: boolean;
   /** Tick several rows, then confirm them together; `onSelect` is not called in this mode. */
   multiple?: boolean;
   onConfirm?: (values: string[]) => void;
@@ -89,20 +98,21 @@ export function SelectSheet({
 
   const close = () => {
     setQuery('');
+    onQueryChange?.('');
     setPicked([]);
     onClose();
   };
 
   // A creatable list always needs the search box — it is where the new value is typed.
-  const showSearch = searchable && (options.length > 6 || !!onCreate);
+  const showSearch = searchable && (options.length > 6 || !!onCreate || !!onQueryChange);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
+    if (!q || onQueryChange) return options;
     return options.filter(
       (o) => o.label.toLowerCase().includes(q) || (o.description ?? '').toLowerCase().includes(q),
     );
-  }, [options, query]);
+  }, [options, query, onQueryChange]);
 
   const typed = query.trim();
   const canCreate = !!onCreate && !!typed && !filtered.some((o) => o.label.toLowerCase() === typed.toLowerCase());
@@ -163,14 +173,23 @@ export function SelectSheet({
       header={
         showSearch ? (
           <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder={searchPlaceholder ?? tr('common:component.search')} />
+            <SearchBar
+              value={query}
+              onChangeText={(q) => {
+                setQuery(q);
+                onQueryChange?.(q);
+              }}
+              placeholder={searchPlaceholder ?? tr('common:component.search')}
+            />
           </View>
         ) : null
       }
     >
       {hasBlocked ? <ToastCapture intoRef={sheetToastRef} /> : null}
 
-      {filtered.length === 0 ? (
+      {loading && filtered.length === 0 ? (
+        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+      ) : filtered.length === 0 ? (
         (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage ?? tr('common:component.noSearchMatch')} compact />)
       ) : (
         filtered.map((o) => {

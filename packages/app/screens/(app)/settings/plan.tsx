@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -10,13 +10,20 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useDocuments } from '../../../store/selectors';
+import { useActiveCompany } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '../../../features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
 type Cycle = 'monthly' | 'yearly';
+
+/**
+ * The phone apps don't sell plans (App Store and Play billing rules), so they show no prices, no
+ * billing cycle and nothing about paying: what each plan includes, and which one the business is on.
+ */
+const SHOWS_PRICES = Platform.OS === 'web';
 
 export default function PlanBilling() {
   const t = useTheme();
@@ -27,14 +34,14 @@ export default function PlanBilling() {
   // Only people who have accepted count; a pending invitation is not a user yet.
   const teamSize = useAppStore((s) => s.users.filter((u) => u.status === 'active' && u.companyIds.includes(s.activeCompanyId)).length);
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
-  const invoices = useDocuments('invoice');
+  const usage = useCompanyUsage().data;
   const company = useActiveCompany();
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
   const seatLimit = userLimit(currentPlan);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('plan:billing.title') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -46,16 +53,18 @@ export default function PlanBilling() {
             </Text>
             <Badge label={tr('plan:billing.active')} tone="success" />
           </View>
-          <Text variant="caption" tone="muted">
-            {current.yearly === 0
-              ? tr('plan:billing.freeForever')
-              : tr('plan:billing.renews', { price: `₹${formatNumber(current.yearly, 0, 'indian')}` })}
-          </Text>
+          {SHOWS_PRICES ? (
+            <Text variant="caption" tone="muted">
+              {current.yearly === 0
+                ? tr('plan:billing.freeForever')
+                : tr('plan:billing.renews', { price: `₹${formatNumber(current.yearly, 0, 'indian')}` })}
+            </Text>
+          ) : null}
           <View style={{ height: 1, backgroundColor: t.c.line }} />
           {[
             // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md).
             { label: tr('plan:billing.usageBusinesses'), value: String(companies.length) },
-            { label: tr('plan:billing.usageInvoices'), value: String(invoices.length) },
+            { label: tr('plan:billing.usageInvoices'), value: usage ? String(usage.counts.invoices) : '…' },
             { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }) },
             ...(pendingInvites > 0 ? [{ label: tr('plan:billing.usagePending'), value: String(pendingInvites) }] : []),
           ].map((r) => (
@@ -70,14 +79,16 @@ export default function PlanBilling() {
           ))}
         </Card>
 
-        <Segmented
-          options={[
-            { value: 'monthly', label: tr('plan:billing.monthly') },
-            { value: 'yearly', label: tr('plan:billing.yearlySave') },
-          ]}
-          value={cycle}
-          onChange={(v) => setCycle(v as Cycle)}
-        />
+        {SHOWS_PRICES ? (
+          <Segmented
+            options={[
+              { value: 'monthly', label: tr('plan:billing.monthly') },
+              { value: 'yearly', label: tr('plan:billing.yearlySave') },
+            ]}
+            value={cycle}
+            onChange={(v) => setCycle(v as Cycle)}
+          />
+        ) : null}
 
         {PLANS.map((p) => {
           const isCurrent = p.key === currentPlan;
@@ -103,7 +114,7 @@ export default function PlanBilling() {
                     {planBlurb(tr, p)}
                   </Text>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
+                <View style={{ alignItems: 'flex-end', display: SHOWS_PRICES ? 'flex' : 'none' }}>
                   <Text variant="h3" weight="700">
                     {price === 0 ? tr('plan:billing.free') : `₹${formatNumber(price, 0, 'indian')}`}
                   </Text>
@@ -131,9 +142,11 @@ export default function PlanBilling() {
           );
         })}
 
-        <Text variant="caption" tone="muted" center style={{ lineHeight: 18 }}>
-          {tr('plan:billing.footnote')}
-        </Text>
+        {SHOWS_PRICES ? (
+          <Text variant="caption" tone="muted" center style={{ lineHeight: 18 }}>
+            {tr('plan:billing.footnote')}
+          </Text>
+        ) : null}
       </ScrollView>
     </View>
   );

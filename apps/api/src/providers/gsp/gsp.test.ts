@@ -576,3 +576,22 @@ describe('sandbox document numbers', () => {
     expect(sandboxDocNo({ ...config, PUBLIC_BASE_URL: 'https://other.example.test' }, '29AAGCB1286Q000', 'INV/26-27/0003', '2026-10-29')).not.toBe(a);
   });
 });
+
+describe('Adaequare recovery lookups', () => {
+  it('finds the e-way bill raised for a document, and none when NIC says 604', async () => {
+    const found = fakeTransport({ '/enriched/ewb/ewayapi/GetEwayBillGeneratedByConsigner': () => ({ success: true, result: { ewayBillNo: 331000123456, ewayBillDate: '02/09/2026 10:00:00 AM', validUpto: '03/09/2026 11:59:00 PM' } }) });
+    const hit = await new AdaequareGateway(adaequareConfig(), found.transport).findEwayBillByDocument(creds, { docType: 'INV', docNo: 'INV-1', docDate: '02/09/2026', fromGstin: '29AAGCB1286Q000', now: NOW });
+    expect(hit).toMatchObject({ ok: true, found: { ewayBillNumber: '331000123456' } });
+    expect(found.calls[0].query).toEqual({ docType: 'INV', docNo: 'INV-1' });
+
+    const none = fakeTransport({ '/enriched/ewb/ewayapi/GetEwayBillGeneratedByConsigner': () => new GspRequestError('No record (604)', 'envelope', 422, { success: false, message: nic('604', 'No record found') }) });
+    expect(await new AdaequareGateway(adaequareConfig(), none.transport).findEwayBillByDocument(creds, { docType: 'INV', docNo: 'INV-1', docDate: '02/09/2026', fromGstin: 'x', now: NOW })).toEqual({ ok: true, found: null });
+  });
+
+  it('reads an IRN as active or cancelled, and treats an unknown status as incomplete', async () => {
+    const status = (Status: string) => fakeTransport({ '/enriched/ei/api/invoice/irn': () => ({ success: true, result: { Status, CancelDate: '02/09/2026 12:00:00' } }) });
+    expect(await new AdaequareGateway(adaequareConfig(), status('CNL').transport).getIrnStatus(creds, { irn: 'IRN-1', now: NOW })).toMatchObject({ ok: true, status: 'cancelled' });
+    expect(await new AdaequareGateway(adaequareConfig(), status('ACT').transport).getIrnStatus(creds, { irn: 'IRN-1', now: NOW })).toEqual({ ok: true, status: 'active' });
+    expect(await new AdaequareGateway(adaequareConfig(), status('??').transport).getIrnStatus(creds, { irn: 'IRN-1', now: NOW })).toMatchObject({ ok: false, errors: [{ code: 'GSP_INCOMPLETE' }] });
+  });
+});

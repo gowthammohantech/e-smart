@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'expo-router';
-import { hasModule, moduleForPath } from '@esmart/core/domain/plan';
-import { usePlan } from '../store/selectors';
+import { hasModule, moduleEnabled, moduleForPath } from '@esmart/core/domain/plan';
+import { useDisabledModules, usePlan } from '../store/selectors';
 
 /**
  * Keeps a Sales-plan company out of full-plan screens however it got there.
@@ -11,11 +11,15 @@ export function usePlanGuard() {
   const pathname = usePathname();
   const router = useRouter();
   const plan = usePlan();
+  const disabled = useDisabledModules();
 
   useEffect(() => {
     const module = moduleForPath(pathname);
     if (module && !hasModule(plan, module)) {
       router.replace({ pathname: '/(app)/upgrade', params: { module } });
+    } else if (module && !moduleEnabled(plan, disabled, module)) {
+      // In the plan, but switched off: where it can be switched on.
+      router.replace('/(app)/settings/modules');
     }
-  }, [pathname, plan, router]);
+  }, [pathname, plan, disabled, router]);
 }

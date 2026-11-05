@@ -23,10 +23,10 @@ export default function Upgrade() {
   const label = module ? moduleLabel(tr, module) : tr('plan:upgrade.thisFeature');
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg, padding: t.spacing.lg }}>
+    <View style={{ flex: 1, padding: t.spacing.lg, justifyContent: 'center' }}>
       <Stack.Screen options={{ title: label }} />
       <EmptyState
-        icon="lock-outline"
+        illustration="locked"
         title={tr('plan:upgrade.lockedTitle', { module: label, plan: target.name })}
         message={tr('plan:upgrade.lockedMessage', { currentPlan: plan.name })}
         actionLabel={tr('plan:upgrade.seePlans')}

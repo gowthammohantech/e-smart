@@ -4,3 +4,7 @@
 // an existing test fails.
 require('intl-pluralrules');
 require('@esmart/i18n').initI18n('en', { plugins: [require('react-i18next').initReactI18next] });
+
+// Tests keep the book in memory: SQLite and IndexedDB aren't there.
+/* global jest */
+jest.mock('./store/bookBackend', () => ({ bookBackend: () => require('./store/bookStorage').memoryBackend() }));

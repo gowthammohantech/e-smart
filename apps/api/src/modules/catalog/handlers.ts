@@ -1,15 +1,18 @@
 import { businessDate } from '@esmart/core/lib/date';
+import type { CustomValues } from '@esmart/core/domain/customFields';
+import { cleanCustomValues } from '../settings/customFields';
 import { and, asc, desc, eq, getTableColumns, gt, ilike, ne, not, or, sql, lte, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
 import { defineHandlers, type AuthUser, type Deps } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { ApiError, conflict, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { storageKeyFor } from '../attachments/keys';
 import { ensureHsn } from './hsn';
+import { catalogMasterHandlers } from './masters';
 import { onHandSql, stockOnHand } from './stock';
 import { itemColumns, itemToWire, itemWithStock } from './wire';
 
@@ -33,10 +36,11 @@ async function imageUri(deps: Deps, db: DbOrTx, attachmentId: string | null): Pr
 }
 
 /** Reference data the foreign keys need, and prices in the company's currency. */
-async function validate(db: DbOrTx, companyId: string, baseCurrency: string, body: Schema<'Item'>, today: string) {
+async function validate(db: DbOrTx, companyId: string, baseCurrency: string, body: Schema<'Item'>, today: string, creating = false) {
   const issues: Issue[] = [];
   const blocking = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
-  if (!body.sku.trim()) blocking('sku', 'SKU is required');
+  // A new item may leave it blank for the next number.
+  if (!body.sku.trim() && !creating) blocking('sku', 'SKU is required');
   if (!body.name.trim()) blocking('name', 'Name is required');
   const unit = body.unit.trim().toUpperCase();
   const [u] = await db.select().from(schema.units).where(eq(schema.units.code, unit));
@@ -44,6 +48,16 @@ async function validate(db: DbOrTx, companyId: string, baseCurrency: string, bod
   const T = schema.taxCategories;
   const [tax] = await db.select({ id: T.id }).from(T).where(and(eq(T.companyId, companyId), eq(T.id, body.taxCategoryId)));
   if (!tax) blocking('taxCategoryId', 'No such tax category in this company');
+  if (body.categoryId) {
+    const C = schema.itemCategories;
+    const [cat] = await db.select({ id: C.id }).from(C).where(and(eq(C.companyId, companyId), eq(C.id, body.categoryId)));
+    if (!cat) blocking('categoryId', 'No such item category in this company');
+  }
+  if (body.brandId) {
+    const B = schema.brands;
+    const [brand] = await db.select({ id: B.id }).from(B).where(and(eq(B.companyId, companyId), eq(B.id, body.brandId)));
+    if (!brand) blocking('brandId', 'No such brand in this company');
+  }
   for (const f of ['salePrice', 'purchasePrice'] as const) {
     if (body[f].currency !== baseCurrency) blocking(`${f}.currency`, `Item prices are in the company's currency (${baseCurrency})`);
     if (body[f].minor < 0) blocking(`${f}.minor`, 'Prices cannot be negative');
@@ -55,6 +69,14 @@ async function validate(db: DbOrTx, companyId: string, baseCurrency: string, bod
 }
 
 /** SKU and barcode are unique per company. */
+async function nextSku(db: DbOrTx, companyId: string): Promise<string> {
+  const [row] = await db
+    .select({ max: sql<number | null>`max(nullif(regexp_replace(${I.sku}, '\\D', '', 'g'), '')::int)` })
+    .from(I)
+    .where(and(eq(I.companyId, companyId), ilike(I.sku, 'SKU-%')));
+  return `SKU-${String((row?.max ?? 0) + 1).padStart(4, '0')}`;
+}
+
 async function assertUnique(db: DbOrTx, companyId: string, sku: string, barcode: string | null, exceptId?: string) {
   const others = exceptId ? [ne(I.id, exceptId)] : [];
   const [skuTaken] = await db.select({ id: I.id }).from(I).where(and(eq(I.companyId, companyId), sql`lower(${I.sku}) = lower(${sku})`, ...others));
@@ -96,21 +118,31 @@ async function usage(db: DbOrTx, companyId: string, itemId: string): Promise<str
 }
 
 /**
- * Catalog: listItems, createItem, getItem, saveItem, removeItem, uploadItemImage.
+ * Catalog: listItems, createItem, getItem, saveItem, removeItem, uploadItemImage, and the item
+ * category and brand masters (./masters).
  */
 export const catalogHandlers = defineHandlers({
+  ...catalogMasterHandlers,
+
   async listItems(ctx) {
-    const { type, status, barcode, lowStock, branchId, q, limit, cursor } = ctx.query;
+    const { type, status, barcode, lowStock, stock, branchId, categoryId, brandId, q, limit, cursor } = ctx.query;
     const onHand = onHandSql(ctx.company.id, I.id, branchId);
     const k = keyset({ cursor, limit, sort: I.name, id: I.id, order: 'asc' });
     const filters = [eq(I.companyId, ctx.company.id)];
     if (type) filters.push(eq(I.type, type));
     if (status) filters.push(eq(I.status, status));
     if (barcode) filters.push(eq(I.barcode, barcode));
+    if (categoryId) filters.push(eq(I.categoryId, categoryId));
+    if (brandId) filters.push(eq(I.brandId, brandId));
     if (lowStock !== undefined) {
       const low = and(eq(I.trackInventory, true), gt(I.reorderLevel, '0'), lte(onHand, I.reorderLevel))!;
       filters.push(lowStock ? low : not(low));
     }
+    // As the inventory tab's filters read: low is still in stock, out has none.
+    if (stock === 'low') filters.push(and(eq(I.trackInventory, true), gt(I.reorderLevel, '0'), lte(onHand, I.reorderLevel), gt(onHand, '0'))!);
+    if (stock === 'out') filters.push(and(eq(I.trackInventory, true), lte(onHand, '0'))!);
+    if (stock === 'tracked') filters.push(eq(I.trackInventory, true));
+    if (stock === 'untracked') filters.push(eq(I.trackInventory, false));
     if (q) {
       const like = `%${q.trim()}%`;
       filters.push(or(ilike(I.name, like), ilike(I.sku, like), ilike(I.barcode, like), ilike(I.hsnCode, like), ilike(I.description, like))!);
@@ -136,17 +168,20 @@ export const catalogHandlers = defineHandlers({
   async createItem(ctx) {
     const base = ctx.company.baseCurrency.trim();
     const today = businessDate(ctx.now);
-    await validate(ctx.db, ctx.company.id, base, ctx.body, today);
+    await validate(ctx.db, ctx.company.id, base, ctx.body, today, true);
     const cols = itemColumns(ctx.body, base);
+    const customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'item', ctx.body.customFields as CustomValues | undefined);
     const openingStock = ctx.body.openingStock ?? 0;
     // The day the stock was counted; only a tracked item has stock to date.
     const openingStockDate = cols.trackInventory ? (ctx.body.openingStockDate ?? today) : null;
     const row = await ctx.db.transaction(async (tx) => {
+      // Left blank, a new item takes the next SKU-0001 style number.
+      if (!cols.sku) cols.sku = await nextSku(tx, ctx.company.id);
       await assertUnique(tx, ctx.company.id, cols.sku, cols.barcode);
       const hsnCode = ctx.body.hsnCode ? await ensureHsn(tx, ctx.body.hsnCode) : null;
       const [created] = await tx
         .insert(I)
-        .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, hsnCode, openingStock: String(openingStock), openingStockDate })
+        .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, customFields, hsnCode, openingStock: String(openingStock), openingStockDate })
         .returning();
       if (created.trackInventory && openingStock > 0) {
         await tx.insert(schema.stockMovements).values({
@@ -170,6 +205,78 @@ export const catalogHandlers = defineHandlers({
     return itemToWire(row);
   },
 
+  async importItems(ctx) {
+    const { rows, dryRun } = ctx.body;
+    const base = ctx.company.baseCurrency.trim();
+    const today = businessDate(ctx.now);
+    // What is already there, to tell duplicates by SKU, barcode or name in any case.
+    const existing = await ctx.db.select({ sku: I.sku, barcode: I.barcode, name: I.name }).from(I).where(eq(I.companyId, ctx.company.id));
+    const skus = new Set(existing.map((e) => e.sku.toLowerCase()));
+    const barcodes = new Set(existing.map((e) => e.barcode).filter(Boolean) as string[]);
+    const names = new Set(existing.map((e) => e.name.trim().toLowerCase()));
+    type Result = { index: number; status: 'created' | 'duplicate' | 'invalid'; id?: string; issues?: Issue[] };
+    const results: Result[] = [];
+    const good: { index: number; body: Schema<'Item'> }[] = [];
+    for (const [index, body] of rows.entries()) {
+      try {
+        await validate(ctx.db, ctx.company.id, base, body, today, true);
+      } catch (err) {
+        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
+        results.push({ index, status: 'invalid', issues });
+        continue;
+      }
+      const sku = body.sku.trim().toLowerCase();
+      const barcode = body.barcode?.trim();
+      const name = body.name.trim().toLowerCase();
+      if ((sku && skus.has(sku)) || (barcode && barcodes.has(barcode)) || names.has(name)) {
+        results.push({ index, status: 'duplicate' });
+        continue;
+      }
+      if (sku) skus.add(sku);
+      if (barcode) barcodes.add(barcode);
+      names.add(name);
+      good.push({ index, body });
+    }
+    if (!dryRun && good.length) {
+      await ctx.db.transaction(async (tx) => {
+        const branchId = await primaryBranchId(tx, ctx.company.id);
+        // Blank SKUs follow the SKU-0001 series, counted on within the batch.
+        let nextNumber = Number((await nextSku(tx, ctx.company.id)).replace(/\D/g, ''));
+        for (const { index, body } of good) {
+          const cols = itemColumns(body, base);
+          if (!cols.sku) cols.sku = `SKU-${String(nextNumber++).padStart(4, '0')}`;
+          const openingStock = body.openingStock ?? 0;
+          const openingStockDate = cols.trackInventory ? (body.openingStockDate ?? today) : null;
+          const hsnCode = body.hsnCode ? await ensureHsn(tx, body.hsnCode) : null;
+          const [created] = await tx
+            .insert(I)
+            .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, hsnCode, openingStock: String(openingStock), openingStockDate })
+            .returning();
+          if (created.trackInventory && openingStock > 0) {
+            await tx.insert(schema.stockMovements).values({
+              id: newId('stm'),
+              companyId: ctx.company.id,
+              branchId,
+              itemId: created.id,
+              type: 'opening',
+              quantity: String(openingStock),
+              currency: base,
+              unitCostMinor: created.purchasePriceMinor,
+              date: openingStockDate ?? today,
+              notes: 'Opening stock',
+              createdBy: ctx.user.id,
+            });
+          }
+          await auditItem(tx, ctx.user, 'created', created);
+          results.push({ index, status: 'created', id: created.id });
+        }
+      });
+    } else for (const { index } of good) results.push({ index, status: 'created' });
+    results.sort((a, b) => a.index - b.index);
+    const count = (st: Result['status']) => results.filter((r) => r.status === st).length;
+    return { created: count('created'), skipped: count('duplicate'), invalid: count('invalid'), results };
+  },
+
   async getItem(ctx) {
     const row = await findItem(ctx.db, ctx.company.id, ctx.params.id);
     const stock = await stockOnHand(ctx.db, ctx.company.id, [row.id]);
@@ -188,7 +295,7 @@ export const catalogHandlers = defineHandlers({
       const hsnCode = ctx.body.hsnCode ? await ensureHsn(tx, ctx.body.hsnCode) : null;
       const [updated] = await tx
         .update(I)
-        .set({ ...cols, hsnCode, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...cols, hsnCode, customFields: await cleanCustomValues(tx, ctx.company.id, 'item', ctx.body.customFields as CustomValues | undefined, current.customFields), version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(I.id, current.id), eq(I.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();

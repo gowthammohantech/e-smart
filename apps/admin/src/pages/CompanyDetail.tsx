@@ -5,7 +5,7 @@ import { AuditList } from '../components/AuditList';
 import { PlanBadge, SubscriptionBadge } from '../components/Badges';
 import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
-import { PageHeader, QueryState } from '../components/ui';
+import { PageHeader, QueryState, EmptyState } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDateTime, fmtInt, PLAN_LABELS, PLANS } from '../lib/format';
 
@@ -27,7 +27,7 @@ const EVENT_LABELS: Record<string, string> = {
   'cancel.requested': 'Cancellation requested',
 };
 
-function PlanOverride({ company }: { company: Schema<'PlatformCompany'> }) {
+function PlanOverride({ company, billedBy }: { company: Schema<'PlatformCompany'>; billedBy: string | null }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [plan, setPlan] = useState<Schema<'PlanTier'>>(company.plan);
@@ -69,6 +69,11 @@ function PlanOverride({ company }: { company: Schema<'PlatformCompany'> }) {
           await queryClient.invalidateQueries();
         }}
       >
+        {billedBy ? (
+          <div className="alert warn">
+            This company is billed through {billedBy}. Its next billing event (a renewal, a failed payment) may change the plan back.
+          </div>
+        ) : null}
         <label className="field">
           <span>Plan</span>
           <select className="select" value={plan} onChange={(e) => setPlan(e.target.value as Schema<'PlanTier'>)}>
@@ -118,7 +123,7 @@ export function CompanyDetail() {
               ]}
               title={company.name}
               sub={<span className="mono">{company.id}</span>}
-              actions={<PlanOverride company={company} />}
+              actions={<PlanOverride company={company} billedBy={subscription?.provider ?? null} />}
             />
             {accountSuspended ? <div className="alert bad">This company’s account is suspended. Nobody on it can sign in.</div> : null}
 
@@ -189,7 +194,7 @@ export function CompanyDetail() {
                   <span className="muted num">{fmtInt(totalDocs)} total</span>
                 </div>
                 {documentCounts.length === 0 ? (
-                  <div className="empty">No documents yet.</div>
+                  <EmptyState title="No documents yet" />
                 ) : (
                   <table className="data">
                     <tbody>
@@ -210,7 +215,7 @@ export function CompanyDetail() {
                 <h2>Plan history</h2>
               </div>
               {planHistory.length === 0 ? (
-                <div className="empty">No plan changes yet.</div>
+                <EmptyState title="No plan changes yet" />
               ) : (
                 <div className="table-wrap">
                   <table className="data">

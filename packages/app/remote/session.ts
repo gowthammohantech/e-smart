@@ -4,23 +4,28 @@ import type { Schema } from '@esmart/api-client';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { emptyData, useAppStore, type AppData } from '../store/appStore';
 import { COLLECTIONS } from './collections';
+import { applyChanges } from './apply';
 import { api, isNetworkError } from './api';
 import { RemoteError } from './errors';
 import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
 import { useReceiptQueue } from './receiptQueue';
 import { isOpen } from './outbox';
-import { endSyncSession, loadSnapshot, reloadSnapshot, syncSoon } from './sync';
+import { endSyncSession, reloadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
+import { LEGAL } from '../lib/legal';
+import { unregisterPush } from './push';
 
 type AuthSession = Schema<'AuthSession'>;
 
 const device = () => ({ label: Platform.OS === 'web' ? 'Web browser' : `${Platform.OS} app`, platform: `${Platform.OS} ${String(Platform.Version ?? '')}`.trim() });
 
 /**
- * Starts a session from the API's AuthSession: stores the tokens, loads the
- * account's data into an empty store, then marks the session signed in, so
- * the first screen the router shows already has data.
+ * Starts a session from the API's AuthSession: stores the tokens, reads who
+ * the user is and the branches of the business they open, then marks the
+ * session signed in. The rest of the books download in the background: the
+ * sync that starts on sign-in finds no cursor and pulls everything
+ * (useRemoteSync), so signing in doesn't wait on the size of the books.
  */
 async function begin(auth: AuthSession, preferCompanyId?: string) {
   if (!auth.accessToken || !auth.refreshToken || !auth.user?.id) throw new RemoteError('incompleteSession', 'The server returned an incomplete session');
@@ -29,16 +34,22 @@ async function begin(auth: AuthSession, preferCompanyId?: string) {
   useAppStore.setState({ ...emptyData(), activeCompanyId: '', activeBranchId: '' });
 
   const { data: me } = await api.GET('/me');
+  const companies = me?.companies ?? [];
+  const companyId = (preferCompanyId && companies.some((c) => c.id === preferCompanyId) ? preferCompanyId : undefined) ?? me?.defaultCompanyId ?? companies[0]?.id ?? '';
+  // The first screen opens on a branch: only the open business's branches are waited for.
+  const branches = companyId
+    ? await api
+        .GET('/companies/{companyId}/branches', { params: { path: { companyId } } })
+        .then((r) => r.data?.data ?? [])
+        .catch(() => [])
+    : [];
   useAppStore.setState({
     accountId: me?.accountId ?? '',
     users: me?.user ? [me.user as never] : [],
-    companies: (me?.companies ?? []) as never,
+    companies: companies as never,
   });
-  await loadSnapshot();
-
-  const s = useAppStore.getState();
-  const companyId = (preferCompanyId && s.companies.some((c) => c.id === preferCompanyId) ? preferCompanyId : undefined) ?? me?.defaultCompanyId ?? s.companies[0]?.id ?? '';
-  const branches = s.branches.filter((b) => b.companyId === companyId);
+  // As the sync would store them, versions included, so an edit before it finishes still matches.
+  applyChanges(branches.map((b) => ({ companyId, entityType: 'branch', entityId: b.id, op: 'upsert', data: b })));
   useAppStore.setState({
     activeCompanyId: companyId,
     activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '',
@@ -52,7 +63,7 @@ export async function signIn(email: string, password: string) {
   await begin(data!);
 }
 
-export async function signUp(input: { name: string; email: string; phone?: string; phoneVerificationId?: string; password: string; locale?: string }) {
+export async function signUp(input: { name: string; email: string; phone?: string; phoneVerificationId?: string; password: string; locale?: string; termsVersion?: string }) {
   const { data } = await api.POST('/auth/sign-up', { body: { ...input, email: input.email.trim(), phone: input.phone || undefined } });
   await begin(data!);
 }
@@ -60,7 +71,8 @@ export async function signUp(input: { name: string; email: string; phone?: strin
 /** Sends a code; returns the request id that verifyOtp needs. */
 export async function requestOtp(phone: string): Promise<{ requestId: string; resendAfterSeconds: number }> {
   const { data } = await api.POST('/auth/otp/request', { body: { phone } });
-  return { requestId: data?.requestId ?? '', resendAfterSeconds: data?.resendAfterSeconds ?? 30 };
+  if (!data?.requestId) throw new RemoteError('incompleteSession', 'The server sent no OTP request id');
+  return { requestId: data.requestId, resendAfterSeconds: data.resendAfterSeconds ?? 30 };
 }
 
 export async function verifyOtp(requestId: string, code: string) {
@@ -117,11 +129,29 @@ function clearLocal(): Promise<void> {
 }
 
 export async function signOut() {
+  // While still signed in, so the server knows whose token it is.
+  await unregisterPush();
   try {
     await api.POST('/auth/sign-out', {});
   } catch {
     // Signing out works offline too; the server session expires on its own.
   }
+  await setTokens(null);
+  await clearLocal();
+}
+
+/**
+ * Deletes the account on the server, then forgets everything here. Unlike signing out, changes still
+ * waiting to send are dropped rather than kept for a next sign-in that won't come. Throws (and
+ * changes nothing locally) when the server refuses.
+ */
+export async function deleteAccount(body: Schema<'DeleteAccountRequest'>) {
+  await api.POST('/me/delete', { body });
+  // The server already dropped the token; forget it here too.
+  await AsyncStorage.removeItem('ebs.push.token').catch(() => {});
+  const { userId } = useAppStore.getState().session;
+  useAppStore.setState({ syncQueue: [] });
+  if (userId) await AsyncStorage.removeItem(unsyncedKey(userId)).catch(() => {});
   await setTokens(null);
   await clearLocal();
 }
@@ -188,6 +218,7 @@ export async function getInvite(token: string) {
  * lands in the business they just joined.
  */
 export async function acceptInvite(token: string, password?: string, joinedCompanyId?: string) {
-  const { data } = await api.POST('/invites/{token}/accept', { params: { path: { token } }, body: password ? { password } : {} });
+  // Accepting is agreeing to the terms the screen links to.
+  const { data } = await api.POST('/invites/{token}/accept', { params: { path: { token } }, body: { ...(password ? { password } : {}), termsVersion: LEGAL.termsVersion } });
   await begin(data as AuthSession, joinedCompanyId);
 }

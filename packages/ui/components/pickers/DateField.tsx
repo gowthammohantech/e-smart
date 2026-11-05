@@ -71,7 +71,7 @@ export function DateField({
           backgroundColor: t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : t.c.line,
+          borderColor: error ? t.c.bad : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: 48,
           opacity: pressed ? 0.7 : 1,

@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, FieldShell, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, FieldShell, focusFirstInvalid, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
@@ -19,23 +19,30 @@ import { formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
-import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCategories, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { FROM_DOCUMENT, handBack } from '../../navigation/handBack';
+import { GstTreatmentFields } from './GstTreatmentFields';
+import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import type { CustomValues } from '@esmart/core/domain/customFields';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'common']);
   const router = useRouter();
   const goBack = useGoBack();
-  const { run: serverSave, saving } = useServerSave();
+  const { run: serverSave, saving, blocked } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
+  const itemCategories = useItemCategories();
+  const brands = useBrands();
   const existing = useItems();
   // Read live, so a business that registers for GST gets the rule on its next edit.
-  const hsnRequired = hsnMandatory(useActiveCompany()?.taxRegistration);
+  const taxRegistration = useActiveCompany()?.taxRegistration;
+  const hsnRequired = hsnMandatory(taxRegistration);
+  const gstRegistered = taxRegistration?.regime === 'GST' && !!taxRegistration.registered;
   const saveItem = useAppStore((s) => s.saveItem);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   // Without the stock module a new item starts untracked; an existing item keeps its setting.
@@ -53,33 +60,63 @@ export function ItemForm({ item }: { item?: Item }) {
   const [purchasePrice, setPurchasePrice] = useState(item && item.purchasePrice.minor !== 0 ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
+  const [gst, setGst] = useState(item?.gst);
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
   const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
   const [openingStockDate, setOpeningStockDate] = useState(item?.openingStockDate ?? today());
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
+  const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
+  const [brandId, setBrandId] = useState(item?.brandId ?? '');
+  const [customFields, setCustomFields] = useState<CustomValues>(item?.customFields ?? {});
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
   // Only a new tracked item takes an opening stock, and so its date.
   const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
 
-  const save = async () => {
+  /**
+   * After "Save & add another": a clean form for the next item, keeping what tends to
+   * repeat in a run of them (goods or service, unit, tax rate, category, brand).
+   */
+  const resetForAnother = () => {
+    setName('');
+    setSku('');
+    setDescription('');
+    setSalePrice('');
+    setPurchasePrice('');
+    setHsnCode('');
+    setBarcode('');
+    setOpeningStock('');
+    setReorderLevel('');
+    setErrors({});
+    setGst(undefined);
+    // Straight back into the name, for the next one.
+    requestAnimationFrame(() => (globalThis.document?.getElementById('item-form-name') as HTMLElement | null)?.focus());
+  };
+
+  const save = async (another = false) => {
     const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
       name: required(name, tr('inventory:form.itemName')),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
       openingStockDate: takesOpeningStock && openingStockDate > today() ? tr('inventory:form.openingStockDateFuture') : undefined,
     };
-    const skuValue = sku.trim().toUpperCase() || `SKU-${String(existing.length + 1).padStart(4, '0')}`;
-    if (existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
+    // Left blank, a new item gets the next free SKU from the server when it is created.
+    const skuValue = sku.trim().toUpperCase() || (item?.sku ?? '');
+    if (skuValue && existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
       next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);
-    if (hasErrors(next)) return;
+    if (hasErrors(next)) {
+      focusFirstInvalid();
+      return;
+    }
 
     const record: Item = {
       id: item?.id ?? uid('itm'),
@@ -95,10 +132,15 @@ export function ItemForm({ item }: { item?: Item }) {
       hsnCode: hsnCode.trim() || undefined,
       barcode: barcode.trim() || undefined,
       trackInventory: type === 'goods' ? trackInventory : false,
+      // Capital goods are goods; a service never is one.
+      gst: gst && type === 'service' && gst.capitalGoods ? { ...gst, capitalGoods: undefined } : gst,
       openingStock: Number(openingStock) || 0,
       openingStockDate: takesOpeningStock ? openingStockDate : item?.openingStockDate,
       reorderLevel: Number(reorderLevel) || 0,
       imageUri: item?.imageUri,
+      categoryId: categoryId || undefined,
+      brandId: brandId || undefined,
+      customFields,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
     };
@@ -107,16 +149,17 @@ export function ItemForm({ item }: { item?: Item }) {
     if (!res) return;
     const id = res.id ?? record.id;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
+    else if (another) resetForAnother();
     else if (params.from === FROM_DOCUMENT && router.canGoBack()) {
       // Back to the document it was made from, which adds it as a line.
       handBack({ kind: 'item', record: { ...record, id } });
       router.back();
     } else router.replace(`/(app)/catalog/items/${id}`);
   };
-  useSaveShortcut(() => void save(), !saving);
+  useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer>
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
@@ -142,7 +185,7 @@ export function ItemForm({ item }: { item?: Item }) {
             />
           </FieldShell>
 
-          <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
+          <TextField id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
           <TextField
             label={tr('inventory:form.sku')}
             value={sku}
@@ -153,6 +196,9 @@ export function ItemForm({ item }: { item?: Item }) {
             error={errors.sku}
           />
           <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
+          <PickerField label={tr('inventory:form.category')} value={itemCategories.find((c) => c.id === categoryId)?.name ?? tr('inventory:form.none')} onPress={() => setCategoryOpen(true)} icon="tag-outline" />
+          <PickerField label={tr('inventory:form.brand')} value={brands.find((b) => b.id === brandId)?.name ?? tr('inventory:form.none')} onPress={() => setBrandOpen(true)} icon="star-circle-outline" />
+          <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} />
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
@@ -177,6 +223,7 @@ export function ItemForm({ item }: { item?: Item }) {
             error={errors.hsn}
             required={hsnRequired}
           />
+          {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
 
           {type === 'goods' ? (
             <>
@@ -231,7 +278,10 @@ export function ItemForm({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} fullWidth size="lg" />
+          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+          {item ? null : (
+            <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+          )}
         </FormActions>
 
         <SelectSheet
@@ -250,6 +300,22 @@ export function ItemForm({ item }: { item?: Item }) {
           value={taxCategoryId}
           onSelect={setTaxCategoryId}
           searchable={false}
+        />
+        <SelectSheet
+          visible={categoryOpen}
+          onClose={() => setCategoryOpen(false)}
+          title={tr('inventory:form.category')}
+          options={[{ value: '', label: tr('inventory:form.none') }, ...itemCategories.map((c) => ({ value: c.id, label: c.name }))]}
+          value={categoryId}
+          onSelect={setCategoryId}
+        />
+        <SelectSheet
+          visible={brandOpen}
+          onClose={() => setBrandOpen(false)}
+          title={tr('inventory:form.brand')}
+          options={[{ value: '', label: tr('inventory:form.none') }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+          value={brandId}
+          onSelect={setBrandId}
         />
       </FormContainer>
     </KeyboardAvoidingView>

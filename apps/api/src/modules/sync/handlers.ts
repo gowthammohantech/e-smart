@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { defineHandlers } from '../../context';
@@ -184,7 +184,7 @@ export const syncHandlers = defineHandlers({
    * what the entity's own GET returns now; deletes carry none.
    */
   async syncPull(ctx) {
-    const { since, companyId } = ctx.query;
+    const { since, companyId, entityTypes, changedSince } = ctx.query;
     const limit = Math.min(Math.max(ctx.query.limit ?? 500, 1), 2000);
     let companies = ctx.user.companyIds;
     if (companyId) {
@@ -194,7 +194,13 @@ export const syncHandlers = defineHandlers({
     // The cursor is (transaction, seq), and only transactions older than every running one are
     // served: their order can't change any more, so a change committing late is never passed over.
     let after = { tx: '0', seq: 0 };
-    if (since !== undefined && since !== '') {
+    // A snapshot's later pages: past `after`, still as of `upTo`, so a narrowed snapshot stays narrowed.
+    const snapshotPage = since ? /^s:(\d{1,20})\.(\d{1,18}):(\d{1,20})\.(\d{1,18})$/.exec(since) : null;
+    let snapshotUpTo: { tx: string; seq: number } | undefined;
+    if (snapshotPage) {
+      after = { tx: snapshotPage[1], seq: Number(snapshotPage[2]) };
+      snapshotUpTo = { tx: snapshotPage[3], seq: Number(snapshotPage[4]) };
+    } else if (since !== undefined && since !== '') {
       const issued = /^(\d{1,20})\.(\d{1,18})$/.exec(since);
       if (issued) after = { tx: issued[1], seq: Number(issued[2]) };
       else if (/^\d{1,18}$/.test(since)) {
@@ -207,34 +213,43 @@ export const syncHandlers = defineHandlers({
     if (!companies.length) return { changes: [], cursor: cursorOf(after), hasMore: false };
 
     const settled = sql`${CL.txId} < pg_snapshot_xmin(pg_current_snapshot())`;
-    const fields = { seq: CL.seq, tx: sql<string>`${CL.txId}::text`.as('tx'), companyId: CL.companyId, entityType: CL.entityType, entityId: CL.entityId, op: CL.op, version: CL.version };
-    type Change = { seq: number; tx: string; companyId: string; entityType: string; entityId: string; op: string; version: number };
+    const fields = { seq: CL.seq, tx: sql<string>`${CL.txId}::text`.as('tx'), companyId: CL.companyId, entityType: CL.entityType, entityId: CL.entityId, op: CL.op, version: CL.version, changedAt: CL.changedAt };
+    type Change = { seq: number; tx: string; companyId: string; entityType: string; entityId: string; op: string; version: number; changedAt: Date };
     let rows: Change[];
     let cursor: string;
     let hasMore: boolean;
-    if (since === undefined || since === '') {
-      const [top] = await ctx.db
-        .select({ seq: CL.seq, tx: sql<string>`${CL.txId}::text` })
-        .from(CL)
-        .where(and(inArray(CL.companyId, companies), settled))
-        .orderBy(sql`${CL.txId} desc, ${CL.seq} desc`)
-        .limit(1);
+    const snapshot = since === undefined || since === '' || !!snapshotPage;
+    let pageCursor = cursorOf;
+    if (snapshot) {
+      const [top] = snapshotUpTo
+        ? [snapshotUpTo]
+        : await ctx.db
+            .select({ seq: CL.seq, tx: sql<string>`${CL.txId}::text` })
+            .from(CL)
+            .where(and(inArray(CL.companyId, companies), settled))
+            .orderBy(sql`${CL.txId} desc, ${CL.seq} desc`)
+            .limit(1);
       const upTo = top ?? after;
+      pageCursor = (at) => `s:${at.tx}.${at.seq}:${upTo.tx}.${upTo.seq}`;
       const latest = ctx.db
         .selectDistinctOn([CL.companyId, CL.entityType, CL.entityId], fields)
         .from(CL)
         .where(and(inArray(CL.companyId, companies), sql`(${CL.txId}, ${CL.seq}) <= (${upTo.tx}::xid8, ${upTo.seq}::bigint)`))
         .orderBy(CL.companyId, CL.entityType, CL.entityId, sql`${CL.txId} desc, ${CL.seq} desc`)
         .as('latest');
+      // A narrowed snapshot: the named types in full, anything else only if it changed recently.
+      const types = entityTypes?.length ? entityTypes : undefined;
+      const recent = changedSince ? new Date(changedSince) : undefined;
+      const scope = types && recent ? or(inArray(latest.entityType, types), gte(latest.changedAt, recent)) : types ? inArray(latest.entityType, types) : recent ? gte(latest.changedAt, recent) : undefined;
       const found = await ctx.db
         .select()
         .from(latest)
-        .where(sql`${latest.op} <> 'delete'`)
+        .where(and(sql`${latest.op} <> 'delete'`, scope, sql`(${latest.tx}::xid8, ${latest.seq}) > (${after.tx}::xid8, ${after.seq}::bigint)`))
         .orderBy(sql`${latest.tx}::xid8, ${latest.seq}`)
         .limit(limit + 1);
       hasMore = found.length > limit;
       rows = found.slice(0, limit);
-      cursor = cursorOf(hasMore ? rows[rows.length - 1] : upTo);
+      cursor = hasMore ? pageCursor(rows[rows.length - 1]) : cursorOf(upTo);
     } else {
       const found = await ctx.db
         .select(fields)
@@ -261,7 +276,7 @@ export const syncHandlers = defineHandlers({
     if (stop === 0) throw new ApiError(503, 'SYNC_READ_FAILED', 'Could not read a change; try again');
     if (stop > 0) {
       rows = rows.slice(0, stop);
-      cursor = cursorOf(rows[stop - 1]);
+      cursor = pageCursor(rows[stop - 1]);
       hasMore = true;
     }
     return {

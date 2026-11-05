@@ -16,6 +16,16 @@ export type LixiHintsLearned = Record<LixiHintKey, boolean>;
 /** Where the floating Lixi orb was last parked: an edge, and its top as a fraction of the screen. */
 export type LixiOrbSpot = { side: 'left' | 'right'; y: number };
 
+/** The period every dashboard tab shows, as the period bar sets it. `from`/`to` only with `custom`. */
+export type DashboardPeriod = {
+  range: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
+  from?: string;
+  to?: string;
+  grain: 'day' | 'week' | 'month';
+  compare: boolean;
+};
+export const DEFAULT_DASHBOARD_PERIOD: DashboardPeriod = { range: 'month', grain: 'month', compare: false };
+
 type UiState = {
   themeMode: ThemeMode;
   setThemeMode: (m: ThemeMode) => void;
@@ -42,6 +52,10 @@ type UiState = {
   hasSeenTour: boolean;
   setHasSeenTour: (v: boolean) => void;
 
+  /** Businesses whose setup checklist the person has hidden on Home. */
+  setupDismissed: string[];
+  dismissSetup: (companyId: string) => void;
+
   lixiAccess: LixiAccess;
   setLixiAccess: (key: keyof LixiAccess, on: boolean) => void;
 
@@ -52,6 +66,10 @@ type UiState = {
   lixiHintsLearned: LixiHintsLearned;
   markLixiHintLearned: (key: LixiHintKey) => void;
   resetLixiHints: () => void;
+
+  /** Shared by Home, Sales, Purchases and Accounts, so switching tabs keeps the same period. */
+  dashboardPeriod: DashboardPeriod;
+  setDashboardPeriod: (p: DashboardPeriod) => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -89,6 +107,11 @@ export const useUiStore = create<UiState>()(
       hasSeenTour: false,
       setHasSeenTour: (hasSeenTour) => set({ hasSeenTour }),
 
+      setupDismissed: [],
+      dismissSetup: (companyId) => {
+        if (!get().setupDismissed.includes(companyId)) set({ setupDismissed: [...get().setupDismissed, companyId] });
+      },
+
       lixiAccess: { holdTab: true, swipeUp: true, floatingOrb: false, pullDown: true },
       setLixiAccess: (key, on) => set({ lixiAccess: { ...get().lixiAccess, [key]: on } }),
 
@@ -101,6 +124,9 @@ export const useUiStore = create<UiState>()(
         set({ lixiHintsLearned: { ...get().lixiHintsLearned, [key]: true } });
       },
       resetLixiHints: () => set({ lixiHintsLearned: { swipeTabs: false, swipeUp: false, holdTab: false } }),
+
+      dashboardPeriod: DEFAULT_DASHBOARD_PERIOD,
+      setDashboardPeriod: (dashboardPeriod) => set({ dashboardPeriod }),
     }),
     {
       name: 'ebs.ui.v1',

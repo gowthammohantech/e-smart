@@ -26,26 +26,17 @@ import {
   summarizeStock,
   summarizeTax,
 } from '@esmart/core/domain/reports';
-import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
-import { toMajor } from '@esmart/core/lib/money';
-
-import {
-  useBaseCurrency,
-  useBranches,
-  useDocuments,
-  useExpenseCategories,
-  useExpenses,
-  useItems,
-  useParties,
-  usePayables,
-  usePaymentAccounts,
-  usePayments,
-  useReceivables,
-  useStockMovements,
-} from '../../../store/selectors';
+import { formatDate, monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
+import { money, toMajor } from '@esmart/core/lib/money';
+import { summarizeAging, type OutstandingDoc } from '@esmart/core/domain/receivables';
+import type { tdsRegister } from '@esmart/core/domain/tds';
+import type { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { BANK_RATE_PERCENT, type msmePayables, type sec43bh } from '@esmart/core/domain/msme';
+import { useActiveCompany, useBaseCurrency, useBranches, useExpenseCategories, useParties } from '../../../store/selectors';
+import { useReportData, type ReportDataKey } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
 
 export default function Report() {
   const t = useTheme();
@@ -63,72 +54,74 @@ export default function Report() {
     payments: { title: tr('reports:report.payments.title') },
     advances: { title: tr('reports:report.advances.title'), subtitle: tr('reports:report.advances.basis') },
     profit: { title: tr('reports:report.profit.title'), subtitle: tr('reports:report.profit.basis') },
+    'tds-register': { title: tr('reports:report.tdsRegister.title'), subtitle: tr('reports:report.tdsRegister.basis') },
+    'tds-payable': { title: tr('reports:report.tdsPayable.title'), subtitle: tr('reports:report.tdsPayable.basis') },
+    'tds-receivable': { title: tr('reports:report.tdsReceivable.title'), subtitle: tr('reports:report.tdsReceivable.basis') },
+    'tds-26q': { title: tr('reports:report.tds26q.title'), subtitle: tr('reports:report.tds26q.basis') },
+    'tds-challans': { title: tr('reports:report.tdsChallans.title'), subtitle: tr('reports:report.tdsChallans.basis') },
+    'msme-payables': { title: tr('reports:report.msmePayables.title'), subtitle: tr('reports:report.msmePayables.basis') },
   };
   const meta = titles[key];
   // Always false in the native apps, so the desktop layout only ever reaches a browser.
   const desktop = useIsDesktop();
 
-  const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' ? 'thisFY' : 'last90');
+  const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' || key.startsWith('tds-') ? 'thisFY' : 'last90');
 
   const baseCurrency = useBaseCurrency();
-  const documents = useDocuments();
-  const expenses = useExpenses();
-  const expenseCategories = useExpenseCategories();
-  const items = useItems();
-  const movements = useStockMovements();
   const parties = useParties();
+  const company = useActiveCompany();
   const branches = useBranches();
-  const payments = usePayments();
-  const accounts = usePaymentAccounts();
-  const receivables = useReceivables();
-  const payables = usePayables();
+  const expenseCategories = useExpenseCategories();
 
-  const branchNames = useMemo(
-    () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
-    [branches],
-  );
-  const accountNames = useMemo(
-    () => Object.fromEntries(accounts.map((a) => [a.id, a.name])),
-    [accounts],
-  );
-
-  const sales = useMemo(
-    () => summarizeDocuments(documents.filter((d) => d.kind === 'invoice'), parties, items, branchNames, baseCurrency, scope.filters),
-    [documents, parties, items, branchNames, baseCurrency, scope.filters],
-  );
-  const purchases = useMemo(
-    () => summarizeDocuments(documents.filter((d) => d.kind === 'purchaseBill'), parties, items, branchNames, baseCurrency, scope.filters),
-    [documents, parties, items, branchNames, baseCurrency, scope.filters],
-  );
-  const expenseSummary = useMemo(
-    () => summarizeExpenses(expenses, expenseCategories, baseCurrency, scope.filters),
-    [expenses, expenseCategories, baseCurrency, scope.filters],
-  );
-  const tax = useMemo(() => summarizeTax(documents, baseCurrency, scope.filters), [documents, baseCurrency, scope.filters]);
-  // The reports engine takes method names as data, so it stays free of the
-  // translator. Rebuilt when the language changes, or the chart keeps the old
-  // one's labels.
-  const methodLabels = useMemo(
-    () => Object.fromEntries(PAYMENT_METHODS.map((m) => [m, paymentMethodLabel(tr, m)])),
-    [tr],
-  );
+  // The report on screen comes from the server, worked out there by the same core function; the
+  // others stay empty, made by those functions over nothing so every shape is what it always was.
+  const SERVER_KEYS = ['sales-summary', 'purchase-summary', 'expense-summary', 'receivables', 'payables', 'stock', 'tax-summary', 'payments', 'advances', 'profit', 'tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'msme-payables'];
+  const serverKey = SERVER_KEYS.includes(key) ? (key as ReportDataKey) : null;
+  const remote = useReportData<unknown>(serverKey, { ...scope.filters.range, branchId: scope.filters.branchId, partyId: scope.filters.partyId });
+  const data = remote.data;
+  const empty = useMemo(() => {
+    const aging = { outstanding: [] as OutstandingDoc[], summary: summarizeAging([], baseCurrency) };
+    return {
+      summary: summarizeDocuments([], [], [], {}, baseCurrency, scope.filters),
+      expenses: summarizeExpenses([], [], baseCurrency, scope.filters),
+      tax: summarizeTax([], baseCurrency, scope.filters, [], company),
+      payments: summarizePayments([], {}, {}, baseCurrency, scope.filters),
+      advances: summarizeAdvances([], baseCurrency, scope.filters),
+      stock: summarizeStock([], [], baseCurrency, scope.filters.branchId),
+      profit: profitSnapshot([], [], [], baseCurrency, scope.filters),
+      aging,
+    };
+  }, [baseCurrency, scope.filters, company]);
+  const pick = <T,>(k: string, fallback: T): T => (key === k && data ? (data as T) : fallback);
+  // The server names the parties on its rows; the store's copy is the fallback.
+  const serverNames = ((data as { partyNames?: Record<string, string> } | undefined)?.partyNames ?? {}) as Record<string, string>;
+  const partyNameOf = (id: string) => serverNames[id] ?? parties.find((p) => p.id === id)?.name ?? '';
+  const sales = pick('sales-summary', empty.summary);
+  const purchases = pick('purchase-summary', empty.summary);
+  const expenseSummary = pick('expense-summary', empty.expenses);
+  const tax = pick('tax-summary', empty.tax);
+  const serverPayments = pick('payments', empty.payments);
+  // The server names payment methods by their key: they are named here, in the reader's language.
   const paymentSummary = useMemo(
-    () => summarizePayments(payments, accountNames, methodLabels, baseCurrency, scope.filters),
-    [payments, accountNames, methodLabels, baseCurrency, scope.filters],
+    () => ({ ...serverPayments, byMethod: serverPayments.byMethod.map((r) => ({ ...r, label: paymentMethodLabel(tr, r.label as never) })) }),
+    [serverPayments, tr],
   );
-  const advances = useMemo(() => summarizeAdvances(payments, baseCurrency, scope.filters), [payments, baseCurrency, scope.filters]);
-  const stock = useMemo(
-    () => summarizeStock(items, movements, baseCurrency, scope.filters.branchId),
-    [items, movements, baseCurrency, scope.filters.branchId],
-  );
-  const profit = useMemo(
-    () => profitSnapshot(documents, expenses, items, baseCurrency, scope.filters),
-    [documents, expenses, items, baseCurrency, scope.filters],
-  );
+  const advances = pick('advances', empty.advances);
+  const stock = pick('stock', empty.stock);
+  const profit = pick('profit', empty.profit);
+  const receivables = pick('receivables', empty.aging);
+  const payables = pick('payables', empty.aging);
+  const tdsRows = pick<{ rows: ReturnType<typeof tdsRegister> }>('tds-register', { rows: [] }).rows;
+  const tdsPayable = pick<{ rows: ReturnType<typeof tdsPayableSummary> }>('tds-payable', { rows: [] }).rows;
+  const tdsIn = pick<{ rows: ReturnType<typeof tdsReceivable> }>('tds-receivable', { rows: [] }).rows;
+  const tdsReturn = pick<ReturnType<typeof tdsReturnRows>>(key === 'tds-challans' ? 'tds-challans' : 'tds-26q', { deductees: [], challans: [] });
+  const msme = pick<{ rows: ReturnType<typeof msmePayables>; late: ReturnType<typeof sec43bh> }>('msme-payables', { rows: [], late: [] });
+
+  if (meta && serverKey && !data && remote.isLoading) return <LoadingView title={meta.title} />;
 
   if (!meta) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.report') }} />
         <EmptyState illustration="unknown-report" icon="chart-box-outline" title={tr('reports:detail.unknown')} message={tr('reports:detail.unknownBody')} />
       </View>
@@ -200,7 +193,7 @@ export default function Report() {
         data.documents.map((d) => [
           d.number,
           d.date,
-          parties.find((p) => p.id === d.partyId)?.name ?? '',
+          partyNameOf(d.partyId),
           toMajor(d.totals.taxableAmount),
           toMajor(d.totals.totalTax),
           toMajor(d.totals.grandTotal),
@@ -285,7 +278,7 @@ export default function Report() {
         ],
         data.outstanding.map((o) => [
           o.document.number,
-          parties.find((p) => p.id === o.document.partyId)?.name ?? '',
+          partyNameOf(o.document.partyId),
           o.document.date,
           o.document.dueDate ?? '',
           toMajor(o.document.totals.grandTotal),
@@ -441,7 +434,8 @@ export default function Report() {
   }
 
   if (key === 'advances') {
-    const partyName = (id: string) => parties.find((x) => x.id === id)?.name ?? '';
+    const names = (advances as { partyNames?: Record<string, string> }).partyNames ?? {};
+    const partyName = (id: string) => names[id] ?? parties.find((x) => x.id === id)?.name ?? '';
     body = advances.rows.length ? (
       <>
         <KeyFigures
@@ -470,6 +464,189 @@ export default function Report() {
       reportTable(
         [tr('common:table.number'), tr('common:table.date'), tr('reports:column.direction'), tr('reports:shell.contact'), tr('common:table.amount'), tr('reports:column.toAdjust')],
         advances.rows.map((r) => [r.number, r.date, tr(`domain:status.${r.direction}`), partyName(r.partyId), toMajor(r.amount), toMajor(r.unallocated)]),
+      );
+  }
+
+  if (key === 'tds-register') {
+    const total = money(tdsRows.reduce((a, r) => a + r.tdsMinor, 0), baseCurrency);
+    body = tdsRows.length ? (
+      <>
+        <KeyFigures rows={[{ label: tr('reports:figure.tdsDeducted'), value: formatMoney(total), tone: 'warn' }]} />
+        <ReportSection title={tr('reports:detail.tdsByDeductee')}>
+          <DataTable
+            headers={[tr('reports:column.quarter'), tr('reports:column.section'), tr('reports:shell.contact'), tr('reports:column.tds')]}
+            rows={tdsRows.map((r) => [r.quarter.replace('FY ', ''), r.sectionLabel, r.partyName, formatMoney(money(r.tdsMinor, baseCurrency), { symbol: false })])}
+            widths={[1.2, 0.9, 1.6, 1.1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="bank-minus" title={tr('reports:detail.noTds')} message={tr('reports:detail.noTdsBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:column.quarter'), tr('reports:column.section'), tr('reports:shell.contact'), 'PAN', tr('reports:column.tdsBase'), tr('reports:column.tds'), tr('reports:column.documents')],
+        tdsRows.map((r) => [r.quarter, r.sectionLabel, r.partyName, r.pan ?? '', r.baseMinor / 100, r.tdsMinor / 100, r.documents]),
+      );
+  }
+
+  const amount = (minor: number) => formatMoney(money(minor, baseCurrency), { symbol: false });
+  const sectionName = (code: string) => code || tr('reports:tds.noSection');
+  const noTds = <EmptyState illustration="all-settled" icon="bank-minus" title={tr('reports:detail.noTds')} message={tr('reports:detail.noTdsBody')} />;
+
+  if (key === 'tds-payable') {
+    const due = tdsPayable.reduce((a, r) => a + r.balanceMinor, 0);
+    const late = tdsPayable.filter((r) => r.overdue).reduce((a, r) => a + r.balanceMinor, 0);
+    body = tdsPayable.length ? (
+      <>
+        <KeyFigures
+          rows={[
+            { label: tr('reports:tds.deducted'), value: formatMoney(money(tdsPayable.reduce((a, r) => a + r.deductedMinor, 0), baseCurrency)) },
+            { label: tr('reports:tds.deposited'), value: formatMoney(money(tdsPayable.reduce((a, r) => a + r.depositedMinor, 0), baseCurrency)), tone: 'good' },
+            { label: tr('reports:tds.toDeposit'), value: formatMoney(money(due, baseCurrency)), tone: due ? 'warn' : undefined },
+            { label: tr('reports:tds.overdue'), value: formatMoney(money(late, baseCurrency)), tone: late ? 'bad' : undefined },
+          ]}
+        />
+        <ReportSection title={tr('reports:tds.bySectionMonth')}>
+          <DataTable
+            headers={[tr('reports:column.month'), tr('reports:column.section'), tr('reports:tds.deducted'), tr('reports:tds.deposited'), tr('reports:tds.balance'), tr('reports:tds.dueBy')]}
+            rows={tdsPayable.map((r) => [monthLabel(r.month), sectionName(r.section), amount(r.deductedMinor), amount(r.depositedMinor), amount(r.balanceMinor), `${formatDate(r.dueDate)}${r.overdue ? ' ⚠' : ''}`])}
+            widths={[1, 0.8, 1, 1, 1, 1.1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      noTds
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:column.month'), tr('reports:column.section'), tr('reports:tds.deducted'), tr('reports:tds.deposited'), tr('reports:tds.balance'), tr('reports:tds.dueBy')],
+        tdsPayable.map((r) => [r.month, r.section, r.deductedMinor / 100, r.depositedMinor / 100, r.balanceMinor / 100, r.dueDate]),
+      );
+  }
+
+  if (key === 'tds-receivable') {
+    body = tdsIn.length ? (
+      <>
+        <KeyFigures rows={[{ label: tr('reports:tds.keptBack'), value: formatMoney(money(tdsIn.reduce((a, r) => a + r.tdsMinor, 0), baseCurrency)), tone: 'good' }]} />
+        <ReportSection title={tr('reports:tds.byCustomer')}>
+          <DataTable
+            headers={[tr('reports:column.quarter'), tr('reports:shell.contact'), 'PAN', tr('reports:column.tds')]}
+            rows={tdsIn.map((r) => [r.quarter.replace('FY ', ''), r.partyName, r.pan ?? '—', amount(r.tdsMinor)])}
+            widths={[1.2, 1.6, 1.2, 1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="bank-plus" title={tr('reports:tds.noneKept')} message={tr('reports:tds.noneKeptBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:column.quarter'), tr('reports:shell.contact'), 'PAN', tr('reports:column.tds'), tr('reports:tds.receipts')],
+        tdsIn.map((r) => [r.quarter, r.partyName, r.pan ?? '', r.tdsMinor / 100, r.receipts]),
+      );
+  }
+
+  if (key === 'tds-26q') {
+    const rows = tdsReturn.deductees;
+    const missingPan = rows.filter((r) => !r.pan).length;
+    body = rows.length ? (
+      <>
+        <KeyFigures
+          rows={[
+            { label: tr('reports:tds.deductees'), value: String(new Set(rows.map((r) => r.partyId)).size) },
+            { label: tr('reports:column.tds'), value: formatMoney(money(rows.reduce((a, r) => a + r.tdsMinor, 0), baseCurrency)) },
+            { label: tr('reports:tds.notDeposited'), value: String(rows.filter((r) => !r.challan && r.tdsMinor > 0).length), tone: rows.some((r) => !r.challan && r.tdsMinor > 0) ? 'warn' : undefined },
+            { label: tr('reports:tds.withoutPan'), value: String(missingPan), tone: missingPan ? 'bad' : undefined },
+          ]}
+        />
+        <ReportSection title={tr('reports:tds.deducteeRows')}>
+          <DataTable
+            headers={[tr('common:table.date'), tr('reports:shell.contact'), tr('reports:column.section'), tr('reports:column.tdsBase'), tr('reports:column.tds'), tr('reports:tds.challan')]}
+            rows={rows.map((r) => [formatDate(r.date), `${r.partyName}${r.pan ? '' : ' ⚠'}`, r.section, amount(r.amountMinor), amount(r.tdsMinor), r.challan?.number ?? '—'])}
+            widths={[1, 1.5, 0.8, 1.1, 0.9, 1]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      noTds
+    );
+    // The columns of the 26Q deductee annexure, in its order, for the return preparation utility.
+    exportRows = () =>
+      reportTable(
+        ['Quarter', 'Section', 'Deductee PAN', 'Deductee name', 'Bill', 'Date of payment or credit', 'Amount paid or credited', 'Rate (%)', 'TDS', 'BSR code', 'Challan serial', 'Date deposited'],
+        rows.map((r) => [r.quarter, r.section, r.pan ?? '', r.partyName, r.number, r.date, r.amountMinor / 100, r.rate, r.tdsMinor / 100, r.challan?.bsrCode ?? '', r.challan?.serial ?? '', r.challan?.depositedOn ?? '']),
+      );
+  }
+
+  if (key === 'tds-challans') {
+    const rows = tdsReturn.challans;
+    body = rows.length ? (
+      <>
+        <KeyFigures rows={[{ label: tr('reports:tds.deposited'), value: formatMoney(money(rows.reduce((a, r) => a + r.totalMinor, 0), baseCurrency)), tone: 'good' }]} />
+        <ReportSection title={tr('reports:tds.challans')}>
+          <DataTable
+            headers={[tr('reports:tds.depositedOn'), tr('common:table.number'), tr('reports:tds.bsr'), tr('reports:tds.serial'), tr('reports:column.section'), tr('common:table.amount'), tr('reports:column.documents')]}
+            rows={rows.map((r) => [formatDate(r.depositedOn ?? r.date), r.number, r.bsrCode ?? '—', r.serial ?? '—', r.sections.map((x) => sectionName(x.section)).join(', '), amount(r.totalMinor), String(r.deductions)])}
+            widths={[1, 1, 0.9, 0.7, 0.9, 1, 0.6]}
+          />
+        </ReportSection>
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="bank-transfer-out" title={tr('reports:tds.noChallans')} message={tr('reports:tds.noChallansBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('reports:tds.depositedOn'), tr('common:table.number'), tr('reports:tds.bsr'), tr('reports:tds.serial'), tr('reports:column.section'), tr('common:table.amount'), tr('reports:column.documents')],
+        rows.map((r) => [r.depositedOn ?? r.date, r.number, r.bsrCode ?? '', r.serial ?? '', r.sections.map((x) => x.section).join(' '), r.totalMinor / 100, r.deductions]),
+      );
+  }
+
+  if (key === 'msme-payables') {
+    // As of the period's end: what micro and small suppliers are still owed, against the 45-day limit
+    // (worked out on the server, for the branch).
+    const { rows, late } = msme;
+    const nameOf = (id: string) => (msme as { partyNames?: Record<string, string> }).partyNames?.[id] ?? parties.find((x) => x.id === id)?.name ?? '';
+    const sum = (list: typeof rows) => money(list.reduce((a, r) => a + r.outstandingMinor, 0), baseCurrency);
+    const when = (days: number) => (days < 0 ? tr('reports:msme.overdue', { count: -days }) : tr('reports:msme.left', { count: days }));
+    body = rows.length || late.length ? (
+      <>
+        <KeyFigures
+          rows={[
+            { label: tr('reports:msme.owed'), value: formatMoney(sum(rows)) },
+            { label: tr('reports:msme.pastLimit'), value: formatMoney(sum(rows.filter((r) => r.daysLeft < 0))), tone: rows.some((r) => r.daysLeft < 0) ? 'bad' : undefined },
+          ]}
+        />
+        <ReportSection title={tr('reports:msme.unpaid')}>
+          <DataTable
+            headers={[tr('common:table.number'), tr('reports:shell.contact'), tr('reports:msme.due'), tr('common:table.amount'), tr('reports:msme.interest')]}
+            rows={rows.map((r) => [r.number, nameOf(r.partyId), `${formatDate(r.dueDate)} · ${when(r.daysLeft)}`, formatMoney(money(r.outstandingMinor, r.currency), { symbol: false }), formatMoney(money(r.interestMinor, r.currency), { symbol: false })])}
+            widths={[1, 1.4, 1.6, 1, 0.9]}
+          />
+          <Text variant="caption" tone="muted">
+            {tr('reports:msme.interestBasis', { rate: formatPercent((company.msmeBankRate ?? BANK_RATE_PERCENT) * 3) })}
+          </Text>
+        </ReportSection>
+        {late.length ? (
+          <ReportSection title={tr('reports:msme.notInTime')}>
+            <DataTable
+              headers={[tr('common:table.number'), tr('reports:shell.contact'), tr('reports:msme.due'), tr('common:table.amount')]}
+              rows={late.map((r) => [r.number, nameOf(r.partyId), formatDate(r.dueDate), formatMoney(money(r.notPaidInTimeMinor, r.currency), { symbol: false })])}
+              widths={[1, 1.4, 1, 1]}
+            />
+            <Text variant="caption" tone="muted">
+              {tr('reports:msme.notInTimeBasis')}
+            </Text>
+          </ReportSection>
+        ) : null}
+      </>
+    ) : (
+      <EmptyState illustration="all-settled" icon="timer-sand" title={tr('reports:msme.none')} message={tr('reports:msme.noneBody')} />
+    );
+    exportRows = () =>
+      reportTable(
+        [tr('common:table.number'), tr('reports:shell.contact'), tr('common:table.date'), tr('reports:msme.due'), tr('reports:msme.daysLeft'), tr('common:table.amount'), tr('reports:msme.interest')],
+        rows.map((r) => [r.number, nameOf(r.partyId), r.date, r.dueDate, r.daysLeft, r.outstandingMinor / 100, r.interestMinor / 100]),
       );
   }
 
@@ -520,7 +697,8 @@ export default function Report() {
   }
 
   // A desktop browser gets its own layout; the phone keeps the single column above.
-  if (desktop) {
+  // Reports without a desktop layout of their own keep the single column there too.
+  if (desktop && !['tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'msme-payables'].includes(key)) {
     body = (
       <ReportDesktop
         report={key}
@@ -539,6 +717,7 @@ export default function Report() {
         onScopeChange={setScope}
         showPartyFilter={['sales-summary', 'purchase-summary', 'payments', 'advances'].includes(key)}
         exportRows={exportRows}
+        generatedAt={remote.dataUpdatedAt || undefined}
       >
         {body}
       </ReportShell>

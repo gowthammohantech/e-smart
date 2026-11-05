@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "start": "sirv dist --single --host 0.0.0.0 --port ${PORT:-5174}",
+    "start": "node serve.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"
@@ -19,17 +19,18 @@
     "@esmart/core": "*",
     "@esmart/ui": "*",
     "@tanstack/react-query": "5.103.3",
+    "qrcode": "1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-router": "7.18.4",
-    "recharts": "3.10.1",
-    "sirv-cli": "3.0.1"
+    "recharts": "3.10.1"
   },
   "devDependencies": {
     "@esmart/eslint-config": "*",
     "@esmart/tsconfig": "*",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
+    "@types/qrcode": "1.5.6",
     "@types/react": "~19.2.2",
     "@types/react-dom": "~19.2.3",
     "@vitejs/plugin-react": "6.1.1",

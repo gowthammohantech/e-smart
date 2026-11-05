@@ -14,10 +14,6 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { keyLabel } from '@esmart/core/labels';
 import type { EwayBill } from '@esmart/core/types';
 import {
-  EWAY_CANCEL_REASONS,
-  EWAY_SUB_SUPPLY_TYPES,
-  EWAY_TRANSPORT_MODES,
-  EWAY_VEHICLE_TYPES,
   canCancelEwayBill,
   canExtendEwayBill,
   canUpdatePartB,
@@ -27,6 +23,7 @@ import {
 import { formatDate, formatDateTime, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useAppStore } from '@esmart/app/store/appStore';
+import { useDocumentRecord } from '@esmart/app/remote/queries';
 import { useEwayBill, useParties } from '@esmart/app/store/selectors';
 import { detailRouteFor } from '@esmart/app/features/documents/DocumentEditor';
 import { EwayBillActionSheets, useEwayBillHistory, type EwayBillAction } from '@esmart/app/features/compliance/EwayBillDetail';
@@ -111,15 +108,14 @@ function Leg({ title, place }: { title: string; place: EwayBill['from'] }) {
  * (`@esmart/app/features/compliance/EwayBillDetail`), whose sheets it reuses.
  */
 export function EwayBillDetailDesktop() {
-  const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'common']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const bill = useEwayBill(id);
 
   if (!bill) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <Stack.Screen options={{ title: 'Not found' }} />
+      <View style={{ flex: 1 }}>
+        <Stack.Screen options={{ title: tr('common:notFound.title') }} />
         <EmptyState illustration="not-found" title={tr('compliance:notFound.ewbTitle')} message={tr('compliance:notFound.ewbBody')} />
       </View>
     );
@@ -131,6 +127,8 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'common']);
   const router = useRouter();
+  // The document behind it, with its party, loaded into the store.
+  useDocumentRecord(bill.documentId);
   const documents = useAppStore((s) => s.documents);
   const parties = useParties();
   const history = useEwayBillHistory(bill);
@@ -149,8 +147,8 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
   const party = parties.find((p) => p.id === bill.partyId);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: `E-way bill ${bill.ewayBillNumber}` }} />
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ title: tr('compliance:ewb.a11yBill', { number: bill.ewayBillNumber }) }} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }}>
         {/* The headline: number, status, what can be done next */}
@@ -178,12 +176,14 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                 <Badge label={keyLabel(tr, meta.labelKey)} tone={expiringSoon ? 'warning' : meta.tone} icon={meta.icon} />
                 {status !== 'cancelled' ? (
                   <Text variant="small" tone={expiringSoon ? 'warn' : 'muted'}>
-                    {expiryPhrase(tr, hours)} · midnight expiry, per rule 138(10)
+                    {tr('compliance:ewb.midnightRule', { phrase: expiryPhrase(tr, hours) })}
                   </Text>
                 ) : (
                   <Text variant="small" tone="muted">
-                    Cancelled{bill.cancelledAt ? ` on ${formatDateTime(bill.cancelledAt)}` : ''}
-                    {bill.cancelReasonCode ? ` · ${EWAY_CANCEL_REASONS[bill.cancelReasonCode]}` : ''}
+                    {bill.cancelledAt
+                      ? tr('compliance:ewb.cancelledAt', { date: formatDateTime(bill.cancelledAt) })
+                      : tr('compliance:status.eway.cancelled')}
+                    {bill.cancelReasonCode ? ` · ${tr(`compliance:cancelReason.eway.${bill.cancelReasonCode}`)}` : ''}
                     {bill.cancelRemark ? `. ${bill.cancelRemark}` : ''}
                   </Text>
                 )}
@@ -221,7 +221,11 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
               {/* Saying why an action is shut is more use than hiding it. */}
               {!extension.allowed && status !== 'cancelled' ? (
                 <Text variant="caption" tone="muted" style={{ textAlign: 'right' }}>
-                  {extension.reason} — the window runs from {formatDateTime(extension.opensAt)} to {formatDateTime(extension.closesAt)}.
+                  {tr('compliance:ewb.extensionWindow', {
+                    reason: extension.reason,
+                    from: formatDateTime(extension.opensAt),
+                    to: formatDateTime(extension.closesAt),
+                  })}
                 </Text>
               ) : null}
             </View>
@@ -232,7 +236,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.xl }}>
             <Fact label={tr('compliance:ewb.validFrom')} value={formatDate(bill.validFrom.slice(0, 10))} />
             <Fact label={tr('compliance:ewb.validUntil')} value={formatDate(bill.validUpto.slice(0, 10))} tone={expiringSoon ? 'warn' : undefined} />
-            <Fact label="Distance" value={`${bill.distanceKm} km`} />
+            <Fact label={tr('compliance:ewb.distance')} value={tr('compliance:ewb.distanceValue', { distance: bill.distanceKm })} />
             <Fact label={tr('compliance:ewb.totalValue')} value={formatMoney(bill.consignmentValue)} />
           </View>
         </Card>
@@ -247,7 +251,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                 <View style={{ alignItems: 'center', gap: 4 }}>
                   <Icon name="arrow-right" size={22} color={t.c.primary} />
                   <Text variant="caption" tone="muted">
-                    {bill.distanceKm} km
+                    {tr('compliance:ewb.distanceValue', { distance: bill.distanceKm })}
                   </Text>
                 </View>
                 <Leg title={tr('compliance:ewb.to')} place={bill.to} />
@@ -299,7 +303,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                 </Card>
               ) : (
                 <Card padded={false}>
-                  <EmptyState icon="history" title="No changes yet" message="Part-B updates and extensions appear here." compact />
+                  <EmptyState icon="history" title={tr('compliance:ewb.historyEmptyTitle')} message={tr('compliance:ewb.historyEmptyBody')} compact />
                 </Card>
               )}
             </View>
@@ -309,11 +313,11 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
           <View style={{ flexGrow: 2, flexBasis: 320, gap: t.spacing.lg, minWidth: 0 }}>
             {doc ? (
               <View style={{ gap: t.spacing.md }}>
-                <SectionTitle>Document</SectionTitle>
+                <SectionTitle>{tr('compliance:ewb.document')}</SectionTitle>
                 <Pressable
                   onPress={() => router.push(detailRouteFor(doc.kind, doc.id) as never)}
                   accessibilityRole="link"
-                  accessibilityLabel={`Open ${doc.number}`}
+                  accessibilityLabel={tr('compliance:ewb.openDocument', { number: doc.number })}
                   style={(state) => {
                     const { hovered, focused } = state as WebPressState;
                     return [
@@ -337,7 +341,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
                       {doc.number}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
-                      {party?.name ?? 'Unknown'} · {formatMoney(bill.consignmentValue)}
+                      {party?.name ?? tr('common:placeholder.unknown')} · {formatMoney(bill.consignmentValue)}
                     </Text>
                   </View>
                   <Icon name="chevron-right" size={20} color={t.c.muted} />
@@ -349,7 +353,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
               <SectionTitle>{tr('compliance:ewb.consignment')}</SectionTitle>
               <DetailRows
                 rows={[
-                  { label: tr('compliance:ewb.supply'), value: EWAY_SUB_SUPPLY_TYPES[bill.subSupplyType].label },
+                  { label: tr('compliance:ewb.supply'), value: tr(`compliance:subSupply.${bill.subSupplyType}` as 'compliance:subSupply.supply') },
                   { label: tr('compliance:ewb.documentType'), value: bill.docType },
                   { label: tr('compliance:ewb.taxableValue'), value: formatMoney(bill.taxableValue) },
                   { label: tr('compliance:ewb.totalValue'), value: formatMoney(bill.consignmentValue) },
@@ -363,8 +367,8 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
               <SectionTitle>{tr('compliance:ewb.transport')}</SectionTitle>
               <DetailRows
                 rows={[
-                  { label: tr('compliance:ewb.mode'), value: EWAY_TRANSPORT_MODES[bill.transportMode].label },
-                  { label: tr('compliance:ewb.cargo'), value: EWAY_VEHICLE_TYPES[bill.vehicleType].label },
+                  { label: tr('compliance:ewb.mode'), value: tr(`compliance:mode.${bill.transportMode}` as 'compliance:mode.road') },
+                  { label: tr('compliance:ewb.cargo'), value: tr(bill.vehicleType === 'overDimensional' ? 'compliance:cargo.overDimensionalCargo' : 'compliance:cargo.regular') },
                   ...(bill.vehicleNumber ? [{ label: tr('compliance:ewb.vehicle'), value: bill.vehicleNumber }] : []),
                   ...(bill.transportDocNumber ? [{ label: tr('compliance:ewb.transportDocument'), value: bill.transportDocNumber }] : []),
                   ...(bill.transporterName ? [{ label: tr('compliance:ewb.transporter'), value: bill.transporterName }] : []),

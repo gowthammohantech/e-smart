@@ -16,10 +16,10 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
 import { Branch } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBranches, useDocuments, usePlan } from '../../../store/selectors';
+import { useActiveCompany, useBranches, usePlan } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { hasModule } from '@esmart/core/domain/plan';
 import { uid } from '@esmart/core/lib/id';
 import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
@@ -29,16 +29,17 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGstinLookup, type GstinDetails } from '../../../features/gstin/useGstinLookup';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 export default function BranchSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const branches = useBranches();
-  const documents = useDocuments();
+  const usage = useCompanyUsage().data;
   const saveBranch = useAppStore((s) => s.saveBranch);
   const removeBranch = useAppStore((s) => s.removeBranch);
   const router = useRouter();
@@ -111,16 +112,17 @@ export default function BranchSettings() {
   };
   const gstinLookup = useGstinLookup({ gstin, opened: editing?.gstin, enabled: !!editing && !locked, fill: fillFromPortal });
 
-  const save = () => {
+  const save = async () => {
     if (!editing || !name.trim()) return;
     if (locked) {
       // Only the name is the person's to change here; the server keeps the rest as it is too.
       const taken = branches.some((b) => b.id !== editing.id && b.name.trim().toLowerCase() === name.trim().toLowerCase());
       setErrors(taken ? { name: tr('settings:branches.nameTaken', { name: name.trim() }) } : {});
       if (taken) return;
-      saveBranch({ ...editing, name: name.trim() });
-      toast.show(tr('settings:branches.updated'), 'success', { icon: 'office-building-marker-outline' });
-      setEditing(null);
+      const res = await serverSave(() => saveBranch({ ...editing, name: name.trim() }), tr('settings:branches.updated'), {
+        icon: 'office-building-marker-outline',
+      });
+      if (res) setEditing(null);
       return;
     }
     const cleanGstin = gstin ? normalizeGstin(gstin) : '';
@@ -149,7 +151,7 @@ export default function BranchSettings() {
     setErrors(next);
     if (hasErrors(next)) return;
 
-    saveBranch({
+    const branch = {
       ...editing,
       id: editing.id || uid('brn'),
       companyId: company.id,
@@ -167,18 +169,23 @@ export default function BranchSettings() {
         state: stateCode ? stateName(stateCode) : editing.address.state,
         stateCode: stateCode || undefined,
       },
-    });
-    toast.show(editing.id ? tr('settings:branches.updated') : tr('settings:branches.added'), 'success', { icon: 'office-building-marker-outline' });
-    setEditing(null);
+    };
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(
+      () => saveBranch(branch),
+      editing.id ? tr('settings:branches.updated') : tr('settings:branches.added'),
+      { icon: 'office-building-marker-outline' },
+    );
+    if (res) setEditing(null);
   };
 
-  const docCount = (branchId: string) => documents.filter((d) => d.branchId === branchId).length;
+  const docCount = (branchId: string) => usage?.documentsByBranch[branchId] ?? 0;
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
   useSaveShortcut(save, !!editing && !!name.trim());
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.branches') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -240,7 +247,7 @@ export default function BranchSettings() {
                 }}
               />
             ) : null}
-            <Button shortcut="S" title={tr('settings:branches.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:branches.save')} onPress={save} loading={saving} disabled={!name.trim() || saving} style={{ flex: 2 }} />
           </View>
         }
       >
@@ -319,9 +326,9 @@ export default function BranchSettings() {
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
-          if (confirmDelete) removeBranch(confirmDelete.id);
+          const b = confirmDelete;
           setConfirmDelete(null);
-          toast.show(tr('settings:branches.deleted'), 'success', { icon: 'office-building-remove-outline' });
+          if (b) void serverSave(() => removeBranch(b.id), tr('settings:branches.deleted'), { icon: 'office-building-remove-outline' });
         }}
       />
     </View>

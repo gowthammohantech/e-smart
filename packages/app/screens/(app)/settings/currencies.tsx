@@ -16,7 +16,6 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Sparkline } from '@esmart/ui/components/charts/BarChart';
-import { useToast } from '@esmart/ui/components/Toast';
 import { ExchangeRate } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useExchangeRates } from '../../../store/selectors';
@@ -25,13 +24,14 @@ import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 export default function CurrencySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const sourceLabel = (source: ExchangeRate['source']) => (source === 'provider' ? tr('settings:currencies.sourceProvider') : tr('settings:currencies.sourceManual'));
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -65,9 +65,9 @@ export default function CurrencySettings() {
     setEffectiveFrom(r?.effectiveFrom ?? today());
   };
 
-  const save = () => {
+  const save = async () => {
     if (!editing || !Number(rate)) return;
-    saveExchangeRate({
+    const exchangeRate: ExchangeRate = {
       ...editing,
       id: editing.id || uid('fx'),
       companyId: company.id,
@@ -76,16 +76,17 @@ export default function CurrencySettings() {
       rate: Number(rate),
       effectiveFrom,
       source: 'manual',
-    });
-    toast.show(tr('settings:currencies.saved'), 'success', { icon: 'currency-inr' });
-    setEditing(null);
+    };
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(() => saveExchangeRate(exchangeRate), tr('settings:currencies.saved'), { icon: 'currency-inr' });
+    if (res) setEditing(null);
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
   useSaveShortcut(save, !!editing && !!Number(rate));
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.currenciesAndRates') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -155,14 +156,16 @@ export default function CurrencySettings() {
                 title={tr('settings:currencies.delete')}
                 variant="danger"
                 style={{ flex: 1 }}
-                onPress={() => {
-                  if (editing.id) removeExchangeRate(editing.id);
-                  setEditing(null);
-                  toast.show(tr('settings:currencies.deleted'), 'success', { icon: 'currency-usd-off' });
+                disabled={saving}
+                onPress={async () => {
+                  const id = editing.id;
+                  if (!id) return;
+                  const res = await serverSave(() => removeExchangeRate(id), tr('settings:currencies.deleted'), { icon: 'currency-usd-off' });
+                  if (res) setEditing(null);
                 }}
               />
             ) : null}
-            <Button shortcut="S" title={tr('settings:currencies.save')} onPress={save} disabled={!Number(rate)} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:currencies.save')} onPress={save} loading={saving} disabled={!Number(rate) || saving} style={{ flex: 2 }} />
           </View>
         }
       >

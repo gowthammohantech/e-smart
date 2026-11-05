@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  AccessibilityInfo,
   Platform,
   Pressable,
   StyleProp,
@@ -44,6 +45,40 @@ export function webFocusHalo(t: Theme, focused: boolean): ViewStyle {
 /* Shared label / error wrapper                                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * What a field's input needs so assistive tech knows it is required, whether
+ * it is wrong, and where its error or hint is. Pass `messageId` to the
+ * field's `FieldShell` and spread `inputProps` on the input (or the button
+ * that stands in for one). The aria props only take effect on the web; a
+ * native screen reader hears the error through `FieldShell`'s announcement.
+ */
+export function useFieldA11y({ error, hint, required }: { error?: string; hint?: string; required?: boolean }) {
+  const messageId = `field-msg-${useId().replace(/:/g, '')}`;
+  return {
+    messageId,
+    inputProps: {
+      'aria-required': required || undefined,
+      'aria-invalid': error ? true : undefined,
+      'aria-describedby': error || hint ? messageId : undefined,
+    },
+  };
+}
+
+/**
+ * After a failed save, moves keyboard focus to the first field marked
+ * invalid, so a keyboard or screen reader user lands on what to fix. Call it
+ * right after setting the errors; it waits a frame for them to render. The
+ * web only: on native each new error is announced by its `FieldShell`.
+ */
+export function focusFirstInvalid() {
+  if (!WEB || typeof document === 'undefined') return;
+  requestAnimationFrame(() => {
+    const el = document.querySelector<HTMLElement>('[aria-invalid="true"]');
+    el?.focus();
+    el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  });
+}
+
 export function FieldShell({
   label,
   error,
@@ -51,6 +86,7 @@ export function FieldShell({
   required,
   children,
   style,
+  messageId,
 }: {
   label?: string;
   error?: string;
@@ -58,8 +94,14 @@ export function FieldShell({
   required?: boolean;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** The id the input points at with `aria-describedby`, from `useFieldA11y`. */
+  messageId?: string;
 }) {
   const t = useTheme();
+  // A native screen reader has no live region on iOS, so a new error is spoken outright.
+  useEffect(() => {
+    if (!WEB && error) AccessibilityInfo.announceForAccessibility(label ? `${label}: ${error}` : error);
+  }, [error, label]);
   return (
     <View style={[{ gap: 6 }, style]}>
       {label ? (
@@ -68,17 +110,21 @@ export function FieldShell({
           {required ? (
             // On the web the asterisk must match the label's size, or a required
             // label runs taller and its field sits lower than the one beside it.
-            <Text variant={WEB ? 'small' : undefined} style={{ color: t.c.bad }}> *</Text>
+            // Hidden from screen readers: the input itself says it is required.
+            <Text variant={WEB ? 'small' : undefined} style={{ color: t.c.bad }} aria-hidden importantForAccessibility="no">
+              {' *'}
+            </Text>
           ) : null}
         </Text>
       ) : null}
       {children}
       {error ? (
-        <Text variant="caption" tone="bad">
+        // An alert, so the web reads a new error out as soon as it appears.
+        <Text variant="caption" tone="bad" id={messageId} role={WEB ? 'alert' : undefined}>
           {error}
         </Text>
       ) : hint ? (
-        <Text variant="caption" tone="muted">
+        <Text variant="caption" tone="muted" id={messageId}>
           {hint}
         </Text>
       ) : null}
@@ -121,9 +167,10 @@ export function TextField({
   const desktop = useIsDesktop();
   // Read-only: no focus ring or text cursor on a click, and the lock a locked picker shows.
   const readOnly = rest.editable === false;
+  const a11y = useFieldA11y({ error, hint, required });
 
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
+    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
       <View
         style={{
           flexDirection: 'row',
@@ -133,7 +180,7 @@ export function TextField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : focused && !readOnly ? t.c.primary : t.c.line,
+          borderColor: error ? t.c.bad : focused && !readOnly ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           // Tamil's below-line vowel signs need a few more pixels. The extra
           // goes on the box rather than as `lineHeight` on the TextInput,
@@ -165,6 +212,7 @@ export function TextField({
           multiline={multiline}
           accessibilityLabel={label}
           secureTextEntry={secureTextEntry && !revealed}
+          {...a11y.inputProps}
           {...rest}
           // Emails are lowercase only, so capitals turn lowercase as they're typed.
           onChangeText={rest.keyboardType === 'email-address' && rest.onChangeText ? (v) => rest.onChangeText?.(v.toLowerCase()) : rest.onChangeText}
@@ -240,9 +288,10 @@ export function PhoneField({
     paddingVertical: t.spacing.sm,
     ...WEB_INPUT_RESET,
   };
+  const a11y = useFieldA11y({ error, hint, required });
 
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
+    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
       <View
         style={{
           flexDirection: 'row',
@@ -252,7 +301,7 @@ export function PhoneField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : focused && !disabled ? t.c.primary : t.c.line,
+          borderColor: error ? t.c.bad : focused && !disabled ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           minHeight: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48,
           ...webFocusHalo(t, focused && !error && !disabled),
@@ -277,6 +326,7 @@ export function PhoneField({
           onBlur={() => setFocused(false)}
           accessibilityLabel={label}
           accessibilityState={{ disabled: !!disabled }}
+          {...a11y.inputProps}
           textContentType="telephoneNumber"
           autoComplete="tel-national"
           onSubmitEditing={onSubmitEditing}
@@ -342,8 +392,9 @@ export function AmountField({
   const [focused, setFocused] = useState(false);
   const desktop = useIsDesktop();
 
+  const a11y = useFieldA11y({ error, hint, required });
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
+    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
       <View
         style={{
           flexDirection: 'row',
@@ -353,7 +404,7 @@ export function AmountField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
+          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: size === 'lg' ? 64 : desktop ? 40 : 48,
           ...webFocusHalo(t, focused && !error),
@@ -377,6 +428,7 @@ export function AmountField({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           accessibilityLabel={label}
+          {...a11y.inputProps}
           style={{
             flex: 1,
             color: t.c.text,
@@ -430,8 +482,11 @@ export function PickerField({
   const { t: tr } = useTranslation(['common']);
   const placeholder = placeholderProp ?? tr('common:component.select');
   const desktop = useIsDesktop();
+  const a11y = useFieldA11y({ error, hint, required });
+  // aria-required isn't allowed on a button, so a required picker says so in its label.
+  const pickerLabel = `${label ?? tr('common:component.select')}${required ? `, ${tr('common:component.required')}` : ''}: ${value ?? placeholder}`;
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle}>
+    <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
       {/* The clear button sits beside the field's button, not inside it: on
           web each is a <button>, and a button can't contain another. */}
       <View>
@@ -440,7 +495,9 @@ export function PickerField({
         disabled={disabled}
         accessibilityRole="button"
         accessibilityState={{ disabled: !!disabled }}
-        accessibilityLabel={`${label ?? tr('common:component.select')}: ${value ?? placeholder}`}
+        accessibilityLabel={pickerLabel}
+        aria-invalid={a11y.inputProps['aria-invalid']}
+        aria-describedby={a11y.inputProps['aria-describedby']}
         style={(state) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -448,7 +505,7 @@ export function PickerField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : t.c.line,
+          borderColor: error ? t.c.bad : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: desktop ? 40 : 48,
           opacity: disabled ? 0.6 : state.pressed ? 0.7 : 1,

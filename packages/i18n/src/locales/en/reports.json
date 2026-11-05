@@ -18,7 +18,7 @@
     "gettingStarted": "Getting started",
     "welcome": "Welcome, {{name}}",
     "welcomeBody": "{{company}} is ready. Raise your first invoice and this page fills in with your sales, collections and what you are owed.",
-    "setUpSteps": "Set up in three steps",
+    "setUpSteps": "Set up your business",
     "stepsDone": "{{done}} of {{total}} done",
     "stepNumber": "Step {{n}}",
     "quickActions": "Quick actions",
@@ -34,6 +34,22 @@
       "invoice": {
         "title": "Create your first invoice",
         "body": "Bill a customer and send it as a PDF, link or WhatsApp."
+      },
+      "profile": {
+        "title": "Complete your business profile",
+        "body": "Logo, address and phone, as they print on every invoice."
+      },
+      "gst": {
+        "title": "Set up GST",
+        "body": "Your GSTIN and registration, so invoices charge the right tax."
+      },
+      "team": {
+        "title": "Invite your team",
+        "body": "Add your accountant or staff, each with their own access."
+      },
+      "bank": {
+        "title": "Add bank details and signature",
+        "body": "Where customers pay, with a UPI QR, and your signature on invoices."
       }
     },
     "invoice": "Invoice",
@@ -66,6 +82,15 @@
       "lowStock": "Items low on stock",
       "eInvoiceRejected": "E-invoices rejected",
       "ewbExpiring": "E-way bills expiring in 24 h"
+    },
+    "invoicesCount_one": "{{count}} invoice",
+    "invoicesCount_other": "{{count}} invoices",
+    "entriesCount_one": "{{count}} entry",
+    "entriesCount_other": "{{count}} entries",
+    "checklist": {
+      "progress": "{{done}} of {{total}} done",
+      "dismiss": "Hide setup steps",
+      "done": "Done"
     }
   },
   "shell": {
@@ -77,17 +102,22 @@
     "branch": "Branch",
     "contact": "Contact",
     "exportCancelled": "Export was cancelled",
+    "exportFailed": "Couldn't prepare that file. Try again in a moment.",
     "basis": "Report basis",
     "allBranches": "all branches",
     "allContacts": "All contacts",
     "clearFilter": "Clear {{label}}",
     "basisLine": "{{company}} · {{from}} to {{to}} · {{branch}} · {{currency}}",
     "basisFull": "{{company}} · {{from}} to {{to}} · {{branch}} · presented in {{currency}}, foreign-currency documents converted at the rate stored on each document.",
-    "exportTitle": "{{title}} export"
+    "exportTitle": "{{title}} export",
+    "generatedAt": "Generated {{at}}"
   },
   "detail": {
     "openAdvances": "Open advances",
     "noAdvances": "No open advances",
+    "tdsByDeductee": "By deductee",
+    "noTds": "No TDS kept back",
+    "noTdsBody": "With a TAN in company settings and a TDS section on a supplier, TDS is worked out on their bills.",
     "noAdvancesBody": "Every payment in this period is fully set against invoices or bills.",
     "unknown": "Unknown report",
     "unknownBody": "Pick a report from the Reports tab.",
@@ -124,6 +154,23 @@
     "withCount": "{{title}} ({{count}})",
     "empty": "Nothing in this period."
   },
+  "msme": {
+    "owed": "Owed to micro and small suppliers",
+    "pastLimit": "Past the legal limit",
+    "unpaid": "Unpaid bills",
+    "due": "Due",
+    "interest": "Interest",
+    "daysLeft": "Days left",
+    "overdue_one": "{{count}} day late",
+    "overdue_other": "{{count}} days late",
+    "left_one": "{{count}} day left",
+    "left_other": "{{count}} days left",
+    "interestBasis": "Interest the law adds once late: {{rate}} a year (three times the bank rate), compounded monthly. For information.",
+    "notInTime": "Not paid in time this year",
+    "notInTimeBasis": "For your CA: what wasn’t paid within the limit can’t be deducted this year (Income-tax Act s.43B(h)); it is deducted in the year it is paid.",
+    "none": "Nothing due to micro or small suppliers",
+    "noneBody": "Mark a supplier as a micro or small enterprise, with their Udyam number, to track their bills here."
+  },
   "report": {
     "salesSummary": {
       "title": "Sales summary",
@@ -138,7 +185,7 @@
       "description": "Spend by category over time"
     },
     "receivables": {
-      "title": "Receivables",
+      "title": "Receivable report",
       "description": "Who owes you, and for how long",
       "basis": "Outstanding = document total less allocated payments."
     },
@@ -170,6 +217,36 @@
       "title": "Profit snapshot",
       "description": "Revenue less cost and expenses",
       "basis": "Revenue is taxable value, so tax collected is not counted as income."
+    },
+    "tdsRegister": {
+      "title": "TDS deducted",
+      "description": "TDS kept back on supplier bills, by section and quarter",
+      "basis": "Supplier bills and notes dated in the period, by deductee: the figures for Form 26Q"
+    },
+    "msmePayables": {
+      "title": "MSME payments due",
+      "description": "Micro and small suppliers’ bills against the 45-day limit",
+      "basis": "Unpaid on the period’s last day. Due on the agreed day, never more than 45 days after the bill, or in 15 days if nothing was agreed (MSMED Act s.15)."
+    },
+    "tdsPayable": {
+      "title": "TDS payable",
+      "description": "TDS deducted, deposited and still to deposit, by section and month",
+      "basis": "Deducted on bills and payments, against the TDS challans. A challan settles its section's oldest month first; each month is due by the 7th of the next (30 April for March)."
+    },
+    "tdsReceivable": {
+      "title": "TDS receivable",
+      "description": "TDS your customers kept back, to check against Form 26AS",
+      "basis": "Receipts dated in the period where the customer deducted TDS, by customer and quarter"
+    },
+    "tds26q": {
+      "title": "Form 26Q deductees",
+      "description": "Deductee-wise TDS with PAN and challan, ready for the return",
+      "basis": "Supplier bills and notes with TDS, dated in the period. Export it for the return preparation utility. TDS kept back on a payment names no section, so deduct it on the bill to report it here."
+    },
+    "tdsChallans": {
+      "title": "TDS challans",
+      "description": "Challans deposited, with BSR code and serial",
+      "basis": "TDS challan vouchers deposited in the period, and how many deductions each settles"
     }
   },
   "figure": {
@@ -202,7 +279,8 @@
     "costOfGoodsSold": "Cost of goods sold",
     "grossProfit": "Gross profit",
     "operatingExpenses": "Operating expenses",
-    "stockOnHand": "Stock on hand"
+    "stockOnHand": "Stock on hand",
+    "tdsDeducted": "TDS deducted"
   },
   "caption": {
     "advancesReceived": "From customers, to adjust against invoices",
@@ -252,7 +330,12 @@
     "days": "Days",
     "direction": "Direction",
     "paid": "Paid",
-    "daysOverdue": "Days overdue"
+    "daysOverdue": "Days overdue",
+    "quarter": "Quarter",
+    "section": "Section",
+    "tds": "TDS",
+    "tdsBase": "Amount taxed",
+    "documents": "Bills"
   },
   "cell": {
     "days_one": "{{count}} day",
@@ -264,6 +347,199 @@
     "agingA11y_one": "{{label}}: {{amount}} across {{count}} invoice",
     "agingA11y_other": "{{label}}: {{amount}} across {{count}} invoices",
     "outward": "Outward",
-    "inward": "Inward"
+    "inward": "Inward",
+    "urgency": {
+      "notDue": "Not due",
+      "followUp": "Follow up",
+      "overdue": "Overdue",
+      "escalate": "Escalate",
+      "critical": "Critical"
+    }
+  },
+  "tds": {
+    "noSection": "No section",
+    "deducted": "Deducted",
+    "deposited": "Deposited",
+    "toDeposit": "To deposit",
+    "overdue": "Overdue",
+    "balance": "Balance",
+    "dueBy": "Due by",
+    "bySectionMonth": "By section and month",
+    "keptBack": "Kept back by customers",
+    "byCustomer": "By customer",
+    "receipts": "Receipts",
+    "noneKept": "No TDS kept back by customers",
+    "noneKeptBody": "When a customer deducts TDS, record it on their payment as TDS deducted.",
+    "deductees": "Deductees",
+    "notDeposited": "Not yet deposited",
+    "withoutPan": "Without a PAN",
+    "deducteeRows": "Deductee rows",
+    "challan": "Challan",
+    "challans": "Challans",
+    "depositedOn": "Deposited on",
+    "bsr": "BSR code",
+    "serial": "Serial",
+    "noChallans": "No TDS challans in this period",
+    "noChallansBody": "Record each deposit as a TDS challan voucher in Books, with its BSR code and serial."
+  },
+  "dash": {
+    "period": {
+      "today": "Today",
+      "week": "This week",
+      "month": "This month",
+      "quarter": "This quarter",
+      "year": "This FY",
+      "custom": "Custom",
+      "label": "Period",
+      "grain": "Show by",
+      "day": "Day",
+      "weekGrain": "Week",
+      "monthGrain": "Month",
+      "compare": "Compare",
+      "compareOn": "vs previous period",
+      "customTitle": "Choose a period",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply",
+      "backwards": "The period ends before it starts",
+      "previous": "{{amount}} before"
+    },
+    "state": {
+      "failedTitle": "Couldn't load this",
+      "failedBody": "Check your connection and try again.",
+      "retry": "Retry",
+      "offline": "You're offline. These figures are from your last visit.",
+      "loading": "Loading"
+    },
+    "export": {
+      "csv": "Export CSV",
+      "cancelled": "Export cancelled"
+    },
+    "home": {
+      "profit": "Profit",
+      "profitCaption": "As the profit report",
+      "invoiceStatus": "Invoices by status",
+      "noInvoices": "No invoices in this period",
+      "cash": "Cash & bank",
+      "cashAccounts_one": "{{count}} account",
+      "cashAccounts_other": "{{count}} accounts",
+      "cashFlow": "Net cash flow",
+      "cashFlowCaption": "Money in and out of cash and bank",
+      "moneyIn": "In",
+      "moneyOut": "Out",
+      "net": "Net",
+      "stock": "Stock health",
+      "stockValue": "Stock value",
+      "low": "Low",
+      "out": "Out of stock",
+      "dead": "No sales in 90 days",
+      "deadValue": "{{amount}} sitting idle",
+      "movement": "Money in and out",
+      "noMovement": "Nothing received, paid or spent in this period",
+      "received": "Received from {{name}}",
+      "paid": "Paid to {{name}}",
+      "spent": "{{name}} expense",
+      "count": "Count",
+      "date": "Date",
+      "amount": "Amount",
+      "plus": "+{{amount}}",
+      "minus": "−{{amount}}",
+      "lowCount": "Low {{count}}",
+      "outCount": "Out {{count}}",
+      "deadCount": "Idle {{count}}"
+    },
+    "filings": {
+      "title": "Filing calendar",
+      "none": "Nothing falls due in the next 60 days",
+      "kind": {
+        "gstr1": "GSTR-1",
+        "iff": "IFF (optional)",
+        "gstr3b": "GSTR-3B",
+        "pmt06": "PMT-06 tax payment",
+        "tds": "TDS deposit"
+      },
+      "status": {
+        "filed": "Filed",
+        "pending": "Due",
+        "overdue": "Overdue"
+      },
+      "due": "Due {{date}}",
+      "forPeriod": "For {{period}}",
+      "itc": "ITC from GSTR-2B",
+      "itcFor": "GSTR-2B for {{period}}",
+      "itcNotFetched": "GSTR-2B for {{period}} hasn't been fetched yet.",
+      "fetch": "Open GSTR-2B",
+      "matched": "Matched",
+      "mismatched": "Don't match",
+      "missingInBooks": "Not in your books",
+      "missingIn2b": "Not reported by suppliers",
+      "claimable": "Claimable credit",
+      "atRisk": "{{amount}} of credit waits on suppliers",
+      "tds": "TDS to deposit",
+      "tdsOverdue": "{{amount}} overdue",
+      "tdsNone": "All TDS deducted has been deposited",
+      "tdsRow": "{{section}} · {{month}}"
+    },
+    "expenses": {
+      "segPurchases": "Purchases",
+      "segExpenses": "Expenses",
+      "total": "Spent",
+      "tax": "GST on expenses",
+      "itc": "Claimable ITC",
+      "billable": "Billable to customers",
+      "trend": "Spending trend",
+      "trendCaption": "Expenses by period",
+      "byCategory": "By category",
+      "topSuppliers": "Top suppliers",
+      "noSuppliers": "No supplier named on this period's expenses",
+      "upcoming": "Coming up",
+      "noUpcoming": "No recurring expenses due in the next 30 days",
+      "recurrence": {
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "quarterly": "Quarterly",
+        "yearly": "Yearly"
+      }
+    },
+    "sales": {
+      "trend": "Sales trend",
+      "trendCaption": "Invoiced by period",
+      "invoiced": "Invoiced"
+    },
+    "accounts": {
+      "title": "Accounts & P&L",
+      "subtitle": "Profit, cash and tax for the period",
+      "open": "Accounts & P&L",
+      "waterfall": "Profit & loss",
+      "revenue": "Revenue",
+      "costOfGoods": "Cost of goods",
+      "grossProfit": "Gross profit",
+      "expenses": "Expenses",
+      "netProfit": "Net profit",
+      "margin": "{{pct}}% margin",
+      "profitTrend": "Profit trend",
+      "profitTrendCaption": "Net profit by period",
+      "cash": "Cash movement",
+      "opening": "Opening",
+      "receipts": "Receipts",
+      "payments": "Payments",
+      "cashExpenses": "Expenses",
+      "taxPaid": "Tax paid",
+      "other": "Other",
+      "closing": "Closing",
+      "branchNote": "Opening and closing balances cover every branch, so they show with all branches selected.",
+      "tax": "GST position",
+      "output": "On sales",
+      "input": "On purchases & expenses",
+      "netPayable": "Net payable",
+      "netCredit": "Net credit",
+      "balanceSheet": "Balance sheet",
+      "asOf": "As of {{date}}",
+      "movement": "Accounts that moved most",
+      "debit": "Debit",
+      "credit": "Credit",
+      "closingBalance": "Closing",
+      "booksAllBranches": "The books cover every branch. Ask an owner or admin to see the balance sheet and accounts."
+    }
   }
 }

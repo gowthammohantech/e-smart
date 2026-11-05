@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -12,18 +12,12 @@ import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { EInvoiceStatus, EwayBillStatus } from '@esmart/core/types';
-import { useAppStore } from '../../store/appStore';
-import {
-  useComplianceSettings,
-  useComplianceSummary,
-  useEInvoiceDocuments,
-  useEwayBills,
-  useExpiringEwayBills,
-  useParties,
-  usePendingEwayDocuments,
-} from '../../store/selectors';
+import { useComplianceSettings, useComplianceSummary } from '../../store/selectors';
+import { useComplianceDocuments, useEwayBillPages } from '../../remote/queries';
+import { useDebounced } from '../../components/useDebounced';
 import { ewayBillStatusAt, hoursUntilExpiry } from '@esmart/core/domain/ewayBill';
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
@@ -76,52 +70,18 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
 
   const settings = useComplianceSettings();
   const summary = useComplianceSummary();
-  const documents = useEInvoiceDocuments();
-  const bills = useEwayBills();
-  const expiring = useExpiringEwayBills(24);
-  const unbilled = usePendingEwayDocuments();
-  const parties = useParties();
-  const allDocuments = useAppStore((s) => s.documents);
+  // Each list is read from the server, filtered and searched there, and only while it is on screen.
+  const search = useDebounced(query);
+  const eInvoices = useComplianceDocuments({ need: 'eInvoice', status: eInvoiceFilter === 'all' ? undefined : eInvoiceFilter, q: search || undefined }, tab === 'eInvoice');
+  const unbilled = useComplianceDocuments({ need: 'ewayBill', q: search || undefined }, tab === 'eway' && ewayFilter === 'pending');
+  const bills = useEwayBillPages({ status: ewayFilter === 'all' || ewayFilter === 'pending' ? undefined : ewayFilter, q: search || undefined }, tab === 'eway' && ewayFilter !== 'pending');
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? tr('common:placeholder.unknown');
+  const nameOf = (d: { partyName?: string }) => d.partyName ?? tr('common:placeholder.unknown');
   const now = nowISO();
-
-  const eInvoiceRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return documents.filter((d) => {
-      const status = d.compliance?.eInvoiceStatus ?? 'pending';
-      if (eInvoiceFilter !== 'all' && status !== eInvoiceFilter) return false;
-      if (!q) return true;
-      return (
-        d.number.toLowerCase().includes(q) ||
-        nameOf(d.partyId).toLowerCase().includes(q) ||
-        (d.compliance?.irn ?? '').toLowerCase().includes(q) ||
-        (d.compliance?.ackNo ?? '').includes(q)
-      );
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documents, eInvoiceFilter, query, parties]);
-
-  const unbilledRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? unbilled.filter((d) => d.number.toLowerCase().includes(q) || nameOf(d.partyId).toLowerCase().includes(q)) : unbilled;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unbilled, query, parties]);
-
-  const ewayRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return bills.filter((b) => {
-      if (ewayFilter === 'pending') return false;
-      if (ewayFilter !== 'all' && ewayBillStatusAt(b, now) !== ewayFilter) return false;
-      if (!q) return true;
-      return (
-        b.ewayBillNumber.includes(q) ||
-        b.documentNumber.toLowerCase().includes(q) ||
-        nameOf(b.partyId).toLowerCase().includes(q)
-      );
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bills, ewayFilter, query, now, parties]);
+  const eInvoiceRows = eInvoices.rows;
+  const unbilledRows = unbilled.rows;
+  const ewayRows = bills.rows;
+  const loading = tab === 'eInvoice' ? eInvoices.isLoading : ewayFilter === 'pending' ? unbilled.isLoading : bills.isLoading;
 
   return (
     <ScrollView
@@ -175,19 +135,19 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         </StatRow>
       )}
 
-      {tab === 'eway' && unbilled.length && ewayFilter !== 'pending' ? (
+      {tab === 'eway' && summary.ewayOutstanding && ewayFilter !== 'pending' ? (
         <Pressable onPress={() => setEwayFilter('pending')} accessibilityRole="button" style={{ marginTop: t.spacing.md }}>
           <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, borderColor: t.c.warn }}>
             <Icon name="truck-alert-outline" size={20} color={t.c.warn} />
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
-              {tr('compliance:hub.unbilledBanner', { count: unbilled.length })}
+              {tr('compliance:hub.unbilledBanner', { count: summary.ewayOutstanding })}
             </Text>
             <Icon name="chevron-right" size={20} color={t.c.warn} />
           </Card>
         </Pressable>
       ) : null}
 
-      {tab === 'eway' && expiring.length ? (
+      {tab === 'eway' && summary.expiringSoon ? (
         <Pressable
           onPress={() => setEwayFilter('active')}
           accessibilityRole="button"
@@ -204,7 +164,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           >
             <Icon name="clock-alert-outline" size={20} color={t.c.warn} />
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
-              {tr('compliance:hub.expiringBanner', { count: expiring.length })}
+              {tr('compliance:hub.expiringBanner', { count: summary.expiringSoon })}
             </Text>
           </Card>
         </Pressable>
@@ -255,25 +215,23 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         })}
       </ScrollView>
 
-      {tab === 'eInvoice' ? (
+      {loading ? (
+        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+      ) : tab === 'eInvoice' ? (
         eInvoiceRows.length ? (
           <Card padded={false}>
             {eInvoiceRows.map((d, i) => {
-              const status = d.compliance?.eInvoiceStatus ?? 'pending';
+              const status = d.eInvoiceStatus ?? 'pending';
               const meta = E_INVOICE_STATUS_META[status];
               return (
                 <ListRow
                   key={d.id}
                   title={d.number}
-                  subtitle={`${nameOf(d.partyId)} · ${formatDate(d.date)}`}
-                  meta={
-                    d.compliance?.irn
-                      ? `IRN ${d.compliance.irn.slice(0, 12)}…`
-                      : formatMoney(d.totals.grandTotal)
-                  }
+                  subtitle={`${nameOf(d)} · ${formatDate(d.date)}`}
+                  meta={d.irn ? `IRN ${d.irn.slice(0, 12)}…` : formatMoney(d.grandTotal)}
                   right={<Badge label={keyLabel(tr, meta.labelKey)} tone={meta.tone} size="sm" />}
                   divider={i < eInvoiceRows.length - 1}
-                  onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
+                  onPress={() => router.push(detailRouteFor(d.kind!, d.id) as never)}
                 />
               );
             })}
@@ -296,12 +254,12 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
               <ListRow
                 key={d.id}
                 title={d.number}
-                subtitle={`${nameOf(d.partyId)} · ${formatDate(d.date)}`}
-                meta={formatMoney(d.totals.grandTotal)}
+                subtitle={`${nameOf(d)} · ${formatDate(d.date)}`}
+                meta={formatMoney(d.grandTotal)}
                 right={<Badge label={tr('compliance:hub.needsBill')} tone="warning" size="sm" />}
                 divider={i < unbilledRows.length - 1}
                 // The document's own page raises the bill.
-                onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
+                onPress={() => router.push(detailRouteFor(d.kind!, d.id) as never)}
               />
             ))}
           </Card>
@@ -323,7 +281,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
               <ListRow
                 key={b.id}
                 title={b.ewayBillNumber}
-                subtitle={`${b.documentNumber} · ${nameOf(b.partyId)}`}
+                subtitle={`${b.documentNumber} · ${b.to.legalName}`}
                 meta={
                   status === 'cancelled'
                     ? b.cancelledAt
@@ -345,12 +303,17 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           message={
             query
               ? tr('compliance:hub.noBillMatch')
-              : allDocuments.length
+              : summary.ewayOutstanding
                 ? tr('compliance:hub.ewayEmptyHasDocs')
                 : tr('compliance:hub.ewayEmpty')
           }
         />
       )}
+      {tab === 'eway' && ewayFilter !== 'pending' && bills.hasNextPage ? (
+        <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
+          {bills.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void bills.fetchNextPage()} />}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { CustomField } from '@esmart/core/domain/customFields';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 
 import {
   Attachment,
@@ -16,6 +17,7 @@ import {
   DeviceSession,
   DocStatus,
   DocumentKind,
+  SeriesDocumentKind,
   DocumentLine,
   EwayBill,
   EwayExtendReasonCode,
@@ -25,6 +27,8 @@ import {
   Expense,
   ExpenseCategory,
   Integration,
+  ItemCategory,
+  Brand,
   Item,
   NotificationKind,
   NumberingSeries,
@@ -38,19 +42,28 @@ import {
   TransportMode,
   User,
   VehicleType,
+  LedgerAccount,
+  CostCentre,
+  Voucher,
 } from '@esmart/core/types';
 import { Money, zero } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
-import { formatNumber } from '@esmart/core/domain/numbering';
-import { conversionBlock, initialStatus, isFinalized } from '@esmart/core/domain/documentStates';
+import { DEFAULT_PREFIXES, SERIES_KINDS, formatNumber } from '@esmart/core/domain/numbering';
+import { CREDIT_KINDS, PURCHASE_KINDS, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import { LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
-import { allocateAdvances, statusForOutstanding } from '@esmart/core/domain/receivables';
+import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
+import { tdsForDocument } from './tds';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
+import { createBookStorage } from './bookStorage';
+import { bookBackend } from './bookBackend';
+import { reportError } from '../lib/reporter';
+import { i18nInstance } from '@esmart/i18n';
+import { useRemoteMeta } from '../remote/meta';
 
 export type AppData = {
   accountId: string;
@@ -62,12 +75,22 @@ export type AppData = {
   items: Item[];
   taxCategories: TaxCategory[];
   expenseCategories: ExpenseCategory[];
+  /** The catalogue's own groupings: an item may have one category and one brand. */
+  itemCategories: ItemCategory[];
+  brands: Brand[];
+  /** The company's own fields on contacts, items and documents. */
+  customFields: CustomField[];
   paymentAccounts: PaymentAccount[];
   exchangeRates: ExchangeRate[];
   numberingSeries: NumberingSeries[];
   documents: BusinessDocument[];
   payments: Payment[];
   expenses: Expense[];
+  /** The books: accounts the business added, and journal and contra vouchers. */
+  ledgerAccounts: LedgerAccount[];
+  vouchers: Voucher[];
+  /** Projects, departments and the like, for profit by cost centre. */
+  costCentres: CostCentre[];
   stockMovements: StockMovement[];
   attachments: Attachment[];
   notifications: AppNotification[];
@@ -98,12 +121,18 @@ export function emptyData(): AppData {
     items: [],
     taxCategories: [],
     expenseCategories: [],
+    itemCategories: [],
+    brands: [],
+    customFields: [],
     paymentAccounts: [],
     exchangeRates: [],
     numberingSeries: [],
     documents: [],
     payments: [],
     expenses: [],
+    ledgerAccounts: [],
+    vouchers: [],
+    costCentres: [],
     stockMovements: [],
     attachments: [],
     notifications: [],
@@ -142,6 +171,12 @@ type Actions = {
   removeTaxCategory: (id: string) => void;
   saveExpenseCategory: (cat: ExpenseCategory) => void;
   removeExpenseCategory: (id: string) => void;
+  saveItemCategory: (cat: ItemCategory) => void;
+  removeItemCategory: (id: string) => void;
+  saveBrand: (brand: Brand) => void;
+  removeBrand: (id: string) => void;
+  saveCustomField: (field: CustomField) => void;
+  removeCustomField: (id: string) => void;
   savePaymentAccount: (acc: PaymentAccount) => void;
   removePaymentAccount: (id: string) => void;
   saveExchangeRate: (rate: ExchangeRate) => void;
@@ -172,6 +207,15 @@ type Actions = {
   /** Returns the id, or '' when the account does not fit the payment method. */
   saveExpense: (expense: Expense) => string;
   removeExpense: (id: string) => void;
+
+  /* books */
+  saveLedgerAccount: (account: LedgerAccount) => void;
+  removeLedgerAccount: (id: string) => void;
+  /** Numbers a new voucher from its kind's series; returns its id. */
+  saveVoucher: (voucher: Voucher) => string;
+  removeVoucher: (id: string) => void;
+  saveCostCentre: (centre: CostCentre) => void;
+  removeCostCentre: (id: string) => void;
 
   /* inventory */
   addStockMovement: (m: Omit<StockMovement, 'id' | 'createdAt' | 'createdBy'>) => void;
@@ -211,7 +255,12 @@ export type NewDocumentInput = {
   terms?: string;
   reference?: string;
   supplierDocNumber?: string;
+  billOfEntry?: BusinessDocument['billOfEntry'];
+  isdInvoice?: boolean;
   placeOfSupplyStateCode?: string;
+  reverseCharge?: boolean;
+  noteReason?: BusinessDocument['noteReason'];
+  tdsSection?: string;
   branchId?: string;
   attachmentIds?: string[];
   sourceDocumentId?: string;
@@ -307,8 +356,15 @@ function starterExpenseCategories(companyId: string): ExpenseCategory[] {
   return defaultExpenseCategories(companyId).map((c) => ({ ...c, id: uid('exc') }));
 }
 
-/** Where the store persists on the device. */
+/** Where the store persisted before it moved to per-collection storage; read once to move it over. */
 const PERSIST_KEY = 'ebs.remote.v1';
+
+/** Tells this browser's other tabs which collections changed (IndexedDB writes raise no `storage` event). */
+let channel: BroadcastChannel | null | undefined;
+export function bookChannel(): BroadcastChannel | null {
+  if (channel === undefined) channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('ebs.book');
+  return channel;
+}
 
 /**
  * Builds before the app went API-only kept a bundled demo dataset under its
@@ -387,25 +443,48 @@ export const useAppStore = create<AppState>()(
             placeOfSupply: doc.placeOfSupplyStateCode,
             party: s.parties.find((p) => p.id === doc.partyId),
             date: doc.date,
-            purchase: ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'].includes(doc.kind),
+            purchase: PURCHASE_KINDS.includes(doc.kind),
+            branch: s.branches.find((b) => b.id === doc.branchId),
+            reverseCharge: doc.reverseCharge,
           }),
         });
       };
+
+      const computeTds = (doc: BusinessDocument) =>
+        tdsForDocument(doc, { company: companyOf(doc.companyId), parties: get().parties, documents: get().documents });
 
       /**
        * Re-derive paid / partly paid / unpaid for documents whose allocations
        * changed. Any positive allocation short of the total is a valid
        * partial settlement.
        */
+      /** A receipt's advance and refund list after a refund out of it changed by `delta` (more paid back is positive). */
+      const moveRefund = (receiptId: string, refund: Payment, delta: number) => {
+        set({
+          payments: get().payments.map((p) => {
+            if (p.id !== receiptId) return p;
+            const others = (p.refunds ?? []).filter((r) => r.paymentId !== refund.id);
+            const kept = get().payments.some((x) => x.id === refund.id);
+            return {
+              ...p,
+              unallocated: { ...p.unallocated, minor: p.unallocated.minor - delta },
+              refunds: kept ? [...others, { paymentId: refund.id, number: refund.number, date: refund.date, amount: refund.amount }] : others,
+            };
+          }),
+        });
+      };
+
       const refreshPaymentStatuses = (affected: Set<string>) => {
         if (!affected.size) return;
         const allocations = get().payments.flatMap((p) => p.allocations);
+        const documents = get().documents;
         set({
-          documents: get().documents.map((d) => {
-            if (!affected.has(d.id)) return d;
+          documents: documents.map((d) => {
+            if (!affected.has(d.id) || !isFinalized(d.status) || d.status === 'cancelled' || d.status === 'rejected') return d;
+            // Returns and credit notes against it settle it too, as on the server.
             const allocated = allocations
               .filter((a) => a.documentId === d.id)
-              .reduce((acc, a) => acc + a.amount.minor, 0);
+              .reduce((acc, a) => acc + settledBy(a), 0) + creditedTo(d.id, documents);
             const outstanding = d.totals.grandTotal.minor - allocated;
             const status: DocStatus =
               outstanding <= 0
@@ -544,15 +623,8 @@ export const useAppStore = create<AppState>()(
             gstin: partial.taxRegistration?.registered ? partial.taxRegistration.identifier : undefined,
             isPrimary: true,
           };
-          const kinds: NumberingSeries['kind'][] = [
-            'invoice', 'quote', 'salesOrder', 'delivery', 'salesReturn',
-            'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense',
-          ];
-          const prefixes: Record<string, string> = {
-            invoice: 'INV', quote: 'QT', salesOrder: 'SO', delivery: 'DN', salesReturn: 'CRN',
-            purchaseOrder: 'PO', goodsReceipt: 'GRN', purchaseBill: 'BILL', purchaseReturn: 'DRN',
-            payment: 'PAY', expense: 'EXP',
-          };
+          const kinds = SERIES_KINDS;
+          const prefixes = DEFAULT_PREFIXES;
           const series: NumberingSeries[] = kinds.map((kind) => ({
             id: uid('series'),
             companyId: id,
@@ -684,6 +756,25 @@ export const useAppStore = create<AppState>()(
           });
         },
         removeExpenseCategory: (id) => set({ expenseCategories: get().expenseCategories.filter((c) => c.id !== id) }),
+        // A book saved before these existed has no list yet.
+        saveItemCategory: (cat) => {
+          const list = get().itemCategories ?? [];
+          const exists = list.some((c) => c.id === cat.id);
+          set({ itemCategories: exists ? list.map((c) => (c.id === cat.id ? cat : c)) : [...list, cat] });
+        },
+        removeItemCategory: (id) => set({ itemCategories: (get().itemCategories ?? []).filter((c) => c.id !== id) }),
+        saveBrand: (brand) => {
+          const list = get().brands ?? [];
+          const exists = list.some((b) => b.id === brand.id);
+          set({ brands: exists ? list.map((b) => (b.id === brand.id ? brand : b)) : [...list, brand] });
+        },
+        removeBrand: (id) => set({ brands: (get().brands ?? []).filter((b) => b.id !== id) }),
+        saveCustomField: (field) => {
+          const list = get().customFields ?? [];
+          const exists = list.some((f) => f.id === field.id);
+          set({ customFields: exists ? list.map((f) => (f.id === field.id ? field : f)) : [...list, field] });
+        },
+        removeCustomField: (id) => set({ customFields: (get().customFields ?? []).filter((f) => f.id !== id) }),
         savePaymentAccount: (acc) => {
           const exists = get().paymentAccounts.some((a) => a.id === acc.id);
           const next = exists
@@ -726,7 +817,8 @@ export const useAppStore = create<AppState>()(
           const s = get();
           const status = draft.status ?? initialStatus(draft.kind);
           const finalized = isFinalized(status);
-          const number = finalized ? consumeSeriesNumber(draft.kind, draft.date) : `${draft.kind.toUpperCase()}-DRAFT`;
+          // Opening invoices and bills are only ever imported by the server, never made here.
+          const number = finalized ? consumeSeriesNumber(draft.kind as SeriesDocumentKind, draft.date) : `${draft.kind.toUpperCase()}-DRAFT`;
           const party = s.parties.find((p) => p.id === draft.partyId);
 
           const doc: BusinessDocument = {
@@ -742,6 +834,8 @@ export const useAppStore = create<AppState>()(
             validUntil: draft.validUntil,
             reference: draft.reference,
             supplierDocNumber: draft.supplierDocNumber,
+            billOfEntry: draft.billOfEntry,
+            isdInvoice: draft.isdInvoice,
             currency: draft.currency,
             exchangeRate: draft.exchangeRate,
             lines: draft.lines,
@@ -751,6 +845,9 @@ export const useAppStore = create<AppState>()(
             applyRoundOff: draft.applyRoundOff ?? draft.currency === 'INR',
             roundOffManual: draft.roundOffManual,
             placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress?.stateCode,
+            reverseCharge: draft.reverseCharge,
+            noteReason: draft.noteReason,
+            tdsSection: draft.tdsSection,
             notes: draft.notes,
             terms: draft.terms,
             attachmentIds: draft.attachmentIds ?? [],
@@ -772,9 +869,13 @@ export const useAppStore = create<AppState>()(
             updatedAt: nowISO(),
           };
           doc.totals = computeTotals(doc);
+          doc.tds = computeTds(doc);
 
           set({ documents: [doc, ...get().documents] });
           if (finalized) postStockFor(doc);
+          if (finalized && doc.sourceDocumentId && CREDIT_KINDS.includes(doc.kind)) {
+            refreshPaymentStatuses(new Set([doc.sourceDocumentId]));
+          }
           audit(finalized ? 'finalized' : 'created', draft.kind, doc.id, doc.number);
           return doc.id;
         },
@@ -784,6 +885,7 @@ export const useAppStore = create<AppState>()(
           if (!existing) return;
           const merged = { ...existing, ...patch, updatedAt: nowISO() };
           merged.totals = computeTotals(merged);
+          merged.tds = computeTds(merged);
           set({ documents: get().documents.map((d) => (d.id === id ? merged : d)) });
           const partyName = (pid: string) => get().parties.find((p) => p.id === pid)?.name;
           audit('updated', existing.kind, id, merged.number, {
@@ -803,13 +905,18 @@ export const useAppStore = create<AppState>()(
           const existing = get().documents.find((d) => d.id === id);
           if (!existing) return;
           let number = existing.number;
-          if (!isFinalized(existing.status) && isFinalized(status)) {
-            number = consumeSeriesNumber(existing.kind, existing.date);
+          // A draft withdrawn never takes a number from the series.
+          if (!isFinalized(existing.status) && isFinalized(status) && status !== 'cancelled') {
+            number = consumeSeriesNumber(existing.kind as SeriesDocumentKind, existing.date);
           }
           const updated = { ...existing, status, number, updatedAt: nowISO() };
           set({ documents: get().documents.map((d) => (d.id === id ? updated : d)) });
           if (isFinalized(status)) postStockFor(updated);
           audit(`marked ${status}`, existing.kind, id, number);
+          // A return or credit note going live (or void) changes what its source owes.
+          if (existing.sourceDocumentId && CREDIT_KINDS.includes(existing.kind)) {
+            refreshPaymentStatuses(new Set([existing.sourceDocumentId]));
+          }
 
           if (existing.kind === 'invoice' && status === 'sent') {
             notify('invoiceSent', 'Invoice sent', `${number} was shared with the customer.`, 'invoice', id);
@@ -822,7 +929,7 @@ export const useAppStore = create<AppState>()(
           const target: DocStatus =
             existing.kind === 'salesReturn' || existing.kind === 'purchaseReturn'
               ? 'approved'
-              : existing.kind === 'quote'
+              : existing.kind === 'quote' || existing.kind === 'proforma'
                 ? 'sent'
                 : existing.kind === 'salesOrder' || existing.kind === 'purchaseOrder'
                   ? 'confirmed'
@@ -863,6 +970,7 @@ export const useAppStore = create<AppState>()(
             notes: src.notes,
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
+            reverseCharge: src.reverseCharge,
             branchId: src.branchId,
             status: initialStatus(src.kind),
           });
@@ -878,7 +986,7 @@ export const useAppStore = create<AppState>()(
             partyId: src.partyId,
             date: today(),
             dueDate:
-              target === 'invoice' || target === 'purchaseBill'
+              isPayableDocument(target)
                 ? new Date(Date.now() + (party?.paymentTermsDays ?? 30) * 86400000).toISOString().slice(0, 10)
                 : undefined,
             currency: src.currency,
@@ -895,6 +1003,7 @@ export const useAppStore = create<AppState>()(
             notes: src.notes,
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
+            reverseCharge: src.reverseCharge,
             branchId: src.branchId,
             sourceDocumentId: src.id,
             // A return starts as requested, not draft, or it has no way forward to post.
@@ -922,6 +1031,8 @@ export const useAppStore = create<AppState>()(
               ? get().payments.map((p) => (p.id === payment.id ? withNumber : p))
               : [withNumber, ...get().payments],
           });
+          // A refund comes out of the advance on the receipt it pays back, as the server will have it.
+          if (withNumber.refundOf) moveRefund(withNumber.refundOf, withNumber, withNumber.amount.minor - (previous?.amount.minor ?? 0));
 
           // Refresh the status of every invoice/bill this payment touches —
           // including ones an edit removed it from.
@@ -940,6 +1051,7 @@ export const useAppStore = create<AppState>()(
           const p = get().payments.find((x) => x.id === id);
           if (!p) return;
           set({ payments: get().payments.filter((x) => x.id !== id) });
+          if (p.refundOf) moveRefund(p.refundOf, p, -p.amount.minor);
           refreshPaymentStatuses(new Set(p.allocations.map((a) => a.documentId)));
           audit('deleted payment', 'payment', id, p.number);
         },
@@ -996,6 +1108,36 @@ export const useAppStore = create<AppState>()(
           set({ expenses: get().expenses.filter((x) => x.id !== id) });
           if (e) audit('deleted', 'expense', id, e.number);
         },
+
+        /* ------------------------------------------------------------ */
+        /* books                                                        */
+        /* ------------------------------------------------------------ */
+        saveLedgerAccount: (account) => {
+          const exists = get().ledgerAccounts.some((a) => a.id === account.id);
+          set({ ledgerAccounts: exists ? get().ledgerAccounts.map((a) => (a.id === account.id ? account : a)) : [...get().ledgerAccounts, account] });
+        },
+        removeLedgerAccount: (id) => set({ ledgerAccounts: get().ledgerAccounts.filter((a) => a.id !== id) }),
+        saveVoucher: (voucher) => {
+          const exists = get().vouchers.some((v) => v.id === voucher.id);
+          // A draft's number is its id, as on the server; it takes one from the series when posted.
+          const draft = voucher.status === 'draft';
+          const unnumbered = !voucher.number || voucher.number === voucher.id;
+          const numbered = draft ? { ...voucher, number: voucher.number || voucher.id } : unnumbered ? { ...voucher, status: 'posted' as const, number: consumeSeriesNumber(voucher.kind, voucher.date) } : voucher;
+          set({ vouchers: exists ? get().vouchers.map((v) => (v.id === voucher.id ? numbered : v)) : [numbered, ...get().vouchers] });
+          audit(exists ? 'updated' : 'created', 'voucher', numbered.id, numbered.number);
+          return numbered.id;
+        },
+        removeVoucher: (id) => {
+          const v = get().vouchers.find((x) => x.id === id);
+          set({ vouchers: get().vouchers.filter((x) => x.id !== id) });
+          if (v) audit('deleted', 'voucher', id, v.number);
+        },
+        saveCostCentre: (centre) => {
+          const list = get().costCentres ?? [];
+          const exists = list.some((c) => c.id === centre.id);
+          set({ costCentres: exists ? list.map((c) => (c.id === centre.id ? centre : c)) : [...list, centre] });
+        },
+        removeCostCentre: (id) => set({ costCentres: (get().costCentres ?? []).filter((c) => c.id !== id) }),
 
         /* ------------------------------------------------------------ */
         /* inventory                                                    */
@@ -1083,7 +1225,18 @@ export const useAppStore = create<AppState>()(
     {
       name: PERSIST_KEY,
       version: 5,
-      storage: createJSONStorage(() => AsyncStorage),
+      // One row per collection, encrypted on phones (bookStorage.ts); the old single entry moves over once.
+      storage: createBookStorage<AppState>({
+        backend: bookBackend,
+        legacy: AsyncStorage,
+        legacyKey: PERSIST_KEY,
+        onError: (err, during) => {
+          reportError(err, { source: `book.${during}` });
+          // Shown on the Sync screen: the change is still here in memory and in the queue.
+          if (during === 'write') useRemoteMeta.getState().patch({ lastError: i18nInstance.t('settings:sync.storageFull') });
+        },
+        onWritten: (keys) => bookChannel()?.postMessage({ keys }),
+      }),
       partialize: (s) => {
         const { hydrated, ...rest } = s;
         void hydrated;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import LixiChat from '@esmart/app/screens/(app)/lixi';
@@ -12,12 +13,15 @@ import { LIXI_PANEL_WIDTH, closeLixiPanel, lixiPanelWidth, useLixiPanel } from '
  */
 export function LixiPanel() {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const { open, ask, nonce } = useLixiPanel();
   return (
     <Animated.View
       // Shut, the chat is out of reach of the keyboard and screen readers too.
       pointerEvents={open ? 'auto' : 'none'}
       aria-hidden={!open}
+      role="complementary"
+      aria-label={tr('nav:shell.assistant')}
       style={{
         width: lixiPanelWidth,
         overflow: 'hidden',

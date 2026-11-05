@@ -5,9 +5,12 @@ import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { StatusBadge } from './Badge';
 import { Avatar } from './Avatar';
-import { BusinessDocument } from '@esmart/core/types';
+import type { BusinessDocument } from '@esmart/core/types';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
+
+/** What a row shows: a whole document, or a server list's summary of one. */
+export type DocumentRowData = Pick<BusinessDocument, 'number' | 'date' | 'status'> & { totals: Pick<BusinessDocument['totals'], 'grandTotal'> };
 
 export function DocumentRow({
   document,
@@ -16,7 +19,7 @@ export function DocumentRow({
   outstandingLabel,
   divider = true,
 }: {
-  document: BusinessDocument;
+  document: DocumentRowData;
   partyName: string;
   onPress?: () => void;
   outstandingLabel?: string;

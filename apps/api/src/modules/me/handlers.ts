@@ -111,6 +111,17 @@ export const meHandlers = defineHandlers({
     return undefined;
   },
 
+  async getNotificationPreferences(ctx) {
+    const [row] = await ctx.db.select({ pushMuted: U.pushMuted }).from(U).where(eq(U.id, ctx.user.id));
+    return { pushMuted: (row?.pushMuted ?? []) as never };
+  },
+
+  async saveNotificationPreferences(ctx) {
+    const pushMuted = [...new Set(ctx.body.pushMuted)];
+    await ctx.db.update(U).set({ pushMuted, updatedAt: ctx.now }).where(eq(U.id, ctx.user.id));
+    return { pushMuted };
+  },
+
   /** A token that moves to another user (a handed-over phone) follows the new user. */
   async registerPushToken(ctx) {
     const token = ctx.body.token.trim();

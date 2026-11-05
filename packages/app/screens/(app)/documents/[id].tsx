@@ -9,6 +9,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
+import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { documentKindLabel } from '@esmart/core/labels';
 import {
   useActiveCompany,
@@ -22,6 +23,9 @@ import { HtmlPreview, printHtml } from '../../../features/documents/HtmlPreview'
 import { deliverFile } from '../../../features/reports/exportFiles';
 import { documentPdf, pdfFileName } from '../../../remote/documents';
 import { describeError } from '../../../remote/errors';
+import { useDocumentRecord } from '../../../remote/queries';
+import { LoadingView } from '../../../components/LoadingView';
+import { useAppStore } from '../../../store/appStore';
 
 export default function DocumentPreview() {
   const t = useTheme();
@@ -32,13 +36,19 @@ export default function DocumentPreview() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const doc = useDocument(id);
+  const remote = useDocumentRecord(id);
   const company = useActiveCompany();
+  const sourceId = doc && NOTE_SOURCE[doc.kind] ? doc.sourceDocumentId : undefined;
+  // A note prints the invoice or bill it is against: fetched too, in case the device doesn't hold it.
+  useDocumentRecord(sourceId);
+  const source = useDocument(sourceId);
   const party = useParty(doc?.partyId);
   const branches = useBranches();
   const ewayBill = useActiveEwayBill(doc?.id);
   const [busy, setBusy] = useState(false);
   const desktop = useIsDesktop();
 
+  const customFields = useAppStore((s) => s.customFields);
   const html = useMemo(
     () =>
       doc
@@ -50,14 +60,17 @@ export default function DocumentPreview() {
             party,
             branch: branches.find((b) => b.id === doc.branchId),
             ewayBill,
+            source,
+            customFields,
           })
         : '',
-    [doc, company, party, branches, ewayBill, tr, language],
+    [doc, company, party, branches, ewayBill, source, customFields, tr, language],
   );
 
+  if (!doc && remote.isLoading) return <LoadingView title={tr('nav:title.preview')} />;
   if (!doc) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.preview') }} />
         <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} message={tr('common:notFound.document')} />
       </View>
@@ -91,7 +104,7 @@ export default function DocumentPreview() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      <Stack.Screen options={{ title: `${label} preview` }} />
+      <Stack.Screen options={{ title: tr('nav:title.documentPreview', { kind: label }) }} />
 
       {desktop ? (
         // A desktop shows the page as a sheet of paper on the canvas.

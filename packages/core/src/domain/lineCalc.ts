@@ -18,7 +18,7 @@ import {
   TaxComponent,
   TaxLine,
 } from '../types';
-import { TaxContext, splitTax } from './taxEngine';
+import { TaxContext, cessComponent, splitTax } from './taxEngine';
 
 export type LineCalcInput = {
   lines: DocumentLine[];
@@ -43,10 +43,37 @@ export type LineBreakdown = {
   /** Amount the tax is charged on. */
   taxable: Money;
   taxRate: number;
+  cessRate: number;
+  /** GST and cess on the line, reverse-charge tax included. */
   taxAmount: Money;
-  /** taxable + tax */
+  /** The buyer pays this line's tax to the government; it isn't in `total`. */
+  reverseCharge: boolean;
+  /** A pure-agent reimbursement: no tax, outside the taxable value. */
+  reimbursement: boolean;
+  /** taxable + tax charged on the document */
   total: Money;
 };
+
+/**
+ * The GST treatment of one line in this context: which rates apply, and whether the tax is
+ * charged on the document or paid by the buyer under reverse charge.
+ */
+export function lineTreatment(line: DocumentLine, ctx: TaxContext) {
+  const g = line.gst ?? {};
+  const reimbursement = !!g.reimbursement;
+  const taxable = !reimbursement && (g.supplyType ?? 'taxable') === 'taxable';
+  const reverseCharge = taxable && (!!ctx.reverseCharge || !!g.reverseCharge);
+  // Reverse charge is self-assessed, imports of services included (IGST, s.5(3) IGST Act).
+  const effective: TaxContext = reverseCharge ? { ...ctx, zeroRated: false, composition: false } : ctx;
+  const charges = taxable && effective.registered && !effective.zeroRated && !effective.composition;
+  return {
+    reimbursement,
+    reverseCharge,
+    ctx: effective,
+    rate: charges ? line.taxRate : 0,
+    cessRate: charges ? (g.cessRate ?? 0) : 0,
+  };
+}
 
 function discountOf(base: Money, mode: DiscountMode, value: number): Money {
   if (!value || value <= 0) return zero(base.currency);
@@ -66,17 +93,20 @@ export function calculateLine(line: DocumentLine, currency: string, ctx: TaxCont
   const gross = multiply(money(line.unitPrice.minor, currency), line.quantity);
   const discount = discountOf(gross, line.discountMode, line.discountValue);
   const net = subtract(gross, discount);
+  const t = lineTreatment(line, ctx);
+  const combined = t.rate + t.cessRate;
 
   let taxable: Money;
   let taxAmount: Money;
 
-  if (line.taxInclusive && line.taxRate > 0) {
+  // Reverse-charge tax is never inside the supplier's price.
+  if (line.taxInclusive && combined > 0 && !t.reverseCharge) {
     // The entered price already contains the tax: strip it back out.
-    taxAmount = inclusiveTax(net, line.taxRate);
+    taxAmount = inclusiveTax(net, combined);
     taxable = subtract(net, taxAmount);
   } else {
     taxable = net;
-    taxAmount = ctx.registered ? percent(net, line.taxRate) : zero(currency);
+    taxAmount = add(percent(net, t.rate), percent(net, t.cessRate));
   }
 
   return {
@@ -84,9 +114,12 @@ export function calculateLine(line: DocumentLine, currency: string, ctx: TaxCont
     gross,
     discount,
     taxable,
-    taxRate: line.taxRate,
+    taxRate: t.rate,
+    cessRate: t.cessRate,
     taxAmount,
-    total: add(taxable, taxAmount),
+    reverseCharge: t.reverseCharge,
+    reimbursement: t.reimbursement,
+    total: t.reverseCharge ? taxable : add(taxable, taxAmount),
   };
 }
 
@@ -112,49 +145,54 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
   } = input;
 
   const breakdowns = lines.map((l) => calculateLine(l, currency, taxContext));
+  // Reimbursements are recovered at cost, after tax: outside the subtotal, discounts and taxable value.
+  const supplies = breakdowns.filter((b) => !b.reimbursement);
 
-  const subtotal = sum(breakdowns.map((b) => b.gross), currency);
-  const lineDiscount = sum(breakdowns.map((b) => b.discount), currency);
-  const taxableAmount = sum(breakdowns.map((b) => b.taxable), currency);
+  const subtotal = sum(supplies.map((b) => b.gross), currency);
+  const lineDiscount = sum(supplies.map((b) => b.discount), currency);
+  const taxableAmount = sum(supplies.map((b) => b.taxable), currency);
+  const reimbursements = sum(breakdowns.filter((b) => b.reimbursement).map((b) => b.taxable), currency);
 
-  // Group tax by rate so the document shows one row per slab.
-  const groups = new Map<string, { rate: number; taxable: Money; categoryId: string }>();
+  // Group tax by rate so the document shows one row per slab; reverse charge in rows of its own.
+  const groups = new Map<string, { rate: number; cessRate: number; reverseCharge: boolean; taxable: Money; categoryId: string; ctx: TaxContext }>();
   lines.forEach((line, i) => {
     const b = breakdowns[i];
-    if (b.taxRate <= 0) return;
-    const key = `${line.taxCategoryId}:${b.taxRate}`;
+    if (b.taxRate <= 0 && b.cessRate <= 0) return;
+    const key = `${line.taxCategoryId}:${b.taxRate}:${b.cessRate}:${b.reverseCharge ? 'rcm' : ''}`;
     const existing = groups.get(key);
     if (existing) {
       existing.taxable = add(existing.taxable, b.taxable);
     } else {
-      groups.set(key, { rate: b.taxRate, taxable: b.taxable, categoryId: line.taxCategoryId });
+      const ctx = lineTreatment(line, taxContext).ctx;
+      groups.set(key, { rate: b.taxRate, cessRate: b.cessRate, reverseCharge: b.reverseCharge, taxable: b.taxable, categoryId: line.taxCategoryId, ctx });
     }
   });
 
   const taxLines: TaxLine[] = [];
-  groups.forEach((g, key) => {
+  groups.forEach((g) => {
     const category = input.taxCategories.find((c) => c.id === g.categoryId);
-    const components: TaxComponent[] = splitTax(g.taxable, g.rate, taxContext);
+    const components: TaxComponent[] = [...splitTax(g.taxable, g.rate, g.ctx), ...cessComponent(g.taxable, g.cessRate, g.ctx)];
     const totalTax = sum(components.map((c) => c.amount), currency);
     taxLines.push({
       categoryId: g.categoryId,
       categoryName: category?.name ?? `${g.rate}%`,
       rate: g.rate,
+      ...(g.reverseCharge ? { reverseCharge: true } : {}),
       taxableAmount: g.taxable,
       components,
       totalTax,
     });
-    void key;
   });
-  taxLines.sort((a, b) => a.rate - b.rate);
+  taxLines.sort((a, b) => Number(!!a.reverseCharge) - Number(!!b.reverseCharge) || a.rate - b.rate);
 
-  const totalTax = sum(taxLines.map((t) => t.totalTax), currency);
+  const totalTax = sum(taxLines.filter((t) => !t.reverseCharge).map((t) => t.totalTax), currency);
+  const reverseChargeTax = sum(taxLines.filter((t) => t.reverseCharge).map((t) => t.totalTax), currency);
 
   const afterTax = add(taxableAmount, totalTax);
   const documentDiscount = discountOf(afterTax, documentDiscountMode, documentDiscountValue);
 
   const chargesInCurrency = money(charges.minor, currency);
-  const beforeRounding = add(subtract(afterTax, documentDiscount), chargesInCurrency);
+  const beforeRounding = add(add(subtract(afterTax, documentDiscount), reimbursements), chargesInCurrency);
 
   const manual = roundOffManual ? money(roundOffManual.minor, currency) : undefined;
   const { rounded, adjustment } = !applyRoundOff
@@ -175,6 +213,8 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
     taxableAmount,
     taxLines,
     totalTax,
+    reverseChargeTax,
+    reimbursements,
     charges: chargesInCurrency,
     roundOff: adjustment,
     grandTotal: rounded,
@@ -185,7 +225,7 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
 /** Flatten the per-rate tax lines into one row per legal component. */
 export function flattenTaxComponents(taxLines: TaxLine[], currency: string): TaxComponent[] {
   const byLabel = new Map<string, TaxComponent>();
-  taxLines.forEach((tl) => {
+  taxLines.filter((tl) => !tl.reverseCharge).forEach((tl) => {
     tl.components.forEach((c) => {
       const existing = byLabel.get(c.label);
       if (existing) {

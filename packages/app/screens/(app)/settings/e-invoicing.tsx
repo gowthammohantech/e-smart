@@ -9,7 +9,6 @@ import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
-import { useToast } from '@esmart/ui/components/Toast';
 import { ComplianceSettings, TransportMode, VehicleType } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { compliance } from '../../../remote';
@@ -18,13 +17,14 @@ import { useActiveCompany, useBaseCurrency, useComplianceSettings, useCompliance
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['compliance', 'nav', 'auth', 'settings']);
   const router = useRouter();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   // Always false in the native apps, so the desktop header action only ever reaches a browser.
   const desktop = useIsDesktop();
 
@@ -121,28 +121,28 @@ export default function EInvoicingSettings() {
       .finally(() => setCredBusy(null));
   };
 
-  const onSave = () => {
-    save({
+  const onSave = async () => {
+    const settings = {
       ...draft,
       annualTurnover: fromMajor(turnover || '0', currency),
       eInvoiceTurnoverThreshold: fromMajor(threshold || '0', currency),
       ewayBillThreshold: fromMajor(ewayThreshold || '0', currency),
-    });
-    toast.show(tr('compliance:settings.saved'), 'success', { icon: 'shield-check-outline' });
+    };
+    await serverSave(() => save(settings), tr('compliance:settings.saved'), { icon: 'shield-check-outline' });
   };
 
   // Ctrl+S (⌘+S) does what Save does.
   useSaveShortcut(onSave);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={
           desktop
             ? // A desktop puts Save with the page title, top right, instead of a bar at the bottom.
               {
                 title: tr('nav:title.eInvoicingAndEWayBill'),
-                headerRight: () => <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} />,
+                headerRight: () => <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} loading={saving} disabled={saving} />,
               }
             : { title: tr('nav:title.eInvoicingAndEWayBill') }
         }
@@ -356,7 +356,7 @@ export default function EInvoicingSettings() {
             backgroundColor: t.c.paper,
           }}
         >
-          <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} fullWidth />
+          <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} loading={saving} disabled={saving} fullWidth />
         </View>
       )}
     </View>

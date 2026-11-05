@@ -15,28 +15,27 @@ import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/compo
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { today } from '@esmart/core/lib/date';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
 import { PaymentAccount } from '@esmart/core/types';
-import { accountBalances } from '@esmart/core/domain/paymentAccounts';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBaseCurrency, useExpenses, usePaymentAccounts, usePayments } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, usePaymentAccounts } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 export default function AccountSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const accounts = usePaymentAccounts();
-  const payments = usePayments();
-  const expenses = useExpenses();
+  const usage = useCompanyUsage().data;
   const savePaymentAccount = useAppStore((s) => s.savePaymentAccount);
   const removePaymentAccount = useAppStore((s) => s.removePaymentAccount);
 
@@ -46,7 +45,8 @@ export default function AccountSettings() {
   const [type, setType] = useState<PaymentAccount['type']>('bank');
   const [accountNumber, setAccountNumber] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
-  const [openingBalanceDate, setOpeningBalanceDate] = useState(today());
+  // Blank: the balance stands at the start of the books. A date: it stands on that day.
+  const [openingBalanceDate, setOpeningBalanceDate] = useState<string | undefined>(undefined);
   const [isDefault, setIsDefault] = useState(false);
   const typeLabels: Record<PaymentAccount['type'], string> = {
     bank: tr('settings:accounts.typeBank'),
@@ -55,13 +55,17 @@ export default function AccountSettings() {
   };
 
   /** Running balance: opening + money in − money out − expenses paid from it. */
-  const balances = useMemo(() => accountBalances(accounts, payments, expenses), [accounts, payments, expenses]);
+  // From the server, which has every payment, expense and voucher; a new account starts at its opening.
+  const balances = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, usage?.paymentAccounts[a.id]?.balance.minor ?? Math.round(a.openingBalance.minor * (a.openingRate ?? 1))])) as Record<string, number>,
+    [accounts, usage],
+  );
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
 
   // Once money has gone through an account it stays, and so does its type: past
   // payments used methods the type allows. The server refuses both too.
-  const inUse = !!editing?.id && (payments.some((p) => p.accountId === editing.id) || expenses.some((e) => e.accountId === editing.id));
+  const inUse = !!editing?.id && (usage?.paymentAccounts[editing.id]?.inUse ?? true);
 
   const open = (a?: PaymentAccount) => {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', type: 'bank', currency: baseCurrency, openingBalance: money(0, baseCurrency), isDefault: false } as PaymentAccount));
@@ -69,13 +73,13 @@ export default function AccountSettings() {
     setType(a?.type ?? 'bank');
     setAccountNumber(a?.accountNumber ?? '');
     setOpeningBalance(a ? String(toMajor(a.openingBalance)) : '');
-    setOpeningBalanceDate(a?.openingBalanceDate ?? today());
+    setOpeningBalanceDate(a?.openingBalanceDate);
     setIsDefault(a?.isDefault ?? false);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!editing || !name.trim()) return;
-    savePaymentAccount({
+    const account = {
       ...editing,
       id: editing.id || uid('acc'),
       companyId: company.id,
@@ -86,16 +90,21 @@ export default function AccountSettings() {
       openingBalance: fromMajor(openingBalance || '0', baseCurrency),
       openingBalanceDate,
       isDefault,
-    });
-    toast.show(editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'), 'success', { icon: 'bank-check' });
-    setEditing(null);
+    };
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(
+      () => savePaymentAccount(account),
+      editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'),
+      { icon: 'bank-check' },
+    );
+    if (res) setEditing(null);
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
   useSaveShortcut(save, !!editing);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.paymentAccounts') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -152,7 +161,7 @@ export default function AccountSettings() {
                 }}
               />
             ) : null}
-            <Button shortcut="S" title={tr('settings:accounts.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:accounts.save')} onPress={save} loading={saving} disabled={!name.trim() || saving} style={{ flex: 2 }} />
           </View>
         }
       >
@@ -175,14 +184,22 @@ export default function AccountSettings() {
             <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
           ) : null}
           <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
-          {/* The day the balance was counted; never a future day. */}
-          <DateField
-            label={tr('settings:accounts.openingBalanceDate')}
-            value={openingBalanceDate}
-            onChange={setOpeningBalanceDate}
-            maximumDate={new Date()}
-            hint={tr('settings:accounts.openingBalanceDateHint')}
+          {/* The day the balance was counted; never a future day. Off, it stands at the start of the books. */}
+          <SwitchField
+            label={tr('settings:accounts.openingOnDate')}
+            description={tr('settings:accounts.openingOnDateHint')}
+            value={!!openingBalanceDate}
+            onValueChange={(on) => setOpeningBalanceDate(on ? today() : undefined)}
           />
+          {openingBalanceDate ? (
+            <DateField
+              label={tr('settings:accounts.openingBalanceDate')}
+              value={openingBalanceDate}
+              onChange={setOpeningBalanceDate}
+              maximumDate={new Date()}
+              hint={tr('settings:accounts.openingBalanceDateHint')}
+            />
+          ) : null}
           <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />
         </View>
       </Sheet>
@@ -195,9 +212,9 @@ export default function AccountSettings() {
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
-          if (confirmDelete) removePaymentAccount(confirmDelete.id);
+          const a = confirmDelete;
           setConfirmDelete(null);
-          toast.show(tr('settings:accounts.deleted'), 'success', { icon: 'bank-remove' });
+          if (a) void serverSave(() => removePaymentAccount(a.id), tr('settings:accounts.deleted'), { icon: 'bank-remove' });
         }}
       />
     </View>

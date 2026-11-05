@@ -2,9 +2,19 @@ import type { Schema } from '@esmart/api-contract';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
 import type { Item } from '@esmart/core/types';
 import type { schema } from '@esmart/db';
-import { compact, money, versioned } from '../../lib/wire';
+import { compact, gstColumns, gstFlagsFrom, money, versioned } from '../../lib/wire';
 
 type ItemRow = typeof schema.items.$inferSelect;
+type ItemCategoryRow = typeof schema.itemCategories.$inferSelect;
+type BrandRow = typeof schema.brands.$inferSelect;
+
+export function itemCategoryToWire(row: ItemCategoryRow): Schema<'ItemCategory'> {
+  return { id: row.id, companyId: row.companyId, name: row.name, color: row.color, ...versioned(row) };
+}
+
+export function brandToWire(row: BrandRow): Schema<'Brand'> {
+  return { id: row.id, companyId: row.companyId, name: row.name, ...versioned(row) };
+}
 
 /** `imageUri` is a short-lived signed URL, so the caller resolves it. */
 export function itemToWire(row: ItemRow, imageUri?: string): Schema<'Item'> {
@@ -23,10 +33,14 @@ export function itemToWire(row: ItemRow, imageUri?: string): Schema<'Item'> {
     hsnCode: row.hsnCode,
     barcode: row.barcode,
     trackInventory: row.trackInventory,
+    gst: gstFlagsFrom(row),
     openingStock: Number(row.openingStock),
     openingStockDate: row.openingStockDate,
     reorderLevel: Number(row.reorderLevel),
     imageUri,
+    categoryId: row.categoryId,
+    brandId: row.brandId,
+    customFields: row.customFields as Record<string, unknown>,
     status: row.status,
     ...versioned(row),
   });
@@ -52,7 +66,10 @@ export function itemColumns(body: Schema<'Item'>, currency: string) {
     taxCategoryId: body.taxCategoryId,
     barcode: body.barcode?.trim() || null,
     trackInventory: body.trackInventory ?? body.type === 'goods',
+    ...gstColumns(body.gst),
     reorderLevel: String(body.reorderLevel ?? 0),
+    categoryId: body.categoryId || null,
+    brandId: body.brandId || null,
     status: body.status ?? 'active',
   };
 }

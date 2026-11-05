@@ -7,6 +7,19 @@ import { joinTeam } from './team-helpers';
 const t = setupApi();
 
 describe('notifications', () => {
+  it('pushes nothing for a change that rolled back', async () => {
+    const { token, company } = await ownerWithCompany(t);
+    await t.post('/me/push-tokens', { token: 'ExponentPushToken[owner]', provider: 'expo' }, { token });
+    await expect(
+      t.deps.db.transaction(async (tx) => {
+        await notify(tx, t.deps, { companyId: company.id!, kind: 'system', title: 'Never', body: 'x' });
+        throw new Error('rolled back');
+      }),
+    ).rejects.toThrow('rolled back');
+    await t.runJobs();
+    expect(t.providers.outbox.messages.filter((m) => m.channel === 'push')).toHaveLength(0);
+  });
+
   it("shows company-wide and the caller's own notifications, not other people's", async () => {
     const { token, c, company, user } = await ownerWithCompany(t);
     const member = await joinTeam(t, token, { role: 'sales', companyIds: [company.id!] });
@@ -15,7 +28,10 @@ describe('notifications', () => {
     await notify(t.deps.db, t.deps, { companyId: company.id!, kind: 'system', title: 'Welcome', body: 'For everyone' });
     await notify(t.deps.db, t.deps, { companyId: company.id!, userId: user.id!, kind: 'paymentReceived', title: 'Paid', body: 'For the owner', entityType: 'payment', entityId: 'pay_1' });
     await notify(t.deps.db, t.deps, { companyId: company.id!, userId: member.user.id!, kind: 'lowStock', title: 'Low', body: 'For the member' });
-    expect(t.providers.outbox.messages.filter((m) => m.channel === 'push').map((m) => m.subject)).toEqual(['Welcome', 'Low']);
+    // Pushes go out from the job queue, after the change commits.
+    expect(t.providers.outbox.messages.filter((m) => m.channel === 'push')).toHaveLength(0);
+    await t.runJobs();
+    expect(t.providers.outbox.messages.filter((m) => m.channel === 'push').map((m) => m.subject).sort()).toEqual(['Low', 'Welcome']);
 
     const mine = await t.get(`${c}/notifications`, { token });
     expect(mine.body.data.map((n: { title: string }) => n.title).sort()).toEqual(['Paid', 'Welcome']);

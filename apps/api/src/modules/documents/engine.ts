@@ -1,19 +1,26 @@
-import { and, desc, eq, inArray, lte } from 'drizzle-orm';
-import { PURCHASE_KINDS, initialStatus } from '@esmart/core/domain/documentStates';
+import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
+import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
+import type { CustomValues } from '@esmart/core/domain/customFields';
+import { cleanCustomValues } from '../settings/customFields';
+import { bankDetailsOf } from '../companies/wire';
+import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
+import { NOTE_KINDS, PURCHASE_KINDS, initialStatus, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
-import type { Company, DocumentKind, DocumentLine, DocumentTotals, Party, TaxCategory } from '@esmart/core/types';
+import type { Branch, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { CompanyRow } from '../../context';
-import { planUpgradeRequired, unprocessable, type Issue } from '../../http/errors';
+import { conflict, planUpgradeRequired, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { iso, requiredAddressFrom } from '../../lib/wire';
+import { gstColumns, gstFlagsFrom, iso, requiredAddressFrom } from '../../lib/wire';
+import { tdsOn, tdsSectionFor } from '../../lib/tds';
+import { costCentreIssues } from '../books/costCentres';
 import { partyToWire } from '../parties/wire';
 
 export type DocRow = typeof schema.documents.$inferSelect;
@@ -56,9 +63,11 @@ export function companyCore(row: CompanyRow): Company {
       placeOfSupplyStateCode: row.placeOfSupplyStateCode ?? undefined,
       lutNumber: row.lutNumber ?? undefined,
       lutValidTill: row.lutValidTill ?? undefined,
+      returnFrequency: row.returnFrequency,
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     allowNegativeStock: row.allowNegativeStock,
+    bankDetails: bankDetailsOf(row),
     plan: row.plan,
     createdAt: iso(row.createdAt)!,
   };
@@ -66,6 +75,10 @@ export function companyCore(row: CompanyRow): Company {
 
 export function partyCore(row: PartyRow): Party {
   return { ...(partyToWire(row) as unknown as Party), id: row.id, companyId: row.companyId, code: row.code, createdAt: iso(row.createdAt)! };
+}
+
+function branchCore(row: typeof schema.branches.$inferSelect): Branch {
+  return { id: row.id, companyId: row.companyId, name: row.name, code: row.code, address: requiredAddressFrom(row, 'address'), gstin: row.gstin ?? undefined, isPrimary: row.isPrimary };
 }
 
 function taxCategoryCore(row: typeof schema.taxCategories.$inferSelect): TaxCategory {
@@ -114,6 +127,10 @@ export type LineInput = {
   taxInclusive: boolean;
   /** Kept on finalised documents; recomputed from the category on drafts. */
   taxRate?: number;
+  /** Sent with the line, or kept from the stored one; else the item's. */
+  gst?: GstFlags;
+  /** A reimbursement line: the billable expense it recovers. */
+  expenseId?: string | null;
 };
 
 /** The header of a document, after defaults are applied. */
@@ -126,6 +143,8 @@ export type DocFields = {
   validUntil: string | null;
   reference: string | null;
   supplierDocNumber: string | null;
+  billOfEntry: { number: string; date: string; portCode: string; assessableMinor: number; igstMinor: number; cessMinor: number } | null;
+  isdInvoice: boolean;
   currency: string;
   exchangeRate: number | null;
   documentDiscountMode: 'percent' | 'amount';
@@ -136,6 +155,13 @@ export type DocFields = {
   /** A round-off the user typed, in minor units of the document currency. */
   roundOffManualMinor: number | null;
   placeOfSupplyStateCode: string | null;
+  reverseCharge: boolean | null;
+  noteReason: NonNullable<DocRow['noteReason']> | null;
+  /** A TDS section, `none`, or unset for the supplier's own. */
+  tdsSection?: string;
+  costCentreId: string | null;
+  /** Undefined keeps what the document had. */
+  customFields?: Record<string, unknown>;
   notes: string | null;
   terms: string | null;
   sourceDocumentId: string | null;
@@ -156,6 +182,8 @@ export function linesFromWire(lines: Schema<'DocumentLine'>[]): LineInput[] {
     discountValue: l.discountValue ?? 0,
     taxCategoryId: l.taxCategoryId,
     taxInclusive: l.taxInclusive ?? false,
+    gst: l.gst,
+    expenseId: l.expenseId ?? null,
   }));
 }
 
@@ -176,6 +204,8 @@ export function linesFromRows(rows: LineRow[]): LineInput[] {
       taxCategoryId: l.taxCategoryId,
       taxInclusive: l.taxInclusive,
       taxRate: Number(l.taxRate),
+      gst: gstFlagsFrom(l) ?? {},
+      expenseId: l.expenseId,
     }));
 }
 
@@ -191,6 +221,11 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     validUntil: keep(body.validUntil, base?.validUntil),
     reference: keep(body.reference, base?.reference),
     supplierDocNumber: keep(body.supplierDocNumber, base?.supplierDocNumber),
+    billOfEntry:
+      body.billOfEntry !== undefined
+        ? body.billOfEntry && { number: body.billOfEntry.number.trim(), date: body.billOfEntry.date, portCode: body.billOfEntry.portCode.trim().toUpperCase(), assessableMinor: body.billOfEntry.assessableValue.minor, igstMinor: body.billOfEntry.igst.minor, cessMinor: body.billOfEntry.cess?.minor ?? 0 }
+        : ((base?.billOfEntry as DocFields['billOfEntry'] | undefined) ?? null),
+    isdInvoice: body.isdInvoice ?? base?.isdInvoice ?? false,
     currency: body.currency,
     exchangeRate: body.exchangeRate ?? (base && base.currency.trim() === body.currency ? Number(base.exchangeRate) : null),
     documentDiscountMode: body.documentDiscountMode ?? base?.documentDiscountMode ?? 'percent',
@@ -200,6 +235,12 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     applyRoundOff: body.applyRoundOff ?? base?.applyRoundOff ?? null,
     roundOffManualMinor: body.roundOffManual !== undefined ? body.roundOffManual.minor : (base?.roundOffManualMinor ?? null),
     placeOfSupplyStateCode: keep(body.placeOfSupplyStateCode, base?.placeOfSupplyStateCode),
+    reverseCharge: keep(body.reverseCharge, base?.reverseCharge),
+    noteReason: keep(body.noteReason, base?.noteReason),
+    // A stored document keeps what it had; a new one takes the supplier's section unless told otherwise.
+    tdsSection: body.tdsSection ?? (base ? (base.tdsSection ?? 'none') : undefined),
+    costCentreId: keep(body.costCentreId, base?.costCentreId),
+    customFields: (body.customFields as Record<string, unknown> | undefined) ?? (base?.customFields as Record<string, unknown> | undefined),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
     sourceDocumentId: keep(body.sourceDocumentId, base?.sourceDocumentId),
@@ -216,6 +257,8 @@ export function fieldsFromRow(row: DocRow): DocFields {
     validUntil: row.validUntil,
     reference: row.reference,
     supplierDocNumber: row.supplierDocNumber,
+    billOfEntry: (row.billOfEntry as DocFields['billOfEntry']) ?? null,
+    isdInvoice: row.isdInvoice,
     currency: row.currency.trim(),
     exchangeRate: Number(row.exchangeRate),
     documentDiscountMode: row.documentDiscountMode,
@@ -224,6 +267,11 @@ export function fieldsFromRow(row: DocRow): DocFields {
     applyRoundOff: row.applyRoundOff,
     roundOffManualMinor: row.roundOffManualMinor,
     placeOfSupplyStateCode: row.placeOfSupplyStateCode,
+    reverseCharge: row.reverseCharge,
+    noteReason: row.noteReason,
+    tdsSection: row.tdsSection ?? (row.finalizedAt ? 'none' : undefined),
+    costCentreId: row.costCentreId,
+    customFields: row.customFields as Record<string, unknown>,
     notes: row.notes,
     terms: row.terms,
     sourceDocumentId: row.sourceDocumentId,
@@ -231,6 +279,46 @@ export function fieldsFromRow(row: DocRow): DocFields {
 }
 
 // ------------------------------------------------------------ preparation
+
+/**
+ * Reimbursement lines recovering billable expenses (Rule 33): each on an invoice to the customer the
+ * expense is billed to, and recovered once. A draft holds nothing; a live document holds its expenses.
+ */
+async function checkRecoveredExpenses(db: DbOrTx, companyId: string, f: DocFields, lines: DocumentLine[], documentId: string | undefined, blocking: (field: string, message: string) => void) {
+  const linked = lines.map((l, i) => ({ id: l.expenseId, i, reimbursement: !!l.gst?.reimbursement })).filter((l): l is { id: string; i: number; reimbursement: boolean } => !!l.id);
+  if (!linked.length) return;
+  const E = schema.expenses;
+  const expenses = await db.select({ id: E.id, number: E.number, billable: E.billable, customerId: E.customerId }).from(E).where(and(eq(E.companyId, companyId), inArray(E.id, linked.map((l) => l.id))));
+  const seen = new Set<string>();
+  let wrong = false;
+  const block = (field: string, message: string) => {
+    wrong = true;
+    blocking(field, message);
+  };
+  for (const l of linked) {
+    const field = `lines[${l.i}].expenseId`;
+    const e = expenses.find((x) => x.id === l.id);
+    if (!e) block(field, 'No such expense in this company');
+    else if (f.kind !== 'invoice') block(field, 'Only an invoice recovers an expense');
+    else if (!l.reimbursement) block(field, 'A line recovering an expense is a reimbursement line');
+    else if (!e.billable) block(field, `${e.number} is not marked billable`);
+    else if (e.customerId && e.customerId !== f.partyId) block(field, `${e.number} is billed to another customer`);
+    else if (seen.has(e.id)) block(field, `${e.number} is on this invoice twice`);
+    seen.add(l.id);
+  }
+  if (wrong) return;
+  const L = schema.documentLines;
+  const [taken] = await db
+    .select({ number: D.number, expenseId: L.expenseId })
+    .from(L)
+    .innerJoin(D, eq(D.id, L.documentId))
+    .where(and(inArray(L.expenseId, linked.map((l) => l.id)), notInArray(D.status, ['draft', 'cancelled', 'rejected']), documentId ? ne(D.id, documentId) : undefined))
+    .limit(1);
+  if (taken) {
+    const e = expenses.find((x) => x.id === taken.expenseId);
+    throw conflict('EXPENSE_ALREADY_RECOVERED', `${e?.number ?? 'The expense'} is already recovered on ${taken.number}`);
+  }
+}
 
 export type Prepared = {
   /** Columns for `documents`, totals included. */
@@ -255,7 +343,7 @@ export async function prepareDocument(
   company: CompanyRow,
   f: DocFields,
   lines: LineInput[],
-  opts: { snapshotRates: boolean },
+  opts: { snapshotRates: boolean; documentId?: string },
 ): Promise<Prepared> {
   const issues: Issue[] = [];
   const blocking = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
@@ -264,17 +352,20 @@ export async function prepareDocument(
   const [party] = await db.select().from(schema.parties).where(and(eq(schema.parties.companyId, company.id), eq(schema.parties.id, f.partyId)));
   if (!party) blocking('partyId', 'No such party in this company');
   else {
-    const wanted = isPurchaseKind(f.kind) ? 'supplier' : 'customer';
-    if (party.kind !== wanted) blocking('partyId', `A ${f.kind} needs a ${wanted}`);
+    // A party that is both is on either side; a general contact on neither.
+    const purchase = isPurchaseKind(f.kind);
+    if (!(purchase ? buysFrom(party.kind) : sellsTo(party.kind))) blocking('partyId', `A ${f.kind} needs a ${purchase ? 'supplier' : 'customer'}`);
   }
 
   let branchId = f.branchId;
+  let branch: typeof schema.branches.$inferSelect | undefined;
   if (branchId) {
-    const [b] = await db.select({ id: schema.branches.id }).from(schema.branches).where(and(eq(schema.branches.companyId, company.id), eq(schema.branches.id, branchId)));
-    if (!b) blocking('branchId', 'No such branch in this company');
+    [branch] = await db.select().from(schema.branches).where(and(eq(schema.branches.companyId, company.id), eq(schema.branches.id, branchId)));
+    if (!branch) blocking('branchId', 'No such branch in this company');
   } else {
     const branches = await db.select().from(schema.branches).where(eq(schema.branches.companyId, company.id));
-    branchId = (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? null;
+    branch = branches.find((b) => b.isPrimary) ?? branches[0];
+    branchId = branch?.id ?? null;
     if (!branchId) blocking('branchId', 'The company has no branch');
   }
 
@@ -286,11 +377,29 @@ export async function prepareDocument(
   if (f.dueDate && f.dueDate < f.date) blocking('dueDate', `The due date cannot be before the document date (${f.date})`);
   if (f.validUntil && f.validUntil < f.date) blocking('validUntil', `Valid until cannot be before the document date (${f.date})`);
 
+  // A bill of entry belongs on an import bill; an ISD invoice comes from a registered distributor at home.
+  if (f.billOfEntry) {
+    const abroad = party?.gstRegistrationType === 'overseas' || f.placeOfSupplyStateCode === '96';
+    if (f.kind !== 'purchaseBill') blocking('billOfEntry', 'Only a purchase bill carries a bill of entry');
+    else if (!abroad) blocking('billOfEntry', 'A bill of entry is for goods imported from an overseas supplier');
+    if (!/^[A-Z0-9]{6}$/.test(f.billOfEntry.portCode)) blocking('billOfEntry.portCode', 'A six-character port code');
+    if (!f.billOfEntry.number) blocking('billOfEntry.number', 'The bill of entry number is required');
+    if (f.billOfEntry.igstMinor < 0 || f.billOfEntry.cessMinor < 0 || f.billOfEntry.assessableMinor < 0) blocking('billOfEntry', 'Amounts cannot be negative');
+  }
+  if (f.isdInvoice) {
+    if (f.kind !== 'purchaseBill') blocking('isdInvoice', 'Only a purchase bill can be an ISD invoice');
+    if (f.billOfEntry) blocking('isdInvoice', 'An ISD invoice is not an import');
+    if (!party?.taxId) blocking('isdInvoice', "An ISD invoice comes from the distributor's GSTIN; the supplier has none");
+  }
+
   if (f.sourceDocumentId) {
     const [src] = await db.select({ id: D.id, date: D.date, number: D.number }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
     // What a document is made from (the quote behind an order, the invoice behind a return) came first.
     else if (f.date < src.date) blocking('date', `Can't be before ${src.date}, the date of ${src.number.trim()} it was made from`);
+  } else if (NOTE_KINDS.includes(f.kind) && !f.noteReason) {
+    // A direct note (a discount over several invoices, a rate revision) needn't name one invoice or bill, but must say why.
+    blocking('noteReason', `A ${f.kind} not raised against a ${isPurchaseKind(f.kind) ? 'purchase bill' : 'invoice'} needs a reason`);
   }
 
   const categories = (await db.select().from(schema.taxCategories).where(eq(schema.taxCategories.companyId, company.id))).map(taxCategoryCore);
@@ -325,6 +434,9 @@ export async function prepareDocument(
     if (l.unitPriceCurrency && l.unitPriceCurrency !== f.currency) blocking(`lines[${i}].unitPrice.currency`, `Must be in the document's currency (${f.currency})`);
     if (!(l.quantity > 0)) blocking(`lines[${i}].quantity`, 'Must be more than zero');
     if (l.unitPriceMinor < 0) blocking(`lines[${i}].unitPrice`, 'Cannot be negative');
+    // The line's own treatment, else the item's. A non-taxable supply is charged at 0%.
+    const gst = l.gst ?? (item ? gstFlagsFrom(item) : undefined) ?? {};
+    const taxable = !gst.reimbursement && (gst.supplyType ?? 'taxable') === 'taxable';
     return {
       id: l.id ?? '',
       itemId: l.itemId ?? undefined,
@@ -337,8 +449,10 @@ export async function prepareDocument(
       discountMode: l.discountMode,
       discountValue: l.discountValue,
       taxCategoryId: l.taxCategoryId,
-      taxRate: returned.get(l.itemId ?? l.name) ?? (opts.snapshotRates || l.taxRate === undefined ? Number(category ? rateOn(category) : 0) : l.taxRate),
+      taxRate: !taxable ? 0 : (returned.get(l.itemId ?? l.name) ?? (opts.snapshotRates || l.taxRate === undefined ? Number(category ? rateOn(category) : 0) : l.taxRate)),
       taxInclusive: l.taxInclusive,
+      gst,
+      expenseId: l.expenseId ?? undefined,
     };
   });
 
@@ -351,6 +465,8 @@ export async function prepareDocument(
   }
   if (exchangeRate !== null && !(exchangeRate > 0)) blocking('exchangeRate', 'Must be more than zero');
 
+  issues.push(...(await costCentreIssues(db, company.id, [{ field: 'costCentreId', id: f.costCentreId }])));
+  await checkRecoveredExpenses(db, company.id, f, coreLines, opts.documentId, blocking);
   if (issues.length) throw unprocessable(issues);
 
   // Place of supply: what was sent, else the buyer's state, else "other
@@ -363,11 +479,15 @@ export async function prepareDocument(
       null);
 
   const coreCompany = companyCore(company);
+  // A supplier marked reverse charge puts the whole bill under it unless the document says otherwise.
+  const reverseCharge = f.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge);
   const taxContext = buildTaxContext(coreCompany, {
     placeOfSupply: placeOfSupply ?? undefined,
     party: partyCore(party!),
     date: f.date,
     purchase: isPurchaseKind(f.kind),
+    branch: branch ? branchCore(branch) : undefined,
+    reverseCharge,
   });
   const applyRoundOff = f.applyRoundOff ?? f.currency === 'INR';
   const totals = calculateDocument({
@@ -384,8 +504,21 @@ export async function prepareDocument(
     taxContext,
   });
 
+  // TDS the business keeps back from a supplier, worked on the taxable value in base currency.
+  let tds: { section: string | null; rate: number; amountMinor: number } = { section: null, rate: 0, amountMinor: 0 };
+  const baseMinor = Math.round(totals.taxableAmount.minor * exchangeRate!);
+  if (f.kind === 'purchaseBill' || f.kind === 'supplierDebitNote') {
+    tds = await tdsOn(db, company, party!, tdsSectionFor(company, party!, f.tdsSection), f.date, baseMinor, { documentId: opts.documentId });
+  } else if (f.kind === 'supplierCreditNote' && f.sourceDocumentId) {
+    // A credit note gives back TDS at the rate its bill was taxed at.
+    const [src] = await db.select({ section: D.tdsSection, rate: D.tdsRate }).from(D).where(eq(D.id, f.sourceDocumentId));
+    if (src?.section && src.rate) tds = { section: src.section, rate: Number(src.rate), amountMinor: Math.round((baseMinor * Number(src.rate)) / 100) };
+  }
+  // Held in the document's currency, like what is paid against it.
+  const tdsAmountMinor = exchangeRate === 1 ? tds.amountMinor : Math.round(tds.amountMinor / exchangeRate!);
+
   // Invoices and bills fall due after the party's terms unless a date was given.
-  const dueDate = f.dueDate ?? (f.kind === 'invoice' || f.kind === 'purchaseBill' ? addDaysISO(f.date, party!.paymentTermsDays) : null);
+  const dueDate = f.dueDate ?? (isPayableDocument(f.kind) ? addDaysISO(f.date, party!.paymentTermsDays) : null);
 
   return {
     party: party!,
@@ -399,6 +532,8 @@ export async function prepareDocument(
       validUntil: f.validUntil,
       reference: f.reference,
       supplierDocNumber: f.supplierDocNumber,
+      billOfEntry: f.kind === 'purchaseBill' ? f.billOfEntry : null,
+      isdInvoice: f.kind === 'purchaseBill' && f.isdInvoice,
       currency: f.currency,
       exchangeRate: String(exchangeRate),
       documentDiscountMode: f.documentDiscountMode,
@@ -407,6 +542,14 @@ export async function prepareDocument(
       applyRoundOff,
       roundOffManualMinor: f.roundOffManualMinor,
       placeOfSupplyStateCode: placeOfSupply,
+      reverseCharge,
+      noteReason: NOTE_KINDS.includes(f.kind) ? f.noteReason : null,
+      tdsSection: tds.amountMinor > 0 || tds.section ? tds.section : null,
+      tdsRate: tds.section ? String(tds.rate) : null,
+      tdsAmountMinor,
+      costCentreId: f.costCentreId,
+      // A balance brought in from before the books began isn't filled in like a new document.
+      customFields: OPENING_KINDS.includes(f.kind) ? {} : await cleanCustomValues(db, company.id, 'document', f.customFields as CustomValues | undefined),
       notes: f.notes,
       terms: f.terms,
       sourceDocumentId: f.sourceDocumentId,
@@ -415,6 +558,8 @@ export async function prepareDocument(
       documentDiscountMinor: totals.documentDiscount.minor,
       taxableAmountMinor: totals.taxableAmount.minor,
       totalTaxMinor: totals.totalTax.minor,
+      reverseChargeTaxMinor: totals.reverseChargeTax?.minor ?? 0,
+      reimbursementsMinor: totals.reimbursements?.minor ?? 0,
       roundOffMinor: totals.roundOff.minor,
       grandTotalMinor: totals.grandTotal.minor,
       grandTotalBaseMinor: totals.grandTotalBase.minor,
@@ -434,6 +579,8 @@ export async function prepareDocument(
       taxCategoryId: l.taxCategoryId,
       taxRate: String(l.taxRate),
       taxInclusive: l.taxInclusive,
+      ...gstColumns(l.gst),
+      expenseId: l.expenseId ?? null,
       lineTotalMinor: calculateLine(l, f.currency, taxContext).total.minor,
     })),
   };
@@ -466,6 +613,7 @@ export async function writeLines(tx: DbOrTx, documentId: string, prepared: Prepa
       rate: String(tl.rate),
       taxableAmountMinor: tl.taxableAmount.minor,
       totalTaxMinor: tl.totalTax.minor,
+      reverseCharge: !!tl.reverseCharge,
     });
     if (tl.components.length) {
       await tx.insert(schema.documentTaxComponents).values(

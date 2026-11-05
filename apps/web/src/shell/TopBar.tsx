@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
+import { readableOn } from '@esmart/ui/theme/contrast';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -13,13 +14,18 @@ import { Menu, MenuDivider, MenuItem, useMenuAnchor } from '@esmart/ui/component
 import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useRemoteMeta } from '@esmart/app/remote';
+import { carriesQueue, ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
+import { useConnectivity } from '@esmart/app/remote';
 import { useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
 import { NOTIFICATION_META, notificationRoute } from '@esmart/app/features/notifications/notificationMeta';
 import { CommandPalette } from './CommandPalette';
+import { BranchPicker, CompanyPicker } from './CompanySwitcher';
+import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SETTINGS_HREF } from '@esmart/app/navigation/pages';
+import { appHref } from '@esmart/app/navigation/menu';
 
 export const TOP_BAR_HEIGHT = 56;
 
@@ -104,7 +110,8 @@ function LixiButton({ label }: { label: string }) {
       }}
     >
       <LixiMark size={22} />
-      <Text variant="small" weight="600" style={{ color: LIXI.blue }}>
+      {/* Lixi's own blue, lightened in dark mode until it reads on the bar (3.1:1 as is). */}
+      <Text variant="small" weight="600" style={{ color: readableOn(LIXI.blue, t.c.paper, t.c.text) }}>
         Lixi
       </Text>
     </Pressable>
@@ -112,8 +119,10 @@ function LixiButton({ label }: { label: string }) {
 }
 
 /**
- * The desktop app's top bar: search (⌘K), sync state, Lixi, notifications
- * and your account. The business switcher lives at the top of the sidebar.
+ * The desktop app's top bar, in three parts: the business and branch you're
+ * in on the left (each its own picker), search (⌘K) in the middle, and sync
+ * state, Lixi, notifications and your account on the right. The two sides
+ * share the leftover width equally, so search stays centred on the bar.
  */
 export function TopBar() {
   const t = useTheme();
@@ -127,9 +136,10 @@ export function TopBar() {
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const signOut = useSignOut();
 
-  const offline = !useRemoteMeta((m) => m.online);
   const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
   const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
+  const mode = useConnectivity((s) => s.mode);
+  const showQueued = pendingSync > 0 && !carriesQueue(mode);
 
   const { setAnchor: bellAnchor, rect: bellRect, open: openBellMenu, close: closeBellMenu } = useMenuAnchor();
   const { setAnchor: accountAnchor, rect: accountRect, open: openAccountMenu, close: closeAccountMenu } = useMenuAnchor();
@@ -155,20 +165,28 @@ export function TopBar() {
   }, []);
 
   const go = (route: string) => router.push(route as never);
+  // A tablet-width window keeps just the logo and branch mark, so search keeps its room.
+  const narrow = useBreakpoint() === 'tablet';
 
   return (
     <View
+      role="banner"
       style={{
         height: TOP_BAR_HEIGHT,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: t.spacing.sm,
-        paddingHorizontal: t.spacing.xxl,
+        gap: t.spacing.md,
+        paddingHorizontal: narrow ? t.spacing.lg : t.spacing.xxl,
         backgroundColor: t.c.paper,
         borderBottomWidth: 1,
         borderBottomColor: t.c.line,
       }}
     >
+      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+        <CompanyPicker compact={narrow} />
+        <BranchPicker compact={narrow} />
+      </View>
+
       <Pressable
         onPress={() => setPaletteOpen(true)}
         accessibilityRole="search"
@@ -177,8 +195,9 @@ export function TopBar() {
           const { hovered, focused } = state as WebPressState;
           return [
             {
-              flex: 1,
-              maxWidth: 480,
+              width: 480,
+              flexShrink: 1,
+              minWidth: 200,
               height: 36,
               flexDirection: 'row',
               alignItems: 'center',
@@ -204,11 +223,10 @@ export function TopBar() {
         </View>
       </Pressable>
 
-      <View style={{ flex: 1 }} />
-
-      {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ alignSelf: 'center' }} /> : null}
+      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+      <ConnectionBadge style={{ alignSelf: 'center' }} />
       {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
-      {failedSync > 0 || pendingSync > 0 ? (
+      {failedSync > 0 || showQueued ? (
         <Pressable
           onPress={() => router.push('/(app)/settings/sync')}
           accessibilityRole="button"
@@ -216,7 +234,7 @@ export function TopBar() {
           style={(state) => [{ flexDirection: 'row', gap: t.spacing.xs, alignSelf: 'center', borderRadius: 999, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
         >
           {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" /> : null}
-          {pendingSync > 0 ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" /> : null}
+          {showQueued ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" /> : null}
         </Pressable>
       ) : null}
 
@@ -232,6 +250,7 @@ export function TopBar() {
       >
         <Avatar name={user?.name ?? '?'} size={30} color={user?.avatarColor} />
       </Pressable>
+      </View>
 
       <Menu anchor={bellRect} onClose={closeBellMenu} align="right" width={380}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm }}>
@@ -292,7 +311,7 @@ export function TopBar() {
             ['account-circle-outline', 'nav:title.yourProfile', '/(app)/settings/profile'],
             ['star-circle-outline', 'nav:more.entry.planAndBilling', '/(app)/settings/plan'],
             ['palette-outline', 'nav:more.entry.appearanceAndLanguage', '/(app)/settings/appearance'],
-            ['cog-outline', 'nav:shell.allSettings', '/(app)/(tabs)/more'],
+            ['cog-outline', 'nav:shell.allSettings', appHref(SETTINGS_HREF)],
           ] as const
         ).map(([icon, key, route]) => (
           <MenuItem
