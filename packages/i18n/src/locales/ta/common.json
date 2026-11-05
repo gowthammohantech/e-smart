@@ -310,7 +310,8 @@
     "deactivate": "செயலிழக்கச் செய்",
     "deactivated_one": "{{count}} செயலிழக்கப்பட்டது",
     "deactivated_other": "{{count}} செயலிழக்கப்பட்டன",
-    "duplicate": "நகல் எடு"
+    "duplicate": "நகல் எடு",
+    "preview": "முன்னோட்டம்"
   },
   "toast": {
     "success": "முடிந்தது",

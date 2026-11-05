@@ -310,7 +310,8 @@
     "deactivate": "Deactivate",
     "deactivated_one": "{{count}} deactivated",
     "deactivated_other": "{{count}} deactivated",
-    "duplicate": "Duplicate"
+    "duplicate": "Duplicate",
+    "preview": "Preview"
   },
   "toast": {
     "success": "Done",

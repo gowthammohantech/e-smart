@@ -28,6 +28,7 @@ import { useBaseCurrency } from '../store/selectors';
 import { isOpen } from '../remote/outbox';
 import { useDocumentPages, useDocumentSummary, type DocumentQuery } from '../remote/queries';
 import { useDebounced } from './useDebounced';
+import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { listParam, presetParam, useQueryParams } from '../navigation/queryParams';
 
@@ -146,6 +147,21 @@ export function DocumentListView({
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
+  // Desktop bulk action: the chosen documents as a CSV.
+  const selection = useTableSelection(`${kind}|${search}|${JSON.stringify(filters)}`);
+  const exportRows = useRowsExport();
+  const exportChosen = (keys: string[]) =>
+    exportRows(
+      documentKindLabel(tr, kind, 2),
+      {
+        headers: [tr('common:table.number'), tr('common:table.party'), tr('common:table.date'), tr('common:table.due'), tr('common:table.status'), tr('common:table.amount'), tr('common:table.outstanding')],
+        rows: rows
+          .filter((d) => keys.includes(d.id))
+          .map((d) => [d.number, d.partyName, d.date, d.dueDate ?? '', statusLabel(tr, d.status), d.grandTotal.minor / 100, d.outstanding ? d.outstanding.minor / 100 : '']),
+      },
+      tr('common:table.exportCancelled'),
+    );
+
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
       {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
@@ -283,10 +299,25 @@ export function DocumentListView({
           onSortChange={setSort}
           onRowPress={(d) => router.push(routeFor(d) as never)}
           rowLabel={(d) => `${d.number}, ${d.partyName}, ${formatMoney(d.grandTotal)}`}
+          {...pagedTableProps(pages, tr('common:table.loadFailed'), `documents-${kind}`)}
+          loading={loading}
+          totalCount={summary.data ? summary.data.count + waiting.length : undefined}
+          selectable
+          selectedKeys={selection.selected}
+          onSelectionChange={selection.setSelected}
+          bulkActions={(keys) => (
+            <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+          )}
+          rowActions={(d) => [
+            { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(routeFor(d) as never) },
+            // As on the detail screen: only a draft is edited in place.
+            ...(d.status === 'draft' && !d.waiting
+              ? [{ key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${routeFor(d)}/edit` as never) }]
+              : []),
+            { key: 'preview', label: tr('common:table.preview'), icon: 'file-document-outline', onPress: () => router.push(`/(app)/documents/${d.id}` as never) },
+          ]}
           empty={
-            loading ? (
-              <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
-            ) : (
+            loading ? null : (
               <EmptyState
                 illustration="no-documents"
                 icon="file-search-outline"
@@ -299,7 +330,6 @@ export function DocumentListView({
             )
           }
         />
-        {moreFooter}
       </View>
     );
   }
