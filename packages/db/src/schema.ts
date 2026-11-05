@@ -680,6 +680,8 @@ export const documents = pgTable("documents", {
 	version: integer().default(1).notNull(),
 	// Values of the company's custom fields, by field id.
 	customFields: jsonb("custom_fields").default({}).notNull(),
+	// Waiting for, approved or rejected by an owner or admin: { status, requestedBy, requestedAt, decidedBy?, decidedAt?, note? }.
+	approval: jsonb(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
@@ -1789,6 +1791,8 @@ export const companies = pgTable("companies", {
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
 	// Modules the owner switched off within the plan; their records stay.
 	disabledModules: jsonb("disabled_modules").default([]).notNull(),
+	// Documents over these amounts wait for an owner or admin: [{ kind, overMinor }] in base currency.
+	approvalRules: jsonb("approval_rules").default([]).notNull(),
 	lockedThroughDate: date("locked_through_date"),
 	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
 	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
