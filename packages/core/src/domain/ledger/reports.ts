@@ -1,6 +1,6 @@
 import { Item, LedgerGroup, StockMovement } from '../../types';
 import { financialYearOf } from '../../lib/date';
-import { stockValue } from '../stockLedger';
+import { valueStock, type StockCosting } from '../stockLedger';
 import { Account, Book, GROUPS, accountFor, isDebitNature } from './accounts';
 import { OPENING_DATE, Posting } from './postings';
 
@@ -11,14 +11,14 @@ const dayBefore = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) - 86_
  * Stock in hand on `date`, at weighted-average cost: every tracked item's movements up to that day.
  * Stock counted when the books began counts from the start, whatever day it was counted.
  */
-export function stockValueOn(items: Item[], movements: StockMovement[], date: string, baseCurrency: string): number {
+export function stockValueOn(items: Item[], movements: StockMovement[], date: string, baseCurrency: string, method: StockCosting = 'average'): number {
   const upTo = movements.filter((m) => m.type === 'opening' || m.date <= date);
-  return items.filter((i) => i.trackInventory).reduce((a, i) => a + stockValue(i, upTo, baseCurrency).minor, 0);
+  return items.filter((i) => i.trackInventory).reduce((a, i) => a + valueStock(i, upTo, baseCurrency, method).minor, 0);
 }
 
 /** Stock counted when the books began (opening stock movements). */
-export function openingStockValue(items: Item[], movements: StockMovement[], baseCurrency: string): number {
-  return stockValueOn(items, movements.filter((m) => m.type === 'opening'), OPENING_DATE, baseCurrency);
+export function openingStockValue(items: Item[], movements: StockMovement[], baseCurrency: string, method: StockCosting = 'average'): number {
+  return stockValueOn(items, movements.filter((m) => m.type === 'opening'), OPENING_DATE, baseCurrency, method);
 }
 
 export type Stock = {
@@ -29,6 +29,8 @@ export type Stock = {
   perpetualFrom?: string | null;
   /** The document a return was made against: a return comes back at what its goods went out at. */
   sourceOf?: (documentId: string) => string | undefined;
+  /** How stock is costed: moving weighted average (the default), or first in, first out. */
+  costing?: StockCosting;
 };
 
 /** Whether the books hold stock perpetually on a day. */
@@ -132,8 +134,8 @@ export function profitAndLoss(postings: Posting[], book: Book, range: { from: st
   // runs into perpetual stock values its periodic part, up to the day before it starts.
   const periodicTo = perpetualOn(stock, range.to) ? dayBefore(stock.perpetualFrom!) : range.to;
   const periodic = !perpetualOn(stock, range.from);
-  const openingStock = periodic ? stockValueOn(stock.items, stock.movements, dayBefore(range.from), stock.baseCurrency) : 0;
-  const closingStock = periodic ? stockValueOn(stock.items, stock.movements, periodicTo, stock.baseCurrency) : 0;
+  const openingStock = periodic ? stockValueOn(stock.items, stock.movements, dayBefore(range.from), stock.baseCurrency, stock.costing) : 0;
+  const closingStock = periodic ? stockValueOn(stock.items, stock.movements, periodicTo, stock.baseCurrency, stock.costing) : 0;
   const total = (ls: StatementLine[]) => ls.reduce((a, l) => a + l.amount, 0);
   const trading = { income: pick(true, 'income'), expense: pick(true, 'expense'), openingStock, closingStock };
   const grossProfit = total(trading.income) + closingStock - openingStock - total(trading.expense);
@@ -172,7 +174,7 @@ export function balanceSheet(postings: Posting[], book: Book, asOf: string, stoc
   // valued on the day, and what it gained to the year's start counts in earlier years' profit.
   const perpetual = perpetualOn(stock, asOf);
   const openingStock = net.get('sys:openingStock') ?? 0;
-  const stockAtYearStart = perpetual ? openingStock : stockValueOn(stock.items, stock.movements, dayBefore(fyStart), stock.baseCurrency);
+  const stockAtYearStart = perpetual ? openingStock : stockValueOn(stock.items, stock.movements, dayBefore(fyStart), stock.baseCurrency, stock.costing);
   // Debit-positive, so a profit is negative here. Anything posted straight to earlier years' profit
   // (stock brought onto the books when perpetual stock began) stands with it, on one line.
   const earlierProfit = -earlierNominal + stockAtYearStart - openingStock - (net.get('sys:retainedEarnings') ?? 0);
@@ -189,7 +191,7 @@ export function balanceSheet(postings: Posting[], book: Book, asOf: string, stoc
     if (GROUPS[account.group].nature === 'asset') add('assets', { group: account.group, account, amount: value });
     else add('liabilities', { group: account.group, account, amount: -value });
   }
-  const closingStock = perpetual ? 0 : stockValueOn(stock.items, stock.movements, asOf, stock.baseCurrency);
+  const closingStock = perpetual ? 0 : stockValueOn(stock.items, stock.movements, asOf, stock.baseCurrency, stock.costing);
   if (closingStock) add('assets', { group: 'stockInHand', account: accountFor('sys:openingStock', book)!, amount: closingStock });
   if (earlierProfit) add('liabilities', { group: 'reserves', account: accountFor('sys:retainedEarnings', book)!, amount: earlierProfit });
 

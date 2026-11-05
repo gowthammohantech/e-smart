@@ -13,7 +13,7 @@ import { Money, add, money, subtract, sum, zero } from '../lib/money';
 import { DateRange, inRange, monthKey } from '../lib/date';
 import { claimableTax, expenseCost, expenseTaxComponents } from './expenseTax';
 import { GSTR1_KINDS, noteTypeOf } from './gstr1';
-import { stockOnHand, stockValue } from './stockLedger';
+import { stockOnHand, valueStock, type StockCosting } from './stockLedger';
 
 export type ReportFilters = {
   range: DateRange;
@@ -443,6 +443,7 @@ export function summarizeStock(
   movements: StockMovement[],
   baseCurrency: string,
   branchId?: string | null,
+  method: StockCosting = 'average',
 ): StockReport {
   const tracked = items.filter((i) => i.trackInventory);
   const rows: StockReportRow[] = tracked.map((item) => {
@@ -450,7 +451,7 @@ export function summarizeStock(
     return {
       item,
       onHand,
-      value: stockValue(item, movements, baseCurrency),
+      value: valueStock(item, movements, baseCurrency, method),
       low: item.reorderLevel > 0 && onHand <= item.reorderLevel,
     };
   });

@@ -49,8 +49,9 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   const perpetualFrom = s.company.perpetualStockFrom;
   // A return comes back at what the goods it returns went out (or came in) at.
   const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
-  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom, sourceOf: (id) => sourceOf.get(id) };
-  const openingStockMinor = openingStockValue(items, movements, base);
+  const costing = s.company.stockCosting as Stock['costing'];
+  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom, sourceOf: (id) => sourceOf.get(id), costing };
+  const openingStockMinor = openingStockValue(items, movements, base, costing);
 
   const postings = allPostings({
     baseCurrency: base,
@@ -67,7 +68,7 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
     openingStockMinor,
     // Depreciation through the day the book is read to (RULES 6.15).
     assets: { list: await loadAssets(s.db, id), until: s.to, fyStartMonth: s.company.fiscalYearStartMonth },
-    ...(perpetualFrom && perpetualFrom <= s.to && { stock: perpetualStock(items, movements, perpetualFrom, base, (id) => sourceOf.get(id)) }),
+    ...(perpetualFrom && perpetualFrom <= s.to && { stock: perpetualStock(items, movements, perpetualFrom, base, (id) => sourceOf.get(id), costing) }),
   });
   return { postings, book: { parties, paymentAccounts, expenseCategories, ledgerAccounts }, stock };
 }
@@ -82,7 +83,7 @@ export async function loadPerpetualCost(s: Pick<Scope, 'db' | 'company' | 'to'>,
   if (!from || from > s.to) return undefined;
   const movements = await coreMovements(s.db, s.company.id, { to: s.to });
   const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
-  const stock = perpetualStock(items, movements, from, s.company.baseCurrency.trim(), (id) => sourceOf.get(id));
+  const stock = perpetualStock(items, movements, from, s.company.baseCurrency.trim(), (id) => sourceOf.get(id), s.company.stockCosting as 'average' | 'fifo');
   return { from, goodsCost: goodsCostByDocument(stock, docs) };
 }
 

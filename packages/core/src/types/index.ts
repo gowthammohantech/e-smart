@@ -61,6 +61,8 @@ export type Company = {
    * Stock in hand at cost and the goods sold to Cost of goods sold. Unset, the books are periodic.
    */
   perpetualStockFrom?: string | null;
+  /** How stock is costed as it goes out: moving weighted average (the default), or first in, first out. */
+  stockCosting?: 'average' | 'fifo';
   /** Let sales take tracked items below zero. Off unless the business turns it on. */
   allowNegativeStock?: boolean;
   /** RBI's bank rate, percent, for MSME late-payment interest (three times it). 5.5 unless changed. */

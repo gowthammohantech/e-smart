@@ -4476,6 +4476,11 @@ export interface components {
              * @description Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.
              */
             perpetualStockFrom?: string | null;
+            /**
+             * @description How stock is costed as it goes out (RULES 6.2): `average`, a moving weighted average (the default), or `fifo`, first in, first out. It values every period, so it changes only while no period is closed (`409 PERIOD_LOCKED`), and only by an owner.
+             * @enum {string}
+             */
+            stockCosting?: "average" | "fifo";
             /** @description Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it. */
             tan?: string;
             /**

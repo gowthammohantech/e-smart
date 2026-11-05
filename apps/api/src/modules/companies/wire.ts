@@ -54,6 +54,7 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
     disabledModules: (row.disabledModules as Schema<'Company'>['disabledModules']) ?? [],
     approvalRules: (row.approvalRules as Schema<'Company'>['approvalRules']) ?? [],
     perpetualStockFrom: row.perpetualStockFrom,
+    stockCosting: row.stockCosting as 'average' | 'fifo',
     allowNegativeStock: row.allowNegativeStock,
     msmeBankRate: Number(row.msmeBankRate),
     gstr2bDateToleranceDays: row.gstr2bDateToleranceDays,

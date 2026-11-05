@@ -78,9 +78,9 @@ export function integrityChecks(input: IntegrityInput): IntegrityCheck[] {
   // 4. Perpetual stock: the posted balance of Stock in hand against the stock ledger's value that day,
   // costed as perpetual stock costs it (what was there before it began, then the moving average).
   // Periodic stock is valued on the day and never posted, so there is nothing to drift.
-  const { items, movements, baseCurrency, perpetualFrom, sourceOf } = input.stock;
+  const { items, movements, baseCurrency, perpetualFrom, sourceOf, costing: method } = input.stock;
   const perpetual = !!perpetualFrom && input.asOf >= perpetualFrom;
-  const costing = perpetual ? perpetualStock(items, movements, perpetualFrom, baseCurrency, sourceOf) : undefined;
+  const costing = perpetual ? perpetualStock(items, movements, perpetualFrom, baseCurrency, sourceOf, method) : undefined;
   const stockValue = costing ? Math.round(costing.broughtForward + costedStockValue(costing.costed, input.asOf)) : 0;
   const stockPosted = perpetual ? Math.round(upTo.filter((p) => p.account === 'sys:openingStock').reduce((a, p) => a + p.debit - p.credit, 0)) : 0;
 

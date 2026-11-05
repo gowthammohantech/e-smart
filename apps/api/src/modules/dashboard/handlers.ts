@@ -118,7 +118,7 @@ export const dashboardHandlers = defineHandlers({
     if (hasModule(plan, 'inventory')) {
       lowStockCount = await lowStock(ctx, branchId);
       const [items, movements] = await Promise.all([loadItems(ctx), coreMovements(ctx.db, ctx.company.id, { branchIds: branches, to: today })]);
-      const stock = summarizeStock(items, movements, base, branchId ?? null);
+      const stock = summarizeStock(items, movements, base, branchId ?? null, ctx.company.stockCosting as 'average' | 'fifo');
       const dead = deadStock(items.filter((i) => i.status !== 'inactive'), movements, today, 90, branchId);
       const valueOf = new Map(stock.rows.map((r) => [r.item.id, r.value.minor]));
       inventory = {

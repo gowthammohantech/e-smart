@@ -275,7 +275,24 @@
     "turnOnTitle": "Keep stock perpetually from {{date}}?",
     "turnOnBody": "From {{date}}, goods are posted to Stock in hand as they come in and go out, and the profit and loss shows Cost of goods sold instead of opening and closing stock. Reports from that day change. You can go back to periodic while that year is open.",
     "turnOffTitle": "Go back to periodic stock?",
-    "turnOffBody": "Stock from {{date}} is valued at the end of each period again, and nothing is posted to Stock in hand or Cost of goods sold. Reports from that day change."
+    "turnOffBody": "Stock from {{date}} is valued at the end of each period again, and nothing is posted to Stock in hand or Cost of goods sold. Reports from that day change.",
+    "costingTitle": "Stock costing",
+    "costing": {
+      "average": "Weighted average",
+      "fifo": "First in, first out"
+    },
+    "costingBody": {
+      "average": "Goods going out are costed at the average of what is in stock, which moves with each purchase.",
+      "fifo": "Goods going out are costed at what the oldest stock still on hand cost; stock left over is valued at the latest prices."
+    },
+    "costingLocked": "Stock costing values every period's stock, so it can be changed only while no period is closed.",
+    "costingAskTitle": "Cost stock by {{method}}?",
+    "costingAskBody": "Every period's stock value and cost of goods sold is worked out again this way, from when the books began. Reports change. Keep the method you choose year after year (AS 2).",
+    "costingConfirm": "Change costing",
+    "costingSaved": {
+      "average": "Stock is costed at weighted average",
+      "fifo": "Stock is costed first in, first out"
+    }
   },
   "receipts": {
     "title": "Receipts",

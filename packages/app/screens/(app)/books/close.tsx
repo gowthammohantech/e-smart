@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
+import { Segmented } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Text } from '@esmart/ui/components/Text';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -34,6 +35,10 @@ export default function CloseBooks() {
   const [date, setDate] = useState(company.lockedThroughDate ?? lastFyEnd);
   // Changing how stock is kept changes every report from its day, so it is asked first.
   const [asking, setAsking] = useState<'on' | 'off' | null>(null);
+  const costing = company.stockCosting ?? 'average';
+  const [askCosting, setAskCosting] = useState<'average' | 'fifo' | null>(null);
+  const setCosting = (stockCosting: 'average' | 'fifo') =>
+    serverSave(() => saveCompany({ ...company, stockCosting }), tr(`books:close.costingSaved.${stockCosting}`), { icon: 'package-variant-closed' });
 
   // Perpetual stock starts a financial year still open: this one, or the next if this one is closed.
   const thisFy = financialYearOf(today(), company.fiscalYearStartMonth).start;
@@ -96,7 +101,41 @@ export default function CloseBooks() {
             <Button title={`${tr('books:close.turnOn')} · ${formatDate(perpetualStart)}`} icon="package-variant-closed" onPress={() => setAsking('on')} loading={saving} disabled={blocked} />
           )
         ) : null}
+
+        <Card style={{ gap: t.spacing.sm }}>
+          <Text variant="body" weight="600">
+            {tr('books:close.costingTitle')}
+          </Text>
+          <Text variant="caption" tone="muted">
+            {tr(`books:close.costingBody.${costing}`)}
+          </Text>
+          {owner ? (
+            <Segmented
+              options={(['average', 'fifo'] as const).map((v) => ({ value: v, label: tr(`books:close.costing.${v}`) }))}
+              value={costing}
+              onChange={(v) => v !== costing && setAskCosting(v as 'average' | 'fifo')}
+            />
+          ) : null}
+          {owner && company.lockedThroughDate ? (
+            <Text variant="caption" tone="muted">
+              {tr('books:close.costingLocked')}
+            </Text>
+          ) : null}
+        </Card>
       </ScrollView>
+      <ConfirmDialog
+        visible={!!askCosting}
+        icon="package-variant-closed"
+        title={tr('books:close.costingAskTitle', { method: askCosting ? tr(`books:close.costing.${askCosting}`) : '' })}
+        message={tr('books:close.costingAskBody')}
+        confirmLabel={tr('books:close.costingConfirm')}
+        onCancel={() => setAskCosting(null)}
+        onConfirm={() => {
+          const v = askCosting!;
+          setAskCosting(null);
+          void setCosting(v);
+        }}
+      />
       <ConfirmDialog
         visible={!!asking}
         icon="package-variant-closed"

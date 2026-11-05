@@ -1,5 +1,5 @@
 import { and, asc, eq, exists, gte, ilike, inArray, lte, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import { isLowStock, ledgerFor, stockMapOn, stockOnHand as coreStockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
+import { isLowStock, ledgerFor, stockMapOn, stockOnHand as coreStockOnHand, stockValue, valueStock } from '@esmart/core/domain/stockLedger';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
 import { invalid, notFound, unprocessable, type Issue } from '../../http/errors';
@@ -102,7 +102,7 @@ export const inventoryHandlers = defineHandlers({
       .where(and(eq(D.companyId, ctx.company.id), eq(D.kind, 'invoice'), notInArray(D.status, ['draft', 'cancelled']), eq(L.itemId, item.id)));
     return {
       onHand,
-      value: stockValue(item, movements, base),
+      value: valueStock(item, movements, base, ctx.company.stockCosting as 'average' | 'fifo'),
       low: isLowStock(item, onHand),
       soldQuantity: Number(sold?.q ?? 0),
       // Newest first, as the screen lists them; the balance runs from the first movement.
@@ -124,7 +124,7 @@ export const inventoryHandlers = defineHandlers({
     const items = (await ctx.db.select().from(I).where(and(...filters)).orderBy(I.name, I.id)).map(toCoreItem);
     if (!items.length || !branches.length) return { data: [] };
     const movements = await coreMovements(ctx.db, ctx.company.id, { itemIds: items.map((i) => i.id), branchIds: branches.map((b) => b.id) });
-    let data = items.flatMap((item) => branches.map((b) => levelAt(item, b.id, movements, base)));
+    let data = items.flatMap((item) => branches.map((b) => levelAt(item, b.id, movements, base, ctx.company.stockCosting as 'average' | 'fifo')));
     if (q.asOf) {
       // The same figure finalising checks a document against.
       const on = new Map(branches.map((b) => [b.id, stockMapOn(movements, q.asOf!, b.id)]));

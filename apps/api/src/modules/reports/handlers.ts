@@ -79,7 +79,7 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
       const branchIds = q.branchId ? [q.branchId] : restricted;
       const hidden = !!q.branchId && restricted.length > 0 && !restricted.includes(q.branchId);
       const movements = hidden ? [] : await coreMovements(s.db, s.company.id, { branchIds, to: s.to });
-      const r = summarizeStock(await loadItems(s), movements, base, q.branchId ?? null);
+      const r = summarizeStock(await loadItems(s), movements, base, q.branchId ?? null, s.company.stockCosting as 'average' | 'fifo');
       // Core hands back the Item it was given, which is the wire Item.
       return { ...r, rows: r.rows.map((row) => ({ ...row, item: row.item as unknown as Schema<'Item'> })) };
     }
@@ -188,7 +188,7 @@ export const reportsHandlers = defineHandlers({
       case 'stock': {
         const branchIds = branchId ? [branchId] : ctx.user.branchIds;
         const movements = await coreMovements(ctx.db, ctx.company.id, { branchIds, to });
-        return summarizeStock(await loadItems(all), movements, base, branchId ?? null) as never;
+        return summarizeStock(await loadItems(all), movements, base, branchId ?? null, ctx.company.stockCosting as 'average' | 'fifo') as never;
       }
       case 'profit': {
         const { docs } = await loadDocuments(all, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
