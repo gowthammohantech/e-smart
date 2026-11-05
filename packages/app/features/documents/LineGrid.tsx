@@ -1,6 +1,6 @@
 import React, { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -17,7 +17,10 @@ import { unitDecimals } from '@esmart/core/data/masters';
 
 type Col = 'name' | 'qty' | 'rate' | 'discount';
 
-const W = { no: 36, qty: 110, unit: 64, rate: 130, discount: 130, tax: 96, amount: 130, actions: 44 };
+// Sized to fit the editor's main column (about 730px) with the item name taking the rest.
+const W = { no: 32, qty: 104, rate: 108, discount: 104, tax: 88, amount: 116, actions: 40 };
+const ITEM_MIN = 120;
+const MIN_WIDTH = W.no + ITEM_MIN + W.qty + W.rate + W.discount + W.tax + W.amount + W.actions;
 
 /**
  * A desktop document's lines as an editable grid: name, quantity, rate and
@@ -53,6 +56,9 @@ export function LineGrid({
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common']);
   const [taxFor, setTaxFor] = useState<DocumentLine | null>(null);
+  // The grid's own width: inside the sideways scroller the rows would otherwise take their
+  // natural width, and a long item name would push the totals and ⋯ out of view.
+  const [boxWidth, setBoxWidth] = useState(0);
   // Cells are found by id: the grid is the desktop (web) editor's, and ids keep
   // the moves out of render, where refs may not be read.
   const gridId = useId().replace(/:/g, '');
@@ -64,7 +70,7 @@ export function LineGrid({
   };
 
   const headerCell = (label: string, width?: number, align: 'left' | 'right' = 'left') => (
-    <View role="columnheader" style={[width ? { width } : { flex: 1, minWidth: 160 }, { paddingHorizontal: 8, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }]}>
+    <View role="columnheader" style={[width ? { width } : { flex: 1, minWidth: ITEM_MIN }, { paddingHorizontal: 8, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }]}>
       <Text variant="caption" tone="muted" weight="600" numberOfLines={1}>
         {label}
       </Text>
@@ -73,14 +79,16 @@ export function LineGrid({
 
   return (
     <View
-      role="table"
       style={{ backgroundColor: t.c.paper, borderRadius: t.radius.lg, borderWidth: 1, borderColor: t.c.line, overflow: 'hidden' }}
+      onLayout={(e) => setBoxWidth(Math.round(e.nativeEvent.layout.width))}
     >
+    {/* A narrow window scrolls the grid sideways rather than clipping its totals. */}
+    <ScrollView horizontal contentContainerStyle={{ flexGrow: 1, minWidth: MIN_WIDTH }} showsHorizontalScrollIndicator>
+    <View role="table" style={{ flexGrow: 1, width: boxWidth ? Math.max(MIN_WIDTH, boxWidth - 2) : undefined }}>
       <View role="row" style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36, backgroundColor: t.c.card2, borderBottomWidth: 1, borderBottomColor: t.c.line }}>
         {headerCell(tr('sales:grid.lineNo'), W.no)}
         {headerCell(tr('sales:line.itemOrService'))}
         {headerCell(tr('sales:line.quantity'), W.qty, 'right')}
-        {headerCell(tr('sales:line.unit'), W.unit)}
         {headerCell(tr('sales:line.rate'), W.rate, 'right')}
         {headerCell(tr('sales:line.discount'), W.discount, 'right')}
         {headerCell(tr('sales:line.tax'), W.tax)}
@@ -111,7 +119,7 @@ export function LineGrid({
                 {n}
               </Text>
             </View>
-            <View role="cell" style={{ flex: 1, minWidth: 160, paddingHorizontal: 4 }}>
+            <View role="cell" style={{ flex: 1, minWidth: ITEM_MIN, paddingHorizontal: 4 }}>
               <GridInput
                 id={cellId(row, 'name')}
                 value={line.name}
@@ -127,7 +135,8 @@ export function LineGrid({
                 </Text>
               ) : null}
             </View>
-            <View role="cell" style={{ width: W.qty, paddingHorizontal: 4 }}>
+            <View role="cell" style={{ width: W.qty, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <View style={{ flex: 1 }}>
               <GridInput
                 id={cellId(row, 'qty')}
                 value={String(line.quantity)}
@@ -143,9 +152,9 @@ export function LineGrid({
                 }}
                 onEnter={() => onEnter(row, 'qty')}
               />
-            </View>
-            <View role="cell" style={{ width: W.unit, paddingHorizontal: 8 }}>
-              <Text variant="small" tone="muted" numberOfLines={1}>
+              </View>
+              {/* The unit rides along with the quantity it counts, rather than taking a column. */}
+              <Text variant="micro" tone="muted" numberOfLines={1} style={{ maxWidth: 34 }}>
                 {line.unit}
               </Text>
             </View>
@@ -251,6 +260,8 @@ export function LineGrid({
         );
       })}
 
+    </View>
+    </ScrollView>
       <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.c.line, backgroundColor: t.c.card2 }}>
         <Text variant="micro" tone="muted">
           {tr('sales:grid.enterHint')}

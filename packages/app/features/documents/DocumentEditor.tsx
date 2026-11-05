@@ -979,7 +979,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </Card>
       )}
 
-      {draft.lines.length > 0 ? (
+      {/* A desktop has the full totals beside the lines, kept in view; a phone shows them here. */}
+      {draft.lines.length > 0 && !desktop ? (
         <Card>
           <TotalsPanel
             totals={totals}
