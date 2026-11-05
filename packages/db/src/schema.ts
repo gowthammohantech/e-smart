@@ -32,7 +32,9 @@ export const cancelReasonCode = pgEnum("cancel_reason_code", ['1', '2', '3', '4'
 export const deliveryStatus = pgEnum("delivery_status", ['queued', 'sent', 'delivered', 'read', 'failed'])
 export const discountMode = pgEnum("discount_mode", ['percent', 'amount'])
 export const docStatus = pgEnum("doc_status", ['draft', 'sent', 'accepted', 'rejected', 'expired', 'confirmed', 'fulfilled', 'cancelled', 'delivered', 'issued', 'partiallyPaid', 'paid', 'overdue', 'requested', 'approved', 'processed', 'received', 'billed'])
-export const documentKind = pgEnum("document_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'])
+// openingInvoice / openingBill: what a customer owed us, or we owed a supplier, invoice by invoice, when the
+// books started here. Payable and aged like an invoice or bill, but they post only to Opening balances.
+export const documentKind = pgEnum("document_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'openingInvoice', 'openingBill'])
 /** Why a credit or debit note was raised. */
 export const noteReason = pgEnum("note_reason", ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'])
 export const einvoiceDocType = pgEnum("einvoice_doc_type", ['INV', 'CRN', 'DBN'])
