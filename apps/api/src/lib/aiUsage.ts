@@ -74,3 +74,34 @@ export async function takeAiAction(
     await step(-1);
   };
 }
+
+/** What one AI action's model calls took. `costUsd` is null when the provider doesn't report it. */
+export type AiCallUsage = { inputTokens: number; outputTokens: number; costUsd: number | null };
+
+/**
+ * Adds a reply's tokens and cost to the month's row. The count is
+ * `takeAiAction`'s and stays as it is; this only records what it cost us.
+ */
+export async function recordAiCost(
+  db: DbOrTx,
+  companyId: string,
+  now: Date,
+  feature: AiFeature,
+  usage: AiCallUsage,
+): Promise<void> {
+  const month = usageMonth(now);
+  const inputTokens = Math.max(0, Math.round(usage.inputTokens));
+  const outputTokens = Math.max(0, Math.round(usage.outputTokens));
+  const costMicroUsd = usage.costUsd === null ? 0 : Math.max(0, Math.round(usage.costUsd * 1_000_000));
+  await db
+    .insert(U)
+    .values({ companyId, month, feature, count: 0, inputTokens, outputTokens, costMicroUsd })
+    .onConflictDoUpdate({
+      target: [U.companyId, U.month, U.feature],
+      set: {
+        inputTokens: sql`${U.inputTokens} + ${inputTokens}`,
+        outputTokens: sql`${U.outputTokens} + ${outputTokens}`,
+        costMicroUsd: sql`${U.costMicroUsd} + ${costMicroUsd}`,
+      },
+    });
+}

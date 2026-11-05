@@ -4,7 +4,7 @@ import type { Schema } from '@esmart/api-contract';
 import { canOpen, hasModule, MODULES, planInfo } from '@esmart/core/domain/plan';
 import { defineHandlers, type Ctx } from '../../context';
 import { badRequest, tooManyRequests, upstream } from '../../http/errors';
-import { takeAiAction } from '../../lib/aiUsage';
+import { recordAiCost, takeAiAction } from '../../lib/aiUsage';
 import { confirm, propose, type PendingAction } from '../../lixi/confirm';
 import { jsonSchemaOf, runRead, TOOLS, ToolError, toolByName, type ToolCtx } from '../../lixi/tools';
 import { AssistantUnavailable, type AssistantReply, type ToolOutcome, type ToolSpec } from '../../providers/assistant';
@@ -130,6 +130,12 @@ export const lixiHandlers = defineHandlers({
         throw upstream('LIXI_UNAVAILABLE', 'Lixi is unavailable right now');
       }
       throw err;
+    }
+    if (reply.usage) {
+      const { model, inputTokens, outputTokens, costUsd } = reply.usage;
+      ctx.req.log.info({ companyId: ctx.company.id, model, inputTokens, outputTokens, costUsd }, 'lixi usage');
+      // Our own costing: a failure here is logged, never the person's problem.
+      await recordAiCost(ctx.db, ctx.company.id, ctx.now, 'lixi', reply.usage).catch((err: unknown) => ctx.req.log.warn({ err }, 'lixi usage not recorded'));
     }
     const done = pending as PendingAction | null;
     return { reply: toWire(reply, ctx.company.plan), ...(done ? { pendingAction: done } : {}) };

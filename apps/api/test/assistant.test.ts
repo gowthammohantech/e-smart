@@ -46,7 +46,7 @@ describe('AnthropicAssistant', () => {
       routes: ['/(app)/receivables'],
     });
 
-    expect(reply).toEqual(final);
+    expect(reply).toEqual({ ...final, usage: { model: 'claude-opus-5-5', inputTokens: 20, outputTokens: 20, costUsd: null } });
     expect(calls).toEqual(['get_receivables']);
     const [first, second] = api.requests;
     expect(first.headers.get('anthropic-beta')).toContain('server-side-fallback-2026-07-01');
@@ -109,6 +109,7 @@ const oaiConfig = {
   OPENAI_REASONING_EFFORT: undefined,
   LIXI_MODEL: 'llama-3.3-70b-versatile',
   LIXI_MAX_TOOL_ROUNDS: 4,
+  APP_URL: 'https://smart.elixir-books.com',
 };
 
 describe('OpenAICompatibleAssistant', () => {
@@ -143,6 +144,9 @@ describe('OpenAICompatibleAssistant', () => {
       response_format: { type: 'json_schema', json_schema: { name: 'lixi_reply', strict: true } },
     });
     expect(first.body).not.toHaveProperty('reasoning_effort');
+    // OpenRouter's extras stay off other servers, which reject unknown fields.
+    expect(first.body).not.toHaveProperty('usage');
+    expect(first.headers.get('x-title')).toBeNull();
     expect(first.body.messages[0]).toMatchObject({ role: 'system' });
     expect(first.body.messages[0].content).toContain('Today is 2026-09-29.');
     expect(second.body.messages.slice(-2)).toEqual([
@@ -162,6 +166,30 @@ describe('OpenAICompatibleAssistant', () => {
     expect(api.requests[1].body.tool_choice).toBe('none');
     expect(api.requests[0].body.reasoning_effort).toBe('low');
     expect(api.requests[0].body).not.toHaveProperty('response_format');
+  });
+
+  it('on OpenRouter, asks for usage, attributes the app, and adds up the cost of every round', async () => {
+    const call = { tool_calls: [{ id: 'c', type: 'function', function: { name: 'get_receivables', arguments: '{}' } }] };
+    const api = fakeOpenAI([
+      { ...completion(call, 'tool_calls'), model: 'openai/gpt-5-mini', usage: { prompt_tokens: 1200, completion_tokens: 40, cost: 0.00042 } },
+      { ...completion({ content: '{"text":"₹1,180 is owed."}' }, 'stop'), model: 'openai/gpt-5-mini', usage: { prompt_tokens: 1500, completion_tokens: 60, cost: 0.00058 } },
+    ]);
+    const reply = await new OpenAICompatibleAssistant({ ...oaiConfig, OPENAI_BASE_URL: 'https://openrouter.ai/api/v1', LIXI_MODEL: 'openai/gpt-5-mini' }, api.fetch).reply({
+      history: [{ role: 'user', text: 'who owes me?' }], context: '', tools, execute: async () => ({ ok: true, value: {} }), routes: [],
+    });
+    expect(reply.text).toBe('₹1,180 is owed.');
+    expect(reply.usage).toEqual({ model: 'openai/gpt-5-mini', inputTokens: 2700, outputTokens: 100, costUsd: expect.closeTo(0.001, 9) });
+    expect(api.requests[0].body.usage).toEqual({ include: true });
+    expect(api.requests[0].headers.get('http-referer')).toBe('https://smart.elixir-books.com');
+    expect(api.requests[0].headers.get('x-title')).toBe('Elixir Books');
+  });
+
+  it('reports tokens with no cost when the server leaves cost out, and no usage when it says nothing', async () => {
+    const req = { history: [{ role: 'user' as const, text: 'hi' }], context: '', tools, execute: async (): Promise<ToolOutcome> => ({ ok: true, value: {} }), routes: [] };
+    const counted = fakeOpenAI([{ ...completion({ content: '{"text":"Hi"}' }, 'stop'), usage: { prompt_tokens: 10, completion_tokens: 2 } }]);
+    expect((await new OpenAICompatibleAssistant(oaiConfig, counted.fetch).reply(req)).usage).toEqual({ model: 'gpt-5-mini', inputTokens: 10, outputTokens: 2, costUsd: null });
+    const silent = fakeOpenAI([completion({ content: '{"text":"Hi"}' }, 'stop')]);
+    expect((await new OpenAICompatibleAssistant(oaiConfig, silent.fetch).reply(req)).usage).toBeUndefined();
   });
 
   it('sends Azure its api-key header', async () => {

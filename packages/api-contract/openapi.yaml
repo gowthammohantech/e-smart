@@ -8101,6 +8101,18 @@ components:
               kind: { type: string }
               count: { type: integer }
         userCount: { type: integer }
+        aiCost:
+          type: array
+          description: What this company's AI use cost the platform, by month (India time), newest first, the last six months with any use.
+          items:
+            type: object
+            required: [month, actions, inputTokens, outputTokens, costUsd]
+            properties:
+              month: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+              actions: { type: integer, description: Lixi messages and bill scans counted against the allowance }
+              inputTokens: { type: integer }
+              outputTokens: { type: integer }
+              costUsd: { type: number, description: 'As the provider reported it; 0 where it reports none (Anthropic, most non-OpenRouter servers)' }
     PlatformPlanOverride:
       type: object
       required: [plan, reason]

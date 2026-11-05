@@ -6334,6 +6334,16 @@ export interface components {
                 count: number;
             }[];
             userCount: number;
+            /** @description What this company's AI use cost the platform, by month (India time), newest first, the last six months with any use. */
+            aiCost?: {
+                month: string;
+                /** @description Lixi messages and bill scans counted against the allowance */
+                actions: number;
+                inputTokens: number;
+                outputTokens: number;
+                /** @description As the provider reported it; 0 where it reports none (Anthropic, most non-OpenRouter servers) */
+                costUsd: number;
+            }[];
         };
         PlatformPlanOverride: {
             plan: components["schemas"]["PlanTier"];

@@ -2047,6 +2047,11 @@ export const aiUsage = pgTable("ai_usage", {
 	month: char({ length: 7 }).notNull(),
 	feature: aiFeature().notNull(),
 	count: integer().default(0).notNull(),
+	// What the model calls behind those actions took, for the platform's own costing.
+	inputTokens: bigint("input_tokens", { mode: "number" }).default(0).notNull(),
+	outputTokens: bigint("output_tokens", { mode: "number" }).default(0).notNull(),
+	// US dollars × 1,000,000, as the provider reported it (OpenRouter does; others leave it 0).
+	costMicroUsd: bigint("cost_micro_usd", { mode: "number" }).default(0).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	primaryKey({ columns: [table.companyId, table.month, table.feature], name: "ai_usage_pkey" }),
 	foreignKey({

@@ -16,7 +16,26 @@ export type ToolOutcome = { ok: true; value: unknown } | { ok: false; error: { s
 
 export type AssistantAction = { type: 'route' | 'ask' | 'document'; label: string; value: string; documentKind: string };
 export type AssistantStat = { label: string; value: string };
-export type AssistantReply = { text: string; stats: AssistantStat[]; actions: AssistantAction[] };
+/** What a reply cost, summed over every model call it took. `costUsd` is null when the server doesn't say. */
+export type AssistantUsage = { model: string; inputTokens: number; outputTokens: number; costUsd: number | null };
+export type AssistantReply = { text: string; stats: AssistantStat[]; actions: AssistantAction[]; usage?: AssistantUsage };
+
+/** Adds one call's usage to the running total. */
+class UsageTotal {
+  private total: AssistantUsage | null = null;
+
+  add(model: string, inputTokens: number, outputTokens: number, costUsd: number | null) {
+    const t = this.total;
+    this.total = t
+      ? { model, inputTokens: t.inputTokens + inputTokens, outputTokens: t.outputTokens + outputTokens, costUsd: t.costUsd === null || costUsd === null ? (t.costUsd ?? costUsd) : t.costUsd + costUsd }
+      : { model, inputTokens, outputTokens, costUsd };
+  }
+
+  /** The reply with its usage attached, when any call reported some. */
+  on(reply: AssistantReply): AssistantReply {
+    return this.total ? { ...reply, usage: this.total } : reply;
+  }
+}
 
 export type AssistantRequest = {
   history: ChatTurn[];
@@ -143,6 +162,7 @@ export class AnthropicAssistant implements AssistantProvider {
       input_schema: t.inputSchema as Anthropic.Beta.BetaTool.InputSchema,
     }));
     const messages: Anthropic.Beta.BetaMessageParam[] = req.history.map((turn) => ({ role: turn.role, content: turn.text }));
+    const usage = new UsageTotal();
 
     for (let round = 0; round <= this.config.LIXI_MAX_TOOL_ROUNDS; round++) {
       const last = round === this.config.LIXI_MAX_TOOL_ROUNDS;
@@ -163,18 +183,19 @@ export class AnthropicAssistant implements AssistantProvider {
         tool_choice: last ? { type: 'none' } : { type: 'auto' },
         messages,
       });
+      usage.add(response.model, response.usage.input_tokens + (response.usage.cache_read_input_tokens ?? 0) + (response.usage.cache_creation_input_tokens ?? 0), response.usage.output_tokens, null);
 
-      if (response.stop_reason === 'refusal') return { text: "I can't help with that one.", stats: [], actions: [] };
+      if (response.stop_reason === 'refusal') return usage.on({ text: "I can't help with that one.", stats: [], actions: [] });
       if (response.stop_reason === 'pause_turn') {
         messages.push({ role: 'assistant', content: response.content });
         continue;
       }
       if (response.stop_reason !== 'tool_use') {
-        if (response.stop_reason === 'max_tokens') return FALLBACK;
+        if (response.stop_reason === 'max_tokens') return usage.on(FALLBACK);
         // The answer is the last text block; anything before it is the model thinking aloud.
         const texts = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : []));
         const last = parseReply(texts.at(-1) ?? '');
-        return last === FALLBACK ? parseReply(texts.join('')) : last;
+        return usage.on(last === FALLBACK ? parseReply(texts.join('')) : last);
       }
 
       const calls = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
@@ -193,7 +214,7 @@ export class AnthropicAssistant implements AssistantProvider {
       );
       messages.push({ role: 'user', content: results });
     }
-    return FALLBACK;
+    return usage.on(FALLBACK);
   }
 }
 
@@ -205,6 +226,9 @@ type OaiMessage =
   | { role: 'assistant'; content: string | null; tool_calls?: OaiToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string };
 type OaiChoice = { finish_reason: string | null; message: { content?: string | null; refusal?: string | null; tool_calls?: OaiToolCall[] } };
+/** `cost` is OpenRouter's, in US dollars; other servers leave it out. */
+type OaiUsage = { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+type OaiCompletion = { model?: string; choices?: OaiChoice[]; usage?: OaiUsage };
 
 const RETRYABLE = new Set([408, 409, 429, 500, 502, 503, 504]);
 
@@ -222,12 +246,14 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
   readonly name = 'openai';
   private readonly url: string;
   private readonly model: string;
+  /** OpenRouter takes a usage request and attribution headers that other servers would reject or ignore. */
+  private readonly openRouter: boolean;
   private readonly fetch: typeof globalThis.fetch;
 
   constructor(
     private readonly config: Pick<
       Config,
-      'OPENAI_BASE_URL' | 'OPENAI_API_KEY' | 'OPENAI_RESPONSE_FORMAT' | 'OPENAI_REASONING_EFFORT' | 'LIXI_MODEL' | 'LIXI_MAX_TOOL_ROUNDS'
+      'OPENAI_BASE_URL' | 'OPENAI_API_KEY' | 'OPENAI_RESPONSE_FORMAT' | 'OPENAI_REASONING_EFFORT' | 'LIXI_MODEL' | 'LIXI_MAX_TOOL_ROUNDS' | 'APP_URL'
     >,
     /** Tests swap the transport. */
     fetch?: typeof globalThis.fetch,
@@ -236,6 +262,7 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
     if (!config.LIXI_MODEL) throw new Error('LIXI_MODEL must be set for ASSISTANT_PROVIDER=openai.');
     this.model = config.LIXI_MODEL;
     this.url = `${config.OPENAI_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
+    this.openRouter = /(^|\.)openrouter\.ai$/i.test(new URL(this.url).hostname);
     this.fetch = fetch ?? globalThis.fetch;
   }
 
@@ -245,23 +272,26 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
       { role: 'system', content: `${SYSTEM}\n\n${req.context}` },
       ...req.history.map((turn): OaiMessage => ({ role: turn.role, content: turn.text })),
     ];
+    const usage = new UsageTotal();
 
     for (let round = 0; round <= this.config.LIXI_MAX_TOOL_ROUNDS; round++) {
       const last = round === this.config.LIXI_MAX_TOOL_ROUNDS;
-      const choice = await this.complete({
+      const { choice, model, usage: used } = await this.complete({
         model: this.model,
         messages,
         ...(tools.length ? { tools, tool_choice: last ? 'none' : 'auto' } : {}),
         ...this.responseFormat(req.routes),
         ...(this.config.OPENAI_REASONING_EFFORT ? { reasoning_effort: this.config.OPENAI_REASONING_EFFORT } : {}),
+        ...(this.openRouter ? { usage: { include: true } } : {}),
       });
+      if (used) usage.add(model, used.prompt_tokens ?? 0, used.completion_tokens ?? 0, typeof used.cost === 'number' ? used.cost : null);
       const { message } = choice;
 
-      if (message.refusal) return { text: "I can't help with that one.", stats: [], actions: [] };
+      if (message.refusal) return usage.on({ text: "I can't help with that one.", stats: [], actions: [] });
       const calls = message.tool_calls ?? [];
       if (!calls.length) {
-        if (choice.finish_reason === 'length') return FALLBACK;
-        return parseReply(message.content ?? '');
+        if (choice.finish_reason === 'length') return usage.on(FALLBACK);
+        return usage.on(parseReply(message.content ?? ''));
       }
 
       messages.push({ role: 'assistant', content: message.content ?? null, tool_calls: calls });
@@ -279,7 +309,7 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
       );
       messages.push(...results);
     }
-    return FALLBACK;
+    return usage.on(FALLBACK);
   }
 
   private responseFormat(routes: readonly string[]) {
@@ -293,9 +323,13 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
     }
   }
 
-  /** One call, retried twice on a timeout, 429 or 5xx. */
-  private async complete(body: Record<string, unknown>): Promise<OaiChoice> {
+  /** One call, retried twice on a timeout, 429 or 5xx. `model` is the one that answered: OpenRouter may route elsewhere. */
+  private async complete(body: Record<string, unknown>): Promise<{ choice: OaiChoice; model: string; usage?: OaiUsage }> {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (this.openRouter) {
+      headers['http-referer'] = this.config.APP_URL;
+      headers['x-title'] = 'Elixir Books';
+    }
     const key = this.config.OPENAI_API_KEY;
     if (key) {
       headers.authorization = `Bearer ${key}`;
@@ -315,10 +349,10 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
         throw new AssistantUnavailable(`Model server unreachable: ${(err as Error).message}`);
       }
       if (res.ok) {
-        const data = (await res.json()) as { choices?: OaiChoice[] };
+        const data = (await res.json()) as OaiCompletion;
         const choice = data.choices?.[0];
         if (!choice?.message) throw new AssistantUnavailable('Model server returned no choices');
-        return choice;
+        return { choice, model: data.model ?? this.model, ...(data.usage ? { usage: data.usage } : {}) };
       }
       if (RETRYABLE.has(res.status) && attempt < 2) {
         await sleep(500 * 2 ** attempt);
