@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { profitAndLoss, type StatementLine } from '@esmart/core/domain/ledger/reports';
@@ -10,6 +10,7 @@ import { useBooksView } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName } from '../../../features/books/names';
+import { ColumnsReport, StatementViewPicker, type StatementView } from '../../../features/books/ColumnsReport';
 
 /** Profit and loss in the Tally layout: the trading account, then indirect income and expenses. */
 export default function ProfitAndLossScreen() {
@@ -17,6 +18,7 @@ export default function ProfitAndLossScreen() {
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
   const nameOf = useAccountName();
+  const [view, setView] = useState<StatementView>('single');
   const pl = useBooksView<ReturnType<typeof profitAndLoss>>('profit-loss', scope.filters.range).data;
   if (!pl) return <LoadingView />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
@@ -44,6 +46,11 @@ export default function ProfitAndLossScreen() {
           )
         }
       >
+        <StatementViewPicker value={view} onChange={setView} />
+        {view !== 'single' ? (
+          <ColumnsReport kind="profit-loss" range={scope.filters.range} view={view} />
+        ) : (
+        <>
         <HeroFigure label={pl.netProfit >= 0 ? tr('books:pl.netProfit') : tr('books:pl.netLoss')} value={money(Math.abs(pl.netProfit), baseCurrency)} tone={pl.netProfit >= 0 ? 'good' : 'bad'} />
         <ReportSection title={tr('books:pl.trading')}>
           <DataTable
@@ -61,6 +68,8 @@ export default function ProfitAndLossScreen() {
         <ReportSection title={tr('books:pl.indirect')}>
           <DataTable headers={[tr('books:tb.account'), tr('books:accounts.balance')]} rows={[...rows(pl.indirect.income), ...rows(pl.indirect.expense).map(([a, v]) => [a, `− ${v}`])]} widths={[2, 1.2]} />
         </ReportSection>
+        </>
+        )}
       </ReportShell>
     </>
   );

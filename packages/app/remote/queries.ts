@@ -634,19 +634,23 @@ export function useMovementPages(f: { branchId?: string; itemId?: string; type?:
   return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
 }
 
-type BooksView = 'trial-balance' | 'profit-loss' | 'balance-sheet' | 'ledger' | 'day-book' | 'cost-centres' | 'accounts';
+type BooksView = 'trial-balance' | 'profit-loss' | 'balance-sheet' | 'ledger' | 'day-book' | 'cost-centres' | 'accounts' | 'integrity';
 
 /**
  * One of the books' statements from the server: the same core ledger functions, run on its whole
  * book, so the device needn't hold every posting. Shaped as core returns them (amounts in paise).
  */
-export function useBooksView<T>(view: BooksView, scope: { from?: string; to: string; account?: string }, enabled = true) {
+export function useBooksView<T>(
+  view: BooksView,
+  scope: { from?: string; to: string; account?: string; breakdown?: 'month' | 'quarter'; compare?: 'previousPeriod' | 'previousYear' },
+  enabled = true,
+) {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
     queryKey: ['books', companyId, view, scope],
     enabled: enabled && !!companyId,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/books/{view}', { params: { path: { companyId, view }, query: { from: scope.from, to: scope.to, account: scope.account } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/books/{view}', { params: { path: { companyId, view }, query: { from: scope.from, to: scope.to, account: scope.account, breakdown: scope.breakdown, compare: scope.compare } }, signal });
       return data as T;
     },
     placeholderData: keepPreviousData,

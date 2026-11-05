@@ -9,7 +9,7 @@ import { Text } from '@esmart/ui/components/Text';
 import type { IconName } from '@esmart/ui/components/Icon';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const LINKS: { key: 'accounts' | 'vouchers' | 'costCentres' | 'trialBalance' | 'profitLoss' | 'balanceSheet' | 'dayBook' | 'close'; route: string; icon: IconName }[] = [
+const LINKS: { key: 'accounts' | 'vouchers' | 'costCentres' | 'trialBalance' | 'profitLoss' | 'balanceSheet' | 'dayBook' | 'integrity' | 'close'; route: string; icon: IconName }[] = [
   { key: 'accounts', route: '/(app)/books/accounts', icon: 'format-list-bulleted-type' },
   { key: 'vouchers', route: '/(app)/books/vouchers', icon: 'swap-horizontal' },
   { key: 'costCentres', route: '/(app)/books/cost-centres', icon: 'sitemap-outline' },
@@ -17,6 +17,7 @@ const LINKS: { key: 'accounts' | 'vouchers' | 'costCentres' | 'trialBalance' | '
   { key: 'profitLoss', route: '/(app)/books/profit-loss', icon: 'chart-line' },
   { key: 'balanceSheet', route: '/(app)/books/balance-sheet', icon: 'file-table-outline' },
   { key: 'dayBook', route: '/(app)/books/day-book', icon: 'calendar-text-outline' },
+  { key: 'integrity', route: '/(app)/books/integrity', icon: 'shield-check-outline' },
   { key: 'close', route: '/(app)/books/close', icon: 'lock-outline' },
 ];
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { balanceSheet, type BalanceSheetSide } from '@esmart/core/domain/ledger/reports';
@@ -10,6 +10,7 @@ import { useBooksView } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName } from '../../../features/books/names';
+import { ColumnsReport, StatementViewPicker, type StatementView } from '../../../features/books/ColumnsReport';
 
 /** What the business owns against what it owes and its capital, on the period's last day. */
 export default function BalanceSheetScreen() {
@@ -17,6 +18,7 @@ export default function BalanceSheetScreen() {
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
   const nameOf = useAccountName();
+  const [view, setView] = useState<StatementView>('single');
   const bs = useBooksView<ReturnType<typeof balanceSheet>>('balance-sheet', { to: scope.filters.range.to }).data;
   if (!bs) return <LoadingView />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
@@ -39,6 +41,11 @@ export default function BalanceSheetScreen() {
           )
         }
       >
+        <StatementViewPicker value={view} onChange={setView} balanceSheet />
+        {view !== 'single' ? (
+          <ColumnsReport kind="balance-sheet" range={scope.filters.range} view={view} />
+        ) : (
+        <>
         <KeyFigures
           rows={[
             { label: tr('books:bs.liabilities'), value: m(bs.totalLiabilities) },
@@ -52,6 +59,8 @@ export default function BalanceSheetScreen() {
         <ReportSection title={tr('books:bs.assets')}>
           <DataTable headers={[tr('books:tb.account'), tr('books:accounts.balance')]} rows={rows(bs.assets)} widths={[2, 1.2]} />
         </ReportSection>
+        </>
+        )}
       </ReportShell>
     </>
   );

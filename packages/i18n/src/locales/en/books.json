@@ -19,7 +19,9 @@
     "dayBook": "Day book",
     "dayBookHint": "Every entry, day by day",
     "close": "Close the books",
-    "closeHint": "Lock a period once it is filed or audited"
+    "closeHint": "Lock a period once it is filed or audited",
+    "integrity": "Integrity check",
+    "integrityHint": "The ledger against the invoices, payments, statements and stock it comes from"
   },
   "account": {
     "capital": "Capital",
@@ -291,5 +293,48 @@
     "save": "Save receipt",
     "saved": "Receipt saved",
     "newIncome": "Add \"{{name}}\" as an income"
+  },
+  "integrity": {
+    "basis": "Checked as of the last day of the period",
+    "allGood": "Everything agrees",
+    "problems_one": "{{count}} check needs a look",
+    "problems_other": "{{count}} checks need a look",
+    "asOf": "As of {{date}}",
+    "ok": "Agrees",
+    "notOk_one": "{{count}} to fix",
+    "notOk_other": "{{count}} to fix",
+    "expectedActual": "Records say {{expected}} · ledger says {{actual}}",
+    "check": "Check",
+    "record": "Record",
+    "expected": "Records say",
+    "actual": "Ledger says",
+    "key": {
+      "sourcesBalance": "Every entry balances",
+      "roundOff": "Round-off under ₹1",
+      "trialBalance": "Trial balance agrees",
+      "partyLedgers": "Party statements match their ledgers",
+      "stock": "Stock ledger matches stock in hand",
+      "allocations": "No document paid more than its total"
+    },
+    "hint": {
+      "sourcesBalance": "Debits equal credits for each invoice, bill, payment, expense and voucher",
+      "roundOff": "No document rounds off by a rupee or more",
+      "trialBalance": "Total debits equal total credits",
+      "partyLedgers": "Each party billed in rupees: its statement against its account in the books",
+      "stock": "Under perpetual stock: the stock account against the stock ledger’s value",
+      "allocations": "Money set against each invoice or bill is no more than it is for"
+    }
+  },
+  "columns": {
+    "change": "Change",
+    "view": {
+      "single": "Single",
+      "month": "Monthly",
+      "quarter": "Quarterly",
+      "monthEnd": "Month ends",
+      "quarterEnd": "Quarter ends",
+      "previousPeriod": "vs previous",
+      "previousYear": "vs last year"
+    }
   }
 }
