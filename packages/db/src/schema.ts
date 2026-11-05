@@ -7,7 +7,7 @@
  * Change the database by editing this file and running
  * `npm run db:generate -w @esmart/db`, which writes a new migration.
  */
-import { pgTable, uniqueIndex, foreignKey, varchar, char, boolean, integer, timestamp, index, unique, smallint, inet, bigint, jsonb, numeric, date, text, bigserial, serial, primaryKey, uuid, pgEnum, customType, type PgTableExtraConfigValue } from "drizzle-orm/pg-core"
+import { pgTable, uniqueIndex, foreignKey, varchar, char, boolean, integer, timestamp, index, unique, smallint, inet, bigint, jsonb, numeric, date, text, bigserial, serial, primaryKey, uuid, pgEnum, customType, check, type PgTableExtraConfigValue } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 /** Encrypted secrets. drizzle-kit has no built-in for bytea. */
@@ -2358,6 +2358,54 @@ export const costCentres = pgTable("cost_centres", {
 			foreignColumns: [companies.id],
 			name: "cost_centres_company_id_fkey"
 		}),
+]);
+
+/**
+ * The fixed asset register (RULES 6.15). Each asset's cost is in the books already, posted by the bill
+ * or voucher it was bought on, to `account` (`sys:fixedAssets` or a fixed-asset ledger account). Its
+ * depreciation and disposal are worked out from the register and posted, never stored: by `method`,
+ * `slm` (straight line, cost less residual over `life_months` from `in_use_from`) or `wdv` (written down
+ * value, `rate` percent a year on what is left), by the day, at each month's end.
+ */
+export const fixedAssets = pgTable("fixed_assets", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	branchId: varchar("branch_id", { length: 40 }),
+	name: varchar({ length: 200 }).notNull(),
+	// What kind of asset: "Computers", "Vehicles", "Plant and machinery"…
+	category: varchar({ length: 60 }),
+	// The ledger account its cost sits in, by key.
+	account: varchar({ length: 80 }).default('sys:fixedAssets').notNull(),
+	assetCode: varchar("asset_code", { length: 60 }),
+	acquiredOn: date("acquired_on").notNull(),
+	inUseFrom: date("in_use_from").notNull(),
+	costMinor: bigint("cost_minor", { mode: "number" }).notNull(),
+	residualMinor: bigint("residual_minor", { mode: "number" }).default(0).notNull(),
+	method: varchar({ length: 8 }).default('slm').notNull(),
+	lifeMonths: integer("life_months"),
+	rate: numeric({ precision: 7, scale: 4 }),
+	// Bought before the books began here: depreciation already written off by `opening_as_of`.
+	openingDepreciationMinor: bigint("opening_depreciation_minor", { mode: "number" }).default(0).notNull(),
+	openingAsOf: date("opening_as_of"),
+	// Where it came from, when bought on a bill here.
+	sourceDocumentId: varchar("source_document_id", { length: 40 }),
+	costCentreId: varchar("cost_centre_id", { length: 40 }),
+	disposedOn: date("disposed_on"),
+	disposalNote: text("disposal_note"),
+	notes: text(),
+	version: integer().default(1).notNull(),
+	createdBy: varchar("created_by", { length: 40 }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	index("fixed_assets_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
+	uniqueIndex("fixed_assets_company_id_asset_code_idx").using("btree", table.companyId.asc().nullsLast(), table.assetCode.asc().nullsLast()).where(sql`${table.assetCode} IS NOT NULL`),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "fixed_assets_company_id_fkey"
+		}),
+	check("fixed_assets_method_check", sql`${table.method} IN ('slm', 'wdv')`),
 ]);
 
 /**
