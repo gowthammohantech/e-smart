@@ -8,6 +8,7 @@
     "dev": "expo start --web",
     "build": "expo export -p web",
     "e2e:offline": "cd e2e && node offline.mjs",
+    "e2e:a11y": "cd e2e && node a11y.mjs",
     "serve": "node serve.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
@@ -66,6 +67,7 @@
     "@esmart/eslint-config": "*",
     "@esmart/tsconfig": "*",
     "@types/react": "~19.2.2",
+    "axe-core": "4.10.3",
     "babel-preset-expo": "~57.0.5",
     "eslint": "^9.39.5",
     "typescript": "~6.0.3"

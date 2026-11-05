@@ -127,6 +127,12 @@ jobs:
       - name: Scenarios
         working-directory: apps/web/e2e
         run: node offline.mjs online,offline,kill,slow,refresh500,tabs,conflict
+      # axe-core (WCAG 2.2 A/AA) over the key pages, light and dark; serious or critical fails.
+      # Runs even if a scenario failed, so one red job shows both.
+      - name: Accessibility scan
+        if: success() || failure()
+        working-directory: apps/web/e2e
+        run: node a11y.mjs
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -135,4 +141,5 @@ jobs:
             api.log
             web.log
             apps/web/e2e/*.png
+            apps/web/e2e/a11y-report.json
           retention-days: 7

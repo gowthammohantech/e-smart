@@ -1,3 +1,5 @@
-const base = require('@esmart/eslint-config');
-
-module.exports = base;
+module.exports = [
+  ...require('@esmart/eslint-config'),
+  require('@esmart/eslint-config/no-literals'),
+  require('@esmart/eslint-config/a11y'),
+];
