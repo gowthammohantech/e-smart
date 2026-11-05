@@ -47,7 +47,16 @@ export function useAppPages(): AppPage[] {
     MENU.filter((s) => s.name !== 'more').forEach((s) => {
       const name = tr(`nav:tab.${s.name}` as 'nav:tab.index');
       add({ key: `tab-${s.name}`, title: name, icon: s.icon, route: sectionPath(s.name) });
-      s.pages.forEach((p) => add({ key: p.route, title: tr(p.labelKey as 'nav:title.invoices'), subtitle: name, icon: p.icon, route: p.route }));
+      s.pages.forEach((p) =>
+        add({
+          key: p.route,
+          title: tr(p.labelKey as 'nav:title.invoices'),
+          // "Sell · Adjustments": the section and, where it has one, the category inside it.
+          subtitle: p.group ? `${name} · ${tr(`nav:menuGroup.${p.group}`)}` : name,
+          icon: p.icon,
+          route: p.route,
+        }),
+      );
     });
 
     const tools = tr('nav:more.group.tools');

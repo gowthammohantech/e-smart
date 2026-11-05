@@ -20,9 +20,18 @@ export type MenuPage = {
   /** Without route groups, as the browser shows it. */
   route: string;
   badge?: MenuBadge;
+  /** The category it sits under inside its section's panel (`nav:menuGroup.<group>`). */
+  group?: PageGroup;
+  /** Where its "+" opens a new one, for pages that list documents. */
+  createRoute?: string;
+  /** Something you do rather than a list you open, shown as a button in the panel. */
+  action?: true;
 };
 
-/** The small headings the desktop sidebar files sections under; `null` sits above them all. */
+/** The categories a section's pages are filed under in the desktop's section panel. */
+export type PageGroup = 'documents' | 'adjustments' | 'accounts' | 'cashFlow' | 'dues' | 'spending' | 'compliance' | 'returns';
+
+/** The bands the desktop sidebar files sections in, split by a rule; `null` sits above them all. */
 export type SidebarGroup = 'transactions' | 'finance' | 'manage' | null;
 
 export type MenuSection = {
@@ -41,13 +50,13 @@ export const MENU: MenuSection[] = [
     activeIcon: 'trending-up',
     sidebarGroup: 'transactions',
     pages: [
-      { key: 'invoices', labelKey: 'nav:title.invoices', icon: 'file-document-outline', route: '/sales/invoices' },
-      { key: 'quotes', labelKey: 'nav:title.quotations', icon: 'file-percent-outline', route: '/sales/quotes' },
-      { key: 'salesOrders', labelKey: 'nav:title.salesOrders', icon: 'clipboard-list-outline', route: '/sales/orders' },
-      { key: 'deliveries', labelKey: 'nav:title.deliveryNotes', icon: 'truck-outline', route: '/sales/deliveries' },
-      { key: 'salesReturns', labelKey: 'nav:title.salesReturns', icon: 'keyboard-return', route: '/sales/returns' },
-      { key: 'creditNotes', labelKey: 'nav:title.creditNotes', icon: 'file-document-minus-outline', route: '/sales/credit-notes' },
-      { key: 'debitNotes', labelKey: 'nav:title.debitNotes', icon: 'file-document-plus-outline', route: '/sales/debit-notes' },
+      { key: 'invoices', labelKey: 'nav:title.invoices', icon: 'file-document-outline', route: '/sales/invoices', group: 'documents', createRoute: '/sales/invoices/new' },
+      { key: 'quotes', labelKey: 'nav:title.quotations', icon: 'file-percent-outline', route: '/sales/quotes', group: 'documents', createRoute: '/sales/quotes/new' },
+      { key: 'salesOrders', labelKey: 'nav:title.salesOrders', icon: 'clipboard-list-outline', route: '/sales/orders', group: 'documents', createRoute: '/sales/orders/new' },
+      { key: 'deliveries', labelKey: 'nav:title.deliveryNotes', icon: 'truck-outline', route: '/sales/deliveries', group: 'documents', createRoute: '/sales/deliveries/new' },
+      { key: 'salesReturns', labelKey: 'nav:title.salesReturns', icon: 'keyboard-return', route: '/sales/returns', group: 'adjustments', createRoute: '/sales/returns/new' },
+      { key: 'creditNotes', labelKey: 'nav:title.creditNotes', icon: 'file-document-minus-outline', route: '/sales/credit-notes', group: 'adjustments', createRoute: '/sales/credit-notes/new' },
+      { key: 'debitNotes', labelKey: 'nav:title.debitNotes', icon: 'file-document-plus-outline', route: '/sales/debit-notes', group: 'adjustments', createRoute: '/sales/debit-notes/new' },
     ],
   },
   {
@@ -56,13 +65,13 @@ export const MENU: MenuSection[] = [
     activeIcon: 'cart',
     sidebarGroup: 'transactions',
     pages: [
-      { key: 'bills', labelKey: 'nav:title.purchaseBills', icon: 'file-document-outline', route: '/purchases/bills' },
-      { key: 'purchaseOrders', labelKey: 'nav:title.purchaseOrders', icon: 'clipboard-list-outline', route: '/purchases/orders' },
-      { key: 'goodsReceipts', labelKey: 'nav:title.goodsReceipts', icon: 'package-down', route: '/purchases/receipts' },
-      { key: 'purchaseReturns', labelKey: 'nav:title.purchaseReturns', icon: 'package-up', route: '/purchases/returns' },
-      { key: 'supplierCreditNotes', labelKey: 'nav:title.supplierCreditNotes', icon: 'file-document-minus-outline', route: '/purchases/credit-notes' },
-      { key: 'supplierDebitNotes', labelKey: 'nav:title.supplierDebitNotes', icon: 'file-document-plus-outline', route: '/purchases/debit-notes' },
-      { key: 'scanBill', labelKey: 'nav:title.scanABill', icon: 'text-recognition', route: '/ocr/capture' },
+      { key: 'bills', labelKey: 'nav:title.purchaseBills', icon: 'file-document-outline', route: '/purchases/bills', group: 'documents', createRoute: '/purchases/bills/new' },
+      { key: 'purchaseOrders', labelKey: 'nav:title.purchaseOrders', icon: 'clipboard-list-outline', route: '/purchases/orders', group: 'documents', createRoute: '/purchases/orders/new' },
+      { key: 'goodsReceipts', labelKey: 'nav:title.goodsReceipts', icon: 'package-down', route: '/purchases/receipts', group: 'documents', createRoute: '/purchases/receipts/new' },
+      { key: 'purchaseReturns', labelKey: 'nav:title.purchaseReturns', icon: 'package-up', route: '/purchases/returns', group: 'adjustments', createRoute: '/purchases/returns/new' },
+      { key: 'supplierCreditNotes', labelKey: 'nav:title.supplierCreditNotes', icon: 'file-document-minus-outline', route: '/purchases/credit-notes', group: 'adjustments', createRoute: '/purchases/credit-notes/new' },
+      { key: 'supplierDebitNotes', labelKey: 'nav:title.supplierDebitNotes', icon: 'file-document-plus-outline', route: '/purchases/debit-notes', group: 'adjustments', createRoute: '/purchases/debit-notes/new' },
+      { key: 'scanBill', labelKey: 'nav:title.scanABill', icon: 'text-recognition', route: '/ocr/capture', action: true },
     ],
   },
   {
@@ -71,7 +80,7 @@ export const MENU: MenuSection[] = [
     activeIcon: 'package-variant',
     sidebarGroup: 'transactions',
     pages: [
-      { key: 'items', labelKey: 'nav:title.itemsAndServices', icon: 'package-variant', route: '/catalog/items' },
+      { key: 'items', labelKey: 'nav:title.itemsAndServices', icon: 'package-variant', route: '/catalog/items', createRoute: '/catalog/items/new' },
       { key: 'movements', labelKey: 'nav:title.stockMovements', icon: 'swap-horizontal', route: '/inventory/movements' },
       { key: 'lowStock', labelKey: 'nav:title.lowStock', icon: 'alert-outline', route: '/inventory/low-stock' },
     ],
@@ -82,14 +91,14 @@ export const MENU: MenuSection[] = [
     activeIcon: 'wallet',
     sidebarGroup: 'finance',
     pages: [
-      { key: 'accountsHub', labelKey: 'reports:dash.accounts.open', icon: 'scale-balance', route: '/accounts' },
-      { key: 'paymentsIn', labelKey: 'nav:title.paymentsReceived', icon: 'cash-plus', route: '/payments/received' },
-      { key: 'paymentsOut', labelKey: 'nav:title.paymentsMade', icon: 'cash-minus', route: '/payments/made' },
-      { key: 'receipts', labelKey: 'nav:title.receipts', icon: 'receipt', route: '/receipts' },
-      { key: 'receivables', labelKey: 'nav:title.receivables', icon: 'clock-alert-outline', route: '/receivables' },
-      { key: 'payables', labelKey: 'nav:title.payables', icon: 'file-clock-outline', route: '/payables' },
-      { key: 'expenses', labelKey: 'nav:title.expenses', icon: 'receipt-text-outline', route: '/expenses' },
-      { key: 'books', labelKey: 'nav:more.entry.books', icon: 'book-open-page-variant-outline', route: '/books' },
+      { key: 'accountsHub', labelKey: 'reports:dash.accounts.open', icon: 'scale-balance', route: '/accounts', group: 'accounts' },
+      { key: 'paymentsIn', labelKey: 'nav:title.paymentsReceived', icon: 'cash-plus', route: '/payments/received', group: 'cashFlow', createRoute: '/payments/new?direction=received' },
+      { key: 'paymentsOut', labelKey: 'nav:title.paymentsMade', icon: 'cash-minus', route: '/payments/made', group: 'cashFlow', createRoute: '/payments/new?direction=paid' },
+      { key: 'receipts', labelKey: 'nav:title.receipts', icon: 'receipt', route: '/receipts', group: 'cashFlow', createRoute: '/receipts/new' },
+      { key: 'receivables', labelKey: 'nav:title.receivables', icon: 'clock-alert-outline', route: '/receivables', group: 'dues' },
+      { key: 'payables', labelKey: 'nav:title.payables', icon: 'file-clock-outline', route: '/payables', group: 'dues' },
+      { key: 'expenses', labelKey: 'nav:title.expenses', icon: 'receipt-text-outline', route: '/expenses', group: 'spending', createRoute: '/expenses/new' },
+      { key: 'books', labelKey: 'nav:more.entry.books', icon: 'book-open-page-variant-outline', route: '/books', group: 'accounts', createRoute: '/books/vouchers/new' },
     ],
   },
   {
@@ -98,10 +107,10 @@ export const MENU: MenuSection[] = [
     activeIcon: 'shield-check',
     sidebarGroup: 'finance',
     pages: [
-      { key: 'compliance', labelKey: 'nav:more.entry.gstCompliance', icon: 'shield-check-outline', route: '/compliance', badge: 'eInvoiceFailed' },
-      { key: 'gstr1', labelKey: 'nav:title.gstr1', icon: 'file-send-outline', route: '/gst/gstr1' },
-      { key: 'gstr2b', labelKey: 'nav:title.gstr2b', icon: 'file-compare', route: '/gst/gstr2b' },
-      { key: 'gstReturns', labelKey: 'nav:title.gstReturns', icon: 'file-certificate-outline', route: '/gst/returns' },
+      { key: 'compliance', labelKey: 'nav:more.entry.gstCompliance', icon: 'shield-check-outline', route: '/compliance', badge: 'eInvoiceFailed', group: 'compliance' },
+      { key: 'gstr1', labelKey: 'nav:title.gstr1', icon: 'file-send-outline', route: '/gst/gstr1', group: 'returns' },
+      { key: 'gstr2b', labelKey: 'nav:title.gstr2b', icon: 'file-compare', route: '/gst/gstr2b', group: 'returns' },
+      { key: 'gstReturns', labelKey: 'nav:title.gstReturns', icon: 'file-certificate-outline', route: '/gst/returns', group: 'returns' },
     ],
   },
   { name: 'contacts', icon: 'account-group-outline', activeIcon: 'account-group', sidebarGroup: 'manage', pages: [] },
@@ -191,4 +200,28 @@ export function sectionPath(name: SectionName): string {
 export function appHref(route: string): string {
   if (route === '/') return '/(app)/(tabs)';
   return MENU.some((s) => sectionPath(s.name) === route) ? `/(app)/(tabs)${route}` : `/(app)${route}`;
+}
+
+/** Every page in the menu: the sections' pages, the tools and the settings. */
+export const ALL_PAGES: readonly MenuPage[] = [...MENU.flatMap((s) => s.pages), ...TOOLS, ...SETTINGS.flatMap((g) => g.pages)];
+
+/**
+ * The menu page a pathname is on, so a document deep in a list
+ * (`/sales/invoices/42`) counts as Invoices. The longest matching route wins.
+ */
+export function pageForPath(pathname: string): MenuPage | undefined {
+  let best: MenuPage | undefined;
+  for (const p of ALL_PAGES) {
+    if (p.action) continue;
+    if ((pathname === p.route || pathname.startsWith(`${p.route}/`)) && (!best || p.route.length > best.route.length)) best = p;
+  }
+  return best;
+}
+
+/** How many pages the desktop's Recent list keeps. */
+export const RECENT_LIMIT = 5;
+
+/** Puts a page at the front of a recent list, once, keeping the newest few. */
+export function pushRecent(list: readonly string[], key: string, limit = RECENT_LIMIT): string[] {
+  return [key, ...list.filter((k) => k !== key)].slice(0, limit);
 }

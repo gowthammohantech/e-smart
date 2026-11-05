@@ -22,6 +22,8 @@ import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
 import { NOTIFICATION_META, notificationRoute } from '@esmart/app/features/notifications/notificationMeta';
 import { CommandPalette } from './CommandPalette';
+import { BranchPicker, CompanyPicker } from './CompanySwitcher';
+import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { SETTINGS_HREF } from '@esmart/app/navigation/pages';
 import { appHref } from '@esmart/app/navigation/menu';
 
@@ -117,8 +119,10 @@ function LixiButton({ label }: { label: string }) {
 }
 
 /**
- * The desktop app's top bar: search (⌘K), sync state, Lixi, notifications
- * and your account. The business switcher lives at the top of the sidebar.
+ * The desktop app's top bar, in three parts: the business and branch you're
+ * in on the left (each its own picker), search (⌘K) in the middle, and sync
+ * state, Lixi, notifications and your account on the right. The two sides
+ * share the leftover width equally, so search stays centred on the bar.
  */
 export function TopBar() {
   const t = useTheme();
@@ -161,6 +165,8 @@ export function TopBar() {
   }, []);
 
   const go = (route: string) => router.push(route as never);
+  // A tablet-width window keeps just the logo and branch mark, so search keeps its room.
+  const narrow = useBreakpoint() === 'tablet';
 
   return (
     <View
@@ -169,13 +175,18 @@ export function TopBar() {
         height: TOP_BAR_HEIGHT,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: t.spacing.sm,
-        paddingHorizontal: t.spacing.xxl,
+        gap: t.spacing.md,
+        paddingHorizontal: narrow ? t.spacing.lg : t.spacing.xxl,
         backgroundColor: t.c.paper,
         borderBottomWidth: 1,
         borderBottomColor: t.c.line,
       }}
     >
+      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+        <CompanyPicker compact={narrow} />
+        <BranchPicker compact={narrow} />
+      </View>
+
       <Pressable
         onPress={() => setPaletteOpen(true)}
         accessibilityRole="search"
@@ -184,8 +195,9 @@ export function TopBar() {
           const { hovered, focused } = state as WebPressState;
           return [
             {
-              flex: 1,
-              maxWidth: 480,
+              width: 480,
+              flexShrink: 1,
+              minWidth: 200,
               height: 36,
               flexDirection: 'row',
               alignItems: 'center',
@@ -211,8 +223,7 @@ export function TopBar() {
         </View>
       </Pressable>
 
-      <View style={{ flex: 1 }} />
-
+      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
       <ConnectionBadge style={{ alignSelf: 'center' }} />
       {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
       {failedSync > 0 || showQueued ? (
@@ -239,6 +250,7 @@ export function TopBar() {
       >
         <Avatar name={user?.name ?? '?'} size={30} color={user?.avatarColor} />
       </Pressable>
+      </View>
 
       <Menu anchor={bellRect} onClose={closeBellMenu} align="right" width={380}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm }}>

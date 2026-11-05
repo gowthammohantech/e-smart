@@ -16,19 +16,24 @@ export type MoreGroupKey = SectionName | 'moreSections' | 'tools' | SettingsGrou
 
 export type MoreGroup = { key: MoreGroupKey; title: string; entries: MoreEntry[] };
 
-/** Turns menu pages into entries: translated, badged, routed, and only what the plan opens. */
-function useEntries() {
-  const { t: tr } = useTranslation(['common', 'nav']);
+/** What each live badge shows right now; `undefined` when there's nothing to flag. */
+export function useMenuBadges(): Record<MenuBadge, string | undefined> {
+  const { t: tr } = useTranslation(['common']);
   const unread = useUnreadCount();
   const offline = !useRemoteMeta((m) => m.online);
   const failed = useComplianceSummary().eInvoice.failed;
-  const canOpen = useCanOpen();
-
-  const badges: Record<MenuBadge, string | undefined> = {
+  return {
     unread: unread ? countLabel(unread) : undefined,
     eInvoiceFailed: failed ? String(failed) : undefined,
     offline: offline ? tr('common:component.offline') : undefined,
   };
+}
+
+/** Turns menu pages into entries: translated, badged, routed, and only what the plan opens. */
+function useEntries() {
+  const { t: tr } = useTranslation(['common', 'nav']);
+  const badges = useMenuBadges();
+  const canOpen = useCanOpen();
   return (pages: MenuPage[]): MoreEntry[] =>
     pages
       .filter((p) => canOpen(p.route))

@@ -192,7 +192,13 @@
     "settingsNavigation": "அமைப்புப் பக்கங்கள்",
     "skipToContent": "உள்ளடக்கத்துக்குச் செல்",
     "assistant": "Lixi உதவியாளர்",
-    "escKey": "Esc"
+    "escKey": "Esc",
+    "recent": "சமீபத்தியவை",
+    "overview": "{{label}} மேலோட்டம்",
+    "createIn": "{{label}} — புதியது",
+    "openPanel": "{{label}} பக்கங்கள்",
+    "branch": "கிளை",
+    "business": "வணிகம்"
   },
   "home": {
     "emptyTitle": "தொடங்கலாம் வாருங்கள்",
@@ -217,5 +223,15 @@
   },
   "money": {
     "subtitle": "கட்டணங்கள், நிலுவைகள், செலவுகள், கணக்குப் புத்தகங்கள்"
+  },
+  "menuGroup": {
+    "documents": "ஆவணங்கள்",
+    "adjustments": "சரிசெய்தல்கள்",
+    "accounts": "கணக்குகள்",
+    "cashFlow": "பணப் புழக்கம்",
+    "dues": "நிலுவைகள்",
+    "spending": "செலவுகள்",
+    "compliance": "இணக்கம்",
+    "returns": "தாக்கல்கள்"
   }
 }

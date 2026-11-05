@@ -1,5 +1,5 @@
 import { canOpen } from '@esmart/core/domain/plan';
-import { MENU, PHONE_TABS, SETTINGS, TOOLS, appHref, sectionPath } from '../menu';
+import { MENU, PHONE_TABS, SETTINGS, TOOLS, appHref, pageForPath, pushRecent, sectionPath } from '../menu';
 import { tabForPath } from '../tabs';
 
 const sectionPages = MENU.flatMap((s) => s.pages.map((p) => ({ section: s.name, ...p })));
@@ -35,5 +35,34 @@ describe('the menu', () => {
 
   it('keeps every full-plan page open on the full plan', () => {
     allPages.forEach((p) => expect([p.route, canOpen('pro', p.route)]).toEqual([p.route, true]));
+  });
+
+  it('files a sectioned page under a category in every section that uses them', () => {
+    MENU.forEach((s) => {
+      const lists = s.pages.filter((p) => !p.action);
+      const grouped = lists.filter((p) => p.group).length;
+      // All or nothing, so a panel never shows a category beside a loose page.
+      expect([s.name, grouped === 0 || grouped === lists.length]).toEqual([s.name, true]);
+    });
+  });
+
+  it('opens a new one from inside the page it lists', () => {
+    sectionPages.filter((p) => p.createRoute).forEach((p) => expect([p.key, tabForPath(p.createRoute!.split('?')[0])]).toEqual([p.key, p.section]));
+  });
+
+  it('finds the page a deep link is on', () => {
+    expect(pageForPath('/sales/invoices')?.key).toBe('invoices');
+    expect(pageForPath('/sales/invoices/abc/edit')?.key).toBe('invoices');
+    expect(pageForPath('/settings/company')?.key).toBe('company');
+    expect(pageForPath('/sales')).toBeUndefined();
+    expect(pageForPath('/sales/invoicesx')).toBeUndefined();
+    // A capture is a step, not a place to come back to.
+    expect(pageForPath('/ocr/capture')).toBeUndefined();
+  });
+
+  it('keeps the newest five recent pages, once each', () => {
+    expect(pushRecent([], 'a')).toEqual(['a']);
+    expect(pushRecent(['a', 'b', 'c'], 'b')).toEqual(['b', 'a', 'c']);
+    expect(pushRecent(['a', 'b', 'c', 'd', 'e'], 'f')).toEqual(['f', 'a', 'b', 'c', 'd']);
   });
 });

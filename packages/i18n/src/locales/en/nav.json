@@ -192,7 +192,13 @@
     "settingsNavigation": "Settings pages",
     "skipToContent": "Skip to content",
     "assistant": "Lixi assistant",
-    "escKey": "ESC"
+    "escKey": "ESC",
+    "recent": "Recent",
+    "overview": "{{label}} overview",
+    "createIn": "Create in {{label}}",
+    "openPanel": "{{label}} pages",
+    "branch": "Branch",
+    "business": "Business"
   },
   "home": {
     "emptyTitle": "Let's get you started",
@@ -217,5 +223,15 @@
   },
   "money": {
     "subtitle": "Payments, dues, expenses and your books"
+  },
+  "menuGroup": {
+    "documents": "Documents",
+    "adjustments": "Adjustments",
+    "accounts": "Accounts",
+    "cashFlow": "Cash flow",
+    "dues": "Dues",
+    "spending": "Spending",
+    "compliance": "Compliance",
+    "returns": "Returns"
   }
 }
