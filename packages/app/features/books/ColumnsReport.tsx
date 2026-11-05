@@ -30,17 +30,19 @@ export function StatementViewPicker({ value, onChange, balanceSheet }: { value: 
 const queryOf = (view: StatementView) =>
   view === 'month' || view === 'quarter' ? { breakdown: view } : view === 'previousPeriod' || view === 'previousYear' ? { compare: view } : {};
 
+export type ColumnsSection = { title: string; headers: string[]; widths: number[]; rows: string[][] };
+
 /**
  * The P&L or the balance sheet with a column per period, each worked out on the server as the single
- * statement for that period. Set against one earlier period, a last column shows the change.
+ * statement for that period, as table sections. Set against one earlier period, a last column shows
+ * the change. The screen shows them and exports the same rows.
  */
-export function ColumnsReport({ kind, range, view }: { kind: 'profit-loss' | 'balance-sheet'; range: { from: string; to: string }; view: Exclude<StatementView, 'single'> }) {
-  const t = useTheme();
+export function useColumnsTables(kind: 'profit-loss' | 'balance-sheet', range: { from: string; to: string }, view: StatementView): ColumnsSection[] | undefined {
   const { t: tr } = useTranslation(['books']);
   const baseCurrency = useBaseCurrency();
   const nameOf = useAccountName();
-  const data = useBooksView<ProfitAndLossColumns | BalanceSheetColumns>(kind, { ...range, ...queryOf(view) }).data;
-  if (!data) return <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />;
+  const data = useBooksView<ProfitAndLossColumns | BalanceSheetColumns>(kind, { ...range, ...queryOf(view) }, view !== 'single').data;
+  if (!data || view === 'single') return undefined;
 
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const comparing = view === 'previousPeriod' || view === 'previousYear';
@@ -51,46 +53,54 @@ export function ColumnsReport({ kind, range, view }: { kind: 'profit-loss' | 'ba
   };
   const line = (label: string, values: number[], minus = false) => [label, ...values.map((v) => (minus && v ? `− ${m(v)}` : m(v))), ...(comparing ? [change(minus ? values.map((x) => -x) : values)] : [])];
   const accountRows = (rows: ColumnRow[], minus = false) => rows.map((r) => line(nameOf({ key: r.key, name: r.name, kind: (r.key.startsWith('sys:') ? 'system' : 'party') as Account['kind'] }), r.values, minus));
+  const tableOf = (labels: string[]) => {
+    const headers = [tr('books:tb.account'), ...labels, ...(comparing ? [tr('books:columns.change')] : [])];
+    return { headers, widths: [2, ...headers.slice(1).map(() => 1.2)] };
+  };
 
   if (kind === 'profit-loss') {
     const pl = data as ProfitAndLossColumns;
-    const headers = [tr('books:tb.account'), ...pl.periods.map((p) => (comparing ? `${p.from} – ${p.to}` : p.label)), ...(comparing ? [tr('books:columns.change')] : [])];
-    const widths = [2, ...headers.slice(1).map(() => 1.2)];
-    return (
-      <>
-        <ReportSection title={tr('books:pl.trading')}>
-          <DataTable
-            headers={headers}
-            widths={widths}
-            rows={[
-              ...accountRows(pl.tradingIncome),
-              line(tr('books:pl.closingStock'), pl.closingStock),
-              line(tr('books:pl.openingStock'), pl.openingStock, true),
-              ...accountRows(pl.tradingExpense, true),
-              line(tr('books:pl.grossProfit'), pl.grossProfit),
-            ]}
-          />
-        </ReportSection>
-        <ReportSection title={tr('books:pl.indirect')}>
-          <DataTable headers={headers} widths={widths} rows={[...accountRows(pl.indirectIncome), ...accountRows(pl.indirectExpense, true), line(tr('books:pl.netProfit'), pl.netProfit)]} />
-        </ReportSection>
-      </>
-    );
+    const t = tableOf(pl.periods.map((p) => (comparing ? `${p.from} – ${p.to}` : p.label)));
+    return [
+      {
+        title: tr('books:pl.trading'),
+        ...t,
+        rows: [
+          ...accountRows(pl.tradingIncome),
+          line(tr('books:pl.closingStock'), pl.closingStock),
+          line(tr('books:pl.openingStock'), pl.openingStock, true),
+          ...accountRows(pl.tradingExpense, true),
+          line(tr('books:pl.grossProfit'), pl.grossProfit),
+        ],
+      },
+      { title: tr('books:pl.indirect'), ...t, rows: [...accountRows(pl.indirectIncome), ...accountRows(pl.indirectExpense, true), line(tr('books:pl.netProfit'), pl.netProfit)] },
+    ];
   }
-
   const bs = data as BalanceSheetColumns;
-  const headers = [tr('books:tb.account'), ...bs.dates, ...(comparing ? [tr('books:columns.change')] : [])];
-  const widths = [2, ...headers.slice(1).map(() => 1.2)];
+  const t = tableOf(bs.dates);
   const side = (groups: BalanceSheetColumns['assets']) =>
     groups.flatMap((g) => [line(tr(`books:bs.heading.${g.heading}` as 'books:bs.heading.capital').toUpperCase(), g.totals), ...accountRows(g.rows).map(([a, ...rest]) => [`   ${a}`, ...rest])]);
+  return [
+    { title: tr('books:bs.liabilities'), ...t, rows: [...side(bs.liabilities), line(tr('books:bs.currentProfit'), bs.currentProfit), line(tr('books:bs.total'), bs.totalLiabilities)] },
+    { title: tr('books:bs.assets'), ...t, rows: [...side(bs.assets), line(tr('books:bs.total'), bs.totalAssets)] },
+  ];
+}
+
+/** The sections as one table for the export: each section's title on a row of its own. */
+export function columnsExport(sections: ColumnsSection[]): { headers: string[]; rows: string[][] } {
+  return { headers: sections[0]?.headers ?? [], rows: sections.flatMap((s) => [[s.title.toUpperCase()], ...s.rows]) };
+}
+
+export function ColumnsReport({ sections }: { sections: ColumnsSection[] | undefined }) {
+  const t = useTheme();
+  if (!sections) return <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />;
   return (
     <>
-      <ReportSection title={tr('books:bs.liabilities')}>
-        <DataTable headers={headers} widths={widths} rows={[...side(bs.liabilities), line(tr('books:bs.currentProfit'), bs.currentProfit), line(tr('books:bs.total'), bs.totalLiabilities)]} />
-      </ReportSection>
-      <ReportSection title={tr('books:bs.assets')}>
-        <DataTable headers={headers} widths={widths} rows={[...side(bs.assets), line(tr('books:bs.total'), bs.totalAssets)]} />
-      </ReportSection>
+      {sections.map((s) => (
+        <ReportSection key={s.title} title={s.title}>
+          <DataTable headers={s.headers} widths={s.widths} rows={s.rows} />
+        </ReportSection>
+      ))}
     </>
   );
 }

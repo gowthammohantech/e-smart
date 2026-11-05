@@ -10,7 +10,7 @@ import { useBooksView } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName } from '../../../features/books/names';
-import { ColumnsReport, StatementViewPicker, type StatementView } from '../../../features/books/ColumnsReport';
+import { ColumnsReport, StatementViewPicker, columnsExport, useColumnsTables, type StatementView } from '../../../features/books/ColumnsReport';
 
 /** Profit and loss in the Tally layout: the trading account, then indirect income and expenses. */
 export default function ProfitAndLossScreen() {
@@ -19,6 +19,7 @@ export default function ProfitAndLossScreen() {
   const baseCurrency = useBaseCurrency();
   const nameOf = useAccountName();
   const [view, setView] = useState<StatementView>('single');
+  const columns = useColumnsTables('profit-loss', scope.filters.range, view);
   const pl = useBooksView<ReturnType<typeof profitAndLoss>>('profit-loss', scope.filters.range).data;
   if (!pl) return <LoadingView />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
@@ -34,7 +35,8 @@ export default function ProfitAndLossScreen() {
         scope={scope}
         onScopeChange={setScope}
         exportRows={() =>
-          reportTable(
+          // The columns when they're showing, else the single statement.
+          view !== 'single' && columns ? reportTable(columnsExport(columns).headers, columnsExport(columns).rows) : reportTable(
             [tr('books:tb.account'), tr('books:pl.income'), tr('books:pl.expenses')],
             [
               [tr('books:pl.openingStock'), '', pl.trading.openingStock / 100],
@@ -48,7 +50,7 @@ export default function ProfitAndLossScreen() {
       >
         <StatementViewPicker value={view} onChange={setView} />
         {view !== 'single' ? (
-          <ColumnsReport kind="profit-loss" range={scope.filters.range} view={view} />
+          <ColumnsReport sections={columns} />
         ) : (
         <>
         <HeroFigure label={pl.netProfit >= 0 ? tr('books:pl.netProfit') : tr('books:pl.netLoss')} value={money(Math.abs(pl.netProfit), baseCurrency)} tone={pl.netProfit >= 0 ? 'good' : 'bad'} />
