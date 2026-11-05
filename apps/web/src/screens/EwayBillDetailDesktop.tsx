@@ -14,9 +14,6 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { keyLabel } from '@esmart/core/labels';
 import type { EwayBill } from '@esmart/core/types';
 import {
-  EWAY_SUB_SUPPLY_TYPES,
-  EWAY_TRANSPORT_MODES,
-  EWAY_VEHICLE_TYPES,
   canCancelEwayBill,
   canExtendEwayBill,
   canUpdatePartB,
@@ -356,7 +353,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
               <SectionTitle>{tr('compliance:ewb.consignment')}</SectionTitle>
               <DetailRows
                 rows={[
-                  { label: tr('compliance:ewb.supply'), value: EWAY_SUB_SUPPLY_TYPES[bill.subSupplyType].label },
+                  { label: tr('compliance:ewb.supply'), value: tr(`compliance:subSupply.${bill.subSupplyType}` as 'compliance:subSupply.supply') },
                   { label: tr('compliance:ewb.documentType'), value: bill.docType },
                   { label: tr('compliance:ewb.taxableValue'), value: formatMoney(bill.taxableValue) },
                   { label: tr('compliance:ewb.totalValue'), value: formatMoney(bill.consignmentValue) },
@@ -370,8 +367,8 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
               <SectionTitle>{tr('compliance:ewb.transport')}</SectionTitle>
               <DetailRows
                 rows={[
-                  { label: tr('compliance:ewb.mode'), value: EWAY_TRANSPORT_MODES[bill.transportMode].label },
-                  { label: tr('compliance:ewb.cargo'), value: EWAY_VEHICLE_TYPES[bill.vehicleType].label },
+                  { label: tr('compliance:ewb.mode'), value: tr(`compliance:mode.${bill.transportMode}` as 'compliance:mode.road') },
+                  { label: tr('compliance:ewb.cargo'), value: tr(bill.vehicleType === 'overDimensional' ? 'compliance:cargo.overDimensionalCargo' : 'compliance:cargo.regular') },
                   ...(bill.vehicleNumber ? [{ label: tr('compliance:ewb.vehicle'), value: bill.vehicleNumber }] : []),
                   ...(bill.transportDocNumber ? [{ label: tr('compliance:ewb.transportDocument'), value: bill.transportDocNumber }] : []),
                   ...(bill.transporterName ? [{ label: tr('compliance:ewb.transporter'), value: bill.transporterName }] : []),
