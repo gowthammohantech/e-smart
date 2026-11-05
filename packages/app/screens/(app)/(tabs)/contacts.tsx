@@ -18,6 +18,9 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { useBaseCurrency, useHasModule } from '../../../store/selectors';
 import { usePartyPages, usePartySummary } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
+import { pagedTableProps, useRowsExport, useTableSelection } from '../../../components/pagedTable';
+import { useServerSave } from '../../../components/useServerSave';
+import { useAppStore } from '../../../store/appStore';
 import type { Party } from '@esmart/core/types';
 import { zero, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -49,6 +52,41 @@ export default function ContactsTab() {
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
+  // Desktop bulk actions: the chosen contacts as a CSV, or set inactive in one save.
+  const selection = useTableSelection(`${tab}|${search}`);
+  const exportRows = useRowsExport();
+  const saveParty = useAppStore((s) => s.saveParty);
+  const { run: serverSave, saving } = useServerSave();
+  const detailRoute = (p: { id: string }) => (tab === 'customer' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`);
+  const chosen = (keys: string[]) => filtered.filter((p) => keys.includes(p.id));
+  const exportChosen = (keys: string[]) =>
+    exportRows(
+      tab === 'customer' ? tr('common:table.customer') : tr('common:table.supplier'),
+      {
+        headers: [tr('common:table.name'), tr('common:table.code'), tr('common:table.taxId'), tr('common:table.phone'), tr('common:table.email'), tr('common:table.outstanding')],
+        rows: chosen(keys).map((p) => [p.name, p.code ?? '', p.taxId ?? '', p.phone ?? '', p.email ?? '', owed(p) / 100]),
+      },
+      tr('common:table.exportCancelled'),
+    );
+  const deactivate = async (keys: string[]) => {
+    const parties = chosen(keys).filter((p) => p.status !== 'inactive');
+    if (!parties.length) return;
+    const res = await serverSave(
+      () => {
+        // The list's rows are whole parties plus read-only balances, which aren't saved back.
+        for (const { outstanding: _o, overdue: _d, ...party } of parties as (Party & { outstanding?: Money; overdue?: Money })[]) {
+          saveParty({ ...party, status: 'inactive' });
+        }
+      },
+      tr('common:table.deactivated', { count: parties.length }),
+      { icon: 'minus-circle-outline' },
+    );
+    if (res) {
+      selection.clear();
+      void pages.refetch();
+    }
+  };
+
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
       {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
@@ -156,19 +194,25 @@ export default function ContactsTab() {
             ]}
             rows={filtered}
             rowKey={(p) => p.id}
-            onRowPress={(p) =>
-              router.push(tab === 'customer' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`)
-            }
+            onRowPress={(p) => router.push(detailRoute(p) as never)}
             rowLabel={(p) => p.name}
-            empty={
-              pages.isLoading ? (
-                <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
-              ) : (
-                <EmptyState illustration="no-contacts" icon="account-group-outline" title={emptyTitle} message={emptyMessage} compact />
-              )
-            }
+            {...pagedTableProps(pages, tr('common:table.loadFailed'), `contacts-${tab}`)}
+            totalCount={summary?.count}
+            selectable
+            selectedKeys={selection.selected}
+            onSelectionChange={selection.setSelected}
+            bulkActions={(keys) => (
+              <>
+                <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+                <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void deactivate(keys)} />
+              </>
+            )}
+            rowActions={(p) => [
+              { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(detailRoute(p) as never) },
+              { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`${detailRoute(p)}/edit` as never) },
+            ]}
+            empty={<EmptyState illustration="no-contacts" icon="account-group-outline" title={emptyTitle} message={emptyMessage} compact />}
           />
-          {moreFooter}
         </View>
       ) : pages.isLoading && !filtered.length ? (
         <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
