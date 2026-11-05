@@ -153,6 +153,7 @@ export default function ContactsTab() {
           <Text variant="caption" tone="muted">
             {asCustomer ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count })}
           </Text>
+          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/contacts/import' as never)} />
           <Text variant="caption" weight="600" tone={asCustomer ? 'warn' : 'bad'}>
             {asCustomer
               ? tr('contacts:hub.receivable', { amount: formatMoney(totalOutstanding) })

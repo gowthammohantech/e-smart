@@ -181,5 +181,27 @@
     "supplier": "You buy from them.",
     "both": "You buy from and sell to them, on one account.",
     "general": "A contact only, such as a landlord, auditor or transporter. Not on invoices, bills or payments."
+  },
+  "import": {
+    "title": "Import contacts",
+    "action": "Import",
+    "hint": "Paste or choose a CSV saved from Excel, Google Sheets, Tally or another app. Columns are found by their names (Name, GSTIN, Phone, Email, Address, City, State, PIN, Opening balance, Dr/Cr, Credit days, Type). Check it first; nothing is saved until you import.",
+    "defaultKind": "Type for rows that do not say",
+    "chooseFile": "Choose CSV file",
+    "paste": "Or paste the CSV here",
+    "noNameColumn": "No column called Name (or Party name, Customer name…) was found in the first row.",
+    "summary": "{{good}} of {{total}} rows can be imported",
+    "line": "Line {{line}}",
+    "more": "and {{count}} more rows",
+    "check": "Check",
+    "import": "Import {{count}}",
+    "done": "{{count}} contacts imported",
+    "skipped": "{{count}} left out",
+    "tooMany": "Up to 1,000 at a time; split the sheet.",
+    "status": {
+      "invalid": "Fix",
+      "duplicate": "Already there",
+      "ready": "Ready"
+    }
   }
 }
