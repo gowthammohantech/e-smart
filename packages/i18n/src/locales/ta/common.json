@@ -281,7 +281,14 @@
     "reference": "குறிப்பு",
     "total": "மொத்தம்",
     "allDates": "எல்லா தேதிகளும்",
-    "clear": "வடிகட்டிகளை அழி"
+    "clear": "வடிகட்டிகளை அழி",
+    "sortBy": "{{column}} படி வரிசைப்படுத்து",
+    "sortedAsc": "{{column}}, ஏறுவரிசையில்",
+    "sortedDesc": "{{column}}, இறங்குவரிசையில்",
+    "range": "{{total}} இல் {{from}}–{{to}}",
+    "pageOf": "பக்கம் {{page}} / {{count}}",
+    "previousPage": "முந்தைய பக்கம்",
+    "nextPage": "அடுத்த பக்கம்"
   },
   "toast": {
     "success": "முடிந்தது",

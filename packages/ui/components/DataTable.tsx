@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
@@ -76,6 +77,7 @@ export function DataTable<T>({
   onSortChange?: (sort: Sort) => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const breakpoint = useBreakpoint();
   const narrow = breakpoint === 'tablet';
   // Only a desktop window scrolls sideways; a phone never reaches this table.
@@ -128,22 +130,26 @@ export function DataTable<T>({
         borderBottomWidth: 1,
         borderBottomColor: t.c.line,
       }}
-      accessibilityRole="header"
+      role="row"
     >
       {columns.map((c) => {
         const active = sort?.key === c.key;
+        const ariaSort = !c.sortValue ? undefined : !active ? 'none' : sort?.dir === 'asc' ? 'ascending' : 'descending';
+        const sortLabel = !active
+          ? tr('common:table.sortBy', { column: c.header })
+          : tr(sort?.dir === 'asc' ? 'common:table.sortedAsc' : 'common:table.sortedDesc', { column: c.header });
         const label = (
           <Text variant="caption" tone={active ? 'default' : 'muted'} weight={active ? '600' : '500'} numberOfLines={1}>
             {c.header}
           </Text>
         );
         return (
-          <View key={c.key} style={cellStyle(c)}>
+          <View key={c.key} style={cellStyle(c)} role="columnheader" aria-sort={ariaSort}>
             {c.sortValue ? (
               <Pressable
                 onPress={() => toggleSort(c.key)}
                 accessibilityRole="button"
-                accessibilityLabel={`Sort by ${c.header}`}
+                accessibilityLabel={sortLabel}
                 style={(state) => [
                   { flexDirection: 'row', alignItems: 'center', gap: 4, opacity: (state as WebPressState).hovered ? 0.7 : 1 },
                   focusRing(t, (state as WebPressState).focused),
@@ -167,11 +173,15 @@ export function DataTable<T>({
 
   const body =
     sorted.length === 0 && empty ? (
-      empty
+      <View role="row" style={{ flexGrow: 1 }}>
+        <View role="cell" style={{ flexGrow: 1 }}>
+          {empty}
+        </View>
+      </View>
     ) : (
       visible.map((row, i) => {
         const cells = columns.map((c) => (
-          <View key={c.key} style={cellStyle(c)}>
+          <View key={c.key} style={cellStyle(c)} role="cell">
             {c.render(row)}
           </View>
         ));
@@ -188,7 +198,9 @@ export function DataTable<T>({
           <Pressable
             key={rowKey(row)}
             onPress={() => onRowPress(row)}
-            accessibilityRole="link"
+            // A row, not a link, so the table stays a table to a screen reader;
+            // it is still focusable and opens on Enter.
+            role="row"
             accessibilityLabel={rowLabel?.(row)}
             style={(state) => {
               const { pressed, hovered, focused } = state as WebPressState;
@@ -198,7 +210,7 @@ export function DataTable<T>({
             {cells}
           </Pressable>
         ) : (
-          <View key={rowKey(row)} style={rowStyle}>
+          <View key={rowKey(row)} style={rowStyle} role="row">
             {cells}
           </View>
         );
@@ -206,9 +218,12 @@ export function DataTable<T>({
     );
 
   const footerRow = footer ? (
-    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 4, backgroundColor: t.c.card2 }}>
+    <View
+      style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 4, backgroundColor: t.c.card2 }}
+      role="row"
+    >
       {columns.map((c) => (
-        <View key={c.key} style={cellStyle(c)}>
+        <View key={c.key} style={cellStyle(c)} role="cell">
           {footer[c.key] ?? null}
         </View>
       ))}
@@ -258,29 +273,36 @@ export function DataTable<T>({
         }}
       >
         <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
-          {`${page * pageSize + 1}–${Math.min((page + 1) * pageSize, sorted.length)} of ${sorted.length}`}
+          {tr('common:table.range', {
+            from: page * pageSize + 1,
+            to: Math.min((page + 1) * pageSize, sorted.length),
+            total: sorted.length,
+          })}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {pageButton('chevron-left', 'Previous page', page - 1, page === 0)}
+          {pageButton('chevron-left', tr('common:table.previousPage'), page - 1, page === 0)}
           <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'], minWidth: 64, textAlign: 'center' }}>
-            {`Page ${page + 1} of ${pageCount}`}
+            {tr('common:table.pageOf', { page: page + 1, count: pageCount })}
           </Text>
-          {pageButton('chevron-right', 'Next page', page + 1, page >= pageCount - 1)}
+          {pageButton('chevron-right', tr('common:table.nextPage'), page + 1, page >= pageCount - 1)}
         </View>
       </View>
     ) : null;
 
+  // The pager sits outside the table element: it controls the table but is not part of it.
   const content = (
     <>
-      {header}
-      {scroll ? (
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-          {body}
-        </ScrollView>
-      ) : (
-        body
-      )}
-      {footerRow}
+      <View role="table" style={{ flex: scroll ? 1 : undefined }}>
+        <View role="rowgroup">{header}</View>
+        {scroll ? (
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} role="rowgroup">
+            {body}
+          </ScrollView>
+        ) : (
+          <View role="rowgroup">{body}</View>
+        )}
+        {footerRow ? <View role="rowgroup">{footerRow}</View> : null}
+      </View>
       {pager}
     </>
   );

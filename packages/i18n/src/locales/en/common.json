@@ -281,7 +281,14 @@
     "reference": "Reference",
     "total": "Total",
     "allDates": "All dates",
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "sortBy": "Sort by {{column}}",
+    "sortedAsc": "{{column}}, sorted ascending",
+    "sortedDesc": "{{column}}, sorted descending",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "pageOf": "Page {{page}} of {{count}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page"
   },
   "toast": {
     "success": "Done",
