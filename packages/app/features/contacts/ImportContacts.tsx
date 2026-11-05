@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -19,26 +19,12 @@ import { syncSoon } from '../../remote/sync';
 import { useBaseCurrency } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
+import { CAN_PICK_FILES, pickFile } from '../import/pickFile';
 
 type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; issues?: { message?: string }[] };
 const KINDS: ImportKind[] = ['customer', 'supplier', 'both', 'general'];
 /** A sample of the sheet: column names as spreadsheets have them, in English in every language. */
 const SAMPLE_CSV = ['Name,GSTIN,Phone,State,Opening Balance', 'Murugan Traders,33AAACM1234A1ZF,9840012345,Tamil Nadu,12500'].join('\n');
-
-/** A CSV picked in the browser, read as text. Phones paste it instead, until a file picker ships with the next store build. */
-function pickCsvOnWeb(): Promise<string | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv,text/csv';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return resolve(null);
-      void file.text().then(resolve);
-    };
-    input.click();
-  });
-}
 
 /**
  * Contacts from a spreadsheet: read on the device (core/domain/partyImport), checked by the server
@@ -105,12 +91,18 @@ export function ImportContacts() {
           </Text>
           <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => { setKind(v as ImportKind); setOutcomes(null); }} />
         </View>
-        {Platform.OS === 'web' ? (
+        {CAN_PICK_FILES ? (
           <Button
             title={tr('contacts:import.chooseFile')}
             icon="upload"
             variant="secondary"
-            onPress={() => void pickCsvOnWeb().then((csv) => { if (csv !== null) { setText(csv); setOutcomes(null); } })}
+            onPress={() =>
+              void pickFile(['.csv']).then(async (file) => {
+                if (!file) return;
+                setText(await file.text());
+                setOutcomes(null);
+              })
+            }
           />
         ) : null}
         <TextField
