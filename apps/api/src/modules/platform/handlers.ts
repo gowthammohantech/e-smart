@@ -345,6 +345,44 @@ export const platformHandlers = defineHandlers({
     return setUserEnabled(ctx, true);
   },
 
+  /**
+   * Grants, changes or removes platform operator access, as db:platform-admin does from the command line.
+   * The user is signed out everywhere so their next session opens under the new role's rules.
+   */
+  async setPlatformUserRole(ctx) {
+    const reason = reasonOf(ctx.body);
+    const next = ctx.body.platformRole ?? null;
+    if (ctx.params.userId === ctx.user.id) throw conflict('SELF', "You can't change your own platform role");
+    const { user, account } = await ctx.db.transaction(async (tx) => {
+      // Lock every superadmin too, so two demotions at once can't leave none.
+      await tx.select({ id: U.id }).from(U).where(eq(U.platformRole, 'superadmin')).for('update');
+      const [current] = await tx.select().from(U).where(eq(U.id, ctx.params.userId)).for('update');
+      if (!current) throw notFound('User');
+      if (current.platformRole === next) throw conflict('NO_CHANGE', next ? `This user is already a platform ${next}` : 'This user has no platform role');
+      if (next && current.status === 'disabled') throw conflict('USER_DISABLED', 'Enable this user before giving them a platform role');
+      if (current.platformRole === 'superadmin') {
+        const [{ n }] = await tx.select({ n: count() }).from(U).where(and(eq(U.platformRole, 'superadmin'), sql`${U.id} <> ${current.id}`));
+        if (n === 0) throw conflict('LAST_SUPERADMIN', 'There must always be at least one superadmin');
+      }
+      const [updated] = await tx
+        .update(U)
+        .set({ platformRole: next, version: current.version + 1, updatedAt: ctx.now })
+        .where(eq(U.id, current.id))
+        .returning();
+      await revokeAllSessions(tx, current.id, ctx.now);
+      await recordPlatformAction(tx, ctx.user, ctx.req, {
+        action: next ? 'operator.role_granted' : 'operator.role_removed',
+        target: { type: 'user', id: current.id, label: `${current.name} <${current.email}>` },
+        reason,
+        before: { platformRole: current.platformRole },
+        after: { platformRole: next },
+      });
+      const [acct] = await tx.select({ name: A.name, suspendedAt: A.suspendedAt }).from(A).where(eq(A.id, current.accountId));
+      return { user: updated, account: acct };
+    });
+    return userToPlatform(user, account);
+  },
+
   /** Newest first. `from` and `to` are inclusive UTC dates. */
   async listPlatformAuditEvents(ctx) {
     const { actorId, targetType, targetId, from, to, limit, cursor } = ctx.query;

@@ -232,6 +232,40 @@ describe('users', () => {
     expect(tenantAudit.body.data.slice(0, 2).map((e: { action: string }) => e.action)).toEqual(['enabled', 'disabled']);
   });
 
+  it('makes a user a superadmin, signing them out, and takes it away again', async () => {
+    const admin = await platformOperator(t, 'superadmin');
+    const tenant = await ownerWithCompany(t);
+    const url = `/admin/users/${tenant.user.id}/platform-role`;
+
+    const up = await t.put(url, { platformRole: 'superadmin', reason: 'New ops hire' }, { token: admin.token });
+    expect(up.status).toBe(200);
+    expect(up.body.platformRole).toBe('superadmin');
+    expect((await t.get('/me', { token: tenant.token })).status).toBe(401);
+    expect((await t.put(url, { platformRole: 'superadmin', ...REASON }, { token: admin.token })).body.code).toBe('NO_CHANGE');
+
+    const down = await t.put(url, { platformRole: null, reason: 'Left ops' }, { token: admin.token });
+    expect(down.status).toBe(200);
+    expect(down.body.platformRole).toBeNull();
+
+    const audit = await t.get('/admin/audit-events', { token: admin.token, query: { targetType: 'user', targetId: tenant.user.id } });
+    expect(audit.body.data.map((e: { action: string }) => e.action)).toEqual(['operator.role_removed', 'operator.role_granted']);
+  });
+
+  it('guards platform role changes', async () => {
+    const admin = await platformOperator(t, 'superadmin');
+    const support = await platformOperator(t, 'support');
+    const tenant = await ownerWithCompany(t);
+
+    const bySupport = await t.put(`/admin/users/${tenant.user.id}/platform-role`, { platformRole: 'superadmin', ...REASON }, { token: support.token });
+    expect(bySupport.body.code).toBe('PLATFORM_FORBIDDEN');
+    const self = await t.put(`/admin/users/${admin.user.id}/platform-role`, { platformRole: null, ...REASON }, { token: admin.token });
+    expect(self.body.code).toBe('SELF');
+
+    await t.post(`/admin/users/${tenant.user.id}/disable`, REASON, { token: admin.token });
+    const disabled = await t.put(`/admin/users/${tenant.user.id}/platform-role`, { platformRole: 'support', ...REASON }, { token: admin.token });
+    expect(disabled.body.code).toBe('USER_DISABLED');
+  });
+
   it("won't disable a platform operator", async () => {
     const admin = await platformOperator(t, 'superadmin');
     const res = await t.post(`/admin/users/${admin.user.id}/disable`, REASON, { token: admin.token });

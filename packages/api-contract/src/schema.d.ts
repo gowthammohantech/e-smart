@@ -3873,6 +3873,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/{userId}/platform-role": {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Make a user a platform superadmin or support operator, or remove their platform access
+         * @description Signs the user out everywhere, so their next session opens under the new role's rules (an authenticator, 12-hour sessions). `SELF`: you can't change your own role. `USER_DISABLED`: enable the user first. `LAST_SUPERADMIN`: there must always be one. `NO_CHANGE`: they already have that role.
+         */
+        put: operations["setPlatformUserRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/audit-events": {
         parameters: {
             query?: never;
@@ -5550,6 +5574,12 @@ export interface components {
         /** @enum {string} */
         PlatformRole: "superadmin" | "support";
         PlatformReason: {
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+        };
+        PlatformRoleChange: {
+            /** @description `null` removes platform access */
+            platformRole: components["schemas"]["PlatformRole"] | null;
             /** @description Why; kept in the platform audit log */
             reason: string;
         };
@@ -13839,6 +13869,38 @@ export interface operations {
         };
         responses: {
             /** @description Enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUser"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    setPlatformUserRole: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformRoleChange"];
+            };
+        };
+        responses: {
+            /** @description Changed */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -5490,6 +5490,34 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/users/{userId}/platform-role:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+    put:
+      tags: [Platform]
+      operationId: setPlatformUserRole
+      summary: Make a user a platform superadmin or support operator, or remove their platform access
+      description: >-
+        Signs the user out everywhere, so their next session opens under the new role's rules (an authenticator, 12-hour sessions).
+        `SELF`: you can't change your own role. `USER_DISABLED`: enable the user first. `LAST_SUPERADMIN`: there must always be one.
+        `NO_CHANGE`: they already have that role.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformRoleChange' }
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /admin/audit-events:
     get:
       tags: [Platform]
@@ -7072,6 +7100,12 @@ components:
       type: object
       required: [reason]
       properties:
+        reason: { type: string, minLength: 3, maxLength: 500, description: Why; kept in the platform audit log }
+    PlatformRoleChange:
+      type: object
+      required: [platformRole, reason]
+      properties:
+        platformRole: { oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }], description: '`null` removes platform access' }
         reason: { type: string, minLength: 3, maxLength: 500, description: Why; kept in the platform audit log }
     PlatformAccount:
       type: object
