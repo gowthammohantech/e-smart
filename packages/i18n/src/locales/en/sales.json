@@ -379,7 +379,8 @@
     "ewbNo": "E-way bill no.",
     "validUntil": "Valid until",
     "ackNo": "Ack no.",
-    "ackDate": "Ack date"
+    "ackDate": "Ack date",
+    "amountInWords": "Amount in words"
   },
   "returnPicker": {
     "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",

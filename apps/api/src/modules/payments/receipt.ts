@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
+import { amountInWords } from '@esmart/core/lib/amountInWords';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { schema } from '@esmart/db';
 import type { CompanyRow } from '../../context';
@@ -104,6 +105,7 @@ export async function receiptHtml(db: DbOrTx, company: CompanyRow, p: Schema<'Pa
   <div><span class="strong">${esc(p.number)}</span> · ${formatDate(p.date)}</div>
   <p>${p.direction === 'received' ? 'Received from' : 'Paid to'} <span class="strong">${esc(party?.name)}</span>
      the sum of <span class="strong">${formatMoney(p.amount)}</span> by ${esc(p.method)}${p.reference ? ` (ref. ${esc(p.reference)})` : ''}.</p>
+  <p class="muted">${esc(amountInWords(p.amount))}</p>
   ${rows ? `<table><thead><tr><th>Against</th><th class="num">Amount</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
   ${p.unallocated && p.unallocated.minor > 0 ? `<p class="muted">Held as an advance: ${formatMoney(p.unallocated)}</p>` : ''}
   ${p.notes ? `<p class="muted">${esc(p.notes)}</p>` : ''}

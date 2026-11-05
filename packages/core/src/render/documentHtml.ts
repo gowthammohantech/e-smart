@@ -4,6 +4,7 @@ import { flattenTaxComponents } from '../domain/lineCalc';
 import { formatMoney, formatPercent, formatQty } from '../lib/format';
 import { formatDate } from '../lib/date';
 import { money } from '../lib/money';
+import { amountInWords } from '../lib/amountInWords';
 import { INDIAN_STATES } from '../data/masters';
 import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '../lib/qr';
 import { E_INVOICE_CANCEL_REASONS } from '../domain/eInvoice';
@@ -221,6 +222,7 @@ export function buildDocumentHtml({
   .totals { width: 280px; margin-left: auto; margin-top: 14px; }
   .totals td { padding: 5px 0; border: 0; }
   .totals tr.grand td { border-top: 1px solid #E2E8F1; padding-top: 9px; font-weight: 700; font-size: 15px; }
+  .words { margin-top: 10px; text-align: right; font-size: 12px; }
   .notes { margin-top: 26px; display: flex; gap: 28px; }
   .notes > div { flex: 1; }
   .sign { margin-top: 34px; text-align: right; }
@@ -305,6 +307,7 @@ export function buildDocumentHtml({
   ${reimbursementTable}
 
   <table class="totals"><tbody>${totalRows}</tbody></table>
+  <div class="words"><span class="cap">${bi('sales:pdf.amountInWords')}</span> ${esc(amountInWords(doc.totals.grandTotal))}</div>
 
   ${eInvoiceBlock(doc, bi, ewayBill)}
 
