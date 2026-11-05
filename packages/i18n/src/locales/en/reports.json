@@ -344,11 +344,11 @@
     "outward": "Outward",
     "inward": "Inward",
     "urgency": {
-      "current": "Not due",
-      "d1_30": "Follow up",
-      "d31_60": "Overdue",
-      "d61_90": "Escalate",
-      "d90plus": "Critical"
+      "notDue": "Not due",
+      "followUp": "Follow up",
+      "overdue": "Overdue",
+      "escalate": "Escalate",
+      "critical": "Critical"
     }
   },
   "tds": {

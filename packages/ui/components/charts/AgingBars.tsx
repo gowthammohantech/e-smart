@@ -14,12 +14,12 @@ import type { StatusTone } from '@esmart/core/domain/documentStates';
  * What each bucket asks of the person, with an icon so it doesn't rest on colour alone.
  * Keys not listed (a custom bucket) show no label.
  */
-const URGENCY: Record<string, { tone: StatusTone; icon: IconName }> = {
-  current: { tone: 'neutral', icon: 'check-circle-outline' },
-  d1_30: { tone: 'warning', icon: 'bell-outline' },
-  d31_60: { tone: 'warning', icon: 'alert-outline' },
-  d61_90: { tone: 'danger', icon: 'alert-outline' },
-  d90plus: { tone: 'danger', icon: 'alert-circle-outline' },
+const URGENCY: Record<string, { key: 'notDue' | 'followUp' | 'overdue' | 'escalate' | 'critical'; tone: StatusTone; icon: IconName }> = {
+  current: { key: 'notDue', tone: 'neutral', icon: 'check-circle-outline' },
+  d1_30: { key: 'followUp', tone: 'warning', icon: 'bell-outline' },
+  d31_60: { key: 'overdue', tone: 'warning', icon: 'alert-outline' },
+  d61_90: { key: 'escalate', tone: 'danger', icon: 'alert-outline' },
+  d90plus: { key: 'critical', tone: 'danger', icon: 'alert-circle-outline' },
 };
 
 export type AgingDatum = { key: string; label: string; amount: Money; count: number };
@@ -70,7 +70,7 @@ export function AgingBars({
           const label = b.key === 'current' ? tr('reports:cell.current') : b.label;
           const dim = !!selectedKey && selectedKey !== b.key;
           const urgency = URGENCY[b.key];
-          const urgencyLabel = urgency ? tr(`reports:cell.urgency.${b.key}` as 'reports:cell.urgency.current') : '';
+          const urgencyLabel = urgency ? tr(`reports:cell.urgency.${urgency.key}` as const) : '';
           return (
             <Pressable
               key={b.key}
