@@ -38,6 +38,7 @@ import { major, useCardExport } from '../../../features/dashboard/exportCard';
 import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
 import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
+import { SetupChecklist } from '../../../features/reports/SetupChecklist';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function Home() {
@@ -148,47 +149,9 @@ export default function Home() {
             <QuickActions />
           </View>
 
-          <SectionHeader title={tr('reports:home.firstSteps')} />
-          <Card padded={false}>
-            {[
-              { label: tr('reports:home.step.customer.title'), icon: 'account-plus-outline' as const, route: '/(app)/contacts/customers/new' },
-              { label: tr('reports:home.step.item.title'), icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
-              { label: tr('reports:home.step.invoice.title'), icon: 'file-document-edit-outline' as const, route: '/(app)/sales/invoices/new' },
-            ].map((step, i, arr) => (
-              <Pressable
-                key={step.label}
-                onPress={() => router.push(step.route as never)}
-                accessibilityRole="button"
-                accessibilityLabel={step.label}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: t.spacing.md,
-                  padding: t.spacing.lg,
-                  borderBottomWidth: i < arr.length - 1 ? 0.5 : 0,
-                  borderBottomColor: t.c.line,
-                  backgroundColor: pressed ? t.c.card2 : 'transparent',
-                })}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: t.radius.sm,
-                    backgroundColor: t.c.chip,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Icon name={step.icon} size={19} color={t.c.primary} />
-                </View>
-                <Text variant="body" weight="500" style={{ flex: 1 }}>
-                  {step.label}
-                </Text>
-                <Icon name="chevron-right" size={18} color={t.c.muted} />
-              </Pressable>
-            ))}
-          </Card>
+          <View style={{ marginTop: t.spacing.xl }}>
+            <SetupChecklist />
+          </View>
         </Screen>
 
         <Fab icon="plus" label={tr('reports:home.invoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />
@@ -211,6 +174,11 @@ export default function Home() {
         <Text variant="small" tone="muted">
           {tr('nav:home.subtitle')}
         </Text>
+
+        {/* Until the business is set up (or the person hides it). */}
+        <View style={{ marginTop: t.spacing.lg }}>
+          <SetupChecklist />
+        </View>
 
         <View style={{ marginTop: t.spacing.xl, marginHorizontal: -t.spacing.lg, paddingLeft: t.spacing.lg }}>
           <QuickActions />

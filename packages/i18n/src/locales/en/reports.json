@@ -18,7 +18,7 @@
     "gettingStarted": "Getting started",
     "welcome": "Welcome, {{name}}",
     "welcomeBody": "{{company}} is ready. Raise your first invoice and this page fills in with your sales, collections and what you are owed.",
-    "setUpSteps": "Set up in three steps",
+    "setUpSteps": "Set up your business",
     "stepsDone": "{{done}} of {{total}} done",
     "stepNumber": "Step {{n}}",
     "quickActions": "Quick actions",
@@ -34,6 +34,18 @@
       "invoice": {
         "title": "Create your first invoice",
         "body": "Bill a customer and send it as a PDF, link or WhatsApp."
+      },
+      "profile": {
+        "title": "Complete your business profile",
+        "body": "Logo, address and phone, as they print on every invoice."
+      },
+      "gst": {
+        "title": "Set up GST",
+        "body": "Your GSTIN and registration, so invoices charge the right tax."
+      },
+      "team": {
+        "title": "Invite your team",
+        "body": "Add your accountant or staff, each with their own access."
       }
     },
     "invoice": "Invoice",
@@ -70,7 +82,12 @@
     "invoicesCount_one": "{{count}} invoice",
     "invoicesCount_other": "{{count}} invoices",
     "entriesCount_one": "{{count}} entry",
-    "entriesCount_other": "{{count}} entries"
+    "entriesCount_other": "{{count}} entries",
+    "checklist": {
+      "progress": "{{done}} of {{total}} done",
+      "dismiss": "Hide setup steps",
+      "done": "Done"
+    }
   },
   "shell": {
     "exportCsv": "Export as CSV",

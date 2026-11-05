@@ -52,6 +52,10 @@ type UiState = {
   hasSeenTour: boolean;
   setHasSeenTour: (v: boolean) => void;
 
+  /** Businesses whose setup checklist the person has hidden on Home. */
+  setupDismissed: string[];
+  dismissSetup: (companyId: string) => void;
+
   lixiAccess: LixiAccess;
   setLixiAccess: (key: keyof LixiAccess, on: boolean) => void;
 
@@ -102,6 +106,11 @@ export const useUiStore = create<UiState>()(
 
       hasSeenTour: false,
       setHasSeenTour: (hasSeenTour) => set({ hasSeenTour }),
+
+      setupDismissed: [],
+      dismissSetup: (companyId) => {
+        if (!get().setupDismissed.includes(companyId)) set({ setupDismissed: [...get().setupDismissed, companyId] });
+      },
 
       lixiAccess: { holdTab: true, swipeUp: true, floatingOrb: false, pullDown: true },
       setLixiAccess: (key, on) => set({ lixiAccess: { ...get().lixiAccess, [key]: on } }),
