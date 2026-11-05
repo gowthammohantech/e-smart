@@ -303,7 +303,14 @@
     "rowActions": "Actions for {{label}}",
     "actions": "Actions",
     "loading": "Loading",
-    "loadFailed": "This list couldn’t load."
+    "loadFailed": "This list couldn’t load.",
+    "open": "Open",
+    "exportCsv": "Export CSV",
+    "exportCancelled": "Export cancelled",
+    "deactivate": "Deactivate",
+    "deactivated_one": "{{count}} deactivated",
+    "deactivated_other": "{{count}} deactivated",
+    "duplicate": "Duplicate"
   },
   "toast": {
     "success": "Done",

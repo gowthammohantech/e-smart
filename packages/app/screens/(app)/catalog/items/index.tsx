@@ -13,6 +13,9 @@ import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { useItemPages } from '../../../../remote/queries';
+import { pagedTableProps, useRowsExport, useTableSelection } from '../../../../components/pagedTable';
+import { useServerSave } from '../../../../components/useServerSave';
+import { useAppStore } from '../../../../store/appStore';
 import { useDebounced } from '../../../../components/useDebounced';
 import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
@@ -40,11 +43,46 @@ export default function ItemList() {
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
+  // The phone's list: the next page loads on scroll, with this as the fallback.
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
       {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
     </View>
   ) : null;
+
+  // Desktop bulk actions: the chosen rows as a CSV, or set inactive in one save.
+  const selection = useTableSelection(`${tab}|${search}`);
+  const exportRows = useRowsExport();
+  const saveItem = useAppStore((s) => s.saveItem);
+  const { run: serverSave, saving } = useServerSave();
+  const chosen = (keys: string[]) => filtered.filter((i) => keys.includes(i.id));
+  const exportChosen = (keys: string[]) =>
+    exportRows(
+      tr('nav:title.itemsAndServices'),
+      {
+        headers: [tr('common:table.name'), tr('common:table.sku'), tr('common:table.hsn'), tr('common:table.unit'), tr('common:table.onHand'), tr('common:table.price')],
+        rows: chosen(keys).map((i) => [i.name, i.sku, i.hsnCode ?? '', i.unit, i.trackInventory ? (stock[i.id] ?? 0) : '', i.salePrice.minor / 100]),
+      },
+      tr('common:table.exportCancelled'),
+    );
+  const deactivate = async (keys: string[]) => {
+    const items = chosen(keys).filter((i) => i.status !== 'inactive');
+    if (!items.length) return;
+    const res = await serverSave(
+      () => {
+        // The list's rows are whole items plus read-only stock figures, which aren't saved back.
+        for (const { stockOnHand: _stock, low: _low, ...item } of items as (Item & { stockOnHand?: number; low?: boolean })[]) {
+          saveItem({ ...item, status: 'inactive' });
+        }
+      },
+      tr('common:table.deactivated', { count: items.length }),
+      { icon: 'minus-circle-outline' },
+    );
+    if (res) {
+      selection.clear();
+      void pages.refetch();
+    }
+  };
 
   const tabs = (
     <Segmented
@@ -112,9 +150,22 @@ export default function ItemList() {
             rowKey={(i) => i.id}
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
             rowLabel={(i) => i.name}
-            empty={pages.isLoading ? <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} /> : <EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
+            {...pagedTableProps(pages, tr('common:table.loadFailed'), 'items')}
+            selectable
+            selectedKeys={selection.selected}
+            onSelectionChange={selection.setSelected}
+            bulkActions={(keys) => (
+              <>
+                <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+                <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void deactivate(keys)} />
+              </>
+            )}
+            rowActions={(i) => [
+              { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(`/(app)/catalog/items/${i.id}`) },
+              { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`/(app)/catalog/items/${i.id}/edit`) },
+            ]}
+            empty={<EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
           />
-          {moreFooter}
         </View>
       ) : (
       <ScrollView
