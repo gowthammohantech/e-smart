@@ -2,6 +2,7 @@ import { calculateDocument } from '../lineCalc';
 import { buildTaxContext } from '../taxEngine';
 import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting } from '../ledger/postings';
 import { balanceSheet, ledgerStatement, profitAndLoss, trialBalance } from '../ledger/reports';
+import { balanceSheetColumns, comparisonPeriod, profitAndLossColumns, splitPeriods, variance } from '../ledger/comparative';
 import { Book, chartOfAccounts } from '../ledger/accounts';
 import { BusinessDocument, Company, DocumentKind, DocumentLine, Expense, GstFlags, Item, Party, Payment, PaymentAccount, StockMovement, Voucher } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
@@ -240,6 +241,47 @@ describe('books', () => {
     expect(pl.trading.closingStock).toBe(90000);
     expect(pl.grossProfit).toBe(100000 - 120000 + 90000 - 30000);
     expect(pl.netProfit).toBe(pl.grossProfit);
+  });
+
+  it('breaks the P&L into months that add up to the year, and each month agrees with its own report', () => {
+    const year = { from: '2026-04-01', to: '2027-03-31' };
+    const months = splitPeriods(year, 'month');
+    expect(months).toHaveLength(12);
+    expect(months[0]).toEqual({ from: '2026-04-01', to: '2026-04-30', label: 'Apr 26' });
+    expect(months[10].to).toBe('2027-02-28');
+    const cols = profitAndLossColumns(postings, book, months, stock);
+    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+    const full = profitAndLoss(postings, book, year, stock);
+    expect(sum(cols.netProfit)).toBe(full.netProfit);
+    expect(sum(cols.grossProfit)).toBe(full.grossProfit);
+    // Periodic stock: each month opens with what the last one closed with.
+    for (let i = 1; i < 12; i++) expect(cols.openingStock[i]).toBe(cols.closingStock[i - 1]);
+    const may = profitAndLoss(postings, book, months[1], stock);
+    expect(cols.netProfit[1]).toBe(may.netProfit);
+    // A row per account, its months adding up to the year's line.
+    const sales = cols.tradingIncome.find((r) => r.key === 'sys:sales')!;
+    expect(sum(sales.values)).toBe(full.trading.income.find((l) => l.account.key === 'sys:sales')!.amount);
+  });
+
+  it('cuts quarters from the start of the range and sets a period beside the one before or last year', () => {
+    expect(splitPeriods({ from: '2026-04-01', to: '2027-03-31' }, 'quarter').map((p) => [p.from, p.to])).toEqual([
+      ['2026-04-01', '2026-06-30'],
+      ['2026-07-01', '2026-09-30'],
+      ['2026-10-01', '2026-12-31'],
+      ['2027-01-01', '2027-03-31'],
+    ]);
+    expect(comparisonPeriod({ from: '2026-07-01', to: '2026-09-30' }, 'previousPeriod')).toMatchObject({ from: '2026-04-01', to: '2026-06-30' });
+    expect(comparisonPeriod({ from: '2026-07-10', to: '2026-07-19' }, 'previousPeriod')).toMatchObject({ from: '2026-06-30', to: '2026-07-09' });
+    expect(comparisonPeriod({ from: '2026-04-01', to: '2027-03-31' }, 'previousYear')).toMatchObject({ from: '2025-04-01', to: '2026-03-31' });
+    expect(comparisonPeriod({ from: '2028-02-01', to: '2028-02-29' }, 'previousYear')).toMatchObject({ to: '2027-02-28' });
+    expect(variance(150, 100)).toEqual({ amount: 50, percent: 50 });
+    expect(variance(10, 0)).toEqual({ amount: 10, percent: null });
+  });
+
+  it('lines balance sheets up across dates, each one balanced', () => {
+    const cols = balanceSheetColumns(postings, book, ['2026-06-30', '2026-12-31', '2027-03-31'], stock);
+    cols.totalAssets.forEach((a, i) => expect(a).toBe(cols.totalLiabilities[i]));
+    expect(cols.currentProfit[2]).toBe(balanceSheet(postings, book, '2027-03-31', stock).currentProfit);
   });
 
   it('has a balance sheet whose two sides agree', () => {
