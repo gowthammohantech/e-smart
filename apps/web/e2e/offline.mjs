@@ -11,7 +11,7 @@
 //   npm run e2e:offline -w @esmart/web [-- online,offline,…]
 //
 // It writes to that database only. Screenshots land next to this file.
-import { launch, device, signIn, addCustomer, queue, book, serverParties, results, APP, toastText, sql, apiOffline } from './lib.mjs';
+import { launch, device, signIn, addCustomer, queue, book, serverParties, results, APP, toastText, sql, apiOffline, ensureCanWrite } from './lib.mjs';
 const r = results();
 const b = await launch();
 const stamp = Date.now().toString(36);
@@ -176,6 +176,7 @@ if (want('conflict')) {
   const rename = async (p, to) => {
     await p.goto(`${APP}/contacts/customers/${pid}/edit`, { waitUntil: 'domcontentloaded' });
     const f = p.getByPlaceholder('Business name'); await f.waitFor({ timeout: 30_000 }); await f.fill(to);
+    await ensureCanWrite(p);
     const t0 = Date.now(); await p.getByText(/^Save/).last().click();
     await p.waitForTimeout(1500);
     return Date.now() - t0;
@@ -183,8 +184,13 @@ if (want('conflict')) {
   await rename(p2, `Device two ${stamp}`);
   await rename(p1, `Device one ${stamp}`);
   await apiOffline(d2, false);
-  await p2.goto(`${APP}/settings/sync`, { waitUntil: 'domcontentloaded' }); await p2.waitForTimeout(8000);
-  const q2 = await queue(p2);
+  await p2.goto(`${APP}/settings/sync`, { waitUntil: 'domcontentloaded' });
+  // Back from offline, a device waits for the connection to hold (15 s) before sending: wait for the answer.
+  let q2 = await queue(p2);
+  for (let i = 0; i < 90 && q2.some((e) => e.status === 'pending' && !e.conflict); i++) {
+    await p2.waitForTimeout(500);
+    q2 = await queue(p2);
+  }
   const server = sql(`select name from parties where id='${pid}'`);
   r.check('two devices: first save kept on server', server === `Device one ${stamp}`, `server "${server}"`);
   r.check('two devices: second shows a conflict, not an overwrite', q2.some((e) => e.conflict), `queue ${JSON.stringify(q2.map((e) => ({ s: e.status, c: !!e.conflict })))}`);
