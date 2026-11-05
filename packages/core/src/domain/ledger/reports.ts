@@ -27,6 +27,8 @@ export type Stock = {
   baseCurrency: string;
   /** Perpetual stock from this day (a financial year's start): stock is then posted, not valued at the end. */
   perpetualFrom?: string | null;
+  /** The document a return was made against: a return comes back at what its goods went out at. */
+  sourceOf?: (documentId: string) => string | undefined;
 };
 
 /** Whether the books hold stock perpetually on a day. */

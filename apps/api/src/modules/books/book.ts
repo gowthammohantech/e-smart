@@ -11,7 +11,9 @@ import { coreMovements } from '../inventory/ledger';
 import { loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadPayments, type Scope } from '../reports/data';
 
 // Opening invoices and bills too: they post to the party and Opening balances (RULES 6.12), nothing else.
-const KINDS = ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote', 'openingInvoice', 'openingBill'] as const;
+// Deliveries, goods receipts and purchase orders post nothing themselves; perpetual stock needs them for
+// the goods they move and for the bills made from them (RULES 6.2).
+const KINDS = ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote', 'openingInvoice', 'openingBill', 'delivery', 'goodsReceipt', 'purchaseOrder'] as const;
 
 /**
  * The whole book up to `s.to`, as postings: every sale, purchase, note, payment, expense and voucher
@@ -44,9 +46,9 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   const items = await loadItems(s);
   const movements = await coreMovements(s.db, id, { to: s.to });
   const perpetualFrom = s.company.perpetualStockFrom;
-  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom };
   // A return comes back at what the goods it returns went out (or came in) at.
   const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
+  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom, sourceOf: (id) => sourceOf.get(id) };
   const openingStockMinor = openingStockValue(items, movements, base);
 
   const postings = allPostings({

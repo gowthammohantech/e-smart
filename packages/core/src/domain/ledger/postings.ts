@@ -292,6 +292,11 @@ const STOCK_CONTRA: Partial<Record<StockMovement['type'], string>> = {
  * day before, a balance sheet on that day would count it twice: posted and valued.)
  *
  * A movement from a document posts under that document, with its party, branch and cost centre.
+ *
+ * Goods that come in on a goods receipt, before their bill, are owed to the supplier but not yet
+ * bought: they go to Goods received, not billed. The bill made from the receipt (or from the order
+ * the receipt was made from) moves that amount into Purchases on its own date, so Purchases never
+ * runs below what was billed.
  */
 export function postStock(stock: PerpetualStock, ctx: { openingStockMinor: number; documents: Map<string, BusinessDocument> }): Posting[] {
   const out: Posting[] = [];
@@ -299,14 +304,50 @@ export function postStock(stock: PerpetualStock, ctx: { openingStockMinor: numbe
   if (Math.round(carry)) {
     out.push(...toPostings([['sys:openingStock', carry], ['sys:retainedEarnings', -carry]], { type: 'stock', id: 'perpetual', number: 'Stock brought onto the books' }, stock.from, {}));
   }
+  const received = new Map<string, number>();
   for (const m of stock.costed) {
-    const contra = STOCK_CONTRA[m.type];
-    if (!contra || !Math.round(m.cost)) continue;
     const doc = m.referenceId ? ctx.documents.get(m.referenceId) : undefined;
+    const unbilled = m.type === 'purchaseReceipt' && doc?.kind === 'goodsReceipt';
+    const contra = unbilled ? GRNI : STOCK_CONTRA[m.type];
+    if (!contra || !Math.round(m.cost)) continue;
+    if (unbilled) received.set(doc.id, (received.get(doc.id) ?? 0) + m.cost);
     const source: Posting['source'] = doc
       ? { type: 'document', id: doc.id, number: doc.number, kind: doc.kind }
       : { type: 'stock', id: m.referenceId ?? m.id, number: m.referenceNumber ?? m.notes ?? '', kind: m.type };
     out.push(...toPostings([['sys:openingStock', m.cost], [contra, -m.cost]], source, m.date, { branchId: m.branchId, partyId: doc?.partyId, costCentreId: doc?.costCentreId }));
+  }
+  out.push(...billReceipts(received, ctx.documents));
+  return out;
+}
+
+const GRNI = 'sys:goodsReceivedNotBilled';
+
+/**
+ * Each bill takes over the goods receipts it was made from: the receipt itself, or those raised from
+ * the same purchase order. The earliest bill takes a receipt whole; a receipt is taken over once.
+ */
+function billReceipts(received: Map<string, number>, documents: Map<string, BusinessDocument>): Posting[] {
+  if (!received.size) return [];
+  const receiptsOf = new Map<string, string[]>();
+  for (const id of received.keys()) {
+    const grn = documents.get(id);
+    if (grn?.sourceDocumentId) receiptsOf.set(grn.sourceDocumentId, [...(receiptsOf.get(grn.sourceDocumentId) ?? []), id]);
+  }
+  const bills = [...documents.values()].filter((d) => d.kind === 'purchaseBill').sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const taken = new Set<string>();
+  const out: Posting[] = [];
+  for (const bill of bills) {
+    const ids: string[] = [];
+    // Up the bill's chain: a receipt it was made from, or the order whose receipts it bills.
+    let at = bill.sourceDocumentId;
+    for (let depth = 0; at && depth < 10; depth++) {
+      if (received.has(at)) ids.push(at);
+      ids.push(...(receiptsOf.get(at) ?? []));
+      at = documents.get(at)?.sourceDocumentId;
+    }
+    const value = [...new Set(ids)].filter((id) => !taken.has(id)).reduce((a, id) => (taken.add(id), a + received.get(id)!), 0);
+    if (!Math.round(value)) continue;
+    out.push(...toPostings([[GRNI, value], ['sys:purchases', -value]], { type: 'document', id: bill.id, number: bill.number, kind: bill.kind }, bill.date, { branchId: bill.branchId, partyId: bill.partyId, costCentreId: bill.costCentreId }));
   }
   return out;
 }

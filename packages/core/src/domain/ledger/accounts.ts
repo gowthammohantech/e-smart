@@ -74,6 +74,8 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   // Perpetual stock: what the goods sold cost, and stock counted short or over.
   'sys:cogs': { name: 'Cost of goods sold', group: 'directExpenses' },
   'sys:stockAdjustment': { name: 'Stock adjustments', group: 'directExpenses' },
+  // Perpetual stock: goods in on a goods receipt, owed to the supplier until their bill comes.
+  'sys:goodsReceivedNotBilled': { name: 'Goods received, not billed', group: 'currentLiabilities' },
   'sys:freightInward': { name: 'Freight and charges on purchases', group: 'directExpenses' },
   'sys:chargesRecovered': { name: 'Freight and charges recovered', group: 'indirectIncomes' },
   // Kept for books posted before reimbursements went through the asset account below.

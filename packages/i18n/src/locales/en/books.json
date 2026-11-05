@@ -270,7 +270,11 @@
     "turnOn": "Keep stock perpetually",
     "turnOff": "Go back to periodic",
     "perpetualOn": "Stock is perpetual from {{date}}",
-    "perpetualOff": "Stock is periodic again"
+    "perpetualOff": "Stock is periodic again",
+    "turnOnTitle": "Keep stock perpetually from {{date}}?",
+    "turnOnBody": "From {{date}}, goods are posted to Stock in hand as they come in and go out, and the profit and loss shows Cost of goods sold instead of opening and closing stock. Reports from that day change. You can go back to periodic while that year is open.",
+    "turnOffTitle": "Go back to periodic stock?",
+    "turnOffBody": "Stock from {{date}} is valued at the end of each period again, and nothing is posted to Stock in hand or Cost of goods sold. Reports from that day change."
   },
   "receipts": {
     "title": "Receipts",
