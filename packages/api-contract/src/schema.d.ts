@@ -989,6 +989,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/parties/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create many contacts at once, from a spreadsheet the app has read
+         * @description Each row is checked as createParty checks it. A row whose GSTIN, or failing that whose name (in any case), matches a contact already there or an earlier row is skipped as a duplicate. With `dryRun` nothing is written and the results say what would happen; otherwise every good row is created in one transaction.
+         */
+        post: operations["importParties"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/items": {
         parameters: {
             query?: never;
@@ -1889,7 +1911,7 @@ export interface paths {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts";
+                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts" | "integrity";
             };
             cookie?: never;
         };
@@ -1899,7 +1921,10 @@ export interface paths {
          *     `trial-balance` (core trialBalance over from–to), `profit-loss` (ProfitAndLoss over from–to), `balance-sheet` (BalanceSheet as of `to`), `ledger`
          *     (one account's LedgerStatement over from–to; needs `account`), `day-book` (DayBookEntry[] over
          *     from–to), `cost-centres` (CostCentreRow[] over from–to) and `accounts` (the chart of accounts,
-         *     the book it names accounts from, and each account's balance as of `to`). Amounts are base-currency
+         *     the book it names accounts from, and each account's balance as of `to`) and `integrity` (IntegrityCheck[] as of
+         *     `to`: the ledger against the records it comes from). `profit-loss` and `balance-sheet` take `breakdown`
+         *     (ProfitAndLossColumns / BalanceSheetColumns, a column per month or quarter of from–to) or `compare` (two
+         *     columns: the range and the one before it, or the same dates last year). Amounts are base-currency
          *     paise, as core gives them. The books cover every branch, so a user limited to some is refused.
          */
         get: operations["getBooksView"];
@@ -7661,6 +7686,47 @@ export interface operations {
             };
         };
     };
+    importParties: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: components["schemas"]["Party"][];
+                    /** @default false */
+                    dryRun?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        skipped?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "duplicate" | "invalid";
+                            id?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listItems: {
         parameters: {
             query?: {
@@ -9677,11 +9743,15 @@ export interface operations {
                 to: string;
                 /** @description The account key, for `ledger` */
                 account?: string;
+                /** @description For `profit-loss` and `balance-sheet`: a column per month or quarter */
+                breakdown?: "month" | "quarter";
+                /** @description For `profit-loss` and `balance-sheet`: beside the period before, or the same dates last year */
+                compare?: "previousPeriod" | "previousYear";
             };
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts";
+                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts" | "integrity";
             };
             cookie?: never;
         };

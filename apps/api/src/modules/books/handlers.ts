@@ -16,6 +16,34 @@ import { assertPeriodOpen } from '../documents/lifecycle';
 import { accountBalanceMinor } from '../payments/engine';
 import { costCentreIssues } from './costCentres';
 import { loadBook } from './book';
+import { comparisonPeriod, profitAndLossColumns, balanceSheetColumns, splitPeriods } from '@esmart/core/domain/ledger/comparative';
+import { integrityChecks, type IntegrityInput } from '@esmart/core/domain/ledger/integrity';
+import { partyStatement } from '../parties/statement';
+
+/**
+ * The sub-ledgers the integrity check holds the ledger against: each base-currency party's own statement
+ * (documents, payments and vouchers on it) as of `asOf`, debit positive, and what is allocated to each
+ * document. A party billed in another currency keeps its statement in that currency, so it isn't compared.
+ */
+async function integritySources(ctx: Pick<Ctx<'getBooksView'>, 'db' | 'company'>, asOf: string): Promise<Pick<IntegrityInput, 'partyStatements' | 'allocations'>> {
+  const base = ctx.company.baseCurrency.trim();
+  const parties = await ctx.db.select().from(schema.parties).where(and(eq(schema.parties.companyId, ctx.company.id), ne(schema.parties.kind, 'general')));
+  const partyStatements: IntegrityInput['partyStatements'] = [];
+  for (const party of parties.filter((p) => p.currency.trim() === base)) {
+    const s = await partyStatement(ctx.db, ctx.company, party, { to: asOf });
+    const closing = s.closingBalance?.minor ?? 0;
+    partyStatements.push({ id: party.id, name: party.name, balance: party.kind === 'supplier' ? -closing : closing });
+  }
+  const D = schema.documents;
+  const A = schema.paymentAllocations;
+  const rows = await ctx.db
+    .select({ documentId: D.id, number: D.number, total: D.grandTotalMinor, allocated: sql<number>`coalesce(sum(${A.amountMinor} + ${A.tdsMinor} + ${A.discountMinor} + ${A.writeOffMinor}), 0)::bigint` })
+    .from(D)
+    .innerJoin(A, eq(A.documentId, D.id))
+    .where(eq(D.companyId, ctx.company.id))
+    .groupBy(D.id, D.number, D.grandTotalMinor);
+  return { partyStatements, allocations: rows.map((r) => ({ ...r, allocated: Number(r.allocated) })) };
+}
 
 const LA = schema.ledgerAccounts;
 const V = schema.vouchers;
@@ -178,17 +206,23 @@ export const booksHandlers = defineHandlers({
   async getBooksView(ctx) {
     // The books are one set across branches; a user limited to some of them sees the branch reports instead.
     if (ctx.user.branchIds.length) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
-    const { from = '1900-01-01', to, account } = ctx.query;
+    const { from = '1900-01-01', to, account, breakdown, compare } = ctx.query;
     const { postings, book, stock } = await loadBook({ db: ctx.db, company: ctx.company, user: ctx.user, now: ctx.now, from, to });
     const range = { from, to };
     const fy = ctx.company.fiscalYearStartMonth;
+    // Columns: a period per month or quarter, or this one beside the one it is compared with (earliest first).
+    const periods = breakdown ? splitPeriods(range, breakdown) : compare ? [comparisonPeriod(range, compare), { ...range, label: `${from} – ${to}` }] : null;
     switch (ctx.params.view) {
       case 'trial-balance':
         return trialBalance(postings, book, range, fy) as never;
       case 'profit-loss':
+        if (periods) return profitAndLossColumns(postings, book, periods, stock) as never;
         return profitAndLoss(postings, book, range, stock) as never;
       case 'balance-sheet':
+        if (periods) return balanceSheetColumns(postings, book, periods.map((p) => p.to), stock, fy) as never;
         return balanceSheet(postings, book, to, stock, fy) as never;
+      case 'integrity':
+        return { asOf: to, checks: integrityChecks({ postings, asOf: to, stock, ...(await integritySources(ctx, to)) }) } as never;
       case 'ledger':
         if (!account) throw invalid('account', 'Which account?');
         return { account: accountFor(account, book) ?? null, ...ledgerStatement(postings, account, range), trend: monthEndBalances(postings, account, range) } as never;
