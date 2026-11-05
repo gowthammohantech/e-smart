@@ -50,6 +50,8 @@ export type Company = {
   lockedThroughDate?: string | null;
   /** Modules the owner switched off within the plan (domain/plan moduleEnabled). */
   disabledModules?: Module[];
+  /** How its documents look (render/invoiceTemplate). */
+  invoiceTemplate?: import('../render/invoiceTemplate').InvoiceTemplate;
   /** Documents of a kind over the amount (base currency) wait for an owner or admin. */
   approvalRules?: { kind: DocumentKind; overMinor: number }[];
   /**

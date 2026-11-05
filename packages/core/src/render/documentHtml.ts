@@ -11,6 +11,7 @@ import { E_INVOICE_CANCEL_REASONS } from '../domain/eInvoice';
 import type { LanguageCode } from '@esmart/i18n/config';
 import i18n from '@esmart/i18n';
 import { printableFields, type CustomField } from '../domain/customFields';
+import { resolveTemplate, tint, type InvoiceTemplate } from './invoiceTemplate';
 
 /**
  * A field label on the printed document. Under Tamil it reads in Tamil with
@@ -123,6 +124,7 @@ export function buildDocumentHtml({
   signatureSrc,
   source,
   customFields = [],
+  template,
   t,
   language,
 }: {
@@ -141,6 +143,8 @@ export function buildDocumentHtml({
   signatureSrc?: string;
   /** The company's custom fields: those marked to print show under the notes (the document's, then the party's). */
   customFields?: CustomField[];
+  /** How the business wants it to look; defaults to `company.invoiceTemplate`, then to the standard page. */
+  template?: InvoiceTemplate;
   /** Translator for the descriptive labels. Statutory field names stay English. */
   t: Translate;
   language: LanguageCode;
@@ -161,6 +165,7 @@ export function buildDocumentHtml({
 
   // Pure-agent reimbursements sit outside the taxable value (Rule 33), so they get their own
   // table and the items table adds up to the subtotal.
+  const tpl = resolveTemplate(template ?? company?.invoiceTemplate);
   const reimbursed = doc.lines.filter((l) => l.gst?.reimbursement);
   const rows = doc.lines
     .filter((l) => !l.gst?.reimbursement)
@@ -176,13 +181,13 @@ export function buildDocumentHtml({
         <td class="num">${i + 1}</td>
         <td>
           <div class="item">${esc(line.name)}</div>
-          ${line.hsnCode ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
+          ${line.hsnCode && tpl.showHsn ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
           ${line.gst?.supplyType && line.gst.supplyType !== 'taxable' ? `<div class="sub">${SUPPLY_NOTE[line.gst.supplyType]}</div>` : ''}
         </td>
         <td class="num">${formatQty(line.quantity)} ${esc(line.unit)}</td>
         <td class="num">${formatMoney(line.unitPrice)}</td>
-        <td class="num">${discount}</td>
-        <td class="num">${formatPercent(line.taxRate)}</td>
+        ${tpl.showDiscountColumn ? `<td class="num">${discount}</td>` : ''}
+        ${tpl.showTaxColumn ? `<td class="num">${formatPercent(line.taxRate)}</td>` : ''}
         <td class="num strong">${formatMoney(gross)}</td>
       </tr>`;
     })
@@ -247,18 +252,18 @@ export function buildDocumentHtml({
     color: #0E121A;
     margin: 0;
     padding: 28px;
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: ${tpl.compact ? 10.5 : 12}px;
+    line-height: ${tpl.compact ? 1.3 : 1.45};
     background: #FFFFFF;
   }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
   .brand { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
   .logo { display: block; max-width: 160px; max-height: 56px; object-fit: contain; margin-bottom: 8px; }
   .muted { color: #5A6478; }
-  .doc-title { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #007AFF; text-align: right; }
+  .doc-title { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: ${tpl.accentColor}; text-align: right; }
   .meta { text-align: right; margin-top: 6px; }
   .meta div { margin-bottom: 2px; }
-  .rule { height: 2px; background: #007AFF; margin: 18px 0; border-radius: 1px; }
+  .rule { height: 2px; background: ${tpl.accentColor}; margin: 18px 0; border-radius: 1px; }
   .parties { display: flex; gap: 28px; margin-bottom: 18px; }
   .parties > div { flex: 1; }
   .cap { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: #5A6478; margin-bottom: 5px; font-weight: 700; }
@@ -291,7 +296,7 @@ export function buildDocumentHtml({
   .sign .signature { display: block; margin: 8px 0 -34px auto; max-width: 180px; max-height: 60px; object-fit: contain; }
   .sign .line { margin-top: 42px; border-top: 1px solid #E2E8F1; display: inline-block; padding-top: 5px; min-width: 190px; }
   .foot { margin-top: 26px; text-align: center; color: #5A6478; font-size: 10px; }
-  .badge { display: inline-block; padding: 3px 9px; border-radius: 99px; background: rgba(0,122,255,0.10); color: #007AFF; font-size: 10px; font-weight: 700; }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 99px; background: ${tint(tpl.accentColor, 0.1)}; color: ${tpl.accentColor}; font-size: 10px; font-weight: 700; }
   .einv { display: flex; gap: 18px; margin-top: 16px; padding: 12px 14px; border: 1px solid #E2E8F1; border-radius: 6px; page-break-inside: avoid; }
   .einv-qr svg { display: block; }
   .einv-body { flex: 1; }
@@ -311,7 +316,7 @@ export function buildDocumentHtml({
   ${cancelledStrip(doc)}
   <div class="head">
     <div>
-      ${logoTag(logoSrc ?? company?.logoUri, company?.name)}
+      ${tpl.showLogo ? logoTag(logoSrc ?? company?.logoUri, company?.name) : ''}
       <div class="brand">${esc(company?.name)}</div>
       <div class="muted">${addressBlock(branch?.address?.line1 ? branch.address : company?.address)}</div>
       ${company?.phone ? `<div class="muted">${esc(company.phone)}</div>` : ''}
@@ -360,8 +365,8 @@ export function buildDocumentHtml({
         <th>${bi('sales:pdf.description')}</th>
         <th class="num">${bi('sales:pdf.qty')}</th>
         <th class="num">${bi('sales:pdf.rate')}</th>
-        <th class="num">${bi('sales:pdf.disc')}</th>
-        <th class="num">${bi('sales:pdf.tax')}</th>
+        ${tpl.showDiscountColumn ? `<th class="num">${bi('sales:pdf.disc')}</th>` : ''}
+        ${tpl.showTaxColumn ? `<th class="num">${bi('sales:pdf.tax')}</th>` : ''}
         <th class="num">${bi('sales:pdf.amount')}</th>
       </tr>
     </thead>
@@ -394,7 +399,7 @@ export function buildDocumentHtml({
     <div class="line muted">${bi('sales:pdf.authorisedSignatory')}</div>
   </div>
 
-  <div class="foot">${esc(t('sales:pdf.generatedWith'))}</div>
+  <div class="foot">${esc(tpl.footerText ?? t('sales:pdf.generatedWith'))}</div>
 </body>
 </html>`;
 }

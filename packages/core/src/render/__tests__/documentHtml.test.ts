@@ -98,3 +98,26 @@ describe('bank details, UPI and signature on the printed document', () => {
     );
   });
 });
+
+describe('invoice template', () => {
+  it('prints the standard page when the business has none', () => {
+    const html = render(invoice(), company());
+    expect(html).toContain('#007AFF');
+    expect(html).toContain('>Disc.<');
+    expect(html).toContain('Generated with');
+  });
+
+  it('takes the accent colour, drops the optional columns, and prints its own footer', () => {
+    const html = render(invoice(), company({ invoiceTemplate: { accentColor: '#0B6E4F', showDiscountColumn: false, showTaxColumn: false, footerText: 'Thank you for your business', compact: true } }));
+    expect(html).toContain('#0B6E4F');
+    expect(html).not.toContain('#007AFF');
+    expect(html).not.toContain('>Disc.<');
+    expect(html).toContain('Thank you for your business');
+    expect(html).not.toContain('Generated with');
+    expect(html).toContain('font-size: 10.5px');
+  });
+
+  it('ignores a colour that is not a hex value', () => {
+    expect(render(invoice(), company({ invoiceTemplate: { accentColor: 'red;}</style><script>' } }))).toContain('#007AFF');
+  });
+});
