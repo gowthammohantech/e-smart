@@ -642,6 +642,13 @@ export const documents = pgTable("documents", {
 	itcClaimPeriod: char("itc_claim_period", { length: 6 }),
 	// The project or department the document belongs to, for profit by cost centre.
 	costCentreId: varchar("cost_centre_id", { length: 40 }),
+	// A recurring invoice is its own template: the scheduler issues a copy on each next date
+	// (invoices.recur); each copy points back here through recurring_parent_id.
+	recurrence: recurrenceFrequency().default('none').notNull(),
+	nextRecurrenceDate: date("next_recurrence_date"),
+	recurrenceEndDate: date("recurrence_end_date"),
+	recurrenceAutoSend: boolean("recurrence_auto_send").default(false).notNull(),
+	recurringParentId: varchar("recurring_parent_id", { length: 40 }),
 	itcReversedOn: date("itc_reversed_on"),
 	itcReclaimedOn: date("itc_reclaimed_on"),
 	subtotalMinor: bigint("subtotal_minor", { mode: "number" }).default(0).notNull(),
@@ -674,6 +681,8 @@ export const documents = pgTable("documents", {
 	index("documents_company_id_kind_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_company_id_party_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.partyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_source_document_id_idx").using("btree", table.sourceDocumentId.asc().nullsLast()),
+	index("documents_next_recurrence_date_idx").using("btree", table.nextRecurrenceDate.asc().nullsLast()),
+	index("documents_recurring_parent_id_date_idx").using("btree", table.recurringParentId.asc().nullsLast(), table.date.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
@@ -1766,6 +1775,9 @@ export const companies = pgTable("companies", {
 	returnFrequency: returnFrequency("return_frequency").default('monthly').notNull(),
 	fiscalYearStartMonth: smallint("fiscal_year_start_month").default(4).notNull(),
 	lockedThroughDate: date("locked_through_date"),
+	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
+	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
+	perpetualStockFrom: date("perpetual_stock_from"),
 	// Off by default: a sale cannot take a tracked item below zero at its branch.
 	allowNegativeStock: boolean("allow_negative_stock").default(false).notNull(),
 	// RBI's bank rate (percent) for MSME late-payment interest, three times it (MSMED Act s.16).
@@ -1775,9 +1787,6 @@ export const companies = pgTable("companies", {
 	// With a TAN the business deducts TDS on what it pays suppliers.
 	tan: varchar({ length: 10 }),
 	plan: planTier().default('free').notNull(),
-	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
-	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
-	perpetualStockFrom: date("perpetual_stock_from"),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

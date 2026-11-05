@@ -1323,6 +1323,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/documents/{id}/recurrence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Repeat an issued invoice weekly, monthly, quarterly or yearly
+         * @description The invoice becomes the template: each day the scheduler issues a copy for every date that has fallen due (same customer, lines and prices at the tax rates of the day, due the same number of days after its date), numbered from the series and e-invoiced like any other, and emails it when `autoSend` is on. Counting from the template's date keeps a series on the 31st at month ends. `none` stops it. Only an issued, uncancelled invoice that is not itself a copy can repeat (422 NOT_RECURRABLE).
+         */
+        put: operations["setDocumentRecurrence"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/documents/{id}/pdf": {
         parameters: {
             query?: never;
@@ -3581,6 +3604,11 @@ export interface components {
              * @description Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.
              */
             lockedThroughDate?: string | null;
+            /**
+             * Format: date
+             * @description Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.
+             */
+            perpetualStockFrom?: string | null;
             /** @description Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it. */
             tan?: string;
             /**
@@ -3604,11 +3632,6 @@ export interface components {
         Branch: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
-            /**
-             * Format: date
-             * @description Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.
-             */
-            perpetualStockFrom?: string | null;
             name: string;
             /** @example MUM */
             code: string;
@@ -4392,6 +4415,21 @@ export interface components {
             /** @description The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return */
             readonly itcClaimPeriod?: string;
             readonly partyStateCode?: string;
+            /**
+             * @description Set with setDocumentRecurrence
+             * @enum {string}
+             */
+            readonly recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
+            /**
+             * Format: date
+             * @description The date of the next copy; unset once the series has ended
+             */
+            readonly nextRecurrenceDate?: string;
+            /** Format: date */
+            readonly recurrenceEndDate?: string;
+            readonly recurrenceAutoSend?: boolean;
+            /** @description On a copy, the recurring invoice it was issued from */
+            readonly recurringParentId?: string;
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
         };
@@ -7924,6 +7962,8 @@ export interface operations {
                 kind?: components["schemas"]["DocumentKind"][];
                 status?: components["schemas"]["DocStatus"][];
                 partyId?: string;
+                /** @description true: only invoices that repeat */
+                recurring?: boolean;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
@@ -8308,6 +8348,51 @@ export interface operations {
                     "application/json": components["schemas"]["BusinessDocument"];
                 };
             };
+        };
+    };
+    setDocumentRecurrence: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    recurrence: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
+                    /**
+                     * Format: date
+                     * @description No copy is dated after this
+                     */
+                    endDate?: string;
+                    /**
+                     * @description Email each copy to the customer when it is issued
+                     * @default false
+                     */
+                    autoSend?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDocument"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
         };
     };
     getDocumentPdf: {

@@ -75,7 +75,7 @@ export function nextRecurrence(anchor: string, frequency: RecurrenceFrequency, a
 }
 
 /** Whoever set a series up is the one its occurrences are recorded against. */
-async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
+export async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
   const [u] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, userId));
   return {
     id: userId,

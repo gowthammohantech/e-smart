@@ -60,6 +60,7 @@ import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
+import { RecurrenceSheet } from './RecurrenceSheet';
 import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
 
@@ -102,6 +103,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const allDocuments = useAppStore((s) => s.documents);
 
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -824,6 +826,8 @@ ${url}`;
         </>
       )}
 
+      <RecurrenceSheet doc={doc} visible={recurrenceOpen} onClose={() => setRecurrenceOpen(false)} />
+
       {/* Action sheet */}
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>
         {[
@@ -832,6 +836,10 @@ ${url}`;
                 { label: tr('sales:print.sharePdf'), icon: 'file-pdf-box' as const, onPress: shareDocument },
                 { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
                 { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
+                // An issued invoice, not itself a copy, can repeat; the server says if it can't.
+                ...(doc.kind === 'invoice' && !doc.recurringParentId && doc.status !== 'cancelled'
+                  ? [{ label: doc.recurrence && doc.recurrence !== 'none' ? `${tr('sales:recurring.action')} · ${tr(`sales:recurring.frequency.${doc.recurrence}`)}` : tr('sales:recurring.action'), icon: 'repeat' as const, onPress: () => setRecurrenceOpen(true) }]
+                  : []),
                 { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () =>
                     runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id)), {
                       loading: tr('sales:detail.creatingLink'),

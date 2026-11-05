@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
@@ -38,7 +38,8 @@ import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, rende
 import { companyLogoFile } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
 import { formatMoney } from '@esmart/core/lib/format';
-import { formatDate } from '@esmart/core/lib/date';
+import { addDaysISO, formatDate } from '@esmart/core/lib/date';
+import { nextRecurrence } from '../expenses/engine';
 import { documentsToWire, summariesToWire, type DocumentWire, type SummaryRow } from './wire';
 
 /** How the email's HTML refers to the business logo it carries. */
@@ -69,7 +70,7 @@ const RESEND_WINDOW_MS = 2 * 60_000;
 const D = schema.documents;
 const P = schema.parties;
 /** What the helpers need from any document operation's context. */
-type AnyCtx = Pick<Ctx<'getDocument'>, 'company' | 'user' | 'db' | 'now' | 'deps' | 'req' | 'reply'>;
+export type AnyCtx = Pick<Ctx<'getDocument'>, 'company' | 'user' | 'db' | 'now' | 'deps' | 'req' | 'reply'>;
 
 /** A document in the caller's company (and branches), or 404. Purchase-side kinds need the purchases module. */
 async function findDocument(ctx: AnyCtx, db: DbOrTx, id: string, opts: { lock?: boolean } = {}): Promise<DocRow> {
@@ -106,7 +107,7 @@ function checkRequestedStatus(kind: DocumentKind, status: string): DocStatus {
  * Inserts a new document from prepared fields, finalising it in the same
  * transaction when asked. Shared by create, convert and duplicate.
  */
-async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], status: DocStatus, extra: { attachmentIds?: string[]; snapshotRates?: boolean; action?: string; overrideCreditLimit?: boolean } = {}) {
+export async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], status: DocStatus, extra: { attachmentIds?: string[]; snapshotRates?: boolean; action?: string; overrideCreditLimit?: boolean } = {}) {
   const prepared = await prepareDocument(ctx.db, ctx.company, f, lines, { snapshotRates: extra.snapshotRates ?? true });
   if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot create documents in this branch');
   const draftStatus = requestedStatus(f.kind, 'draft') as DocStatus;
@@ -241,7 +242,7 @@ async function eInvoiceGenerated(db: DbOrTx, documentId: string): Promise<boolea
  */
 const splitList = <T extends string>(v: T[] | undefined) => (v ?? []).flatMap((x) => String(x).split(',')).filter(Boolean) as T[];
 
-type ListQuery = Pick<Ctx<'listDocuments'>['query'], 'kind' | 'status' | 'partyId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listDocuments'>['query'], 'sourceDocumentId' | 'outstanding' | 'overdue' | 'eInvoiceStatus'>>;
+type ListQuery = Pick<Ctx<'listDocuments'>['query'], 'kind' | 'status' | 'partyId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listDocuments'>['query'], 'sourceDocumentId' | 'outstanding' | 'overdue' | 'eInvoiceStatus' | 'recurring'>>;
 
 /** The WHERE of a document list, shared by the list and its summary so the two never disagree. */
 function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' | 'now'>, q: ListQuery): (SQL | undefined)[] {
@@ -257,6 +258,7 @@ function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' |
   if (ctx.user.branchIds.length) filters.push(inArray(D.branchId, ctx.user.branchIds));
   if (statuses.length) filters.push(inArray(effectiveStatusSql(asOf), statuses));
   if (q.partyId) filters.push(eq(D.partyId, q.partyId));
+  if (q.recurring) filters.push(ne(D.recurrence, 'none'));
   if (q.branchId) filters.push(eq(D.branchId, q.branchId));
   if (q.from) filters.push(gte(D.date, q.from));
   if (q.to) filters.push(lte(D.date, q.to));
@@ -331,6 +333,43 @@ export const documentsHandlers = defineHandlers({
     assertKindAllowed(ctx.company, body.kind);
     const status = checkRequestedStatus(body.kind, body.status);
     const row = await insertDocument(ctx, fieldsFromWire(body), linesFromWire(body.lines), status, { attachmentIds: body.attachmentIds, overrideCreditLimit: body.overrideCreditLimit });
+    setEtag(ctx.reply, row.version);
+    return toWire(ctx, row);
+  },
+
+  async setDocumentRecurrence(ctx) {
+    const { recurrence, endDate, autoSend } = ctx.body;
+    const row = await ctx.db.transaction(async (tx) => {
+      const current = await findDocument(ctx, tx, ctx.params.id, { lock: true });
+      checkIfMatch(ctx.req, current.version);
+      const status = effectiveStatus(current, today(ctx.now));
+      if (recurrence !== 'none') {
+        if (current.kind !== 'invoice') throw unprocessable([{ field: 'recurrence', message: 'Only an invoice can repeat', severity: 'blocking' }], 'NOT_RECURRABLE');
+        if (current.recurringParentId) throw unprocessable([{ field: 'recurrence', message: `${current.number} is a copy of a recurring invoice; change the series on the original`, severity: 'blocking' }], 'NOT_RECURRABLE');
+        if (!isFinalized(current.status) || status === 'cancelled') throw unprocessable([{ field: 'recurrence', message: 'Issue the invoice before it can repeat; a cancelled one cannot', severity: 'blocking' }], 'NOT_RECURRABLE');
+        if (endDate && endDate <= current.date) throw invalid('endDate', 'The series must end after the invoice date');
+      }
+      // The next copy is the first date of the series after today, counted from the invoice's own date,
+      // so turning it on doesn't back-date a run of copies. Changing the frequency recounts it.
+      const next = recurrence === 'none' ? null : nextRecurrence(current.date, recurrence, current.recurrence === recurrence && current.nextRecurrenceDate ? addDaysISO(current.nextRecurrenceDate, -1) : [current.date, addDaysISO(today(ctx.now), -1)].sort().at(-1)!);
+      const ended = next && endDate && next > endDate ? null : next;
+      const [updated] = await tx
+        .update(D)
+        .set({ recurrence, nextRecurrenceDate: ended, recurrenceEndDate: recurrence === 'none' ? null : (endDate ?? null), recurrenceAutoSend: recurrence !== 'none' && !!autoSend, version: current.version + 1, updatedAt: ctx.now })
+        .where(eq(D.id, current.id))
+        .returning();
+      await recordChange(tx, ctx.user, {
+        companyId: ctx.company.id,
+        action: 'updated',
+        entityType: 'document',
+        entityId: updated.id,
+        entityLabel: updated.number,
+        version: updated.version,
+        before: { recurrence: current.recurrence, nextRecurrenceDate: current.nextRecurrenceDate },
+        after: { recurrence: updated.recurrence, nextRecurrenceDate: updated.nextRecurrenceDate },
+      });
+      return updated;
+    });
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },

@@ -4,6 +4,7 @@ import { purgeIdempotencyKeys } from '../http/idempotency';
 import { reconcileEInvoices } from '../modules/compliance/einvoice';
 import { recoverComplianceAttempts } from '../modules/compliance/recovery';
 import { materializeRecurringExpenses } from '../modules/expenses/engine';
+import { issueRecurringInvoices } from '../modules/documents/recurring';
 import { deleteExpiredExports, failExport, queueDueBackups, runExport } from '../modules/exports/handlers';
 import { checkPushReceipts, sendPush } from '../lib/notify';
 import { reverseUnpaidItc } from '../modules/documents/itcReversal';
@@ -41,6 +42,9 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
   },
   'expenses.recur': async ({ deps }) => {
     await materializeRecurringExpenses(deps, deps.now());
+  },
+  'invoices.recur': async ({ deps }) => {
+    await issueRecurringInvoices(deps, deps.now());
   },
   'export.build': async ({ deps, payload, job }) => {
     try {
@@ -99,6 +103,7 @@ export const SCHEDULES: Schedule[] = [
   { kind: 'db.backup', dailyAt: { hour: 2, minute: 0 } },
   // After midnight IST, so the day's recurring expenses carry the new date.
   { kind: 'expenses.recur', dailyAt: { hour: 0, minute: 10 } },
+  { kind: 'invoices.recur', dailyAt: { hour: 0, minute: 15 } },
   { kind: 'backups.due', everyMinutes: 60 },
   { kind: 'exports.expire', dailyAt: { hour: 4, minute: 0 } },
   { kind: 'accounts.purge', dailyAt: { hour: 4, minute: 30 } },

@@ -430,5 +430,25 @@
     "lineActions": "Actions for line {{n}}",
     "discountMode": "Discount as {{mode}}, line {{n}}. Change",
     "enterHint": "Enter moves down a column; on the last line it adds an item."
+  },
+  "recurring": {
+    "title": "Repeat this invoice",
+    "hint": "A copy is issued on each date of the series, with the same customer, lines and prices, and its own number. It is e-invoiced like any other.",
+    "frequency": {
+      "none": "Off",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "yearly": "Yearly"
+    },
+    "endDate": "Last date (optional)",
+    "autoSend": "Email each copy",
+    "autoSendHint": "Sends it to the customer as soon as it is issued.",
+    "next": "Next copy on {{date}}",
+    "save": "Save",
+    "saved": "Repeats; next copy on {{date}}",
+    "stopped": "No longer repeats",
+    "action": "Repeat…",
+    "badge": "Repeats"
   }
 }

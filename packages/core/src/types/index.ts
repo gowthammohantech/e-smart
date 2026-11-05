@@ -419,6 +419,13 @@ export type BusinessDocument = {
   itcClaimPeriod?: string;
   /** The project or department it belongs to. */
   costCentreId?: string;
+  /** An invoice that repeats: the server issues a copy on each next date (setDocumentRecurrence). */
+  recurrence?: RecurrenceFrequency;
+  nextRecurrenceDate?: string;
+  recurrenceEndDate?: string;
+  recurrenceAutoSend?: boolean;
+  /** On a copy, the recurring invoice it was issued from. */
+  recurringParentId?: string;
   totals: DocumentTotals;
   compliance?: ComplianceInfo;
   createdBy: string;

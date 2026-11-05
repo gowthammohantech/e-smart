@@ -267,6 +267,13 @@
       "when": 1793844649233,
       "tag": "0037_perpetual_stock",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793845160867,
+      "tag": "0038_recurring_invoices",
+      "breakpoints": true
     }
   ]
 }

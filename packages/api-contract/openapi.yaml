@@ -1584,6 +1584,7 @@ paths:
           explode: false
           schema: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
         - { name: partyId, in: query, schema: { type: string } }
+        - { name: recurring, in: query, description: 'true: only invoices that repeat', schema: { type: boolean } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -1892,6 +1893,42 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BusinessDocument' }
+  /companies/{companyId}/documents/{id}/recurrence:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Documents]
+      operationId: setDocumentRecurrence
+      summary: Repeat an issued invoice weekly, monthly, quarterly or yearly
+      description: >-
+        The invoice becomes the template: each day the scheduler issues a copy for every date that has
+        fallen due (same customer, lines and prices at the tax rates of the day, due the same number of
+        days after its date), numbered from the series and e-invoiced like any other, and emails it when
+        `autoSend` is on. Counting from the template's date keeps a series on the 31st at month ends.
+        `none` stops it. Only an issued, uncancelled invoice that is not itself a copy can repeat
+        (422 NOT_RECURRABLE).
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recurrence]
+              properties:
+                recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly] }
+                endDate: { type: string, format: date, description: No copy is dated after this }
+                autoSend: { type: boolean, default: false, description: Email each copy to the customer when it is issued }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/documents/{id}/pdf:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -5088,6 +5125,7 @@ components:
             taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
             fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
             lockedThroughDate: { type: [string, 'null'], format: date, description: 'Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.' }
+            perpetualStockFrom: { type: [string, 'null'], format: date, description: 'Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.' }
             tan: { type: string, pattern: '^([A-Z]{4}[0-9]{5}[A-Z])?$', description: 'Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it.' }
             allowNegativeStock: { type: boolean, default: false, description: 'When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.' }
             msmeBankRate: { type: number, minimum: 0, maximum: 50, default: 5.5, description: "RBI's bank rate in percent; MSME late-payment interest is three times it (MSMED Act s.16)" }
@@ -5125,7 +5163,6 @@ components:
             lastActiveAt: { type: string, format: date-time, readOnly: true }
     DeviceSession:
       type: object
-            perpetualStockFrom: { type: [string, 'null'], format: date, description: 'Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.' }
       properties:
         id: { type: string }
         label: { type: string }
@@ -5827,6 +5864,11 @@ components:
             itcReclaimedOn: { type: string, format: date, readOnly: true, description: 'Credit claimed again once paid' }
             itcClaimPeriod: { type: string, readOnly: true, description: 'The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return' }
             partyStateCode: { type: string, readOnly: true }
+            recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly], readOnly: true, description: Set with setDocumentRecurrence }
+            nextRecurrenceDate: { type: string, format: date, readOnly: true, description: The date of the next copy; unset once the series has ended }
+            recurrenceEndDate: { type: string, format: date, readOnly: true }
+            recurrenceAutoSend: { type: boolean, readOnly: true }
+            recurringParentId: { type: string, readOnly: true, description: "On a copy, the recurring invoice it was issued from" }
             compliance: { $ref: '#/components/schemas/ComplianceInfo' }
             createdBy: { type: string, readOnly: true }
     DocumentSummary:

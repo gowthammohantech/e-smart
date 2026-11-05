@@ -150,6 +150,11 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       itcReclaimedOn: row.itcReclaimedOn,
       itcClaimPeriod: row.itcClaimPeriod,
       costCentreId: row.costCentreId,
+      recurrence: row.recurrence,
+      nextRecurrenceDate: row.nextRecurrenceDate,
+      recurrenceEndDate: row.recurrenceEndDate,
+      recurrenceAutoSend: row.recurrence !== 'none' ? row.recurrenceAutoSend : undefined,
+      recurringParentId: row.recurringParentId,
       totals: {
         subtotal: m(row.subtotalMinor),
         lineDiscount: m(row.lineDiscountMinor),
