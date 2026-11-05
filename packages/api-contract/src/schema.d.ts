@@ -2619,6 +2619,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/cash-forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Cash and bank week by week, from what is owed each way and what recurs
+         * @description Today's cash and bank balances, plus open invoices and debit notes by due date, less open bills by due date, plus copies of recurring invoices and recurring expenses on their dates. Overdue amounts count in the first week, marked. Base-currency minor units, as core's CashForecast.
+         */
+        get: operations["getCashForecast"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/receivables": {
         parameters: {
             query?: never;
@@ -11717,6 +11739,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OcrExtraction"];
+                };
+            };
+        };
+    };
+    getCashForecast: {
+        parameters: {
+            query?: {
+                weeks?: number;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

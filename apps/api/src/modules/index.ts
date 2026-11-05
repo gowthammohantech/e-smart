@@ -18,6 +18,7 @@ import { inventoryHandlers } from './inventory/handlers';
 import { attachmentsHandlers } from './attachments/handlers';
 import { ocrHandlers } from './ocr/handlers';
 import { ledgerHandlers } from './ledger/handlers';
+import { forecastHandlers } from './ledger/forecast';
 import { booksHandlers } from './books/handlers';
 import { reportsHandlers } from './reports/handlers';
 import { gstHandlers } from './gst/handlers';
@@ -59,6 +60,7 @@ export const handlers: Handlers = {
   ...attachmentsHandlers,
   ...ocrHandlers,
   ...ledgerHandlers,
+  ...forecastHandlers,
   ...booksHandlers,
   ...reportsHandlers,
   ...gstHandlers,

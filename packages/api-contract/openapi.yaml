@@ -3791,6 +3791,25 @@ paths:
               schema: { $ref: '#/components/schemas/OcrExtraction' }
 
   # ------------------------------------------------------------------ Ledger
+  /companies/{companyId}/cash-forecast:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Reports]
+      operationId: getCashForecast
+      summary: Cash and bank week by week, from what is owed each way and what recurs
+      description: >-
+        Today's cash and bank balances, plus open invoices and debit notes by due date, less open bills by due date,
+        plus copies of recurring invoices and recurring expenses on their dates. Overdue amounts count in the first
+        week, marked. Base-currency minor units, as core's CashForecast.
+      x-roles: [owner, admin, accountant]
+      parameters:
+        - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 52, default: 13 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
   /companies/{companyId}/receivables:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:

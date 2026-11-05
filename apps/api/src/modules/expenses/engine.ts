@@ -1,9 +1,8 @@
 import { businessDate } from '@esmart/core/lib/date';
 import { and, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
-import { addDaysISO } from '@esmart/core/lib/date';
 import { inclusiveTax, money, percent, zero, type Money } from '@esmart/core/lib/money';
-import type { RecurrenceFrequency } from '@esmart/core/types';
 import { schema } from '@esmart/db';
+import { nextRecurrence } from '@esmart/core/domain/recurrence';
 import type { AuthUser, Deps } from '../../context';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -35,44 +34,8 @@ export function expenseTax(amount: Money, rate: number, taxInclusive: boolean, r
   return inclusiveTax(amount, rate);
 }
 
-/** `iso` moved on by whole months, clamped to the end of a shorter month (31 Jan + 1 → 28/29 Feb). */
-function addMonthsISO(iso: string, months: number): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const total = m - 1 + months;
-  const year = y + Math.floor(total / 12);
-  const month = ((total % 12) + 12) % 12;
-  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return `${year}-${String(month + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
-}
-
-/** The `k`th occurrence of a series that started on `anchor`. */
-function occurrence(anchor: string, frequency: Exclude<RecurrenceFrequency, 'none'>, k: number): string {
-  switch (frequency) {
-    case 'weekly':
-      return addDaysISO(anchor, 7 * k);
-    case 'monthly':
-      return addMonthsISO(anchor, k);
-    case 'quarterly':
-      return addMonthsISO(anchor, 3 * k);
-    case 'yearly':
-      return addMonthsISO(anchor, 12 * k);
-  }
-}
-
-/**
- * The first occurrence strictly after `after` of a series anchored on the
- * template's date, or null when it does not recur. Counting from the anchor
- * (rather than from the last occurrence) keeps a series that started on the
- * 31st on month ends instead of drifting to the 28th.
- */
-export function nextRecurrence(anchor: string, frequency: RecurrenceFrequency, after: string = anchor): string | null {
-  if (frequency === 'none') return null;
-  for (let k = 1; k < 100_000; k++) {
-    const d = occurrence(anchor, frequency, k);
-    if (d > after) return d;
-  }
-  return null;
-}
+/** Moved to core so the cash-flow forecast counts a series the same way. */
+export { nextRecurrence };
 
 /** Whoever set a series up is the one its occurrences are recorded against. */
 export async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {

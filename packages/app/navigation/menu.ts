@@ -102,6 +102,7 @@ export const MENU: MenuSection[] = [
       { key: 'expenses', labelKey: 'nav:title.expenses', icon: 'receipt-text-outline', route: '/expenses', group: 'spending', createRoute: '/expenses/new' },
       { key: 'books', labelKey: 'nav:more.entry.books', icon: 'book-open-page-variant-outline', route: '/books', group: 'accounts', createRoute: '/books/vouchers/new' },
       { key: 'bankReconciliation', labelKey: 'nav:title.bankReconciliation', icon: 'bank-check', route: '/books/reconciliation', group: 'accounts' },
+      { key: 'cashForecast', labelKey: 'nav:title.cashForecast', icon: 'chart-areaspline', route: '/books/cash-forecast', group: 'accounts' },
     ],
   },
   {

@@ -113,7 +113,8 @@
     "proformas": "Proforma invoices",
     "newProforma": "New proforma invoice",
     "proforma": "Proforma invoice",
-    "approvals": "Waiting for approval"
+    "approvals": "Waiting for approval",
+    "cashForecast": "Cash-flow forecast"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {

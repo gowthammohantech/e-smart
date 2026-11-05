@@ -369,5 +369,23 @@
       "due": "Due",
       "amount": "Outstanding"
     }
+  },
+  "forecast": {
+    "title": "Cash-flow forecast",
+    "basis": "Cash and bank today, plus what customers owe by due date, less bills by due date, plus recurring invoices and expenses. Overdue amounts count in the first week.",
+    "weeks_one": "{{count}} week",
+    "weeks_other": "{{count}} weeks",
+    "endOf": "Cash on {{date}}",
+    "today": "Cash and bank today",
+    "lowest": "Lowest, week to {{date}}",
+    "shortfall": "Runs short in the week from {{date}}",
+    "inOut": "In {{inflow}} · out {{outflow}}",
+    "overdue": "overdue",
+    "kind": {
+      "receivable": "To receive",
+      "payable": "To pay",
+      "recurringInvoice": "Recurring invoice",
+      "recurringExpense": "Recurring expense"
+    }
   }
 }
