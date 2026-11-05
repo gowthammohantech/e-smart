@@ -1813,6 +1813,8 @@ export const companies = pgTable("companies", {
 	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
 	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
 	perpetualStockFrom: date("perpetual_stock_from"),
+	// How stock is costed as it goes out (RULES 6.2): moving weighted average, or first in, first out.
+	stockCosting: varchar("stock_costing", { length: 8 }).default('average').notNull(),
 	// Off by default: a sale cannot take a tracked item below zero at its branch.
 	allowNegativeStock: boolean("allow_negative_stock").default(false).notNull(),
 	// RBI's bank rate (percent) for MSME late-payment interest, three times it (MSMED Act s.16).
@@ -2406,6 +2408,34 @@ export const fixedAssets = pgTable("fixed_assets", {
 			name: "fixed_assets_company_id_fkey"
 		}),
 	check("fixed_assets_method_check", sql`${table.method} IN ('slm', 'wdv')`),
+]);
+
+/**
+ * Budgets (RULES 6.16): what the business plans to earn and spend on each income and expense account,
+ * month by month over a financial year, for the whole business or one branch or cost centre. `lines`
+ * is `[{ account, months: [12 base-currency paise amounts, from the year's first month] }]`.
+ */
+export const budgets = pgTable("budgets", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 200 }).notNull(),
+	// The first day of the financial year it is for.
+	yearFrom: date("year_from").notNull(),
+	branchId: varchar("branch_id", { length: 40 }),
+	costCentreId: varchar("cost_centre_id", { length: 40 }),
+	lines: jsonb().default([]).notNull(),
+	notes: text(),
+	version: integer().default(1).notNull(),
+	createdBy: varchar("created_by", { length: 40 }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("budgets_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), table.name.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "budgets_company_id_fkey"
+		}),
 ]);
 
 /**
