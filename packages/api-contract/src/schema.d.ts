@@ -1802,7 +1802,7 @@ export interface paths {
         };
         get: operations["listVouchers"];
         put?: never;
-        /** @description The server assigns `number` from the kind's series. Debits must equal credits; a contra moves money only between cash and bank accounts; a GST journal touches a GST ledger; a TDS challan clears TDS payable. Refused in a closed period (409 PERIOD_LOCKED). */
+        /** @description The server assigns `number` from the kind's series. A voucher sent with status `draft` is kept out of the books and takes no number (its `number` is its id) until a save sets status `posted`; a draft may be unbalanced or have one line, and is not refused in a closed period. A posted voucher must follow every rule. Debits must equal credits; a contra moves money only between cash and bank accounts; a GST journal touches a GST ledger; a TDS challan clears TDS payable. Refused in a closed period (409 PERIOD_LOCKED). */
         post: operations["createVoucher"];
         delete?: never;
         options?: never;
@@ -3967,6 +3967,13 @@ export interface components {
                 reverseCharge?: boolean;
                 itcAvailable?: boolean;
                 itcReason?: string;
+            /**
+             * @description Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft.
+             * @enum {string}
+             */
+            status?: "draft" | "posted";
+            /** Format: date-time */
+            readonly postedAt?: string;
                 /**
                  * @description matchedWithinTolerance: amounts agree, dated a few days apart. partial: number agrees, amount or date doesn't (see reasons). claimed: its bill's credit is claimed for this period.
                  * @enum {string}
@@ -9504,6 +9511,7 @@ export interface operations {
                     toBranchId: string;
                     quantity: number;
                     /** Format: date */
+                status?: "draft" | "posted";
                     date: string;
                     notes?: string;
                 };

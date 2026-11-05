@@ -46,7 +46,7 @@ export async function paymentAccountBalances(db: DbOrTx, companyId: string, acco
     db
       .select({ account: sql<string>`l->>'account'`, debit: sql<string>`coalesce(sum((l->>'debitMinor')::bigint), 0)`, credit: sql<string>`coalesce(sum((l->>'creditMinor')::bigint), 0)` })
       .from(sql`${V}, jsonb_array_elements(${V.lines}) as l`)
-      .where(and(eq(V.companyId, companyId), sql`l->>'account' like 'pay:%'`))
+      .where(and(eq(V.companyId, companyId), eq(V.status, 'posted'), sql`l->>'account' like 'pay:%'`))
       .groupBy(sql`l->>'account'`),
   ]);
   const coreAccounts = accounts.map((a) => ({ id: a.id, openingBalance: { minor: a.openingBalanceMinor, currency: a.currency.trim() }, openingRate: Number(a.openingRate) }) as PaymentAccount);

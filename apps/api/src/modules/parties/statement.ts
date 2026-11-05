@@ -54,7 +54,7 @@ export async function partyStatement(db: DbOrTx, company: CompanyRow, party: Par
   const vouchers = await db
     .select()
     .from(V)
-    .where(and(eq(V.companyId, company.id), sql`${V.lines} @> ${JSON.stringify([{ account: `party:${party.id}` }])}::jsonb`));
+    .where(and(eq(V.companyId, company.id), eq(V.status, 'posted'), sql`${V.lines} @> ${JSON.stringify([{ account: `party:${party.id}` }])}::jsonb`));
 
   // In the party's currency: as booked when they match, via base when the party is billed in base.
   const inPartyCurrency = (minor: number, cur: string, baseMinor: number) => (cur.trim() === currency ? minor : currency === baseCurrency ? baseMinor : minor);

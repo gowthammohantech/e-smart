@@ -18,7 +18,7 @@ export default function EditVoucher() {
   if (!voucher) return <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} />;
   return (
     <>
-      <Stack.Screen options={{ title: voucher.number }} />
+      <Stack.Screen options={{ title: voucher.status === 'draft' ? tr('books:vouchers.draftTitle') : voucher.number }} />
       <VoucherForm voucher={voucher} onSaved={() => goBack(`/(app)/books/vouchers/${voucher.id}`)} />
     </>
   );

@@ -126,6 +126,7 @@ Amounts are kept in paise. Every source document's postings balance to the paisa
 | 6.6 | Closing the books (owner only) refuses any document, payment, expense or voucher dated on or before the close (`PERIOD_LOCKED`) | `documents/lifecycle.ts` `assertPeriodOpen` | api `books` › *closes payments and expenses with the books too* |
 | 6.7 | Cost centres: a document's and an expense's postings carry their centre; a voucher splits by line; profit by centre excludes the change in stock | `ledger/reports.ts` `costCentreProfit` | core `extras` › *tags a document's postings and splits a voucher by centre* |
 | 6.8 | Tally export: every account as a ledger under Tally's reserved group with its opening; every voucher balanced | `exports/tally.ts` | api `exports` › *writes the whole book for Tally* |
+| 6.9 | **New.** A voucher may be saved as a draft: it posts nothing, takes no number from the series (none is lost if it is abandoned), may be unbalanced or one line, and is outside closed periods. Posting it applies every rule in 6.5 and 6.6 and gives it the next number on its date; a posted voucher cannot return to draft. Drafts are left out of cash and bank balances, party statements, the TDS challan register and the Tally export | `ledger/postings.ts` `postVoucher`, `isDraftVoucher`; `books/handlers.ts` | core `books` › *leaves a draft voucher off the books until it is posted*; api `books` › *keeps a draft out of the books and its number series…*, *keeps and deletes a draft in a closed period…* |
 
 ## 7. GSTR-3B and filing
 

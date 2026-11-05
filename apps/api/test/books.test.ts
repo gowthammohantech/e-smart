@@ -126,6 +126,63 @@ describe('books: vouchers', () => {
     expect(locked.body.code).toBe('PERIOD_LOCKED');
   });
 
+  it('keeps a draft out of the books and its number series until it is posted', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: 1_000_000 }).where(eq(schema.paymentAccounts.id, m.cash.id));
+    const tb = async () => {
+      const res = await t.get(`${m.c}/reports/trial-balance`, { token: m.token, query: { from: '2026-04-01', to: '2027-03-31' } });
+      return (account: string) => res.body.rows.find((r: { account: string }) => r.account === account)?.closing.minor ?? 0;
+    };
+
+    // Half done: one line, unbalanced, and more than the cash holds. A draft keeps it anyway.
+    const draft = await t.post(`${m.c}/vouchers`, voucher('journal', [['sys:badDebts', 5_000_000, 0]], { status: 'draft' }), { token: m.token });
+    expect(draft.status).toBe(201);
+    expect(draft.body.status).toBe('draft');
+    expect(draft.body.number).toBe(draft.body.id);
+    expect((await tb())('sys:badDebts')).toBe(0);
+
+    // A posted voucher in the meantime takes the first number: the draft held none.
+    const posted = await t.post(`${m.c}/vouchers`, voucher('journal', [['sys:roundOff', 100, 0], ['sys:otherIncome', 0, 100]]), { token: m.token });
+    expect(posted.body.number).toBe('JV/26-27/0001');
+    expect(posted.body.status).toBe('posted');
+
+    const drafts = await t.get(`${m.c}/vouchers`, { token: m.token, query: { status: 'draft' } });
+    expect(drafts.body.data.map((v: { id: string }) => v.id)).toEqual([draft.body.id]);
+
+    // Posting checks it in full: still unbalanced, so refused and left a draft.
+    const save = (body: Record<string, unknown>, version: number) =>
+      t.put(`${m.c}/vouchers/${draft.body.id}`, body, { token: m.token, headers: { 'if-match': `"v${version}"` } });
+    const refused = await save(voucher('journal', [['sys:badDebts', 5_000_000, 0]], { status: 'posted' }), 1);
+    expect(refused.status).toBe(422);
+    const outOfCash = await save(voucher('journal', [['sys:badDebts', 5_000_000, 0], [`pay:${m.cash.id}`, 0, 5_000_000]], { status: 'posted' }), 1);
+    expect(outOfCash.body.code).toBe('INSUFFICIENT_BALANCE');
+
+    // Finished and posted: it takes the next number and reaches the books.
+    const done = await save(voucher('journal', [['sys:badDebts', 2_000, 0], [`party:${m.mumbai.id}`, 0, 2_000]], { status: 'posted' }), 1);
+    expect(done.status).toBe(200);
+    expect(done.body.status).toBe('posted');
+    expect(done.body.number).toBe('JV/26-27/0002');
+    expect(done.body.postedAt).toBeDefined();
+    expect((await tb())('sys:badDebts')).toBe(2_000);
+
+    // And it doesn't go back.
+    const back = await save(voucher('journal', [['sys:badDebts', 2_000, 0], [`party:${m.mumbai.id}`, 0, 2_000]], { status: 'draft' }), 2);
+    expect(back.status).toBe(422);
+    expect(back.body.issues[0].field).toBe('status');
+  });
+
+  it('keeps and deletes a draft in a closed period, but posts it only once the period is open', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.companies).set({ lockedThroughDate: '2026-09-30' }).where(eq(schema.companies.id, m.companyId));
+    const lines = voucher('journal', [['sys:roundOff', 100, 0], ['sys:otherIncome', 0, 100]]);
+    const draft = await t.post(`${m.c}/vouchers`, { ...lines, status: 'draft' }, { token: m.token });
+    expect(draft.status).toBe(201);
+    const post = await t.put(`${m.c}/vouchers/${draft.body.id}`, { ...lines, status: 'posted' }, { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect(post.body.code).toBe('PERIOD_LOCKED');
+    const removed = await t.del(`${m.c}/vouchers/${draft.body.id}`, { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect(removed.status).toBe(204);
+  });
+
   it('closes payments and expenses with the books too', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);

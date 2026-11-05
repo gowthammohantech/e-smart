@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Badge } from '@esmart/ui/components/Badge';
 import { Card } from '@esmart/ui/components/Card';
+import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { ListRow } from '@esmart/ui/components/ListRow';
@@ -20,12 +22,20 @@ export default function VoucherList() {
   const router = useRouter();
   const { t: tr } = useTranslation(['books']);
   // From the server, newest first, 50 at a time.
-  const pages = useVoucherPages({});
+  const [status, setStatus] = useState<'all' | 'draft' | 'posted'>('all');
+  const pages = useVoucherPages(status === 'all' ? {} : { status });
   const vouchers = pages.rows;
   const baseCurrency = useBaseCurrency();
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.vouchers') }} />
+      <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md }}>
+        <Segmented
+          options={(['all', 'draft', 'posted'] as const).map((v) => ({ value: v, label: tr(`books:vouchers.filter.${v}`) }))}
+          value={status}
+          onChange={(v) => setStatus(v as typeof status)}
+        />
+      </View>
       {vouchers.length ? (
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }}
@@ -40,12 +50,15 @@ export default function VoucherList() {
             {vouchers.map((v, i) => (
               <ListRow
                 key={v.id}
-                title={v.number}
+                title={v.status === 'draft' ? tr('books:vouchers.draftTitle') : v.number}
                 subtitle={`${formatDate(v.date)} · ${tr(`books:vouchers.kind.${v.kind}`)}${v.narration ? ` · ${v.narration}` : ''}`}
                 right={
-                  <Text variant="small" weight="600">
-                    {formatMoney(money(v.lines.reduce((a, l) => a + l.debit.minor, 0), baseCurrency))}
-                  </Text>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    {v.status === 'draft' ? <Badge label={tr('books:vouchers.draft')} tone="warning" size="sm" /> : null}
+                    <Text variant="small" weight="600">
+                      {formatMoney(money(v.lines.reduce((a, l) => a + l.debit.minor, 0), baseCurrency))}
+                    </Text>
+                  </View>
                 }
                 chevron
                 divider={i < vouchers.length - 1}

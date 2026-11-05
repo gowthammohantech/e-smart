@@ -1,6 +1,6 @@
 import { calculateDocument } from '../lineCalc';
 import { buildTaxContext } from '../taxEngine';
-import { allPostings, postDocument, postExpense, postPayment, Posting } from '../ledger/postings';
+import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting } from '../ledger/postings';
 import { balanceSheet, ledgerStatement, profitAndLoss, trialBalance } from '../ledger/reports';
 import { Book, chartOfAccounts } from '../ledger/accounts';
 import { BusinessDocument, Company, DocumentKind, DocumentLine, Expense, GstFlags, Item, Party, Payment, PaymentAccount, StockMovement, Voucher } from '../../types';
@@ -218,6 +218,12 @@ describe('books', () => {
   it('leaves drafts off the books and balances to the paisa', () => {
     expect(postings.some((p) => p.source.kind === 'purchaseBill' && p.date === '2026-06-01')).toBe(false);
     expect(balanced(postings)).toBe(0);
+  });
+
+  it('leaves a draft voucher off the books until it is posted', () => {
+    const half: Voucher = { ...loan, id: 'v3', number: 'v3', status: 'draft', lines: [{ account: 'sys:badDebts', debit: inr('999'), credit: zero('INR') }] };
+    expect(postVoucher(half)).toEqual([]);
+    expect(postVoucher({ ...half, status: 'posted', lines: loan.lines })).toHaveLength(2);
   });
 
   it('has a trial balance whose debits equal its credits', () => {

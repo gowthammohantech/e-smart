@@ -150,7 +150,20 @@
     "bsrHint": "The bank branch's 7-digit code, on the challan",
     "challanSerial": "Challan serial number",
     "depositedOn": "Deposited on",
-    "challanInvalid": "A BSR code has 7 digits and a challan serial up to 5"
+    "challanInvalid": "A BSR code has 7 digits and a challan serial up to 5",
+    "needsOne": "Add at least one line",
+    "saveDraft": "Save as draft",
+    "post": "Post",
+    "posted": "Voucher posted",
+    "draftSaved": "Draft saved",
+    "draft": "Draft",
+    "draftTitle": "Draft voucher",
+    "draftHint": "Not in the books yet. It takes a number and reaches the ledgers when you post it.",
+    "filter": {
+      "all": "All",
+      "draft": "Drafts",
+      "posted": "Posted"
+    }
   },
   "statement": {
     "opening": "Opening balance",

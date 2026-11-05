@@ -79,6 +79,9 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const filled = lines.filter((l) => l.account && minor(l.amount));
   const challanGiven = kind === 'tdsChallan' && (bsrCode || serial);
   const challanBad = challanGiven && (!/^\d{7}$/.test(bsrCode) || !/^\d{1,5}$/.test(serial));
+  const isDraft = voucher?.status === 'draft';
+  // Kept to finish later: a draft only needs a line, and is checked in full when it is posted.
+  const draftProblem = filled.length ? null : tr('books:vouchers.needsOne');
   const problem = filled.length < 2 ? tr('books:vouchers.needsTwo') : debit !== credit ? tr('books:vouchers.unbalanced') : challanBad ? tr('books:vouchers.challanInvalid') : null;
 
   /**
@@ -100,14 +103,15 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       return next;
     });
 
-  const save = async () => {
-    if (problem) return;
+  const save = async (status: 'draft' | 'posted') => {
+    if (status === 'draft' ? draftProblem : problem) return;
     const record: Voucher = {
       id: voucher?.id ?? uid('vch'),
       companyId: voucher?.companyId ?? company.id,
       branchId: voucher?.branchId ?? defaultBranchId ?? '',
       kind,
       number: voucher?.number ?? '',
+      status,
       date,
       narration: narration.trim() || undefined,
       reference: reference.trim() || undefined,
@@ -122,7 +126,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       createdBy: voucher?.createdBy ?? '',
       createdAt: voucher?.createdAt ?? nowISO(),
     };
-    const res = await serverSave(() => saveVoucher(record), tr('books:vouchers.saved'), { icon: 'swap-horizontal', detail: tr(`books:vouchers.kind.${kind}`) });
+    const res = await serverSave(() => saveVoucher(record), tr(status === 'draft' ? 'books:vouchers.draftSaved' : isDraft ? 'books:vouchers.posted' : 'books:vouchers.saved'), { icon: 'swap-horizontal', detail: tr(`books:vouchers.kind.${kind}`) });
     if (res) onSaved(res.id ?? record.id);
   };
 
@@ -169,7 +173,11 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
           <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" />
         </ScrollView>
         <FormActions>
-          <Button title={tr('books:vouchers.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth size="lg" shortcut="S" />
+          {/* A posted voucher stays posted; a new one or a draft can be kept as a draft. */}
+          {!voucher || isDraft ? (
+            <Button title={tr('books:vouchers.saveDraft')} variant="secondary" onPress={() => void save('draft')} loading={saving} disabled={blocked || !!draftProblem} fullWidth size="lg" />
+          ) : null}
+          <Button title={tr(isDraft ? 'books:vouchers.post' : 'books:vouchers.save')} onPress={() => void save('posted')} loading={saving} disabled={blocked || !!problem} fullWidth size="lg" shortcut="S" />
         </FormActions>
       </FormContainer>
 

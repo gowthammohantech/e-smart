@@ -1023,6 +1023,8 @@ export type Voucher = {
   id: string;
   companyId: string;
   branchId: string;
+/** A draft is kept but not in the books (no number, no postings) until it is posted. */
+export type VoucherStatus = 'draft' | 'posted';
   kind: VoucherKind;
   number: string;
   date: string;
@@ -1036,3 +1038,6 @@ export type Voucher = {
   createdAt: string;
   updatedAt?: string;
 };
+  /** Absent on records from before drafts existed, which are posted. */
+  status?: VoucherStatus;
+  postedAt?: string;

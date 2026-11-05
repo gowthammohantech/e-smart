@@ -63,7 +63,7 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
 export async function loadVouchers(s: Pick<Scope, 'db' | 'company' | 'to'>, kind?: Voucher['kind']): Promise<Voucher[]> {
   const V = schema.vouchers;
   const base = s.company.baseCurrency.trim();
-  const rows = await s.db.select().from(V).where(and(eq(V.companyId, s.company.id), lte(V.date, s.to), kind ? eq(V.kind, kind) : undefined));
+  const rows = await s.db.select().from(V).where(and(eq(V.companyId, s.company.id), eq(V.status, 'posted'), lte(V.date, s.to), kind ? eq(V.kind, kind) : undefined));
   return rows.map((v) => ({
     id: v.id,
     companyId: v.companyId,

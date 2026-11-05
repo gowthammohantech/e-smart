@@ -40,6 +40,8 @@ function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> {
     branchId: row.branchId,
     kind: row.kind,
     number: row.number,
+    status: row.status,
+    postedAt: row.postedAt ? iso(row.postedAt) : undefined,
     date: row.date,
     narration: row.narration,
     reference: row.reference,
@@ -93,8 +95,12 @@ async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'Ledge
  * A voucher's rules: at least two lines, each a debit or a credit, debits equal to credits, every
  * account in this book, and what its kind allows: a contra only between cash and bank, a GST journal
  * touching a GST ledger, a TDS challan clearing TDS payable from cash or bank.
+ *
+ * A draft is kept to finish later, so it only needs lines that name real accounts: it may be
+ * unbalanced, have one line, break its kind's rules or sit in a closed period, since nothing of it
+ * reaches the books. All of that is checked when it is posted.
  */
-async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, exceptId?: string) {
+async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, exceptId?: string, draft = false) {
   const issues: Issue[] = [];
   const block = blocking(issues);
   const base = ctx.company.baseCurrency.trim();
@@ -109,13 +115,14 @@ async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, 
     if ((l.debitMinor > 0) === (l.creditMinor > 0)) block(field, 'Each line is a debit or a credit');
     if (!accountFor(l.account, book)) block(`${field}.account`, `No account ${l.account} in this company`);
   });
-  if (lines.length < 2) block('lines', 'A voucher needs at least two lines');
+  if (!lines.length) block('lines', 'A voucher needs at least one line');
+  if (!draft && lines.length < 2) block('lines', 'A voucher needs at least two lines');
   const debit = lines.reduce((a, l) => a + l.debitMinor, 0);
   const credit = lines.reduce((a, l) => a + l.creditMinor, 0);
-  if (debit !== credit) block('lines', `Debits (${(debit / 100).toFixed(2)}) and credits (${(credit / 100).toFixed(2)}) must be equal`);
+  if (!draft && debit !== credit) block('lines', `Debits (${(debit / 100).toFixed(2)}) and credits (${(credit / 100).toFixed(2)}) must be equal`);
   const groups = lines.map((l) => accountFor(l.account, book)?.group);
   const isCash = (g: LedgerGroup | undefined) => g === 'cashInHand' || g === 'bankAccounts';
-  if (!issues.length) {
+  if (!issues.length && !draft) {
     if (body.kind === 'contra' && !groups.every(isCash)) block('lines', 'A contra moves money between cash and bank accounts only');
     if (body.kind === 'gstJournal' && !groups.some((g) => g === 'dutiesTaxes')) block('lines', 'A GST journal adjusts a GST ledger');
     if (body.kind === 'tdsChallan') {
@@ -141,7 +148,9 @@ async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, 
     branchId = (mine.find((b) => b.isPrimary) ?? mine[0])?.id ?? null;
   }
   if (branchId && ctx.user.branchIds.length && !ctx.user.branchIds.includes(branchId)) block('branchId', 'You cannot record vouchers in this branch');
-  if (issues.length) throw unprocessable(issues, debit !== credit ? 'VOUCHER_UNBALANCED' : 'VALIDATION_FAILED');
+  if (issues.length) throw unprocessable(issues, !draft && debit !== credit ? 'VOUCHER_UNBALANCED' : 'VALIDATION_FAILED');
+  const columns = { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, lines };
+  if (draft) return columns;
   assertPeriodOpen(ctx.company, body.date);
 
   // No account pays out more than it holds, as for payments.
@@ -155,7 +164,7 @@ async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, 
       throw unprocessable([{ field: `lines[${i}]`, message: `${account.name} holds ${base} ${(Math.max(balance, 0) / 100).toFixed(2)}; this voucher takes ${base} ${(out / 100).toFixed(2)}`, severity: 'blocking' }], 'INSUFFICIENT_BALANCE');
     }
   }
-  return { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, lines };
+  return columns;
 }
 
 async function findVoucher(ctx: AnyCtx, db: DbOrTx, id: string): Promise<VoucherRow> {
@@ -267,6 +276,7 @@ export const booksHandlers = defineHandlers({
           eq(V.companyId, ctx.company.id),
           ctx.user.branchIds.length ? inArray(V.branchId, ctx.user.branchIds) : undefined,
           q.kind ? eq(V.kind, q.kind) : undefined,
+          q.status ? eq(V.status, q.status) : undefined,
           q.from ? gte(V.date, q.from) : undefined,
           q.to ? lte(V.date, q.to) : undefined,
           k.where,
@@ -279,10 +289,14 @@ export const booksHandlers = defineHandlers({
   },
 
   async createVoucher(ctx) {
-    const cols = await voucherColumns(ctx, ctx.db, ctx.body);
+    const draft = ctx.body.status === 'draft';
+    const cols = await voucherColumns(ctx, ctx.db, ctx.body, undefined, draft);
     const row = await ctx.db.transaction(async (tx) => {
-      const number = await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date });
-      const [created] = await tx.insert(V).values({ id: newId('vch'), companyId: ctx.company.id, number, createdBy: ctx.user.id, ...cols, createdAt: ctx.now, updatedAt: ctx.now }).returning();
+      const id = newId('vch');
+      // A draft takes no number from the series, so drafts given up on leave no gaps in it.
+      const number = draft ? id : await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date });
+      const posted = draft ? { status: 'draft' as const } : { status: 'posted' as const, postedAt: ctx.now, postedBy: ctx.user.id };
+      const [created] = await tx.insert(V).values({ id, companyId: ctx.company.id, number, createdBy: ctx.user.id, ...cols, ...posted, createdAt: ctx.now, updatedAt: ctx.now }).returning();
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'voucher', entityId: created.id, entityLabel: created.number, version: created.version });
       return created;
     });
@@ -299,13 +313,21 @@ export const booksHandlers = defineHandlers({
   async saveVoucher(ctx) {
     const current = await findVoucher(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    assertPeriodOpen(ctx.company, current.date);
+    const wasDraft = current.status === 'draft';
+    // Omitted keeps it as it is; a draft is posted by saving it as posted.
+    const draft = (ctx.body.status ?? current.status) === 'draft';
+    if (!wasDraft && draft) throw unprocessable([{ field: 'status', message: 'A posted voucher cannot go back to draft; delete it or post a correcting voucher', severity: 'blocking' }]);
+    if (!wasDraft) assertPeriodOpen(ctx.company, current.date);
     if (ctx.body.kind !== current.kind) throw unprocessable([{ field: 'kind', message: 'A voucher keeps its kind; delete it and make another', severity: 'blocking' }]);
-    const cols = await voucherColumns(ctx, ctx.db, ctx.body, current.id);
+    const cols = await voucherColumns(ctx, ctx.db, ctx.body, current.id, draft);
     const row = await ctx.db.transaction(async (tx) => {
-      const [updated] = await tx.update(V).set({ ...cols, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning();
+      // Posting a draft: it takes its number now, on the date it is posted with.
+      const posting = wasDraft && !draft;
+      const number = posting ? await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date }) : current.number;
+      const posted = posting ? { status: 'posted' as const, postedAt: ctx.now, postedBy: ctx.user.id } : {};
+      const [updated] = await tx.update(V).set({ ...cols, number, ...posted, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning();
       if (!updated) throw preconditionFailed();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'updated', entityType: 'voucher', entityId: updated.id, entityLabel: updated.number, version: updated.version, before: { date: current.date, lines: current.lines }, after: { date: updated.date, lines: updated.lines } });
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: posting ? 'posted' : 'updated', entityType: 'voucher', entityId: updated.id, entityLabel: updated.number, version: updated.version, before: { status: current.status, date: current.date, lines: current.lines }, after: { status: updated.status, date: updated.date, lines: updated.lines } });
       return updated;
     });
     setEtag(ctx.reply, row.version);
@@ -315,7 +337,8 @@ export const booksHandlers = defineHandlers({
   async removeVoucher(ctx) {
     const current = await findVoucher(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    assertPeriodOpen(ctx.company, current.date);
+    // A draft was never in the books, so a closed period doesn't hold it.
+    if (current.status !== 'draft') assertPeriodOpen(ctx.company, current.date);
     await ctx.db.transaction(async (tx) => {
       const deleted = await tx.delete(V).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning({ id: V.id });
       if (!deleted.length) throw preconditionFailed();

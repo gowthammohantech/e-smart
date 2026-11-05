@@ -73,6 +73,8 @@ export const paymentDirection = pgEnum("payment_direction", ['received', 'paid']
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
 export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables', 'books'])
 export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
+/** A draft voucher is kept but not in the books: no number from the series, no postings, until it is posted. */
+export const voucherStatus = pgEnum("voucher_status", ['draft', 'posted'])
 export const ledgerGroup = pgEnum("ledger_group", ['capital', 'reserves', 'loans', 'sundryCreditors', 'dutiesTaxes', 'provisions', 'currentLiabilities', 'fixedAssets', 'investments', 'sundryDebtors', 'cashInHand', 'bankAccounts', 'stockInHand', 'loansAdvances', 'currentAssets', 'salesAccounts', 'directIncomes', 'indirectIncomes', 'purchaseAccounts', 'directExpenses', 'indirectExpenses'])
 export const planTier = pgEnum("plan_tier", ['free', 'basic', 'pro', 'business'])
 export const platformRole = pgEnum("platform_role", ['superadmin', 'support'])
@@ -2196,7 +2198,11 @@ export const gstPortalSessions = pgTable("gst_portal_sessions", {
 	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'date' }),
 	refreshableUntil: timestamp("refreshable_until", { withTimezone: true, mode: 'date' }),
 	otpRequestedAt: timestamp("otp_requested_at", { withTimezone: true, mode: 'date' }),
+	// A draft's number is its id until it is posted, which keeps the per-kind number index unique.
 	connectedBy: varchar("connected_by", { length: 40 }),
+	status: voucherStatus().default('posted').notNull(),
+	postedAt: timestamp("posted_at", { withTimezone: true, mode: 'date' }),
+	postedBy: varchar("posted_by", { length: 40 }),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	primaryKey({ columns: [table.companyId, table.gstin], name: "gst_portal_sessions_pkey" }),

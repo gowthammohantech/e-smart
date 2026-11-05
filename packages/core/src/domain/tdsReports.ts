@@ -1,6 +1,6 @@
 import { tdsSection } from '../data/tdsSections';
 import type { BusinessDocument, Party, Payment, Voucher } from '../types';
-import type { Posting } from './ledger/postings';
+import { isDraftVoucher, type Posting } from './ledger/postings';
 import { tdsQuarter } from './tds';
 
 /**
@@ -193,7 +193,7 @@ export function tdsReturnRows(
     .sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
 
   const challans: TdsChallanRow[] = vouchers
-    .filter((v) => v.kind === 'tdsChallan')
+    .filter((v) => v.kind === 'tdsChallan' && !isDraftVoucher(v))
     .map((v) => {
       const sections = v.lines.filter((l) => isPayable(l.account) && l.debit.minor).map((l) => ({ section: sectionOfAccount(l.account), minor: l.debit.minor }));
       return {

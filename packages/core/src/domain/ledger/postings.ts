@@ -205,8 +205,9 @@ export function postExpense(e: Expense, ctx: { company?: Company; branches: Bran
   return toPostings(entries, { type: 'expense', id: e.id, number: e.number }, e.date, { branchId: e.branchId, partyId: e.supplierId, costCentreId: e.costCentreId });
 }
 
-/** A voucher posts exactly what it says. */
+/** A posted voucher posts exactly what it says; a draft posts nothing. */
 export function postVoucher(v: Voucher): Posting[] {
+  if (isDraftVoucher(v)) return [];
   return toPostings(
     v.lines.map((l): Entry => [l.account, l.debit.minor - l.credit.minor, l.costCentreId]),
     { type: 'voucher', id: v.id, number: v.number, kind: v.kind },
@@ -214,6 +215,9 @@ export function postVoucher(v: Voucher): Posting[] {
     { branchId: v.branchId },
   );
 }
+
+/** A draft voucher is kept but stays out of the books until it is posted. */
+export const isDraftVoucher = (v: Pick<Voucher, 'status'>): boolean => v.status === 'draft';
 
 /** The day before anything: opening balances sit here, so every report sees them as opening. */
 export const OPENING_DATE = '1900-01-01';

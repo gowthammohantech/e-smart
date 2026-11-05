@@ -57,7 +57,7 @@ export function accountBalances(
   accounts: PaymentAccount[],
   payments: Payment[],
   expenses: Expense[],
-  vouchers: Pick<Voucher, 'lines'>[] = [],
+  vouchers: Pick<Voucher, 'lines' | 'status'>[] = [],
 ): Record<string, number> {
   const map: Record<string, number> = {};
   accounts.forEach((a) => {
@@ -72,7 +72,8 @@ export function accountBalances(
     if (map[e.accountId] === undefined) return;
     map[e.accountId] -= Math.round(e.amount.minor * (e.exchangeRate || 1));
   });
-  vouchers.forEach((v) =>
+  // A draft voucher hasn't moved any money yet.
+  vouchers.filter((v) => v.status !== 'draft').forEach((v) =>
     v.lines.forEach((l) => {
       const id = l.account.startsWith('pay:') ? l.account.slice(4) : undefined;
       if (id && map[id] !== undefined) map[id] += l.debit.minor - l.credit.minor;

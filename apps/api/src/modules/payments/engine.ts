@@ -43,7 +43,7 @@ export async function accountBalanceMinor(tx: DbOrTx, account: typeof schema.pay
   const [moved] = await tx
     .select({ total: sql<string>`coalesce(sum((l->>'debitMinor')::bigint - (l->>'creditMinor')::bigint), 0)` })
     .from(sql`${V}, jsonb_array_elements(${V.lines}) as l`)
-    .where(and(eq(V.companyId, account.companyId), sql`l->>'account' = ${`pay:${account.id}`}`, exceptVoucherId ? ne(V.id, exceptVoucherId) : undefined));
+    .where(and(eq(V.companyId, account.companyId), eq(V.status, 'posted'), sql`l->>'account' = ${`pay:${account.id}`}`, exceptVoucherId ? ne(V.id, exceptVoucherId) : undefined));
   return Math.round(account.openingBalanceMinor * Number(account.openingRate)) + net - Number(spent?.total ?? 0) + Number(moved?.total ?? 0);
 }
 

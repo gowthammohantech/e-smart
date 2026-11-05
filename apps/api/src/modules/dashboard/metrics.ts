@@ -159,7 +159,7 @@ export async function cashFlows(c: MetricsCtx, branches: string[], upTo: string)
     c.db
       .select({ date: V.date, kind: V.kind, lines: V.lines })
       .from(V)
-      .where(and(eq(V.companyId, c.company.id), lte(V.date, upTo), inBranches(V.branchId, branches), sql`exists (select 1 from jsonb_array_elements(${V.lines}) l where l->>'account' like 'pay:%')`)),
+      .where(and(eq(V.companyId, c.company.id), eq(V.status, 'posted'), lte(V.date, upTo), inBranches(V.branchId, branches), sql`exists (select 1 from jsonb_array_elements(${V.lines}) l where l->>'account' like 'pay:%')`)),
   ]);
   const flows: CashFlow[] = [];
   for (const r of pays) flows.push({ date: String(r.date), category: r.direction === 'received' ? 'receipts' : 'payments', minor: (r.direction === 'received' ? 1 : -1) * Number(r.v) });

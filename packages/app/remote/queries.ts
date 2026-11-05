@@ -661,7 +661,7 @@ export function useServerBook() {
   return { book: data?.book ?? EMPTY_BOOK, accounts: data?.accounts ?? [], balances: data?.balances ?? {}, loaded: !!data };
 }
 
-export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt'; from?: string; to?: string };
+export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt'; status?: 'draft' | 'posted'; from?: string; to?: string };
 const voucherKeys = {
   all: (companyId: string) => ['vouchers', companyId] as const,
 };
@@ -674,7 +674,7 @@ export function useVoucherPages(f: VoucherQuery) {
     enabled: !!companyId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/vouchers', { params: { path: { companyId }, query: { kind: f.kind, from: f.from, to: f.to, limit: PAGE, cursor: pageParam } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/vouchers', { params: { path: { companyId }, query: { kind: f.kind, status: f.status, from: f.from, to: f.to, limit: PAGE, cursor: pageParam } }, signal });
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,

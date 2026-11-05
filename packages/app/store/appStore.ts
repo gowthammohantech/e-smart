@@ -1081,7 +1081,10 @@ export const useAppStore = create<AppState>()(
         removeLedgerAccount: (id) => set({ ledgerAccounts: get().ledgerAccounts.filter((a) => a.id !== id) }),
         saveVoucher: (voucher) => {
           const exists = get().vouchers.some((v) => v.id === voucher.id);
-          const numbered = voucher.number ? voucher : { ...voucher, number: consumeSeriesNumber(voucher.kind, voucher.date) };
+          // A draft's number is its id, as on the server; it takes one from the series when posted.
+          const draft = voucher.status === 'draft';
+          const unnumbered = !voucher.number || voucher.number === voucher.id;
+          const numbered = draft ? { ...voucher, number: voucher.number || voucher.id } : unnumbered ? { ...voucher, status: 'posted' as const, number: consumeSeriesNumber(voucher.kind, voucher.date) } : voucher;
           set({ vouchers: exists ? get().vouchers.map((v) => (v.id === voucher.id ? numbered : v)) : [numbered, ...get().vouchers] });
           audit(exists ? 'updated' : 'created', 'voucher', numbered.id, numbered.number);
           return numbered.id;
