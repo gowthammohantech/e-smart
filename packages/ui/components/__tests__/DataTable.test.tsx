@@ -17,6 +17,12 @@ const columns: Column<Row>[] = [
   { key: 'amount', header: 'Amount', render: (r) => String(r.amount) },
 ];
 
+// Unmounted after each test, so an icon font that loads late doesn't render into a torn-down environment.
+const mounted: ReactTestRenderer[] = [];
+afterEach(() => {
+  act(() => mounted.splice(0).forEach((r) => r.unmount()));
+});
+
 function render(props: Partial<React.ComponentProps<typeof DataTable<Row>>> = {}) {
   let root!: ReactTestRenderer;
   act(() => {
@@ -26,6 +32,7 @@ function render(props: Partial<React.ComponentProps<typeof DataTable<Row>>> = {}
       </ThemeProvider>,
     );
   });
+  mounted.push(root);
   return root;
 }
 

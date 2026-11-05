@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsDesktop } from '../../theme/breakpoints';
-import { FieldShell, webFocusHalo } from '../Field';
+import { FieldShell, useFieldA11y, webFocusHalo } from '../Field';
 import { toISODate } from '@esmart/core/lib/date';
 
 /**
@@ -44,8 +44,10 @@ export function DateField({
   const max = maximumDate ? toISODate(maximumDate) : undefined;
   const allowed = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
 
+  const a11y = useFieldA11y({ error, hint, required });
+
   return (
-    <FieldShell label={label} required={required} hint={hint} error={error}>
+    <FieldShell label={label} required={required} hint={hint} error={error} messageId={a11y.messageId}>
       <View
         style={{
           flexDirection: 'row',
@@ -66,6 +68,8 @@ export function DateField({
           type="date"
           aria-label={label ?? tr('common:component.date')}
           required={required}
+          aria-invalid={error || stray ? true : undefined}
+          aria-describedby={a11y.inputProps['aria-describedby']}
           value={stray ?? (value ? value.slice(0, 10) : '')}
           min={min}
           max={max}

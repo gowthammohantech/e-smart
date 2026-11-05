@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, focusFirstInvalid, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
@@ -83,7 +83,10 @@ export function ItemForm({ item }: { item?: Item }) {
       next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);
-    if (hasErrors(next)) return;
+    if (hasErrors(next)) {
+      focusFirstInvalid();
+      return;
+    }
 
     const record: Item = {
       id: item?.id ?? uid('itm'),

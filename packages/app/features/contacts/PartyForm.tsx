@@ -7,7 +7,7 @@ import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/comp
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { AmountField, focusFirstInvalid, PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
@@ -141,7 +141,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       postalCode: validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
     };
     setErrors(next);
-    if (hasErrors(next)) return;
+    if (hasErrors(next)) {
+      focusFirstInvalid();
+      return;
+    }
 
     // An overseas party's place of supply is "other country" (96): exports and imports are inter-state.
     const stateName = overseas ? region.trim() : (INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? '');

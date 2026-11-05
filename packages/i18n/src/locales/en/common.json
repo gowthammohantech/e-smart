@@ -173,7 +173,8 @@
     "workOffline": "Work offline",
     "offlineWaiting": "Offline · {{count}} waiting",
     "draining": "Syncing {{count}}…",
-    "loadingBooks": "Loading your books…"
+    "loadingBooks": "Loading your books…",
+    "required": "required"
   },
   "totals": {
     "subtotal": "Subtotal",

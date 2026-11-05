@@ -5,7 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
-import { AmountField, FieldShell, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, FieldShell, focusFirstInvalid, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
@@ -82,10 +82,13 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
     // Left blank, a new item gets the next free SKU from the server when it is created.
     const skuValue = sku.trim().toUpperCase() || (item?.sku ?? '');
     if (skuValue && existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
-      next.sku = 'Another item already uses this SKU';
+      next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);
-    if (hasErrors(next)) return;
+    if (hasErrors(next)) {
+      focusFirstInvalid();
+      return;
+    }
 
     const record: Item = {
       id: item?.id ?? uid('itm'),
