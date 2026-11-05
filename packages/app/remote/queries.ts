@@ -909,6 +909,20 @@ export function useServerSearch(query: string, withExpenses: boolean) {
 }
 
 /** Record counts and what the setup is used by, for the settings screens. Refreshed on every visit. */
+/** This month's AI actions against the allowance (Lixi messages and provider bill scans). */
+export function useAiUsage() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['aiUsage', companyId],
+    enabled: !!companyId,
+    staleTime: 0,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/ai-usage', { params: { path: { companyId } }, signal });
+      return data!;
+    },
+  });
+}
+
 export function useCompanyUsage() {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({

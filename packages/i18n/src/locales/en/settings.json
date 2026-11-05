@@ -707,5 +707,20 @@
     "deleteTitle": "Delete {{registration}}?",
     "deleteMessage": "Only a vehicle on no expense or document can be deleted; mark it not in use instead.",
     "deleted": "Vehicle deleted"
+  },
+  "aiUsage": {
+    "title": "AI usage",
+    "hint": "Lixi messages and bills read by the scanning service come from a monthly allowance for this business. Text your phone reads itself is free. The count starts again on the 1st.",
+    "used": "{{used}} of {{limit}} used this month",
+    "breakdown": "Lixi: {{lixi}} · Bill scans: {{ocr}}",
+    "plan": "Your plan includes {{limit}} a month.",
+    "reached": "The allowance is used up. Lixi and bill scanning pause until the 1st.",
+    "budget": "Set a lower monthly budget",
+    "budgetHint": "Keep AI use below the plan's allowance. It can't go above it.",
+    "ownerOnly": "Only the owner can change the budget.",
+    "budgetLabel": "AI actions a month",
+    "budgetInvalid": "Enter a whole number",
+    "save": "Save",
+    "saved": "AI budget saved"
   }
 }

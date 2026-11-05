@@ -30,6 +30,7 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
     signatureUri: await link(signatureKey),
     bankDetails: bankDetailsOf(row),
     invoiceTemplate: (row.invoiceTemplate as Schema<'Company'>['invoiceTemplate']) ?? undefined,
+    aiMonthlyLimit: row.aiMonthlyLimit,
     businessType: row.businessType,
     country: row.country.trim(),
     baseCurrency: row.baseCurrency.trim(),
@@ -94,6 +95,7 @@ export function companyColumns(body: Schema<'Company'>) {
     // Sent whole: an empty field clears it; left out, the account stays as it is (an older client).
     ...(body.bankDetails !== undefined && bankColumns(body.bankDetails)),
     ...(body.invoiceTemplate !== undefined && { invoiceTemplate: body.invoiceTemplate }),
+    ...(body.aiMonthlyLimit !== undefined && { aiMonthlyLimit: body.aiMonthlyLimit }),
   };
 }
 

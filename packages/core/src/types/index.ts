@@ -52,6 +52,8 @@ export type Company = {
   disabledModules?: Module[];
   /** How its documents look (render/invoiceTemplate). */
   invoiceTemplate?: import('../render/invoiceTemplate').InvoiceTemplate;
+  /** The owner's monthly AI budget, below the plan's (domain/plan AI_LIMITS); null or absent is the plan's. */
+  aiMonthlyLimit?: number | null;
   /** Documents of a kind over the amount (base currency) wait for an owner or admin. */
   approvalRules?: { kind: DocumentKind; overMinor: number }[];
   /**

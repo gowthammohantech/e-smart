@@ -4,6 +4,7 @@ import type { Schema } from '@esmart/api-contract';
 import { canOpen, hasModule, MODULES, planInfo } from '@esmart/core/domain/plan';
 import { defineHandlers, type Ctx } from '../../context';
 import { badRequest, tooManyRequests, upstream } from '../../http/errors';
+import { takeAiAction } from '../../lib/aiUsage';
 import { confirm, propose, type PendingAction } from '../../lixi/confirm';
 import { jsonSchemaOf, runRead, TOOLS, ToolError, toolByName, type ToolCtx } from '../../lixi/tools';
 import type { AssistantReply, ToolOutcome, ToolSpec } from '../../providers/assistant';
@@ -96,6 +97,8 @@ export const lixiHandlers = defineHandlers({
       throw upstream('LIXI_UNAVAILABLE', 'Lixi is not configured on this server');
     }
     limit(ctx.user.id, ctx.now.getTime(), ctx.deps.config.LIXI_RATE_LIMIT_PER_MINUTE);
+    // One message from the business's monthly AI allowance, given back if the model can't answer.
+    const giveBack = await takeAiAction(ctx, 'lixi');
 
     const tctx = toolCtx(ctx);
     const secret = ctx.deps.config.JWT_SECRET;
@@ -123,6 +126,7 @@ export const lixiHandlers = defineHandlers({
     } catch (err) {
       if (err instanceof Anthropic.APIError) {
         ctx.req.log.warn({ err }, 'lixi model call failed');
+        await giveBack();
         throw upstream('LIXI_UNAVAILABLE', 'Lixi is unavailable right now');
       }
       throw err;

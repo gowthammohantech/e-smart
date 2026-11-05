@@ -162,6 +162,7 @@
       "modules": "Modules",
       "customFields": "Custom fields",
       "approvalRules": "Approvals",
+      "aiUsage": "AI usage",
       "invoiceDesign": "Invoice design",
       "vehicles": "Vehicles"
     },

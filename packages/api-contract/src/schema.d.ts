@@ -1183,6 +1183,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/ai-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * This month's AI actions (Lixi messages and provider bill scans) against the allowance
+         * @description The allowance is the plan's, or the owner's lower monthly budget (Company.aiMonthlyLimit). Past it, Lixi and OCR answer `429 AI_LIMIT_REACHED` until the 1st (India time).
+         */
+        get: operations["getAiUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/vehicles": {
         parameters: {
             query?: never;
@@ -4372,6 +4394,8 @@ export interface components {
                 footerText?: string;
                 compact?: boolean;
             };
+            /** @description The owner's monthly AI budget (Lixi messages plus provider bill scans), below the plan's allowance. Null is the plan's. */
+            aiMonthlyLimit?: number | null;
             /** @description Stable slug, e.g. `wholesale` */
             businessType: string;
             country: string;
@@ -9184,6 +9208,39 @@ export interface operations {
                 content?: never;
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    getAiUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2026-11 */
+                        month: string;
+                        limit: number;
+                        planLimit: number;
+                        budget?: number | null;
+                        total: number;
+                        used: {
+                            lixi: number;
+                            ocr: number;
+                        };
+                    };
+                };
+            };
         };
     };
     listVehicles: {

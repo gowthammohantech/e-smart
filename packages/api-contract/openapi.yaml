@@ -1675,6 +1675,33 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/ai-usage:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: getAiUsage
+      summary: This month's AI actions (Lixi messages and provider bill scans) against the allowance
+      description: The allowance is the plan's, or the owner's lower monthly budget (Company.aiMonthlyLimit). Past it, Lixi and OCR answer `429 AI_LIMIT_REACHED` until the 1st (India time).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [month, limit, planLimit, used, total]
+                properties:
+                  month: { type: string, example: '2026-11' }
+                  limit: { type: integer }
+                  planLimit: { type: integer }
+                  budget: { type: [integer, 'null'] }
+                  total: { type: integer }
+                  used:
+                    type: object
+                    required: [lixi, ocr]
+                    properties:
+                      lixi: { type: integer }
+                      ocr: { type: integer }
   /companies/{companyId}/vehicles:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -6217,6 +6244,7 @@ components:
                 showLogo: { type: boolean }
                 footerText: { type: string, maxLength: 200 }
                 compact: { type: boolean }
+            aiMonthlyLimit: { type: [integer, 'null'], minimum: 0, description: "The owner's monthly AI budget (Lixi messages plus provider bill scans), below the plan's allowance. Null is the plan's." }
             businessType: { type: string, description: 'Stable slug, e.g. `wholesale`' }
             country: { type: string }
             baseCurrency: { type: string }
