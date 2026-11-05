@@ -4,6 +4,7 @@ import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type Nativ
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
+import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -28,7 +29,12 @@ export default function VoucherList() {
   const baseCurrency = useBaseCurrency();
   return (
     <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: tr('books:hub.vouchers') }} />
+      <Stack.Screen
+        options={{
+          title: tr('books:hub.vouchers'),
+          headerRight: () => <Button title={tr('books:journalImport.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/books/vouchers/import' as never)} />,
+        }}
+      />
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md }}>
         <Segmented
           options={(['all', 'draft', 'posted'] as const).map((v) => ({ value: v, label: tr(`books:vouchers.filter.${v}`) }))}

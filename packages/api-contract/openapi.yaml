@@ -3699,6 +3699,121 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Voucher' }
+  /companies/{companyId}/vouchers/import:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Books]
+      operationId: importVouchers
+      summary: Journals from a spreadsheet, each checked as one entered by hand
+      description: Up to 500 journals. With asDrafts each is kept as a draft (unbalanced ones too); otherwise each is posted and must follow every voucher rule. dryRun checks and saves nothing; the good ones are saved in one transaction.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vouchers]
+              properties:
+                asDrafts: { type: boolean, default: false }
+                dryRun: { type: boolean, default: false }
+                vouchers:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: object
+                    required: [date, lines]
+                    properties:
+                      kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] }
+                      date: { type: string, format: date }
+                      reference: { type: string }
+                      narration: { type: string }
+                      lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/VoucherLine' } }
+      responses:
+        '200':
+          description: What happened to each journal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+                  invalid: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index: { type: integer }
+                        status: { type: string, enum: [created, invalid] }
+                        id: { type: string }
+                        number: { type: string }
+                        issues: { type: array, items: { $ref: '#/components/schemas/ComplianceIssue' } }
+  /companies/{companyId}/voucher-templates:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: listVoucherTemplates
+      x-plan-module: books
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/VoucherTemplate' } }
+    post:
+      tags: [Books]
+      operationId: createVoucherTemplate
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VoucherTemplate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoucherTemplate' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/voucher-templates/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Books]
+      operationId: saveVoucherTemplate
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VoucherTemplate' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoucherTemplate' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Books]
+      operationId: removeVoucherTemplate
+      x-roles: [owner, admin, accountant]
+      x-plan-module: books
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '204': { description: Removed }
   /companies/{companyId}/vouchers/{id}:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -6214,6 +6329,29 @@ components:
             name: { type: string }
             icon: { type: string }
             color: { type: string }
+    VoucherTemplate:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name, kind, lines]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, maxLength: 100 }
+            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] }
+            narration: { type: string }
+            lines:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [account, side]
+                properties:
+                  account: { type: string }
+                  side: { type: string, enum: [dr, cr] }
+                  amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: Left out to fill in on each use }
+                  narration: { type: string }
+                  costCentreId: { type: string }
     Vehicle:
       allOf:
         - $ref: '#/components/schemas/Versioned'

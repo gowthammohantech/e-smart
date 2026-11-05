@@ -391,5 +391,35 @@
       "recurringInvoice": "Recurring invoice",
       "recurringExpense": "Recurring expense"
     }
+  },
+  "templates": {
+    "use": "Use a template",
+    "save": "Save as template",
+    "name": "Template name",
+    "saved": "Template saved"
+  },
+  "journalImport": {
+    "action": "Import",
+    "title": "Import journals",
+    "hint": "One row per line: date, reference, account, debit, credit and narration. Rows with the same reference make one journal. Accounts are matched by name.",
+    "asDrafts": "Keep as drafts",
+    "asDraftsHint": "Drafts can be unbalanced and don't reach the books until posted.",
+    "chooseFile": "Choose a CSV file",
+    "paste": "Or paste the sheet here",
+    "missingColumns": "The sheet needs Date and Account columns.",
+    "summary": "{{total}} journals, {{good}} ready",
+    "line": "Line {{line}}",
+    "lines_one": "{{count}} line",
+    "lines_other": "{{count}} lines",
+    "status": {
+      "invalid": "Needs fixing",
+      "ready": "Ready"
+    },
+    "check": "Check",
+    "import_one": "Import {{count}} journal",
+    "import_other": "Import {{count}} journals",
+    "done_one": "{{count}} journal imported",
+    "done_other": "{{count}} journals imported",
+    "tooMany": "Up to 500 journals at a time."
   }
 }

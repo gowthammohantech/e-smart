@@ -1105,6 +1105,17 @@ export type VoucherLine = {
   costCentreId?: string;
 };
 
+/** A journal kept to reuse; an amount left out is filled in on each use. */
+export type VoucherTemplate = {
+  id: string;
+  companyId: string;
+  name: string;
+  kind: VoucherKind;
+  narration?: string;
+  lines: { account: string; side: 'dr' | 'cr'; amount?: Money; narration?: string; costCentreId?: string }[];
+  version?: number;
+};
+
 export type Voucher = {
   id: string;
   companyId: string;

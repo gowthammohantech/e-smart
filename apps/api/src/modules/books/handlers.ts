@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { USER_GROUPS, accountFor, chartOfAccounts, type Book } from '@esmart/core/domain/ledger/accounts';
 import { balanceSheet, costCentreProfit, dayBook, ledgerStatement, monthEndBalances, profitAndLoss, trialBalance } from '@esmart/core/domain/ledger/reports';
@@ -6,7 +6,7 @@ import type { LedgerGroup } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, forbidden, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { ApiError, conflict, forbidden, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -201,6 +201,40 @@ async function findVoucher(ctx: AnyCtx, db: DbOrTx, id: string): Promise<Voucher
   return row;
 }
 
+/** A voucher row from checked columns: a draft takes no number from the series, so drafts given up on leave no gaps. */
+async function insertVoucher(ctx: AnyCtx, tx: DbOrTx, cols: Awaited<ReturnType<typeof voucherColumns>>, draft: boolean): Promise<VoucherRow> {
+  const id = newId('vch');
+  const number = draft ? id : await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date });
+  const posted = draft ? { status: 'draft' as const } : { status: 'posted' as const, postedAt: ctx.now, postedBy: ctx.user.id };
+  const [created] = await tx.insert(V).values({ id, companyId: ctx.company.id, number, createdBy: ctx.user.id, ...cols, ...posted, createdAt: ctx.now, updatedAt: ctx.now }).returning();
+  await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'voucher', entityId: created.id, entityLabel: created.number, version: created.version });
+  return created;
+}
+
+const VT = schema.voucherTemplates;
+type TemplateLine = { account: string; side: 'dr' | 'cr'; amountMinor?: number | null; narration?: string; costCentreId?: string };
+
+function templateToWire(row: typeof VT.$inferSelect, base: string): Schema<'VoucherTemplate'> {
+  return compact({
+    id: row.id,
+    companyId: row.companyId,
+    name: row.name,
+    kind: row.kind,
+    narration: row.narration,
+    lines: (row.lines as TemplateLine[]).map((l) => compact({ account: l.account, side: l.side, amount: l.amountMinor != null ? money(l.amountMinor, base) : undefined, narration: l.narration, costCentreId: l.costCentreId })),
+    ...versioned(row),
+  });
+}
+
+/** A template's lines keep their accounts and sides; an amount left out is filled in on each use. */
+function templateColumns(body: Schema<'VoucherTemplate'>) {
+  const name = body.name.trim();
+  if (!name) throw invalid('name', 'Give the template a name');
+  if (!body.lines.length) throw invalid('lines', 'A template needs at least one line');
+  const lines: TemplateLine[] = body.lines.map((l) => ({ account: l.account.trim(), side: l.side, ...(l.amount && { amountMinor: l.amount.minor }), ...(l.narration?.trim() && { narration: l.narration.trim() }), ...(l.costCentreId && { costCentreId: l.costCentreId }) }));
+  return { name, kind: body.kind, narration: body.narration?.trim() || null, lines };
+}
+
 /** Books: the accounts a business adds, and its vouchers. */
 export const booksHandlers = defineHandlers({
   async getBooksView(ctx) {
@@ -329,17 +363,82 @@ export const booksHandlers = defineHandlers({
   async createVoucher(ctx) {
     const draft = ctx.body.status === 'draft';
     const cols = await voucherColumns(ctx, ctx.db, ctx.body, undefined, draft);
+    const row = await ctx.db.transaction((tx) => insertVoucher(ctx, tx, cols, draft));
+    setEtag(ctx.reply, row.version);
+    return voucherToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  /** Journals from a spreadsheet, each checked as one entered by hand; drafts when asked, else posted. */
+  async importVouchers(ctx) {
+    const { vouchers, asDrafts, dryRun } = ctx.body;
+    const base = ctx.company.baseCurrency.trim();
+    type Result = { index: number; status: 'created' | 'invalid'; id?: string; number?: string; issues?: Issue[] };
+    const results: Result[] = [];
+    const good: { index: number; cols: Awaited<ReturnType<typeof voucherColumns>> }[] = [];
+    for (const [index, v] of vouchers.entries()) {
+      const body = { kind: v.kind ?? 'journal', date: v.date, narration: v.narration, reference: v.reference, lines: v.lines, status: asDrafts ? 'draft' : 'posted' } as Schema<'Voucher'>;
+      try {
+        good.push({ index, cols: await voucherColumns(ctx, ctx.db, body, undefined, !!asDrafts) });
+      } catch (err) {
+        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
+        results.push({ index, status: 'invalid', issues });
+      }
+    }
+    if (!dryRun && good.length) {
+      await ctx.db.transaction(async (tx) => {
+        for (const g of good) {
+          const row = await insertVoucher(ctx, tx, g.cols, !!asDrafts);
+          results.push({ index: g.index, status: 'created', id: row.id, number: row.number });
+        }
+      });
+    } else for (const g of good) results.push({ index: g.index, status: 'created' });
+    results.sort((a, b) => a.index - b.index);
+    void base;
+    return { created: results.filter((r) => r.status === 'created').length, invalid: results.filter((r) => r.status === 'invalid').length, results };
+  },
+
+  async listVoucherTemplates(ctx) {
+    const rows = await ctx.db.select().from(VT).where(eq(VT.companyId, ctx.company.id)).orderBy(asc(VT.name));
+    return { data: rows.map((r) => templateToWire(r, ctx.company.baseCurrency.trim())) };
+  },
+
+  async createVoucherTemplate(ctx) {
+    const cols = templateColumns(ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
-      const id = newId('vch');
-      // A draft takes no number from the series, so drafts given up on leave no gaps in it.
-      const number = draft ? id : await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date });
-      const posted = draft ? { status: 'draft' as const } : { status: 'posted' as const, postedAt: ctx.now, postedBy: ctx.user.id };
-      const [created] = await tx.insert(V).values({ id, companyId: ctx.company.id, number, createdBy: ctx.user.id, ...cols, ...posted, createdAt: ctx.now, updatedAt: ctx.now }).returning();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'voucher', entityId: created.id, entityLabel: created.number, version: created.version });
+      const [dupe] = await tx.select({ id: VT.id }).from(VT).where(and(eq(VT.companyId, ctx.company.id), eq(VT.name, cols.name)));
+      if (dupe) throw invalid('name', `There is already a template called ${cols.name}`, 'TEMPLATE_EXISTS');
+      const [created] = await tx.insert(VT).values({ id: newId('vtp'), companyId: ctx.company.id, createdBy: ctx.user.id, ...cols }).returning();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'voucher_template', entityId: created.id, entityLabel: created.name, version: created.version });
       return created;
     });
     setEtag(ctx.reply, row.version);
-    return voucherToWire(row, ctx.company.baseCurrency.trim());
+    return templateToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async saveVoucherTemplate(ctx) {
+    const [current] = await ctx.db.select().from(VT).where(and(eq(VT.companyId, ctx.company.id), eq(VT.id, ctx.params.id)));
+    if (!current) throw notFound('Template');
+    checkIfMatch(ctx.req, current.version);
+    const cols = templateColumns(ctx.body);
+    const row = await ctx.db.transaction(async (tx) => {
+      const [updated] = await tx.update(VT).set({ ...cols, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(VT.id, current.id), eq(VT.version, current.version))).returning();
+      if (!updated) throw preconditionFailed();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'updated', entityType: 'voucher_template', entityId: updated.id, entityLabel: updated.name, version: updated.version });
+      return updated;
+    });
+    setEtag(ctx.reply, row.version);
+    return templateToWire(row, ctx.company.baseCurrency.trim());
+  },
+
+  async removeVoucherTemplate(ctx) {
+    const [current] = await ctx.db.select().from(VT).where(and(eq(VT.companyId, ctx.company.id), eq(VT.id, ctx.params.id)));
+    if (!current) throw notFound('Template');
+    checkIfMatch(ctx.req, current.version);
+    await ctx.db.transaction(async (tx) => {
+      await tx.delete(VT).where(eq(VT.id, current.id));
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'voucher_template', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true });
+    });
+    return undefined;
   },
 
   async getVoucher(ctx) {

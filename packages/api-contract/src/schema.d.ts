@@ -2558,6 +2558,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/vouchers/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Journals from a spreadsheet, each checked as one entered by hand
+         * @description Up to 500 journals. With asDrafts each is kept as a draft (unbalanced ones too); otherwise each is posted and must follow every voucher rule. dryRun checks and saves nothing; the good ones are saved in one transaction.
+         */
+        post: operations["importVouchers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/voucher-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVoucherTemplates"];
+        put?: never;
+        post: operations["createVoucherTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/voucher-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveVoucherTemplate"];
+        post?: never;
+        delete: operations["removeVoucherTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/vouchers/{id}": {
         parameters: {
             query?: never;
@@ -4442,6 +4501,23 @@ export interface components {
             name: string;
             icon?: string;
             color?: string;
+        };
+        VoucherTemplate: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @enum {string} */
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            narration?: string;
+            lines: {
+                account: string;
+                /** @enum {string} */
+                side: "dr" | "cr";
+                /** @description Left out to fill in on each use */
+                amount?: components["schemas"]["Money"];
+                narration?: string;
+                costCentreId?: string;
+            }[];
         };
         Vehicle: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -11886,6 +11962,165 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Voucher"];
                 };
+            };
+        };
+    };
+    importVouchers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    asDrafts?: boolean;
+                    /** @default false */
+                    dryRun?: boolean;
+                    vouchers: {
+                        /** @enum {string} */
+                        kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                        /** Format: date */
+                        date: string;
+                        reference?: string;
+                        narration?: string;
+                        lines: components["schemas"]["VoucherLine"][];
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each journal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "invalid";
+                            id?: string;
+                            number?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    listVoucherTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["VoucherTemplate"][];
+                    };
+                };
+            };
+        };
+    };
+    createVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoucherTemplate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherTemplate"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoucherTemplate"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherTemplate"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    removeVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

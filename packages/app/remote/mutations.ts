@@ -176,6 +176,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   removeCustomField: removal('custom_field', 'customFields', 'custom-fields', (f: { label: string }) => f.label),
   saveVehicle: master('vehicle', 'vehicles', 'vehicles', (v: { registration: string }) => v.registration),
   removeVehicle: removal('vehicle', 'vehicles', 'vehicles', (v: { registration: string }) => v.registration),
+  saveVoucherTemplate: master('voucher_template', 'voucherTemplates', 'voucher-templates', named),
+  removeVoucherTemplate: removal('voucher_template', 'voucherTemplates', 'voucher-templates', named),
   savePaymentAccount: master('payment_account', 'paymentAccounts', 'payment-accounts', named),
   removePaymentAccount: removal('payment_account', 'paymentAccounts', 'payment-accounts', named),
   saveExchangeRate: master('exchange_rate', 'exchangeRates', 'exchange-rates', (r) => `${r.currency} rate`),

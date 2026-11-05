@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { Sheet } from '@esmart/ui/components/Sheet';
 import { Text } from '@esmart/ui/components/Text';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -15,7 +16,7 @@ import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/l
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import type { Voucher, VoucherKind } from '@esmart/core/types';
+import type { Voucher, VoucherKind, VoucherTemplate } from '@esmart/core/types';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { useServerBook } from '../../remote/queries';
@@ -37,6 +38,10 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const baseCurrency = useBaseCurrency();
   const defaultBranchId = useDefaultBranchId();
   const saveVoucher = useAppStore((s) => s.saveVoucher);
+  const saveTemplate = useAppStore((s) => s.saveVoucherTemplate);
+  const templates = useAppStore((s) => s.voucherTemplates ?? []).filter((x) => x.companyId === company.id);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templateName, setTemplateName] = useState<string | null>(null);
   // The chart the server names accounts from, rather than every posting worked out on the device.
   const { book } = useServerBook();
   const nameOf = useAccountName();
@@ -137,6 +142,9 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
           {voucher ? null : (
             <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`books:vouchers.kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as VoucherKind)} />
           )}
+          {voucher || !templates.length ? null : (
+            <Button title={tr('books:templates.use')} icon="content-copy" variant="secondary" size="sm" onPress={() => setTemplatesOpen(true)} />
+          )}
           <Text variant="small" tone="muted">
             {tr(`books:vouchers.kindHint.${kind}`)}
           </Text>
@@ -171,6 +179,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
             </>
           ) : null}
           <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" />
+          {lines.some((l) => l.account) ? <Button title={tr('books:templates.save')} icon="content-save-outline" variant="ghost" size="sm" onPress={() => setTemplateName(narration.trim().slice(0, 60))} /> : null}
         </ScrollView>
         <FormActions>
           {/* A posted voucher stays posted; a new one or a draft can be kept as a draft. */}
@@ -181,6 +190,42 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
         </FormActions>
       </FormContainer>
 
+      <SelectSheet
+        visible={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        title={tr('books:templates.use')}
+        options={templates.map((x) => ({ value: x.id, label: x.name, description: x.narration }))}
+        value={undefined}
+        onSelect={(id) => {
+          const tpl = templates.find((x) => x.id === id);
+          if (!tpl) return;
+          // The template's accounts and sides; amounts it leaves out are filled in now.
+          setKind(tpl.kind);
+          if (tpl.narration) setNarration(tpl.narration);
+          setLines(tpl.lines.map((l) => ({ id: uid('vl'), side: l.side, account: l.account, amount: l.amount ? String(toMajor(l.amount)) : '', narration: l.narration, costCentreId: l.costCentreId })));
+        }}
+      />
+      <Sheet visible={templateName !== null} onClose={() => setTemplateName(null)} title={tr('books:templates.save')}>
+        <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.lg }}>
+          <TextField label={tr('books:templates.name')} value={templateName ?? ''} onChangeText={setTemplateName} maxLength={100} />
+          <Button
+            title={tr('books:templates.save')}
+            disabled={!templateName?.trim() || saving}
+            onPress={async () => {
+              const record: VoucherTemplate = {
+                id: uid('vtp'),
+                companyId: company.id,
+                name: templateName!.trim(),
+                kind,
+                narration: narration.trim() || undefined,
+                lines: lines.filter((l) => l.account).map((l) => ({ account: l.account, side: l.side, ...(minor(l.amount) ? { amount: money(minor(l.amount), baseCurrency) } : {}), ...(l.narration?.trim() && { narration: l.narration.trim() }), ...(l.costCentreId && { costCentreId: l.costCentreId }) })),
+              };
+              const res = await serverSave(() => saveTemplate(record), tr('books:templates.saved'), { icon: 'content-copy', detail: record.name });
+              if (res) setTemplateName(null);
+            }}
+          />
+        </View>
+      </Sheet>
       <SelectSheet
         visible={!!picking}
         onClose={() => setPicking(null)}
