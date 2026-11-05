@@ -36,6 +36,8 @@ export type DraftState = {
   costCentreId?: string;
   /** Values of the company's document fields, by field id. */
   customFields?: CustomValues;
+  /** On an invoice: the TCS section (s.206C), or none. */
+  tcsSection?: string;
   notes: string;
   terms: string;
   attachmentIds: string[];
@@ -113,6 +115,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     tdsSection: doc.tdsSection ?? doc.tds?.section ?? 'none',
     costCentreId: doc.costCentreId,
     customFields: doc.customFields,
+    tcsSection: doc.tcs?.section,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],
@@ -221,8 +224,10 @@ export function useDocumentDraft(options: {
   /** A fixed context, or one derived from the draft (party, place of supply, date). */
   taxContext: TaxContext | ((draft: DraftState) => TaxContext);
   initial?: DraftState;
+  /** The TCS rate for the draft, given its total in base currency before TCS; 0 when none. */
+  tcsRate?: (draft: DraftState, grandTotalBaseMinor: number) => number;
 }) {
-  const { kind, baseCurrency, taxCategories, taxContext, initial } = options;
+  const { kind, baseCurrency, taxCategories, taxContext, initial, tcsRate } = options;
   const [draft, setDraft] = useState<DraftState>(() => {
     const start = alignCurrency(initial ?? emptyDraft(baseCurrency, kind), baseCurrency);
     // An existing document opens with the switch where its lines are.
@@ -273,9 +278,8 @@ export function useDocumentDraft(options: {
     [],
   );
 
-  const totals = useMemo(
-    () =>
-      calculateDocument({
+  const totals = useMemo(() => {
+    const input = {
         lines: draft.lines,
         currency: draft.currency,
         baseCurrency,
@@ -290,9 +294,12 @@ export function useDocumentDraft(options: {
           typeof taxContext === 'function'
             ? taxContext(draft)
             : { ...taxContext, placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? taxContext.placeOfSupplyStateCode },
-      }),
-    [draft, baseCurrency, taxCategories, taxContext],
-  );
+    };
+    const before = calculateDocument(input);
+    // TCS, as the server works it: on the price with GST, at the section's rate for this buyer.
+    const rate = tcsRate ? tcsRate(draft, before.grandTotalBase.minor) : 0;
+    return rate > 0 ? calculateDocument({ ...input, tcsRate: rate }) : before;
+  }, [draft, baseCurrency, taxCategories, taxContext, tcsRate]);
 
   return { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, setPricesIncludeTax, totals };
 }

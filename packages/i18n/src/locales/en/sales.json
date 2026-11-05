@@ -480,5 +480,11 @@
     "sentBack": "Sent back to its creator",
     "empty": "Nothing waiting",
     "emptyBody": "Documents over the amounts set in Settings → Approvals wait here for an owner or admin."
+  },
+  "tcs": {
+    "section": "TCS (income tax)",
+    "none": "No TCS",
+    "hint": "For sales of scrap, minerals, timber and similar goods, or vehicles and luxury goods over ₹10 lakh.",
+    "willCollect": "Collects {{amount}} from the buyer"
   }
 }

@@ -4954,6 +4954,8 @@ export interface components {
             totalTax?: components["schemas"]["Money"];
             /** @description Tax the buyer owes under reverse charge; not in the grand total */
             reverseChargeTax?: components["schemas"]["Money"];
+            /** @description TCS collected from the buyer (s.206C), inside the grand total */
+            tcs?: components["schemas"]["Money"];
             /** @description Pure-agent reimbursements, added after tax */
             reimbursements?: components["schemas"]["Money"];
             charges?: components["schemas"]["Money"];
@@ -5016,6 +5018,11 @@ export interface components {
             /** @description The project or department it belongs to */
             costCentreId?: string;
             /**
+             * @description On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.
+             * @enum {string}
+             */
+            tcsSection?: "none" | "scrap" | "liquor" | "tenduLeaves" | "timberLease" | "timberOther" | "forestProduce" | "minerals" | "motorVehicle" | "luxuryGoods";
+            /**
              * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN.
              * @enum {string}
              */
@@ -5059,6 +5066,11 @@ export interface components {
              * @enum {string}
              */
             readonly recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
+            /** @description TCS collected on the sale; the amount is totals.tcs */
+            readonly tcs?: {
+                section?: string;
+                rate?: number;
+            };
             /**
              * Format: date
              * @description The date of the next copy; unset once the series has ended

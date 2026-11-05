@@ -642,7 +642,8 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       Discount: round2(
         toMajor(doc.totals.documentDiscount) + Math.max(0, -toMajor(doc.totals.charges)),
       ),
-      OthChrg: round2(Math.max(0, toMajor(doc.totals.charges)) + reimbursements),
+      // TCS collected (s.206C) is in the invoice value but neither assessable nor GST: it travels as another charge.
+      OthChrg: round2(Math.max(0, toMajor(doc.totals.charges)) + reimbursements + (doc.totals.tcs ? toMajor(doc.totals.tcs) : 0)),
       RndOffAmt: round2(toMajor(doc.totals.roundOff)),
       // The portal checks the total against the item values, which carry reverse-charge tax too
       // (unconfirmed in the sandbox; see providers/gsp/README.md).

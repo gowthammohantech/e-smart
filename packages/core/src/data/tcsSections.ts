@@ -45,3 +45,14 @@ export const TCS_SECTIONS: TcsSection[] = [
 export function tcsSection(code: string | undefined | null): TcsSection | undefined {
   return TCS_SECTIONS.find((x) => x.code === code);
 }
+
+/**
+ * The TCS rate a sale takes under a section: the higher no-PAN rate when the buyer has none (s.206CC),
+ * and nothing on a 206C(1F) sale that isn't over its threshold. 0 when no TCS applies.
+ */
+export function tcsRateFor(code: string | undefined | null, buyerHasPan: boolean, saleValueBaseMinor: number): number {
+  const sec = tcsSection(code);
+  if (!sec) return 0;
+  if (sec.singleThresholdMinor !== undefined && saleValueBaseMinor <= sec.singleThresholdMinor) return 0;
+  return buyerHasPan ? sec.rate : sec.noPanRate;
+}

@@ -6608,6 +6608,7 @@ components:
         taxLines: { type: array, items: { $ref: '#/components/schemas/TaxLine' } }
         totalTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Tax charged on the document, cess included; reverse-charge tax is not' }
         reverseChargeTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: Tax the buyer owes under reverse charge; not in the grand total }
+        tcs: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'TCS collected from the buyer (s.206C), inside the grand total' }
         reimbursements: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'Pure-agent reimbursements, added after tax' }
         charges: { $ref: '#/components/schemas/Money' }
         roundOff: { $ref: '#/components/schemas/Money' }
@@ -6654,6 +6655,7 @@ components:
         sourceDocumentId: { type: string }
         noteReason: { type: string, enum: [discount, priceChange, taxCorrection, deficiency, other], description: Why a credit or debit note was raised }
         costCentreId: { type: string, description: The project or department it belongs to }
+        tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
         tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN." }
         overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
         status:
@@ -6684,6 +6686,13 @@ components:
             itcClaimPeriod: { type: string, readOnly: true, description: 'The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return' }
             partyStateCode: { type: string, readOnly: true }
             recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly], readOnly: true, description: Set with setDocumentRecurrence }
+            tcs:
+              type: object
+              readOnly: true
+              description: TCS collected on the sale; the amount is totals.tcs
+              properties:
+                section: { type: string }
+                rate: { type: number }
             nextRecurrenceDate: { type: string, format: date, readOnly: true, description: The date of the next copy; unset once the series has ended }
             recurrenceEndDate: { type: string, format: date, readOnly: true }
             recurrenceAutoSend: { type: boolean, readOnly: true }

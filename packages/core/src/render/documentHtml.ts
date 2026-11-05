@@ -12,6 +12,9 @@ import type { LanguageCode } from '@esmart/i18n/config';
 import i18n from '@esmart/i18n';
 import { printableFields, type CustomField } from '../domain/customFields';
 import { resolveTemplate, tint, type InvoiceTemplate } from './invoiceTemplate';
+import { TCS_SECTIONS } from '../data/tcsSections';
+
+const TCS_LABEL: Record<string, string> = Object.fromEntries(TCS_SECTIONS.map((s) => [s.code, s.label.split(' ')[0]]));
 
 /**
  * A field label on the printed document. Under Tamil it reads in Tamil with
@@ -226,6 +229,8 @@ export function buildDocumentHtml({
     doc.totals.documentDiscount.minor > 0 ? totalRow(esc('Discount on total'), `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
     doc.totals.reimbursements?.minor ? totalRow(esc('Reimbursement of expenses'), formatMoney(doc.totals.reimbursements)) : '',
     doc.totals.charges.minor > 0 ? totalRow(esc('Other charges'), formatMoney(doc.totals.charges)) : '',
+    // Income-tax TCS (s.206C), collected with the price: statutory, so English.
+    doc.totals.tcs?.minor ? totalRow(esc(`TCS collected u/s ${doc.tcs?.section ? (TCS_LABEL[doc.tcs.section] ?? '206C') : '206C'} @ ${doc.tcs?.rate ?? ''}%`), formatMoney(doc.totals.tcs)) : '',
     doc.totals.roundOff.minor !== 0 ? totalRow(bi('sales:pdf.roundOff'), formatMoney(doc.totals.roundOff, { signed: true })) : '',
     totalRow(bi('sales:pdf.total'), formatMoney(doc.totals.grandTotal), true),
     // Rule 46(p): the invoice says whether tax is payable on reverse charge, and how much.

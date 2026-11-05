@@ -152,6 +152,8 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       costCentreId: row.costCentreId,
       customFields: row.customFields as Record<string, unknown>,
       approval: (row.approval as DocumentWire['approval']) ?? undefined,
+      tcs: row.tcsSection && row.tcsRate ? { section: row.tcsSection, rate: Number(row.tcsRate) } : undefined,
+      tcsSection: row.tcsSection ?? undefined,
       recurrence: row.recurrence,
       nextRecurrenceDate: row.nextRecurrenceDate,
       recurrenceEndDate: row.recurrenceEndDate,
@@ -178,6 +180,8 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
           })),
         totalTax: m(row.totalTaxMinor),
         reverseChargeTax: m(row.reverseChargeTaxMinor),
+        // What the grand total holds beyond the goods, tax, charges and rounding is the TCS collected.
+        ...(row.tcsRate && { tcs: m(row.grandTotalMinor - row.roundOffMinor - (row.taxableAmountMinor + row.totalTaxMinor - row.documentDiscountMinor + row.reimbursementsMinor + row.chargesMinor)) }),
         reimbursements: m(row.reimbursementsMinor),
         charges: m(row.chargesMinor),
         roundOff: m(row.roundOffMinor),
