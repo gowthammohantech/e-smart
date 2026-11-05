@@ -1,4 +1,5 @@
 import { ExpenseCategory, LedgerAccount, LedgerGroup, Party, PaymentAccount } from '../../types';
+import { tcsSection } from '../../data/tcsSections';
 import { tdsSection } from '../../data/tdsSections';
 
 /**
@@ -87,6 +88,7 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:otherIncome': { name: 'Balances written back', group: 'indirectIncomes' },
   'sys:tdsReceivable': { name: 'TDS receivable', group: 'loansAdvances' },
   'sys:tdsPayable': { name: 'TDS payable', group: 'dutiesTaxes' },
+  'sys:tcsPayable': { name: 'TCS payable', group: 'dutiesTaxes' },
   // GST paid on advances for services, taken back as invoices adjust them.
   'sys:gstOnAdvances': { name: 'GST paid on advances', group: 'dutiesTaxes' },
   // IGST and cess on imports, assessed on the bill of entry: owed to customs until paid (a payment voucher clears it).
@@ -114,6 +116,7 @@ export function accountFor(key: string, book: Book): Account | undefined {
   const [prefix, id, extra] = key.split(':');
   if (prefix === 'sys') {
     if (id === 'tdsPayable' && extra) return { key, name: `TDS payable ${tdsSection(extra)?.label ?? extra}`, group: 'dutiesTaxes', kind: 'system' };
+    if (id === 'tcsPayable' && extra) return { key, name: `TCS payable ${tcsSection(extra)?.label ?? extra}`, group: 'dutiesTaxes', kind: 'system' };
     const s = SYSTEM_ACCOUNTS[key];
     return s ? { key, ...s, kind: 'system' } : undefined;
   }

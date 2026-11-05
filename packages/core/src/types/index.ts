@@ -396,6 +396,8 @@ export type DocumentTotals = {
   /** Pure-agent reimbursements, added after tax and outside the taxable value. Absent on older documents. */
   reimbursements?: Money;
   charges: Money;
+  /** TCS collected from the buyer (s.206C), inside the grand total. Absent when none. */
+  tcs?: Money;
   roundOff: Money;
   grandTotal: Money;
   /** Grand total converted into the company base currency at the stored rate. */
@@ -451,6 +453,8 @@ export type BusinessDocument = {
   tdsSection?: string;
   /** TDS the business deducted on a supplier's bill: what's paid them is the total less this. */
   tds?: { section: string; rate: number; amount: Money };
+  /** TCS collected on a sale (s.206C): its section and rate; the amount is `totals.tcs`. */
+  tcs?: { section: string; rate: number };
   /** The self-invoice raised for a reverse-charge purchase from an unregistered supplier (Rule 46(f)). */
   selfInvoiceNumber?: string;
   /** Input tax credit reversed because the bill went unpaid for 180 days, and claimed again once paid. */

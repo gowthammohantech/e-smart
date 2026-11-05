@@ -367,3 +367,20 @@ describe('opening invoices and bills (RULES 6.12)', () => {
     expect(postDocument(opening('openingInvoice', 'cancelled'), 'INR')).toEqual([]);
   });
 });
+
+describe('TCS on a sale', () => {
+  it('adds TCS to what the buyer owes, on the price with GST, and owes it to the government', () => {
+    const lines = [line({ quantity: 10, unitPrice: inr('1000') })];
+    const totals = calculateDocument({ lines, currency: 'INR', baseCurrency: 'INR', exchangeRate: 1, documentDiscountMode: 'amount', documentDiscountValue: 0, charges: zero('INR'), applyRoundOff: false, taxCategories: [], taxContext: buildTaxContext(company, { party: customer, placeOfSupply: '27', date: '2026-06-01', purchase: false }), tcsRate: 1 });
+    // ₹10,000 + 18% GST = ₹11,800; 1% TCS = ₹118.
+    expect(totals.tcs).toEqual(inr('118'));
+    expect(totals.grandTotal).toEqual(inr('11918'));
+    const sale = { ...doc('invoice', { lines, tcs: { section: 'scrap', rate: 1 } }), totals };
+    const ps = postDocument(sale, 'INR');
+    const net = (a: string) => ps.filter((p) => p.account === a).reduce((s, p) => s + p.debit - p.credit, 0);
+    expect(net(`party:${customer.id}`)).toBe(1191800);
+    expect(net('sys:tcsPayable:scrap')).toBe(-11800);
+    expect(net('sys:sales')).toBe(-1000000);
+    expect(ps.reduce((s, p) => s + p.debit - p.credit, 0)).toBe(0);
+  });
+});

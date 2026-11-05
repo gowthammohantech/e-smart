@@ -115,6 +115,8 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
       ['sys:chargesRecovered', -b(t.charges.minor)],
       ['sys:roundOff', -b(t.roundOff.minor)],
     );
+    // TCS collected with the price is the government's, not income: owed under its section (RULES 6.13).
+    if (t.tcs?.minor) entries.push([doc.tcs?.section ? `sys:tcsPayable:${doc.tcs.section}` : 'sys:tcsPayable', -b(t.tcs.minor)]);
   } else {
     // Input credit by bucket, as a bill (itcOfDocument signs credit notes negative; undo that here).
     const itc: ItcBuckets = itcOfDocument(doc, baseCurrency);
