@@ -108,6 +108,7 @@
     "editNamed": "Edit {{name}}",
     "notifications": "Notifications",
     "receipts": "Receipts",
+    "bankReconciliation": "Bank reconciliation",
     "documentPreview": "{{kind}} preview",
     "proformas": "Proforma invoices",
     "newProforma": "New proforma invoice",

@@ -100,6 +100,7 @@ export const MENU: MenuSection[] = [
       { key: 'payables', labelKey: 'nav:title.payables', icon: 'file-clock-outline', route: '/payables', group: 'dues' },
       { key: 'expenses', labelKey: 'nav:title.expenses', icon: 'receipt-text-outline', route: '/expenses', group: 'spending', createRoute: '/expenses/new' },
       { key: 'books', labelKey: 'nav:more.entry.books', icon: 'book-open-page-variant-outline', route: '/books', group: 'accounts', createRoute: '/books/vouchers/new' },
+      { key: 'bankReconciliation', labelKey: 'nav:title.bankReconciliation', icon: 'bank-check', route: '/books/reconciliation', group: 'accounts' },
     ],
   },
   {

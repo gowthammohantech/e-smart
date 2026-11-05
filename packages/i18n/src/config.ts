@@ -47,6 +47,7 @@ export const NAMESPACES = [
   'compliance',
   'reports',
   'books',
+  'banking',
   'settings',
   'lixi',
   'domain',

@@ -1,0 +1,269 @@
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Button } from '@esmart/ui/components/Button';
+import { PickerField, TextField } from '@esmart/ui/components/Field';
+import { Sheet } from '@esmart/ui/components/Sheet';
+import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { Text } from '@esmart/ui/components/Text';
+import { PAYMENT_METHODS } from '@esmart/core/data/masters';
+import { paymentMethodLabel } from '@esmart/core/labels';
+import { formatDate } from '@esmart/core/lib/date';
+import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
+import type { PaymentMethod } from '@esmart/core/types';
+import { useDebounced } from '../../components/useDebounced';
+import { createExpenseFromBankLine, createPaymentFromBankLine, excludeBankLine, matchBankLine, useBankMatchSearch } from '../../remote/banking';
+import { usePartySearch, type BankLine } from '../../remote/queries';
+import { useExpenseCategories, useHasModule } from '../../store/selectors';
+import { SignedAmount, signedMoney, useBankAction, useRecordLabel } from './parts';
+
+/*
+ * Each sheet is mounted for one line (BankLinesView keys it by the line), so it opens empty every time.
+ */
+
+/** The line a sheet is about, as its header shows it. */
+function LineSummary({ line }: { line: BankLine }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.md }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="small" weight="600">
+          {line.description || '—'}
+        </Text>
+        <Text variant="caption" tone="muted">
+          {[formatDate(line.date), line.reference].filter(Boolean).join(' · ')}
+        </Text>
+      </View>
+      <SignedAmount minor={line.amount.minor} currency={line.amount.currency} />
+    </View>
+  );
+}
+
+/** Find…: the payments and expenses on the account near the line's date; the same amount can be matched. */
+export function FindMatchSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
+  const { t: tr } = useTranslation(['banking']);
+  const [query, setQuery] = useState('');
+  const paymentsMade = useHasModule('payables');
+  const expenses = useHasModule('expenses');
+  const search = useBankMatchSearch(line, useDebounced(query), { paymentsMade, expenses });
+  const labelOf = useRecordLabel();
+  const { run } = useBankAction();
+  if (!line) return null;
+  const options = (search.data ?? []).map((c) => ({
+    value: `${c.type}:${c.id}`,
+    label: labelOf(c),
+    description: [c.reference, signedMoney(c.amountMinor, line.amount.currency)].filter(Boolean).join(' · '),
+    blocked: c.amountMinor !== line.amount.minor ? tr('banking:find.amountDiffers', { amount: signedMoney(c.amountMinor, line.amount.currency), line: signedMoney(line.amount.minor, line.amount.currency) }) : undefined,
+  }));
+  return (
+    <SelectSheet
+      visible
+      onClose={onClose}
+      title={tr('banking:find.title')}
+      subtitle={tr('banking:find.subtitle', { amount: signedMoney(line.amount.minor, line.amount.currency), date: formatDate(line.date) })}
+      options={options}
+      onQueryChange={setQuery}
+      loading={search.isFetching}
+      searchPlaceholder={tr('banking:find.search')}
+      emptyMessage={tr('banking:find.none')}
+      onSelect={(v) => {
+        const [type, id] = v.split(':') as ['payment' | 'expense', string];
+        onClose();
+        void run('match', () => matchBankLine(line, { type, id }), tr('banking:lines.matched'));
+      }}
+    />
+  );
+}
+
+/** Record payment: money in from a customer, or out to a supplier, through this bank. */
+export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['banking', 'common']);
+  const into = (line?.amount.minor ?? 0) > 0;
+  const [partyId, setPartyId] = useState<string>();
+  const [partyName, setPartyName] = useState<string>();
+  const [method, setMethod] = useState<PaymentMethod>('bank');
+  const [notes, setNotes] = useState('');
+  const [partyOpen, setPartyOpen] = useState(false);
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [partyQuery, setPartyQuery] = useState('');
+  const parties = usePartySearch(into ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen);
+  const { run, busy } = useBankAction();
+  if (!line) return null;
+  const allowed = (parties.data ?? []).filter((p) => p.kind && (into ? sellsTo(p.kind) : buysFrom(p.kind)));
+  const save = async () => {
+    if (!partyId) return;
+    const ok = await run('payment', () => createPaymentFromBankLine(line, { partyId, method, notes }), tr(into ? 'banking:record.paymentInSaved' : 'banking:record.paymentOutSaved'));
+    if (ok) onClose();
+  };
+  return (
+    <>
+      <Sheet
+        visible={!partyOpen && !methodOpen}
+        onClose={onClose}
+        title={tr(into ? 'banking:record.paymentInTitle' : 'banking:record.paymentOutTitle')}
+        footer={<Button title={tr('banking:record.savePayment')} onPress={() => void save()} loading={busy === 'payment'} disabled={!partyId || !!busy} fullWidth />}
+      >
+        <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
+          <LineSummary line={line} />
+          <PickerField
+            label={tr(into ? 'banking:record.customer' : 'banking:record.supplier')}
+            required
+            value={partyName}
+            placeholder={tr('banking:record.pickParty')}
+            onPress={() => setPartyOpen(true)}
+            icon="account-outline"
+          />
+          <PickerField label={tr('banking:record.method')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
+          <TextField label={tr('banking:record.notes')} value={notes} onChangeText={setNotes} placeholder={tr('banking:record.optional')} multiline />
+          <Text variant="caption" tone="muted">
+            {tr('banking:record.paymentHint')}
+          </Text>
+        </View>
+      </Sheet>
+      <SelectSheet
+        visible={partyOpen}
+        onClose={() => setPartyOpen(false)}
+        title={tr(into ? 'banking:record.customer' : 'banking:record.supplier')}
+        options={allowed.map((p) => ({ value: p.id!, label: p.name! }))}
+        onQueryChange={setPartyQuery}
+        loading={parties.isFetching}
+        value={partyId}
+        emptyMessage={tr('banking:record.noParty')}
+        onSelect={(v) => {
+          setPartyId(v);
+          setPartyName(allowed.find((p) => p.id === v)?.name);
+          setPartyOpen(false);
+        }}
+      />
+      <SelectSheet
+        visible={methodOpen}
+        onClose={() => setMethodOpen(false)}
+        title={tr('banking:record.method')}
+        options={PAYMENT_METHODS.map((value) => ({ value, label: paymentMethodLabel(tr, value) }))}
+        value={method}
+        searchable={false}
+        onSelect={(v) => {
+          setMethod(v as PaymentMethod);
+          setMethodOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
+/** Record expense: a debit line as an expense under a category, from a supplier if there was one. */
+export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['banking', 'common']);
+  const categories = useExpenseCategories();
+  const [categoryId, setCategoryId] = useState<string>();
+  const [supplierId, setSupplierId] = useState<string>();
+  const [supplierName, setSupplierName] = useState<string>();
+  const [notes, setNotes] = useState('');
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [supplierOpen, setSupplierOpen] = useState(false);
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const suppliers = usePartySearch('supplier', useDebounced(supplierQuery), supplierOpen);
+  const { run, busy } = useBankAction();
+  if (!line) return null;
+  const allowed = (suppliers.data ?? []).filter((p) => p.kind && buysFrom(p.kind));
+  const save = async () => {
+    if (!categoryId) return;
+    const ok = await run('expense', () => createExpenseFromBankLine(line, { categoryId, supplierId, notes }), tr('banking:record.expenseSaved'));
+    if (ok) onClose();
+  };
+  return (
+    <>
+      <Sheet
+        visible={!categoryOpen && !supplierOpen}
+        onClose={onClose}
+        title={tr('banking:record.expenseTitle')}
+        footer={<Button title={tr('banking:record.saveExpense')} onPress={() => void save()} loading={busy === 'expense'} disabled={!categoryId || !!busy} fullWidth />}
+      >
+        <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
+          <LineSummary line={line} />
+          <PickerField
+            label={tr('banking:record.category')}
+            required
+            value={categories.find((c) => c.id === categoryId)?.name}
+            placeholder={tr('banking:record.pickCategory')}
+            onPress={() => setCategoryOpen(true)}
+            icon="shape-outline"
+            hint={categories.length ? undefined : tr('banking:record.noCategories')}
+          />
+          <PickerField
+            label={tr('banking:record.supplier')}
+            value={supplierName}
+            placeholder={tr('banking:record.optional')}
+            onPress={() => setSupplierOpen(true)}
+            icon="account-outline"
+            clearable={!!supplierId}
+            onClear={() => {
+              setSupplierId(undefined);
+              setSupplierName(undefined);
+            }}
+          />
+          <TextField label={tr('banking:record.notes')} value={notes} onChangeText={setNotes} placeholder={tr('banking:record.optional')} multiline />
+        </View>
+      </Sheet>
+      <SelectSheet
+        visible={categoryOpen}
+        onClose={() => setCategoryOpen(false)}
+        title={tr('banking:record.category')}
+        options={categories.map((c) => ({ value: c.id, label: c.name, icon: c.icon as never }))}
+        value={categoryId}
+        emptyMessage={tr('banking:record.noCategories')}
+        onSelect={(v) => {
+          setCategoryId(v);
+          setCategoryOpen(false);
+        }}
+      />
+      <SelectSheet
+        visible={supplierOpen}
+        onClose={() => setSupplierOpen(false)}
+        title={tr('banking:record.supplier')}
+        options={allowed.map((p) => ({ value: p.id!, label: p.name! }))}
+        onQueryChange={setSupplierQuery}
+        loading={suppliers.isFetching}
+        value={supplierId}
+        emptyMessage={tr('banking:record.noParty')}
+        onSelect={(v) => {
+          setSupplierId(v);
+          setSupplierName(allowed.find((p) => p.id === v)?.name);
+          setSupplierOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
+/** Exclude: a line the books needn't have (a transfer already in, a bank's own reversal), with why. */
+export function ExcludeSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['banking']);
+  const [reason, setReason] = useState('');
+  const { run, busy } = useBankAction();
+  if (!line) return null;
+  const save = async () => {
+    const ok = await run('exclude', () => excludeBankLine(line, reason), tr('banking:lines.excludedToast'));
+    if (ok) onClose();
+  };
+  return (
+    <Sheet
+      visible
+      onClose={onClose}
+      title={tr('banking:exclude.title')}
+      footer={<Button title={tr('banking:exclude.confirm')} variant="danger" onPress={() => void save()} loading={busy === 'exclude'} disabled={!!busy} fullWidth />}
+    >
+      <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
+        <LineSummary line={line} />
+        <Text variant="small" tone="muted">
+          {tr('banking:exclude.body')}
+        </Text>
+        <TextField label={tr('banking:exclude.reason')} value={reason} onChangeText={setReason} placeholder={tr('banking:exclude.reasonPlaceholder')} maxLength={500} />
+      </View>
+    </Sheet>
+  );
+}

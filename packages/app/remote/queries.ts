@@ -1009,6 +1009,66 @@ export function useEwayBillPages(f: { status?: EwayBillStatus; q?: string }, ena
   return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as EwayBill[] };
 }
 
+// ------------------------------------------------------------------ banking
+
+export type BankLine = Schema<'BankStatementLine'>;
+export type BankLineStatus = Schema<'BankLineStatus'>;
+export type BankReconciliation = Schema<'BankReconciliation'>;
+export type BankLineSummary = Schema<'BankLineSummary'>;
+/** Statement lines, their counts and reconciliations: server only, invalidated by remote/banking.ts. */
+export const bankingKeys = {
+  all: (companyId: string) => ['banking', companyId] as const,
+  account: (companyId: string, accountId: string) => ['banking', companyId, accountId] as const,
+};
+
+/** A bank account's statement lines in one state (or all), newest first, 50 at a time. */
+export function useBankLines(accountId: string | undefined, status?: BankLineStatus) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...bankingKeys.account(companyId, accountId ?? ''), 'lines', status ?? 'all'],
+    enabled: !!companyId && !!accountId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payment-accounts/{id}/bank-lines', {
+        params: { path: { companyId, id: accountId! }, query: { status, limit: PAGE, cursor: pageParam } },
+        signal,
+      });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as BankLine[] };
+}
+
+/** How many of a bank account's lines are waiting, matched and excluded, and its latest statement balance. */
+export function useBankLineSummary(accountId: string | undefined) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...bankingKeys.account(companyId, accountId ?? ''), 'summary'],
+    enabled: !!companyId && !!accountId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payment-accounts/{id}/bank-lines/summary', { params: { path: { companyId, id: accountId! } }, signal });
+      return data!;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The bank reconciliation statement of an account as of a day. */
+export function useBankReconciliation(accountId: string | undefined, asOf: string) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...bankingKeys.account(companyId, accountId ?? ''), 'reconciliation', asOf],
+    enabled: !!companyId && !!accountId && !!asOf,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payment-accounts/{id}/reconciliation', { params: { path: { companyId, id: accountId! }, query: { asOf } }, signal });
+      return data!;
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
 /**
  * Marks server reads stale when what they show changes on the device: a save here (optimistic, then
  * confirmed) or a change pulled by sync. Batched, so a sync page of 500 changes refetches once.
@@ -1031,6 +1091,8 @@ export function watchStoreForQueries(): () => void {
       void queryClient.invalidateQueries({ queryKey: ['books', companyId] });
       // Contra and journal lines move money between accounts.
       void queryClient.invalidateQueries({ queryKey: [...paymentKeys.all(companyId), 'balances'] });
+      // A voucher matched to a bank line, or one no longer there.
+      void queryClient.invalidateQueries({ queryKey: bankingKeys.all(companyId) });
     }
     if (stale.has('documents')) {
       void queryClient.invalidateQueries({ queryKey: documentKeys.all(companyId) });
@@ -1042,6 +1104,8 @@ export function watchStoreForQueries(): () => void {
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'summary'] });
       // The hubs add up documents and payments.
       void queryClient.invalidateQueries({ queryKey: hubKeys.all(companyId) });
+      // Payments and expenses are what bank lines match; one edited or deleted changes the reconciliation.
+      void queryClient.invalidateQueries({ queryKey: bankingKeys.all(companyId) });
     }
     if (stale.has('documents') || stale.has('eway')) void queryClient.invalidateQueries({ queryKey: ['compliance', companyId] });
     stale.clear();

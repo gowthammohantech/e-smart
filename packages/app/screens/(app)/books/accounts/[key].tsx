@@ -1,6 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { View } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Card } from '@esmart/ui/components/Card';
 import { BarChart } from '@esmart/ui/components/charts/BarChart';
@@ -11,12 +13,13 @@ import { ReportShell, reportTable, useReportScope } from '../../../../features/r
 import { DataTable, KeyFigures, ReportSection } from '../../../../features/reports/reportParts';
 import { useBooksView, useServerBook } from '../../../../remote/queries';
 import { LoadingView } from '../../../../components/LoadingView';
-import { useBaseCurrency } from '../../../../store/selectors';
+import { useBaseCurrency, usePaymentAccounts } from '../../../../store/selectors';
 import { useAccountName, useDrCr } from '../../../../features/books/names';
 
 /** One account's entries in a period, with its running balance. */
 export default function AccountStatement() {
-  const { t: tr } = useTranslation(['books', 'common']);
+  const { t: tr } = useTranslation(['books', 'common', 'banking']);
+  const router = useRouter();
   const { key: raw } = useLocalSearchParams<{ key: string }>();
   const key = decodeURIComponent(raw ?? '');
   const { scope, setScope } = useReportScope('thisFY');
@@ -24,6 +27,8 @@ export default function AccountStatement() {
   const { book } = useServerBook();
   const nameOf = useAccountName();
   const drCr = useDrCr();
+  // A bank account's ledger leads to matching its statements.
+  const bank = usePaymentAccounts().find((a) => a.type === 'bank' && key === `pay:${a.id}`);
   const account = accountFor(key, book) ?? (key.startsWith('sys:tdsPayable:') ? { key, name: key, group: 'dutiesTaxes' as const, kind: 'system' as const } : undefined);
   const s = useBooksView<ReturnType<typeof ledgerStatement> & { trend?: BalancePoint[] }>('ledger', { ...scope.filters.range, account: key }).data;
   if (!s) return <LoadingView />;
@@ -49,6 +54,11 @@ export default function AccountStatement() {
             { label: tr('books:statement.closing'), value: drCr(s.closing, baseCurrency) },
           ]}
         />
+        {bank ? (
+          <View style={{ alignItems: 'flex-start' }}>
+            <Button title={tr('banking:account.reconcile')} icon="bank-check" variant="ghost" size="sm" onPress={() => router.push(`/(app)/books/reconciliation/${bank.id}` as never)} />
+          </View>
+        ) : null}
         {showTrend ? (
           <ReportSection title={tr('books:statement.trend')}>
             <Card>
