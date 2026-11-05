@@ -336,5 +336,38 @@
       "previousPeriod": "vs previous",
       "previousYear": "vs last year"
     }
+  },
+  "openings": {
+    "title": "Import what was outstanding",
+    "action": "Import outstanding",
+    "hint": "Invoices or bills still unpaid when you started using these books, one row each: party (name or GSTIN), number, date, due date and the amount still outstanding. They go on each party’s account and in aging, against Opening balances; never in sales, purchases or GST. A party with an opening balance already is left out, so nothing is counted twice.",
+    "side": "These are",
+    "receivable": "Owed to us (customer invoices)",
+    "payable": "Owed by us (supplier bills)",
+    "field": {
+      "party": "Party (name or GSTIN)",
+      "number": "Invoice or bill number",
+      "date": "Date",
+      "dueDate": "Due date",
+      "amount": "Amount outstanding"
+    },
+    "noParty": "No party",
+    "noNumber": "No number",
+    "badDate": "Date “{{value}}” not understood",
+    "badDueDate": "Due date “{{value}}” not understood",
+    "badAmount": "Amount “{{value}}” is not an amount",
+    "dryRun": "{{created}} ready, {{skipped}} already imported, {{invalid}} to fix",
+    "flag": {
+      "duplicate": "Already imported"
+    },
+    "done": "{{count}} imported",
+    "confirm": "Import {{count}}",
+    "col": {
+      "party": "Party",
+      "number": "Number",
+      "date": "Date",
+      "due": "Due",
+      "amount": "Outstanding"
+    }
   }
 }
