@@ -32,7 +32,7 @@ export const cancelReasonCode = pgEnum("cancel_reason_code", ['1', '2', '3', '4'
 export const deliveryStatus = pgEnum("delivery_status", ['queued', 'sent', 'delivered', 'read', 'failed'])
 export const discountMode = pgEnum("discount_mode", ['percent', 'amount'])
 export const docStatus = pgEnum("doc_status", ['draft', 'sent', 'accepted', 'rejected', 'expired', 'confirmed', 'fulfilled', 'cancelled', 'delivered', 'issued', 'partiallyPaid', 'paid', 'overdue', 'requested', 'approved', 'processed', 'received', 'billed'])
-export const documentKind = pgEnum("document_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'])
+export const documentKind = pgEnum("document_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'])
 /** Why a credit or debit note was raised. */
 export const noteReason = pgEnum("note_reason", ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'])
 export const einvoiceDocType = pgEnum("einvoice_doc_type", ['INV', 'CRN', 'DBN'])
@@ -62,7 +62,7 @@ export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed',
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
 export const messageChannel = pgEnum("message_channel", ['whatsapp', 'sms', 'email'])
 export const notificationKind = pgEnum("notification_kind", ['invoiceSent', 'paymentReceived', 'invoiceOverdue', 'lowStock', 'compliance', 'syncFailure', 'system'])
-export const numberingKind = pgEnum("numbering_kind", ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
+export const numberingKind = pgEnum("numbering_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
 export const ocrFieldKey = pgEnum("ocr_field_key", ['vendor', 'gstin', 'date', 'amount', 'tax', 'reference', 'category'])
 export const ocrKind = pgEnum("ocr_kind", ['expense', 'purchaseBill'])
 export const ocrStatus = pgEnum("ocr_status", ['queued', 'processing', 'completed', 'failed'])
