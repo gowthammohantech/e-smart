@@ -1790,6 +1790,15 @@ export const companies = pgTable("companies", {
 	gstr2bDateToleranceDays: smallint("gstr2b_date_tolerance_days").default(3).notNull(),
 	// With a TAN the business deducts TDS on what it pays suppliers.
 	tan: varchar({ length: 10 }),
+	// The bank account customers pay into, printed on invoices (with a UPI QR when upiId is set).
+	bankName: varchar("bank_name", { length: 100 }),
+	bankAccountName: varchar("bank_account_name", { length: 100 }),
+	bankAccountNumber: varchar("bank_account_number", { length: 34 }),
+	bankIfsc: varchar("bank_ifsc", { length: 11 }),
+	bankBranch: varchar("bank_branch", { length: 100 }),
+	upiId: varchar("upi_id", { length: 100 }),
+	// The authorised signatory's signature, printed above that line on documents.
+	signatureAttachmentId: varchar("signature_attachment_id", { length: 40 }),
 	plan: planTier().default('free').notNull(),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),
 	version: integer().default(1).notNull(),
@@ -1807,6 +1816,11 @@ export const companies = pgTable("companies", {
 			columns: [table.logoAttachmentId],
 			foreignColumns: [attachments.id],
 			name: "companies_logo_attachment_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.signatureAttachmentId],
+			foreignColumns: [attachments.id],
+			name: "companies_signature_attachment_id_fkey"
 		}),
 	foreignKey({
 			columns: [table.country],
