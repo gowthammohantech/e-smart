@@ -7,6 +7,7 @@ import { Text, TextTone } from './Text';
 import { Money } from '@esmart/core/lib/money';
 import { formatCompactMoney } from '@esmart/core/lib/format';
 import { Sparkline } from './charts/BarChart';
+import { DeltaBadge } from './DeltaBadge';
 
 const WEB = Platform.OS === 'web';
 
@@ -18,6 +19,7 @@ export function StatTile({
   icon,
   onPress,
   trend,
+  delta,
   flex = 1,
 }: {
   label: string;
@@ -27,6 +29,8 @@ export function StatTile({
   icon?: IconName;
   onPress?: () => void;
   trend?: number[];
+  /** Change against the period before, in percent (null: nothing to compare with). `inverse` for a cost. */
+  delta?: { pct: number | null; inverse?: boolean; label?: string };
   flex?: number;
 }) {
   const t = useTheme();
@@ -80,6 +84,7 @@ export function StatTile({
         ) : (
           <View style={{ flex: 1 }} />
         )}
+        {delta ? <DeltaBadge pct={delta.pct} inverse={delta.inverse} accessibilityLabel={delta.label} /> : null}
         {trend && trend.length > 1 ? <Sparkline values={trend} width={54} height={20} color={toneColor} /> : null}
       </View>
     </View>

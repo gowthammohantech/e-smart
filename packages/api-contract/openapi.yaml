@@ -3472,12 +3472,19 @@ paths:
       operationId: getSalesHub
       summary: Everything the Sales tab shows, in one call
       description: |
-        This month's invoicing and collections, what customers owe (as the receivables aging works it
-        out), how many of each sales document there are, the top five customers by invoiced value, and
-        the six latest invoices. Amounts are in base currency; drafts and cancelled invoices count
+        The period's invoicing and collections (this month unless `range` says otherwise, with the
+        period before when `compare=previous`), its sales trend, what customers owe (as the receivables
+        aging works it out), how many of each sales document there are, the top five customers by value
+        invoiced in the period, and the six latest invoices. Fields named `…ThisMonth` hold the period's
+        figure. Amounts are in base currency; drafts and cancelled invoices count
         towards nothing but the document counts.
       parameters:
         - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
       responses:
         '200':
           description: OK
@@ -3485,10 +3492,21 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [invoicedThisMonth, collectedThisMonth, outstanding, overdue, counts, paymentsReceived, eInvoicesGenerated, topCustomers, recentInvoices]
+                required: [period, invoicedThisMonth, invoicesThisMonth, collectedThisMonth, outstanding, overdue, counts, paymentsReceived, eInvoicesGenerated, topCustomers, salesTrend, recentInvoices]
                 properties:
-                  invoicedThisMonth: { $ref: '#/components/schemas/Money' }
-                  collectedThisMonth: { $ref: '#/components/schemas/Money' }
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  invoicedThisMonth: { $ref: '#/components/schemas/Money', description: 'In the period (named for the default, this month)' }
+                  invoicesThisMonth: { type: integer, description: Invoices issued in the period }
+                  collectedThisMonth: { $ref: '#/components/schemas/Money', description: Received in the period }
+                  previous:
+                    type: object
+                    description: The same figures for the period before, with `compare=previous`
+                    required: [invoiced, invoices, collected]
+                    properties:
+                      invoiced: { $ref: '#/components/schemas/Money' }
+                      invoices: { type: integer }
+                      collected: { $ref: '#/components/schemas/Money' }
+                  salesTrend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
                   outstanding:
                     type: object
                     required: [amount, count]
@@ -3503,12 +3521,7 @@ paths:
                     additionalProperties: { type: integer }
                   paymentsReceived: { type: integer }
                   eInvoicesGenerated: { type: integer }
-                  topCustomers:
-                    type: array
-                    items:
-                      type: object
-                      required: [partyId, name, total]
-                      properties: { partyId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
+                  topCustomers: { type: array, description: The five who were invoiced most in the period, items: { $ref: '#/components/schemas/PartyTotal' } }
                   recentInvoices: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
   /companies/{companyId}/hubs/purchases:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
@@ -3518,12 +3531,19 @@ paths:
       x-plan-module: purchases
       summary: Everything the Purchases tab shows, in one call
       description: |
-        This month's bills and expenses, what the business owes suppliers (as the payables aging works
-        it out), how many of each purchase document there are, the last 90 days' expenses by
-        category, and the six latest bills. Amounts are in base currency. The expense figures are left
+        The period's bills and expenses (this month unless `range` says otherwise, with the period
+        before when `compare=previous`), what the business owes suppliers (as the payables aging works
+        it out), how many of each purchase document there are, the period's expenses by category with
+        the Expenses tab's figures, and the six latest bills. Fields named `…ThisMonth` hold the
+        period's figure. Amounts are in base currency. The expense figures are left
         out on a plan without expenses.
       parameters:
         - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
       responses:
         '200':
           description: OK
@@ -3531,10 +3551,42 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [billedThisMonth, payable, overdue, counts, paymentsMade, recentBills]
+                required: [period, billedThisMonth, payable, overdue, counts, paymentsMade, recentBills]
                 properties:
-                  billedThisMonth: { $ref: '#/components/schemas/Money' }
-                  expensesThisMonth: { $ref: '#/components/schemas/Money' }
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  billedThisMonth: { $ref: '#/components/schemas/Money', description: 'In the period (named for the default, this month)' }
+                  expensesThisMonth: { $ref: '#/components/schemas/Money', description: In the period }
+                  previous:
+                    type: object
+                    description: The same figures for the period before, with `compare=previous`
+                    required: [billed]
+                    properties:
+                      billed: { $ref: '#/components/schemas/Money' }
+                      expenses: { $ref: '#/components/schemas/Money' }
+                  expenseInsights:
+                    type: object
+                    description: The Expenses tab, for the period. Left out on a plan without expenses.
+                    required: [count, tax, itcEligibleTax, billable, trend, topSuppliers, upcomingRecurring]
+                    properties:
+                      count: { type: integer }
+                      tax: { $ref: '#/components/schemas/Money', description: GST on the period's expenses }
+                      itcEligibleTax: { $ref: '#/components/schemas/Money', description: The part of that tax the business can claim as credit }
+                      billable: { $ref: '#/components/schemas/Money', description: Spent on customers' behalf, to be recovered on an invoice }
+                      trend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
+                      topSuppliers: { type: array, description: The five paid most, items: { $ref: '#/components/schemas/PartyTotal' } }
+                      upcomingRecurring:
+                        type: array
+                        description: Recurring expenses due in the next 30 days, soonest first
+                        items:
+                          type: object
+                          required: [id, nextDate, amount, category, recurrence]
+                          properties:
+                            id: { type: string }
+                            nextDate: { type: string, format: date }
+                            amount: { $ref: '#/components/schemas/Money' }
+                            category: { type: string }
+                            description: { type: string }
+                            recurrence: { type: string, enum: [weekly, monthly, quarterly, yearly] }
                   payable:
                     type: object
                     required: [amount, count]
@@ -3551,7 +3603,7 @@ paths:
                   paymentsMade: { type: integer }
                   expensesByCategory:
                     type: array
-                    description: The last 90 days
+                    description: In the period, largest first
                     items:
                       type: object
                       required: [categoryId, name, total]
@@ -3564,12 +3616,20 @@ paths:
       operationId: getHomeHub
       summary: Everything the Home tab shows, in one call
       description: |
-        This month's sales, collections and expenses, the six-month sales trend, receivables (with the
-        four most overdue invoices) and payables as the aging works them out, counts that need
-        attention, and the five latest invoices. Amounts are in base currency. Expense, payable and
+        The period's sales, collections, expenses and profit (this month unless `range` says
+        otherwise, with the period before when `compare=previous`), the sales trend and cash in and out
+        at the chosen grain, invoices by status, cash and bank balances, stock health, the latest money
+        in and out, receivables (with the four most overdue invoices) and payables as the aging works
+        them out, counts that need attention, and the five latest invoices. Fields named `…ThisMonth`
+        hold the period's figure; profit is the profit report's. Amounts are in base currency. Expense, payable and
         stock figures are left out on a plan without them.
       parameters:
         - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
       responses:
         '200':
           description: OK
@@ -3577,13 +3637,55 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [salesThisMonth, invoicesThisMonth, collectedThisMonth, salesTrend, receivable, overdueInvoices, draftInvoices, openQuotes, recentInvoices, firstRun]
+                required: [period, salesThisMonth, invoicesThisMonth, collectedThisMonth, salesTrend, cashFlow, invoiceStatus, cash, moneyMovement, receivable, overdueInvoices, draftInvoices, openQuotes, recentInvoices, firstRun]
                 properties:
-                  salesThisMonth: { $ref: '#/components/schemas/Money' }
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  salesThisMonth: { $ref: '#/components/schemas/Money', description: 'In the period (named for the default, this month)' }
                   invoicesThisMonth: { type: integer }
                   collectedThisMonth: { $ref: '#/components/schemas/Money' }
                   expensesThisMonth: { $ref: '#/components/schemas/Money' }
                   expenseEntriesThisMonth: { type: integer }
+                  profit: { $ref: '#/components/schemas/Money', description: 'Net profit as the profit report gives it for the same period and branch. Left out on a plan without expenses.' }
+                  previous:
+                    type: object
+                    description: The same figures for the period before, with `compare=previous`
+                    required: [sales, invoices, collected]
+                    properties:
+                      sales: { $ref: '#/components/schemas/Money' }
+                      invoices: { type: integer }
+                      collected: { $ref: '#/components/schemas/Money' }
+                      expenses: { $ref: '#/components/schemas/Money' }
+                      profit: { $ref: '#/components/schemas/Money' }
+                  cashFlow: { type: array, description: 'Money into and out of cash and bank per trend bucket: receipts, payments, expenses and vouchers; transfers between own accounts left out', items: { $ref: '#/components/schemas/CashFlowPoint' } }
+                  invoiceStatus: { type: array, description: "The period's invoices by the status they're in today", items: { $ref: '#/components/schemas/StatusCount' } }
+                  cash:
+                    type: object
+                    description: What each cash and bank account holds now. The accounts are the company's, whichever branch is chosen.
+                    required: [total, accounts]
+                    properties:
+                      total: { $ref: '#/components/schemas/Money' }
+                      accounts:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, name, type, balance]
+                          properties:
+                            id: { type: string }
+                            name: { type: string }
+                            type: { type: string }
+                            balance: { $ref: '#/components/schemas/Money' }
+                  inventory:
+                    type: object
+                    description: Stock health now. Left out on a plan without inventory.
+                    required: [value, tracked, low, out, dead]
+                    properties:
+                      value: { $ref: '#/components/schemas/Money', description: At weighted-average cost }
+                      tracked: { type: integer }
+                      low: { type: integer, description: 'At or below the reorder level, not yet out' }
+                      out: { type: integer }
+                      dead: { type: integer, description: 'In stock, nothing taken out in 90 days' }
+                      deadValue: { $ref: '#/components/schemas/Money' }
+                  moneyMovement: { type: array, description: "The period's latest ten receipts, payments and expenses, newest first", items: { $ref: '#/components/schemas/MoneyMovement' } }
                   salesTrend: { type: array, items: { $ref: '#/components/schemas/MonthValue' } }
                   receivable:
                     type: object
@@ -3618,6 +3720,142 @@ paths:
                   openQuotes: { type: integer, description: Quotes sent and not yet answered }
                   recentInvoices: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
                   firstRun: { type: boolean, description: 'No invoices, payments or expenses yet' }
+  /companies/{companyId}/hubs/accounts:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getAccountsHub
+      x-plan-module: books
+      summary: Everything the Accounts & P&L tab shows, in one call
+      description: |
+        The period's profit (as the profit report gives it), cash in and out of cash and bank by kind,
+        the GST position, and, for a user who sees every branch, the balance sheet at the period's end
+        and the accounts that moved most. The books cover every branch, so a user limited to some gets
+        `books: false` and no balance sheet or account movement.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/DashboardRange' }
+        - { $ref: '#/components/parameters/DashboardFrom' }
+        - { $ref: '#/components/parameters/DashboardTo' }
+        - { $ref: '#/components/parameters/DashboardCompare' }
+        - { $ref: '#/components/parameters/DashboardGrain' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [period, profit, profitTrend, cash, tax, books]
+                properties:
+                  period: { $ref: '#/components/schemas/DashboardPeriod' }
+                  profit: { $ref: '#/components/schemas/ProfitFigures' }
+                  previousProfit: { $ref: '#/components/schemas/ProfitFigures' }
+                  profitTrend: { type: array, description: Net profit per trend bucket, items: { $ref: '#/components/schemas/MonthValue' } }
+                  cash:
+                    type: object
+                    description: Direct-method cash movement. Opening and closing only without a branch, as the accounts are the company's.
+                    required: [inflow, outflow, net, receipts, payments, expenses, tax, other]
+                    properties:
+                      opening: { $ref: '#/components/schemas/Money' }
+                      inflow: { $ref: '#/components/schemas/Money' }
+                      outflow: { $ref: '#/components/schemas/Money' }
+                      net: { $ref: '#/components/schemas/Money' }
+                      closing: { $ref: '#/components/schemas/Money' }
+                      receipts: { $ref: '#/components/schemas/Money', description: From customers and receipt vouchers }
+                      payments: { $ref: '#/components/schemas/Money', description: To suppliers and others (negative) }
+                      expenses: { $ref: '#/components/schemas/Money', description: Negative }
+                      tax: { $ref: '#/components/schemas/Money', description: TDS challans and GST payments (negative) }
+                      other: { $ref: '#/components/schemas/Money', description: Other vouchers }
+                  tax:
+                    type: object
+                    description: As the tax summary report gives it for the period
+                    required: [output, input, netPayable]
+                    properties:
+                      output: { $ref: '#/components/schemas/Money', description: GST on sales }
+                      input: { $ref: '#/components/schemas/Money', description: GST on purchases and expenses }
+                      netPayable: { $ref: '#/components/schemas/Money' }
+                  books: { type: boolean, description: Whether the user sees the books (every branch) }
+                  balanceSheet:
+                    type: object
+                    required: [asOf, assets, liabilities, totalAssets, totalLiabilities, currentProfit]
+                    properties:
+                      asOf: { type: string, format: date }
+                      assets: { type: array, items: { type: object, required: [heading, total], properties: { heading: { type: string }, total: { $ref: '#/components/schemas/Money' } } } }
+                      liabilities: { type: array, items: { type: object, required: [heading, total], properties: { heading: { type: string }, total: { $ref: '#/components/schemas/Money' } } } }
+                      totalAssets: { $ref: '#/components/schemas/Money' }
+                      totalLiabilities: { $ref: '#/components/schemas/Money' }
+                      currentProfit: { $ref: '#/components/schemas/Money', description: The year's profit so far, as the books give it }
+                  accountMovement:
+                    type: array
+                    description: The eight accounts with the most debits and credits in the period
+                    items:
+                      type: object
+                      required: [account, name, group, opening, debit, credit, closing]
+                      properties:
+                        account: { type: string }
+                        name: { type: string }
+                        group: { type: string }
+                        opening: { $ref: '#/components/schemas/Money' }
+                        debit: { $ref: '#/components/schemas/Money' }
+                        credit: { $ref: '#/components/schemas/Money' }
+                        closing: { $ref: '#/components/schemas/Money' }
+  /companies/{companyId}/hubs/compliance:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Dashboard]
+      operationId: getComplianceHub
+      summary: What's due to the tax department, and where the credit stands
+      description: |
+        Returns and deposits due in the 45 days behind and 60 ahead (GSTR-1 or IFF and GSTR-3B or
+        PMT-06 for each GSTIN, by its filing frequency, and the TDS deposit for a business with a TAN),
+        with whether each was filed as recorded here; the last month's GSTR-2B against the purchase
+        register (on a plan with purchases); and the TDS still to deposit (for a user who sees the books).
+        Informational: it files nothing.
+      parameters:
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [calendar]
+                properties:
+                  calendar: { type: array, items: { $ref: '#/components/schemas/FilingDue' } }
+                  itc:
+                    type: object
+                    description: The latest period fetched in the last three months, or last month's when none is
+                    required: [gstin, period, fetched]
+                    properties:
+                      gstin: { type: string }
+                      period: { type: string, description: MMYYYY }
+                      fetched: { type: boolean }
+                      lines: { type: integer }
+                      matched: { type: integer, description: 'Matched exactly, within tolerance or by hand, or claimed' }
+                      mismatched: { type: integer, description: Partly matched or only probably }
+                      missingInBooks: { type: integer, description: On 2B with no bill recorded }
+                      missingIn2b: { type: integer, description: Bills the suppliers haven't reported }
+                      missingIn2bTax: { $ref: '#/components/schemas/Money', description: Tax on those bills, not yet claimable }
+                      claimableTax: { $ref: '#/components/schemas/Money' }
+                  tdsDue:
+                    type: object
+                    required: [total, overdue, rows]
+                    properties:
+                      total: { $ref: '#/components/schemas/Money' }
+                      overdue: { $ref: '#/components/schemas/Money' }
+                      rows:
+                        type: array
+                        items:
+                          type: object
+                          required: [section, month, balance, dueDate, overdue]
+                          properties:
+                            section: { type: string }
+                            month: { type: string, description: yyyy-mm deducted }
+                            balance: { $ref: '#/components/schemas/Money' }
+                            dueDate: { type: string, format: date }
+                            overdue: { type: boolean }
   /companies/{companyId}/search:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -4546,6 +4784,23 @@ components:
     From: { name: from, in: query, schema: { type: string, format: date } }
     To: { name: to, in: query, schema: { type: string, format: date } }
     BranchIdQuery: { name: branchId, in: query, schema: { type: string } }
+    DashboardRange:
+      name: range
+      in: query
+      description: The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`.
+      schema: { type: string, enum: [today, week, month, quarter, year, custom], default: month }
+    DashboardFrom: { name: from, in: query, description: 'First day, with `range=custom`', schema: { type: string, format: date } }
+    DashboardTo: { name: to, in: query, description: 'Last day, with `range=custom`', schema: { type: string, format: date } }
+    DashboardCompare:
+      name: compare
+      in: query
+      description: '`previous` adds the same figures for the period just before, the same length'
+      schema: { type: string, enum: [none, previous], default: none }
+    DashboardGrain:
+      name: grain
+      in: query
+      description: Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least.
+      schema: { type: string, enum: [day, week, month], default: month }
 
   headers:
     ETag: { schema: { type: string }, description: 'Weak ETag of `version`, e.g. W/"7"' }
@@ -6275,6 +6530,68 @@ components:
         pendingCompliance: { type: integer, description: Invoices awaiting IRN plus e-way bills expiring soon }
         recentDocuments: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
         unreadNotifications: { type: integer }
+    DashboardPeriod:
+      type: object
+      description: The dates a hub's figures cover, and the period `previous` figures cover when compared
+      required: [range, from, to, grain]
+      properties:
+        range: { type: string, enum: [today, week, month, quarter, year, custom] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        grain: { type: string, enum: [day, week, month], description: 'The trend''s grain, after any step up' }
+        previous:
+          type: object
+          required: [from, to]
+          properties: { from: { type: string, format: date }, to: { type: string, format: date } }
+    CashFlowPoint:
+      type: object
+      required: [key, inflow, outflow]
+      properties:
+        key: { type: string, description: 'The bucket: yyyy-mm-dd (a day, or a week''s Monday) or yyyy-mm' }
+        inflow: { $ref: '#/components/schemas/Money' }
+        outflow: { $ref: '#/components/schemas/Money' }
+    StatusCount:
+      type: object
+      required: [status, count, total]
+      properties:
+        status: { $ref: '#/components/schemas/DocStatus' }
+        count: { type: integer }
+        total: { $ref: '#/components/schemas/Money' }
+    PartyTotal:
+      type: object
+      required: [partyId, name, total]
+      properties: { partyId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
+    ProfitFigures:
+      type: object
+      description: 'As the profit report works it out (core `profitSnapshot`): taxable revenue less the average cost of goods sold, less expenses that are not billable'
+      required: [revenue, costOfGoods, grossProfit, expenses, netProfit, margin]
+      properties:
+        revenue: { $ref: '#/components/schemas/Money' }
+        costOfGoods: { $ref: '#/components/schemas/Money' }
+        grossProfit: { $ref: '#/components/schemas/Money' }
+        expenses: { $ref: '#/components/schemas/Money' }
+        netProfit: { $ref: '#/components/schemas/Money' }
+        margin: { type: number, description: Net profit as a percentage of revenue }
+    MoneyMovement:
+      type: object
+      required: [id, kind, date, amount, label]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [received, paid, expense] }
+        date: { type: string, format: date }
+        amount: { $ref: '#/components/schemas/Money' }
+        label: { type: string, description: 'The party, or the expense''s category' }
+        accountName: { type: string }
+    FilingDue:
+      type: object
+      required: [kind, period, due, optional, status]
+      properties:
+        kind: { type: string, enum: [gstr1, iff, gstr3b, pmt06, tds] }
+        period: { type: string, description: 'MMYYYY for GST; yyyy-mm (the month deducted) for TDS' }
+        gstin: { type: string, description: 'The registration it is for; absent for TDS' }
+        due: { type: string, format: date }
+        optional: { type: boolean, description: 'IFF is a choice under QRMP' }
+        status: { type: string, enum: [filed, pending, overdue], description: 'Filed as recorded here; TDS is filed once the month''s deductions are deposited; PMT-06 shows pending or overdue only' }
 
     # ---------------------------------------------------------------- assistant
     LixiChatRequest:

@@ -38,6 +38,7 @@ export function tabForPath(pathname: string): TabName {
     case 'payables':
     case 'expenses':
     case 'books':
+    case 'accounts':
       return 'money';
     case 'gst':
     case 'compliance':

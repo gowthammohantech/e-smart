@@ -12,9 +12,13 @@ import { HubTiles } from '@esmart/ui/components/HubTiles';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
-import { RankedBars } from '@esmart/ui/components/charts/BarChart';
-import { useBaseCurrency } from '../../../store/selectors';
+import { BarChart, RankedBars } from '@esmart/ui/components/charts/BarChart';
+import { useBaseCurrency, useDashboardScope } from '../../../store/selectors';
 import { useSalesHub } from '../../../remote/queries';
+import { HubState } from '../../../features/dashboard/HubState';
+import { PeriodBar } from '../../../features/dashboard/PeriodBar';
+import { bucketLabel, delta, periodTitle } from '../../../features/dashboard/labels';
+import { major, useCardExport } from '../../../features/dashboard/exportCard';
 import { zero, type Money } from '@esmart/core/lib/money';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
@@ -27,8 +31,13 @@ export default function SalesTab() {
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  // Worked out by the server: the whole book needn't be on the device to show it.
-  const hub = useSalesHub().data;
+  // Worked out by the server for the branch and period chosen: the whole book needn't be on the device.
+  const scope = useDashboardScope();
+  const query = useSalesHub(scope);
+  const hub = query.data;
+  const exportCsv = useCardExport();
+  const prev = hub?.previous;
+  const trend = (hub?.salesTrend ?? []).map((r) => ({ label: bucketLabel(r.key!, hub!.period.grain), value: r.value as Money }));
   const none = zero(baseCurrency);
   const count = (kind: DocumentKind) => hub?.counts[kind] ?? 0;
   const monthTotal = (hub?.invoicedThisMonth as Money | undefined) ?? none;
@@ -54,12 +63,19 @@ export default function SalesTab() {
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
+        <PeriodBar />
+        <HubState query={query}>
+          {() => (
+        <>
+        <SectionHeader title={periodTitle(tr, hub?.period)} />
         <StatGrid>
           <StatRow>
             <StatTile
-              label={tr('sales:hub.invoicedThisMonth')}
+              label={tr('reports:dash.sales.invoiced')}
               value={monthTotal}
               icon="file-document-outline"
+              caption={tr('reports:home.invoicesCount', { count: hub?.invoicesThisMonth ?? 0 })}
+              delta={delta(hub?.invoicedThisMonth, prev?.invoiced)}
               onPress={() => router.push('/(app)/sales/invoices')}
             />
             <StatTile
@@ -67,6 +83,7 @@ export default function SalesTab() {
               value={monthCollected}
               tone="good"
               icon="cash-check"
+              delta={delta(hub?.collectedThisMonth, prev?.collected)}
               onPress={() => router.push('/(app)/payments/received')}
             />
           </StatRow>
@@ -90,10 +107,27 @@ export default function SalesTab() {
           </StatRow>
         </StatGrid>
 
+        <SectionHeader
+          title={tr('reports:dash.sales.trend')}
+          action={tr('reports:dash.export.csv')}
+          onAction={() => exportCsv(tr('reports:dash.sales.trend'), hub?.period, { headers: [tr('reports:dash.period.label'), tr('reports:dash.sales.invoiced')], rows: (hub?.salesTrend ?? []).map((r) => [r.key!, major(r.value)]) })}
+        />
+        <Card>
+          <BarChart data={trend} caption={tr('reports:dash.sales.trendCaption')} />
+        </Card>
+
         <SectionHeader title={tr('sales:hub.documents')} />
         <HubTiles tiles={tiles} />
 
-        <SectionHeader title={tr('sales:hub.topCustomers')} action={tr('sales:hub.contacts')} onAction={() => router.push('/(app)/(tabs)/contacts')} />
+        <SectionHeader
+          title={tr('sales:hub.topCustomers')}
+          action={topCustomers.length ? tr('reports:dash.export.csv') : tr('sales:hub.contacts')}
+          onAction={() =>
+            topCustomers.length
+              ? exportCsv(tr('sales:hub.topCustomers'), hub?.period, { headers: [tr('sales:hub.contacts'), tr('reports:dash.sales.invoiced')], rows: topCustomers.map((c) => [c.label, major(c.value)]) })
+              : router.push('/(app)/(tabs)/contacts')
+          }
+        />
         <Card>
           <RankedBars rows={topCustomers} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel={tr('sales:hub.noSales')} />
         </Card>
@@ -121,6 +155,9 @@ export default function SalesTab() {
             ))
           )}
         </Card>
+        </>
+          )}
+        </HubState>
       </ScrollView>
 
       <Fab icon="plus" label={tr('sales:hub.invoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />

@@ -19,15 +19,22 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useBaseCurrency, useCanOpen, useComplianceSummary, useCurrentUser, useModuleSet } from '../../../store/selectors';
-import { useAppStore } from '../../../store/appStore';
+import { useBaseCurrency, useCanOpen, useComplianceSummary, useCurrentUser, useDashboardScope, useHasModule, useModuleSet } from '../../../store/selectors';
 import { useHomeHub } from '../../../remote/queries';
-import { LoadingView } from '../../../components/LoadingView';
-import { money, subtract, type Money } from '@esmart/core/lib/money';
-import { formatMoney } from '@esmart/core/lib/format';
-import { monthLabelNarrow } from '@esmart/core/lib/date';
+import { money, type Money } from '@esmart/core/lib/money';
+import { formatCompactMoney, formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 import { AGING_BUCKETS } from '@esmart/core/domain/receivables';
 import type { DocStatus } from '@esmart/core/types';
+import { statusLabel } from '@esmart/core/labels';
+import { PairedBars } from '@esmart/ui/components/charts/PairedBars';
+import { StatusBar } from '@esmart/ui/components/charts/StatusBar';
+import { seriesColor } from '@esmart/ui/theme/chartColors';
+import { HubState } from '../../../features/dashboard/HubState';
+import { PeriodBar } from '../../../features/dashboard/PeriodBar';
+import { FilingCards } from '../../../features/dashboard/FilingCards';
+import { bucketLabel, delta, periodTitle } from '../../../features/dashboard/labels';
+import { major, useCardExport } from '../../../features/dashboard/exportCard';
 import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
 import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
@@ -35,7 +42,7 @@ import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function Home() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'reports', 'nav', 'lixi']);
+  const { t: tr } = useTranslation(['common', 'reports', 'nav', 'lixi', 'domain']);
   const router = useRouter();
   const pullToLixi = useUiStore((s) => s.lixiAccess.pullDown);
 
@@ -44,9 +51,13 @@ export default function Home() {
   const compliance = useComplianceSummary();
   const canOpen = useCanOpen();
   const full = useModuleSet() === 'full';
-  // Every figure comes from the server in one call, already in base currency.
-  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
-  const hub = useHomeHub(branchId).data;
+  const withStock = useHasModule('inventory');
+  const exportCsv = useCardExport();
+  // Every figure comes from the server in one call, already in base currency, for the branch and
+  // period the header and period bar name.
+  const scope = useDashboardScope();
+  const query = useHomeHub(scope);
+  const hub = query.data;
 
   const [actionsOpen, setActionsOpen] = useState(false);
   // Always false in the native apps.
@@ -56,11 +67,17 @@ export default function Home() {
   const monthSales = hub?.salesThisMonth ?? zero;
   const monthExpenses = hub?.expensesThisMonth ?? zero;
   const monthCollected = hub?.collectedThisMonth ?? zero;
-  const salesTrend = useMemo(() => (hub?.salesTrend ?? []).map((m) => ({ label: monthLabelNarrow(m.key!), value: m.value! })), [hub?.salesTrend]);
+  const grain = hub?.period.grain ?? 'month';
+  const salesTrend = useMemo(() => (hub?.salesTrend ?? []).map((m) => ({ label: bucketLabel(m.key!, grain), value: m.value! })), [hub?.salesTrend, grain]);
+  const cashFlow = useMemo(() => (hub?.cashFlow ?? []).map((r) => ({ label: bucketLabel(r.key, grain), inflow: r.inflow, outflow: r.outflow })), [hub?.cashFlow, grain]);
+  const prev = hub?.previous;
+  const title = periodTitle(tr, hub?.period);
   const overdueInvoices = hub?.overdueInvoices ?? [];
   const recent = hub?.recentInvoices ?? [];
   const receivable = hub?.receivable;
   const nameOf = (d: { partyName?: string }) => d.partyName ?? tr('common:placeholder.unknown');
+  const movementLabel = (r: { kind: 'received' | 'paid' | 'expense'; label: string }) =>
+    tr(r.kind === 'received' ? 'reports:dash.home.received' : r.kind === 'paid' ? 'reports:dash.home.paid' : 'reports:dash.home.spent', { name: r.label || tr('common:placeholder.unknown') });
 
   type AttentionItem = {
     icon: IconName;
@@ -79,7 +96,9 @@ export default function Home() {
     { icon: 'clock-alert-outline', label: tr('reports:home.attn.ewbExpiring'), count: compliance.expiringSoon, route: '/(app)/compliance?tab=eway', tone: 'warning' },
   ] as AttentionItem[]).filter((a) => a.count > 0 && canOpen(a.route));
 
-  const netThisMonth = subtract(monthSales, monthExpenses);
+  // The profit report's own figure for the same period and branch, not sales less expenses.
+  const profit = hub?.profit ?? zero;
+  const STATUS_COLOR: Record<string, string> = { paid: t.c.good, partiallyPaid: seriesColor(t.scheme, 0), issued: seriesColor(t.scheme, 2), overdue: t.c.bad };
 
   // A business created moments ago has nothing to summarise — a wall of zeroes
   // and empty charts reads as broken, so show a first-run block instead.
@@ -89,7 +108,9 @@ export default function Home() {
     return (
       <View style={{ flex: 1 }}>
         <AppHeader />
-        <LoadingView />
+        <Screen bottomInset={80}>
+          <HubState query={query}>{() => null}</HubState>
+        </Screen>
       </View>
     );
   }
@@ -195,14 +216,17 @@ export default function Home() {
           <QuickActions />
         </View>
 
-        <SectionHeader title={tr('reports:home.thisMonth')} />
+        <PeriodBar />
+
+        <SectionHeader title={title} />
         <StatGrid>
           <StatRow>
             <StatTile
               label={tr('reports:home.sales')}
               value={monthSales}
               icon="trending-up"
-              caption={`${hub.invoicesThisMonth} invoices`}
+              caption={tr('reports:home.invoicesCount', { count: hub.invoicesThisMonth })}
+              delta={delta(hub.salesThisMonth, prev?.sales)}
               onPress={() => router.push('/(app)/reports/sales-summary')}
             />
             <StatTile
@@ -211,6 +235,7 @@ export default function Home() {
               tone="good"
               icon="cash-check"
               caption={tr('reports:home.paymentsReceived')}
+              delta={delta(hub.collectedThisMonth, prev?.collected)}
               onPress={() => router.push('/(app)/payments/received')}
             />
           </StatRow>
@@ -221,16 +246,18 @@ export default function Home() {
               value={monthExpenses}
               tone="warn"
               icon="receipt-text-outline"
-              caption={`${hub.expenseEntriesThisMonth ?? 0} entries`}
+              caption={tr('reports:home.entriesCount', { count: hub.expenseEntriesThisMonth ?? 0 })}
+              delta={delta(hub.expensesThisMonth, prev?.expenses, true)}
               onPress={() => router.push('/(app)/expenses')}
             />
             <StatTile
-              label={tr('reports:home.net')}
-              value={netThisMonth}
-              tone={netThisMonth.minor >= 0 ? 'good' : 'bad'}
+              label={tr('reports:dash.home.profit')}
+              value={profit}
+              tone={profit.minor >= 0 ? 'good' : 'bad'}
               icon="scale-balance"
-              caption={tr('reports:home.netCaption')}
-              onPress={() => router.push('/(app)/reports/profit')}
+              caption={tr('reports:dash.home.profitCaption')}
+              delta={delta(hub.profit, prev?.profit)}
+              onPress={() => router.push('/(app)/accounts')}
             />
           </StatRow>
           ) : (
@@ -259,9 +286,51 @@ export default function Home() {
         <Columns
           left={
             <>
-              <SectionHeader title={tr('reports:home.salesTrend')} action={tr('nav:tab.reports')} onAction={() => router.push('/(app)/reports/sales-summary')} />
+              <SectionHeader
+                title={tr('reports:home.salesTrend')}
+                action={tr('reports:dash.export.csv')}
+                onAction={() => exportCsv(tr('reports:home.salesTrend'), hub.period, { headers: [tr('reports:dash.period.label'), tr('reports:home.sales')], rows: (hub.salesTrend ?? []).map((r) => [r.key!, major(r.value)]) })}
+              />
               <Card>
-                <BarChart data={salesTrend} caption={tr('reports:home.salesTrendCaption')} />
+                <BarChart data={salesTrend} caption={tr('reports:dash.sales.trendCaption')} />
+              </Card>
+
+              <SectionHeader
+                title={tr('reports:dash.home.cashFlow')}
+                action={tr('reports:dash.export.csv')}
+                onAction={() =>
+                  exportCsv(tr('reports:dash.home.cashFlow'), hub.period, {
+                    headers: [tr('reports:dash.period.label'), tr('reports:dash.home.moneyIn'), tr('reports:dash.home.moneyOut'), tr('reports:dash.home.net')],
+                    rows: hub.cashFlow.map((r) => [r.key, major(r.inflow), major(r.outflow), major(r.inflow) - major(r.outflow)]),
+                  })
+                }
+              />
+              <Card>
+                <PairedBars data={cashFlow} caption={tr('reports:dash.home.cashFlowCaption')} inLabel={tr('reports:dash.home.moneyIn')} outLabel={tr('reports:dash.home.moneyOut')} netLabel={tr('reports:dash.home.net')} />
+              </Card>
+
+              <SectionHeader
+                title={tr('reports:dash.home.invoiceStatus')}
+                action={tr('reports:dash.export.csv')}
+                onAction={() =>
+                  exportCsv(tr('reports:dash.home.invoiceStatus'), hub.period, {
+                    headers: [tr('reports:dash.home.invoiceStatus'), tr('reports:dash.home.count'), tr('reports:home.sales')],
+                    rows: hub.invoiceStatus.map((r) => [statusLabel(tr, r.status as DocStatus), r.count, major(r.total)]),
+                  })
+                }
+              />
+              <Card>
+                <StatusBar
+                  emptyLabel={tr('reports:dash.home.noInvoices')}
+                  segments={hub.invoiceStatus.map((r) => ({
+                    key: r.status,
+                    label: statusLabel(tr, r.status as DocStatus),
+                    count: r.count,
+                    total: r.total,
+                    color: STATUS_COLOR[r.status] ?? t.c.muted,
+                    onPress: () => router.push(`/(app)/sales/invoices?status=${r.status}` as never),
+                  }))}
+                />
               </Card>
 
               <SectionHeader title={tr('reports:home.owedToYou')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/receivables')} />
@@ -314,6 +383,43 @@ export default function Home() {
           }
           right={
             <>
+              <SectionHeader title={tr('reports:dash.home.cash')} />
+              <Card style={{ gap: t.spacing.md }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <Text variant="h2" weight="700" tone={hub.cash.total.minor < 0 ? 'bad' : 'default'}>
+                    {formatMoney(hub.cash.total)}
+                  </Text>
+                  <Text variant="caption" tone="muted">{tr('reports:dash.home.cashAccounts', { count: hub.cash.accounts.length })}</Text>
+                </View>
+                {hub.cash.accounts.slice(0, 4).map((a) => (
+                  <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+                    <Icon name={a.type === 'cash' ? 'cash-multiple' : 'bank'} size={16} color={t.c.muted} />
+                    <Text variant="small" style={{ flex: 1 }} numberOfLines={1}>{a.name}</Text>
+                    <Text variant="small" weight="600" tone={a.balance.minor < 0 ? 'bad' : 'default'}>{formatMoney(a.balance)}</Text>
+                  </View>
+                ))}
+              </Card>
+
+              {hub.inventory && withStock ? (
+                <>
+                  <SectionHeader title={tr('reports:dash.home.stock')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/reports/stock')} />
+                  <Card style={{ gap: t.spacing.md }} onPress={() => router.push('/(app)/reports/stock')}>
+                    <View style={{ gap: 3 }}>
+                      <Text variant="caption" tone="muted">{tr('reports:dash.home.stockValue')}</Text>
+                      <Text variant="h3" weight="700">{formatMoney(hub.inventory.value)}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+                      {hub.inventory.low ? <Badge label={tr('reports:dash.home.lowCount', { count: hub.inventory.low })} tone="warning" size="sm" /> : null}
+                      {hub.inventory.out ? <Badge label={tr('reports:dash.home.outCount', { count: hub.inventory.out })} tone="danger" size="sm" /> : null}
+                      {hub.inventory.dead ? <Badge label={tr('reports:dash.home.deadCount', { count: hub.inventory.dead })} tone="neutral" size="sm" /> : null}
+                    </View>
+                    {hub.inventory.dead && hub.inventory.deadValue ? (
+                      <Text variant="micro" tone="muted">{tr('reports:dash.home.deadValue', { amount: formatCompactMoney(hub.inventory.deadValue) })}</Text>
+                    ) : null}
+                  </Card>
+                </>
+              ) : null}
+
               {attention.length > 0 ? (
                 <>
                   <SectionHeader title={tr('reports:home.attention')} />
@@ -367,6 +473,37 @@ export default function Home() {
                   </Card>
                 </>
               ) : null}
+
+              <FilingCards branchId={scope.branchId} limit={4} />
+
+              <SectionHeader
+                title={tr('reports:dash.home.movement')}
+                action={hub.moneyMovement.length ? tr('reports:dash.export.csv') : undefined}
+                onAction={() =>
+                  exportCsv(tr('reports:dash.home.movement'), hub.period, {
+                    headers: [tr('reports:dash.home.date'), tr('reports:dash.home.movement'), tr('reports:dash.home.amount')],
+                    rows: hub.moneyMovement.map((r) => [r.date, movementLabel(r), (r.kind === 'received' ? 1 : -1) * major(r.amount)]),
+                  })
+                }
+              />
+              <Card padded={false}>
+                {hub.moneyMovement.length === 0 ? (
+                  <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>{tr('reports:dash.home.noMovement')}</Text>
+                ) : (
+                  hub.moneyMovement.map((r, i) => (
+                    <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.md, borderBottomWidth: i < hub.moneyMovement.length - 1 ? 0.5 : 0, borderBottomColor: t.c.line }}>
+                      <Icon name={r.kind === 'received' ? 'cash-plus' : r.kind === 'paid' ? 'cash-minus' : 'receipt-text-outline'} size={18} color={r.kind === 'received' ? t.c.good : t.c.muted} />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text variant="small" weight="500" numberOfLines={1}>{movementLabel(r)}</Text>
+                        <Text variant="micro" tone="muted" numberOfLines={1}>{[formatDate(r.date, 'd MMM'), r.accountName].filter(Boolean).join(' · ')}</Text>
+                      </View>
+                      <Text variant="small" weight="600" tone={r.kind === 'received' ? 'good' : 'default'}>
+                        {tr(r.kind === 'received' ? 'reports:dash.home.plus' : 'reports:dash.home.minus', { amount: formatMoney(r.amount) })}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </Card>
 
               <SectionHeader title={tr('reports:home.recentInvoices')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/sales/invoices')} />
               <Card padded={false}>

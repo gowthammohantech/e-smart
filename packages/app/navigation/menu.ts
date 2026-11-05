@@ -82,6 +82,7 @@ export const MENU: MenuSection[] = [
     activeIcon: 'wallet',
     sidebarGroup: 'finance',
     pages: [
+      { key: 'accountsHub', labelKey: 'reports:dash.accounts.open', icon: 'scale-balance', route: '/accounts' },
       { key: 'paymentsIn', labelKey: 'nav:title.paymentsReceived', icon: 'cash-plus', route: '/payments/received' },
       { key: 'paymentsOut', labelKey: 'nav:title.paymentsMade', icon: 'cash-minus', route: '/payments/made' },
       { key: 'receipts', labelKey: 'nav:title.receipts', icon: 'receipt', route: '/receipts' },

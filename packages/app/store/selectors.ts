@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useAppStore } from './appStore';
+import { useUiStore, type DashboardPeriod } from './uiStore';
 import { resolveId, useRemoteMeta } from '../remote/meta';
 import { useComplianceCounts, type ComplianceCounts } from '../remote/queries';
 import {
@@ -209,6 +210,16 @@ export function useExpenses(): Expense[] {
 export function useExpense(id: string | undefined): Expense | undefined {
   const current = useCurrentId(id);
   return useAppStore((s) => s.expenses.find((e) => e.id === current));
+}
+
+/**
+ * What every dashboard hub is asked for: the branch picked in the header (undefined for all) and
+ * the period bar's period, which the tabs share.
+ */
+export function useDashboardScope(): { branchId?: string; period: DashboardPeriod } {
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const period = useUiStore((s) => s.dashboardPeriod);
+  return useMemo(() => ({ branchId, period }), [branchId, period]);
 }
 
 /** The branch picked in the header's switcher, or undefined when all branches are showing. */

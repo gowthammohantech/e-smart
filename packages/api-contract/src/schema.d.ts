@@ -2494,9 +2494,11 @@ export interface paths {
         };
         /**
          * Everything the Sales tab shows, in one call
-         * @description This month's invoicing and collections, what customers owe (as the receivables aging works it
-         *     out), how many of each sales document there are, the top five customers by invoiced value, and
-         *     the six latest invoices. Amounts are in base currency; drafts and cancelled invoices count
+         * @description The period's invoicing and collections (this month unless `range` says otherwise, with the
+         *     period before when `compare=previous`), its sales trend, what customers owe (as the receivables
+         *     aging works it out), how many of each sales document there are, the top five customers by value
+         *     invoiced in the period, and the six latest invoices. Fields named `…ThisMonth` hold the period's
+         *     figure. Amounts are in base currency; drafts and cancelled invoices count
          *     towards nothing but the document counts.
          */
         get: operations["getSalesHub"];
@@ -2519,9 +2521,11 @@ export interface paths {
         };
         /**
          * Everything the Purchases tab shows, in one call
-         * @description This month's bills and expenses, what the business owes suppliers (as the payables aging works
-         *     it out), how many of each purchase document there are, the last 90 days' expenses by
-         *     category, and the six latest bills. Amounts are in base currency. The expense figures are left
+         * @description The period's bills and expenses (this month unless `range` says otherwise, with the period
+         *     before when `compare=previous`), what the business owes suppliers (as the payables aging works
+         *     it out), how many of each purchase document there are, the period's expenses by category with
+         *     the Expenses tab's figures, and the six latest bills. Fields named `…ThisMonth` hold the
+         *     period's figure. Amounts are in base currency. The expense figures are left
          *     out on a plan without expenses.
          */
         get: operations["getPurchasesHub"];
@@ -2544,12 +2548,66 @@ export interface paths {
         };
         /**
          * Everything the Home tab shows, in one call
-         * @description This month's sales, collections and expenses, the six-month sales trend, receivables (with the
-         *     four most overdue invoices) and payables as the aging works them out, counts that need
-         *     attention, and the five latest invoices. Amounts are in base currency. Expense, payable and
+         * @description The period's sales, collections, expenses and profit (this month unless `range` says
+         *     otherwise, with the period before when `compare=previous`), the sales trend and cash in and out
+         *     at the chosen grain, invoices by status, cash and bank balances, stock health, the latest money
+         *     in and out, receivables (with the four most overdue invoices) and payables as the aging works
+         *     them out, counts that need attention, and the five latest invoices. Fields named `…ThisMonth`
+         *     hold the period's figure; profit is the profit report's. Amounts are in base currency. Expense, payable and
          *     stock figures are left out on a plan without them.
          */
         get: operations["getHomeHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Accounts & P&L tab shows, in one call
+         * @description The period's profit (as the profit report gives it), cash in and out of cash and bank by kind,
+         *     the GST position, and, for a user who sees every branch, the balance sheet at the period's end
+         *     and the accounts that moved most. The books cover every branch, so a user limited to some gets
+         *     `books: false` and no balance sheet or account movement.
+         */
+        get: operations["getAccountsHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What's due to the tax department, and where the credit stands
+         * @description Returns and deposits due in the 45 days behind and 60 ahead (GSTR-1 or IFF and GSTR-3B or
+         *     PMT-06 for each GSTIN, by its filing frequency, and the TDS deposit for a business with a TAN),
+         *     with whether each was filed as recorded here; the last month's GSTR-2B against the purchase
+         *     register (on a plan with purchases); and the TDS still to deposit (for a user who sees the books).
+         *     Informational: it files nothing.
+         */
+        get: operations["getComplianceHub"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5096,6 +5154,80 @@ export interface components {
             recentDocuments?: components["schemas"]["DocumentSummary"][];
             unreadNotifications?: number;
         };
+        /** @description The dates a hub's figures cover, and the period `previous` figures cover when compared */
+        DashboardPeriod: {
+            /** @enum {string} */
+            range: "today" | "week" | "month" | "quarter" | "year" | "custom";
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /**
+             * @description The trend's grain, after any step up
+             * @enum {string}
+             */
+            grain: "day" | "week" | "month";
+            previous?: {
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+            };
+        };
+        CashFlowPoint: {
+            /** @description The bucket: yyyy-mm-dd (a day, or a week's Monday) or yyyy-mm */
+            key: string;
+            inflow: components["schemas"]["Money"];
+            outflow: components["schemas"]["Money"];
+        };
+        StatusCount: {
+            status: components["schemas"]["DocStatus"];
+            count: number;
+            total: components["schemas"]["Money"];
+        };
+        PartyTotal: {
+            partyId: string;
+            name: string;
+            total: components["schemas"]["Money"];
+        };
+        /** @description As the profit report works it out (core `profitSnapshot`): taxable revenue less the average cost of goods sold, less expenses that are not billable */
+        ProfitFigures: {
+            revenue: components["schemas"]["Money"];
+            costOfGoods: components["schemas"]["Money"];
+            grossProfit: components["schemas"]["Money"];
+            expenses: components["schemas"]["Money"];
+            netProfit: components["schemas"]["Money"];
+            /** @description Net profit as a percentage of revenue */
+            margin: number;
+        };
+        MoneyMovement: {
+            id: string;
+            /** @enum {string} */
+            kind: "received" | "paid" | "expense";
+            /** Format: date */
+            date: string;
+            amount: components["schemas"]["Money"];
+            /** @description The party, or the expense's category */
+            label: string;
+            accountName?: string;
+        };
+        FilingDue: {
+            /** @enum {string} */
+            kind: "gstr1" | "iff" | "gstr3b" | "pmt06" | "tds";
+            /** @description MMYYYY for GST; yyyy-mm (the month deducted) for TDS */
+            period: string;
+            /** @description The registration it is for; absent for TDS */
+            gstin?: string;
+            /** Format: date */
+            due: string;
+            /** @description IFF is a choice under QRMP */
+            optional: boolean;
+            /**
+             * @description Filed as recorded here; TDS is filed once the month's deductions are deposited; PMT-06 shows pending or overdue only
+             * @enum {string}
+             */
+            status: "filed" | "pending" | "overdue";
+        };
         LixiChatRequest: {
             /** @description The conversation so far, oldest first, ending with the user's question. */
             messages: {
@@ -5268,6 +5400,16 @@ export interface components {
         From: string;
         To: string;
         BranchIdQuery: string;
+        /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+        DashboardRange: "today" | "week" | "month" | "quarter" | "year" | "custom";
+        /** @description First day, with `range=custom` */
+        DashboardFrom: string;
+        /** @description Last day, with `range=custom` */
+        DashboardTo: string;
+        /** @description `previous` adds the same figures for the period just before, the same length */
+        DashboardCompare: "none" | "previous";
+        /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+        DashboardGrain: "day" | "week" | "month";
     };
     requestBodies: never;
     headers: {
@@ -10234,6 +10376,16 @@ export interface operations {
         parameters: {
             query?: {
                 branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
             };
             header?: never;
             path: {
@@ -10250,8 +10402,20 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        /** @description In the period (named for the default, this month) */
                         invoicedThisMonth: components["schemas"]["Money"];
+                        /** @description Invoices issued in the period */
+                        invoicesThisMonth: number;
+                        /** @description Received in the period */
                         collectedThisMonth: components["schemas"]["Money"];
+                        /** @description The same figures for the period before, with `compare=previous` */
+                        previous?: {
+                            invoiced: components["schemas"]["Money"];
+                            invoices: number;
+                            collected: components["schemas"]["Money"];
+                        };
+                        salesTrend: components["schemas"]["MonthValue"][];
                         outstanding: {
                             amount: components["schemas"]["Money"];
                             /** @description Open invoices and debit notes */
@@ -10267,11 +10431,8 @@ export interface operations {
                         };
                         paymentsReceived: number;
                         eInvoicesGenerated: number;
-                        topCustomers: {
-                            partyId: string;
-                            name: string;
-                            total: components["schemas"]["Money"];
-                        }[];
+                        /** @description The five who were invoiced most in the period */
+                        topCustomers: components["schemas"]["PartyTotal"][];
                         recentInvoices: components["schemas"]["DocumentSummary"][];
                     };
                 };
@@ -10282,6 +10443,16 @@ export interface operations {
         parameters: {
             query?: {
                 branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
             };
             header?: never;
             path: {
@@ -10298,8 +10469,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        /** @description In the period (named for the default, this month) */
                         billedThisMonth: components["schemas"]["Money"];
+                        /** @description In the period */
                         expensesThisMonth?: components["schemas"]["Money"];
+                        /** @description The same figures for the period before, with `compare=previous` */
+                        previous?: {
+                            billed: components["schemas"]["Money"];
+                            expenses?: components["schemas"]["Money"];
+                        };
+                        /** @description The Expenses tab, for the period. Left out on a plan without expenses. */
+                        expenseInsights?: {
+                            count: number;
+                            /** @description GST on the period's expenses */
+                            tax: components["schemas"]["Money"];
+                            /** @description The part of that tax the business can claim as credit */
+                            itcEligibleTax: components["schemas"]["Money"];
+                            /** @description Spent on customers' behalf */
+                            billable: components["schemas"]["Money"];
+                            trend: components["schemas"]["MonthValue"][];
+                            /** @description The five paid most */
+                            topSuppliers: components["schemas"]["PartyTotal"][];
+                            /** @description Recurring expenses due in the next 30 days, soonest first */
+                            upcomingRecurring: {
+                                id: string;
+                                /** Format: date */
+                                nextDate: string;
+                                amount: components["schemas"]["Money"];
+                                category: string;
+                                description?: string;
+                                /** @enum {string} */
+                                recurrence: "weekly" | "monthly" | "quarterly" | "yearly";
+                            }[];
+                        };
                         payable: {
                             amount: components["schemas"]["Money"];
                             /** @description Open bills and supplier debit notes */
@@ -10315,7 +10518,7 @@ export interface operations {
                         };
                         expenses?: number;
                         paymentsMade: number;
-                        /** @description The last 90 days */
+                        /** @description In the period, largest first */
                         expensesByCategory?: {
                             categoryId: string;
                             name: string;
@@ -10331,6 +10534,16 @@ export interface operations {
         parameters: {
             query?: {
                 branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
             };
             header?: never;
             path: {
@@ -10347,11 +10560,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        /** @description In the period (named for the default, this month) */
                         salesThisMonth: components["schemas"]["Money"];
                         invoicesThisMonth: number;
                         collectedThisMonth: components["schemas"]["Money"];
                         expensesThisMonth?: components["schemas"]["Money"];
                         expenseEntriesThisMonth?: number;
+                        /** @description Net profit as the profit report gives it for the same period and branch. Left out on a plan without expenses. */
+                        profit?: components["schemas"]["Money"];
+                        /** @description The same figures for the period before, with `compare=previous` */
+                        previous?: {
+                            sales: components["schemas"]["Money"];
+                            invoices: number;
+                            collected: components["schemas"]["Money"];
+                            expenses?: components["schemas"]["Money"];
+                            profit?: components["schemas"]["Money"];
+                        };
+                        /** @description Money into and out of cash and bank per trend bucket: receipts, payments, expenses and vouchers; transfers between own accounts left out */
+                        cashFlow: components["schemas"]["CashFlowPoint"][];
+                        /** @description The period's invoices by the status they're in today */
+                        invoiceStatus: components["schemas"]["StatusCount"][];
+                        /** @description What each cash and bank account holds now. The accounts are the company's, whichever branch is chosen. */
+                        cash: {
+                            total: components["schemas"]["Money"];
+                            accounts: {
+                                id: string;
+                                name: string;
+                                type: string;
+                                balance: components["schemas"]["Money"];
+                            }[];
+                        };
+                        /** @description Stock health now. Left out on a plan without inventory. */
+                        inventory?: {
+                            /** @description At weighted-average cost */
+                            value: components["schemas"]["Money"];
+                            tracked: number;
+                            /** @description At or below the reorder level, not yet out */
+                            low: number;
+                            out: number;
+                            /** @description In stock, nothing taken out in 90 days */
+                            dead: number;
+                            deadValue?: components["schemas"]["Money"];
+                        };
+                        /** @description The period's latest ten receipts, payments and expenses, newest first */
+                        moneyMovement: components["schemas"]["MoneyMovement"][];
                         salesTrend: components["schemas"]["MonthValue"][];
                         receivable: {
                             total: components["schemas"]["Money"];
@@ -10383,6 +10636,158 @@ export interface operations {
                         recentInvoices: components["schemas"]["DocumentSummary"][];
                         /** @description No invoices, payments or expenses yet */
                         firstRun: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getAccountsHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        profit: components["schemas"]["ProfitFigures"];
+                        previousProfit?: components["schemas"]["ProfitFigures"];
+                        /** @description Net profit per trend bucket */
+                        profitTrend: components["schemas"]["MonthValue"][];
+                        /** @description Direct-method cash movement. Opening and closing only without a branch, as the accounts are the company's. */
+                        cash: {
+                            opening?: components["schemas"]["Money"];
+                            inflow: components["schemas"]["Money"];
+                            outflow: components["schemas"]["Money"];
+                            net: components["schemas"]["Money"];
+                            closing?: components["schemas"]["Money"];
+                            /** @description From customers and receipt vouchers */
+                            receipts: components["schemas"]["Money"];
+                            /** @description To suppliers and others (negative) */
+                            payments: components["schemas"]["Money"];
+                            /** @description Negative */
+                            expenses: components["schemas"]["Money"];
+                            /** @description TDS challans and GST payments (negative) */
+                            tax: components["schemas"]["Money"];
+                            /** @description Other vouchers */
+                            other: components["schemas"]["Money"];
+                        };
+                        /** @description As the tax summary report gives it for the period */
+                        tax: {
+                            /** @description GST on sales */
+                            output: components["schemas"]["Money"];
+                            /** @description GST on purchases and expenses */
+                            input: components["schemas"]["Money"];
+                            netPayable: components["schemas"]["Money"];
+                        };
+                        /** @description Whether the user sees the books (every branch) */
+                        books: boolean;
+                        balanceSheet?: {
+                            /** Format: date */
+                            asOf: string;
+                            assets: {
+                                heading: string;
+                                total: components["schemas"]["Money"];
+                            }[];
+                            liabilities: {
+                                heading: string;
+                                total: components["schemas"]["Money"];
+                            }[];
+                            totalAssets: components["schemas"]["Money"];
+                            totalLiabilities: components["schemas"]["Money"];
+                            /** @description The year's profit so far */
+                            currentProfit: components["schemas"]["Money"];
+                        };
+                        /** @description The eight accounts with the most debits and credits in the period */
+                        accountMovement?: {
+                            account: string;
+                            name: string;
+                            group: string;
+                            opening: components["schemas"]["Money"];
+                            debit: components["schemas"]["Money"];
+                            credit: components["schemas"]["Money"];
+                            closing: components["schemas"]["Money"];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    getComplianceHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        calendar: components["schemas"]["FilingDue"][];
+                        /** @description The latest period fetched in the last three months, or last month's when none is */
+                        itc?: {
+                            gstin: string;
+                            /** @description MMYYYY */
+                            period: string;
+                            fetched: boolean;
+                            lines?: number;
+                            /** @description Matched exactly, within tolerance or by hand, or claimed */
+                            matched?: number;
+                            /** @description Partly matched or only probably */
+                            mismatched?: number;
+                            /** @description On 2B with no bill recorded */
+                            missingInBooks?: number;
+                            /** @description Bills the suppliers haven't reported */
+                            missingIn2b?: number;
+                            /** @description Tax on those bills */
+                            missingIn2bTax?: components["schemas"]["Money"];
+                            claimableTax?: components["schemas"]["Money"];
+                        };
+                        tdsDue?: {
+                            total: components["schemas"]["Money"];
+                            overdue: components["schemas"]["Money"];
+                            rows: {
+                                section: string;
+                                /** @description yyyy-mm deducted */
+                                month: string;
+                                balance: components["schemas"]["Money"];
+                                /** Format: date */
+                                dueDate: string;
+                                overdue: boolean;
+                            }[];
+                        };
                     };
                 };
             };

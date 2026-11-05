@@ -160,6 +160,8 @@ const GATED_PATHS: [prefix: string, module: Module][] = [
   ['/settings/currencies', 'fx'],
   // Branches opens on every plan: Free has its one branch to name, and adding more is what is locked.
   ['/books', 'books'],
+  // Accounts & P&L reads the books.
+  ['/accounts', 'books'],
   // Receipts are receipt vouchers.
   ['/receipts', 'books'],
   // Matching 2B needs the purchase register.

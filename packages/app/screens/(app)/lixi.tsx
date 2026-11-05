@@ -27,7 +27,7 @@ import { greetWith, lixiSuggestions, LixiAction, LixiReply } from '../../feature
 import { askRemote, confirmRemote, remoteLixiAvailable, type PendingLixiAction } from '../../features/lixi/remote';
 import { detailRouteFor } from '../../features/documents/DocumentEditor';
 import { describeError } from '../../remote/errors';
-import { useComplianceSummary, useCurrentUser, usePlan } from '../../store/selectors';
+import { useComplianceSummary, useCurrentUser, useDashboardScope, usePlan } from '../../store/selectors';
 import { useHomeHub } from '../../remote/queries';
 import { hasModule } from '@esmart/core/domain/plan';
 import { useGoBack } from '../../navigation/useGoBack';
@@ -56,7 +56,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   const user = useCurrentUser();
   const plan = usePlan();
   // The greeting's heads-up comes from the same server figures as the Home tab.
-  const hub = useHomeHub().data;
+  const hub = useHomeHub(useDashboardScope()).data;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');

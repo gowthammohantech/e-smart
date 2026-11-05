@@ -5,6 +5,7 @@ import type { AuditEvent, DocStatus, DocumentKind, EInvoiceStatus, EwayBill, Ewa
 import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
 import { today } from '@esmart/core/lib/date';
 import { useAppStore } from '../store/appStore';
+import type { DashboardPeriod } from '../store/uiStore';
 import { api } from './api';
 import { applyChanges } from './apply';
 import { COLLECTIONS } from './collections';
@@ -742,22 +743,72 @@ export function useReportData<T>(key: ReportDataKey | null, scope: { from: strin
   });
 }
 
+/** What a dashboard hub is asked for: the branch (undefined for all) and the period bar's period. */
+export type HubScope = { branchId?: string; period: DashboardPeriod };
+
+/** The period as the hubs' query string has it. */
+function periodQuery(p: DashboardPeriod) {
+  return {
+    range: p.range,
+    ...(p.range === 'custom' ? { from: p.from, to: p.to } : {}),
+    grain: p.grain,
+    compare: p.compare ? ('previous' as const) : ('none' as const),
+  };
+}
+const periodKey = (p: DashboardPeriod) => [p.range, p.range === 'custom' ? `${p.from}..${p.to}` : '', p.grain, p.compare ? 'cmp' : ''].join('|');
+
 export const hubKeys = {
   all: (companyId: string) => ['hubs', companyId] as const,
-  sales: (companyId: string, branchId?: string) => ['hubs', companyId, 'sales', branchId ?? ''] as const,
-  purchases: (companyId: string, branchId?: string) => ['hubs', companyId, 'purchases', branchId ?? ''] as const,
-  home: (companyId: string, branchId?: string) => ['hubs', companyId, 'home', branchId ?? ''] as const,
+  sales: (companyId: string, s: HubScope) => ['hubs', companyId, 'sales', s.branchId ?? '', periodKey(s.period)] as const,
+  purchases: (companyId: string, s: HubScope) => ['hubs', companyId, 'purchases', s.branchId ?? '', periodKey(s.period)] as const,
+  home: (companyId: string, s: HubScope) => ['hubs', companyId, 'home', s.branchId ?? '', periodKey(s.period)] as const,
+  accounts: (companyId: string, s: HubScope) => ['hubs', companyId, 'accounts', s.branchId ?? '', periodKey(s.period)] as const,
+  filings: (companyId: string, branchId?: string) => ['hubs', companyId, 'filings', branchId ?? ''] as const,
   compliance: (companyId: string, branchId?: string) => ['compliance', companyId, branchId ?? ''] as const,
 };
 
-/** The Home tab's figures: this month, the sales trend, what's owed both ways, what needs attention, latest invoices. */
-export function useHomeHub(branchId?: string) {
+/**
+ * The Home tab's figures for the period: sales, collections, expenses and profit, trends, invoice
+ * status, cash, stock health, money movement, what's owed both ways, what needs attention. The
+ * previous answer stays up while a new period loads, so the cards don't blank on every change.
+ */
+export function useHomeHub(scope: HubScope) {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: hubKeys.home(companyId, branchId),
+    queryKey: hubKeys.home(companyId, scope),
     enabled: !!companyId,
+    placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/hubs/home', { params: { path: { companyId }, query: { branchId } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/hubs/home', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
+      return data!;
+    },
+  });
+}
+
+/** The Accounts & P&L tab: profit, cash movement, tax position, and the books for a user who sees them. */
+export function useAccountsHub(scope: HubScope, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: hubKeys.accounts(companyId, scope),
+    enabled: enabled && !!companyId,
+    placeholderData: keepPreviousData,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/hubs/accounts', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
+      return data!;
+    },
+  });
+}
+
+/** Returns and deposits falling due, GSTR-2B against the books, and TDS still to deposit. */
+export function useFilingsHub(branchId?: string, enabled = true) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: hubKeys.filings(companyId, branchId),
+    enabled: enabled && !!companyId,
+    // Due dates move by the day; no need to ask on every visit.
+    staleTime: 5 * 60_000,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/hubs/compliance', { params: { path: { companyId }, query: { branchId } }, signal });
       return data!;
     },
   });
@@ -796,27 +847,29 @@ export function useComplianceCounts(enabled = true): ComplianceCounts {
   return q.data ?? NO_COMPLIANCE;
 }
 
-/** The Purchases tab's figures: this month's bills and expenses, what's owed, counts, latest bills. */
-export function usePurchasesHub(branchId?: string) {
+/** The Purchases tab's figures for the period: bills, expenses and the Expenses tab, what's owed, counts, latest bills. */
+export function usePurchasesHub(scope: HubScope) {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: hubKeys.purchases(companyId, branchId),
+    queryKey: hubKeys.purchases(companyId, scope),
     enabled: !!companyId,
+    placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/hubs/purchases', { params: { path: { companyId }, query: { branchId } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/hubs/purchases', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
       return data!;
     },
   });
 }
 
-/** The Sales tab's figures: this month, what customers owe, counts, top customers, latest invoices. */
-export function useSalesHub(branchId?: string) {
+/** The Sales tab's figures for the period: invoicing, collections, the trend, what customers owe, counts, top customers, latest invoices. */
+export function useSalesHub(scope: HubScope) {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: hubKeys.sales(companyId, branchId),
+    queryKey: hubKeys.sales(companyId, scope),
     enabled: !!companyId,
+    placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/hubs/sales', { params: { path: { companyId }, query: { branchId } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/hubs/sales', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
       return data!;
     },
   });
