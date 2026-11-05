@@ -60,7 +60,7 @@ function accountToWire(row: AccountRow, base: string): Schema<'LedgerAccount'> {
   return compact({ id: row.id, companyId: row.companyId, name: row.name, group: row.group, openingBalance: money(row.openingBalanceMinor, base), openingBalanceDate: row.openingBalanceDate, status: row.status, ...versioned(row) });
 }
 
-function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> {
+export function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> {
   const lines = row.lines as StoredLine[];
   return compact({
     id: row.id,
@@ -128,7 +128,7 @@ async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'Ledge
  * unbalanced, have one line, break its kind's rules or sit in a closed period, since nothing of it
  * reaches the books. All of that is checked when it is posted.
  */
-async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, exceptId?: string, draft = false) {
+export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, exceptId?: string, draft = false) {
   const issues: Issue[] = [];
   const block = blocking(issues);
   const base = ctx.company.baseCurrency.trim();

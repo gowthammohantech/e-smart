@@ -2213,6 +2213,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/bank-lines/{id}/voucher": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a line against a ledger account, as a voucher, and match it
+         * @description For what is neither a party's payment nor an expense: interest the bank paid, a loan received or
+         *     repaid, capital brought in, drawings. Money in is a receipt voucher (the bank account debited, `account`
+         *     credited); money out a journal (`account` debited, the bank account credited). The voucher takes the
+         *     line's date, amount and reference, and is checked as any voucher is (422 as for `createVoucher`).
+         *     `account` can't be a cash or bank account: a transfer between them is a contra, matched with `matchBankLine`.
+         */
+        post: operations["createVoucherFromBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/expenses/summary": {
         parameters: {
             query?: never;
@@ -10735,6 +10762,44 @@ export interface operations {
                     "application/json": {
                         line: components["schemas"]["BankStatementLine"];
                         expense: components["schemas"]["Expense"];
+                    };
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    createVoucherFromBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The ledger account key, as in a voucher line (e.g. `acc:…`, `sys:capital`) */
+                    account: string;
+                    narration?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded and matched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        line: components["schemas"]["BankStatementLine"];
+                        voucher: components["schemas"]["Voucher"];
                     };
                 };
             };

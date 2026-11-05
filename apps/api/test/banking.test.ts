@@ -256,6 +256,35 @@ describe('banking: matching', () => {
     expect((await t.get(`${m.c}/payment-accounts/${acct}/bank-lines/summary`, { token: m.token })).body).toMatchObject({ matched: 3, unmatched: 0 });
   });
 
+  it('records interest and drawings against a ledger account, as vouchers', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    await importLines(m, acct, [ln('2026-09-25', 'INTEREST CREDIT', 12_340), ln('2026-09-26', 'SELF TRANSFER TO OWNER', -50_000, { reference: 'IMPS88' })]);
+    const [drawings, interest] = await lines(m, acct);
+    const ledger = await t.post(`${m.c}/ledger-accounts`, { name: 'Interest received', group: 'indirectIncomes', openingBalance: inr(0) }, { token: m.token });
+    expect(ledger.status).toBe(201);
+    const key = `acc:${ledger.body.id}`;
+
+    const rec = await t.post(`${m.c}/bank-lines/${interest.id}/voucher`, { account: key }, { token: m.token });
+    expect(rec.status).toBe(201);
+    expect(rec.body.voucher).toMatchObject({ kind: 'receipt', date: '2026-09-25', narration: 'INTEREST CREDIT', status: 'posted' });
+    expect(rec.body.voucher.lines.map((l: any) => [l.account, l.debit.minor, l.credit.minor])).toEqual([[`pay:${acct}`, 12_340, 0], [key, 0, 12_340]]);
+    expect(rec.body.line.match).toMatchObject({ type: 'voucher', id: rec.body.voucher.id, amount: inr(12_340) });
+    expect((await t.post(`${m.c}/bank-lines/${interest.id}/voucher`, { account: key }, { token: m.token })).status).toBe(409);
+
+    // Money out: a journal, the bank credited. A transfer to another bank account is a contra, not this.
+    const contra = await t.post(`${m.c}/bank-lines/${drawings.id}/voucher`, { account: `pay:${m.cash.id}` }, { token: m.token });
+    expect(contra.status).toBe(422);
+    expect(contra.body.code).toBe('CONTRA_NOT_HERE');
+    const unknown = await t.post(`${m.c}/bank-lines/${drawings.id}/voucher`, { account: 'acc:nope' }, { token: m.token });
+    expect(unknown.status).toBe(422);
+    const out = await t.post(`${m.c}/bank-lines/${drawings.id}/voucher`, { account: 'sys:capital', narration: 'Drawings' }, { token: m.token });
+    expect(out.status).toBe(201);
+    expect(out.body.voucher).toMatchObject({ kind: 'journal', narration: 'Drawings', reference: 'IMPS88' });
+    expect(out.body.voucher.lines.map((l: any) => [l.account, l.debit.minor, l.credit.minor])).toEqual([[`pay:${acct}`, 0, 50_000], ['sys:capital', 50_000, 0]]);
+    expect((await t.get(`${m.c}/payment-accounts/${acct}/bank-lines/summary`, { token: m.token })).body).toMatchObject({ matched: 2, unmatched: 0 });
+  });
+
   it('puts a line back to unmatched when its payment is deleted', async () => {
     const m = await moneySetup(t);
     const acct = await bank(m);

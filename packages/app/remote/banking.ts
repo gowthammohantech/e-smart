@@ -83,6 +83,19 @@ export async function createExpenseFromBankLine(line: BankLine, body: ExpenseFro
   return data!;
 }
 
+/**
+ * A line that is neither a party's payment nor an expense (interest, a loan, capital, drawings)
+ * recorded against a ledger account: a receipt voucher for money in, a journal for money out.
+ */
+export async function createVoucherFromBankLine(line: BankLine, body: { account: string; narration?: string }) {
+  const { data } = await api.POST('/companies/{companyId}/bank-lines/{id}/voucher', {
+    params: { path: { companyId: companyId(), id: line.id } },
+    body: { account: body.account, narration: body.narration?.trim() || undefined },
+  });
+  changed(line.accountId, true);
+  return data!;
+}
+
 /** An Excel (.xlsx) or CSV statement as rows of text, read by the server. */
 export async function parseBankStatement(fileName: string, contentBase64: string): Promise<string[][]> {
   const { data } = await api.POST('/companies/{companyId}/bank-statements/parse', { params: { path: { companyId: companyId() } }, body: { fileName, contentBase64 } });

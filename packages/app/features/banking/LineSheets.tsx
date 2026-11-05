@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -10,11 +10,13 @@ import { Text } from '@esmart/ui/components/Text';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatDate } from '@esmart/core/lib/date';
+import { chartOfAccounts } from '@esmart/core/domain/ledger/accounts';
 import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import type { PaymentMethod } from '@esmart/core/types';
 import { useDebounced } from '../../components/useDebounced';
-import { createExpenseFromBankLine, createPaymentFromBankLine, excludeBankLine, matchBankLine, useBankMatchSearch } from '../../remote/banking';
-import { usePartySearch, type BankLine } from '../../remote/queries';
+import { createExpenseFromBankLine, createPaymentFromBankLine, createVoucherFromBankLine, excludeBankLine, matchBankLine, useBankMatchSearch } from '../../remote/banking';
+import { usePartySearch, useServerBook, type BankLine } from '../../remote/queries';
+import { useAccountName, useGroupName } from '../books/names';
 import { useExpenseCategories, useHasModule } from '../../store/selectors';
 import { SignedAmount, signedMoney, useBankAction, useRecordLabel } from './parts';
 
@@ -233,6 +235,73 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
           setSupplierId(v);
           setSupplierName(allowed.find((p) => p.id === v)?.name);
           setSupplierOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * Record to an account: interest the bank paid, a loan in or out, capital brought in, drawings. A
+ * receipt voucher for money in, a journal for money out, against any account that isn't cash or bank
+ * (a transfer between those is a contra, matched with Find). Parties and stock aren't offered: a
+ * party's money is a payment, and stock moves with documents.
+ */
+export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['banking', 'common']);
+  const { book } = useServerBook();
+  const nameOf = useAccountName();
+  const groupName = useGroupName();
+  const [account, setAccount] = useState<string>();
+  const [narration, setNarration] = useState(line?.description ?? '');
+  const [picking, setPicking] = useState(false);
+  const { run, busy } = useBankAction();
+  const accounts = useMemo(
+    () => chartOfAccounts(book).filter((a) => !['cashInHand', 'bankAccounts', 'stockInHand', 'sundryDebtors', 'sundryCreditors'].includes(a.group) && a.kind !== 'party'),
+    [book],
+  );
+  if (!line) return null;
+  const into = line.amount.minor > 0;
+  const chosen = accounts.find((a) => a.key === account);
+  const save = async () => {
+    if (!account) return;
+    const ok = await run('voucher', () => createVoucherFromBankLine(line, { account, narration }), tr('banking:record.voucherSaved'));
+    if (ok) onClose();
+  };
+  return (
+    <>
+      <Sheet
+        visible={!picking}
+        onClose={onClose}
+        title={tr(into ? 'banking:record.voucherInTitle' : 'banking:record.voucherOutTitle')}
+        footer={<Button title={tr('banking:record.saveVoucher')} onPress={() => void save()} loading={busy === 'voucher'} disabled={!account || !!busy} fullWidth />}
+      >
+        <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
+          <LineSummary line={line} />
+          <PickerField
+            label={tr(into ? 'banking:record.accountIn' : 'banking:record.accountOut')}
+            required
+            value={chosen ? nameOf(chosen) : undefined}
+            placeholder={tr('banking:record.pickAccount')}
+            onPress={() => setPicking(true)}
+            icon="book-open-variant"
+          />
+          <TextField label={tr('banking:record.narration')} value={narration} onChangeText={setNarration} placeholder={tr('banking:record.optional')} maxLength={500} />
+          <Text variant="caption" tone="muted">
+            {tr(into ? 'banking:record.voucherInHint' : 'banking:record.voucherOutHint')}
+          </Text>
+        </View>
+      </Sheet>
+      <SelectSheet
+        visible={picking}
+        onClose={() => setPicking(false)}
+        title={tr('banking:record.pickAccount')}
+        options={accounts.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) }))}
+        value={account}
+        onSelect={(v) => {
+          setAccount(v);
+          setPicking(false);
         }}
       />
     </>

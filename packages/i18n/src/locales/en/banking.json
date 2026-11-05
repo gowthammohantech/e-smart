@@ -64,7 +64,17 @@
     "pickCategory": "Choose a category",
     "noCategories": "Add an expense category under Settings first",
     "saveExpense": "Record and match",
-    "expenseSaved": "Expense recorded and matched"
+    "expenseSaved": "Expense recorded and matched",
+    "voucherInTitle": "Record money in to an account",
+    "voucherOutTitle": "Record money out from an account",
+    "accountIn": "Credit to",
+    "accountOut": "Debit to",
+    "pickAccount": "Choose an account",
+    "narration": "Narration",
+    "voucherInHint": "For money in that isn't a customer's payment, such as interest, a loan or capital brought in. A receipt voucher is recorded on this line's date and matched to it.",
+    "voucherOutHint": "For money out that isn't a supplier's payment or an expense, such as drawings, a loan repaid or tax paid. A journal is recorded on this line's date and matched to it.",
+    "saveVoucher": "Record and match",
+    "voucherSaved": "Voucher recorded and matched"
   },
   "lines": {
     "match": "Match {{record}}",
@@ -95,7 +105,8 @@
       "unmatched": "Every imported line is matched or excluded. Import the next statement when it comes.",
       "matched": "Lines matched to a payment, expense or voucher show here.",
       "excluded": "Lines you set aside as needing nothing in the books show here."
-    }
+    },
+    "recordVoucher": "Record to an account"
   },
   "find": {
     "title": "Find the record",
