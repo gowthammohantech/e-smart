@@ -103,7 +103,10 @@ export function Button({
         const { pressed, hovered, focused } = state as WebPressState;
         return [
         {
-          height: heights[size],
+          // A floor, not a fixed height: large system text or a long Tamil
+          // label grows the button instead of being clipped by it.
+          minHeight: heights[size],
+          paddingVertical: size === 'sm' ? 4 : 6,
           borderRadius: t.radius.md,
           backgroundColor: WEB ? webFill(pressed, hovered) : p.bg,
           borderWidth: variant === 'ghost' ? 1 : 0,
@@ -132,13 +135,13 @@ export function Button({
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
               {icon ? <Icon name={icon} size={WEB ? 16 : fonts[size] + 3} color={p.fg} /> : null}
-              {/* The height is fixed, so a label that wrapped would spill out of
-                  it; Tamil runs long, so shrink a little and then truncate. */}
+              {/* Tamil runs long: shrink a little, then take a second line (the
+                  button grows to fit) before truncating. */}
               <Text
-                numberOfLines={1}
+                numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.85}
-                style={{ color: p.fg, fontSize: fonts[size], fontWeight: WEB ? '500' : '600', flexShrink: 1 }}
+                style={{ color: p.fg, fontSize: fonts[size], fontWeight: WEB ? '500' : '600', flexShrink: 1, textAlign: 'center' }}
               >
                 {title}
               </Text>
