@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { CustomField } from '@esmart/core/domain/customFields';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -76,6 +77,8 @@ export type AppData = {
   /** The catalogue's own groupings: an item may have one category and one brand. */
   itemCategories: ItemCategory[];
   brands: Brand[];
+  /** The company's own fields on contacts, items and documents. */
+  customFields: CustomField[];
   paymentAccounts: PaymentAccount[];
   exchangeRates: ExchangeRate[];
   numberingSeries: NumberingSeries[];
@@ -119,6 +122,7 @@ export function emptyData(): AppData {
     expenseCategories: [],
     itemCategories: [],
     brands: [],
+    customFields: [],
     paymentAccounts: [],
     exchangeRates: [],
     numberingSeries: [],
@@ -170,6 +174,8 @@ type Actions = {
   removeItemCategory: (id: string) => void;
   saveBrand: (brand: Brand) => void;
   removeBrand: (id: string) => void;
+  saveCustomField: (field: CustomField) => void;
+  removeCustomField: (id: string) => void;
   savePaymentAccount: (acc: PaymentAccount) => void;
   removePaymentAccount: (id: string) => void;
   saveExchangeRate: (rate: ExchangeRate) => void;
@@ -762,6 +768,12 @@ export const useAppStore = create<AppState>()(
           set({ brands: exists ? list.map((b) => (b.id === brand.id ? brand : b)) : [...list, brand] });
         },
         removeBrand: (id) => set({ brands: (get().brands ?? []).filter((b) => b.id !== id) }),
+        saveCustomField: (field) => {
+          const list = get().customFields ?? [];
+          const exists = list.some((f) => f.id === field.id);
+          set({ customFields: exists ? list.map((f) => (f.id === field.id ? field : f)) : [...list, field] });
+        },
+        removeCustomField: (id) => set({ customFields: (get().customFields ?? []).filter((f) => f.id !== id) }),
         savePaymentAccount: (acc) => {
           const exists = get().paymentAccounts.some((a) => a.id === acc.id);
           const next = exists

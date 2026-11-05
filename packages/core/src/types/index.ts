@@ -145,6 +145,8 @@ export type GstRegistrationType = 'regular' | 'composition' | 'unregistered' | '
 export type MsmeType = 'micro' | 'small' | 'medium';
 
 export type Party = {
+  /** Values of the company's custom fields, by field id (domain/customFields). */
+  customFields?: Record<string, string | number | boolean | null>;
   id: string;
   companyId: string;
   kind: PartyKind;
@@ -215,6 +217,8 @@ export type GstFlags = {
 };
 
 export type Item = {
+  /** Values of the company's custom fields, by field id (domain/customFields). */
+  customFields?: Record<string, string | number | boolean | null>;
   id: string;
   companyId: string;
   sku: string;
@@ -385,6 +389,8 @@ export type DocumentTotals = {
 };
 
 export type BusinessDocument = {
+  /** Values of the company's custom fields, by field id (domain/customFields). */
+  customFields?: Record<string, string | number | boolean | null>;
   id: string;
   companyId: string;
   branchId: string;

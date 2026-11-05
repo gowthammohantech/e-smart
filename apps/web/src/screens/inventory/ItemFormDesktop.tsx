@@ -21,6 +21,8 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCategories, useItems, useTaxCategories } from '@esmart/app/store/selectors';
 import { Divider, Panel, Row, SummaryRow, TwoColumns } from './parts';
 import { useGoBack } from '@esmart/app/navigation/useGoBack';
+import { CustomFieldsSection } from '@esmart/app/features/customFields/CustomFieldsSection';
+import type { CustomValues } from '@esmart/core/domain/customFields';
 
 /**
  * Add an item, laid out for a desktop: the item's identity and prices in the
@@ -65,6 +67,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
   const [brandId, setBrandId] = useState(item?.brandId ?? '');
+  const [customFields, setCustomFields] = useState<CustomValues>(item?.customFields ?? {});
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
@@ -135,6 +138,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
       imageUri: item?.imageUri,
       categoryId: categoryId || undefined,
       brandId: brandId || undefined,
+      customFields,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
     };
@@ -230,6 +234,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                     icon="star-circle-outline"
                   />
                 </Row>
+                <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} />
               </Panel>
 
               <Panel title={tr('inventory:form.section.pricing')} subtitle={tr('inventory:form.section.pricingHint')} icon="currency-inr">

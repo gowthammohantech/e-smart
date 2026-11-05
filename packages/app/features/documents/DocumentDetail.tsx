@@ -147,6 +147,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
+  const customFields = useAppStore((s) => s.customFields);
   const documentHtml = () =>
     buildDocumentHtml({
       t: tr,
@@ -158,6 +159,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       ewayBill,
       // Returns and notes name the invoice or bill they're against.
       source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
+      customFields,
     });
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */

@@ -10,6 +10,7 @@ import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '../lib/qr';
 import { E_INVOICE_CANCEL_REASONS } from '../domain/eInvoice';
 import type { LanguageCode } from '@esmart/i18n/config';
 import i18n from '@esmart/i18n';
+import { printableFields, type CustomField } from '../domain/customFields';
 
 /**
  * A field label on the printed document. Under Tamil it reads in Tamil with
@@ -121,6 +122,7 @@ export function buildDocumentHtml({
   logoSrc,
   signatureSrc,
   source,
+  customFields = [],
   t,
   language,
 }: {
@@ -137,6 +139,8 @@ export function buildDocumentHtml({
   logoSrc?: string;
   /** The signature, when not `company.signatureUri`: inline from the server, as the logo is. */
   signatureSrc?: string;
+  /** The company's custom fields: those marked to print show under the notes (the document's, then the party's). */
+  customFields?: CustomField[];
   /** Translator for the descriptive labels. Statutory field names stay English. */
   t: Translate;
   language: LanguageCode;
@@ -373,6 +377,11 @@ export function buildDocumentHtml({
 
   <div class="notes">
     <div>
+      ${(() => {
+        // The company's own fields marked to print: this document's, then the party's.
+        const printed = [...printableFields(customFields, 'document', doc.customFields), ...printableFields(customFields, 'party', party?.customFields)];
+        return printed.length ? `<table class="custom-fields" style="margin-bottom:12px"><tbody>${printed.map((f) => `<tr><td class="muted" style="padding:2px 12px 2px 0">${esc(f.label)}</td><td style="padding:2px 0">${esc(f.text)}</td></tr>`).join('')}</tbody></table>` : '';
+      })()}
       ${doc.notes ? `<div class="cap">${bi('sales:pdf.notes')}</div><div>${esc(doc.notes)}</div>` : ''}
       ${doc.terms ? `<div class="cap" style="margin-top:12px">Terms &amp; conditions</div><div class="muted">${esc(doc.terms)}</div>` : ''}
     </div>

@@ -23,6 +23,8 @@ import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCate
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { GstTreatmentFields } from './GstTreatmentFields';
+import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import type { CustomValues } from '@esmart/core/domain/customFields';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
@@ -66,6 +68,7 @@ export function ItemForm({ item }: { item?: Item }) {
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
   const [brandId, setBrandId] = useState(item?.brandId ?? '');
+  const [customFields, setCustomFields] = useState<CustomValues>(item?.customFields ?? {});
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
@@ -136,6 +139,7 @@ export function ItemForm({ item }: { item?: Item }) {
       imageUri: item?.imageUri,
       categoryId: categoryId || undefined,
       brandId: brandId || undefined,
+      customFields,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
     };
@@ -184,6 +188,7 @@ export function ItemForm({ item }: { item?: Item }) {
           <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
           <PickerField label={tr('inventory:form.category')} value={itemCategories.find((c) => c.id === categoryId)?.name ?? tr('inventory:form.none')} onPress={() => setCategoryOpen(true)} icon="tag-outline" />
           <PickerField label={tr('inventory:form.brand')} value={brands.find((b) => b.id === brandId)?.name ?? tr('inventory:form.none')} onPress={() => setBrandOpen(true)} icon="star-circle-outline" />
+          <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} />
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />

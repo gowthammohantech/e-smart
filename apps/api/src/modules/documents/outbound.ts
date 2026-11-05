@@ -15,6 +15,7 @@ import { companyLogoDataUri, companySignatureDataUri } from '../companies/logo';
 import { companyCore, partyCore, type DocRow } from './engine';
 import { effectiveStatus, today } from './lifecycle';
 import { documentsToWire, toCoreDocument } from './wire';
+import { loadCustomFields } from '../settings/customFields';
 
 export const SHARE_LINK_DAYS = 30;
 const PAYMENT_LINK_DAYS = 30;
@@ -72,6 +73,7 @@ export async function renderDocumentHtml(
     source: AGAINST_SOURCE.includes(row.kind) ? source : undefined,
     logoSrc: await companyLogoDataUri(db, deps, company),
     signatureSrc: await companySignatureDataUri(db, deps, company),
+    customFields: await loadCustomFields(db, company.id),
     t: i18n.getFixedT(language),
     language,
   });

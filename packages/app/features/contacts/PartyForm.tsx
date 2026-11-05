@@ -30,6 +30,8 @@ import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
+import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import type { CustomValues } from '@esmart/core/domain/customFields';
 
 const CODE_PREFIX: Record<PartyKind, string> = { customer: 'C', supplier: 'S', both: 'B', general: 'G' };
 
@@ -84,6 +86,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     party?.openingBalance && party.openingBalance.minor !== 0 ? String(Math.abs(toMajor(party.openingBalance))) : '',
   );
   const [openingDate, setOpeningDate] = useState<string | undefined>(party?.openingBalanceDate);
+  const [customFields, setCustomFields] = useState<CustomValues>(party?.customFields ?? {});
   // Dr: they owe us; Cr: we owe them. A negative stored amount (an old advance) reads as the other side.
   const [openingSide, setOpeningSide] = useState<BalanceSide>(() => {
     const side = party?.openingBalanceSide ?? usualSide(party?.kind ?? routeKind);
@@ -246,6 +249,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       // Said only when it isn't the kind's usual side, so most records stay as they were.
       openingBalanceSide: openingBalance && hasLedger(kind) && openingSide !== usualSide(kind) ? openingSide : undefined,
       paymentTermsDays: terms,
+      customFields,
       notes: notes.trim() || undefined,
       status: active ? 'active' : 'inactive',
       createdAt: party?.createdAt ?? nowISO(),
@@ -429,6 +433,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         </Text>
       </View>
     ) : null;
+  const customFieldsBlock = <CustomFieldsSection entity="party" values={customFields} onChange={setCustomFields} />;
   const notesField = <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />;
   const activeField = <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />;
 
@@ -493,6 +498,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       {panField}
       {supplierTaxFields}
 
+      {customFieldsBlock}
       {notesField}
       {activeField}
     </ScrollView>
@@ -558,6 +564,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   );
   const status = (
     <FormSection title={tr('contacts:form.notesAndStatus')}>
+      {customFieldsBlock}
       {notesField}
       {activeField}
     </FormSection>

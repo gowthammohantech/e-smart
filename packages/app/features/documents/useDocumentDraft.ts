@@ -5,6 +5,7 @@ import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { TaxContext } from '@esmart/core/domain/taxEngine';
+import type { CustomValues } from '@esmart/core/domain/customFields';
 
 export type DraftState = {
   partyId: string | null;
@@ -33,6 +34,8 @@ export type DraftState = {
   /** A TDS section, `none`, or unset for the supplier's own. */
   tdsSection?: string;
   costCentreId?: string;
+  /** Values of the company's document fields, by field id. */
+  customFields?: CustomValues;
   notes: string;
   terms: string;
   attachmentIds: string[];
@@ -109,6 +112,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     // A stored bill keeps what it was worked out with.
     tdsSection: doc.tdsSection ?? doc.tds?.section ?? 'none',
     costCentreId: doc.costCentreId,
+    customFields: doc.customFields,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],

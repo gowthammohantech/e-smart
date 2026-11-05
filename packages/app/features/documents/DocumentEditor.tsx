@@ -76,6 +76,7 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { tdsForDocument } from '../../store/tds';
 import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
+import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -563,6 +564,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       noteReason: isNote ? draft.noteReason : undefined,
       tdsSection: takesTds ? draft.tdsSection : undefined,
       costCentreId: draft.costCentreId,
+      customFields: draft.customFields,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -817,6 +819,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
 
       <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
+      <CustomFieldsSection entity="document" values={draft.customFields ?? {}} onChange={(customFields) => patch({ customFields })} />
 
       {isNote ? (
         <PickerField

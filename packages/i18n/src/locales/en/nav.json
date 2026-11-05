@@ -156,7 +156,8 @@
       "books": "Books",
       "gstPortal": "GST portal connection",
       "security": "Sign-in security",
-      "modules": "Modules"
+      "modules": "Modules",
+      "customFields": "Custom fields"
     },
     "signOut": {
       "row": "Sign out",

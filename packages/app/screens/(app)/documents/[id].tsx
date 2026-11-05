@@ -25,6 +25,7 @@ import { documentPdf, pdfFileName } from '../../../remote/documents';
 import { describeError } from '../../../remote/errors';
 import { useDocumentRecord } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
+import { useAppStore } from '../../../store/appStore';
 
 export default function DocumentPreview() {
   const t = useTheme();
@@ -47,6 +48,7 @@ export default function DocumentPreview() {
   const [busy, setBusy] = useState(false);
   const desktop = useIsDesktop();
 
+  const customFields = useAppStore((s) => s.customFields);
   const html = useMemo(
     () =>
       doc
@@ -59,9 +61,10 @@ export default function DocumentPreview() {
             branch: branches.find((b) => b.id === doc.branchId),
             ewayBill,
             source,
+            customFields,
           })
         : '',
-    [doc, company, party, branches, ewayBill, source, tr, language],
+    [doc, company, party, branches, ewayBill, source, customFields, tr, language],
   );
 
   if (!doc && remote.isLoading) return <LoadingView title={tr('nav:title.preview')} />;

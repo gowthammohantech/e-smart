@@ -172,6 +172,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   removeItemCategory: removal('item_category', 'itemCategories', 'item-categories', named),
   saveBrand: master('brand', 'brands', 'brands', named),
   removeBrand: removal('brand', 'brands', 'brands', named),
+  saveCustomField: master('custom_field', 'customFields', 'custom-fields', (f: { label: string }) => f.label),
+  removeCustomField: removal('custom_field', 'customFields', 'custom-fields', (f: { label: string }) => f.label),
   savePaymentAccount: master('payment_account', 'paymentAccounts', 'payment-accounts', named),
   removePaymentAccount: removal('payment_account', 'paymentAccounts', 'payment-accounts', named),
   saveExchangeRate: master('exchange_rate', 'exchangeRates', 'exchange-rates', (r) => `${r.currency} rate`),

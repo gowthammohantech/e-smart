@@ -622,5 +622,44 @@
       "payables": "What you owe suppliers, TDS and MSME dues.",
       "books": "Chart of accounts, vouchers, bank reconciliation and the statements."
     }
+  },
+  "customFields": {
+    "title": "Custom fields",
+    "hint": "Ask for more on contacts, items and documents: a drug licence on a customer, a vehicle number on a delivery. Fields marked to print appear on the PDF.",
+    "entity": {
+      "party": "Contacts",
+      "item": "Items",
+      "document": "Documents"
+    },
+    "kind": {
+      "text": "Text",
+      "number": "Number",
+      "date": "Date",
+      "select": "List",
+      "checkbox": "Tick box"
+    },
+    "required": "Required",
+    "printed": "Printed on documents",
+    "printHint": {
+      "document": "Shown on the PDF of the document.",
+      "party": "Shown on the PDF of documents to this contact."
+    },
+    "inactive": "Inactive",
+    "empty": "No fields yet.",
+    "add": "Add a field",
+    "label": "Name",
+    "kindFixed": "{{kind}}. A field keeps its kind; add another field for a different one.",
+    "options": "Choices",
+    "optionsHint": "Separate them with commas, in the order they should appear.",
+    "active": "In use",
+    "activeHint": "An unused field leaves the forms but keeps what records hold.",
+    "save": "Save",
+    "saved": "Field saved",
+    "delete": "Delete field",
+    "deleteTitle": "Delete {{label}}?",
+    "deleteMessage": "Records stop showing what they held for it. To keep that, mark it unused instead.",
+    "deleted": "Field deleted",
+    "choose": "Choose",
+    "none": "None"
   }
 }
