@@ -1,5 +1,6 @@
 import type { Money } from '../lib/money';
 import { fromMajor } from '../lib/money';
+import { cleanAmount, matchColumns, squashHeader } from '../lib/csv';
 import { INDIAN_STATES } from '../data/masters';
 import { isValidGstin, normalizeGstin, panOfGstin, stateCodeOfGstin } from './gstin';
 
@@ -9,42 +10,7 @@ import { isValidGstin, normalizeGstin, panOfGstin, stateCodeOfGstin } from './gs
  * what the server will be asked to create.
  */
 
-/** RFC 4180: commas, quoted fields with doubled quotes and line breaks inside, CRLF or LF, a BOM. */
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let quoted = false;
-  const s = text.replace(/^﻿/, '');
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (quoted) {
-      if (c === '"' && s[i + 1] === '"') {
-        field += '"';
-        i++;
-      } else if (c === '"') quoted = false;
-      else field += c;
-      continue;
-    }
-    if (c === '"' && field === '') quoted = true;
-    else if (c === ',') {
-      row.push(field);
-      field = '';
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && s[i + 1] === '\n') i++;
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = '';
-    } else field += c;
-  }
-  if (field !== '' || row.length) {
-    row.push(field);
-    rows.push(row);
-  }
-  // Blank lines (a trailing newline, spacer rows) carry nothing.
-  return rows.filter((r) => r.some((f) => f.trim() !== ''));
-}
+export { parseCsv } from '../lib/csv';
 
 export type ImportField =
   | 'name'
@@ -90,17 +56,11 @@ const ALIASES: Record<ImportField, string[]> = {
   notes: ['notes', 'remarks', 'note', 'comments'],
 };
 
-const squash = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
+const squash = squashHeader;
 
 /** Which column holds which field, by header; a column with an unknown header is left out. */
 export function guessColumns(header: string[]): Partial<Record<ImportField, number>> {
-  const map: Partial<Record<ImportField, number>> = {};
-  header.forEach((h, i) => {
-    const key = squash(h);
-    const field = (Object.keys(ALIASES) as ImportField[]).find((f) => ALIASES[f].includes(key));
-    if (field && map[field] === undefined) map[field] = i;
-  });
-  return map;
+  return matchColumns(header, ALIASES);
 }
 
 export type ImportKind = 'customer' | 'supplier' | 'both' | 'general';
@@ -180,9 +140,9 @@ export function partiesFromCsv(
     const stateName = stateCode ? INDIAN_STATES.find((s) => s.code === stateCode)!.name : stateRaw;
 
     const amount = (f: ImportField): Money | undefined => {
-      const v = get(f).replace(/[₹,\s]/g, '').replace(/^\((.*)\)$/, '-$1');
-      if (!v) return undefined;
-      if (!/^-?\d+(\.\d{1,2})?$/.test(v)) {
+      const v = cleanAmount(get(f));
+      if (v === undefined) return undefined;
+      if (v === null) {
         problems.push(`${f === 'creditLimit' ? 'Credit limit' : 'Opening balance'} "${get(f)}" is not an amount`);
         return undefined;
       }
