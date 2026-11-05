@@ -143,17 +143,17 @@ describe('paying micro and small suppliers on time', () => {
     expect(report.status).toBe(200);
     expect(report.body.rows.map((r: { number: string; dueDate: string; daysLeft: number }) => [r.number, r.dueDate, r.daysLeft])).toEqual([
       [late.body.number, '2026-09-15', -14],
-      // No date agreed on the bill: the supplier's 30-day terms are the agreement, within 45 days.
-      [soon.body.number, '2026-10-25', 26],
+      // No date agreed on the bill: 15 days, whatever the supplier's standing terms (RULES 8.7).
+      [soon.body.number, '2026-10-10', 11],
     ]);
     expect(report.body.rows[0].interest.minor).toBeGreaterThan(0);
     expect(report.body.notPaidInTime.map((r: { number: string }) => r.number)).toEqual([late.body.number]);
 
     expect(await remindMsmeDue(t.deps)).toBe(1);
     expect(await remindMsmeDue(t.deps)).toBe(0);
-    t.setNow('2026-10-19T10:00:00Z');
+    t.setNow('2026-10-04T10:00:00Z');
     expect(await remindMsmeDue(t.deps)).toBe(1);
     const notes = await t.deps.db.select().from(schema.notifications).where(and(eq(schema.notifications.companyId, m.companyId), eq(schema.notifications.kind, 'compliance')));
-    expect(notes.map((n) => n.title)).toEqual([`${late.body.number} to Konkan Steel is past the MSME limit`, `${soon.body.number} to Konkan Steel is due by 2026-10-25`]);
+    expect(notes.map((n) => n.title)).toEqual([`${late.body.number} to Konkan Steel is past the MSME limit`, `${soon.body.number} to Konkan Steel is due by 2026-10-10`]);
   });
 });
