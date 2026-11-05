@@ -21,8 +21,8 @@ function findChrome() {
   return undefined;
 }
 export const launch = () => chromium.launch({ executablePath: findChrome() });
-export async function device(browser, view = { width: 1280, height: 860 }) {
-  const ctx = await browser.newContext({ viewport: view });
+export async function device(browser, view = { width: 1280, height: 860 }, options = {}) {
+  const ctx = await browser.newContext({ viewport: view, ...options });
   await ctx.addInitScript(() => localStorage.setItem('ebs.ui.v1', JSON.stringify({ state: { themeMode: 'light', language: 'en' }, version: 2 })));
   return ctx;
 }
@@ -71,9 +71,11 @@ export function sql(q) {
 export const serverParties = (name) => Number(sql(`select count(*) from parties where name = '${name.replace(/'/g, "''")}'`));
 
 /** Toast text shown after an action, collected as it appears. */
-export async function addCustomer(page, name) {
+/** `askOffline`: the API is unreachable and nothing is waiting yet, so the app asks first. */
+export async function addCustomer(page, name, { askOffline = false } = {}) {
   await page.goto(`${APP}/contacts/customers/new`, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('Business name').waitFor({ timeout: 30_000 });
+  if (askOffline) await workOffline(page);
   await page.getByPlaceholder('Business name').fill(name);
   const started = Date.now();
   await page.getByText('Add customer', { exact: true }).last().click();
@@ -103,4 +105,17 @@ export function results() {
 export async function apiOffline(ctx, off) {
   if (off) await ctx.route(`${API_ORIGIN}/**`, (route) => route.abort('internetdisconnected'));
   else await ctx.unroute(`${API_ORIGIN}/**`);
+}
+
+/**
+ * Agrees to work offline. Without a connection the app goes view-only and,
+ * after a while, asks; only once that is accepted are changes kept on the
+ * device (packages/app/remote/connectivity.ts). Each page load asks again,
+ * unless changes are already waiting, which start it offline.
+ */
+export async function workOffline(page) {
+  const accept = page.getByText('Work offline', { exact: true }).last();
+  await accept.waitFor({ state: 'visible', timeout: 60_000 });
+  await accept.click();
+  await page.waitForTimeout(500);
 }
