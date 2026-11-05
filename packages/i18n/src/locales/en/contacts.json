@@ -22,7 +22,15 @@
     "noMatchesBody": "Try a different search term.",
     "addContact": "Add contact",
     "owesYou": "owes you",
-    "youOwe": "you owe"
+    "youOwe": "you owe",
+    "tile": {
+      "toReceive": "To receive",
+      "toPay": "To pay",
+      "overdue": "Overdue",
+      "advance": "Advances",
+      "advanceCaption": "Paid ahead, not yet applied",
+      "overdueCaption": "Past the due date"
+    }
   },
   "form": {
     "businessName": "Business name",

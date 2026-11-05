@@ -22,6 +22,8 @@ import { PURCHASE_KINDS, STATUS_TONE } from '@esmart/core/domain/documentStates'
 import { dateRangeLabel, documentKindLabel, statusLabel } from '@esmart/core/labels';
 import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
+import { StatTile } from '@esmart/ui/components/StatTile';
+import { StatGrid } from '@esmart/ui/components/Layout';
 import { zero, type Money } from '@esmart/core/lib/money';
 import { useAppStore } from '../store/appStore';
 import { useBaseCurrency } from '../store/selectors';
@@ -168,6 +170,19 @@ export function DocumentListView({
     </View>
   ) : null;
 
+  // The KPI tiles over the desktop table: the list's total, and the statuses that matter for
+  // this kind (only those it has). Each one toggles that status filter, like its chip.
+  const TILE_STATUSES: Partial<Record<DocumentKind, DocStatus[]>> = {
+    invoice: ['overdue', 'issued', 'paid'],
+    purchaseBill: ['overdue', 'issued', 'paid'],
+    quote: ['draft', 'sent', 'accepted'],
+  };
+  const TILE_TONE = { success: 'good', warning: 'warn', danger: 'bad', info: 'primary', neutral: 'default' } as const;
+  const byStatus = summary.data?.byStatus ?? [];
+  const tileStatuses = (TILE_STATUSES[kind] ?? [...byStatus].sort((a, b) => b.count - a.count).map((b) => b.status as DocStatus))
+    .filter((st) => byStatus.some((b) => b.status === st && b.count > 0))
+    .slice(0, 3);
+
   const toggleStatus = (s: DocStatus) =>
     setFilters((f) => ({
       ...f,
@@ -232,6 +247,29 @@ export function DocumentListView({
 
     return (
       <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
+        {summary.data && summary.data.count + byStatus.length > 0 ? (
+          <StatGrid>
+            <StatTile
+              label={documentKindLabel(tr, kind, 2)}
+              value={total}
+              icon="file-document-multiple-outline"
+              caption={tr('common:documentList.tileCount', { count: summary.data.count })}
+            />
+            {tileStatuses.map((st) => {
+              const b = byStatus.find((x) => x.status === st)!;
+              return (
+                <StatTile
+                  key={st}
+                  label={statusLabel(tr, st)}
+                  value={b.total as Money}
+                  tone={TILE_TONE[STATUS_TONE[st] as keyof typeof TILE_TONE] ?? 'default'}
+                  caption={tr('common:documentList.tileCount', { count: b.count })}
+                  onPress={() => toggleStatus(st)}
+                />
+              );
+            })}
+          </StatGrid>
+        ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
           {/* Wide enough for the hint naming what it searches. */}
           <View style={{ width: 380 }}>

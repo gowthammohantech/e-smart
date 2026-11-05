@@ -76,7 +76,9 @@
     "clearFilters": "வடிகட்டிகளை நீக்கு",
     "statusSection": "நிலை",
     "loadMore": "மேலும் ஏற்று",
-    "waiting": "ஒத்திசைக்கக் காத்திருக்கிறது"
+    "waiting": "ஒத்திசைக்கக் காத்திருக்கிறது",
+    "tileCount_one": "{{count}} ஆவணம்",
+    "tileCount_other": "{{count}} ஆவணங்கள்"
   },
   "documentEditor": {
     "finalised": "{{kind}} இறுதி செய்யப்பட்டது",

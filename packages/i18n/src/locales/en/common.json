@@ -76,7 +76,9 @@
     "clearFilters": "Clear filters",
     "statusSection": "Status",
     "loadMore": "Load more",
-    "waiting": "Waiting to sync"
+    "waiting": "Waiting to sync",
+    "tileCount_one": "{{count}} document",
+    "tileCount_other": "{{count}} documents"
   },
   "documentEditor": {
     "finalised": "{{kind}} finalised",

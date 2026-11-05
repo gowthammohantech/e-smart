@@ -15,6 +15,8 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Badge } from '@esmart/ui/components/Badge';
+import { StatTile } from '@esmart/ui/components/StatTile';
+import { StatGrid } from '@esmart/ui/components/Layout';
 import { useBaseCurrency, useHasModule } from '../../../store/selectors';
 import { usePartyPages, usePartySummary } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
@@ -157,7 +159,24 @@ export default function ContactsTab() {
       </View>
 
       {desktop ? (
-        <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg }}>
+        <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
+          {summary ? (
+            <StatGrid>
+              <StatTile
+                label={tab === 'customer' ? tr('contacts:hub.customers') : tr('contacts:hub.suppliers')}
+                value={String(summary.count)}
+                icon="account-group-outline"
+              />
+              <StatTile
+                label={tab === 'customer' ? tr('contacts:hub.tile.toReceive') : tr('contacts:hub.tile.toPay')}
+                value={totalOutstanding}
+                tone={tab === 'customer' ? 'warn' : 'bad'}
+                icon="cash-clock"
+              />
+              <StatTile label={tr('contacts:hub.tile.overdue')} value={summary.overdue as Money} tone="bad" icon="alert-outline" caption={tr('contacts:hub.tile.overdueCaption')} />
+              <StatTile label={tr('contacts:hub.tile.advance')} value={summary.advance as Money} icon="cash-fast" caption={tr('contacts:hub.tile.advanceCaption')} />
+            </StatGrid>
+          ) : null}
           <DataTable
             columns={[
               {
