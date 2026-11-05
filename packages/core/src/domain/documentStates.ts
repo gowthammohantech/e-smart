@@ -39,6 +39,14 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     rejected: [],
     expired: ['sent'],
   },
+  // A proforma is sent like a quote and settled by the invoice made from it; it is never on the books.
+  proforma: {
+    draft: ['sent', 'cancelled'],
+    sent: ['accepted', 'rejected', 'expired', 'cancelled'],
+    accepted: ['cancelled'],
+    rejected: [],
+    expired: ['sent'],
+  },
   salesOrder: {
     draft: ['confirmed', 'cancelled'],
     confirmed: ['fulfilled', 'cancelled'],
@@ -177,5 +185,5 @@ export const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'purchaseBill', 'debitN
 /** Settled by money received; the rest by money paid. */
 export const RECEIVABLE_KINDS: DocumentKind[] = ['invoice', 'debitNote'];
 
-export const SALES_KINDS: DocumentKind[] = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote'];
+export const SALES_KINDS: DocumentKind[] = ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote'];
 export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'];

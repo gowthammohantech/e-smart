@@ -915,7 +915,7 @@ export const useAppStore = create<AppState>()(
           const target: DocStatus =
             existing.kind === 'salesReturn' || existing.kind === 'purchaseReturn'
               ? 'approved'
-              : existing.kind === 'quote'
+              : existing.kind === 'quote' || existing.kind === 'proforma'
                 ? 'sent'
                 : existing.kind === 'salesOrder' || existing.kind === 'purchaseOrder'
                   ? 'confirmed'

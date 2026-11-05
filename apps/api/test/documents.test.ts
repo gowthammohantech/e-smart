@@ -175,7 +175,7 @@ describe('documents: numbering and lifecycle', () => {
 
     const detail = await t.get(url, { token: m.token });
     expect(detail.body.allowedTransitions).toEqual([]);
-    expect(detail.body.allowedConversions).toEqual(['salesOrder', 'invoice']);
+    expect(detail.body.allowedConversions).toEqual(['proforma', 'salesOrder', 'invoice']);
   });
 
   it('converts quote → order → delivery → invoice with source links, and duplicates into a new draft', async () => {

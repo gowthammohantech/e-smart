@@ -6,6 +6,7 @@ export type SeriesKind = NumberingSeries['kind'];
 /** Every series a company can number, in the order the settings screen lists them. */
 export const SERIES_KINDS: SeriesKind[] = [
   'quote',
+  'proforma',
   'salesOrder',
   'delivery',
   'invoice',
@@ -69,6 +70,7 @@ export function defaultSeries(companyId: string, kind: SeriesKind, prefix: strin
 export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   invoice: 'INV',
   quote: 'QT',
+  proforma: 'PI',
   salesOrder: 'SO',
   delivery: 'DN',
   salesReturn: 'CRN',

@@ -297,6 +297,8 @@ export type ExchangeRate = {
 
 export type DocumentKind =
   | 'quote'
+  /** A proforma invoice: what the customer will be billed, to pay an advance against. Not a tax invoice; posts nothing. */
+  | 'proforma'
   | 'salesOrder'
   | 'delivery'
   | 'invoice'

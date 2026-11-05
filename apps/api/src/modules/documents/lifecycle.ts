@@ -25,6 +25,7 @@ const SETTLEMENT: DocStatus[] = ['issued', 'partiallyPaid', 'paid', 'overdue'];
 /** Where `finalizeDocument` takes each kind (FRD 9). */
 export const FINAL_STATUS: Record<DocumentKind, DocStatus> = {
   quote: 'sent',
+  proforma: 'sent',
   salesOrder: 'confirmed',
   purchaseOrder: 'confirmed',
   delivery: 'delivered',
@@ -39,9 +40,10 @@ export const FINAL_STATUS: Record<DocumentKind, DocStatus> = {
   supplierDebitNote: 'issued',
 };
 
-/** Which kinds each kind converts into (quote → order → delivery → invoice, PO → receipt → bill, invoice/bill → return). */
+/** Which kinds each kind converts into (quote → proforma → order → delivery → invoice, PO → receipt → bill, invoice/bill → return). */
 export const CONVERSIONS: Record<DocumentKind, DocumentKind[]> = {
-  quote: ['salesOrder', 'invoice'],
+  quote: ['proforma', 'salesOrder', 'invoice'],
+  proforma: ['salesOrder', 'invoice'],
   salesOrder: ['delivery', 'invoice'],
   delivery: ['invoice'],
   invoice: ['salesReturn', 'creditNote', 'debitNote'],

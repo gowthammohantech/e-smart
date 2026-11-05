@@ -69,7 +69,7 @@ export function emptyDraft(baseCurrency: string, kind: DocumentKind, invoiceTerm
     partyId: null,
     date: today(),
     dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(today(), 30) : undefined,
-    validUntil: kind === 'quote' ? addDaysISO(today(), 15) : undefined,
+    validUntil: kind === 'quote' || kind === 'proforma' ? addDaysISO(today(), 15) : undefined,
     reference: '',
     supplierDocNumber: '',
     currency: baseCurrency,

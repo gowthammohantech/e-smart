@@ -50,6 +50,7 @@ const LOGO_EMAIL_MAX_BYTES = 1024 * 1024;
 /** What a sent document calls itself in the email, as the app names it. */
 const EMAIL_TITLES: Record<DocumentKind, string> = {
   quote: 'Quotation',
+  proforma: 'Proforma invoice',
   salesOrder: 'Sales order',
   delivery: 'Delivery note',
   invoice: 'Invoice',

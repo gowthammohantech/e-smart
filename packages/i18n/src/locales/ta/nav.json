@@ -108,7 +108,10 @@
     "editNamed": "திருத்து: {{name}}",
     "notifications": "அறிவிப்புகள்",
     "receipts": "வரவுகள்",
-    "documentPreview": "{{kind}} முன்னோட்டம்"
+    "documentPreview": "{{kind}} முன்னோட்டம்",
+    "proformas": "முன்மாதிரி விலைப்பட்டியல்கள்",
+    "newProforma": "புதிய முன்மாதிரி விலைப்பட்டியல்",
+    "proforma": "முன்மாதிரி விலைப்பட்டியல்"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {

@@ -108,7 +108,10 @@
     "editNamed": "Edit {{name}}",
     "notifications": "Notifications",
     "receipts": "Receipts",
-    "documentPreview": "{{kind}} preview"
+    "documentPreview": "{{kind}} preview",
+    "proformas": "Proforma invoices",
+    "newProforma": "New proforma invoice",
+    "proforma": "Proforma invoice"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {

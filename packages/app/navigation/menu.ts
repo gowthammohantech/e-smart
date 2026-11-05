@@ -52,6 +52,7 @@ export const MENU: MenuSection[] = [
     pages: [
       { key: 'invoices', labelKey: 'nav:title.invoices', icon: 'file-document-outline', route: '/sales/invoices', group: 'documents', createRoute: '/sales/invoices/new' },
       { key: 'quotes', labelKey: 'nav:title.quotations', icon: 'file-percent-outline', route: '/sales/quotes', group: 'documents', createRoute: '/sales/quotes/new' },
+      { key: 'proformas', labelKey: 'nav:title.proformas', icon: 'file-document-outline', route: '/sales/proformas', group: 'documents', createRoute: '/sales/proformas/new' },
       { key: 'salesOrders', labelKey: 'nav:title.salesOrders', icon: 'clipboard-list-outline', route: '/sales/orders', group: 'documents', createRoute: '/sales/orders/new' },
       { key: 'deliveries', labelKey: 'nav:title.deliveryNotes', icon: 'truck-outline', route: '/sales/deliveries', group: 'documents', createRoute: '/sales/deliveries/new' },
       { key: 'salesReturns', labelKey: 'nav:title.salesReturns', icon: 'keyboard-return', route: '/sales/returns', group: 'adjustments', createRoute: '/sales/returns/new' },

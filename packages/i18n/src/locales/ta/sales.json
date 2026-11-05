@@ -200,7 +200,8 @@
     "viewEwayBill": "இ-வே பில்லைப் பார்",
     "duplicate": "நகலெடு",
     "deleteDraft": "வரைவை நீக்கு",
-    "cancelTitle": "{{number}}-ஐ ரத்து செய்யவா?"
+    "cancelTitle": "{{number}}-ஐ ரத்து செய்யவா?",
+    "convertToProforma": "முன்மாதிரி விலைப்பட்டியல் உருவாக்கு"
   },
   "line": {
     "editLine": "வரிசையைத் திருத்து",

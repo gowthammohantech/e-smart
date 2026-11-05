@@ -4075,7 +4075,7 @@ export interface components {
             readonly id?: string;
             readonly companyId?: string;
             /** @enum {string} */
-            kind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            kind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
             /** @example INV */
             prefix: string;
             nextNumber: number;
@@ -4259,7 +4259,7 @@ export interface components {
          * @description creditNote and debitNote lower or raise what an invoice charged, with no goods moving; supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually raised against its invoice or bill (sourceDocumentId); a direct note, against no one invoice or bill, must give its noteReason. Credit notes, like returns, settle what the source still owes, and a direct one is credit the party holds, like an advance; debit notes are owed and paid like an invoice or bill.
          * @enum {string}
          */
-        DocumentKind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote";
+        DocumentKind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote";
         /** @enum {string} */
         DocStatus: "draft" | "sent" | "accepted" | "rejected" | "expired" | "confirmed" | "fulfilled" | "cancelled" | "delivered" | "issued" | "partiallyPaid" | "paid" | "overdue" | "requested" | "approved" | "processed" | "received" | "billed";
         LedgerAccount: components["schemas"]["Versioned"] & {

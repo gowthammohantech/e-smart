@@ -361,7 +361,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // An invoice or bill falls due, and a quote lapses, on or after the day it is dated.
   const beforeDocDate = tr('sales:editor.beforeDocDate', { date: formatDate(draft.date) });
   const dueBeforeDate = (kind === 'invoice' || kind === 'purchaseBill') && draft.dueDate && draft.dueDate < draft.date ? beforeDocDate : undefined;
-  const validBeforeDate = kind === 'quote' && draft.validUntil && draft.validUntil < draft.date ? beforeDocDate : undefined;
+  const validBeforeDate = (kind === 'quote' || kind === 'proforma') && draft.validUntil && draft.validUntil < draft.date ? beforeDocDate : undefined;
   // What the server refuses on any save, a draft too.
   const dateProblem = dateBeforeOpeningStock ?? dueBeforeDate ?? validBeforeDate;
   const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
@@ -617,7 +617,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const finalizeLocal = (id: string) => {
     {
       const target =
-        kind === 'quote'
+        kind === 'quote' || kind === 'proforma'
           ? 'sent'
           : kind === 'salesOrder' || kind === 'purchaseOrder'
             ? 'confirmed'
@@ -713,7 +713,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         />
       ) : null}
 
-      {kind === 'quote' ? (
+      {kind === 'quote' || kind === 'proforma' ? (
         <DateField
           label={tr('sales:editor.validUntil')}
           value={draft.validUntil ?? addDaysISO(draft.date, 15)}
@@ -998,7 +998,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
       {/* Where the customer pays: the company's account, as the PDF prints it. Set in settings, not per document. */}
-      {kind === 'invoice' || kind === 'quote' || kind === 'salesOrder' ? (
+      {kind === 'invoice' || kind === 'quote' || kind === 'proforma' || kind === 'salesOrder' ? (
         <Card variant="flat" style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <Icon name="bank-outline" size={18} color={t.c.muted} />
@@ -1556,6 +1556,7 @@ export function detailRouteFor(kind: DocumentKind, id: string): string {
   const map: Record<DocumentKind, string> = {
     invoice: '/(app)/sales/invoices',
     quote: '/(app)/sales/quotes',
+    proforma: '/(app)/sales/proformas',
     salesOrder: '/(app)/sales/orders',
     delivery: '/(app)/sales/deliveries',
     salesReturn: '/(app)/sales/returns',

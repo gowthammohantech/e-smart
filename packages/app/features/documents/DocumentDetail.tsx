@@ -176,7 +176,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           icon: 'file-pdf-box',
         },
       );
-      if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
+      if ((doc.kind === 'quote' || doc.kind === 'proforma') && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
     } catch {
       // The toast has said what went wrong.
     } finally {
@@ -315,8 +315,10 @@ ${url}`;
   };
 
   const offered: { target: DocumentKind; label: string; icon: IconName }[] =
-    doc.kind === 'quote'
+    doc.kind === 'quote' || doc.kind === 'proforma'
       ? [
+          // A quote can become a proforma for the customer to pay an advance against.
+          ...(doc.kind === 'quote' ? [{ target: 'proforma' as DocumentKind, label: tr('sales:detail.convertToProforma'), icon: 'file-document-outline' as IconName }] : []),
           { target: 'salesOrder', label: tr('sales:detail.convertToSalesOrder'), icon: 'clipboard-list-outline' },
           { target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' },
         ]

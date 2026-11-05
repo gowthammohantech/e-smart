@@ -45,7 +45,9 @@
     "supplierCreditNote_one": "விற்பனையாளர் வரவுக் குறிப்பு",
     "supplierCreditNote_other": "விற்பனையாளர் வரவுக் குறிப்புகள்",
     "supplierDebitNote_one": "விற்பனையாளர் பற்றுக் குறிப்பு",
-    "supplierDebitNote_other": "விற்பனையாளர் பற்றுக் குறிப்புகள்"
+    "supplierDebitNote_other": "விற்பனையாளர் பற்றுக் குறிப்புகள்",
+    "proforma_one": "முன்மாதிரி விலைப்பட்டியல்",
+    "proforma_other": "முன்மாதிரி விலைப்பட்டியல்கள்"
   },
   "series": {
     "quote": "விலைப்புள்ளி",
@@ -68,7 +70,8 @@
     "tdsChallan": "TDS சலான்",
     "payment": "கட்டணம்",
     "expense": "செலவு",
-    "receipt": "வரவு வவுச்சர்"
+    "receipt": "வரவு வவுச்சர்",
+    "proforma": "முன்மாதிரி விலைப்பட்டியல்"
   },
   "noteReason": {
     "discount": "விற்பனைக்குப் பின் தள்ளுபடி",

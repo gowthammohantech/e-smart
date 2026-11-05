@@ -68,7 +68,7 @@ function logoTag(src: string | undefined, name: string | undefined): string {
 }
 
 /** Documents a customer pays against, which print the bank account (and a UPI QR) to pay into. */
-const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'quote', 'salesOrder'];
+const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'quote', 'proforma', 'salesOrder'];
 
 /**
  * `upi://pay` for the amount, read by every UPI app: the payee address and name,
@@ -316,6 +316,7 @@ export function buildDocumentHtml({
     </div>
     <div>
       <div class="doc-title">${label}</div>
+      ${doc.kind === 'proforma' ? '<div class="muted">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : ''}
       ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}
       <div class="meta">
         <div><strong>${esc(doc.number)}</strong></div>

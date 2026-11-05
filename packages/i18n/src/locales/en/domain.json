@@ -45,7 +45,9 @@
     "supplierCreditNote_one": "Supplier credit note",
     "supplierCreditNote_other": "Supplier credit notes",
     "supplierDebitNote_one": "Supplier debit note",
-    "supplierDebitNote_other": "Supplier debit notes"
+    "supplierDebitNote_other": "Supplier debit notes",
+    "proforma_one": "Proforma invoice",
+    "proforma_other": "Proforma invoices"
   },
   "series": {
     "quote": "Quotation",
@@ -68,7 +70,8 @@
     "tdsChallan": "TDS challan",
     "payment": "Payment",
     "expense": "Expense",
-    "receipt": "Receipt voucher"
+    "receipt": "Receipt voucher",
+    "proforma": "Proforma invoice"
   },
   "noteReason": {
     "discount": "Discount after the sale",

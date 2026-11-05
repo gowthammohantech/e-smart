@@ -200,7 +200,8 @@
     "viewEwayBill": "View e-way bill",
     "duplicate": "Duplicate",
     "deleteDraft": "Delete draft",
-    "cancelTitle": "Cancel {{number}}?"
+    "cancelTitle": "Cancel {{number}}?",
+    "convertToProforma": "Make a proforma invoice"
   },
   "line": {
     "editLine": "Edit line",

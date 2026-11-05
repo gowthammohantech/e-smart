@@ -5702,7 +5702,7 @@ components:
             companyId: { type: string, readOnly: true }
             kind:
               type: string
-              enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, selfInvoice, payment, expense, journal, contra, gstJournal, tdsChallan, receipt]
+              enum: [quote, proforma, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, selfInvoice, payment, expense, journal, contra, gstJournal, tdsChallan, receipt]
             prefix: { type: string, example: INV }
             nextNumber: { type: integer, minimum: 1 }
             padding: { type: integer, minimum: 1, maximum: 8 }
@@ -5858,7 +5858,7 @@ components:
     # ---------------------------------------------------------------- documents
     DocumentKind:
       type: string
-      enum: [quote, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote]
+      enum: [quote, proforma, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote]
       description: >-
         creditNote and debitNote lower or raise what an invoice charged, with no goods moving;
         supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually
