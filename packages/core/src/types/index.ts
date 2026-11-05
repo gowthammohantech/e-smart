@@ -55,7 +55,8 @@ export type Company = {
   /** The owner's monthly AI budget, below the plan's (domain/plan AI_LIMITS); null or absent is the plan's. */
   aiMonthlyLimit?: number | null;
   /** Documents of a kind over the amount (base currency) wait for an owner or admin. */
-  approvalRules?: { kind: DocumentKind; overMinor: number }[];
+  /** `payment`: payments made over the amount wait as payment requests (RULES 6.14). */
+  approvalRules?: { kind: DocumentKind | 'payment'; overMinor: number }[];
   /**
    * Perpetual stock from this day (the start of a financial year): purchases of tracked goods post to
    * Stock in hand at cost and the goods sold to Cost of goods sold. Unset, the books are periodic.

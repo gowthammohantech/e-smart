@@ -669,7 +669,8 @@
     "over": "Over",
     "overHint": "0 holds every one.",
     "save": "Save",
-    "saved": "Approval rules saved"
+    "saved": "Approval rules saved",
+    "payments": "Payments made"
   },
   "invoiceDesign": {
     "title": "Invoice design",

@@ -479,7 +479,14 @@
     "approved": "Approved and issued",
     "sentBack": "Sent back to its creator",
     "empty": "Nothing waiting",
-    "emptyBody": "Documents over the amounts set in Settings → Approvals wait here for an owner or admin."
+    "emptyBody": "Documents and payments over the amounts set in Settings → Approvals wait here for an owner or admin.",
+    "payments": "Payments",
+    "documents": "Documents",
+    "paymentBy": "{{party}} · asked by {{name}}",
+    "paymentApproved": "Approved and recorded",
+    "paymentRejected": "Turned down",
+    "paymentReject": "Turn down",
+    "paymentWhy": "Why not?"
   },
   "tcs": {
     "section": "TCS (income tax)",

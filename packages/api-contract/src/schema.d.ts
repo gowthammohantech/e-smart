@@ -2025,6 +2025,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/payment-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** Payments waiting for approval (or decided), oldest request first; others see only their own */
+        get: operations["listPaymentRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the payment as the approver (checked as any payment is); 409 NOT_AWAITING_APPROVAL once decided */
+        post: operations["approvePaymentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-requests/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turns a payment request down, with why; nothing is recorded */
+        post: operations["rejectPaymentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payments/{id}": {
         parameters: {
             query?: never;
@@ -4461,9 +4520,10 @@ export interface components {
             fiscalYearStartMonth: number;
             /** @description Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it. */
             disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
-            /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued. Only an owner can change them. */
+            /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued; with kind `payment`, payments made over it wait as payment requests. Only an owner can change them. */
             approvalRules?: {
-                kind: components["schemas"]["DocumentKind"];
+                /** @description A document kind, or `payment` for payments made to suppliers (RULES 6.14). */
+                kind: components["schemas"]["DocumentKind"] | "payment";
                 overMinor: number;
             }[];
             /**
@@ -5717,6 +5777,25 @@ export interface components {
             discount?: components["schemas"]["Money"];
             /** @description Settled without cash: written off as bad debt (owner, admin or accountant) */
             writeOff?: components["schemas"]["Money"];
+        };
+        PaymentRequest: {
+            id: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            payment: components["schemas"]["Payment"];
+            partyName: string;
+            amount: components["schemas"]["Money"];
+            requestedBy: string;
+            requestedByName?: string;
+            /** Format: date-time */
+            requestedAt: string;
+            decidedBy?: string;
+            decidedByName?: string;
+            /** Format: date-time */
+            decidedAt?: string;
+            note?: string;
+            paymentId?: string;
+            version: number;
         };
         Payment: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -10892,7 +10971,97 @@ export interface operations {
                     "application/json": components["schemas"]["Payment"];
                 };
             };
+            /** @description `PAYMENT_HELD`: a payment made over the company's payment approval rule, by someone who is not an owner or admin, is not recorded but kept as a payment request (`requestId`) for them to approve. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             422: components["responses"]["Unprocessable"];
+        };
+    };
+    listPaymentRequests: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "rejected";
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["PaymentRequest"][];
+                    };
+                };
+            };
+        };
+    };
+    approvePaymentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Approved; `payment` is the payment recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRequest"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    rejectPaymentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Rejected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRequest"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     getPayment: {
