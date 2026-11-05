@@ -26,7 +26,11 @@ import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, v
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
+import { SignatureSection } from '../../../features/company/SignatureSection';
 
+
+/** A sample UPI ID for the field's placeholder: an address, the same in every language. */
+const UPI_SAMPLE = 'business@okhdfc';
 export default function CompanySettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
@@ -61,6 +65,13 @@ export default function CompanySettings() {
   const [bankRate, setBankRate] = useState(String(company?.msmeBankRate ?? 5.5));
   const [toleranceDays, setToleranceDays] = useState(String(company?.gstr2bDateToleranceDays ?? 3));
   const [tan, setTan] = useState(company?.tan ?? '');
+  const bank = company?.bankDetails;
+  const [bankName, setBankName] = useState(bank?.bankName ?? '');
+  const [accountName, setAccountName] = useState(bank?.accountName ?? '');
+  const [accountNumber, setAccountNumber] = useState(bank?.accountNumber ?? '');
+  const [ifsc, setIfsc] = useState(bank?.ifsc ?? '');
+  const [bankBranch, setBankBranch] = useState(bank?.branch ?? '');
+  const [upiId, setUpiId] = useState(bank?.upiId ?? '');
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
   const [lutValidTill, setLutValidTill] = useState(() => {
@@ -72,19 +83,23 @@ export default function CompanySettings() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = async () => {
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'> = {
       name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       postalCode: validPostalCode(postalCode, company?.country, stateCode),
       tan: taxRegistered ? validTan(tan) : undefined,
+      // The same shapes the server checks, said here in words.
+      ifsc: ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
+      accountNumber: accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
+      upiId: upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
     };
     setErrors(next);
     if (hasErrors(next) || !company) return;
@@ -105,6 +120,15 @@ export default function CompanySettings() {
         gstr2bDateToleranceDays: /^\d{1,2}$/.test(toleranceDays.trim()) && Number(toleranceDays) <= 30 ? Number(toleranceDays) : 3,
         // Blank clears it; the server takes an empty TAN as "none".
         tan: tan.trim().toUpperCase(),
+        // Sent whole: an empty field clears it on the server.
+        bankDetails: {
+          bankName: bankName.trim(),
+          accountName: accountName.trim(),
+          accountNumber: accountNumber.trim(),
+          ifsc: ifsc.trim().toUpperCase(),
+          branch: bankBranch.trim(),
+          upiId: upiId.trim(),
+        },
         address: {
           ...company.address,
           line1: line1.trim(),
@@ -167,6 +191,48 @@ export default function CompanySettings() {
           <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
           <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={errors.postalCode} containerStyle={{ flex: 1 }} />
         </View>
+
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }} nativeID="bank-and-signature">
+          {tr('settings:company.bankAndSignature')}
+        </Text>
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18, marginTop: -t.spacing.sm }}>
+          {tr('settings:company.bankHint')}
+        </Text>
+        <TextField label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} />
+        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <TextField label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={{ flex: 1 }} />
+          <TextField label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={{ flex: 1 }} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <TextField
+            label={tr('settings:company.accountNumber')}
+            value={accountNumber}
+            onChangeText={setAccountNumber}
+            keyboardType="number-pad"
+            error={errors.accountNumber}
+            containerStyle={{ flex: 1 }}
+          />
+          <TextField
+            label={tr('settings:company.ifsc')}
+            value={ifsc}
+            onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+            autoCapitalize="characters"
+            placeholder="HDFC0001234"
+            error={errors.ifsc}
+            containerStyle={{ flex: 1 }}
+          />
+        </View>
+        <TextField
+          label={tr('settings:company.upiId')}
+          value={upiId}
+          onChangeText={(v) => setUpiId(v.trim())}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          icon="qrcode"
+          placeholder={UPI_SAMPLE}
+          error={errors.upiId}
+        />
+        <SignatureSection />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
         <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />

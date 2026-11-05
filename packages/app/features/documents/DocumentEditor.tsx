@@ -997,6 +997,45 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
+      {/* Where the customer pays: the company's account, as the PDF prints it. Set in settings, not per document. */}
+      {kind === 'invoice' || kind === 'quote' || kind === 'salesOrder' ? (
+        <Card variant="flat" style={{ gap: t.spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+            <Icon name="bank-outline" size={18} color={t.c.muted} />
+            <Text variant="caption" tone="muted" weight="600" style={{ flex: 1 }}>
+              {tr('sales:editor.bankCard')}
+            </Text>
+            <Button
+              title={company?.bankDetails ? tr('sales:editor.bankEdit') : tr('sales:editor.bankAdd')}
+              variant="ghost"
+              size="sm"
+              onPress={() => router.push('/(app)/settings/company')}
+            />
+          </View>
+          {company?.bankDetails ? (
+            <>
+              <Text variant="small">
+                {[
+                  company.bankDetails.bankName,
+                  company.bankDetails.accountNumber ? `•••• ${company.bankDetails.accountNumber.slice(-4)}` : undefined,
+                  company.bankDetails.ifsc,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+              {company.bankDetails.upiId && draft.currency === 'INR' && kind === 'invoice' ? (
+                <Text variant="caption" tone="muted">
+                  {`${company.bankDetails.upiId} · ${tr('sales:editor.bankUpiQr')}`}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <Text variant="caption" tone="muted">
+              {tr('sales:editor.bankNone')}
+            </Text>
+          )}
+        </Card>
+      ) : null}
       <View style={{ gap: 6 }}>
         <Text variant="caption" tone="muted" weight="600">{tr('sales:editor.discountOnTotal')}</Text>
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>

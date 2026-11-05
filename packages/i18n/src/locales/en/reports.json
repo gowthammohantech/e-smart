@@ -46,6 +46,10 @@
       "team": {
         "title": "Invite your team",
         "body": "Add your accountant or staff, each with their own access."
+      },
+      "bank": {
+        "title": "Add bank details and signature",
+        "body": "Where customers pay, with a UPI QR, and your signature on invoices."
       }
     },
     "invoice": "Invoice",

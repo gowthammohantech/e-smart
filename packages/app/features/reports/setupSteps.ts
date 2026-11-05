@@ -6,7 +6,7 @@ import { useCompanyUsage } from '../../remote/queries';
 
 export type SetupStep = {
   /** Also the catalogue key: reports:home.step.<key>.title / .body */
-  key: 'profile' | 'gst' | 'customer' | 'item' | 'invoice' | 'team';
+  key: 'profile' | 'gst' | 'bank' | 'customer' | 'item' | 'invoice' | 'team';
   icon: IconName;
   route: string;
   done: boolean;
@@ -14,7 +14,8 @@ export type SetupStep = {
 
 /**
  * What a new business still has to set up, each with where to do it and
- * whether it's done: the profile that prints on invoices, GST, a first
+ * whether it's done: the profile that prints on invoices, GST, the bank
+ * account and signature, a first
  * customer, item and invoice, and a teammate. Steps the user can't open (plan
  * or role) are left out. `loading` while the server's counts are on the way.
  */
@@ -40,6 +41,12 @@ export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; comple
       route: '/(app)/settings/company',
       // Registered with a GSTIN on file, or chosen as not registered.
       done: !!reg && (!reg.registered || !!reg.identifier),
+    },
+    {
+      key: 'bank',
+      icon: 'bank-outline',
+      route: '/(app)/settings/company',
+      done: !!(company?.bankDetails?.accountNumber || company?.bankDetails?.upiId) && !!company?.signatureUri,
     },
     { key: 'customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new', done: (counts?.customers ?? 0) > 0 },
     { key: 'item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new', done: (counts?.items ?? 0) > 0 },

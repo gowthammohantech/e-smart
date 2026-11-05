@@ -126,16 +126,17 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     const company = byId(after.companies, result as string);
     if (!company) return;
     // The logo goes up on its own (remote/logo.ts); here logoUri is only a path on this device.
-    const { id, accountId, createdAt, plan, logoUri, ...body } = company as Company & Record<string, unknown>;
-    void accountId; void createdAt; void plan; void logoUri;
+    const { id, accountId, createdAt, plan, logoUri, signatureUri, ...body } = company as Company & Record<string, unknown>;
+    void accountId; void createdAt; void plan; void logoUri; void signatureUri;
     outbox.push({ method: 'POST', path: '/companies', body: { ...body, seedDefaults: true, numberingSeries: [] }, entityType: 'company', entityId: id, label: company.name, clientEntityId: id });
   },
   saveCompany: ({ args, after }) => {
     const company = byId(after.companies, (args[0] as Company).id);
     if (!company) return;
-    // logoUri is the server's read-only link (or a local path); the logo has its own upload.
-    const { logoUri, ...body } = company;
+    // logoUri and signatureUri are the server's read-only links (or a local path); each image has its own upload.
+    const { logoUri, signatureUri, ...body } = company;
     void logoUri;
+    void signatureUri;
     // Still to be created: keep what the create carries besides the company itself.
     const create = outbox.pendingCreate(company.id)?.body as { seedDefaults?: boolean; numberingSeries?: unknown[] } | undefined;
     const saved = create ? { ...body, seedDefaults: create.seedDefaults, numberingSeries: create.numberingSeries } : body;

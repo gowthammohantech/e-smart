@@ -112,7 +112,12 @@
     "taxInclusive": "Tax included",
     "taxMixed": "Some lines include tax and some don’t. Pick one to set them all.",
     "saveAndSend": "Save & send",
-    "saveAndSendHint": "Finalise, then email it to the customer"
+    "saveAndSendHint": "Finalise, then email it to the customer",
+    "bankCard": "Paid into",
+    "bankNone": "No bank account on your invoices yet.",
+    "bankEdit": "Change in settings",
+    "bankAdd": "Add bank details",
+    "bankUpiQr": "UPI QR for the total prints on the invoice"
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",
