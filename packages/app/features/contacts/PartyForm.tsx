@@ -576,7 +576,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
               {offersAnother ? (
                 <Button
                   title={tr('common:action.saveAndAddAnother')}
-                  tooltip={tr('common:action.saveAndAddAnotherShortcut')}
+                  tooltip={tr('common:action.saveAndAddAnotherShortcut', { keys: 'Shift+Ctrl+S' })}
                   variant="secondary"
                   onPress={() => void save(true)}
                   loading={saving}
