@@ -125,7 +125,9 @@ describe('banking: import', () => {
     expect(twinsAgain.body).toMatchObject({ imported: 0, duplicates: 2 });
 
     const audit = await t.deps.db.select().from(schema.auditEvents).where(eq(schema.auditEvents.entityType, 'bankStatement'));
-    expect(audit.length).toBe(4);
+    // The twins' second upload added nothing, so it left no statement, and no entry, behind.
+    expect(audit.length).toBe(3);
+    expect(await t.deps.db.select().from(schema.bankStatements).where(eq(schema.bankStatements.companyId, m.companyId))).toHaveLength(3);
   });
 
   it('refuses a cash account, another currency and a viewer', async () => {

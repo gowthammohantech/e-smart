@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -29,8 +29,11 @@ export default function SignUp() {
   const [accepted, setAccepted] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'password' | 'terms'>>({});
   const [busy, setBusy] = useState(false);
+  // Read at once: Enter or a second tap can land before `busy` re-renders.
+  const sending = useRef(false);
 
   const submit = () => {
+    if (sending.current) return;
     const next: Errors<'name' | 'email' | 'phone' | 'password' | 'terms'> = {
       name: required(name, tr('errors:field.yourName')),
       email: required(email, tr('errors:field.email')) ?? validEmail(email),
@@ -41,6 +44,7 @@ export default function SignUp() {
     setErrors(next);
     if (hasErrors(next)) return;
 
+    sending.current = true;
     setBusy(true);
     // A new account has no company yet, so the root layout routes to onboarding.
     remoteSession
@@ -53,6 +57,7 @@ export default function SignUp() {
         termsVersion: LEGAL.termsVersion,
       })
       .catch((err: unknown) => {
+        sending.current = false;
         setBusy(false);
         // A number someone else has already verified is a phone problem, not an email one.
         const message = describeError(err, tr);

@@ -26,7 +26,7 @@ export default function StockTransfer() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const goBack = useGoBack();
-  const { run: serverSave } = useServerSave();
+  const { run: serverSave, saving } = useServerSave();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
@@ -147,13 +147,15 @@ export default function StockTransfer() {
           title={tr('inventory:transfer.submit')}
           onPress={() => {
             if (!canSave || !itemId) return;
+            // Held busy until it has gone back: a second tap would move the stock again.
             void serverSave(() => {
               transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
-            }, tr('inventory:transfer.done'), { icon: 'truck-delivery-outline' }).then((res) => {
+            }, tr('inventory:transfer.done'), { icon: 'truck-delivery-outline', hold: true }).then((res) => {
               if (res) goBack(`/(app)/catalog/items/${itemId}`);
             });
           }}
           disabled={!canSave}
+          loading={saving}
           fullWidth
           size="lg"
         />

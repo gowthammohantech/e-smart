@@ -262,9 +262,10 @@ describe('books: journal import and templates', () => {
     const done = await t.post(`${m.c}/vouchers/import`, { vouchers }, { token: m.token });
     expect(done.body).toMatchObject({ created: 1, invalid: 1 });
     expect(done.body.results[0].number).toBe('JV/26-27/0001');
-    // As drafts, even the unbalanced one is kept, to finish later.
+    // As drafts, even the unbalanced one is kept, to finish later; the one already posted isn't imported twice.
     const drafts = await t.post(`${m.c}/vouchers/import`, { vouchers, asDrafts: true }, { token: m.token });
-    expect(drafts.body.created).toBe(2);
+    expect(drafts.body).toMatchObject({ created: 1, invalid: 1 });
+    expect(drafts.body.results[0].issues[0].message).toContain('JV/26-27/0001');
   });
 
   it('keeps journal templates with or without amounts', async () => {

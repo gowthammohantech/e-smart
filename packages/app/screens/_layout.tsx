@@ -20,6 +20,7 @@ import { ErrorFallback, FallbackArt } from '../components/ErrorFallback';
 import { OfflinePrompt } from '../components/OfflinePrompt';
 import { installGlobalErrorHandlers } from '../lib/reporter';
 import { usePushNotifications } from '../features/session/usePushNotifications';
+import { MfaGate } from '../features/security/MfaGate';
 
 // Remote mode wraps the store's actions once, before anything renders.
 installRemote();
@@ -86,6 +87,7 @@ function RootNavigator() {
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(app)" />
       </Stack>
+      <MfaGate />
     </>
   );
 }

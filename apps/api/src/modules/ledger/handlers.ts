@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, getTableColumns, gte, inArray, notInArray } from 'drizzle-orm';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
 import type { BusinessDocument, DocumentKind, Payment } from '@esmart/core/types';
@@ -86,6 +86,9 @@ async function agingReport(ctx: AgingCtx, kinds: DocumentKind[], q: { asOf?: str
 const fmt = (minor: number, currency: string) => `${currency} ${(minor / 100).toFixed(2)}`;
 
 /** Ledger: getReceivables, getPayables, sendPaymentReminder. */
+/** A reminder to the same party this soon after the last is a retry, not a decision. */
+const REMINDER_RESEND_WINDOW_MS = 2 * 60_000;
+
 export const ledgerHandlers = defineHandlers({
   async getReceivables(ctx) {
     return agingReport(ctx, RECEIVABLE_KINDS, ctx.query);
@@ -111,6 +114,25 @@ export const ledgerHandlers = defineHandlers({
     if (!docs.length) throw invalid('partyId', `${party.name} has nothing outstanding`, 'NOTHING_OUTSTANDING');
 
     await ctx.db.transaction(async (tx) => {
+      // One reminder at a time per party, and the same one again this soon is a retry (a double
+      // tap, a second device), not a decision: it isn't sent twice.
+      await tx.select({ id: P.id }).from(P).where(eq(P.id, party.id)).for('update');
+      const MD = schema.messageDeliveries;
+      const [recent] = await tx
+        .select({ id: MD.id })
+        .from(MD)
+        .where(
+          and(
+            eq(MD.partyId, party.id),
+            eq(MD.purpose, 'paymentReminder'),
+            eq(MD.channel, body.channel),
+            eq(MD.recipient, recipient.slice(0, 254)),
+            inArray(MD.status, ['queued', 'sent', 'delivered', 'read']),
+            gte(MD.createdAt, new Date(ctx.now.getTime() - REMINDER_RESEND_WINDOW_MS)),
+          ),
+        )
+        .limit(1);
+      if (recent) return;
       const lines: string[] = [];
       let total = 0;
       for (const d of docs) {

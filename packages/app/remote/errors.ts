@@ -1,5 +1,6 @@
 import { ApiError } from '@esmart/api-client';
 import { isNetworkError } from './api';
+import { MfaCancelled } from '../features/security/mfaGateStore';
 
 type Translate = (key: any, options?: any) => string;
 
@@ -38,6 +39,8 @@ const BY_CODE: Record<string, string> = {
  * one we know, otherwise the server's own explanation.
  */
 export function describeError(err: unknown, tr: Translate): string {
+  // The person chose to sign out at the authenticator code: nothing went wrong.
+  if (err instanceof MfaCancelled) return '';
   if (isNetworkError(err)) return tr('auth:remote.offline');
   if (err instanceof RemoteError) return tr(`errors:remote.${err.code}`, { status: err.status ?? '' });
   if (err instanceof ApiError) {

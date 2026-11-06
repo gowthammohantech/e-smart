@@ -629,6 +629,9 @@ export const documentsHandlers = defineHandlers({
     const payable = row.kind === 'invoice' && !['draft', 'cancelled', 'paid'].includes(effectiveStatus(row, today(ctx.now)));
 
     const { messageId, queued, text, html, inline, pdfUrl } = await ctx.db.transaction(async (tx) => {
+      // One send of a document at a time: a second (a double tap, another device) waits here,
+      // then finds the first one's messages below and doesn't send them again.
+      await tx.select({ id: D.id }).from(D).where(eq(D.id, row.id)).for('update');
       const share = await createShareLinkFor(tx, ctx.deps, ctx.user, row, ctx.now);
       const pay = body.includePaymentLink && payable ? await paymentLinkFor(tx, ctx.deps, ctx.company, ctx.user, row, ctx.now) : null;
       let pdfUrl: string | undefined;
@@ -683,7 +686,7 @@ export const documentsHandlers = defineHandlers({
       const recent = await tx
         .select({ id: MD.id, recipient: MD.recipient })
         .from(MD)
-        .where(and(eq(MD.documentId, row.id), eq(MD.channel, body.channel), inArray(MD.status, ['sent', 'delivered', 'read']), gte(MD.createdAt, new Date(ctx.now.getTime() - RESEND_WINDOW_MS))));
+        .where(and(eq(MD.documentId, row.id), eq(MD.channel, body.channel), inArray(MD.status, ['queued', 'sent', 'delivered', 'read']), gte(MD.createdAt, new Date(ctx.now.getTime() - RESEND_WINDOW_MS))));
       let first: string | undefined;
       const queued: { id: string; to: string }[] = [];
       for (const to of [...recipients, ...(body.channel === 'email' ? (body.cc ?? []) : [])]) {

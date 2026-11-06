@@ -125,7 +125,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const { t: tr } = useTranslation(['common', 'domain', 'sales', 'purchases']);
   const router = useRouter();
   const toast = useToast();
-  const { save: saveOnline, saving } = useSaveOnline();
+  const { save: saveOnline, saving, release: releaseSave } = useSaveOnline();
   // View-only (no internet, offline not agreed to): the header's badge says so and offers offline mode.
   const blocked = !useCanWrite();
   const insets = useSafeAreaInsets();
@@ -544,6 +544,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
       const onKey = (e: KeyboardEvent) => {
         if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+        // Held down, the key repeats: one finalise per press.
+        if (e.repeat) {
+          e.preventDefault();
+          return;
+        }
         e.preventDefault();
         finalizeShortcut.current();
       };
@@ -599,18 +604,27 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     };
 
     // One save: online it waits for the server, which numbers and checks it; in offline mode it stays here.
-    const res = await saveOnline(() => {
-      let saved = documentId;
-      if (documentId) updateDocument(documentId, payload);
-      else saved = createDocument({ ...payload, status: 'draft' });
-      if (saved && finalize) finalizeLocal(saved);
-      return saved;
-    });
+    const res = await saveOnline(
+      () => {
+        let saved = documentId;
+        if (documentId) updateDocument(documentId, payload);
+        else saved = createDocument({ ...payload, status: 'draft' });
+        if (saved && finalize) finalizeLocal(saved);
+        return saved;
+      },
+      // Busy until it has left for the saved document: a second tap would create it again.
+      { hold: true },
+    );
+    // Another save from this screen is still running.
+    if (!res) return;
     if (res.outcome === 'unreachable' || res.outcome === 'unconfirmed') {
       toast.show(tr(`common:save.${res.outcome}`), 'error');
       return;
     }
-    if (!res.result) return;
+    if (!res.result) {
+      releaseSave();
+      return;
+    }
     if (res.outcome === 'refused') {
       toast.show(tr('common:save.refused', { reason: res.error }), 'error');
       return;

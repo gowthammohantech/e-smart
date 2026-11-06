@@ -6,7 +6,9 @@ import { installRemote } from '../install';
 import { useConnectivity } from '../connectivity';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
-import { onUnconfirmed, saveOnline } from '../save';
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import { onUnconfirmed, saveOnline, useSaveOnline } from '../save';
 import { refreshOnFocus } from '../sync';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -220,5 +222,58 @@ describe('opening a screen', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('a double tap on a screen', () => {
+  /** The hook as a screen holds it. */
+  function mountSave() {
+    const ref: { current: ReturnType<typeof useSaveOnline> | null } = { current: null };
+    function Probe() {
+      ref.current = useSaveOnline();
+      return null;
+    }
+    let root!: ReturnType<typeof create>;
+    act(() => {
+      root = create(React.createElement(Probe));
+    });
+    return { hook: () => ref.current!, unmount: () => act(() => root.unmount()) };
+  }
+
+  it('saves once: a second save while the first is out does nothing', async () => {
+    answer((m) => ({ id: m.id, status: 'applied', entity: { ...m.body, id: `srv_${m.clientEntityId}`, version: 1 } }));
+    const screen = mountSave();
+    let first: unknown;
+    let second: unknown;
+    await act(async () => {
+      // Both before any re-render, the way two quick taps land.
+      const a = screen.hook().save(() => actions().saveParty(party({ id: 'pty_a' })));
+      const b = screen.hook().save(() => actions().saveParty(party({ id: 'pty_b' })));
+      [first, second] = await Promise.all([a, b]);
+    });
+    expect(first).toMatchObject({ outcome: 'saved' });
+    expect(second).toBeNull();
+    expect(sentIds()).toEqual(['pty_a']);
+    screen.unmount();
+  });
+
+  it('with hold, stays shut after a save that went through, until released', async () => {
+    answer((m) => ({ id: m.id, status: 'applied', entity: { ...m.body, id: `srv_${m.clientEntityId}`, version: 1 } }));
+    const screen = mountSave();
+    await act(async () => {
+      await screen.hook().save(() => actions().saveParty(party({ id: 'pty_a' })), { hold: true });
+    });
+    let again: unknown;
+    await act(async () => {
+      again = await screen.hook().save(() => actions().saveParty(party({ id: 'pty_b' })));
+    });
+    expect(again).toBeNull();
+    expect(screen.hook().saving).toBe(true);
+    act(() => screen.hook().release());
+    await act(async () => {
+      again = await screen.hook().save(() => actions().saveParty(party({ id: 'pty_b' })));
+    });
+    expect(again).toMatchObject({ outcome: 'saved' });
+    screen.unmount();
   });
 });

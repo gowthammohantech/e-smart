@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -38,7 +38,11 @@ export default function Done() {
   const numberingSeries = useAppStore((s) => s.numberingSeries);
   const saveNumberingSeries = useAppStore((s) => s.saveNumberingSeries);
 
+  // Read at once, not after a re-render: a double tap would create the business twice.
+  const finished = useRef(false);
   const finish = (goToInvoice: boolean) => {
+    if (finished.current) return;
+    finished.current = true;
     setBusy(true);
     const country = COUNTRIES.find((c) => c.code === draft.country);
 
@@ -149,13 +153,13 @@ export default function Done() {
       >
         {desktop ? (
           <>
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} />
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} disabled={busy} />
             <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} iconRight="arrow-right" />
           </>
         ) : (
           <>
             <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth size="lg" />
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} fullWidth />
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} disabled={busy} fullWidth />
           </>
         )}
       </View>

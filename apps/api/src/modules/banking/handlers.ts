@@ -245,6 +245,8 @@ export const bankingHandlers = defineHandlers({
       }));
       const counts = { imported: fresh.length, duplicates: lines.length - fresh.length, autoMatched: matches.size };
       if (body.dryRun) return { ...counts, lines: preview };
+      // The same file again (a second upload, a double tap): nothing new, so no empty statement either.
+      if (!fresh.length) return { ...counts, lines: preview };
 
       const first = lines[chrono[0]];
       const last = lines[chrono[chrono.length - 1]];

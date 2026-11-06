@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
@@ -27,12 +27,30 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
-  onConfirm: () => void;
+  /** A returned promise keeps the confirm busy until it settles. */
+  onConfirm: () => unknown;
   onCancel: () => void;
   icon?: IconName;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
+  // One confirm per showing: a second tap can land before the dialog closes
+  // (it fades out, and the caller's re-render comes later still).
+  const fired = useRef(false);
+  useEffect(() => {
+    if (visible) fired.current = false;
+  }, [visible]);
+  const confirm = () => {
+    if (fired.current) return;
+    fired.current = true;
+    const ran = onConfirm();
+    if (ran && typeof (ran as Promise<unknown>).then === 'function') {
+      const done = () => void (fired.current = false);
+      return (ran as Promise<unknown>).then(done, done);
+    }
+    // A caller that keeps the dialog open (to show an error, say) can be confirmed again shortly.
+    setTimeout(() => void (fired.current = false), 800);
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
@@ -91,7 +109,7 @@ export function ConfirmDialog({
             <Button
               title={confirmLabel ?? tr('common:component.confirm')}
               variant={destructive ? 'danger' : 'primary'}
-              onPress={onConfirm}
+              onPress={confirm}
               style={{ flex: 1 }}
             />
           </View>

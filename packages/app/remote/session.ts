@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import type { Schema } from '@esmart/api-client';
+import { ApiError, type Schema } from '@esmart/api-client';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { emptyData, useAppStore, type AppData } from '../store/appStore';
 import { COLLECTIONS } from './collections';
@@ -15,6 +15,7 @@ import { endSyncSession, reloadSnapshot, syncSoon } from './sync';
 import { onTokensChange, setTokens } from './tokens';
 import { LEGAL } from '../lib/legal';
 import { unregisterPush } from './push';
+import { MfaCancelled, useMfaGate } from '../features/security/mfaGateStore';
 
 type AuthSession = Schema<'AuthSession'>;
 
@@ -33,7 +34,7 @@ async function begin(auth: AuthSession, preferCompanyId?: string) {
   useRemoteMeta.getState().reset();
   useAppStore.setState({ ...emptyData(), activeCompanyId: '', activeBranchId: '' });
 
-  const { data: me } = await api.GET('/me');
+  const me = await readMe();
   const companies = me?.companies ?? [];
   const companyId = (preferCompanyId && companies.some((c) => c.id === preferCompanyId) ? preferCompanyId : undefined) ?? me?.defaultCompanyId ?? companies[0]?.id ?? '';
   // The first screen opens on a branch: only the open business's branches are waited for.
@@ -57,6 +58,29 @@ async function begin(auth: AuthSession, preferCompanyId?: string) {
   });
   await restoreUnsynced(auth.user.id);
 }
+
+/**
+ * Who signed in. With an authenticator app on, the server holds a new session until its code is
+ * entered: the gate asks for it, and signing in carries on once it passes. Giving up ends the
+ * held session on the server and here.
+ */
+async function readMe() {
+  try {
+    return (await api.GET('/me')).data;
+  } catch (err) {
+    if (!(err instanceof ApiError && err.code === 'MFA_REQUIRED')) throw err;
+    try {
+      await useMfaGate.getState().passed();
+    } catch (cancelled) {
+      await api.POST('/auth/sign-out', {}).catch(() => {});
+      await setTokens(null);
+      throw cancelled;
+    }
+    return (await api.GET('/me')).data;
+  }
+}
+
+export { MfaCancelled };
 
 export async function signIn(email: string, password: string) {
   const { data } = await api.POST('/auth/sign-in', { body: { email: email.trim(), password, device: device() } });
