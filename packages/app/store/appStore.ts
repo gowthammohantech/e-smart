@@ -1080,11 +1080,12 @@ export const useAppStore = create<AppState>()(
 
         applyAdvances: (partyId, direction, documentIds) => {
           const s = get();
-          const kind = direction === 'received' ? 'invoice' : 'purchaseBill';
+          // What a payment settles: invoices and debit notes coming in, bills and supplier debit notes going out.
+          const kinds = direction === 'received' ? ['invoice', 'debitNote'] : ['purchaseBill', 'supplierDebitNote'];
           const docs = s.documents.filter(
             (d) =>
               d.companyId === s.activeCompanyId &&
-              d.kind === kind &&
+              kinds.includes(d.kind) &&
               d.partyId === partyId &&
               (!documentIds || documentIds.includes(d.id)),
           );

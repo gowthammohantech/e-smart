@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -25,6 +25,7 @@ import { useLeaveGuard } from '../../../components/useLeaveGuard';
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
 import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
 import { resolveRate, settlementGainLoss } from '@esmart/core/domain/fx';
+import { availableAdvance } from '@esmart/core/domain/receivables';
 import { INDIAN_STATES, PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
@@ -169,9 +170,18 @@ export default function NewPayment() {
     setAmountText(toAmountInput(prefill.outstanding));
   }
 
-  // Advances already held against this party (unallocated parts of earlier payments).
-  const held = (partyRecord as { advance?: Money } | undefined)?.advance;
-  const advance = held && held.currency === currency ? held : zero(currency);
+  // Advances held against this party: what its earlier payments left unallocated, the only advance
+  // Adjust can put on a document. The server's party advance also counts a credit note raised on its
+  // own, which can't settle an invoice here, so it isn't offered. Read from the payments themselves,
+  // loaded once the party is picked, so it also drops the moment an adjustment uses it.
+  const storePayments = useAppStore((s) => s.payments);
+  useEffect(() => {
+    if (partyId) loadForAdvances(activeCompanyId, partyId, direction, []).catch(() => {});
+  }, [activeCompanyId, partyId, direction]);
+  const advance = useMemo(
+    () => availableAdvance(storePayments.filter((p) => p.companyId === activeCompanyId && p.partyId === partyId && p.direction === direction), currency),
+    [storePayments, activeCompanyId, partyId, direction, currency],
+  );
   /** Adjust held advances against every open document, or just `docId`. */
   const adjustAdvance = async (docId?: string) => {
     if (!partyId) return;
