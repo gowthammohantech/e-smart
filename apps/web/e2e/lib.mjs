@@ -22,7 +22,8 @@ function findChrome() {
 }
 export const launch = () => chromium.launch({ executablePath: findChrome() });
 export async function device(browser, view = { width: 1280, height: 860 }) {
-  const ctx = await browser.newContext({ viewport: view });
+  // The app's CSP is script-src 'self'; the axe scan injects its own script, so the test browser skips it.
+  const ctx = await browser.newContext({ viewport: view, bypassCSP: true });
   await ctx.addInitScript(() => localStorage.setItem('ebs.ui.v1', JSON.stringify({ state: { themeMode: 'light', language: 'en' }, version: 2 })));
   return ctx;
 }
