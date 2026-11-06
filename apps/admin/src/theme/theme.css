@@ -758,10 +758,11 @@ details.table-view .table-wrap {
 .backdrop::before {
   /* The tile is drawn in black and used as a mask, so the doodles take the theme's muted ink. */
   background: var(--muted);
-  opacity: 0.12;
+  /* Halved: a texture, not something to watch (matches the app's doodles). */
+  opacity: 0.06;
   -webkit-mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
   mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
-  animation: wallpaper 60s linear infinite;
+  animation: wallpaper 180s linear infinite;
 }
 @keyframes wallpaper {
   to {
@@ -787,10 +788,10 @@ details.table-view .table-wrap {
   position: absolute;
   inset: 0;
   background: var(--muted);
-  opacity: 0.1;
+  opacity: 0.05;
   -webkit-mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
   mask: var(--doodle-tile) 0 0 / 260px 260px repeat;
-  animation: wallpaper 60s linear infinite;
+  animation: wallpaper 180s linear infinite;
 }
 .doodle-scatter svg {
   position: absolute;

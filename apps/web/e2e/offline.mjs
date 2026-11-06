@@ -11,7 +11,7 @@
 //   npm run e2e:offline -w @esmart/web [-- online,offline,…]
 //
 // It writes to that database only. Screenshots land next to this file.
-import { launch, device, signIn, addCustomer, queue, book, serverParties, results, APP, toastText, sql, apiOffline, workOffline } from './lib.mjs';
+import { launch, device, signIn, addCustomer, queue, book, serverParties, results, APP, toastText, sql, apiOffline, ensureCanWrite } from './lib.mjs';
 const r = results();
 const b = await launch();
 const stamp = Date.now().toString(36);
@@ -65,7 +65,7 @@ if (want('refused')) {
 if (want('offline')) {
   await apiOffline(ctx, true);
   const name = `E2E Offline ${stamp}`;
-  const res = await addCustomer(page, name, { askOffline: true });
+  const res = await addCustomer(page, name);
   r.check('offline save: kept on device', (await book(page)).parties.some((p) => p.name === name));
   r.check('offline save: queued, not on server', (await queue(page)).length === 1 && serverParties(name) === 0, `queue ${(await queue(page)).length}`);
   r.check('offline save: no waiting', res.ms < 3000, `${res.ms} ms; toast "${res.toast}"`);
@@ -88,12 +88,11 @@ if (want('kill')) {
   // Changes made offline; the app is closed while the push is in flight.
   await apiOffline(ctx, true);
   const names = [1, 2, 3].map((i) => `E2E Kill ${stamp} ${i}`);
-  for (const [i, n] of names.entries()) await addCustomer(page, n, { askOffline: i === 0 });
+  for (const n of names) await addCustomer(page, n);
   let held;
   await page.route('**/v1/sync/push', async (route) => { held = route; await new Promise((res) => setTimeout(res, 60_000)); await route.continue().catch(() => {}); });
   await apiOffline(ctx, false);
-  // What was queued goes once the connection has held for a while: wait until the push is on its way.
-  for (let i = 0; i < 60 && !held; i++) await page.waitForTimeout(500);
+  await page.waitForTimeout(3000);
   // The request reached the server's proxy point; close the tab mid-flight, then let it through anyway.
   await page.close();
   await held?.continue().catch(() => {});
@@ -119,11 +118,11 @@ if (want('pwa')) {
 }
 
 if (want('slow')) {
-  // No answer in 8 s: the save asks the server again rather than giving up, and lands once.
+  // No answer in 8 s: the save falls back to the device, and still lands once.
   await live.route('**/v1/sync/push', async (route) => { await new Promise((res) => setTimeout(res, 11_000)); await route.continue().catch(() => {}); });
   const name = `E2E Slow ${stamp}`;
   const res = await addCustomer(live, name);
-  r.check('slow network: saved once the server answers', res.ms >= 7000 && res.ms < 30000 && res.url.includes('/pty_'), `${res.ms} ms; toast "${res.toast}"`);
+  r.check('slow network: falls back after the wait', res.ms >= 7000 && res.ms < 12000, `${res.ms} ms; toast "${res.toast}"`);
   await live.unroute('**/v1/sync/push');
   await waitQueueEmpty(live, 60_000);
   r.check('slow network: server has it exactly once', serverParties(name) === 1, `server count ${serverParties(name)}`);
@@ -155,7 +154,7 @@ if (want('tabs')) {
   await tabB.goto(`${APP}/`, { waitUntil: 'domcontentloaded' }); await tabB.waitForTimeout(3000);
   await apiOffline(ctx, true);
   const a = `E2E TabA ${stamp}`, bb = `E2E TabB ${stamp}`;
-  await addCustomer(tabA, a, { askOffline: true });
+  await addCustomer(tabA, a);
   await tabB.waitForTimeout(1500);
   await addCustomer(tabB, bb);
   await apiOffline(ctx, false);
@@ -174,22 +173,24 @@ if (want('conflict')) {
   await signIn(p1); await signIn(p2);
   const pid = sql(`select id from parties where name like 'E2E Online ${stamp}'`);
   await apiOffline(d2, true);
-  const rename = async (p, to, { askOffline = false } = {}) => {
+  const rename = async (p, to) => {
     await p.goto(`${APP}/contacts/customers/${pid}/edit`, { waitUntil: 'domcontentloaded' });
-    const f = p.getByPlaceholder('Business name'); await f.waitFor({ timeout: 30_000 });
-    if (askOffline) await workOffline(p);
-    await f.fill(to);
+    const f = p.getByPlaceholder('Business name'); await f.waitFor({ timeout: 30_000 }); await f.fill(to);
+    await ensureCanWrite(p);
     const t0 = Date.now(); await p.getByText(/^Save/).last().click();
     await p.waitForTimeout(1500);
     return Date.now() - t0;
   };
-  await rename(p2, `Device two ${stamp}`, { askOffline: true });
+  await rename(p2, `Device two ${stamp}`);
   await rename(p1, `Device one ${stamp}`);
   await apiOffline(d2, false);
   await p2.goto(`${APP}/settings/sync`, { waitUntil: 'domcontentloaded' });
-  // What was kept offline goes once the connection has held for a while; wait for the server's answer.
+  // Back from offline, a device waits for the connection to hold (15 s) before sending: wait for the answer.
   let q2 = await queue(p2);
-  for (let i = 0; i < 90 && q2.some((e) => e.status === 'pending' && !e.conflict); i++) { await p2.waitForTimeout(500); q2 = await queue(p2); }
+  for (let i = 0; i < 90 && q2.some((e) => e.status === 'pending' && !e.conflict); i++) {
+    await p2.waitForTimeout(500);
+    q2 = await queue(p2);
+  }
   const server = sql(`select name from parties where id='${pid}'`);
   r.check('two devices: first save kept on server', server === `Device one ${stamp}`, `server "${server}"`);
   r.check('two devices: second shows a conflict, not an overwrite', q2.some((e) => e.conflict), `queue ${JSON.stringify(q2.map((e) => ({ s: e.status, c: !!e.conflict })))}`);

@@ -1,20 +1,24 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
-import { PickerField, TextField } from '@esmart/ui/components/Field';
+import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatDate } from '@esmart/core/lib/date';
+import { formatMoney } from '@esmart/core/lib/format';
+import { money } from '@esmart/core/lib/money';
+import { chartOfAccounts } from '@esmart/core/domain/ledger/accounts';
 import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import type { PaymentMethod } from '@esmart/core/types';
 import { useDebounced } from '../../components/useDebounced';
-import { createExpenseFromBankLine, createPaymentFromBankLine, excludeBankLine, matchBankLine, useBankMatchSearch } from '../../remote/banking';
-import { usePartySearch, type BankLine } from '../../remote/queries';
+import { createExpenseFromBankLine, createPaymentFromBankLine, createVoucherFromBankLine, excludeBankLine, type BankRecordRef, matchBankLine, useBankMatchSearch } from '../../remote/banking';
+import { useOpenDocuments, usePartySearch, useServerBook, type BankLine } from '../../remote/queries';
+import { useAccountName, useGroupName } from '../books/names';
 import { useExpenseCategories, useHasModule } from '../../store/selectors';
 import { SignedAmount, signedMoney, useBankAction, useRecordLabel } from './parts';
 
@@ -44,9 +48,7 @@ function LineSummary({ line }: { line: BankLine }) {
 export function FindMatchSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
   const { t: tr } = useTranslation(['banking']);
   const [query, setQuery] = useState('');
-  const paymentsMade = useHasModule('payables');
-  const expenses = useHasModule('expenses');
-  const search = useBankMatchSearch(line, useDebounced(query), { paymentsMade, expenses });
+  const search = useBankMatchSearch(line, useDebounced(query));
   const labelOf = useRecordLabel();
   const { run } = useBankAction();
   if (!line) return null;
@@ -68,7 +70,7 @@ export function FindMatchSheet({ line, onClose }: { line: BankLine | null; onClo
       searchPlaceholder={tr('banking:find.search')}
       emptyMessage={tr('banking:find.none')}
       onSelect={(v) => {
-        const [type, id] = v.split(':') as ['payment' | 'expense', string];
+        const [type, id] = v.split(':') as [BankRecordRef['type'], string];
         onClose();
         void run('match', () => matchBankLine(line, { type, id }), tr('banking:lines.matched'));
       }}
@@ -89,12 +91,27 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
   const [methodOpen, setMethodOpen] = useState(false);
   const [partyQuery, setPartyQuery] = useState('');
   const parties = usePartySearch(into ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen);
+  // What the money settles: the party's open invoices (or bills), oldest first, ticked until the line's amount runs out.
+  const open = useOpenDocuments(partyId, into ? ['invoice', 'debitNote'] : ['purchaseBill', 'supplierDebitNote']);
+  const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const { run, busy } = useBankAction();
+  const docs = useMemo(
+    () => (open.data ?? []).filter((d) => d.grandTotal.currency === line?.amount.currency && (d.outstanding?.minor ?? 0) > 0).sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number)),
+    [open.data, line?.amount.currency],
+  );
   if (!line) return null;
+  const amount = Math.abs(line.amount.minor);
+  let left = amount;
+  const allocations = docs.map((d) => {
+    const take = unticked.has(d.id) ? 0 : Math.min(left, d.outstanding!.minor);
+    left -= take;
+    return { documentId: d.id, amountMinor: take };
+  });
+  const cur = line.amount.currency;
   const allowed = (parties.data ?? []).filter((p) => p.kind && (into ? sellsTo(p.kind) : buysFrom(p.kind)));
   const save = async () => {
     if (!partyId) return;
-    const ok = await run('payment', () => createPaymentFromBankLine(line, { partyId, method, notes }), tr(into ? 'banking:record.paymentInSaved' : 'banking:record.paymentOutSaved'));
+    const ok = await run('payment', () => createPaymentFromBankLine(line, { partyId, method, notes, allocations }), tr(into ? 'banking:record.paymentInSaved' : 'banking:record.paymentOutSaved'));
     if (ok) onClose();
   };
   return (
@@ -115,6 +132,36 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
             onPress={() => setPartyOpen(true)}
             icon="account-outline"
           />
+          {partyId && docs.length ? (
+            <View style={{ gap: t.spacing.sm }}>
+              <Text variant="small" weight="600">
+                {tr(into ? 'banking:record.settlesInvoices' : 'banking:record.settlesBills')}
+              </Text>
+              {docs.map((d, i) => (
+                <SwitchField
+                  key={d.id}
+                  label={`${d.number} · ${formatDate(d.date)}`}
+                  description={
+                    allocations[i].amountMinor
+                      ? tr('banking:record.allocates', { amount: formatMoney(money(allocations[i].amountMinor, cur)), due: formatMoney(d.outstanding!) })
+                      : tr('banking:record.due', { due: formatMoney(d.outstanding!) })
+                  }
+                  value={!unticked.has(d.id)}
+                  onValueChange={(on) =>
+                    setUnticked((prev) => {
+                      const next = new Set(prev);
+                      if (on) next.delete(d.id);
+                      else next.add(d.id);
+                      return next;
+                    })
+                  }
+                />
+              ))}
+              <Text variant="caption" tone={left ? 'warn' : 'muted'}>
+                {left ? tr(into ? 'banking:record.advanceIn' : 'banking:record.advanceOut', { amount: formatMoney(money(left, cur)) }) : tr('banking:record.allAllocated')}
+              </Text>
+            </View>
+          ) : null}
           <PickerField label={tr('banking:record.method')} value={paymentMethodLabel(tr, method)} onPress={() => setMethodOpen(true)} icon="credit-card-outline" />
           <TextField label={tr('banking:record.notes')} value={notes} onChangeText={setNotes} placeholder={tr('banking:record.optional')} multiline />
           <Text variant="caption" tone="muted">
@@ -134,6 +181,7 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
         onSelect={(v) => {
           setPartyId(v);
           setPartyName(allowed.find((p) => p.id === v)?.name);
+          setUnticked(new Set());
           setPartyOpen(false);
         }}
       />
@@ -233,6 +281,73 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
           setSupplierId(v);
           setSupplierName(allowed.find((p) => p.id === v)?.name);
           setSupplierOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * Record to an account: interest the bank paid, a loan in or out, capital brought in, drawings. A
+ * receipt voucher for money in, a journal for money out, against any account that isn't cash or bank
+ * (a transfer between those is a contra, matched with Find). Parties and stock aren't offered: a
+ * party's money is a payment, and stock moves with documents.
+ */
+export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['banking', 'common']);
+  const { book } = useServerBook();
+  const nameOf = useAccountName();
+  const groupName = useGroupName();
+  const [account, setAccount] = useState<string>();
+  const [narration, setNarration] = useState(line?.description ?? '');
+  const [picking, setPicking] = useState(false);
+  const { run, busy } = useBankAction();
+  const accounts = useMemo(
+    () => chartOfAccounts(book).filter((a) => !['cashInHand', 'bankAccounts', 'stockInHand', 'sundryDebtors', 'sundryCreditors'].includes(a.group) && a.kind !== 'party'),
+    [book],
+  );
+  if (!line) return null;
+  const into = line.amount.minor > 0;
+  const chosen = accounts.find((a) => a.key === account);
+  const save = async () => {
+    if (!account) return;
+    const ok = await run('voucher', () => createVoucherFromBankLine(line, { account, narration }), tr('banking:record.voucherSaved'));
+    if (ok) onClose();
+  };
+  return (
+    <>
+      <Sheet
+        visible={!picking}
+        onClose={onClose}
+        title={tr(into ? 'banking:record.voucherInTitle' : 'banking:record.voucherOutTitle')}
+        footer={<Button title={tr('banking:record.saveVoucher')} onPress={() => void save()} loading={busy === 'voucher'} disabled={!account || !!busy} fullWidth />}
+      >
+        <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
+          <LineSummary line={line} />
+          <PickerField
+            label={tr(into ? 'banking:record.accountIn' : 'banking:record.accountOut')}
+            required
+            value={chosen ? nameOf(chosen) : undefined}
+            placeholder={tr('banking:record.pickAccount')}
+            onPress={() => setPicking(true)}
+            icon="book-open-variant"
+          />
+          <TextField label={tr('banking:record.narration')} value={narration} onChangeText={setNarration} placeholder={tr('banking:record.optional')} maxLength={500} />
+          <Text variant="caption" tone="muted">
+            {tr(into ? 'banking:record.voucherInHint' : 'banking:record.voucherOutHint')}
+          </Text>
+        </View>
+      </Sheet>
+      <SelectSheet
+        visible={picking}
+        onClose={() => setPicking(false)}
+        title={tr('banking:record.pickAccount')}
+        options={accounts.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) }))}
+        value={account}
+        onSelect={(v) => {
+          setAccount(v);
+          setPicking(false);
         }}
       />
     </>

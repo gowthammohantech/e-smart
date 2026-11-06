@@ -80,6 +80,18 @@ export const USER_LIMITS: Record<PlanTier, number | null> = {
 /** Invoices one business can issue in a calendar month; null is unlimited. Matches `invoiceCap` in `plan:tier.*`. */
 export const INVOICE_LIMITS: Record<PlanTier, number | null> = { free: 20, basic: null, pro: null, business: null };
 
+/**
+ * AI actions one business can use in a calendar month (India time): Lixi messages plus bill scans
+ * read by a network OCR provider. Text the phone reads itself costs nothing and isn't counted. An
+ * owner can set a lower monthly budget (companies.ai_monthly_limit), never a higher one.
+ */
+export const AI_LIMITS: Record<PlanTier, number> = { free: 30, basic: 300, pro: 1500, business: 5000 };
+
+/** This month's AI allowance: the plan's, or the owner's lower budget. */
+export function aiLimit(tier: PlanTier, budget?: number | null): number {
+  return budget === null || budget === undefined ? AI_LIMITS[tier] : Math.min(budget, AI_LIMITS[tier]);
+}
+
 /** The next tier up with no invoice limit. */
 export function nextInvoicePlan(tier: PlanTier): PlanTier | null {
   const at = PLANS.findIndex((p) => p.key === tier);

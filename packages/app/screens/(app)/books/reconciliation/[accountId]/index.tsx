@@ -11,13 +11,14 @@ import { Text } from '@esmart/ui/components/Text';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { BankLinesView } from '../../../../../features/banking/BankLinesView';
+import { ImportsView } from '../../../../../features/banking/ImportsView';
 import { ReconciliationView } from '../../../../../features/banking/ReconciliationView';
 import { useQueryParams } from '../../../../../navigation/queryParams';
 import { useCanWrite } from '../../../../../remote/connectivity';
 import { useBankLineSummary } from '../../../../../remote/queries';
 import { usePaymentAccounts } from '../../../../../store/selectors';
 
-const TABS = ['unmatched', 'matched', 'excluded', 'reconciliation'] as const;
+const TABS = ['unmatched', 'matched', 'excluded', 'reconciliation', 'imports'] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -46,7 +47,8 @@ export default function BankAccountReconciliation() {
     );
   }
 
-  const count = (s: 'unmatched' | 'matched' | 'excluded') => (summary ? ` (${summary[s]})` : '');
+  const count = (s: Tab) => (s === 'reconciliation' || s === 'imports' ? '' : countOf(s));
+  const countOf = (s: 'unmatched' | 'matched' | 'excluded') => (summary ? ` (${summary[s]})` : '');
   const importButton = (
     <Button
       title={tr('banking:account.import')}
@@ -77,14 +79,14 @@ export default function BankAccountReconciliation() {
           {desktop ? null : importButton}
         </View>
         <Segmented<Tab>
-          options={TABS.map((k) => ({ value: k, label: tr(`banking:tab.${k}`) + (k === 'reconciliation' ? '' : count(k)) }))}
+          options={TABS.map((k) => ({ value: k, label: tr(`banking:tab.${k}`) + (k === 'reconciliation' || k === 'imports' ? '' : count(k)) }))}
           value={tab}
           onChange={(v) => setParams({ tab: v === 'unmatched' ? undefined : v })}
           size={desktop ? 'md' : 'sm'}
         />
       </View>
       <View style={{ flex: 1, paddingHorizontal: desktop ? t.spacing.lg : 0, paddingBottom: desktop ? t.spacing.lg : 0 }}>
-        {tab === 'reconciliation' ? <ReconciliationView accountId={account.id} accountName={account.name} /> : <BankLinesView key={tab} accountId={account.id} status={tab} />}
+        {tab === 'reconciliation' ? <ReconciliationView accountId={account.id} accountName={account.name} /> : tab === 'imports' ? <ImportsView accountId={account.id} /> : <BankLinesView key={tab} accountId={account.id} status={tab} />}
       </View>
     </View>
   );

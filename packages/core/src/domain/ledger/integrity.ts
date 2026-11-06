@@ -1,5 +1,6 @@
 import type { Posting } from './postings';
-import { stockValueOn, type Stock } from './reports';
+import { costedStockValue, perpetualStock } from '../stockLedger';
+import type { Stock } from './reports';
 
 /**
  * Does the ledger agree with the records it is worked out from? Postings are computed, never stored
@@ -74,11 +75,14 @@ export function integrityChecks(input: IntegrityInput): IntegrityCheck[] {
     .map((s) => ({ ref: `party:${s.id}`, label: s.name, expected: s.balance, actual: ledger.get(`party:${s.id}`) ?? 0 }))
     .filter((i) => i.expected !== i.actual);
 
-  // 4. Perpetual stock: the posted balance of Stock in hand against the stock ledger's value that day.
+  // 4. Perpetual stock: the posted balance of Stock in hand against the stock ledger's value that day,
+  // costed as perpetual stock costs it (what was there before it began, then the moving average).
   // Periodic stock is valued on the day and never posted, so there is nothing to drift.
-  const perpetual = !!input.stock.perpetualFrom && input.asOf >= input.stock.perpetualFrom;
-  const stockValue = perpetual ? stockValueOn(input.stock.items, input.stock.movements, input.asOf, input.stock.baseCurrency) : 0;
-  const stockPosted = perpetual ? upTo.filter((p) => p.account === 'sys:openingStock').reduce((a, p) => a + p.debit - p.credit, 0) : 0;
+  const { items, movements, baseCurrency, perpetualFrom, sourceOf, costing: method } = input.stock;
+  const perpetual = !!perpetualFrom && input.asOf >= perpetualFrom;
+  const costing = perpetual ? perpetualStock(items, movements, perpetualFrom, baseCurrency, sourceOf, method) : undefined;
+  const stockValue = costing ? Math.round(costing.broughtForward + costedStockValue(costing.costed, input.asOf)) : 0;
+  const stockPosted = perpetual ? Math.round(upTo.filter((p) => p.account === 'sys:openingStock').reduce((a, p) => a + p.debit - p.credit, 0)) : 0;
 
   // 5. No document has more set against it than it is for.
   const over: IntegrityItem[] = input.allocations

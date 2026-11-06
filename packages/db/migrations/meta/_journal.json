@@ -330,6 +330,34 @@
       "when": 1793855355353,
       "tag": "0046_opening_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793866002679,
+      "tag": "0047_templates_tcs_vehicles_ai_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793867047360,
+      "tag": "0048_fixed_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793872338052,
+      "tag": "0049_fifo_budgets",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793906572095,
+      "tag": "0050_ai_usage_cost",
+      "breakpoints": true
     }
   ]
 }

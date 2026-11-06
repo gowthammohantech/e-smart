@@ -102,6 +102,9 @@ export const MENU: MenuSection[] = [
       { key: 'expenses', labelKey: 'nav:title.expenses', icon: 'receipt-text-outline', route: '/expenses', group: 'spending', createRoute: '/expenses/new' },
       { key: 'books', labelKey: 'nav:more.entry.books', icon: 'book-open-page-variant-outline', route: '/books', group: 'accounts', createRoute: '/books/vouchers/new' },
       { key: 'bankReconciliation', labelKey: 'nav:title.bankReconciliation', icon: 'bank-check', route: '/books/reconciliation', group: 'accounts' },
+      { key: 'cashForecast', labelKey: 'nav:title.cashForecast', icon: 'chart-areaspline', route: '/books/cash-forecast', group: 'accounts' },
+      { key: 'fixedAssets', labelKey: 'nav:title.fixedAssets', icon: 'office-building-cog-outline', route: '/books/fixed-assets', group: 'accounts', createRoute: '/books/fixed-assets/new' },
+      { key: 'budgets', labelKey: 'nav:title.budgets', icon: 'target', route: '/books/budgets', group: 'accounts', createRoute: '/books/budgets/new' },
     ],
   },
   {
@@ -151,6 +154,7 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
       { key: 'expenseCategories', labelKey: 'nav:more.entry.expenseCategories', icon: 'shape-outline', route: '/settings/expense-categories' },
       { key: 'itemCategories', labelKey: 'nav:more.entry.itemCategories', icon: 'tag-outline', route: '/settings/item-categories' },
       { key: 'brands', labelKey: 'nav:more.entry.brands', icon: 'star-circle-outline', route: '/settings/brands' },
+      { key: 'vehicles', labelKey: 'nav:more.entry.vehicles', icon: 'truck-outline', route: '/settings/vehicles' },
     ],
   },
   {
@@ -180,6 +184,8 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
       { key: 'devices', labelKey: 'nav:more.entry.devicesAndSessions', icon: 'cellphone-link', route: '/settings/devices' },
       { key: 'security', labelKey: 'nav:more.entry.security', icon: 'shield-check-outline', route: '/settings/security' },
       { key: 'modules', labelKey: 'nav:more.entry.modules', icon: 'toggle-switch-outline', route: '/settings/modules' },
+      { key: 'invoiceDesign', labelKey: 'nav:more.entry.invoiceDesign', icon: 'file-document-outline', route: '/settings/invoice-design' },
+      { key: 'aiUsage', labelKey: 'nav:more.entry.aiUsage', icon: 'robot-outline', route: '/settings/ai-usage' },
       { key: 'customFields', labelKey: 'nav:more.entry.customFields', icon: 'text-box-check-outline', route: '/settings/custom-fields' },
       { key: 'approvalRules', labelKey: 'nav:more.entry.approvalRules', icon: 'clipboard-check-outline', route: '/settings/approvals' },
       { key: 'notificationSettings', labelKey: 'nav:more.entry.notificationSettings', icon: 'bell-outline', route: '/settings/notifications' },
@@ -223,12 +229,4 @@ export function pageForPath(pathname: string): MenuPage | undefined {
     if ((pathname === p.route || pathname.startsWith(`${p.route}/`)) && (!best || p.route.length > best.route.length)) best = p;
   }
   return best;
-}
-
-/** How many pages the desktop's Recent list keeps. */
-export const RECENT_LIMIT = 5;
-
-/** Puts a page at the front of a recent list, once, keeping the newest few. */
-export function pushRecent(list: readonly string[], key: string, limit = RECENT_LIMIT): string[] {
-  return [key, ...list.filter((k) => k !== key)].slice(0, limit);
 }

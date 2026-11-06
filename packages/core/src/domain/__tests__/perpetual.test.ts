@@ -4,6 +4,7 @@ import { allPostings, Posting } from '../ledger/postings';
 import { balanceSheet, costCentreProfit, profitAndLoss, trialBalance } from '../ledger/reports';
 import { Book } from '../ledger/accounts';
 import { perpetualStock } from '../stockLedger';
+import { integrityChecks } from '../ledger/integrity';
 import { BusinessDocument, Company, DocumentKind, DocumentLine, Item, Party, StockMovement } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
 
@@ -65,7 +66,7 @@ function books(documents: BusinessDocument[], movements: StockMovement[], perpet
     openingStockMinor,
     stock: perpetualStock([item], movements, perpetualFrom, 'INR', (id) => sourceOf.get(id)),
   });
-  return { postings, stock: { items: [item], movements, baseCurrency: 'INR', perpetualFrom } };
+  return { postings, stock: { items: [item], movements, baseCurrency: 'INR', perpetualFrom, sourceOf: (id: string) => sourceOf.get(id) } };
 }
 
 describe('perpetual stock', () => {
@@ -138,5 +139,25 @@ describe('perpetual stock', () => {
     const ms = [...movements, move('salesIssue', -3, '2026-09-01', '60', gone), move('adjustment', 3, '2026-09-01', '0', gone)];
     const { postings: ps } = books([bill, invoice, bill2, invoice2, ret, gone], ms, '2026-04-01');
     expect(net(ps, 'sys:cogs')).toBe(net(postings, 'sys:cogs'));
+  });
+  it('holds goods received before their bill as owed, and the bill moves them into purchases', () => {
+    // 10 come in on a goods receipt on 1 Sep at ₹70; the bill made from it on 20 Sep is for ₹72 each.
+    const grn = doc('goodsReceipt', '2026-09-01', [line(10, '70')], { status: 'received', partyId: 'sup' });
+    const late = doc('purchaseBill', '2026-09-20', [line(10, '72')], { sourceDocumentId: grn.id });
+    const unbilled = doc('goodsReceipt', '2026-09-25', [line(4, '70')], { status: 'received', partyId: 'sup' });
+    const ms = [...movements, move('purchaseReceipt', 10, '2026-09-01', '70', grn), move('purchaseReceipt', 4, '2026-09-25', '70', unbilled)];
+    const docs = [bill, invoice, bill2, invoice2, ret, grn, late, unbilled];
+    const { postings: ps, stock: st } = books(docs, ms, '2026-04-01');
+    // Before the bill: in stock, owed as goods received, nothing in purchases for it.
+    expect(net(ps, 'sys:goodsReceivedNotBilled', '2026-09-19')).toBe(-70000);
+    expect(net(ps, 'sys:purchases', '2026-09-19')).toBe(net(postings, 'sys:purchases'));
+    // After: the bill's ₹720 less the ₹700 already in stock stays in purchases; the unbilled receipt is still owed.
+    expect(net(ps, 'sys:goodsReceivedNotBilled')).toBe(-28000);
+    expect(net(ps, 'sys:purchases') - net(postings, 'sys:purchases')).toBe(2000);
+    const tb = trialBalance(ps, book, fy);
+    expect(tb.totals.closingDebit).toBe(tb.totals.closingCredit);
+    const checks = integrityChecks({ postings: ps, asOf: '2027-03-31', stock: st, partyStatements: [], allocations: [] });
+    expect(checks.find((c) => c.key === 'stock')).toMatchObject({ ok: true });
+    expect(checks.find((c) => c.key === 'sourcesBalance')).toMatchObject({ ok: true });
   });
 });

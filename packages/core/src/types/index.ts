@@ -50,13 +50,20 @@ export type Company = {
   lockedThroughDate?: string | null;
   /** Modules the owner switched off within the plan (domain/plan moduleEnabled). */
   disabledModules?: Module[];
+  /** How its documents look (render/invoiceTemplate). */
+  invoiceTemplate?: import('../render/invoiceTemplate').InvoiceTemplate;
+  /** The owner's monthly AI budget, below the plan's (domain/plan AI_LIMITS); null or absent is the plan's. */
+  aiMonthlyLimit?: number | null;
   /** Documents of a kind over the amount (base currency) wait for an owner or admin. */
-  approvalRules?: { kind: DocumentKind; overMinor: number }[];
+  /** `payment`: payments made over the amount wait as payment requests (RULES 6.14). */
+  approvalRules?: { kind: DocumentKind | 'payment'; overMinor: number }[];
   /**
    * Perpetual stock from this day (the start of a financial year): purchases of tracked goods post to
    * Stock in hand at cost and the goods sold to Cost of goods sold. Unset, the books are periodic.
    */
   perpetualStockFrom?: string | null;
+  /** How stock is costed as it goes out: moving weighted average (the default), or first in, first out. */
+  stockCosting?: 'average' | 'fifo';
   /** Let sales take tracked items below zero. Off unless the business turns it on. */
   allowNegativeStock?: boolean;
   /** RBI's bank rate, percent, for MSME late-payment interest (three times it). 5.5 unless changed. */
@@ -122,6 +129,9 @@ export type DeviceSession = {
   current: boolean;
   location?: string;
 };
+
+/** A company's vehicle, for tagging what is spent on it and what it carries. */
+export type Vehicle = { id: string; companyId: string; registration: string; name?: string; status: 'active' | 'inactive'; version?: number };
 
 /* ------------------------------------------------------------------ */
 /* Parties                                                             */
@@ -394,6 +404,8 @@ export type DocumentTotals = {
   /** Pure-agent reimbursements, added after tax and outside the taxable value. Absent on older documents. */
   reimbursements?: Money;
   charges: Money;
+  /** TCS collected from the buyer (s.206C), inside the grand total. Absent when none. */
+  tcs?: Money;
   roundOff: Money;
   grandTotal: Money;
   /** Grand total converted into the company base currency at the stored rate. */
@@ -449,6 +461,8 @@ export type BusinessDocument = {
   tdsSection?: string;
   /** TDS the business deducted on a supplier's bill: what's paid them is the total less this. */
   tds?: { section: string; rate: number; amount: Money };
+  /** TCS collected on a sale (s.206C): its section and rate; the amount is `totals.tcs`. */
+  tcs?: { section: string; rate: number };
   /** The self-invoice raised for a reverse-charge purchase from an unregistered supplier (Rule 46(f)). */
   selfInvoiceNumber?: string;
   /** Input tax credit reversed because the bill went unpaid for 180 days, and claimed again once paid. */
@@ -457,6 +471,8 @@ export type BusinessDocument = {
   /** The GSTR-2B period (MMYYYY) whose line this bill matched: its credit is claimed in that return. */
   itcClaimPeriod?: string;
   /** The project or department it belongs to. */
+  /** The vehicle it moved on. */
+  vehicleId?: string;
   costCentreId?: string;
   /** An invoice that repeats: the server issues a copy on each next date (setDocumentRecurrence). */
   recurrence?: RecurrenceFrequency;
@@ -875,6 +891,8 @@ export type Expense = {
   billable: boolean;
   /** Billable: the customer it is recovered from. */
   customerId?: string;
+  /** The vehicle it was spent on. */
+  vehicleId?: string;
   costCentreId?: string;
   recurrence: RecurrenceFrequency;
   nextRecurrenceDate?: string;
@@ -1090,6 +1108,17 @@ export type VoucherLine = {
   credit: Money;
   narration?: string;
   costCentreId?: string;
+};
+
+/** A journal kept to reuse; an amount left out is filled in on each use. */
+export type VoucherTemplate = {
+  id: string;
+  companyId: string;
+  name: string;
+  kind: VoucherKind;
+  narration?: string;
+  lines: { account: string; side: 'dr' | 'cr'; amount?: Money; narration?: string; costCentreId?: string }[];
+  version?: number;
 };
 
 export type Voucher = {

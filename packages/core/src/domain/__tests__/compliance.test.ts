@@ -709,6 +709,15 @@ describe('the invoice registration portal (FRD 16)', () => {
     expect(res.reason).toBe('Order cancelled');
   });
 
+  it('sends TCS collected as other charges, so the values add up to the total', () => {
+    const base = invoice();
+    const tcs = fromMajor('118', 'INR');
+    const doc = { ...base, totals: { ...base.totals, tcs, grandTotal: { ...base.totals.grandTotal, minor: base.totals.grandTotal.minor + tcs.minor } } };
+    const v = buildIrpPayload(ctx({ document: doc })).ValDtls;
+    expect(v.OthChrg).toBe(118);
+    expect(Math.round((v.AssVal + v.IgstVal + v.CgstVal + v.SgstVal + v.CesVal - v.Discount + v.OthChrg + v.RndOffAmt) * 100)).toBe(Math.round(v.TotInvVal * 100));
+  });
+
   it('sends a pure-agent reimbursement as other charges, so the values add up to the total', () => {
     const reimbursed = fromMajor('500', 'INR');
     const doc = invoice({

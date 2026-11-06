@@ -29,6 +29,8 @@ import {
   Integration,
   ItemCategory,
   Brand,
+  Vehicle,
+  VoucherTemplate,
   Item,
   NotificationKind,
   NumberingSeries,
@@ -80,6 +82,8 @@ export type AppData = {
   brands: Brand[];
   /** The company's own fields on contacts, items and documents. */
   customFields: CustomField[];
+  vehicles: Vehicle[];
+  voucherTemplates: VoucherTemplate[];
   paymentAccounts: PaymentAccount[];
   exchangeRates: ExchangeRate[];
   numberingSeries: NumberingSeries[];
@@ -124,6 +128,8 @@ export function emptyData(): AppData {
     itemCategories: [],
     brands: [],
     customFields: [],
+    vehicles: [],
+    voucherTemplates: [],
     paymentAccounts: [],
     exchangeRates: [],
     numberingSeries: [],
@@ -177,6 +183,10 @@ type Actions = {
   removeBrand: (id: string) => void;
   saveCustomField: (field: CustomField) => void;
   removeCustomField: (id: string) => void;
+  saveVehicle: (vehicle: Vehicle) => void;
+  removeVehicle: (id: string) => void;
+  saveVoucherTemplate: (template: VoucherTemplate) => void;
+  removeVoucherTemplate: (id: string) => void;
   savePaymentAccount: (acc: PaymentAccount) => void;
   removePaymentAccount: (id: string) => void;
   saveExchangeRate: (rate: ExchangeRate) => void;
@@ -775,6 +785,18 @@ export const useAppStore = create<AppState>()(
           set({ customFields: exists ? list.map((f) => (f.id === field.id ? field : f)) : [...list, field] });
         },
         removeCustomField: (id) => set({ customFields: (get().customFields ?? []).filter((f) => f.id !== id) }),
+        saveVehicle: (vehicle) => {
+          const list = get().vehicles ?? [];
+          const exists = list.some((v) => v.id === vehicle.id);
+          set({ vehicles: exists ? list.map((v) => (v.id === vehicle.id ? vehicle : v)) : [...list, vehicle] });
+        },
+        removeVehicle: (id) => set({ vehicles: (get().vehicles ?? []).filter((v) => v.id !== id) }),
+        saveVoucherTemplate: (template) => {
+          const list = get().voucherTemplates ?? [];
+          const exists = list.some((x) => x.id === template.id);
+          set({ voucherTemplates: exists ? list.map((x) => (x.id === template.id ? template : x)) : [...list, template] });
+        },
+        removeVoucherTemplate: (id) => set({ voucherTemplates: (get().voucherTemplates ?? []).filter((x) => x.id !== id) }),
         savePaymentAccount: (acc) => {
           const exists = get().paymentAccounts.some((a) => a.id === acc.id);
           const next = exists

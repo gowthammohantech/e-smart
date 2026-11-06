@@ -1,4 +1,5 @@
 import { BusinessDocument, Company, Branch, Expense, LedgerAccount, Party, Payment, PaymentAccount, StockMovement, TaxCategory, Voucher } from '../../types';
+import { assetEntries, type FixedAsset } from '../fixedAssets';
 import { openingDebit } from '../partyKinds';
 import { advanceTaxEvents } from '../advanceTax';
 import { CREDIT_KINDS } from '../documentStates';
@@ -20,7 +21,7 @@ export type Posting = {
   account: string;
   debit: number;
   credit: number;
-  source: { type: 'document' | 'payment' | 'expense' | 'voucher' | 'opening' | 'stock'; id: string; number: string; kind?: string };
+  source: { type: 'document' | 'payment' | 'expense' | 'voucher' | 'opening' | 'stock' | 'asset'; id: string; number: string; kind?: string };
   branchId?: string;
   partyId?: string;
   costCentreId?: string;
@@ -115,6 +116,8 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
       ['sys:chargesRecovered', -b(t.charges.minor)],
       ['sys:roundOff', -b(t.roundOff.minor)],
     );
+    // TCS collected with the price is the government's, not income: owed under its section (RULES 6.13).
+    if (t.tcs?.minor) entries.push([doc.tcs?.section ? `sys:tcsPayable:${doc.tcs.section}` : 'sys:tcsPayable', -b(t.tcs.minor)]);
   } else {
     // Input credit by bucket, as a bill (itcOfDocument signs credit notes negative; undo that here).
     const itc: ItcBuckets = itcOfDocument(doc, baseCurrency);
@@ -290,6 +293,11 @@ const STOCK_CONTRA: Partial<Record<StockMovement['type'], string>> = {
  * day before, a balance sheet on that day would count it twice: posted and valued.)
  *
  * A movement from a document posts under that document, with its party, branch and cost centre.
+ *
+ * Goods that come in on a goods receipt, before their bill, are owed to the supplier but not yet
+ * bought: they go to Goods received, not billed. The bill made from the receipt (or from the order
+ * the receipt was made from) moves that amount into Purchases on its own date, so Purchases never
+ * runs below what was billed.
  */
 export function postStock(stock: PerpetualStock, ctx: { openingStockMinor: number; documents: Map<string, BusinessDocument> }): Posting[] {
   const out: Posting[] = [];
@@ -297,16 +305,65 @@ export function postStock(stock: PerpetualStock, ctx: { openingStockMinor: numbe
   if (Math.round(carry)) {
     out.push(...toPostings([['sys:openingStock', carry], ['sys:retainedEarnings', -carry]], { type: 'stock', id: 'perpetual', number: 'Stock brought onto the books' }, stock.from, {}));
   }
+  const received = new Map<string, number>();
   for (const m of stock.costed) {
-    const contra = STOCK_CONTRA[m.type];
-    if (!contra || !Math.round(m.cost)) continue;
     const doc = m.referenceId ? ctx.documents.get(m.referenceId) : undefined;
+    const unbilled = m.type === 'purchaseReceipt' && doc?.kind === 'goodsReceipt';
+    const contra = unbilled ? GRNI : STOCK_CONTRA[m.type];
+    if (!contra || !Math.round(m.cost)) continue;
+    if (unbilled) received.set(doc.id, (received.get(doc.id) ?? 0) + m.cost);
     const source: Posting['source'] = doc
       ? { type: 'document', id: doc.id, number: doc.number, kind: doc.kind }
       : { type: 'stock', id: m.referenceId ?? m.id, number: m.referenceNumber ?? m.notes ?? '', kind: m.type };
     out.push(...toPostings([['sys:openingStock', m.cost], [contra, -m.cost]], source, m.date, { branchId: m.branchId, partyId: doc?.partyId, costCentreId: doc?.costCentreId }));
   }
+  out.push(...billReceipts(received, ctx.documents));
   return out;
+}
+
+const GRNI = 'sys:goodsReceivedNotBilled';
+
+/**
+ * Each bill takes over the goods receipts it was made from: the receipt itself, or those raised from
+ * the same purchase order. The earliest bill takes a receipt whole; a receipt is taken over once.
+ */
+function billReceipts(received: Map<string, number>, documents: Map<string, BusinessDocument>): Posting[] {
+  if (!received.size) return [];
+  const receiptsOf = new Map<string, string[]>();
+  for (const id of received.keys()) {
+    const grn = documents.get(id);
+    if (grn?.sourceDocumentId) receiptsOf.set(grn.sourceDocumentId, [...(receiptsOf.get(grn.sourceDocumentId) ?? []), id]);
+  }
+  const bills = [...documents.values()].filter((d) => d.kind === 'purchaseBill').sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const taken = new Set<string>();
+  const out: Posting[] = [];
+  for (const bill of bills) {
+    const ids: string[] = [];
+    // Up the bill's chain: a receipt it was made from, or the order whose receipts it bills.
+    let at = bill.sourceDocumentId;
+    for (let depth = 0; at && depth < 10; depth++) {
+      if (received.has(at)) ids.push(at);
+      ids.push(...(receiptsOf.get(at) ?? []));
+      at = documents.get(at)?.sourceDocumentId;
+    }
+    const value = [...new Set(ids)].filter((id) => !taken.has(id)).reduce((a, id) => (taken.add(id), a + received.get(id)!), 0);
+    if (!Math.round(value)) continue;
+    out.push(...toPostings([[GRNI, value], ['sys:purchases', -value]], { type: 'document', id: bill.id, number: bill.number, kind: bill.kind }, bill.date, { branchId: bill.branchId, partyId: bill.partyId, costCentreId: bill.costCentreId }));
+  }
+  return out;
+}
+
+/**
+ * The fixed asset register's postings through `until` (RULES 6.15): depreciation at each month's end,
+ * depreciation written off before the books began, and disposals. Each under its asset, with its
+ * branch and cost centre.
+ */
+export function postAssets(assets: { list: FixedAsset[]; until: string; fyStartMonth?: number }): Posting[] {
+  return assets.list.flatMap((a) =>
+    assetEntries(a, assets.until, assets.fyStartMonth).flatMap((e) =>
+      toPostings(e.entries, { type: 'asset', id: a.id, number: a.assetCode || a.name, kind: e.kind }, e.date, { branchId: a.branchId, costCentreId: a.costCentreId }),
+    ),
+  );
 }
 
 /** Everything on the books, in date order. */
@@ -325,6 +382,8 @@ export function allPostings(book: {
   openingStockMinor: number;
   /** Perpetual stock from its day; left out, the books are periodic. */
   stock?: PerpetualStock;
+  /** The fixed asset register, posted through `until`. */
+  assets?: { list: FixedAsset[]; until: string; fyStartMonth?: number };
 }): Posting[] {
   const dates = new Map(book.documents.map((d) => [d.id, d.date]));
   const documentDate = (id: string) => dates.get(id);
@@ -334,6 +393,7 @@ export function allPostings(book: {
     ...book.payments.flatMap((p) => postPayment(p, { homeState: homeStateCode(book.company, book.branches.find((b) => b.id === p.branchId)), documentDate })),
     ...book.expenses.flatMap((e) => postExpense(e, book)),
     ...book.vouchers.flatMap(postVoucher),
+    ...(book.assets ? postAssets(book.assets) : []),
     ...(book.stock ? postStock(book.stock, { openingStockMinor: book.openingStockMinor, documents: new Map(book.documents.filter((d) => !OFF_BOOKS.includes(d.status)).map((d) => [d.id, d])) }) : []),
   ].sort((a, b) => a.date.localeCompare(b.date));
 }

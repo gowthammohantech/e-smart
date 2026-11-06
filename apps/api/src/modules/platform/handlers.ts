@@ -218,12 +218,26 @@ export const platformHandlers = defineHandlers({
     if (!company) throw notFound('Company');
     const SE = schema.subscriptionEvents;
     const D = schema.documents;
-    const [[account], [subscription], history, documents, [members]] = await Promise.all([
+    const AI = schema.aiUsage;
+    const [[account], [subscription], history, documents, [members], aiCost] = await Promise.all([
       ctx.db.select().from(A).where(eq(A.id, company.accountId)),
       ctx.db.select().from(schema.subscriptions).where(eq(schema.subscriptions.companyId, company.id)),
       ctx.db.select().from(SE).where(eq(SE.companyId, company.id)).orderBy(desc(SE.createdAt), desc(SE.id)).limit(50),
       ctx.db.select({ kind: D.kind, count: sql<number>`count(*)::int` }).from(D).where(eq(D.companyId, company.id)).groupBy(D.kind).orderBy(asc(D.kind)),
       ctx.db.select({ n: count() }).from(schema.userCompanies).where(eq(schema.userCompanies.companyId, company.id)),
+      ctx.db
+        .select({
+          month: AI.month,
+          actions: sql<string>`sum(${AI.count})`,
+          inputTokens: sql<string>`sum(${AI.inputTokens})`,
+          outputTokens: sql<string>`sum(${AI.outputTokens})`,
+          costMicroUsd: sql<string>`sum(${AI.costMicroUsd})`,
+        })
+        .from(AI)
+        .where(eq(AI.companyId, company.id))
+        .groupBy(AI.month)
+        .orderBy(desc(AI.month))
+        .limit(6),
     ]);
     await recordPlatformAction(ctx.db, ctx.user, ctx.req, { action: 'company.viewed', target: { type: 'company', id: company.id, label: company.name }, reason: 'Viewed' });
     return {
@@ -234,6 +248,14 @@ export const platformHandlers = defineHandlers({
       planHistory: history.map((h) => ({ id: h.id, fromPlan: h.fromPlan, toPlan: h.toPlan, event: h.event, createdAt: h.createdAt.toISOString() })),
       documentCounts: documents,
       userCount: members.n,
+      // Postgres hands sums of bigints back as strings.
+      aiCost: aiCost.map((r) => ({
+        month: r.month,
+        actions: Number(r.actions),
+        inputTokens: Number(r.inputTokens),
+        outputTokens: Number(r.outputTokens),
+        costUsd: Number(r.costMicroUsd) / 1_000_000,
+      })),
     };
   },
 

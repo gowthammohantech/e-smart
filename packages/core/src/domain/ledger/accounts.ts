@@ -1,4 +1,5 @@
 import { ExpenseCategory, LedgerAccount, LedgerGroup, Party, PaymentAccount } from '../../types';
+import { tcsSection } from '../../data/tcsSections';
 import { tdsSection } from '../../data/tdsSections';
 
 /**
@@ -67,12 +68,19 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:sales': { name: 'Sales', group: 'salesAccounts' },
   'sys:purchases': { name: 'Purchases', group: 'purchaseAccounts' },
   'sys:fixedAssets': { name: 'Plant and machinery', group: 'fixedAssets' },
+  // The fixed asset register (RULES 6.15): what has been written off, set against cost under fixed assets.
+  'sys:accumulatedDepreciation': { name: 'Accumulated depreciation', group: 'fixedAssets' },
+  'sys:depreciation': { name: 'Depreciation', group: 'indirectExpenses' },
+  // An asset sold or scrapped: what it stood at, against what it fetched.
+  'sys:assetDisposal': { name: 'Profit or loss on assets sold', group: 'indirectIncomes' },
   // Stock in hand. Periodic books carry only what was counted when the books began here, and value
   // closing stock from the stock ledger; perpetual books post every receipt and issue to it at cost.
   'sys:openingStock': { name: 'Opening stock', group: 'stockInHand' },
   // Perpetual stock: what the goods sold cost, and stock counted short or over.
   'sys:cogs': { name: 'Cost of goods sold', group: 'directExpenses' },
   'sys:stockAdjustment': { name: 'Stock adjustments', group: 'directExpenses' },
+  // Perpetual stock: goods in on a goods receipt, owed to the supplier until their bill comes.
+  'sys:goodsReceivedNotBilled': { name: 'Goods received, not billed', group: 'currentLiabilities' },
   'sys:freightInward': { name: 'Freight and charges on purchases', group: 'directExpenses' },
   'sys:chargesRecovered': { name: 'Freight and charges recovered', group: 'indirectIncomes' },
   // Kept for books posted before reimbursements went through the asset account below.
@@ -87,6 +95,7 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:otherIncome': { name: 'Balances written back', group: 'indirectIncomes' },
   'sys:tdsReceivable': { name: 'TDS receivable', group: 'loansAdvances' },
   'sys:tdsPayable': { name: 'TDS payable', group: 'dutiesTaxes' },
+  'sys:tcsPayable': { name: 'TCS payable', group: 'dutiesTaxes' },
   // GST paid on advances for services, taken back as invoices adjust them.
   'sys:gstOnAdvances': { name: 'GST paid on advances', group: 'dutiesTaxes' },
   // IGST and cess on imports, assessed on the bill of entry: owed to customs until paid (a payment voucher clears it).
@@ -114,6 +123,7 @@ export function accountFor(key: string, book: Book): Account | undefined {
   const [prefix, id, extra] = key.split(':');
   if (prefix === 'sys') {
     if (id === 'tdsPayable' && extra) return { key, name: `TDS payable ${tdsSection(extra)?.label ?? extra}`, group: 'dutiesTaxes', kind: 'system' };
+    if (id === 'tcsPayable' && extra) return { key, name: `TCS payable ${tcsSection(extra)?.label ?? extra}`, group: 'dutiesTaxes', kind: 'system' };
     const s = SYSTEM_ACCOUNTS[key];
     return s ? { key, ...s, kind: 'system' } : undefined;
   }

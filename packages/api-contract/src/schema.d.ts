@@ -1183,6 +1183,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/ai-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * This month's AI actions (Lixi messages and provider bill scans) against the allowance
+         * @description The allowance is the plan's, or the owner's lower monthly budget (Company.aiMonthlyLimit). Past it, Lixi and OCR answer `429 AI_LIMIT_REACHED` until the 1st (India time).
+         */
+        get: operations["getAiUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVehicles"];
+        put?: never;
+        /** @description `422 VEHICLE_EXISTS` when the registration is already on the list. */
+        post: operations["createVehicle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** What each vehicle cost over a period (its expenses, base currency) and how many documents it carried */
+        get: operations["summarizeVehicles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveVehicle"];
+        post?: never;
+        /** @description `409 VEHICLE_IN_USE` when an expense or document names it; mark it inactive instead. */
+        delete: operations["removeVehicle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/custom-fields": {
         parameters: {
             query?: never;
@@ -1945,6 +2025,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/payment-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** Payments waiting for approval (or decided), oldest request first; others see only their own */
+        get: operations["listPaymentRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the payment as the approver (checked as any payment is); 409 NOT_AWAITING_APPROVAL once decided */
+        post: operations["approvePaymentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-requests/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turns a payment request down, with why; nothing is recorded */
+        post: operations["rejectPaymentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payments/{id}": {
         parameters: {
             query?: never;
@@ -1979,6 +2118,29 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-statements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Undo an import
+         * @description Takes the statement and all its lines away. Whatever its lines were matched to stays in the books, free to match again; payments, expenses and vouchers recorded from its lines are not removed.
+         */
+        delete: operations["removeBankStatement"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2019,7 +2181,11 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * The statements imported into a bank account, newest first
+         * @description Each with how many of its lines are still to explain, matched and excluded.
+         */
+        get: operations["listBankStatements"];
         put?: never;
         /**
          * Import a bank statement's lines into a bank account
@@ -2091,6 +2257,31 @@ export interface paths {
         };
         /** Bank reconciliation statement as of a day */
         get: operations["getBankReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What in the books a line could be matched to
+         * @description The payments, expenses and posted vouchers through the line's account, dated within 30 days of it either
+         *     way, that no other line is matched to, whatever their amount: those of the line's amount first, then by
+         *     how near their date. `q` keeps those whose number, reference or party's name contains it. At most 100.
+         */
+        get: operations["listBankLineCandidates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2207,6 +2398,33 @@ export interface paths {
          * @description Only money out (422 `NOT_MONEY_OUT`). The expense takes the line's date, amount, account and reference; needs the expenses module.
          */
         post: operations["createExpenseFromBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/voucher": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a line against a ledger account, as a voucher, and match it
+         * @description For what is neither a party's payment nor an expense: interest the bank paid, a loan received or
+         *     repaid, capital brought in, drawings. Money in is a receipt voucher (the bank account debited, `account`
+         *     credited); money out a journal (`account` debited, the bank account credited). The voucher takes the
+         *     line's date, amount and reference, and is checked as any voucher is (422 as for `createVoucher`).
+         *     `account` can't be a cash or bank account: a transfer between them is a contra, matched with `matchBankLine`.
+         */
+        post: operations["createVoucherFromBankLine"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2349,6 +2567,148 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** The business's budgets, the latest year first */
+        get: operations["listBudgets"];
+        put?: never;
+        /**
+         * @description A plan for each income and expense account, month by month over a financial year (RULES 6.16), for the whole
+         *     business or one branch or cost centre. `yearFrom` is the year's first day; each line's `months` are its twelve
+         *     months from then, in base-currency paise, income as earned and expenses as spent.
+         */
+        post: operations["createBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/budgets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getBudget"];
+        put: operations["saveBudget"];
+        post?: never;
+        delete: operations["removeBudget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/budgets/{id}/variance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The budget against the books
+         * @description For each account planned: what was planned over `from`–`to` (within the budget's year; a month covered in part
+         *     is planned in proportion to its days), what the books show, and the difference, month by month. The books
+         *     cover every branch, so a user limited to some is refused (403 BOOKS_ALL_BRANCHES).
+         */
+        get: operations["getBudgetVariance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fixed asset register
+         * @description Every asset, with what has been written off and what it stands at as of `asOf` (default today). `status` keeps those still held (`active`) or gone (`disposed`).
+         */
+        get: operations["listFixedAssets"];
+        put?: never;
+        /**
+         * @description Adds an asset to the register (RULES 6.15). Its cost is in the books already, on the bill or voucher it was
+         *     bought on, in `account` (`sys:fixedAssets` or a fixed-asset ledger account); the register posts its
+         *     depreciation by the day, at each month's end, and its disposal. Straight line (`slm`) needs `lifeMonths`,
+         *     written down value (`wdv`) a `rate`. Bought before the books began, give the depreciation already written
+         *     off (`openingDepreciation`) and the day it stood at (`openingAsOf`). Nothing it posts may fall in a closed
+         *     period (409 PERIOD_LOCKED).
+         */
+        post: operations["createFixedAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fixed asset schedule for a period
+         * @description Asset by asset, as the notes to the accounts show it: cost and depreciation at the start of `from`, what was bought, written off and disposed of, and at the end of `to`. Base-currency paise.
+         */
+        get: operations["getFixedAssetSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** @description The asset, with its depreciation year by year through the year it is fully written off (or disposed of). */
+        get: operations["getFixedAsset"];
+        /** @description Saves the asset, a disposal among it (`disposedOn`). Refused when what it posts would change in a closed period (409 PERIOD_LOCKED). */
+        put: operations["saveFixedAsset"];
+        post?: never;
+        /** @description Takes the asset out of the register, and its depreciation out of the books; refused when any of it falls in a closed period (409 PERIOD_LOCKED). Its cost stays where its bill or voucher put it. */
+        delete: operations["removeFixedAsset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/books/{view}": {
         parameters: {
             query?: never;
@@ -2394,6 +2754,65 @@ export interface paths {
         /** @description The server assigns `number` from the kind's series. A voucher sent with status `draft` is kept out of the books and takes no number (its `number` is its id) until a save sets status `posted`; a draft may be unbalanced or have one line, and is not refused in a closed period. A posted voucher must follow every rule. Debits must equal credits; a contra moves money only between cash and bank accounts; a GST journal touches a GST ledger; a TDS challan clears TDS payable. Refused in a closed period (409 PERIOD_LOCKED). */
         post: operations["createVoucher"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vouchers/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Journals from a spreadsheet, each checked as one entered by hand
+         * @description Up to 500 journals. With asDrafts each is kept as a draft (unbalanced ones too); otherwise each is posted and must follow every voucher rule. dryRun checks and saves nothing; the good ones are saved in one transaction.
+         */
+        post: operations["importVouchers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/voucher-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVoucherTemplates"];
+        put?: never;
+        post: operations["createVoucherTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/voucher-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveVoucherTemplate"];
+        post?: never;
+        delete: operations["removeVoucherTemplate"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2611,6 +3030,28 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getOcrExtraction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/cash-forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Cash and bank week by week, from what is owed each way and what recurs
+         * @description Today's cash and bank balances, plus open invoices and debit notes by due date, less open bills by due date, plus copies of recurring invoices and recurring expenses on their dates. Overdue amounts count in the first week, marked. Base-currency minor units, as core's CashForecast.
+         */
+        get: operations["getCashForecast"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4122,6 +4563,18 @@ export interface components {
              */
             readonly signatureUri?: string;
             bankDetails?: components["schemas"]["BankDetails"];
+            /** @description How its documents look. Statutory content always prints; every option defaults to the standard page. */
+            invoiceTemplate?: {
+                accentColor?: string;
+                showDiscountColumn?: boolean;
+                showTaxColumn?: boolean;
+                showHsn?: boolean;
+                showLogo?: boolean;
+                footerText?: string;
+                compact?: boolean;
+            };
+            /** @description The owner's monthly AI budget (Lixi messages plus provider bill scans), below the plan's allowance. Null is the plan's. */
+            aiMonthlyLimit?: number | null;
             /** @description Stable slug, e.g. `wholesale` */
             businessType: string;
             country: string;
@@ -4135,9 +4588,10 @@ export interface components {
             fiscalYearStartMonth: number;
             /** @description Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it. */
             disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
-            /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued. Only an owner can change them. */
+            /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued; with kind `payment`, payments made over it wait as payment requests. Only an owner can change them. */
             approvalRules?: {
-                kind: components["schemas"]["DocumentKind"];
+                /** @description A document kind, or `payment` for payments made to suppliers (RULES 6.14). */
+                kind: components["schemas"]["DocumentKind"] | "payment";
                 overMinor: number;
             }[];
             /**
@@ -4150,6 +4604,11 @@ export interface components {
              * @description Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.
              */
             perpetualStockFrom?: string | null;
+            /**
+             * @description How stock is costed as it goes out (RULES 6.2): `average`, a moving weighted average (the default), or `fifo`, first in, first out. It values every period, so it changes only while no period is closed (`409 PERIOD_LOCKED`), and only by an owner.
+             * @enum {string}
+             */
+            stockCosting?: "average" | "fifo";
             /** @description Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it. */
             tan?: string;
             /**
@@ -4251,6 +4710,32 @@ export interface components {
             name: string;
             icon?: string;
             color?: string;
+        };
+        VoucherTemplate: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @enum {string} */
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            narration?: string;
+            lines: {
+                account: string;
+                /** @enum {string} */
+                side: "dr" | "cr";
+                /** @description Left out to fill in on each use */
+                amount?: components["schemas"]["Money"];
+                narration?: string;
+                costCentreId?: string;
+            }[];
+        };
+        Vehicle: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            /** @description As on the RC; spaces and dashes are dropped: TN09AB1234 */
+            registration: string;
+            name?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
         };
         CustomField: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -4526,6 +5011,139 @@ export interface components {
             openingBalanceDate?: string;
             /** @enum {string} */
             status?: "active" | "inactive";
+        };
+        Budget: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            name: string;
+            /**
+             * Format: date
+             * @description The first day of the financial year it plans
+             */
+            yearFrom: string;
+            branchId?: string;
+            costCentreId?: string;
+            notes?: string;
+            lines: {
+                /** @description An income or expense account, by key */
+                account: string;
+                /** @description Base-currency paise for each month from the year's first */
+                months: number[];
+            }[];
+        };
+        BudgetVariance: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            income: components["schemas"]["BudgetActual"];
+            expense: components["schemas"]["BudgetActual"];
+            profit: components["schemas"]["BudgetActual"];
+            rows: {
+                account: components["schemas"]["LedgerAccountRef"];
+                /** @enum {string} */
+                nature: "income" | "expense";
+                budget: number;
+                actual: number;
+                variance: number;
+                favourable: boolean;
+                months: {
+                    /** Format: date */
+                    month: string;
+                    budget: number;
+                    actual: number;
+                }[];
+            }[];
+        };
+        BudgetActual: {
+            budget: number;
+            actual: number;
+        };
+        LedgerAccountRef: {
+            key: string;
+            name: string;
+            group: string;
+        };
+        FixedAsset: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            branchId?: string;
+            name: string;
+            /** @description What kind of asset: Computers, Vehicles, Furniture… */
+            category?: string;
+            /** @description The fixed-asset account its cost sits in, by key: `sys:fixedAssets` or `acc:<id>` */
+            account: string;
+            assetCode?: string;
+            /** Format: date */
+            acquiredOn: string;
+            /**
+             * Format: date
+             * @description Depreciation runs from this day
+             */
+            inUseFrom: string;
+            cost: components["schemas"]["Money"];
+            /** @description What it is expected to fetch at the end; never written off */
+            residualValue?: components["schemas"]["Money"];
+            /**
+             * @description Straight line over `lifeMonths`, or written down value at `rate` percent a year
+             * @enum {string}
+             */
+            method: "slm" | "wdv";
+            lifeMonths?: number;
+            rate?: number;
+            /** @description Written off before the books began here, by `openingAsOf` */
+            openingDepreciation?: components["schemas"]["Money"];
+            /** Format: date */
+            openingAsOf?: string;
+            /** @description The purchase bill it was bought on, when bought here */
+            sourceDocumentId?: string;
+            costCentreId?: string;
+            /**
+             * Format: date
+             * @description Sold, scrapped or lost: depreciation stops and it leaves the books that day
+             */
+            disposedOn?: string;
+            disposalNote?: string;
+            notes?: string;
+            /** @enum {string} */
+            readonly status?: "active" | "disposed";
+            /** @description Written off by `asOf` (today, unless the list was asked for another day) */
+            readonly accumulatedDepreciation?: components["schemas"]["Money"];
+            readonly bookValue?: components["schemas"]["Money"];
+            /** @description Only from getFixedAsset: depreciation by financial year */
+            readonly years?: {
+                label: string;
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+                opening: components["schemas"]["Money"];
+                depreciation: components["schemas"]["Money"];
+                closing: components["schemas"]["Money"];
+            }[];
+        };
+        FixedAssetSchedule: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            rows: components["schemas"]["FixedAssetScheduleRow"][];
+            totals: components["schemas"]["FixedAssetScheduleRow"];
+        };
+        FixedAssetScheduleRow: {
+            assetId?: string;
+            name?: string;
+            category?: string;
+            account?: string;
+            openingCost: number;
+            additions: number;
+            disposals: number;
+            closingCost: number;
+            openingDepreciation: number;
+            depreciation: number;
+            depreciationOnDisposals: number;
+            closingDepreciation: number;
+            openingValue: number;
+            closingValue: number;
         };
         CostCentre: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -4895,6 +5513,8 @@ export interface components {
             totalTax?: components["schemas"]["Money"];
             /** @description Tax the buyer owes under reverse charge; not in the grand total */
             reverseChargeTax?: components["schemas"]["Money"];
+            /** @description TCS collected from the buyer (s.206C), inside the grand total */
+            tcs?: components["schemas"]["Money"];
             /** @description Pure-agent reimbursements, added after tax */
             reimbursements?: components["schemas"]["Money"];
             charges?: components["schemas"]["Money"];
@@ -4956,6 +5576,13 @@ export interface components {
             noteReason?: "discount" | "priceChange" | "taxCorrection" | "deficiency" | "other";
             /** @description The project or department it belongs to */
             costCentreId?: string;
+            /** @description The vehicle it moved on */
+            vehicleId?: string;
+            /**
+             * @description On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.
+             * @enum {string}
+             */
+            tcsSection?: "none" | "scrap" | "liquor" | "tenduLeaves" | "timberLease" | "timberOther" | "forestProduce" | "minerals" | "motorVehicle" | "luxuryGoods";
             /**
              * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN.
              * @enum {string}
@@ -5000,6 +5627,11 @@ export interface components {
              * @enum {string}
              */
             readonly recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
+            /** @description TCS collected on the sale; the amount is totals.tcs */
+            readonly tcs?: {
+                section?: string;
+                rate?: number;
+            };
             /**
              * Format: date
              * @description The date of the next copy; unset once the series has ended
@@ -5265,6 +5897,25 @@ export interface components {
             /** @description Settled without cash: written off as bad debt (owner, admin or accountant) */
             writeOff?: components["schemas"]["Money"];
         };
+        PaymentRequest: {
+            id: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            payment: components["schemas"]["Payment"];
+            partyName: string;
+            amount: components["schemas"]["Money"];
+            requestedBy: string;
+            requestedByName?: string;
+            /** Format: date-time */
+            requestedAt: string;
+            decidedBy?: string;
+            decidedByName?: string;
+            /** Format: date-time */
+            decidedAt?: string;
+            note?: string;
+            paymentId?: string;
+            version: number;
+        };
         Payment: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
@@ -5491,6 +6142,8 @@ export interface components {
             /** @description Billable: the customer it is recovered from, as a reimbursement line on their invoice */
             customerId?: string;
             costCentreId?: string;
+            /** @description The vehicle it was spent on */
+            vehicleId?: string;
             /** @enum {string} */
             recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
             /** Format: date */
@@ -5681,6 +6334,16 @@ export interface components {
                 count: number;
             }[];
             userCount: number;
+            /** @description What this company's AI use cost the platform, by month (India time), newest first, the last six months with any use. */
+            aiCost?: {
+                month: string;
+                /** @description Lixi messages and bill scans counted against the allowance */
+                actions: number;
+                inputTokens: number;
+                outputTokens: number;
+                /** @description As the provider reported it; 0 where it reports none (Anthropic, most non-OpenRouter servers) */
+                costUsd: number;
+            }[];
         };
         PlatformPlanOverride: {
             plan: components["schemas"]["PlanTier"];
@@ -8812,6 +9475,183 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    getAiUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2026-11 */
+                        month: string;
+                        limit: number;
+                        planLimit: number;
+                        budget?: number | null;
+                        total: number;
+                        used: {
+                            lixi: number;
+                            ocr: number;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    listVehicles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Vehicle"][];
+                    };
+                };
+            };
+        };
+    };
+    createVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vehicle"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vehicle"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    summarizeVehicles: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: {
+                            vehicleId?: string;
+                            registration?: string;
+                            name?: string;
+                            expenses?: components["schemas"]["Money"];
+                            expenseCount?: number;
+                            documentCount?: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    saveVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vehicle"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vehicle"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
     listCustomFields: {
         parameters: {
             query?: never;
@@ -10260,7 +11100,97 @@ export interface operations {
                     "application/json": components["schemas"]["Payment"];
                 };
             };
+            /** @description `PAYMENT_HELD`: a payment made over the company's payment approval rule, by someone who is not an owner or admin, is not recorded but kept as a payment request (`requestId`) for them to approve. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             422: components["responses"]["Unprocessable"];
+        };
+    };
+    listPaymentRequests: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "rejected";
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["PaymentRequest"][];
+                    };
+                };
+            };
+        };
+    };
+    approvePaymentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Approved; `payment` is the payment recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRequest"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    rejectPaymentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Rejected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRequest"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     getPayment: {
@@ -10360,6 +11290,28 @@ export interface operations {
             };
         };
     };
+    removeBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     parseBankStatement: {
         parameters: {
             query?: never;
@@ -10391,6 +11343,35 @@ export interface operations {
                 };
             };
             422: components["responses"]["Unprocessable"];
+        };
+    };
+    listBankStatements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: (components["schemas"]["BankStatement"] & {
+                            unmatched: number;
+                            matched: number;
+                            excluded: number;
+                        })[];
+                    };
+                };
+            };
         };
     };
     importBankStatement: {
@@ -10508,6 +11489,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BankReconciliation"];
+                };
+            };
+        };
+    };
+    listBankLineCandidates: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BankLineRecord"][];
+                    };
                 };
             };
         };
@@ -10703,6 +11711,44 @@ export interface operations {
                     "application/json": {
                         line: components["schemas"]["BankStatementLine"];
                         expense: components["schemas"]["Expense"];
+                    };
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    createVoucherFromBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The ledger account key, as in a voucher line (e.g. `acc:…`, `sys:capital`) */
+                    account: string;
+                    narration?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded and matched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        line: components["schemas"]["BankStatementLine"];
+                        voucher: components["schemas"]["Voucher"];
                     };
                 };
             };
@@ -11154,6 +12200,328 @@ export interface operations {
             };
         };
     };
+    listBudgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Budget"][];
+                    };
+                };
+            };
+        };
+    };
+    createBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Budget"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
+    saveBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Budget"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBudgetVariance: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetVariance"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listFixedAssets: {
+        parameters: {
+            query?: {
+                status?: "active" | "disposed";
+                asOf?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FixedAsset"][];
+                    };
+                };
+            };
+        };
+    };
+    createFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FixedAsset"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getFixedAssetSchedule: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                /** @description Only the assets of this branch */
+                branchId?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAssetSchedule"];
+                };
+            };
+        };
+    };
+    getFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+        };
+    };
+    saveFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FixedAsset"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
     getBooksView: {
         parameters: {
             query: {
@@ -11244,6 +12612,165 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Voucher"];
                 };
+            };
+        };
+    };
+    importVouchers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    asDrafts?: boolean;
+                    /** @default false */
+                    dryRun?: boolean;
+                    vouchers: {
+                        /** @enum {string} */
+                        kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                        /** Format: date */
+                        date: string;
+                        reference?: string;
+                        narration?: string;
+                        lines: components["schemas"]["VoucherLine"][];
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each journal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "invalid";
+                            id?: string;
+                            number?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    listVoucherTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["VoucherTemplate"][];
+                    };
+                };
+            };
+        };
+    };
+    createVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoucherTemplate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherTemplate"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoucherTemplate"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherTemplate"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    removeVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11717,6 +13244,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OcrExtraction"];
+                };
+            };
+        };
+    };
+    getCashForecast: {
+        parameters: {
+            query?: {
+                weeks?: number;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

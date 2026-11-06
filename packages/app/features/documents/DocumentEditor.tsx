@@ -24,6 +24,7 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
+import { TCS_SECTIONS, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
@@ -78,6 +79,7 @@ import { tdsForDocument } from '../../store/tds';
 import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
 import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import { VehicleField } from '../vehicles/VehicleField';
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -233,12 +235,21 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     [company, parties, isPurchase, branches, defaultBranchId],
   );
 
+  // TCS on an invoice (s.206C): the section's rate, higher for a buyer with no PAN, over the 206C(1F) threshold only.
+  const tcsRateOfDraft = useCallback(
+    (d: { tcsSection?: string; partyId?: string | null }, totalBaseMinor: number) => {
+      const buyer = parties.find((p) => p.id === d.partyId);
+      return tcsRateFor(d.tcsSection, !!(buyer?.pan || buyer?.taxId), totalBaseMinor);
+    },
+    [parties],
+  );
   const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, setPricesIncludeTax, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
     taxContext: draftTaxContext,
     initial: initialDraft ?? seed?.draft,
+    tcsRate: kind === 'invoice' ? tcsRateOfDraft : undefined,
   });
 
   // What the person has picked or typed, to tell an untouched form from one with changes to lose.
@@ -296,6 +307,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [posOpen, setPosOpen] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
   const [tdsOpen, setTdsOpen] = useState(false);
+  const [tcsOpen, setTcsOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<DocumentLine | null>(null);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
@@ -577,8 +589,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       reverseCharge: draft.reverseCharge || undefined,
       noteReason: isNote ? draft.noteReason : undefined,
       tdsSection: takesTds ? draft.tdsSection : undefined,
+      tcsSection: kind === 'invoice' && draft.tcsSection && draft.tcsSection !== 'none' ? draft.tcsSection : undefined,
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
+      vehicleId: draft.vehicleId,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -832,7 +846,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         />
       ) : null}
 
+      {kind === 'invoice' ? (
+        <PickerField
+          label={tr('sales:tcs.section')}
+          value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}
+          onPress={() => setTcsOpen(true)}
+          icon="cash-plus"
+          hint={totals.tcs ? tr('sales:tcs.willCollect', { amount: formatMoney(totals.tcs) }) : tr('sales:tcs.hint')}
+        />
+      ) : null}
+
       <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
+      <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} />
       <CustomFieldsSection entity="document" values={draft.customFields ?? {}} onChange={(customFields) => patch({ customFields })} />
 
       {isNote ? (
@@ -1369,6 +1394,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature, trailing: formatPercent(x.rateOther) }))]}
           value={draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none'}
           onSelect={(v) => patch({ tdsSection: v })}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={tcsOpen}
+          onClose={() => setTcsOpen(false)}
+          title={tr('sales:tcs.section')}
+          options={[{ value: 'none', label: tr('sales:tcs.none') }, ...TCS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature, trailing: formatPercent(x.rate) }))]}
+          value={draft.tcsSection ?? 'none'}
+          onSelect={(v) => patch({ tcsSection: v })}
           searchable={false}
         />
         <SelectSheet

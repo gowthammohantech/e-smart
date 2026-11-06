@@ -13,6 +13,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
 import { money } from '../../lib/wire';
+import { voucherColumns, voucherToWire } from '../books/handlers';
 import { assertPeriodOpen } from '../documents/lifecycle';
 import { prepare as prepareExpense } from '../expenses/handlers';
 import { expensesToWire } from '../expenses/wire';
@@ -21,6 +22,7 @@ import { paymentsToWire } from '../payments/wire';
 import {
   DAY_TOLERANCE,
   L,
+  accountKey,
   S,
   bankAccount,
   bookBalanceAsOf,
@@ -35,6 +37,9 @@ import {
   type MatchType,
 } from './engine';
 import { statementRows } from './parse';
+
+/** How far either side of a line's date Find looks. */
+const FIND_DAYS = 30;
 
 type AnyCtx = Pick<Ctx<'matchBankLine'>, 'company' | 'user' | 'db' | 'now' | 'req' | 'reply' | 'deps'>;
 
@@ -150,6 +155,33 @@ type ImportLine = Schema<'BankStatementImport'>['lines'][number];
 export const bankingHandlers = defineHandlers({
   async parseBankStatement(ctx) {
     return { rows: await statementRows(ctx.body.fileName, ctx.body.contentBase64) };
+  },
+
+  async listBankStatements(ctx) {
+    const account = await bankAccount(ctx.db, ctx.company, ctx.params.id);
+    const cur = account.currency.trim();
+    const rows = await ctx.db.select().from(S).where(and(eq(S.companyId, ctx.company.id), eq(S.accountId, account.id))).orderBy(desc(S.createdAt), desc(S.id));
+    const counts = rows.length
+      ? await ctx.db
+          .select({ statementId: L.statementId, status: L.status, n: sql<number>`count(*)::int` })
+          .from(L)
+          .where(and(eq(L.companyId, ctx.company.id), inArray(L.statementId, rows.map((r) => r.id))))
+          .groupBy(L.statementId, L.status)
+      : [];
+    const n = (id: string, status: string) => counts.find((c) => c.statementId === id && c.status === status)?.n ?? 0;
+    return { data: rows.map((r) => ({ ...statementToWire(r, cur), unmatched: n(r.id, 'unmatched'), matched: n(r.id, 'matched'), excluded: n(r.id, 'excluded') })) };
+  },
+
+  async removeBankStatement(ctx) {
+    const [row] = await ctx.db.select().from(S).where(and(eq(S.companyId, ctx.company.id), eq(S.id, ctx.params.id)));
+    if (!row) throw notFound('Bank statement');
+    await bankAccount(ctx.db, ctx.company, row.accountId);
+    await ctx.db.transaction(async (tx) => {
+      await tx.delete(L).where(and(eq(L.companyId, ctx.company.id), eq(L.statementId, row.id)));
+      await tx.delete(S).where(eq(S.id, row.id));
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'bank_statement', entityId: row.id, entityLabel: row.fileName ?? row.id, version: 1, deleted: true });
+    });
+    return undefined;
   },
 
   async importBankStatement(ctx) {
@@ -308,6 +340,21 @@ export const bankingHandlers = defineHandlers({
     };
   },
 
+  async listBankLineCandidates(ctx) {
+    const line = await findLine(ctx, ctx.db, ctx.params.id);
+    const account = await bankAccount(ctx.db, ctx.company, line.accountId);
+    const cur = account.currency.trim();
+    const all = await bookRecords(ctx.db, account, { from: addDaysISO(line.date, -FIND_DAYS), to: addDaysISO(line.date, FIND_DAYS), unmatched: {} });
+    const q = ctx.query.q?.trim().toLowerCase();
+    const expenses = hasModule(ctx.company.plan, 'expenses');
+    const day = (iso: string) => Math.abs(Date.parse(iso) - Date.parse(line.date));
+    const found = all
+      .filter((c) => (c.type !== 'expense' || expenses) && (!q || [c.number, c.reference, c.partyName].some((v) => v?.toLowerCase().includes(q))))
+      .sort((a, b) => Number(b.amountMinor === line.amountMinor) - Number(a.amountMinor === line.amountMinor) || day(a.date) - day(b.date) || a.id.localeCompare(b.id))
+      .slice(0, 100);
+    return { data: found.map((c) => recordToWire(c, cur)) };
+  },
+
   async matchBankLine(ctx) {
     const out = await ctx.db.transaction(async (tx) => {
       const line = await findLine(ctx, tx, ctx.params.id, true);
@@ -441,6 +488,46 @@ export const bankingHandlers = defineHandlers({
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'expense', entityId: created.id, entityLabel: created.number, version: created.version, after: wire });
       const matched = await matchTo(tx, ctx, line, account, 'expense', created.id, 'matched to a new expense');
       return { line: lineToWire(matched.line, cur, { match: matched.record }), expense: wire };
+    });
+  },
+
+  async createVoucherFromBankLine(ctx) {
+    const peek = await findLine(ctx, ctx.db, ctx.params.id);
+    const account = await bankAccount(ctx.db, ctx.company, peek.accountId);
+    const base = ctx.company.baseCurrency.trim();
+    if (account.currency.trim() !== base) throw invalid('id', `Vouchers are in ${base}; record this ${account.currency.trim()} line as a payment or expense`);
+    const contra = ctx.body.account.trim();
+    const bank = accountKey(account.id);
+    if (contra === bank || contra.startsWith('pay:')) throw invalid('account', 'Money moved between cash and bank accounts is a contra: record it, then match it to this line', 'CONTRA_NOT_HERE');
+    // Money in: a receipt, the bank debited. Money out: a journal, the bank credited.
+    const into = peek.amountMinor > 0;
+    const amount = money(Math.abs(peek.amountMinor), base);
+    const nil = money(0, base);
+    const body = {
+      kind: into ? 'receipt' : 'journal',
+      date: peek.date,
+      narration: ctx.body.narration?.trim() || peek.description || undefined,
+      reference: (peek.reference ?? '').slice(0, 100) || undefined,
+      status: 'posted',
+      lines: [
+        { account: bank, debit: into ? amount : nil, credit: into ? nil : amount },
+        { account: contra, debit: into ? nil : amount, credit: into ? amount : nil },
+      ],
+    } as Schema<'Voucher'>;
+    const cols = await voucherColumns(ctx, ctx.db, body);
+    return ctx.db.transaction(async (tx) => {
+      const line = await findLine(ctx, tx, ctx.params.id, true);
+      if (line.version !== peek.version) throw preconditionFailed();
+      if (line.status === 'matched') throw conflict('ALREADY_MATCHED', 'This bank line is already matched; unmatch it first');
+      const V = schema.vouchers;
+      const number = await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date });
+      const [created] = await tx
+        .insert(V)
+        .values({ id: newId('vch'), companyId: ctx.company.id, number, createdBy: ctx.user.id, ...cols, status: 'posted', postedAt: ctx.now, postedBy: ctx.user.id, createdAt: ctx.now, updatedAt: ctx.now })
+        .returning();
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'voucher', entityId: created.id, entityLabel: created.number, version: created.version });
+      const matched = await matchTo(tx, ctx, line, account, 'voucher', created.id, 'matched to a new voucher');
+      return { line: lineToWire(matched.line, base, { match: matched.record }), voucher: voucherToWire(created, base) };
     });
   },
 

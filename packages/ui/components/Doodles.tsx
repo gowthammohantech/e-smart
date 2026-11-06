@@ -7,15 +7,22 @@ import { useReducedMotion } from '../theme/useReducedMotion';
 import { useLoopPhase } from '../illustrations/motion';
 import { DOODLES, SCATTER, WALLPAPER_TILE, placeDoodle } from '../illustrations/doodles';
 
-/** How much the doodles show: enough to notice, never enough to compete with text. */
+/**
+ * How much the doodles show: a texture you notice only when you look for it,
+ * never enough to pull the eye from the page (halved from 0.14 / 0.16, which
+ * read as busy behind every screen).
+ */
 const useInk = () => {
   const t = useTheme();
-  return { color: t.c.muted, opacity: t.scheme === 'dark' ? 0.16 : 0.14 };
+  return { color: t.c.muted, opacity: t.scheme === 'dark' ? 0.08 : 0.07 };
 };
+
+/** One tile's drift: slow enough that the movement is felt rather than watched. */
+const DRIFT_MS = 180_000;
 
 /**
  * A full-bleed wallpaper of line-art doodles that drifts diagonally, one tile
- * a minute, and loops seamlessly. Sits behind everything and ignores touches;
+ * every three minutes, and loops seamlessly. Sits behind everything and ignores touches;
  * stands still under Reduce Motion.
  */
 export function DoodleWallpaper() {
@@ -34,7 +41,7 @@ export function DoodleWallpaper() {
       drift.setValue(0);
       return;
     }
-    const loop = Animated.loop(Animated.timing(drift, { toValue: 1, duration: 60000, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }));
+    const loop = Animated.loop(Animated.timing(drift, { toValue: 1, duration: DRIFT_MS, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }));
     loop.start();
     return () => loop.stop();
   }, [drift, reduce]);
@@ -76,7 +83,8 @@ export function DoodleScatter() {
   const ink = useInk();
   const t = useTheme();
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const { bob } = useLoopPhase(7000);
+  // A slow, small bob: alive, not moving enough to catch the eye while reading.
+  const { bob } = useLoopPhase(12000);
 
   return (
     <View
@@ -95,7 +103,7 @@ export function DoodleScatter() {
                 left: Math.min(it.x * size.w, size.w - it.size),
                 top: Math.min(it.y * size.h, size.h - it.size),
                 opacity: it.name === 'sparkle' ? ink.opacity * 1.6 : ink.opacity * 1.3,
-                transform: [{ translateY: bob(5, i * 0.17) }, { rotate: `${it.rotate}deg` }],
+                transform: [{ translateY: bob(2, i * 0.17) }, { rotate: `${it.rotate}deg` }],
               }}
             >
               <Svg width={it.size} height={it.size} viewBox="0 0 48 48">

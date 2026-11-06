@@ -19,6 +19,11 @@ export function useServerSave() {
   const run = useCallback(
     async <T>(action: () => T, success?: string, options?: ToastOptions): Promise<SaveResult<T> | undefined> => {
       const res = await save(action);
+      // Not refused: kept for an owner or admin to approve (RULES 6.14).
+      if (res.outcome === 'refused' && res.errorCode === 'PAYMENT_HELD') {
+        toast.show(tr('common:save.paymentHeld'), 'info', { icon: 'clipboard-clock-outline' });
+        return undefined;
+      }
       if (res.outcome === 'refused') {
         toast.show(tr('common:save.refused', { reason: res.error }), 'error');
         return undefined;

@@ -33,6 +33,8 @@ export type LineCalcInput = {
   roundOffManual?: Money;
   taxCategories: TaxCategory[];
   taxContext: TaxContext;
+  /** TCS collected from the buyer (s.206C), percent of the sale value with GST; added before rounding. */
+  tcsRate?: number;
 };
 
 export type LineBreakdown = {
@@ -192,7 +194,10 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
   const documentDiscount = discountOf(afterTax, documentDiscountMode, documentDiscountValue);
 
   const chargesInCurrency = money(charges.minor, currency);
-  const beforeRounding = add(add(subtract(afterTax, documentDiscount), reimbursements), chargesInCurrency);
+  // TCS on what the buyer pays for the goods, GST included, not on pure-agent recoveries; to the rupee.
+  const tcsBase = add(subtract(afterTax, documentDiscount), chargesInCurrency);
+  const tcs = input.tcsRate && input.tcsRate > 0 ? money(Math.round((tcsBase.minor * input.tcsRate) / 100 / 100) * 100, currency) : undefined;
+  const beforeRounding = add(add(add(subtract(afterTax, documentDiscount), reimbursements), chargesInCurrency), tcs ?? zero(currency));
 
   const manual = roundOffManual ? money(roundOffManual.minor, currency) : undefined;
   const { rounded, adjustment } = !applyRoundOff
@@ -216,6 +221,7 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
     reverseChargeTax,
     reimbursements,
     charges: chargesInCurrency,
+    ...(tcs && { tcs }),
     roundOff: adjustment,
     grandTotal: rounded,
     grandTotalBase,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { schema } from '@esmart/db';
+import { recordAiCost } from '../src/lib/aiUsage';
 import { totpCode, totpStep } from '../src/lib/totp';
 import { createCompany, ownerWithCompany, setupApi, signUpOwner, type TestContext } from './helpers';
 import { joinTeam } from './team-helpers';
@@ -178,6 +179,25 @@ describe('plan override', () => {
     expect(row).toMatchObject({ action: 'company.plan.override', targetId: tenant.company.id, reason: 'Pilot partner' });
     expect(row.before).toMatchObject({ plan: 'free', status: 'none' });
     expect(row.after).toMatchObject({ plan: 'business', status: 'trialing' });
+  });
+
+  it("shows what the company's AI use cost, by month, newest first", async () => {
+    const admin = await platformOperator(t, 'superadmin');
+    const tenant = await ownerWithCompany(t);
+    const fresh = await t.get(`/admin/companies/${tenant.company.id}`, { token: admin.token });
+    expect(fresh.body.aiCost).toEqual([]);
+
+    const id = tenant.company.id!;
+    await recordAiCost(t.deps.db, id, new Date('2026-09-15T06:00:00Z'), 'lixi', { inputTokens: 1000, outputTokens: 50, costUsd: 0.0004 });
+    await recordAiCost(t.deps.db, id, new Date('2026-10-15T06:00:00Z'), 'lixi', { inputTokens: 2000, outputTokens: 80, costUsd: 0.0009 });
+    await recordAiCost(t.deps.db, id, new Date('2026-10-20T06:00:00Z'), 'ocr', { inputTokens: 500, outputTokens: 20, costUsd: 0.0001 });
+
+    const detail = await t.get(`/admin/companies/${id}`, { token: admin.token });
+    expect(detail.status).toBe(200);
+    expect(detail.body.aiCost).toEqual([
+      { month: '2026-10', actions: 0, inputTokens: 2500, outputTokens: 100, costUsd: 0.001 },
+      { month: '2026-09', actions: 0, inputTokens: 1000, outputTokens: 50, costUsd: 0.0004 },
+    ]);
   });
 
   it('warns when a billing provider manages the subscription', async () => {

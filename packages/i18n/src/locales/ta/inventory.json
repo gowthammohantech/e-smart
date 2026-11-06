@@ -324,6 +324,26 @@
       "invalid": "திருத்து",
       "duplicate": "ஏற்கனவே உள்ளது",
       "ready": "தயார்"
+    },
+    "field": {
+      "name": "பெயர்",
+      "sku": "SKU",
+      "description": "விளக்கம்",
+      "type": "பொருள் அல்லது சேவை",
+      "unit": "அலகு",
+      "salePrice": "விற்பனை விலை",
+      "purchasePrice": "வாங்கும் விலை",
+      "taxRate": "GST விகிதம்",
+      "hsnCode": "HSN/SAC",
+      "barcode": "பார்கோடு",
+      "openingStock": "தொடக்கக் கையிருப்பு",
+      "reorderLevel": "மறு ஆர்டர் அளவு"
+    },
+    "dryRun": "{{created}} புதியவை, {{skipped}} ஏற்கனவே உள்ளவை, {{invalid}} திருத்த வேண்டியவை",
+    "col": {
+      "price": "விலை",
+      "tax": "GST",
+      "stock": "தொடக்கக் கையிருப்பு"
     }
   }
 }

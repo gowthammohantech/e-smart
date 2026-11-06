@@ -1,5 +1,5 @@
 import { canOpen } from '@esmart/core/domain/plan';
-import { MENU, PHONE_TABS, SETTINGS, TOOLS, appHref, pageForPath, pushRecent, sectionPath } from '../menu';
+import { MENU, PHONE_TABS, SETTINGS, TOOLS, appHref, pageForPath, sectionPath } from '../menu';
 import { tabForPath } from '../tabs';
 
 const sectionPages = MENU.flatMap((s) => s.pages.map((p) => ({ section: s.name, ...p })));
@@ -58,11 +58,5 @@ describe('the menu', () => {
     expect(pageForPath('/sales/invoicesx')).toBeUndefined();
     // A capture is a step, not a place to come back to.
     expect(pageForPath('/ocr/capture')).toBeUndefined();
-  });
-
-  it('keeps the newest five recent pages, once each', () => {
-    expect(pushRecent([], 'a')).toEqual(['a']);
-    expect(pushRecent(['a', 'b', 'c'], 'b')).toEqual(['b', 'a', 'c']);
-    expect(pushRecent(['a', 'b', 'c', 'd', 'e'], 'f')).toEqual(['f', 'a', 'b', 'c', 'd']);
   });
 });

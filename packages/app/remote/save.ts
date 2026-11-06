@@ -22,6 +22,8 @@ export type SaveResult<T> = {
    */
   outcome: 'saved' | 'queued' | 'refused' | 'unreachable' | 'unconfirmed';
   error?: string;
+  /** The server's code for a refusal, e.g. PAYMENT_HELD. */
+  errorCode?: string;
   /** The id the server gave something created here; else what the action returned. */
   id?: string;
 };
@@ -107,7 +109,10 @@ export async function confirm<T>(result: T, before: AppState, after: AppState, f
     const undo = failing.filter(([, o]) => o.kind !== 'conflict');
     if (undo.length) rollback(before, after, failing.length === outcomes.length ? undefined : ids);
     outbox.dropAll(failing.map(([id]) => id));
-    if (refused.length) return { result, outcome: 'refused', error: (refused[0][1] as { error: string }).error, id: localId };
+    if (refused.length) {
+      const first = refused[0][1] as { error: string; code?: string };
+      return { result, outcome: 'refused', error: first.error, ...(first.code && { errorCode: first.code }), id: localId };
+    }
     // Sent and never answered: it may yet show up from the server, so don't say it wasn't saved.
     const maybe = unanswered.some(([id]) => unconfirmed.has(id));
     return { result, outcome: maybe ? 'unconfirmed' : 'unreachable', id: localId };

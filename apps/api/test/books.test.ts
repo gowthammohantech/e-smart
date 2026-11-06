@@ -248,3 +248,37 @@ describe('books: trial balance', () => {
     expect(res.body.code).toBe('PLAN_UPGRADE_REQUIRED');
   });
 });
+
+describe('books: journal import and templates', () => {
+  it('imports journals, posting the good ones and saying what is wrong with the rest', async () => {
+    const m = await moneySetup(t);
+    const vouchers = [
+      { date: '2026-09-29', reference: 'JV1', narration: 'Rent', lines: voucher('journal', [['sys:roundOff', 1_000, 0], ['sys:otherIncome', 0, 1_000]]).lines },
+      { date: '2026-09-29', reference: 'JV2', lines: voucher('journal', [['sys:roundOff', 1_000, 0], ['sys:otherIncome', 0, 900]]).lines },
+    ];
+    const dry = await t.post(`${m.c}/vouchers/import`, { vouchers, dryRun: true }, { token: m.token });
+    expect(dry.body.results.map((r: { status: string }) => r.status)).toEqual(['created', 'invalid']);
+    expect((await t.get(`${m.c}/vouchers`, { token: m.token })).body.data).toEqual([]);
+    const done = await t.post(`${m.c}/vouchers/import`, { vouchers }, { token: m.token });
+    expect(done.body).toMatchObject({ created: 1, invalid: 1 });
+    expect(done.body.results[0].number).toBe('JV/26-27/0001');
+    // As drafts, even the unbalanced one is kept, to finish later.
+    const drafts = await t.post(`${m.c}/vouchers/import`, { vouchers, asDrafts: true }, { token: m.token });
+    expect(drafts.body.created).toBe(2);
+  });
+
+  it('keeps journal templates with or without amounts', async () => {
+    const m = await moneySetup(t);
+    const tpl = await t.post(
+      `${m.c}/voucher-templates`,
+      { name: 'Monthly rent provision', kind: 'journal', narration: 'Rent for the month', lines: [{ account: 'sys:rent', side: 'dr', amount: inr(2_500_000) }, { account: 'sys:roundOff', side: 'cr' }] },
+      { token: m.token },
+    );
+    expect(tpl.status).toBe(201);
+    expect(tpl.body.lines[1]).toEqual({ account: 'sys:roundOff', side: 'cr' });
+    expect((await t.post(`${m.c}/voucher-templates`, { name: 'Monthly rent provision', kind: 'journal', lines: [{ account: 'sys:rent', side: 'dr' }] }, { token: m.token })).body.code).toBe('TEMPLATE_EXISTS');
+    const list = await t.get(`${m.c}/voucher-templates`, { token: m.token });
+    expect(list.body.data.map((x: { name: string }) => x.name)).toEqual(['Monthly rent provision']);
+    expect((await t.del(`${m.c}/voucher-templates/${tpl.body.id}`, { token: m.token, headers: { 'if-match': `"v${tpl.body.version}"` } })).status).toBe(204);
+  });
+});

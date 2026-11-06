@@ -45,7 +45,7 @@ Railway (never committed). `apps/api/.env.example` names every variable.
 | GSP with IRP and EWB sandbox certification, then production access | `COMPLIANCE_PROVIDER=gsp`, `TAXATION_GSP_PROVIDER_CODE`, `TAXATION_ADAEQUARE_BASE_URL`, `TAXATION_ADAEQUARE_APP_ID`/`_SECRET`; the portal username and password are entered per company in the app | Product, Backend | ⬜ Todo |
 | Razorpay: live keys, webhook secret, plan IDs for subscriptions | `PAYMENTS_PROVIDER=razorpay`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Product, Ops | ⬜ Todo |
 | Open Exchange Rates | `FX_PROVIDER=openexchangerates`, `OPENEXCHANGERATES_APP_ID` | Ops | ⬜ Todo |
-| Anthropic (Lixi) | `ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, `LIXI_MODEL` | Ops | ⬜ Todo |
+| Lixi's model: Anthropic, or any OpenAI-compatible server (OpenAI, Azure, OpenRouter, Groq, Gemini, Ollama…) | `ASSISTANT_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`, or `ASSISTANT_PROVIDER=openai` + `OPENAI_BASE_URL`, `OPENAI_API_KEY`; `LIXI_MODEL` + `LIXI_SECONDARY_MODEL` (OpenRouter defaults to free models) | Ops | ⬜ Todo |
 | Azure Blob Storage or S3: container, CORS rule for the web origin, lifecycle rules | `STORAGE_PROVIDER`, `AZURE_STORAGE_CONNECTION_STRING` / `S3_*` | Ops | ⬜ Todo |
 | Chromium for PDF rendering in the API image | `PDF_PROVIDER=chromium`, `CHROMIUM_PATH` | Ops | ⬜ Todo |
 | KMS / Vault for the credentials key, instead of a static `CREDENTIALS_KEY` | `CREDENTIALS_KEY` | Ops, Backend | ⬜ Todo |

@@ -17,11 +17,11 @@ import { pagedTableProps } from '../../components/pagedTable';
 import { includeBankLine, matchBankLine, unmatchBankLine } from '../../remote/banking';
 import { useCanWrite } from '../../remote/connectivity';
 import { useBankLines, type BankLine, type BankLineStatus } from '../../remote/queries';
-import { useHasModule } from '../../store/selectors';
-import { ExcludeSheet, FindMatchSheet, RecordExpenseSheet, RecordPaymentSheet } from './LineSheets';
+import { useBaseCurrency, useHasModule } from '../../store/selectors';
+import { ExcludeSheet, FindMatchSheet, RecordExpenseSheet, RecordPaymentSheet, RecordVoucherSheet } from './LineSheets';
 import { MatchChip, SignedAmount, useBankAction, useRecordLabel, type RecordLike } from './parts';
 
-type Sheet = 'find' | 'payment' | 'expense' | 'exclude';
+type Sheet = 'find' | 'payment' | 'expense' | 'voucher' | 'exclude';
 
 /** Where a matched record opens. */
 const routeOf = (r: { type: string; id: string }) => (r.type === 'payment' ? `/(app)/payments/${r.id}` : r.type === 'expense' ? `/(app)/expenses/${r.id}` : `/(app)/books/vouchers/${r.id}`);
@@ -40,6 +40,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
   const pages = useBankLines(accountId, status);
   const canWrite = useCanWrite();
   const expenses = useHasModule('expenses');
+  const baseCurrency = useBaseCurrency();
   const paymentsMade = useHasModule('payables');
   const labelOf = useRecordLabel();
   const { run, busy } = useBankAction();
@@ -54,6 +55,8 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
   // Money paid needs the payables module; an expense the expenses module and money going out.
   const canPay = (line: BankLine) => into(line) || paymentsMade;
   const canExpense = (line: BankLine) => !into(line) && expenses;
+  // Vouchers are in the base currency: a foreign-currency account's lines are payments or expenses.
+  const canVoucher = (line: BankLine) => line.amount.currency === baseCurrency;
 
   const actionsOf = (line: BankLine): RowAction[] => {
     if (!canWrite) return [];
@@ -69,6 +72,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
       { key: 'find', label: tr('banking:lines.find'), icon: 'magnify', onPress: () => open('find', line) },
       ...(canPay(line) ? [{ key: 'payment', label: tr('banking:lines.recordPayment'), icon: 'cash-plus' as const, onPress: () => open('payment', line) }] : []),
       ...(canExpense(line) ? [{ key: 'expense', label: tr('banking:lines.recordExpense'), icon: 'receipt-text-outline' as const, onPress: () => open('expense', line) }] : []),
+      ...(canVoucher(line) ? [{ key: 'voucher', label: tr('banking:lines.recordVoucher'), icon: 'book-open-variant' as const, onPress: () => open('voucher', line) }] : []),
       { key: 'exclude', label: tr('banking:lines.exclude'), icon: 'eye-off-outline', destructive: true, onPress: () => open('exclude', line) },
     ];
   };
@@ -82,6 +86,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
       {sheet?.kind === 'find' ? <FindMatchSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
       {sheet?.kind === 'payment' ? <RecordPaymentSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
       {sheet?.kind === 'expense' ? <RecordExpenseSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
+      {sheet?.kind === 'voucher' ? <RecordVoucherSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
       {sheet?.kind === 'exclude' ? <ExcludeSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
     </>
   );
@@ -175,6 +180,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
                     <Button size="sm" variant="ghost" icon="magnify" title={tr('banking:lines.find')} onPress={() => open('find', l)} disabled={!canWrite} />
                     {canPay(l) ? <Button size="sm" variant="ghost" icon="cash-plus" title={tr('banking:lines.recordPayment')} onPress={() => open('payment', l)} disabled={!canWrite} /> : null}
                     {canExpense(l) ? <Button size="sm" variant="ghost" icon="receipt-text-outline" title={tr('banking:lines.recordExpense')} onPress={() => open('expense', l)} disabled={!canWrite} /> : null}
+                    {canVoucher(l) ? <Button size="sm" variant="ghost" icon="book-open-variant" title={tr('banking:lines.recordVoucher')} onPress={() => open('voucher', l)} disabled={!canWrite} /> : null}
                     <Button size="sm" variant="ghost" icon="eye-off-outline" title={tr('banking:lines.exclude')} onPress={() => open('exclude', l)} disabled={!canWrite} />
                   </View>
                 </>

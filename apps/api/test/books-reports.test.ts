@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MUMBAI, setupApi } from './helpers';
+import { BENGALURU, MUMBAI, setupApi } from './helpers';
+import { joinTeam } from './team-helpers';
 import { issueInvoice, moneySetup } from './money-fixtures';
 
 const t = setupApi();
@@ -64,5 +65,31 @@ describe('contacts import', () => {
       ['Konkan Paper', 'S-002'],
       ['Landlord', 'G-001'],
     ]);
+  });
+});
+
+describe('books and branches', () => {
+  it('opens the books to someone listed against every branch, not to someone limited to some', async () => {
+    const m = await moneySetup(t);
+    const blr = await t.post(`${m.c}/branches`, { name: 'Bengaluru', code: 'blr', address: BENGALURU }, { token: m.token });
+    expect(blr.status).toBe(201);
+    const one = await joinTeam(t, m.token, { role: 'accountant', companyIds: [m.companyId], branchIds: [m.branch.id] });
+    const all = await joinTeam(t, m.token, { role: 'accountant', companyIds: [m.companyId], branchIds: [m.branch.id, blr.body.id] });
+    const view = (token: string) => t.get(`${m.c}/books/trial-balance`, { token, query: { from: '2026-04-01', to: '2027-03-31' } });
+    expect((await view(one.token)).body.code).toBe('BOOKS_ALL_BRANCHES');
+    expect((await view(all.token)).status).toBe(200);
+  });
+});
+
+describe('contacts import with custom fields', () => {
+  it('stores the company contact fields and refuses a row whose value does not fit', async () => {
+    const m = await moneySetup(t);
+    const zone = await t.post(`${m.c}/custom-fields`, { entity: 'party', label: 'Zone', kind: 'select', options: ['North', 'South'] }, { token: m.token });
+    const rows = [party({ name: 'Zone North Traders', customFields: { [zone.body.id]: 'North' } }), party({ name: 'Zone East Traders', customFields: { [zone.body.id]: 'East' } })];
+    const done = await t.post(`${m.c}/parties/import`, { rows }, { token: m.token });
+    expect(done.body.results.map((r: { status: string }) => r.status)).toEqual(['created', 'invalid']);
+    expect(done.body.results[1].issues[0].field).toBe(`customFields.${zone.body.id}`);
+    const created = await t.get(`${m.c}/parties/${done.body.results[0].id}`, { token: m.token });
+    expect(created.body.customFields).toEqual({ [zone.body.id]: 'North' });
   });
 });

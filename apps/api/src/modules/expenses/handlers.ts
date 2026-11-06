@@ -1,4 +1,5 @@
 import { and, eq, exists, gte, ilike, inArray, isNull, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { vehicleIssues } from '../settings/vehicles';
 import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import type { Schema } from '@esmart/api-contract';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
@@ -104,6 +105,7 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
     else if (!body.billable) blocking('customerId', 'Only a billable expense is recovered from a customer');
   }
   issues.push(...(await costCentreIssues(db, companyId, [{ field: 'costCentreId', id: body.costCentreId }])));
+  issues.push(...(await vehicleIssues(db, companyId, body.vehicleId)));
   if (issues.length) throw unprocessable(issues);
 
   const taxInclusive = body.taxInclusive ?? current?.taxInclusive ?? true;
@@ -133,6 +135,7 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
     billable: body.billable ?? false,
     customerId: body.billable ? (body.customerId ?? null) : null,
     costCentreId: body.costCentreId ?? null,
+    vehicleId: body.vehicleId ?? null,
     recurrence,
     nextRecurrenceDate: keepSchedule ? current.nextRecurrenceDate : nextRecurrence(body.date, recurrence),
   };

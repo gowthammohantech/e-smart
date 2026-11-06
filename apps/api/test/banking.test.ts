@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { readStatement } from '@esmart/core/domain/bankStatement';
 import { schema } from '@esmart/db';
 import { setupApi } from './helpers';
-import { moneySetup, type Money } from './money-fixtures';
+import { issueInvoice, moneySetup, type Money } from './money-fixtures';
 import { joinTeam } from './team-helpers';
 
 const t = setupApi();
@@ -254,6 +254,92 @@ describe('banking: matching', () => {
     expect(exp.body.expense).toMatchObject({ date: '2026-09-22', amount: inr(45_000), accountId: acct, categoryId: cat.id, reference: 'ELECTRICITY BILL', notes: 'September' });
     expect(exp.body.line.match).toMatchObject({ type: 'expense', id: exp.body.expense.id, amount: inr(-45_000) });
     expect((await t.get(`${m.c}/payment-accounts/${acct}/bank-lines/summary`, { token: m.token })).body).toMatchObject({ matched: 3, unmatched: 0 });
+  });
+
+  it('records interest and drawings against a ledger account, as vouchers', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    await importLines(m, acct, [ln('2026-09-25', 'INTEREST CREDIT', 12_340), ln('2026-09-26', 'SELF TRANSFER TO OWNER', -50_000, { reference: 'IMPS88' })]);
+    const [drawings, interest] = await lines(m, acct);
+    const ledger = await t.post(`${m.c}/ledger-accounts`, { name: 'Interest received', group: 'indirectIncomes', openingBalance: inr(0) }, { token: m.token });
+    expect(ledger.status).toBe(201);
+    const key = `acc:${ledger.body.id}`;
+
+    const rec = await t.post(`${m.c}/bank-lines/${interest.id}/voucher`, { account: key }, { token: m.token });
+    expect(rec.status).toBe(201);
+    expect(rec.body.voucher).toMatchObject({ kind: 'receipt', date: '2026-09-25', narration: 'INTEREST CREDIT', status: 'posted' });
+    expect(rec.body.voucher.lines.map((l: any) => [l.account, l.debit.minor, l.credit.minor])).toEqual([[`pay:${acct}`, 12_340, 0], [key, 0, 12_340]]);
+    expect(rec.body.line.match).toMatchObject({ type: 'voucher', id: rec.body.voucher.id, amount: inr(12_340) });
+    expect((await t.post(`${m.c}/bank-lines/${interest.id}/voucher`, { account: key }, { token: m.token })).status).toBe(409);
+
+    // Money out: a journal, the bank credited. A transfer to another bank account is a contra, not this.
+    const contra = await t.post(`${m.c}/bank-lines/${drawings.id}/voucher`, { account: `pay:${m.cash.id}` }, { token: m.token });
+    expect(contra.status).toBe(422);
+    expect(contra.body.code).toBe('CONTRA_NOT_HERE');
+    const unknown = await t.post(`${m.c}/bank-lines/${drawings.id}/voucher`, { account: 'acc:nope' }, { token: m.token });
+    expect(unknown.status).toBe(422);
+    const out = await t.post(`${m.c}/bank-lines/${drawings.id}/voucher`, { account: 'sys:capital', narration: 'Drawings' }, { token: m.token });
+    expect(out.status).toBe(201);
+    expect(out.body.voucher).toMatchObject({ kind: 'journal', narration: 'Drawings', reference: 'IMPS88' });
+    expect(out.body.voucher.lines.map((l: any) => [l.account, l.debit.minor, l.credit.minor])).toEqual([[`pay:${acct}`, 0, 50_000], ['sys:capital', 50_000, 0]]);
+    expect((await t.get(`${m.c}/payment-accounts/${acct}/bank-lines/summary`, { token: m.token })).body).toMatchObject({ matched: 2, unmatched: 0 });
+  });
+
+  it('finds payments, expenses and vouchers on the account, unmatched, the same amount first', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    const other = await bank(m, 0, 'ICICI current');
+    // More than the 3 days auto-matching allows before the lines, so all are left to Find.
+    const near = await pay(m, acct, 70_000, { date: '2026-09-06', reference: 'UTR998877' });
+    await pay(m, acct, 55_000, { date: '2026-09-07' });
+    await pay(m, other, 70_000, { date: '2026-09-06' });
+    const v = await t.post(`${m.c}/vouchers`, { kind: 'receipt', date: '2026-09-05', lines: [{ account: `pay:${acct}`, debit: inr(70_000), credit: inr(0) }, { account: 'sys:capital', debit: inr(0), credit: inr(70_000) }] }, { token: m.token });
+    expect(v.status, v.raw).toBe(201);
+    await importLines(m, acct, [ln('2026-09-22', 'NEFT CR', 70_000), ln('2026-09-23', 'NEFT CR', 70_000), ln('2026-09-29', 'NEFT CR', 90_000)]);
+    const [, , first] = await lines(m, acct);
+    const found = await t.get(`${m.c}/bank-lines/${first.id}/candidates`, { token: m.token });
+    expect(found.status).toBe(200);
+    // Both ₹700 records, nearest first, then the ₹550 one; nothing from the other account.
+    expect(found.body.data.map((r: any) => [r.type, r.amount.minor])).toEqual([['payment', 70_000], ['voucher', 70_000], ['payment', 55_000]]);
+    expect(found.body.data[0].id).toBe(near.id);
+    const byRef = await t.get(`${m.c}/bank-lines/${first.id}/candidates`, { token: m.token, query: { q: 'utr998' } });
+    expect(byRef.body.data.map((r: any) => r.id)).toEqual([near.id]);
+    await t.post(`${m.c}/bank-lines/${first.id}/match`, { type: 'payment', id: near.id }, { token: m.token, headers: { 'if-match': `"v${first.version}"` } });
+    const [, second] = await lines(m, acct, { status: 'unmatched' });
+    const rest = await t.get(`${m.c}/bank-lines/${second.id}/candidates`, { token: m.token });
+    expect(rest.body.data.some((r: any) => r.id === near.id)).toBe(false);
+  });
+
+  it('settles the customer’s invoices with a payment recorded from a line', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    const inv = await issueInvoice(t, m, { partyId: m.mumbai.id });
+    const due = inv.totals.grandTotal.minor;
+    await importLines(m, acct, [ln('2026-09-29', 'NEFT CR MUMBAI', due + 10_000)]);
+    const [line] = await lines(m, acct);
+    const res = await t.post(`${m.c}/bank-lines/${line.id}/payment`, { partyId: m.mumbai.id, allocations: [{ documentId: inv.id, amount: inr(due) }] }, { token: m.token });
+    expect(res.status, res.raw).toBe(201);
+    expect(res.body.payment.allocations).toEqual([expect.objectContaining({ documentId: inv.id, amount: inr(due) })]);
+    expect((await t.get(`${m.c}/documents/${inv.id}`, { token: m.token })).body.status).toBe('paid');
+  });
+
+  it('lists the imports with their counts, and undoes one, leaving the books as they were', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    const p = await pay(m, acct, 99_900);
+    await importLines(m, acct, [ln('2026-09-28', 'UPI IN', 99_900), ln('2026-09-28', 'CHARGES', -500)], { fileName: 'sept.csv' });
+    await importLines(m, acct, [ln('2026-09-29', 'INTEREST', 1_200)], { fileName: 'late.csv' });
+    const list = await t.get(`${m.c}/payment-accounts/${acct}/bank-statements`, { token: m.token });
+    expect(list.status).toBe(200);
+    expect(list.body.data.map((s: any) => [s.fileName, s.lineCount, s.matched, s.unmatched])).toEqual([['late.csv', 1, 0, 1], ['sept.csv', 2, 1, 1]]);
+    const sept = list.body.data[1];
+    expect((await t.del(`${m.c}/bank-statements/${sept.id}`, { token: m.token })).status).toBe(204);
+    expect((await lines(m, acct)).map((l) => l.description)).toEqual(['INTEREST']);
+    expect((await t.get(`${m.c}/payments/${p.id}`, { token: m.token })).status).toBe(200);
+    // Imported again, the payment is free to match once more.
+    const again = await importLines(m, acct, [ln('2026-09-28', 'UPI IN', 99_900)], { fileName: 'sept.csv' });
+    expect(again.body.autoMatched).toBe(1);
+    expect((await t.del(`${m.c}/bank-statements/nope`, { token: m.token })).status).toBe(404);
   });
 
   it('puts a line back to unmatched when its payment is deleted', async () => {

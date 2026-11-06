@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -13,7 +13,8 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { parseCsv } from '@esmart/core/lib/csv';
-import { guessItemColumns, itemsFromCsv, type ItemImportRow } from '@esmart/core/domain/itemImport';
+import { guessItemColumns, itemsFromCsv, type ImportedItem, type ItemImportField, type ItemImportRow } from '@esmart/core/domain/itemImport';
+import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/ImportFlow';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { api } from '../../remote/api';
@@ -27,12 +28,106 @@ type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; iss
 /** A sample of the sheet: column names as spreadsheets have them, in English in every language. */
 const SAMPLE_CSV = ['Name,SKU,Unit,Sale price,Purchase price,GST %,HSN,Opening stock', 'Ball Bearing 6203,BRG-6203,Nos,250,180,18,84821011,40'].join('\n');
 
+const ITEM_FIELDS: ItemImportField[] = ['name', 'sku', 'type', 'unit', 'salePrice', 'purchasePrice', 'taxRate', 'hsnCode', 'barcode', 'openingStock', 'reorderLevel', 'description'];
+type ItemRecord = ImportedItem & { row: number };
+
+/**
+ * On the web: the shared ImportFlow (choose the file, match its columns, check, import). Phones keep
+ * the paste screen below until ImportFlow can pick a file there.
+ */
+export function ImportItems() {
+  return Platform.OS === 'web' ? <ImportItemsFlow /> : <ImportItemsPaste />;
+}
+
+function ImportItemsFlow() {
+  const { t: tr } = useTranslation(['inventory', 'common']);
+  const router = useRouter();
+  const toast = useToast();
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const currency = useBaseCurrency();
+  const taxCategories = useTaxCategories();
+  const tracksStock = useHasModule('inventory');
+
+  const fields = useMemo(() => ITEM_FIELDS.map((key) => ({ key, label: tr(`inventory:import.field.${key}`), required: key === 'name' })), [tr]);
+  const detect = useCallback((rows: string[][]) => ({ headerRow: 0, mapping: guessItemColumns(rows[0] ?? []) }), []);
+  const toRecords = useCallback(
+    (rows: string[][], headerRow: number, mapping: ColumnMapping) => {
+      // itemsFromCsv reads the row after its first as data: hand it the header and what follows.
+      const read = itemsFromCsv(rows.slice(Math.max(headerRow, 0)), mapping as Partial<Record<ItemImportField, number>>, {
+        currency,
+        taxCategories,
+        trackInventory: tracksStock,
+        openingStockDate: today(),
+      });
+      const offset = Math.max(headerRow, 0);
+      return {
+        records: read.filter((r) => r.item).map((r) => ({ ...r.item!, row: r.line + offset })),
+        errors: read.filter((r) => !r.item).map((r) => ({ row: r.line + offset, message: r.problems.join(' · ') })),
+      };
+    },
+    [currency, taxCategories, tracksStock],
+  );
+  const taxRate = useCallback((id: string) => taxCategories.find((c) => c.id === id)?.rate ?? 0, [taxCategories]);
+  const columns = useMemo<ImportColumn<ItemRecord>[]>(
+    () => [
+      { key: 'sku', label: tr('common:table.sku'), render: (i) => i.sku },
+      { key: 'name', label: tr('common:table.name'), render: (i) => i.name },
+      { key: 'unit', label: tr('common:table.unit'), render: (i) => i.unit },
+      { key: 'tax', label: tr('inventory:import.col.tax'), render: (i) => formatPercent(taxRate(i.taxCategoryId)) },
+      { key: 'stock', label: tr('inventory:import.col.stock'), align: 'right', render: (i) => (i.openingStock ? `${i.openingStock} ${i.unit}` : '') },
+      { key: 'price', label: tr('inventory:import.col.price'), align: 'right', render: (i) => formatMoney(i.salePrice) },
+    ],
+    [tr, taxRate],
+  );
+
+  const send = async (records: ItemRecord[], dryRun: boolean) => {
+    const { data, error } = await api.POST('/companies/{companyId}/items/import', {
+      params: { path: { companyId } },
+      body: { rows: records.map(({ row: _row, ...item }) => item) as never, dryRun },
+    });
+    if (error || !data) throw error ?? new Error('No answer from the server');
+    return data;
+  };
+
+  return (
+    <ImportFlow<ItemRecord>
+      title={tr('inventory:import.title')}
+      hint={tr('inventory:import.hint')}
+      accept={['.csv']}
+      fields={fields}
+      detect={detect}
+      toRecords={toRecords}
+      columns={columns}
+      maxRecords={1000}
+      onDryRun={async (records) => {
+        const res = await send(records, true);
+        return {
+          summary: tr('inventory:import.dryRun', { created: res.created ?? 0, skipped: res.skipped ?? 0, invalid: res.invalid ?? 0 }),
+          rowFlags: (res.results ?? []).map((r) =>
+            r.status === 'duplicate' ? tr('inventory:import.status.duplicate') : r.status === 'invalid' ? (r.issues ?? []).map((x) => x.message).join(' · ') : undefined,
+          ),
+        };
+      }}
+      onConfirm={async (records) => {
+        const res = await send(records, false);
+        syncSoon();
+        toast.show(tr('inventory:import.done', { count: res.created ?? 0 }), 'success', {
+          icon: 'tag-check-outline',
+          detail: tr('inventory:import.skipped', { count: (res.skipped ?? 0) + (res.invalid ?? 0) }),
+        });
+        router.replace('/(app)/catalog/items');
+      }}
+      confirmLabel={(count) => tr('inventory:import.import', { count })}
+    />
+  );
+}
+
 /**
  * Items from a spreadsheet, as contacts are: read on the device (core/domain/itemImport), checked
  * by the server without saving (a dry run), then created in one go, opening stock and all. Rows the
  * sheet gets wrong, and items already in the book (same SKU, barcode or name), are shown and left out.
  */
-export function ImportItems() {
+function ImportItemsPaste() {
   const t = useTheme();
   const router = useRouter();
   const toast = useToast();

@@ -6,6 +6,7 @@ import { defineHandlers, type Deps } from '../../context';
 import { enqueue } from '../../jobs/queue';
 import { actorFor } from '../webhooks/handlers';
 import { ApiError, invalid, notFound } from '../../http/errors';
+import { takeAiAction } from '../../lib/aiUsage';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { compact } from '../../lib/wire';
@@ -189,6 +190,8 @@ export const ocrHandlers = defineHandlers({
     const provider = ctx.deps.providers.ocr;
     const digits = await minorDigits(ctx.db, ctx.company.baseCurrency.trim());
     const inline = !!text?.trim() || INLINE_PROVIDERS.has(provider.name);
+    // A scan read by the provider comes from the monthly AI allowance; text the phone read is free.
+    const giveBack = text?.trim() ? null : await takeAiAction(ctx, 'ocr');
 
     const started = await ctx.db.transaction(async (tx) => {
       const [row] = await tx
@@ -206,6 +209,7 @@ export const ocrHandlers = defineHandlers({
     } catch (err) {
       // No recognition on this server: nothing was extracted, so leave no row behind.
       await ctx.db.delete(X).where(eq(X.id, started.id));
+      await giveBack?.();
       throw err;
     }
   },

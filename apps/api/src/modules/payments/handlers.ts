@@ -4,10 +4,11 @@ import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { money } from '../../lib/wire';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { notFound } from '../../http/errors';
+import { ApiError, notFound } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import type { DbOrTx } from '../../lib/audit';
-import { deletePayment, assertDirectionAllowed, linkPaymentAttachments, writePayment, type PaymentInput } from './engine';
+import { deletePayment, assertDirectionAllowed, linkPaymentAttachments, writePayment } from './engine';
+import { amountInBase, holdPayment, paymentLimit, requestInput } from './requests';
 import { receiptHtml } from './receipt';
 import { paymentsToWire, type PaymentRow } from './wire';
 
@@ -28,33 +29,7 @@ async function toWire(ctx: AnyCtx, row: PaymentRow) {
   return p;
 }
 
-function inputOf(body: Schema<'Payment'>): PaymentInput {
-  return {
-    direction: body.direction,
-    partyId: body.partyId,
-    branchId: body.branchId,
-    date: body.date,
-    amountMinor: body.amount.minor,
-    amountCurrency: body.amount.currency,
-    currency: body.currency,
-    exchangeRate: body.exchangeRate,
-    method: body.method,
-    reference: body.reference,
-    accountId: body.accountId,
-    notes: body.notes,
-    advanceTax: body.advanceTax ?? null,
-    refundOf: body.refundOf ?? null,
-    tdsSection: body.tdsSection ?? null,
-    allocations: (body.allocations ?? []).map((a) => ({
-      documentId: a.documentId,
-      amountMinor: a.amount.minor,
-      tdsMinor: a.tdsDeducted?.minor,
-      discountMinor: a.discount?.minor,
-      writeOffMinor: a.writeOff?.minor,
-      currency: a.amount.currency,
-    })),
-  };
-}
+const inputOf = requestInput;
 
 /**
  * Payments: listPayments, createPayment, getPayment, savePayment,
@@ -110,6 +85,12 @@ export const paymentsHandlers = defineHandlers({
 
   async createPayment(ctx) {
     assertDirectionAllowed(ctx.company, ctx.body.direction, !!ctx.body.refundOf);
+    // Over the company's payment rule, from someone who isn't an approver: kept for an owner or admin (RULES 6.14).
+    const limit = paymentLimit(ctx.company, ctx.user, ctx.body);
+    if (limit !== null && amountInBase(ctx.body) > limit) {
+      const held = await ctx.db.transaction((tx) => holdPayment(tx, ctx.deps, ctx.company, ctx.user, ctx.body, ctx.now));
+      throw new ApiError(409, 'PAYMENT_HELD', `Payments over ${(limit / 100).toFixed(2)} need an owner or admin. This one is waiting for their approval.`, { requestId: held.id });
+    }
     const row = await ctx.db.transaction(async (tx) => {
       const created = await writePayment(tx, ctx.deps, ctx.company, ctx.user, inputOf(ctx.body), { now: ctx.now });
       await linkPaymentAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);

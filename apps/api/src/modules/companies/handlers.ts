@@ -118,10 +118,16 @@ export const companiesHandlers = defineHandlers({
     if (JSON.stringify(approvalRules) !== JSON.stringify(current.approvalRules) && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can set what needs approval');
     const perpetualStockFrom = ctx.body.perpetualStockFrom === undefined ? current.perpetualStockFrom : ctx.body.perpetualStockFrom;
     if (perpetualStockFrom !== current.perpetualStockFrom) checkPerpetualFrom(ctx.user.role, current.fiscalYearStartMonth, lockedThroughDate, current.perpetualStockFrom, perpetualStockFrom);
+    const stockCosting = ctx.body.stockCosting ?? (current.stockCosting as 'average' | 'fifo');
+    if (stockCosting !== current.stockCosting) {
+      // Costing values every period's stock from the start, so it changes only while none is closed (RULES 6.2).
+      if (ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can change how stock is costed');
+      if (lockedThroughDate) throw conflict('PERIOD_LOCKED', `The books are closed through ${lockedThroughDate}; stock costing changes every period's stock value, so reopen them first`);
+    }
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(schema.companies)
-        .set({ ...companyColumns(body), lockedThroughDate, perpetualStockFrom, disabledModules, approvalRules, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...companyColumns(body), lockedThroughDate, perpetualStockFrom, stockCosting, disabledModules, approvalRules, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(schema.companies.id, current.id), eq(schema.companies.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();

@@ -32,7 +32,7 @@ function assertSession(started: number) {
 }
 
 /** What became of a queue entry the user is waiting on. */
-export type Outcome = { kind: 'applied'; serverId?: string } | { kind: 'rejected' | 'conflict'; error: string } | { kind: 'queued' };
+export type Outcome = { kind: 'applied'; serverId?: string } | { kind: 'rejected' | 'conflict'; error: string; code?: string } | { kind: 'queued' };
 const waiting = new Map<string, (o: Outcome) => void>();
 /** Told when the server refuses a change no screen is waiting on (one kept while offline), with its label. */
 export const onRefusedLater = new Set<(label: string, error: string) => void>();
@@ -438,7 +438,7 @@ async function pushAll(session: number): Promise<boolean> {
       } else {
         const error = r.error?.detail ?? r.error?.title ?? 'The server refused this change';
         outbox.update(entry.id, { status: 'failed', attempts: entry.attempts + 1, lastError: error });
-        report(entry.id, { kind: 'rejected', error }, entry.label);
+        report(entry.id, { kind: 'rejected', error, ...(r.error?.code && { code: r.error.code }) }, entry.label);
       }
     }
   }

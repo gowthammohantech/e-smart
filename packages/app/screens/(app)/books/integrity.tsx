@@ -5,6 +5,7 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Card } from '@esmart/ui/components/Card';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import type { IntegrityCheck, IntegrityItem } from '@esmart/core/domain/ledger/integrity';
 import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
@@ -68,7 +69,7 @@ export default function IntegrityScreen() {
       >
         <HeroFigure
           label={failed.length ? tr('books:integrity.problems', { count: failed.length }) : tr('books:integrity.allGood')}
-          value={tr('books:integrity.asOf', { date: res.asOf })}
+          value={tr('books:integrity.asOf', { date: formatDate(res.asOf) })}
           tone={failed.length ? 'bad' : 'good'}
         />
         <Card padded={false}>

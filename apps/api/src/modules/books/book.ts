@@ -6,12 +6,15 @@ import type { Voucher } from '@esmart/core/types';
 import { goodsCostByDocument, perpetualStock } from '@esmart/core/domain/stockLedger';
 import type { BusinessDocument, Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';
+import { loadAssets } from '../assets/handlers';
 import { companyCore, partyCore } from '../documents/engine';
 import { coreMovements } from '../inventory/ledger';
 import { loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadPayments, type Scope } from '../reports/data';
 
 // Opening invoices and bills too: they post to the party and Opening balances (RULES 6.12), nothing else.
-const KINDS = ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote', 'openingInvoice', 'openingBill'] as const;
+// Deliveries, goods receipts and purchase orders post nothing themselves; perpetual stock needs them for
+// the goods they move and for the bills made from them (RULES 6.2).
+const KINDS = ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote', 'openingInvoice', 'openingBill', 'delivery', 'goodsReceipt', 'purchaseOrder'] as const;
 
 /**
  * The whole book up to `s.to`, as postings: every sale, purchase, note, payment, expense and voucher
@@ -44,10 +47,11 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   const items = await loadItems(s);
   const movements = await coreMovements(s.db, id, { to: s.to });
   const perpetualFrom = s.company.perpetualStockFrom;
-  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom };
   // A return comes back at what the goods it returns went out (or came in) at.
   const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
-  const openingStockMinor = openingStockValue(items, movements, base);
+  const costing = s.company.stockCosting as Stock['costing'];
+  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom, sourceOf: (id) => sourceOf.get(id), costing };
+  const openingStockMinor = openingStockValue(items, movements, base, costing);
 
   const postings = allPostings({
     baseCurrency: base,
@@ -62,7 +66,9 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
     paymentAccounts,
     ledgerAccounts,
     openingStockMinor,
-    ...(perpetualFrom && perpetualFrom <= s.to && { stock: perpetualStock(items, movements, perpetualFrom, base, (id) => sourceOf.get(id)) }),
+    // Depreciation through the day the book is read to (RULES 6.15).
+    assets: { list: await loadAssets(s.db, id), until: s.to, fyStartMonth: s.company.fiscalYearStartMonth },
+    ...(perpetualFrom && perpetualFrom <= s.to && { stock: perpetualStock(items, movements, perpetualFrom, base, (id) => sourceOf.get(id), costing) }),
   });
   return { postings, book: { parties, paymentAccounts, expenseCategories, ledgerAccounts }, stock };
 }
@@ -77,7 +83,7 @@ export async function loadPerpetualCost(s: Pick<Scope, 'db' | 'company' | 'to'>,
   if (!from || from > s.to) return undefined;
   const movements = await coreMovements(s.db, s.company.id, { to: s.to });
   const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
-  const stock = perpetualStock(items, movements, from, s.company.baseCurrency.trim(), (id) => sourceOf.get(id));
+  const stock = perpetualStock(items, movements, from, s.company.baseCurrency.trim(), (id) => sourceOf.get(id), s.company.stockCosting as 'average' | 'fifo');
   return { from, goodsCost: goodsCostByDocument(stock, docs) };
 }
 

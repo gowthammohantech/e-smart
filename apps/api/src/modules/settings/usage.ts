@@ -2,6 +2,8 @@ import { and, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { money } from '../../lib/wire';
+import { AI_LIMITS, aiLimit } from '@esmart/core/domain/plan';
+import { aiUsageOf, usageMonth } from '../../lib/aiUsage';
 import { paymentAccountBalances } from './accounts';
 
 /**
@@ -11,6 +13,13 @@ import { paymentAccountBalances } from './accounts';
  * account is used by. Company-wide, like the settings themselves.
  */
 export const usageHandlers = defineHandlers({
+  async getAiUsage(ctx) {
+    const month = usageMonth(ctx.now);
+    const used = await aiUsageOf(ctx.db, ctx.company.id, month);
+    const budget = ctx.company.aiMonthlyLimit ?? null;
+    return { month, limit: aiLimit(ctx.company.plan, budget), planLimit: AI_LIMITS[ctx.company.plan], budget, used, total: used.lixi + used.ocr };
+  },
+
   async getCompanyUsage(ctx) {
     const companyId = ctx.company.id;
     const base = ctx.company.baseCurrency.trim();

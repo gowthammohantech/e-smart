@@ -17,7 +17,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useCurrentUser } from '../../../store/selectors';
 
 /** The kinds worth holding for approval: what commits the business to money. */
-const KINDS: DocumentKind[] = ['invoice', 'creditNote', 'purchaseOrder', 'purchaseBill', 'supplierDebitNote', 'salesOrder', 'quote', 'proforma'];
+const KINDS: (DocumentKind | 'payment')[] = ['invoice', 'creditNote', 'purchaseOrder', 'purchaseBill', 'supplierDebitNote', 'salesOrder', 'quote', 'proforma', 'payment'];
 
 /** Which documents wait for an owner or admin before they are issued, and over what amount. */
 export default function ApprovalRulesScreen() {
@@ -38,7 +38,7 @@ export default function ApprovalRulesScreen() {
           ...company,
           approvalRules: Object.entries(rules)
             .filter(([, v]) => v !== null)
-            .map(([kind, v]) => ({ kind: kind as DocumentKind, overMinor: fromMajor(v || '0', currency).minor })),
+            .map(([kind, v]) => ({ kind: kind as DocumentKind | 'payment', overMinor: fromMajor(v || '0', currency).minor })),
         }),
       tr('settings:approvals.saved'),
       { icon: 'clipboard-check-outline' },
@@ -56,7 +56,7 @@ export default function ApprovalRulesScreen() {
             const on = rules[k] !== undefined && rules[k] !== null;
             return (
               <View key={k} style={{ gap: t.spacing.sm }}>
-                <SwitchField label={documentKindLabel(tr, k, 2)} value={on} onValueChange={(v) => setRules({ ...rules, [k]: v ? '0' : null })} disabled={!owner} />
+                <SwitchField label={k === 'payment' ? tr('settings:approvals.payments') : documentKindLabel(tr, k, 2)} value={on} onValueChange={(v) => setRules({ ...rules, [k]: v ? '0' : null })} disabled={!owner} />
                 {on ? <AmountField label={tr('settings:approvals.over')} value={rules[k] ?? ''} onChangeValue={(v) => setRules({ ...rules, [k]: v })} currency={currency} hint={tr('settings:approvals.overHint')} /> : null}
               </View>
             );

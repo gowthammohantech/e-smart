@@ -63,3 +63,41 @@ describe('costMovements', () => {
     expect(costs(ms)).toEqual([5000, 0, 0]);
   });
 });
+
+describe('first in, first out', () => {
+  const fifo = (ms: StockMovement[], sourceOf?: (id: string) => string | undefined) => costMovements(items, ms, { sourceOf, method: 'fifo' }).map((m) => Math.round(m.cost));
+
+  it('issues from the oldest lot first', () => {
+    // 10 at ₹60, 10 at ₹90; 15 out take all of the first and 5 of the second.
+    const ms = [mv('purchaseReceipt', 10, 6000, '2026-04-01', 'bill1'), mv('purchaseReceipt', 10, 9000, '2026-04-02', 'bill2'), mv('salesIssue', 15, 0, '2026-04-03', 'inv1')];
+    expect(fifo(ms)).toEqual([60000, 90000, -105000]);
+    expect(Math.round(costedStockValue(costMovements(items, ms, { method: 'fifo' })))).toBe(45000);
+    // The moving average takes the same 15 at ₹75.
+    expect(costs(ms)[2]).toBe(-112500);
+  });
+
+  it('brings a sales return back at what its invoice took, and sends a purchase return out of its own bill’s lot', () => {
+    const sourceOf = (id: string) => ({ ret1: 'inv1', pr1: 'bill1' })[id];
+    const ms = [
+      mv('purchaseReceipt', 10, 6000, '2026-04-01', 'bill1'),
+      mv('purchaseReceipt', 10, 9000, '2026-04-02', 'bill2'),
+      mv('salesIssue', 15, 0, '2026-04-03', 'inv1'), // ₹1,050 for 15: ₹70 each
+      mv('salesReturn', 3, 0, '2026-04-04', 'ret1'),
+      mv('purchaseReturn', 2, 0, '2026-04-05', 'pr1'), // bill1's lot is gone: the oldest left, at ₹90
+    ];
+    expect(fifo(ms, sourceOf)).toEqual([60000, 90000, -105000, 21000, -18000]);
+  });
+
+  it('values stock that went out short at the last price, and makes it good with the next lot', () => {
+    const ms = [mv('purchaseReceipt', 2, 6000, '2026-04-01', 'bill1'), mv('salesIssue', 5, 0, '2026-04-02', 'inv1'), mv('purchaseReceipt', 10, 9000, '2026-04-03', 'bill2')];
+    const c = costMovements(items, ms, { method: 'fifo' });
+    // 2 at ₹60 and 3 short at ₹60; then 10 in, 3 of them making good what was short: 7 left at ₹90.
+    expect(c.map((m) => Math.round(m.cost))).toEqual([12000, -30000, 81000]);
+    expect(Math.round(costedStockValue(c))).toBe(63000);
+  });
+
+  it('moves no value for a cancelled document', () => {
+    const ms = [mv('purchaseReceipt', 10, 6000, '2026-04-01', 'bill1'), mv('salesIssue', 4, 0, '2026-04-02', 'inv1'), mv('salesReturn', 4, 0, '2026-04-02', 'inv1')];
+    expect(fifo(ms)).toEqual([60000, 0, 0]);
+  });
+});

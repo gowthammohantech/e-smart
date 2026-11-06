@@ -117,7 +117,7 @@ export function PartyStatementView({ party }: { party: Party }) {
                   right={
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
-                        {e.debit?.minor ? `${formatMoney(e.debit)} ${tr('contacts:statement.dr')}` : `${formatMoney(e.credit ?? { minor: 0, currency: party.currency })} ${tr('contacts:statement.cr')}`}
+                        {e.debit?.minor ? `${formatMoney(e.debit)} ${tr('contacts:statement.dr')}` : e.credit?.minor ? `${formatMoney(e.credit)} ${tr('contacts:statement.cr')}` : formatMoney({ minor: 0, currency: party.currency })}
                       </Text>
                       <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
                         {balance(e.balance)}

@@ -113,7 +113,10 @@
     "proformas": "முன்மாதிரி விலைப்பட்டியல்கள்",
     "newProforma": "புதிய முன்மாதிரி விலைப்பட்டியல்",
     "proforma": "முன்மாதிரி விலைப்பட்டியல்",
-    "approvals": "ஒப்புதலுக்குக் காத்திருப்பவை"
+    "approvals": "ஒப்புதலுக்குக் காத்திருப்பவை",
+    "cashForecast": "பணப்புழக்க முன்கணிப்பு",
+    "fixedAssets": "நிலைச் சொத்துகள்",
+    "budgets": "வரவுசெலவுத் திட்டங்கள்"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {
@@ -159,7 +162,10 @@
       "security": "உள்நுழைவுப் பாதுகாப்பு",
       "modules": "தொகுதிகள்",
       "customFields": "தனிப்பயன் புலங்கள்",
-      "approvalRules": "ஒப்புதல்கள்"
+      "approvalRules": "ஒப்புதல்கள்",
+      "aiUsage": "AI பயன்பாடு",
+      "invoiceDesign": "விலைப்பட்டியல் வடிவமைப்பு",
+      "vehicles": "வாகனங்கள்"
     },
     "signOut": {
       "row": "வெளியேறு",
@@ -202,7 +208,6 @@
     "skipToContent": "உள்ளடக்கத்துக்குச் செல்",
     "assistant": "Lixi உதவியாளர்",
     "escKey": "Esc",
-    "recent": "சமீபத்தியவை",
     "overview": "{{label}} மேலோட்டம்",
     "createIn": "{{label}} — புதியது",
     "openPanel": "{{label}} பக்கங்கள்",

@@ -113,7 +113,10 @@
     "proformas": "Proforma invoices",
     "newProforma": "New proforma invoice",
     "proforma": "Proforma invoice",
-    "approvals": "Waiting for approval"
+    "approvals": "Waiting for approval",
+    "cashForecast": "Cash-flow forecast",
+    "fixedAssets": "Fixed assets",
+    "budgets": "Budgets"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -159,7 +162,10 @@
       "security": "Sign-in security",
       "modules": "Modules",
       "customFields": "Custom fields",
-      "approvalRules": "Approvals"
+      "approvalRules": "Approvals",
+      "aiUsage": "AI usage",
+      "invoiceDesign": "Invoice design",
+      "vehicles": "Vehicles"
     },
     "signOut": {
       "row": "Sign out",
@@ -202,7 +208,6 @@
     "skipToContent": "Skip to content",
     "assistant": "Lixi assistant",
     "escKey": "ESC",
-    "recent": "Recent",
     "overview": "{{label}} overview",
     "createIn": "Create in {{label}}",
     "openPanel": "{{label}} pages",

@@ -106,6 +106,8 @@ export type ImportedParty = {
   creditLimit?: Money;
   paymentTermsDays: number;
   notes?: string;
+  /** The company's contact fields, from columns named as they are (checked on the server like any save). */
+  customFields?: Record<string, string>;
 };
 
 export type ImportRow = { line: number; party?: ImportedParty; problems: string[] };
@@ -118,7 +120,12 @@ export function partiesFromCsv(
   rows: string[][],
   columns: Partial<Record<ImportField, number>>,
   defaults: { kind: ImportKind; currency: string },
+  customFields: { id: string; label: string }[] = [],
 ): ImportRow[] {
+  // A column headed with a custom field's label, in any case or spacing, fills that field.
+  const customColumns = customFields
+    .map((f) => ({ id: f.id, at: rows[0]?.findIndex((h) => squashHeader(h) === squashHeader(f.label)) ?? -1 }))
+    .filter((c) => c.at >= 0);
   return rows.slice(1).map((r, i) => {
     const get = (f: ImportField) => (columns[f] !== undefined ? (r[columns[f]!] ?? '').trim() : '');
     const problems: string[] = [];
@@ -186,6 +193,10 @@ export function partiesFromCsv(
             ...(creditLimit && { creditLimit }),
             paymentTermsDays: Number.isInteger(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 0,
             ...(get('notes') && { notes: get('notes') }),
+            ...(() => {
+              const values = Object.fromEntries(customColumns.map((c) => [c.id, (r[c.at] ?? '').trim()]).filter(([, v]) => v));
+              return Object.keys(values).length ? { customFields: values } : {};
+            })(),
           }
         : undefined;
     return { line: i + 2, party: problems.length ? undefined : party, problems };
