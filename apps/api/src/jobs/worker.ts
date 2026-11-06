@@ -54,33 +54,51 @@ export function createWorker(deps: Deps, handlers: Record<string, JobHandler>, o
     return (result.rows as unknown as Record<string, unknown>[]).map(fromRow);
   }
 
+  /**
+   * Still this worker's: running, under the claim that gave it this attempt number. A worker
+   * whose lease lapsed and was re-claimed elsewhere doesn't overwrite the new run's outcome.
+   */
+  const mine = (job: JobRow) => and(eq(schema.jobs.id, job.id), eq(schema.jobs.status, 'running'), eq(schema.jobs.attempts, job.attempts));
+
   async function finish(job: JobRow, err: unknown) {
     const now = deps.now();
     const J = schema.jobs;
     if (!err) {
-      await deps.db.update(J).set({ status: 'done', finishedAt: now, lockedUntil: null, lastError: null }).where(eq(J.id, job.id));
+      await deps.db.update(J).set({ status: 'done', finishedAt: now, lockedUntil: null, lastError: null }).where(mine(job));
       return;
     }
     const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     if (job.attempts >= job.maxAttempts) {
-      await deps.db.update(J).set({ status: 'dead', finishedAt: now, lockedUntil: null, lastError: message.slice(0, 2000) }).where(eq(J.id, job.id));
+      await deps.db.update(J).set({ status: 'dead', finishedAt: now, lockedUntil: null, lastError: message.slice(0, 2000) }).where(mine(job));
       reportError(opts.log, err, { source: `job:${job.kind}`, jobId: job.id, attempts: job.attempts });
       return;
     }
     await deps.db
       .update(J)
       .set({ status: 'queued', runAt: new Date(now.getTime() + backoffMs(job.attempts)), lockedUntil: null, lastError: message.slice(0, 2000) })
-      .where(eq(J.id, job.id));
+      .where(mine(job));
     opts.log.warn({ jobId: job.id, kind: job.kind, attempts: job.attempts, err: message }, 'job failed; will retry');
   }
 
   async function run(job: JobRow) {
     const handler = handlers[job.kind];
     let failure: unknown = null;
+    // A long job (an export, a backup, a portal fetch) keeps its lease while it works, so no
+    // other worker takes it as abandoned and runs it a second time alongside.
+    const heartbeat = setInterval(() => {
+      deps.db
+        .update(schema.jobs)
+        .set({ lockedUntil: new Date(deps.now().getTime() + LEASE_MS) })
+        .where(mine(job))
+        .catch((err: unknown) => opts.log.warn({ jobId: job.id, err: String(err) }, 'could not renew job lease'));
+    }, LEASE_MS / 3);
+    (heartbeat as { unref?: () => void }).unref?.();
     try {
       await handler({ deps, payload: (job.payload ?? {}) as Record<string, unknown>, job, log: opts.log });
     } catch (err) {
       failure = err ?? new Error('job failed');
+    } finally {
+      clearInterval(heartbeat);
     }
     await finish(job, failure);
   }

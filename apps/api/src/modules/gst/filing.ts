@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { gstr3bJson, type Amounts, type TaxKind } from '@esmart/core/domain/gstr3b';
 import { schema } from '@esmart/db';
@@ -83,8 +83,14 @@ async function recordFiled(db: DbOrTx, company: CompanyRow, actor: AuthUser, row
     const [updated] = await tx
       .update(R)
       .set({ status: 'filed', arn: f.arn, filedAt: f.filedAt, ...(f.summaryHash && { summaryHash: f.summaryHash }), lastError: null, updatedAt: now })
-      .where(eq(R.id, row.id))
+      // Only the first to record it: a second (the recover job racing a file request, or a
+      // double submit) finds it filed and posts no second set-off.
+      .where(and(eq(R.id, row.id), ne(R.status, 'filed')))
       .returning();
+    if (!updated) {
+      const [already] = await tx.select().from(R).where(eq(R.id, row.id));
+      return already;
+    }
     if (updated.returnType === 'gstr3b') await afterFiled3b(tx, company, actor, updated, now);
     await recordChange(tx, actor, { companyId: company.id, action: `filed ${updated.returnType.toUpperCase()} for ${updated.period}`, entityType: 'company', entityId: company.id, entityLabel: updated.gstin, version: company.version, after: { arn: updated.arn } });
     return updated;

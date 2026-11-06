@@ -72,6 +72,12 @@ export const planLimitReached = (plan: PlanTier, limit: number, requiredPlan: Pl
 export const invalid = (field: string, message: string, code = 'VALIDATION_FAILED') =>
   unprocessable([{ field, message, severity: 'blocking' }], code);
 
+/** Postgres refused a duplicate (23505), raw or wrapped by the query builder. */
+export function uniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === '23505' || e?.cause?.code === '23505';
+}
+
 export function problemHandler(app: FastifyInstance) {
   app.setErrorHandler((err: FastifyError | ApiError, req, reply) => {
     let status: number;
@@ -89,6 +95,11 @@ export function problemHandler(app: FastifyInstance) {
         severity: 'blocking',
       }));
       body = { code: 'VALIDATION_FAILED', detail: err.message, issues };
+    } else if (uniqueViolation(err)) {
+      // Two requests raced for the same unique record (a double submit, two devices): the
+      // second is a conflict, not a fault. 4xx also keeps its Idempotency-Key's answer.
+      status = 409;
+      body = { code: 'ALREADY_EXISTS', detail: 'This was already saved; refresh to see it' };
     } else if (err.statusCode && err.statusCode < 500) {
       status = err.statusCode;
       body = { code: err.code ?? 'BAD_REQUEST', detail: err.message };

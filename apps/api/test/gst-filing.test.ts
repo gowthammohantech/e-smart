@@ -134,6 +134,21 @@ describe('GSTR-3B and filing', () => {
     expect(journals).toHaveLength(1);
   });
 
+  it('posts one set-off when two recoveries of a lost GSTR-3B race', async () => {
+    const m = await setup();
+    await m.step('gstr1', 'save');
+    await m.step('gstr1', 'proceed');
+    await m.step('gstr1', 'file', { otp: ReturnsSimulator.OTP });
+    await m.step('gstr3b', 'save');
+    await m.step('gstr3b', 'offset');
+    await t.deps.db.update(schema.gstReturns).set({ lastError: ANSWER_LOST }).where(eq(schema.gstReturns.returnType, 'gstr3b'));
+    sim().filed.set(`${GSTIN}|gstr3b|${PERIOD}`, { arn: 'AA2709202600003', filedOn: '2026-10-15' });
+    // Two API instances run the recover job at the same moment.
+    await Promise.all([recoverLostFilings(t.deps), recoverLostFilings(t.deps)]);
+    const journals = await t.deps.db.select().from(schema.vouchers).where(and(eq(schema.vouchers.companyId, m.companyId), eq(schema.vouchers.kind, 'gstJournal')));
+    expect(journals).toHaveLength(1);
+  });
+
   it('records the books closing when the portal already has the return filed', async () => {
     const m = await setup();
     await m.step('gstr1', 'save');

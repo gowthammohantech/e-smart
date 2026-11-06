@@ -195,6 +195,14 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   return columns;
 }
 
+/** What makes two journals the same entry, for spotting one imported twice. */
+function journalFingerprint(v: { kind: string; date: string; narration: string | null; reference: string | null; lines: unknown }): string {
+  const lines = (v.lines as { account: string; debitMinor: number; creditMinor: number }[])
+    .map((l) => `${l.account}:${l.debitMinor}:${l.creditMinor}`)
+    .sort();
+  return [v.kind, v.date, (v.narration ?? '').trim().toLowerCase(), (v.reference ?? '').trim().toLowerCase(), ...lines].join('|');
+}
+
 async function findVoucher(ctx: AnyCtx, db: DbOrTx, id: string): Promise<VoucherRow> {
   const [row] = await db.select().from(V).where(and(eq(V.companyId, ctx.company.id), eq(V.id, id)));
   if (!row || (ctx.user.branchIds.length && !ctx.user.branchIds.includes(row.branchId))) throw notFound('Voucher');
@@ -382,6 +390,23 @@ export const booksHandlers = defineHandlers({
       } catch (err) {
         const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
+      }
+    }
+    // A sheet uploaded twice would post every journal again under new numbers. One already in the
+    // books (same kind, date, narration, reference and lines) is refused with its number; a
+    // journal that really repeats can say so with its narration.
+    if (good.length) {
+      const dates = [...new Set(good.map((g) => g.cols.date))];
+      const existing = await ctx.db
+        .select({ number: V.number, kind: V.kind, date: V.date, narration: V.narration, reference: V.reference, lines: V.lines })
+        .from(V)
+        .where(and(eq(V.companyId, ctx.company.id), inArray(V.date, dates)));
+      const known = new Map(existing.map((r) => [journalFingerprint(r), r.number]));
+      for (let i = good.length - 1; i >= 0; i--) {
+        const number = known.get(journalFingerprint(good[i].cols));
+        if (!number) continue;
+        results.push({ index: good[i].index, status: 'invalid', issues: [{ field: '', message: `Already in the books as ${number}; change its narration to import it again`, severity: 'blocking' }] });
+        good.splice(i, 1);
       }
     }
     if (!dryRun && good.length) {

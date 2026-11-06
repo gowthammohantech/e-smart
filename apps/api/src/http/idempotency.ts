@@ -1,4 +1,4 @@
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, isNull, lt } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { schema } from '@esmart/db';
 import type { Deps } from '../context';
@@ -7,6 +7,12 @@ import { ApiError, badRequest } from './errors';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TTL_MS = 24 * 3_600_000;
+/**
+ * A claim with no answer this old belongs to a request that died with its process (a crash, a
+ * deploy). No request runs this long, so the next retry takes it over instead of being told
+ * "still running" for the rest of the day. Matches sync's own claim TTL.
+ */
+const STALE_CLAIM_MS = 5 * 60_000;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -35,7 +41,7 @@ export function registerIdempotency(app: FastifyInstance, deps: Deps) {
     const now = deps.now();
     const inserted = await deps.db
       .insert(schema.idempotencyKeys)
-      .values({ key, userId: user.id, method: 'POST', path: req.url.slice(0, 300), requestHash, expiresAt: new Date(now.getTime() + TTL_MS) })
+      .values({ key, userId: user.id, method: 'POST', path: req.url.slice(0, 300), requestHash, createdAt: now, expiresAt: new Date(now.getTime() + TTL_MS) })
       .onConflictDoNothing()
       .returning({ key: schema.idempotencyKeys.key });
 
@@ -58,6 +64,23 @@ export function registerIdempotency(app: FastifyInstance, deps: Deps) {
       throw new ApiError(422, 'IDEMPOTENCY_KEY_REUSED', 'This Idempotency-Key was used for a different request');
     }
     if (prior.responseStatus === null) {
+      // Taken over in one statement, so two retries can't both take it.
+      const [taken] = await deps.db
+        .update(schema.idempotencyKeys)
+        .set({ createdAt: now, expiresAt: new Date(now.getTime() + TTL_MS) })
+        .where(
+          and(
+            eq(schema.idempotencyKeys.userId, user.id),
+            eq(schema.idempotencyKeys.key, key),
+            isNull(schema.idempotencyKeys.responseStatus),
+            lt(schema.idempotencyKeys.createdAt, new Date(now.getTime() - STALE_CLAIM_MS)),
+          ),
+        )
+        .returning({ key: schema.idempotencyKeys.key });
+      if (taken) {
+        req.idempotency = { key, userId: user.id };
+        return;
+      }
       throw new ApiError(409, 'IDEMPOTENT_REQUEST_IN_PROGRESS', 'The original request is still running');
     }
     void reply.header('Idempotent-Replayed', 'true');

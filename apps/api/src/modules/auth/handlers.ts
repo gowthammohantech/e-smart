@@ -151,35 +151,39 @@ export const authHandlers = defineHandlers({
 
   async requestOtp(ctx) {
     const phone = ctx.body.phone.trim();
-    // Local development is never throttled; every other environment is.
-    if (ctx.deps.config.NODE_ENV !== 'development') {
-      const hourAgo = new Date(ctx.now.getTime() - 3_600_000);
-      const [{ count }] = await ctx.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.otpRequests)
-        .where(and(eq(schema.otpRequests.phone, phone), gt(schema.otpRequests.createdAt, hourAgo)));
-      if (count >= OTP_MAX_PER_HOUR) throw tooManyRequests('Too many codes requested for this number; try again later');
-      const [latest] = await ctx.db
-        .select({ createdAt: schema.otpRequests.createdAt })
-        .from(schema.otpRequests)
-        .where(eq(schema.otpRequests.phone, phone))
-        .orderBy(desc(schema.otpRequests.createdAt))
-        .limit(1);
-      if (latest && ctx.now.getTime() - latest.createdAt.getTime() < OTP_RESEND_AFTER_SECONDS * 1000) {
-        throw tooManyRequests(`Wait ${OTP_RESEND_AFTER_SECONDS} seconds before asking for another code`);
-      }
-    }
-
     const isTestPhone = ctx.deps.config.TEST_OTP_PHONES.includes(phone.replace(/\D/g, '').slice(-10));
     const code = ctx.deps.config.DEMO_OTP || isTestPhone ? '123456' : String(randomInt(0, 1_000_000)).padStart(6, '0');
     const requestId = newId('otp');
     const channel = ctx.body.channel ?? 'sms';
-    await ctx.db.insert(schema.otpRequests).values({
-      id: requestId,
-      phone,
-      channel,
-      codeHash: sha256(`${requestId}:${code}`),
-      expiresAt: new Date(ctx.now.getTime() + OTP_TTL_SECONDS * 1000),
+    // Checked and recorded under a lock on the number: two requests at once (a double tap, two
+    // tabs) would otherwise both pass the resend gap and both send a code.
+    await ctx.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`otp:${phone}`}))`);
+      // Local development is never throttled; every other environment is.
+      if (ctx.deps.config.NODE_ENV !== 'development') {
+        const hourAgo = new Date(ctx.now.getTime() - 3_600_000);
+        const [{ count }] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.otpRequests)
+          .where(and(eq(schema.otpRequests.phone, phone), gt(schema.otpRequests.createdAt, hourAgo)));
+        if (count >= OTP_MAX_PER_HOUR) throw tooManyRequests('Too many codes requested for this number; try again later');
+        const [latest] = await tx
+          .select({ createdAt: schema.otpRequests.createdAt })
+          .from(schema.otpRequests)
+          .where(eq(schema.otpRequests.phone, phone))
+          .orderBy(desc(schema.otpRequests.createdAt))
+          .limit(1);
+        if (latest && ctx.now.getTime() - latest.createdAt.getTime() < OTP_RESEND_AFTER_SECONDS * 1000) {
+          throw tooManyRequests(`Wait ${OTP_RESEND_AFTER_SECONDS} seconds before asking for another code`);
+        }
+      }
+      await tx.insert(schema.otpRequests).values({
+        id: requestId,
+        phone,
+        channel,
+        codeHash: sha256(`${requestId}:${code}`),
+        expiresAt: new Date(ctx.now.getTime() + OTP_TTL_SECONDS * 1000),
+      });
     });
     // Test numbers use the fixed code and are never messaged.
     if (isTestPhone) return { requestId, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_AFTER_SECONDS };

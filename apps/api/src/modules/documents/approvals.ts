@@ -4,6 +4,7 @@ import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { notify } from '../../lib/notify';
+import { conflict } from '../../http/errors';
 
 const D = schema.documents;
 type DocRow = typeof D.$inferSelect;
@@ -47,6 +48,8 @@ export async function decide(tx: DbOrTx, user: AuthUser, row: DocRow, status: 'a
   const was = row.approval as Approval;
   const approval: Approval = { ...was, status, decidedBy: user.id, decidedAt: now.toISOString(), ...(note && { note }) };
   const [updated] = await tx.update(D).set({ approval, version: row.version + 1, updatedAt: now }).where(and(eq(D.id, row.id), eq(D.version, row.version))).returning();
+  // Someone else decided first (or the same tap landed twice): theirs stands.
+  if (!updated) throw conflict('ALREADY_DECIDED', 'This document was decided on a moment ago; refresh to see it');
   await recordChange(tx, user, { companyId: row.companyId, action: status === 'approved' ? 'approved' : 'approvalRejected', entityType: 'document', entityId: row.id, entityLabel: row.number, version: updated.version, after: { approval } });
   return updated;
 }

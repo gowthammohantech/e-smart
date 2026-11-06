@@ -86,7 +86,7 @@ export async function generateEInvoiceFor(
   company: CompanyRow,
   actor: AuthUser,
   documentId: string,
-  opts: { now: Date; dryRun?: boolean; onlyIfApplicable?: boolean },
+  opts: { now: Date; dryRun?: boolean; onlyIfApplicable?: boolean; reconciling?: boolean },
 ): Promise<GenerateOutcome> {
   const { now, dryRun } = opts;
   const failed = async (tx: DbOrTx, row: DocRow, found: ComplianceIssue[], request?: IrpInvoicePayload, newAttempt = true) => {
@@ -101,6 +101,12 @@ export async function generateEInvoiceFor(
     if (existing?.status === 'generated') {
       if (opts.onlyIfApplicable) return { kind: 'skipped' as const };
       return { kind: 'ok' as const, issues: (existing.issues as ComplianceIssue[] | null) ?? [], payload: (existing.requestPayload as IrpInvoicePayload | null) ?? undefined };
+    }
+    // Already sent and not yet answered (a double tap, or a second device): asking the portal
+    // again would register it twice. The reconcile job settles it once the answer is overdue.
+    if (!dryRun && !opts.reconciling && existing?.status === 'pending' && existing.lastAttemptAt && existing.lastAttemptAt > new Date(now.getTime() - RECONCILE_AFTER_MS)) {
+      if (opts.onlyIfApplicable) return { kind: 'skipped' as const };
+      throw conflict('EINVOICE_IN_PROGRESS', 'This invoice is already with the e-invoice portal; its IRN will show here once the portal answers');
     }
 
     const ctx = await eInvoiceContext(tx, company, row, now);
@@ -234,7 +240,7 @@ export async function reconcileEInvoices(deps: Deps): Promise<number> {
       const [doc] = await deps.db.select({ createdBy: D.createdBy }).from(D).where(eq(D.id, documentId));
       const actor = await actorFor(deps.db, doc?.createdBy, 'Reconcile');
       if (!company || !actor) continue;
-      const outcome = await generateEInvoiceFor(deps.db, deps, company, actor, documentId, { now });
+      const outcome = await generateEInvoiceFor(deps.db, deps, company, actor, documentId, { now, reconciling: true });
       if (outcome.kind === 'ok') settled += 1;
     } catch {
       // Still no answer: the next run asks again.
