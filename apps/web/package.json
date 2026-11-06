@@ -70,6 +70,6 @@
     "axe-core": "4.10.3",
     "babel-preset-expo": "~57.0.5",
     "eslint": "^9.39.5",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   }
 }
