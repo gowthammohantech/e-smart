@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { isOpenRouter, lixiModels, type Config } from '../config';
+import { formatMoney } from '@esmart/core/lib/format';
+import { LIXI_DEFAULT_MODELS, isOpenRouter, lixiModels, type Config } from '../config';
 
 /**
  * The model behind Lixi. The provider only talks to the model; which tools
@@ -71,7 +72,7 @@ const SYSTEM = `You are Lixi, the assistant inside Elixir Books, an invoicing an
 
 How you work:
 - Every figure you state comes from a tool result in this conversation. Never estimate, invent or recall numbers. If the tools cannot answer, say so plainly.
-- Money in tool results is {minor, currency} in integer minor units: 123450 INR is ₹1,234.50. Write amounts the way the company's currency is written.
+- Money in tool results is {minor, currency, display}. Quote "display" exactly as written (it is already in rupees, e.g. ₹5,32,160.00); never work an amount out from "minor", which is in paise. Pass "minor" when a write tool asks for money.
 - Look things up before answering; use search to turn a name into an id. Prefer one well-chosen call over many.
 - A 403 PLAN_UPGRADE_REQUIRED means that module is not in the company's plan: say so briefly and offer the plan page. A 403 ROLE_FORBIDDEN means the user's role cannot do that.
 - Write tools (drafting documents, recording payments or expenses, adding parties, sending documents or reminders) never write. They prepare one pending action that the user confirms in the app. After one succeeds, say in a sentence what is ready for them to confirm. Prepare at most one action per reply.
@@ -128,6 +129,27 @@ export function parseReply(text: string): AssistantReply {
   } catch {
     return body && !body.startsWith('{') && !body.startsWith('[') ? { text: body, stats: [], actions: [] } : FALLBACK;
   }
+}
+
+/**
+ * Adds `display` (e.g. "₹5,32,160.00") beside every {minor, currency} amount in a
+ * tool result. Models misread paise as rupees and get answers 100x out; a ready
+ * string they only have to copy is far safer than arithmetic.
+ */
+export function withDisplayAmounts(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withDisplayAmounts);
+  if (!value || typeof value !== 'object') return value;
+  const o = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(o)) out[k] = withDisplayAmounts(v);
+  if (typeof o.minor === 'number' && typeof o.currency === 'string' && !('display' in o)) {
+    try {
+      out.display = formatMoney({ minor: o.minor, currency: o.currency } as Parameters<typeof formatMoney>[0]);
+    } catch {
+      // An unknown currency keeps just minor and currency.
+    }
+  }
+  return out;
 }
 
 /** A tool's answer in words, for the simulator: its top-level figures, amounts in rupees. */
@@ -209,7 +231,7 @@ export class AnthropicAssistant implements AssistantProvider {
           return {
             type: 'tool_result',
             tool_use_id: call.id,
-            content: JSON.stringify(outcome.ok ? outcome.value : outcome.error),
+            content: JSON.stringify(outcome.ok ? withDisplayAmounts(outcome.value) : outcome.error),
             ...(outcome.ok ? {} : { is_error: true }),
           };
         }),
@@ -231,6 +253,8 @@ type OaiChoice = { finish_reason: string | null; message: { content?: string | n
 /** `cost` is OpenRouter's, in US dollars; other servers leave it out. */
 type OaiUsage = { prompt_tokens?: number; completion_tokens?: number; cost?: number };
 type OaiCompletion = { model?: string; choices?: OaiChoice[]; usage?: OaiUsage };
+
+const BUILT_IN_MODELS = new Set<string>(Object.values(LIXI_DEFAULT_MODELS));
 
 const RETRYABLE = new Set([408, 409, 429, 500, 502, 503, 504]);
 
@@ -286,7 +310,6 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
       const body = {
         messages,
         ...(tools.length ? { tools, tool_choice: last ? 'none' : 'auto' } : {}),
-        ...this.responseFormat(req.routes),
         ...(this.config.OPENAI_REASONING_EFFORT ? { reasoning_effort: this.config.OPENAI_REASONING_EFFORT } : {}),
         ...(this.openRouter ? { usage: { include: true } } : {}),
       };
@@ -294,7 +317,7 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
       for (;;) {
         const model = this.models[current]!;
         try {
-          answer = await this.complete({ model, ...body }, model);
+          answer = await this.complete({ model, ...body, ...this.responseFormat(req.routes, model) }, model);
           break;
         } catch (err) {
           if (!(err instanceof AssistantUnavailable) || current + 1 >= this.models.length) throw err;
@@ -323,7 +346,7 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
             return { role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 400, code: 'BAD_ARGUMENTS', detail: 'Arguments were not valid JSON' }) };
           }
           const outcome = await req.execute(call.function.name, input);
-          return { role: 'tool', tool_call_id: call.id, content: JSON.stringify(outcome.ok ? outcome.value : { error: outcome.error }) };
+          return { role: 'tool', tool_call_id: call.id, content: JSON.stringify(outcome.ok ? withDisplayAmounts(outcome.value) : { error: outcome.error }) };
         }),
       );
       messages.push(...results);
@@ -331,7 +354,10 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
     return usage.on(FALLBACK);
   }
 
-  private responseFormat(routes: readonly string[]) {
+  private responseFormat(routes: readonly string[], model: string) {
+    // The built-in free models answer in text instead of calling tools when a format is asked for;
+    // the prompt asks for JSON anyway and parseReply copes with loose JSON.
+    if (BUILT_IN_MODELS.has(model)) return {};
     switch (this.config.OPENAI_RESPONSE_FORMAT) {
       case 'json_schema':
         return { response_format: { type: 'json_schema', json_schema: { name: 'lixi_reply', strict: true, schema: REPLY_SCHEMA(routes) } } };

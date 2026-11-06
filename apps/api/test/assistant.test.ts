@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LIXI_DEFAULT_MODELS } from '../src/config';
-import { AnthropicAssistant, AssistantUnavailable, OpenAICompatibleAssistant, parseReply, type ToolOutcome } from '../src/providers/assistant';
+import { AnthropicAssistant, AssistantUnavailable, OpenAICompatibleAssistant, parseReply, withDisplayAmounts, type ToolOutcome } from '../src/providers/assistant';
 
 const message = (content: unknown[], stop_reason: string) => ({
   id: `msg_${Math.random()}`,
@@ -63,7 +63,7 @@ describe('AnthropicAssistant', () => {
     // The tool result goes back after the assistant's tool call.
     expect(second.body.messages.at(-1)).toEqual({
       role: 'user',
-      content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: JSON.stringify({ total: { minor: 118000, currency: 'INR' } }) }],
+      content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: JSON.stringify({ total: { minor: 118000, currency: 'INR', display: '₹1,180.00' } }) }],
     });
   });
 
@@ -152,7 +152,7 @@ describe('OpenAICompatibleAssistant', () => {
     expect(first.body.messages[0].content).toContain('Today is 2026-09-29.');
     expect(second.body.messages.slice(-2)).toEqual([
       { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_receivables', arguments: '{"overdue":true}' } }] },
-      { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify({ total: { minor: 118000, currency: 'INR' } }) },
+      { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify({ total: { minor: 118000, currency: 'INR', display: '₹1,180.00' } }) },
     ]);
   });
 
@@ -215,6 +215,8 @@ describe('OpenAICompatibleAssistant', () => {
     const req = { history: [{ role: 'user' as const, text: 'hi' }], context: '', tools, execute: async (): Promise<ToolOutcome> => ({ ok: true, value: {} }), routes: [] };
     await new OpenAICompatibleAssistant({ ...oaiConfig, OPENAI_BASE_URL: 'https://openrouter.ai/api/v1', LIXI_MODEL: undefined }, api.fetch).reply(req);
     expect(api.requests[0].body.model).toBe(LIXI_DEFAULT_MODELS.primary);
+    // These models skip the tools when a response format is asked for.
+    expect(api.requests[0].body).not.toHaveProperty('response_format');
   });
 
   it('falls back to the secondary when the primary fails, and stays on it for the rest of the reply', async () => {
@@ -255,6 +257,18 @@ describe('OpenAICompatibleAssistant', () => {
     expect(ran).toBe(false);
     expect(api.requests[1].body.messages.at(-1).content).toContain('BAD_ARGUMENTS');
     expect(reply.text).toBe("I can't help with that one.");
+  });
+});
+
+describe('amounts handed to the model', () => {
+  it('adds a rupee string beside every amount, however deep, and leaves the rest alone', () => {
+    expect(withDisplayAmounts({ total: { minor: 53216000, currency: 'INR' }, rows: [{ name: 'Rent', amount: { minor: 11000000, currency: 'INR' } }], count: 14 })).toEqual({
+      total: { minor: 53216000, currency: 'INR', display: '₹5,32,160.00' },
+      rows: [{ name: 'Rent', amount: { minor: 11000000, currency: 'INR', display: '₹1,10,000.00' } }],
+      count: 14,
+    });
+    expect(withDisplayAmounts({ minor: -5050, currency: 'INR' })).toEqual({ minor: -5050, currency: 'INR', display: '-₹50.50' });
+    expect(withDisplayAmounts(null)).toBeNull();
   });
 });
 
