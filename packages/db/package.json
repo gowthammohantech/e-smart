@@ -28,7 +28,7 @@
   "devDependencies": {
     "@esmart/eslint-config": "*",
     "@esmart/tsconfig": "*",
-    "@types/node": "^22",
+    "@types/node": "^26",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9.39.5",
