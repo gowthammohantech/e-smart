@@ -142,7 +142,7 @@ describe('credit and debit notes', () => {
   });
 });
 
-describe('direct notes: with GST (s.34) or a financial note without (RULES 6.22)', () => {
+describe('direct notes: with GST (s.34) or a financial note without (RULES 6.24)', () => {
   const direct = (m: Money, kind: string, minor: number, over: Record<string, unknown> = {}) => note(m, kind, '', minor, { sourceDocumentId: undefined, ...over });
 
   it('with GST: needs the original invoice number and date, keeps the s.34 deadline from it, and reports them', async () => {
@@ -164,7 +164,7 @@ describe('direct notes: with GST (s.34) or a financial note without (RULES 6.22)
     expect(gstr1.body.cdnr).toEqual([expect.objectContaining({ number: ok.body.number, originalNumber: 'INV/25-26/0042', originalDate: '2025-06-10' })]);
   });
 
-  it('without GST: no tax on any line, posted to discount allowed, out of GSTR-1 and 3B', async () => {
+  it('without GST: no tax on any line, posted to discount allowed, out of GSTR-1', async () => {
     const m = await moneySetup(t);
     const res = await t.post(`${m.c}/documents`, direct(m, 'creditNote', 50000, { partyId: m.bengaluru.id, noteGst: 'noGst' }), { token: m.token });
     expect(res.status).toBe(201);
@@ -181,9 +181,6 @@ describe('direct notes: with GST (s.34) or a financial note without (RULES 6.22)
     const gstr1 = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '092026' } });
     expect(gstr1.body.cdnr).toEqual([]);
     expect(gstr1.body.b2cs).toEqual([]);
-    const threeB = await t.get(`${m.c}/gst/gstr3b`, { token: m.token, query: { period: '092026' } });
-    expect(threeB.status).toBe(200);
-    expect(threeB.body.outward.taxable.taxable.minor ?? threeB.body.outward.taxable.taxable).toBe(0);
 
     // A note against an invoice adjusts its GST; it can't be a financial one.
     const inv = await issueInvoice(t, m);

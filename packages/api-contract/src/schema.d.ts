@@ -1504,7 +1504,7 @@ export interface paths {
          *     `notes`, `terms`, `reference` and `attachmentIds` can change, and an
          *     e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
          *
-         *     The exception (RULES 6.21, pending CA): an issued invoice whose `editable` is true is edited
+         *     The exception (RULES 6.23, pending CA): an issued invoice whose `editable` is true is edited
          *     in full. It is recomputed as a draft save is and keeps its number and branch; its stock is
          *     taken back and posted again, and its expected TDS and TCS worked out afresh. Its date may not
          *     move before the invoice issued before it (422 DATE_BEFORE_PREVIOUS), out of its numbering
@@ -5811,7 +5811,7 @@ export interface components {
              */
             noteReason?: "discount" | "priceChange" | "taxCorrection" | "deficiency" | "other";
             /**
-             * @description A direct note's GST treatment (no sourceDocumentId; RULES 6.22). withGst (the default) is a s.34 note: it names the original invoice or bill (originalNumber, originalDate), goes to GSTR-1 CDNR/CDNUR and, for a credit note, must be issued by 30 November after the end of the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or commercial note: no tax on any line, posted to discount allowed (or received), and left out of GSTR-1 and GSTR-3B.
+             * @description A direct note's GST treatment (no sourceDocumentId; RULES 6.24). withGst (the default) is a s.34 note: it names the original invoice or bill (originalNumber, originalDate), goes to GSTR-1 CDNR/CDNUR and, for a credit note, must be issued by 30 November after the end of the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or commercial note: no tax on any line, posted to discount allowed (or received), and left out of GSTR-1 and GSTR-3B.
              * @enum {string}
              */
             noteGst?: "withGst" | "noGst";
@@ -5908,7 +5908,7 @@ export interface components {
             };
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
-            /** @description On an invoice: whether it can be edited in full. A draft always can; an issued one only while it is the latest in its series, with nothing allocated, applied or raised against it, no IRN or e-way bill, and its GSTR-1 month and books period open (RULES 6.21). Unset on other kinds. */
+            /** @description On an invoice: whether it can be edited in full. A draft always can; an issued one only while it is the latest in its series, with nothing allocated, applied or raised against it, no IRN or e-way bill, and its GSTR-1 month and books period open (RULES 6.23). Unset on other kinds. */
             readonly editable?: boolean;
             /**
              * @description Why an issued invoice can't be edited in full (editable false)
@@ -6940,6 +6940,10 @@ export interface components {
             invoiceValue?: components["schemas"]["Money"];
             /** @description Set on an export, or a credit note against one */
             exported?: boolean;
+            /** @description On a note: the invoice it adjusts, linked or (a direct note with GST) as entered on it */
+            originalNumber?: string;
+            /** Format: date */
+            originalDate?: string;
         };
         HsnRow: {
             hsnCode?: string;

@@ -31,6 +31,10 @@ export type DraftState = {
   reverseCharge?: boolean;
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
+  /** A direct note's GST treatment, and (with GST) the original invoice or bill it adjusts (RULES 6.24). */
+  noteGst?: 'withGst' | 'noGst';
+  originalNumber?: string;
+  originalDate?: string;
   /** A TDS section, `none`, or unset for the supplier's own (on an invoice, the customer's). */
   tdsSection?: string;
   /** On an invoice: the rate the customer will deduct at; unset takes the section's. */
@@ -114,6 +118,9 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,
     reverseCharge: doc.reverseCharge,
     noteReason: doc.noteReason,
+    noteGst: doc.noteGst,
+    originalNumber: doc.originalNumber,
+    originalDate: doc.originalDate,
     // A stored bill keeps what it was worked out with.
     tdsSection: doc.tdsSection ?? doc.tds?.section ?? doc.tdsExpected?.section ?? 'none',
     tdsRate: doc.tdsRate ?? doc.tdsExpected?.rate,

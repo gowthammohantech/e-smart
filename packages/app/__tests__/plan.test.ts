@@ -36,6 +36,10 @@ describe('plan tiers', () => {
     expect(moduleForPath('/gst/gstr2b')).toBe('purchases');
     expect(moduleForPath('/gst/gstr2b-reconciliation')).toBe('purchases');
     expect(moduleForPath('/purchasesque')).toBeNull();
+    expect(moduleForPath('/gst/utilization')).toBe('books');
+    expect(moduleForPath('/gst/challan')).toBe('books');
+    expect(moduleForPath('/gst/journal')).toBe('books');
+    expect(moduleForPath('/books/transfer')).toBe('books');
     expect(moduleForPath('/receipts')).toBe('books');
     // Adjusting advances sits under /receipts but is a payments screen, open like payments.
     expect(moduleForPath('/receipts/adjust')).toBeNull();

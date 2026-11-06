@@ -22,7 +22,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
 import { DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
-import { NOTE_KINDS, PURCHASE_KINDS } from '@esmart/core/domain/documentStates';
+import { NOTE_KINDS, PURCHASE_KINDS, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
@@ -50,6 +50,7 @@ import {
   useItems,
   useParties,
   useDefaultBranchId,
+  useDocument,
   useTaxCategories,
 } from '../../store/selectors';
 import {
@@ -153,6 +154,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const isNote = NOTE_KINDS.includes(kind);
   const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn || isNote);
 
+  // An issued invoice opened here is the latest of its series being edited in full (RULES 6.23): it is
+  // saved, never finalised again, and the server says whether it may be.
+  const existing = useDocument(documentId);
+  const editingIssued = !!existing && isFinalized(existing.status) && existing.status !== 'cancelled';
   const createDocument = useAppStore((s) => s.createDocument);
   const updateDocument = useAppStore((s) => s.updateDocument);
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
@@ -228,16 +233,19 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   // Party and place of supply decide export / SEZ / import treatment (IGST, or none under LUT).
   const draftTaxContext = useCallback(
-    (d: DraftState) =>
-      buildTaxContext(company, {
+    (d: DraftState) => {
+      const ctx = buildTaxContext(company, {
         placeOfSupply: d.placeOfSupplyStateCode,
         party: parties.find((p) => p.id === d.partyId),
         date: d.date,
         purchase: isPurchase,
         branch: branches.find((b) => b.id === (d.branchId ?? defaultBranchId)),
         reverseCharge: d.reverseCharge,
-      }),
-    [company, parties, isPurchase, branches, defaultBranchId],
+      });
+      // A financial note without GST charges none, as the server works it out (RULES 6.24).
+      return isNote && !d.sourceDocumentId && d.noteGst === 'noGst' ? { ...ctx, registered: false, reverseCharge: false } : ctx;
+    },
+    [company, parties, isPurchase, isNote, branches, defaultBranchId],
   );
 
   // TCS on an invoice (s.206C): the section's rate, higher for a buyer with no PAN, over the 206C(1F) threshold only.
@@ -258,6 +266,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     initial: initialDraft ?? seed?.draft,
     tcsRate: kind === 'invoice' ? tcsRateOfDraft : kind === 'creditNote' || kind === 'salesReturn' ? tcsRateOfNote : undefined,
   });
+
+  // A note raised against no one invoice or bill (?direct=1): it chooses its GST treatment.
+  const directNote = isNote && !draft.sourceDocumentId;
 
   // What the person has picked or typed, to tell an untouched form from one with changes to lose.
   const entered = JSON.stringify([
@@ -544,6 +555,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
       // Not over another sheet (picking an item, editing a line…): finish that first.
       if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
+      if (editingIssued) return void save(false);
       setSendAfter(false);
       requestFinalize();
     };
@@ -602,6 +614,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
       reverseCharge: draft.reverseCharge || undefined,
       noteReason: isNote ? draft.noteReason : undefined,
+      // A direct note says how it stands with GST; with GST it names the supply it adjusts (RULES 6.24).
+      noteGst: directNote ? (draft.noteGst ?? 'withGst') : undefined,
+      originalNumber: directNote && draft.noteGst !== 'noGst' ? draft.originalNumber?.trim() || undefined : undefined,
+      originalDate: directNote && draft.noteGst !== 'noGst' ? draft.originalDate : undefined,
       tdsSection: billTds || saleTds ? draft.tdsSection : undefined,
       tdsRate: saleTds && draft.tdsSection && draft.tdsSection !== 'none' ? draft.tdsRate : undefined,
       // `none` is sent as itself: unset on a new invoice would take the customer's section.
@@ -641,25 +657,29 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       return;
     }
     const id = res.id ?? res.result;
-    // An issued invoice or bill is usually paid next, so the toast offers it.
-    const payable = finalize && (kind === 'invoice' || kind === 'purchaseBill');
+    // An issued invoice can still be put right while it is the latest (RULES 6.23), so the toast offers
+    // that; an issued bill is usually paid next, so its toast offers that.
+    const issuedInvoice = kind === 'invoice' && (finalize || editingIssued);
     toast.show(
       res.outcome === 'queued'
         ? tr('common:save.queued')
-        : finalize
-          ? tr('common:documentEditor.finalised', { kind: kindName })
-          : tr('common:documentEditor.savedDraft'),
+        : editingIssued
+          ? tr('common:documentEditor.updatedIssued', { kind: kindName })
+          : finalize
+            ? tr('common:documentEditor.finalised', { kind: kindName })
+            : tr('common:documentEditor.savedDraft'),
       'success',
       {
-        icon: finalize ? 'file-check-outline' : 'content-save-outline',
+        icon: finalize || editingIssued ? 'file-check-outline' : 'content-save-outline',
         detail: [party?.name, formatMoney(totals.grandTotal)].filter(Boolean).join(' · '),
-        action: payable
-          ? {
-              label: tr(kind === 'invoice' ? 'common:toast.recordPayment' : 'common:toast.paySupplier'),
-              onPress: () =>
-                router.push(`/(app)/payments/new?direction=${kind === 'invoice' ? 'received' : 'paid'}&partyId=${draft.partyId}&documentId=${id}` as never),
-            }
-          : undefined,
+        action: issuedInvoice
+          ? { label: tr('common:toast.editInvoice'), onPress: () => router.push(`${detailRouteFor(kind, id)}/edit` as never) }
+          : finalize && kind === 'purchaseBill'
+            ? {
+                label: tr('common:toast.paySupplier'),
+                onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${draft.partyId}&documentId=${id}` as never),
+              }
+            : undefined,
       },
     );
     // Saved: leaving for the saved document isn't leaving changes behind.
@@ -930,6 +950,42 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           icon="text-box-outline"
           hint={tr('sales:editor.noteReasonHint')}
         />
+      ) : null}
+
+      {directNote ? (
+        <View style={{ gap: t.spacing.sm }}>
+          <Text variant="small" tone="muted" weight="500">
+            {tr('sales:editor.noteGst.label')}
+          </Text>
+          <Segmented
+            options={[
+              { value: 'withGst', label: tr('sales:editor.noteGst.withGst') },
+              { value: 'noGst', label: tr('sales:editor.noteGst.noGst') },
+            ]}
+            value={draft.noteGst ?? 'withGst'}
+            onChange={(v) => patch({ noteGst: v as 'withGst' | 'noGst' })}
+          />
+          <Text variant="caption" tone="muted">
+            {tr(draft.noteGst === 'noGst' ? 'sales:editor.noteGst.noGstHint' : 'sales:editor.noteGst.withGstHint')}
+          </Text>
+          {draft.noteGst !== 'noGst' ? (
+            <FieldRow>
+              <TextField
+                label={tr(isPurchase ? 'sales:editor.noteGst.originalBill' : 'sales:editor.noteGst.originalInvoice')}
+                value={draft.originalNumber ?? ''}
+                onChangeText={(originalNumber) => patch({ originalNumber })}
+                icon="file-document-outline"
+                maxLength={40}
+              />
+              <DateField
+                label={tr('sales:editor.noteGst.originalDate')}
+                value={draft.originalDate ?? ''}
+                onChange={(originalDate) => patch({ originalDate })}
+                maximumDate={new Date()}
+              />
+            </FieldRow>
+          ) : null}
+        </View>
       ) : null}
 
       {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
@@ -1333,6 +1389,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             <Stack.Screen
               options={{
                 headerRight: () => (
+                  editingIssued ? (
+                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId || draft.lines.length === 0} />
+                  ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
                     <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
                     {canSend && !onSaved ? (
@@ -1361,6 +1420,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                       disabled={blocked || !draft.partyId || draft.lines.length === 0}
                     />
                   </View>
+                  )
                 ),
               }}
             />
@@ -1441,10 +1501,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   style={{ flex: 2 }}
                 />
               ) : (
+                editingIssued ? (
+                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                ) : (
                 <>
                   <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
                   <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} disabled={blocked} style={{ flex: 1 }} />
                 </>
+                )
               )}
             </View>
           </View>

@@ -46,7 +46,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
+import { queryClient, useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
@@ -59,7 +59,7 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
-import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
+import { documentPdf, paymentLink, pdfFileName, pdfLink, removeCreditApplication, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
 import { RecurrenceSheet } from './RecurrenceSheet';
 import { ensurePushRegistered } from '../../remote/push';
@@ -88,7 +88,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   useDocumentRecord(doc.sourceDocumentId);
   const sourceDoc = useDocument(doc.sourceDocumentId);
   // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
-  const record = useDocumentRecord(doc.id).data;
+  const recordQuery = useDocumentRecord(doc.id);
+  const record = recordQuery.data;
   const allPayments = usePayments();
   // Its current e-way bill, fetched into the store: the device keeps only the bills it has seen.
   useEwayBillRecord(doc.compliance?.ewayBillId);
@@ -653,8 +654,71 @@ ${url}`;
       </Card>
     </>
   );
+  // An issued invoice may be edited in full while it is the latest of its series and nothing stands on
+  // it (RULES 6.23): the server says so. When it can't for a reason other than a later invoice, the
+  // reason is the hint.
+  const editable = !isFinalized(doc.status) || (record?.editable ?? doc.editable) === true;
+  type HintedBlock = 'periodLocked' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
+  const editBlock = (record?.editBlock ?? doc.editBlock) as string | undefined;
+  const hinted = (b: string | undefined): b is HintedBlock => !!b && !['notLatest', 'notFinal', 'notInvoice'].includes(b);
+  const editHint: string | undefined = !editable && doc.kind === 'invoice' && doc.status !== 'cancelled' && hinted(editBlock) ? tr(`sales:detail.editBlock.${editBlock}`) : undefined;
+  const openEditor = () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never);
+
+  // Direct credit notes applied to it (or, on a note, where it was applied), each of which can be undone.
+  const applications = record?.creditApplications ?? [];
+  const undoApplication = (applicationId: string, label: string) =>
+    runRemote(
+      async () => {
+        await removeCreditApplication(doc.companyId, applicationId);
+        await recordQuery.refetch();
+        void queryClient.invalidateQueries({ queryKey: ['document'] });
+      },
+      { loading: tr('sales:detail.creditApplications.undoing'), success: tr('sales:detail.creditApplications.undone', { label }), icon: 'undo-variant' },
+    );
+
   const paymentsSection = (
     <>
+      {applications.length > 0 ? (
+        <>
+          <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.creditApplications.title')}</Text>
+          <Card padded={false}>
+            {applications.map((a, i) => {
+              const other = a.noteId === doc.id ? a.documentNumber : a.noteNumber;
+              return (
+                <View
+                  key={a.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: t.spacing.md,
+                    padding: t.spacing.lg,
+                    borderBottomWidth: i < applications.length - 1 ? 0.5 : 0,
+                    borderBottomColor: t.c.line,
+                  }}
+                >
+                  <Icon name="file-document-minus-outline" size={20} color={t.c.primary} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text variant="body" weight="600">
+                      {other}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {formatDate(a.date)} · {formatMoney(a.amount as Money)}
+                    </Text>
+                  </View>
+                  <Button
+                    title={tr('sales:detail.creditApplications.undo')}
+                    variant="ghost"
+                    size="sm"
+                    icon="undo-variant"
+                    onPress={() => undoApplication(a.id, other)}
+                    disabled={busy}
+                  />
+                </View>
+              );
+            })}
+          </Card>
+        </>
+      ) : null}
       {/* Payments */}
       {relatedPayments.length > 0 ? (
         <>
@@ -792,13 +856,10 @@ ${url}`;
 
   const desktopActions = (
     <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-      {!isFinalized(doc.status) ? (
-        <Button
-          title={tr('sales:detail.edit')}
-          variant="ghost"
-          icon="pencil-outline"
-          onPress={() => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never)}
-        />
+      {editable ? (
+        <Button title={tr('sales:detail.edit')} variant="ghost" icon="pencil-outline" onPress={openEditor} />
+      ) : editHint ? (
+        <Button title={tr('sales:detail.edit')} variant="ghost" icon="pencil-off-outline" tooltip={editHint} onPress={() => toast.show(editHint, 'info')} />
       ) : null}
       <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
       {!isFinalized(doc.status) ? (
@@ -933,8 +994,13 @@ ${url}`;
                             icon: 'credit-card-outline',
                           }) }]
                   : []),
+                ...(editable
+                  ? [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]
+                  : editHint
+                    ? [{ label: tr('sales:detail.edit'), icon: 'pencil-off-outline' as const, onPress: () => toast.show(editHint, 'info') }]
+                    : []),
               ]
-            : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
+            : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]),
           {
             label: doc.kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
             icon: 'cash-plus' as const,

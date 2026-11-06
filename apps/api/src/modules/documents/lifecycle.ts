@@ -434,7 +434,7 @@ async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
     throw unprocessable([{ field, message, severity: 'blocking' }], code);
   };
   if (!row.sourceDocumentId && NOTE_KINDS.includes(row.kind)) {
-    // A direct credit note with GST keeps the s.34(2) deadline, from the original invoice it names (RULES 6.22).
+    // A direct credit note with GST keeps the s.34(2) deadline, from the original invoice it names (RULES 6.24).
     if (row.kind === 'creditNote' && row.noteGst !== 'noGst' && row.originalDate && row.date > creditNoteDeadline(row.originalDate)) {
       return blocking('date', `A credit note for ${row.originalNumber ?? 'an invoice'} of ${row.originalDate} had to be issued by ${creditNoteDeadline(row.originalDate)} (CGST s.34(2))`, 'NOTE_TIME_BARRED');
     }
@@ -534,7 +534,7 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
 
 // ------------------------------------------------------------ editing the latest invoice
 
-/** Why a finalised invoice can't be edited in full (RULES 6.21); the app shows it as a hint. */
+/** Why a finalised invoice can't be edited in full (RULES 6.23); the app shows it as a hint. */
 export type EditBlock = 'notInvoice' | 'notFinal' | 'periodLocked' | 'notLatest' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
 
 export const EDIT_BLOCK_MESSAGES: Record<EditBlock, string> = {
@@ -569,14 +569,14 @@ export async function previousInSeries(tx: DbOrTx, row: DocRow): Promise<DocRow 
   const [prev] = await tx
     .select()
     .from(D)
-    .where(and(eq(D.companyId, row.companyId), eq(D.kind, row.kind), ne(D.id, row.id), sql`${D.number} not like '%-DRAFT'`, lt(D.finalizedAt, row.finalizedAt)))
-    .orderBy(desc(D.finalizedAt))
+    .where(and(eq(D.companyId, row.companyId), eq(D.kind, row.kind), ne(D.id, row.id), sql`${D.number} not like '%-DRAFT'`, or(lt(D.finalizedAt, row.finalizedAt), and(eq(D.finalizedAt, row.finalizedAt), lt(D.id, row.id)))))
+    .orderBy(desc(D.finalizedAt), desc(D.id))
     .limit(1);
   return prev;
 }
 
 /**
- * Whether a finalised invoice may still be edited in full (RULES 6.21, pending CA), and if not, why:
+ * Whether a finalised invoice may still be edited in full (RULES 6.23, pending CA), and if not, why:
  * it is the latest issued in its numbering series, nothing has settled or adjusted it, it is not
  * e-invoiced or e-way billed, its GSTR-1 month is open and its books period too. With FIFO costing,
  * a later movement of any of its items holds it too: re-costing this sale would re-cost those.
@@ -601,7 +601,7 @@ export async function canEditLatest(tx: DbOrTx, company: Pick<CompanyRow, 'id' |
   if (later) return 'notLatest';
   const A = schema.paymentAllocations;
   const [paid] = await tx.select({ id: A.paymentId }).from(A).where(eq(A.documentId, row.id)).limit(1);
-  if (paid || row.amountPaidMinor > 0) return 'hasPayments';
+  if (paid) return 'hasPayments';
   const CA = schema.creditApplications;
   const [applied] = await tx.select({ id: CA.id }).from(CA).where(eq(CA.documentId, row.id)).limit(1);
   if (applied) return 'hasCredit';

@@ -54,7 +54,7 @@ describe('GSTR-3B', () => {
     expect(r.outward.nilExempt.taxable).toBe(200_000);
   });
 
-  it('leaves a financial note without GST out of every table (RULES 6.22)', () => {
+  it('leaves a financial note without GST out of every table (RULES 6.24)', () => {
     const financial = doc('creditNote', 'b2b', [line('3000', { supplyType: 'nonGst' })], { noteGst: 'noGst' });
     const supplierNote = doc('supplierCreditNote', 'sup', [line('800', { supplyType: 'nonGst' })], { noteGst: 'noGst', itcClaimPeriod: '092026' });
     const withNotes = gstr3b({ period: '092026', company, gstin: GSTIN, baseCurrency: 'INR', documents: [...documents, financial, supplierNote], expenses: [], parties, expenseSplit: new Map() });

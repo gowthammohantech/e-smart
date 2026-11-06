@@ -209,6 +209,10 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
   // Matching 2B needs the purchase register.
   ['/gst/gstr2b', 'purchases'],
   ['/gst/gstr2b-reconciliation', 'purchases'],
+  // The set-off, GST challans and GST journals post to the books.
+  ['/gst/utilization', 'books'],
+  ['/gst/challan', 'books'],
+  ['/gst/journal', 'books'],
 ];
 
 /** The module a route belongs to, or null when every plan can open it. */

@@ -48,7 +48,8 @@ import {
   useActiveCompany,
   useTaxCategories,
 } from '../../../store/selectors';
-import { loadForAdvances, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../../remote/queries';
+import { describeError } from '../../../remote/errors';
+import { adjustAdvancesFor, loadForAdvances, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
@@ -194,9 +195,18 @@ export default function NewPayment() {
   /** Adjust held advances against every open document, or just `docId`. */
   const adjustAdvance = async (docId?: string) => {
     if (!partyId) return;
-    // The rule runs on the device, so it needs the party's payments and these documents in full.
-    await loadForAdvances(activeCompanyId, partyId, direction, docId ? [docId] : outstanding.map((o) => o.document.id));
-    const applied = applyAdvances(partyId, direction, docId ? [docId] : undefined);
+    let applied: Money[];
+    try {
+      // Online the server applies them (notes too, and a service advance's GST); offline the device does,
+      // and then it needs the party's payments and these documents in full.
+      applied = await adjustAdvancesFor(partyId, direction, docId ? [docId] : undefined, async () => {
+        await loadForAdvances(activeCompanyId, partyId, direction, docId ? [docId] : outstanding.map((o) => o.document.id));
+        return applyAdvances(partyId, direction, docId ? [docId] : undefined);
+      });
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+      return;
+    }
     const next = { ...allocations };
     if (docId) delete next[docId];
     const kept = docId ? next : {};

@@ -164,7 +164,7 @@ export type DocFields = {
   placeOfSupplyStateCode: string | null;
   reverseCharge: boolean | null;
   noteReason: NonNullable<DocRow['noteReason']> | null;
-  /** A direct note's GST treatment (RULES 6.22): with GST under s.34 (null too), or a financial note without. */
+  /** A direct note's GST treatment (RULES 6.24): with GST under s.34 (null too), or a financial note without. */
   noteGst: 'withGst' | 'noGst' | null;
   /** A direct note with GST: the original invoice or bill it adjusts. */
   originalNumber: string | null;
@@ -434,7 +434,7 @@ export async function prepareDocument(
     // A direct note (a discount over several invoices, a rate revision) needn't name one invoice or bill, but must say why.
     if (!f.noteReason) blocking('noteReason', `A ${f.kind} not raised against a ${isPurchaseKind(f.kind) ? 'purchase bill' : 'invoice'} needs a reason`);
     // With GST (s.34) it still adjusts one supply: its number and date go to GSTR-1 CDNR/CDNUR and set the
-    // credit note's deadline (RULES 6.22). A financial note without GST adjusts none.
+    // credit note's deadline (RULES 6.24). A financial note without GST adjusts none.
     if (directNoteGst(f) === 'withGst') {
       const what = isPurchaseKind(f.kind) ? 'bill' : 'invoice';
       if (!f.originalNumber) blocking('originalNumber', `A ${f.kind} with GST and no linked ${what} needs the original ${what} number`);
@@ -479,7 +479,7 @@ export async function prepareDocument(
     if (!(l.quantity > 0)) blocking(`lines[${i}].quantity`, 'Must be more than zero');
     if (l.unitPriceMinor < 0) blocking(`lines[${i}].unitPrice`, 'Cannot be negative');
     // The line's own treatment, else the item's. A non-taxable supply is charged at 0%.
-    // A financial note without GST charges none on any line (RULES 6.22).
+    // A financial note without GST charges none on any line (RULES 6.24).
     const own = l.gst ?? (item ? gstFlagsFrom(item) : undefined) ?? {};
     const gst = noGst ? { ...own, supplyType: 'nonGst' as const, reverseCharge: false, cessRate: 0 } : own;
     const taxable = !gst.reimbursement && (gst.supplyType ?? 'taxable') === 'taxable';

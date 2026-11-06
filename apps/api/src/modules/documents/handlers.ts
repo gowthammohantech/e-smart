@@ -111,7 +111,7 @@ const branchVisible = (user: AuthUser, branchId: string) => !user.branchIds.leng
 
 async function toWire(ctx: AnyCtx, row: DocRow): Promise<DocumentWire> {
   const [doc] = await documentsToWire(ctx.db, [row], ctx.now, ctx.company.baseCurrency.trim());
-  // An invoice says whether it can still be edited in full (a draft always can; RULES 6.21 after issue).
+  // An invoice says whether it can still be edited in full (a draft always can; RULES 6.23 after issue).
   if (row.kind !== 'invoice') return doc;
   if (row.status === 'draft') return { ...doc, editable: true };
   const block = await canEditLatest(ctx.db, ctx.company, row);
@@ -119,7 +119,7 @@ async function toWire(ctx: AnyCtx, row: DocRow): Promise<DocumentWire> {
 }
 
 /**
- * A full edit of an issued invoice that is still the latest of its series (RULES 6.21, pending CA):
+ * A full edit of an issued invoice that is still the latest of its series (RULES 6.23, pending CA):
  * recomputed as a draft save is, same number, its stock taken back and posted again, its expected
  * TDS and TCS worked out afresh. The date may not move before the invoice issued just before it,
  * out of its numbering period, or into a closed or filed period. The ledger reposts from it.

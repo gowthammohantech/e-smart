@@ -117,7 +117,18 @@
     "bankNone": "No bank account on your invoices yet.",
     "bankEdit": "Change in settings",
     "bankAdd": "Add bank details",
-    "bankUpiQr": "UPI QR for the total prints on the invoice"
+    "bankUpiQr": "UPI QR for the total prints on the invoice",
+    "noteGst": {
+      "label": "GST treatment",
+      "withGst": "With GST (s.34)",
+      "noGst": "Financial note — no GST",
+      "withGstHint": "Adjusts the GST of one earlier supply: give its number and date. It goes to GSTR-1, and a credit note must be issued by 30 November after that invoice’s financial year.",
+      "noGstHint": "A commercial discount or adjustment with no GST: no tax on any line, posted to discount, and left out of GSTR-1 and GSTR-3B.",
+      "originalInvoice": "Original invoice number",
+      "originalBill": "Original bill number",
+      "originalDate": "Original date"
+    },
+    "saveChanges": "Save changes"
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",
@@ -202,7 +213,23 @@
     "deleteDraft": "Delete draft",
     "cancelTitle": "Cancel {{number}}?",
     "convertToProforma": "Make a proforma invoice",
-    "adjustAdvance": "Adjust advance ({{amount}})"
+    "adjustAdvance": "Adjust advance ({{amount}})",
+    "editBlock": {
+      "periodLocked": "Can't edit: the books are closed for its date",
+      "hasPayments": "Can't edit: a payment is allocated to it",
+      "hasCredit": "Can't edit: a credit note is adjusted against it",
+      "hasNotes": "Can't edit: a return or note stands against it",
+      "eInvoiced": "Can't edit: it has an IRN (e-invoice)",
+      "ewayBill": "Can't edit: it has an e-way bill",
+      "returnFiled": "Can't edit: its GSTR-1 month is filed",
+      "laterStock": "Can't edit: its items have moved since, and stock is costed FIFO"
+    },
+    "creditApplications": {
+      "title": "Credit notes adjusted",
+      "undo": "Undo",
+      "undoing": "Undoing the adjustment…",
+      "undone": "Adjustment with {{label}} undone"
+    }
   },
   "line": {
     "editLine": "Edit line",

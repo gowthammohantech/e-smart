@@ -4,6 +4,9 @@ import type { Schema } from '@esmart/api-client';
 import type { AuditEvent, DocStatus, DocumentKind, EInvoiceStatus, EwayBill, EwayBillStatus, Expense, Item, Voucher } from '@esmart/core/types';
 import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
 import { today } from '@esmart/core/lib/date';
+import { fifoAllocate } from '@esmart/core/domain/receivables';
+import { useConnectivity } from './connectivity';
+import { syncSoon } from './sync';
 import { useAppStore } from '../store/appStore';
 import type { DashboardPeriod } from '../store/uiStore';
 import { api } from './api';
@@ -715,6 +718,44 @@ export async function adjustOnServer(partyId: string, side: 'customer' | 'suppli
     void queryClient.invalidateQueries({ queryKey: key });
   }
   return data!;
+}
+
+/**
+ * "Adjust advances" from a payment screen: on the server while online, which applies direct credit
+ * notes too and brings a service advance's GST back on the invoice's date (RULES 8.13); on the device
+ * (`onDevice`, appStore.applyAdvances) only in offline mode. `documentIds` limits it to those documents,
+ * oldest credit first, notes before payments on the same day. Returns what was applied, by currency.
+ */
+export async function adjustAdvancesFor(
+  partyId: string,
+  direction: 'received' | 'paid',
+  documentIds: string[] | undefined,
+  onDevice: () => { minor: number; currency: string }[] | Promise<{ minor: number; currency: string }[]>,
+): Promise<{ minor: number; currency: string }[]> {
+  if (useConnectivity.getState().mode === 'offline') return onDevice();
+  const side = direction === 'received' ? 'customer' : 'supplier';
+  const companyId = useAppStore.getState().activeCompanyId;
+  let allocations: AdjustmentAllocation[] | undefined;
+  if (documentIds) {
+    const { data } = await api.GET('/companies/{companyId}/payments/adjust', { params: { path: { companyId }, query: { partyId, side } } });
+    const credits = [...(data?.credits ?? [])].sort((a, b) => a.date.localeCompare(b.date) || (a.sourceType === b.sourceType ? 0 : a.sourceType === 'note' ? -1 : 1));
+    const open = (data?.open ?? []).filter((o) => documentIds.includes(o.documentId));
+    allocations = fifoAllocate(
+      credits.map((c) => ({ id: `${c.sourceType}:${c.id}`, date: c.date, left: c.left.minor })),
+      open.map((o) => ({ id: o.documentId, date: o.date, outstanding: o.outstanding.minor })),
+    ).map((m) => ({
+      sourceType: m.creditId.startsWith('note:') ? 'note' : 'payment',
+      sourceId: m.creditId.split(':').slice(1).join(':'),
+      documentId: m.documentId,
+      amount: { minor: m.amount, currency: open[0]?.outstanding.currency ?? '' },
+    }));
+    if (!allocations.length) return [];
+  }
+  const res = await adjustOnServer(partyId, side, allocations);
+  // The payments it rewrote reach the device's book on the next pull.
+  syncSoon();
+  const total = res.applied.reduce((a, x) => a + x.amount.minor, 0);
+  return total > 0 ? [{ minor: total, currency: res.applied[0].amount.currency }] : [];
 }
 
 /** How many vouchers the filters match, their total, and (for receipts) the split by what they were for. */

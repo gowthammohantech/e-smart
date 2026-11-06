@@ -15,7 +15,7 @@ const read = async (m: Money, id: string) => (await t.get(`${m.c}/documents/${id
 /** A full edit: the invoice body again with new lines (and whatever else). */
 const edit = (m: Money, id: string, over: Record<string, unknown> = {}) => t.patch(`${m.c}/documents/${id}`, invoiceBody(m, over), { token: m.token });
 
-describe('editing the latest invoice (RULES 6.21)', () => {
+describe('editing the latest invoice (RULES 6.23)', () => {
   it('edits the latest invoice in full: same number, totals, stock and ledger posted again, before and after audited', async () => {
     const m = await moneySetup(t);
     await m.allowNegativeStock();
@@ -57,7 +57,7 @@ describe('editing the latest invoice (RULES 6.21)', () => {
     const res = await edit(m, first.id, { lines: [line(m.gst(18), { quantity: 5 })] });
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('DOCUMENT_FINALIZED');
-    expect(res.body.message).toContain('later invoice');
+    expect(res.body.detail).toContain('later invoice');
     // Notes alone still change on any finalised invoice.
     expect((await edit(m, first.id, { notes: 'Thanks' })).status).toBe(200);
   });
@@ -124,7 +124,7 @@ describe('editing the latest invoice (RULES 6.21)', () => {
     expect(await read(m, inv.id)).toMatchObject({ editable: false, editBlock: 'returnFiled' });
     const res = await edit(m, inv.id, { lines: [line(m.gst(18), { quantity: 5 })] });
     expect(res.status).toBe(409);
-    expect(res.body.message).toContain('GSTR-1');
+    expect(res.body.detail).toContain('GSTR-1');
   });
 
   it('keeps the date after the invoice before it, inside the numbering period, and out of filed months', async () => {
@@ -171,14 +171,14 @@ describe('editing the latest invoice (RULES 6.21)', () => {
       unitCostMinor: 50000,
       date: '2026-09-30',
       adjustReason: 'other',
-      createdBy: m.user.id,
+      createdBy: m.user.id as string,
     });
     expect(await read(m, inv.id)).toMatchObject({ editable: true });
     await t.deps.db.update(schema.companies).set({ stockCosting: 'fifo' }).where(eq(schema.companies.id, m.companyId));
     expect(await read(m, inv.id)).toMatchObject({ editable: false, editBlock: 'laterStock' });
     const res = await edit(m, inv.id, { lines: [line(m.gst(18), { itemId: rod, quantity: 1 })] });
     expect(res.status).toBe(409);
-    expect(res.body.message).toContain('FIFO');
+    expect(res.body.detail).toContain('FIFO');
   });
 
   it('refuses an invoice with an IRN or an e-way bill', async () => {

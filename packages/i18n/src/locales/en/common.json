@@ -87,7 +87,8 @@
     "numberLabel": "{{kind}} number",
     "finaliseTitle": "Finalise this {{kind, lowercase}}?",
     "finaliseMessage": "A permanent number will be assigned and the {{kind, lowercase}} can no longer be edited freely.",
-    "prefillMissingParty": "That customer isn't available any more. Pick one to continue."
+    "prefillMissingParty": "That customer isn't available any more. Pick one to continue.",
+    "updatedIssued": "{{kind}} updated"
   },
   "documentDetail": {
     "changeStatus": "Change status",
@@ -334,7 +335,8 @@
     "paySupplier": "Pay supplier",
     "switchedBusiness": "Switched to {{name}}",
     "switchedBranch": "Now showing {{name}}",
-    "signedOut": "Signed out"
+    "signedOut": "Signed out",
+    "editInvoice": "Edit this invoice"
   },
   "gstinLookup": {
     "fetching": "Fetching the registered details…",

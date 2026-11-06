@@ -464,14 +464,14 @@ export type BusinessDocument = {
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
   /**
-   * A direct note's GST treatment (RULES 6.22): `withGst` (s.34, the default) or `noGst`, a financial
+   * A direct note's GST treatment (RULES 6.24): `withGst` (s.34, the default) or `noGst`, a financial
    * or commercial note with no tax, posted to discount and left out of GSTR-1 and GSTR-3B.
    */
   noteGst?: 'withGst' | 'noGst';
   /** A direct note with GST: the original invoice or bill it adjusts (GSTR-1 CDNR/CDNUR, the s.34 deadline). */
   originalNumber?: string;
   originalDate?: string;
-  /** On an invoice from the server: whether it can be edited in full, and why not (RULES 6.21). */
+  /** On an invoice from the server: whether it can be edited in full, and why not (RULES 6.23). */
   editable?: boolean;
   editBlock?: string;
   /** The TDS section asked for on a supplier's bill (or, on an invoice, the customer's): a code, `none`, or unset for the party's own. */

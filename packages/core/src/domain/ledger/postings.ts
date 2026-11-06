@@ -113,7 +113,7 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
   const source = { type: 'document' as const, id: doc.id, number: doc.number, kind: doc.kind };
   const extra = { branchId: doc.branchId, partyId: doc.partyId, costCentreId: doc.costCentreId };
   const entries: Entry[] = [];
-  // A financial or commercial note without GST (RULES 6.22) is a discount after the sale, not a
+  // A financial or commercial note without GST (RULES 6.24) is a discount after the sale, not a
   // return: its value goes to discount allowed (received), not sales (purchases). It carries no tax.
   const discountNote = doc.noteGst === 'noGst' && !doc.sourceDocumentId;
 

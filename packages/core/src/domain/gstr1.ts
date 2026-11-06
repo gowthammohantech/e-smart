@@ -269,7 +269,7 @@ export function gstr1Summary(args: {
   let tax = 0;
   let value = 0;
 
-  // A financial note without GST is no supply (RULES 6.22): it is in no table.
+  // A financial note without GST is no supply (RULES 6.24): it is in no table.
   const issued = documents.filter(
     (d) => GSTR1_KINDS.includes(d.kind) && d.status !== 'draft' && d.noteGst !== 'noGst' && inRange(d.date, period),
   );

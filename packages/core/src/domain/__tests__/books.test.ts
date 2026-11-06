@@ -106,7 +106,7 @@ describe('postings', () => {
     expect(net(ps, 'sys:sales')).toBe(10000);
   });
 
-  it('posts a financial credit note without GST to discount allowed, with no tax (RULES 6.22)', () => {
+  it('posts a financial credit note without GST to discount allowed, with no tax (RULES 6.24)', () => {
     const ps = postDocument(doc('creditNote', { noteGst: 'noGst', lines: [line({ quantity: 1, gst: { supplyType: 'nonGst' } })] }), 'INR');
     expect(balanced(ps)).toBe(0);
     expect(net(ps, 'party:cus')).toBe(-10000);
