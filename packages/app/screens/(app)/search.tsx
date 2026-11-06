@@ -9,7 +9,6 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useUiStore } from '../../store/uiStore';
 import { useGlobalSearch } from '../../features/search/useGlobalSearch';
 import { matchPages, useAppPages } from '../../navigation/pages';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -21,9 +20,6 @@ export default function GlobalSearch() {
   const router = useRouter();
 
   const [query, setQuery] = useState('');
-  const history = useUiStore((s) => s.searchHistory);
-  const pushSearch = useUiStore((s) => s.pushSearch);
-  const clearHistory = useUiStore((s) => s.clearSearchHistory);
 
   const { results, grouped } = useGlobalSearch(query);
   // Screens match too, so "invoices" can open the Invoices list itself.
@@ -39,53 +35,12 @@ export default function GlobalSearch() {
           onChangeText={setQuery}
           placeholder={tr('common:search.placeholder')}
           autoFocus
-          onSubmitEditing={() => pushSearch(query)}
         />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {query.trim().length < 2 ? (
-          history.length > 0 ? (
-            <>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: t.spacing.sm }}>
-                <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('common:search.recent')}</Text>
-                <Pressable onPress={clearHistory} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('common:search.clearHistory')}>
-                  <Text variant="caption" tone="primary" weight="600">{tr('common:search.clear')}</Text>
-                </Pressable>
-              </View>
-              <Card padded={false}>
-                {history.map((h, i) => (
-                  <Pressable
-                    key={h}
-                    onPress={() => setQuery(h)}
-                    accessibilityRole="button"
-                    accessibilityLabel={tr('nav:shell.searchFor', { query: h })}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: t.spacing.md,
-                      padding: t.spacing.lg,
-                      borderBottomWidth: i < history.length - 1 ? 0.5 : 0,
-                      borderBottomColor: t.c.line,
-                      backgroundColor: pressed ? t.c.card2 : 'transparent',
-                    })}
-                  >
-                    <Icon name="history" size={18} color={t.c.muted} />
-                    <Text variant="body" style={{ flex: 1 }}>
-                      {h}
-                    </Text>
-                  </Pressable>
-                ))}
-              </Card>
-            </>
-          ) : (
-            <EmptyState
-              illustration="search-idle"
-              icon="magnify"
-              title={tr('common:search.title')}
-              message={tr('common:search.subtitleFull')}
-            />
-          )
+          <EmptyState illustration="search-idle" icon="magnify" title={tr('common:search.title')} message={tr('common:search.subtitleFull')} />
         ) : results.length === 0 && pages.length === 0 ? (
           <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={tr('nav:shell.noMatchesInBusiness', { query })} />
         ) : (
@@ -102,10 +57,7 @@ export default function GlobalSearch() {
                 {pages.map((p, i) => (
                   <Pressable
                     key={p.key}
-                    onPress={() => {
-                      pushSearch(query);
-                      router.push(p.route as never);
-                    }}
+                    onPress={() => router.push(p.route as never)}
                     accessibilityRole="button"
                     accessibilityLabel={p.title}
                     style={({ pressed }) => ({
@@ -147,10 +99,7 @@ export default function GlobalSearch() {
                 {rows.slice(0, 8).map((r, i) => (
                   <Pressable
                     key={`${r.group}-${r.id}`}
-                    onPress={() => {
-                      pushSearch(query);
-                      router.push(r.route as never);
-                    }}
+                    onPress={() => router.push(r.route as never)}
                     accessibilityRole="button"
                     accessibilityLabel={r.title}
                     style={({ pressed }) => ({

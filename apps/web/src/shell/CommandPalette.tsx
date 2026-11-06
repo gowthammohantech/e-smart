@@ -13,7 +13,6 @@ import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
 import { matchPages, useAppPages } from '@esmart/app/navigation/pages';
 import { appHref } from '@esmart/app/navigation/menu';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
-import { useUiStore } from '@esmart/app/store/uiStore';
 
 type Entry = { key: string; group: string; title: string; subtitle?: string; trailing?: string; icon: IconName; route: string };
 
@@ -28,7 +27,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const plan = usePlan();
   const allowed = useCanOpen();
-  const pushSearch = useUiStore((s) => s.pushSearch);
 
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
@@ -65,7 +63,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const open = (entry: Entry | undefined) => {
     if (!entry) return;
-    if (searching) pushSearch(query.trim());
     onClose();
     router.push(entry.route as never);
   };

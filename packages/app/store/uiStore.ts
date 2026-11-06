@@ -45,10 +45,6 @@ type UiState = {
   recents: RecentEntry[];
   pushRecent: (e: Omit<RecentEntry, 'at'>) => void;
 
-  searchHistory: string[];
-  pushSearch: (q: string) => void;
-  clearSearchHistory: () => void;
-
   hasSeenTour: boolean;
   setHasSeenTour: (v: boolean) => void;
 
@@ -96,14 +92,6 @@ export const useUiStore = create<UiState>()(
           ].slice(0, 20),
         }),
 
-      searchHistory: [],
-      pushSearch: (q) => {
-        const query = q.trim();
-        if (!query) return;
-        set({ searchHistory: [query, ...get().searchHistory.filter((s) => s !== query)].slice(0, 8) });
-      },
-      clearSearchHistory: () => set({ searchHistory: [] }),
-
       hasSeenTour: false,
       setHasSeenTour: (hasSeenTour) => set({ hasSeenTour }),
 
@@ -131,7 +119,7 @@ export const useUiStore = create<UiState>()(
     {
       name: 'ebs.ui.v1',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       // `hydrated` is a runtime flag, not a preference. Persisting it would
       // write back `true` and defeat the gate on the next cold start.
       partialize: (s) => {
@@ -146,6 +134,8 @@ export const useUiStore = create<UiState>()(
         // v2 added language. Anyone already using the app was using it in
         // English, so pin them there rather than switching under them.
         if (version < 2 && state.language === undefined) state.language = 'en';
+        // v3 dropped recent searches: the history kept on the device goes with it.
+        if (version < 3) delete (state as { searchHistory?: unknown }).searchHistory;
         return state as UiState;
       },
       onRehydrateStorage: () => (state) => {

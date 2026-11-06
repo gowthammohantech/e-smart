@@ -227,7 +227,14 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   },
   finalizeDocument: documentAction(() => '/finalize'),
   duplicateDocument: documentAction(() => '/duplicate', undefined, (call) => call.result as string),
-  convertDocument: documentAction(() => '/convert', (call) => ({ targetKind: call.args[1] as DocumentKind }), (call) => call.result as string),
+  convertDocument: documentAction(
+    () => '/convert',
+    (call) => {
+      const lineIds = call.args[2] as string[] | undefined;
+      return { targetKind: call.args[1] as DocumentKind, ...(lineIds?.length ? { lineIds } : {}) };
+    },
+    (call) => call.result as string,
+  ),
   removeDocument: removal('document', 'documents', 'documents', (d) => d.number),
 
   /* money */

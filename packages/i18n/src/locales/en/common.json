@@ -240,12 +240,9 @@
   },
   "search": {
     "placeholder": "Invoices, contacts, items, payments…",
-    "clearHistory": "Clear history",
     "title": "Search everything",
     "subtitle": "Find an invoice number, a customer, an item",
     "noMatches": "No matches",
-    "recent": "Recent searches",
-    "clear": "Clear",
     "subtitleFull": "Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in."
   },
   "filters": {
