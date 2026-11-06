@@ -58,7 +58,7 @@ jobs:
       - run: npm ci
       - run: npx expo export -p web
         working-directory: apps/web
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: apps/web/dist
@@ -75,7 +75,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w @esmart/admin
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: admin-dist
           path: apps/admin/dist
@@ -134,7 +134,7 @@ jobs:
         working-directory: apps/web/e2e
         run: node a11y.mjs
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-failure
           path: |
