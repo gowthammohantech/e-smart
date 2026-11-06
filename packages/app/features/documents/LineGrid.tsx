@@ -120,15 +120,27 @@ export function LineGrid({
               </Text>
             </View>
             <View role="cell" style={{ flex: 1, minWidth: ITEM_MIN, paddingHorizontal: 4 }}>
-              <GridInput
-                id={cellId(row, 'name')}
-                value={line.name}
-                label={label(tr('sales:line.itemOrService'))}
-                invalid={!line.name.trim()}
-                onCommit={(v) => v.trim() && v.trim() !== line.name && onUpdate(line.id, { name: v.trim() })}
-                onEnter={() => onEnter(row, 'name')}
-                placeholder={tr('sales:editor.untitledLine')}
-              />
+              {/* A catalogue line takes its name from the item, as in the line editor; only a one-off line types one. */}
+              {line.itemId ? (
+                <Text
+                  variant="small"
+                  numberOfLines={1}
+                  accessibilityLabel={`${label(tr('sales:line.itemOrService'))}: ${line.name}`}
+                  style={{ paddingHorizontal: 7, lineHeight: 32 }}
+                >
+                  {line.name}
+                </Text>
+              ) : (
+                <GridInput
+                  id={cellId(row, 'name')}
+                  value={line.name}
+                  label={label(tr('sales:line.itemOrService'))}
+                  invalid={!line.name.trim()}
+                  onCommit={(v) => v.trim() && v.trim() !== line.name && onUpdate(line.id, { name: v.trim() })}
+                  onEnter={() => onEnter(row, 'name')}
+                  placeholder={tr('sales:editor.untitledLine')}
+                />
+              )}
               {line.hsnCode ? (
                 <Text variant="micro" tone="muted" style={{ paddingHorizontal: 6 }} numberOfLines={1}>
                   {`HSN ${line.hsnCode}`}
