@@ -62,8 +62,8 @@ describe('plan tiers', () => {
 describe('onboarding by plan', () => {
   it('walks business, tax and numbering on every plan, as India and one location are the defaults', () => {
     for (const plan of ['basic', 'pro', 'business'] as const) {
-      expect(onboardingSteps(plan)).toEqual(['business', 'tax', 'numbering']);
-      expect(nextStepRoute('business', plan)).toBe('/(onboarding)/tax');
+      expect(onboardingSteps(plan)).toEqual(['tax', 'business', 'numbering']);
+      expect(nextStepRoute('tax', plan)).toBe('/(onboarding)/business');
       expect(nextStepRoute('numbering', plan)).toBe('/(onboarding)/done');
     }
   });
