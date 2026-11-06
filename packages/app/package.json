@@ -52,7 +52,7 @@
     "@esmart/tsconfig": "*",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
-    "eslint": "^9.39.5",
+    "eslint": "^10.14.0",
     "jest": "^30.5.1",
     "jest-expo": "~57.0.5",
     "typescript": "~6.0.3"

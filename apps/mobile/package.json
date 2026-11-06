@@ -68,7 +68,7 @@
     "@expo/metro-runtime": "~57.0.15",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "~57.0.5",
-    "eslint": "^9.39.5",
+    "eslint": "^10.14.0",
     "react-dom": "^19.2.3",
     "react-native-web": "^0.21.2",
     "typescript": "~6.0.3"

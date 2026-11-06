@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@esmart/eslint-config": "*",
-    "eslint": "^9.39.5",
+    "eslint": "^10.14.0",
     "railway": "^3.12.0",
     "turbo": "^2.11.5"
   },
