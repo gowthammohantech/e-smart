@@ -95,18 +95,20 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
   const open = useOpenDocuments(partyId, into ? ['invoice', 'debitNote'] : ['purchaseBill', 'supplierDebitNote']);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const { run, busy } = useBankAction();
+  const lineCurrency = line?.amount.currency;
   const docs = useMemo(
-    () => (open.data ?? []).filter((d) => d.grandTotal.currency === line?.amount.currency && (d.outstanding?.minor ?? 0) > 0).sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number)),
-    [open.data, line?.amount.currency],
+    () => (open.data ?? []).filter((d) => d.grandTotal.currency === lineCurrency && (d.outstanding?.minor ?? 0) > 0).sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number)),
+    [open.data, lineCurrency],
   );
   if (!line) return null;
   const amount = Math.abs(line.amount.minor);
-  let left = amount;
-  const allocations = docs.map((d) => {
-    const take = unticked.has(d.id) ? 0 : Math.min(left, d.outstanding!.minor);
-    left -= take;
-    return { documentId: d.id, amountMinor: take };
-  });
+  // Each ticked document takes what it's owed from what the earlier ones left.
+  const allocations = docs.reduce<{ documentId: string; amountMinor: number }[]>((acc, d) => {
+    const left = amount - acc.reduce((sum, a) => sum + a.amountMinor, 0);
+    acc.push({ documentId: d.id, amountMinor: unticked.has(d.id) ? 0 : Math.min(left, d.outstanding!.minor) });
+    return acc;
+  }, []);
+  const left = amount - allocations.reduce((sum, a) => sum + a.amountMinor, 0);
   const cur = line.amount.currency;
   const allowed = (parties.data ?? []).filter((p) => p.kind && (into ? sellsTo(p.kind) : buysFrom(p.kind)));
   const save = async () => {
