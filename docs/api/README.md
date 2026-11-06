@@ -49,7 +49,7 @@ them sits behind the backend; the mobile app never calls them directly.
 | **Email** | invites, password reset, sending documents | Azure Communication Services (`EMAIL_PROVIDER=acs`), Amazon SES (`ses`) |
 | **Payments** | `createPaymentLink`, `razorpayWebhook` | Razorpay (payment links, UPI) |
 | **Subscriptions** | `startCheckout`, plan changes | Razorpay Subscriptions, or App Store / Play Billing if sold in-app |
-| **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`), or any OpenAI-compatible Chat Completions server (`ASSISTANT_PROVIDER=openai`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `LIXI_MODEL`) |
+| **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`), or any OpenAI-compatible Chat Completions server (`ASSISTANT_PROVIDER=openai`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `LIXI_MODEL`, `LIXI_SECONDARY_MODEL`; on OpenRouter both default to free models) |
 | **OCR** | `createOcrExtraction` | Google Document AI, AWS Textract, Azure Document Intelligence, or an LLM vision model |
 | **Object storage** | attachments, logos, item images, PDFs, exports | Azure Blob Storage (`STORAGE_PROVIDER=azure`, SAS URLs), S3 or R2 (`s3`, pre-signed URLs) |
 | **PDF rendering** | `getDocumentPdf`, receipts, statements, reports | Headless Chromium (Puppeteer or Gotenberg) running the same template as `documentHtml.ts` |

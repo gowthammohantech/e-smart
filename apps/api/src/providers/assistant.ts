@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Config } from '../config';
+import { isOpenRouter, lixiModels, type Config } from '../config';
 
 /**
  * The model behind Lixi. The provider only talks to the model; which tools
@@ -45,6 +45,8 @@ export type AssistantRequest = {
   execute: (name: string, input: unknown) => Promise<ToolOutcome>;
   /** App routes an action may open. */
   routes: readonly string[];
+  /** Told when a model failed and the next one takes over, so the caller can log it. */
+  onFallback?: (failed: string, next: string, err: AssistantUnavailable) => void;
 };
 
 export interface AssistantProvider {
@@ -236,7 +238,9 @@ const RETRYABLE = new Set([408, 409, 429, 500, 502, 503, 504]);
  * Any server that speaks the OpenAI Chat Completions API: OpenAI, Azure
  * OpenAI (v1 endpoint), OpenRouter, Groq, Together, Fireworks, DeepSeek,
  * Mistral, Gemini's OpenAI endpoint, or a local Ollama / vLLM / LM Studio.
- * Pick the server with OPENAI_BASE_URL and the model with LIXI_MODEL.
+ * Pick the server with OPENAI_BASE_URL and the models with LIXI_MODEL and
+ * LIXI_SECONDARY_MODEL (on OpenRouter both default to free models, see
+ * LIXI_DEFAULT_MODELS). When the primary fails, the secondary takes over.
  *
  * Only the common subset is sent: messages, tools, tool_choice and, if the
  * server supports it, a JSON response format. Anything vendor-specific stays
@@ -245,7 +249,8 @@ const RETRYABLE = new Set([408, 409, 429, 500, 502, 503, 504]);
 export class OpenAICompatibleAssistant implements AssistantProvider {
   readonly name = 'openai';
   private readonly url: string;
-  private readonly model: string;
+  /** Primary first, then the secondary if one is set. */
+  private readonly models: string[];
   /** OpenRouter takes a usage request and attribution headers that other servers would reject or ignore. */
   private readonly openRouter: boolean;
   private readonly fetch: typeof globalThis.fetch;
@@ -253,16 +258,16 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
   constructor(
     private readonly config: Pick<
       Config,
-      'OPENAI_BASE_URL' | 'OPENAI_API_KEY' | 'OPENAI_RESPONSE_FORMAT' | 'OPENAI_REASONING_EFFORT' | 'LIXI_MODEL' | 'LIXI_MAX_TOOL_ROUNDS' | 'APP_URL'
+      'OPENAI_BASE_URL' | 'OPENAI_API_KEY' | 'OPENAI_RESPONSE_FORMAT' | 'OPENAI_REASONING_EFFORT' | 'LIXI_MODEL' | 'LIXI_SECONDARY_MODEL' | 'LIXI_MAX_TOOL_ROUNDS' | 'APP_URL'
     >,
     /** Tests swap the transport. */
     fetch?: typeof globalThis.fetch,
   ) {
-    // No sensible default across vendors: config refuses to load without one.
-    if (!config.LIXI_MODEL) throw new Error('LIXI_MODEL must be set for ASSISTANT_PROVIDER=openai.');
-    this.model = config.LIXI_MODEL;
+    // Built-in defaults exist only for OpenRouter: config refuses to load elsewhere without a model.
+    this.models = lixiModels(config);
+    if (!this.models.length) throw new Error('LIXI_MODEL must be set for ASSISTANT_PROVIDER=openai.');
     this.url = `${config.OPENAI_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
-    this.openRouter = /(^|\.)openrouter\.ai$/i.test(new URL(this.url).hostname);
+    this.openRouter = isOpenRouter(this.url);
     this.fetch = fetch ?? globalThis.fetch;
   }
 
@@ -273,17 +278,31 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
       ...req.history.map((turn): OaiMessage => ({ role: turn.role, content: turn.text })),
     ];
     const usage = new UsageTotal();
+    // Once the primary has failed in this reply, the rest of it stays on the secondary.
+    let current = 0;
 
     for (let round = 0; round <= this.config.LIXI_MAX_TOOL_ROUNDS; round++) {
       const last = round === this.config.LIXI_MAX_TOOL_ROUNDS;
-      const { choice, model, usage: used } = await this.complete({
-        model: this.model,
+      const body = {
         messages,
         ...(tools.length ? { tools, tool_choice: last ? 'none' : 'auto' } : {}),
         ...this.responseFormat(req.routes),
         ...(this.config.OPENAI_REASONING_EFFORT ? { reasoning_effort: this.config.OPENAI_REASONING_EFFORT } : {}),
         ...(this.openRouter ? { usage: { include: true } } : {}),
-      });
+      };
+      let answer: Awaited<ReturnType<OpenAICompatibleAssistant['complete']>>;
+      for (;;) {
+        const model = this.models[current]!;
+        try {
+          answer = await this.complete({ model, ...body }, model);
+          break;
+        } catch (err) {
+          if (!(err instanceof AssistantUnavailable) || current + 1 >= this.models.length) throw err;
+          req.onFallback?.(model, this.models[current + 1]!, err);
+          current++;
+        }
+      }
+      const { choice, model, usage: used } = answer;
       if (used) usage.add(model, used.prompt_tokens ?? 0, used.completion_tokens ?? 0, typeof used.cost === 'number' ? used.cost : null);
       const { message } = choice;
 
@@ -324,7 +343,7 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
   }
 
   /** One call, retried twice on a timeout, 429 or 5xx. `model` is the one that answered: OpenRouter may route elsewhere. */
-  private async complete(body: Record<string, unknown>): Promise<{ choice: OaiChoice; model: string; usage?: OaiUsage }> {
+  private async complete(body: Record<string, unknown>, requested: string): Promise<{ choice: OaiChoice; model: string; usage?: OaiUsage }> {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (this.openRouter) {
       headers['http-referer'] = this.config.APP_URL;
@@ -352,7 +371,7 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
         const data = (await res.json()) as OaiCompletion;
         const choice = data.choices?.[0];
         if (!choice?.message) throw new AssistantUnavailable('Model server returned no choices');
-        return { choice, model: data.model ?? this.model, ...(data.usage ? { usage: data.usage } : {}) };
+        return { choice, model: data.model ?? requested, ...(data.usage ? { usage: data.usage } : {}) };
       }
       if (RETRYABLE.has(res.status) && attempt < 2) {
         await sleep(500 * 2 ** attempt);

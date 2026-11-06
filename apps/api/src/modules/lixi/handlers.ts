@@ -122,7 +122,14 @@ export const lixiHandlers = defineHandlers({
     const locale = ctx.body.locale ?? ctx.user.locale ?? 'en';
     let reply: AssistantReply;
     try {
-      reply = await ctx.deps.providers.assistant.reply({ history, context: contextFor(ctx, locale.slice(0, 2)), tools: SPECS, execute, routes: LIXI_ROUTES });
+      reply = await ctx.deps.providers.assistant.reply({
+        history,
+        context: contextFor(ctx, locale.slice(0, 2)),
+        tools: SPECS,
+        execute,
+        routes: LIXI_ROUTES,
+        onFallback: (failed, next, err) => ctx.req.log.warn({ err, failed, next }, 'lixi model failed, trying the secondary'),
+      });
     } catch (err) {
       if (err instanceof Anthropic.APIError || err instanceof AssistantUnavailable) {
         ctx.req.log.warn({ err }, 'lixi model call failed');

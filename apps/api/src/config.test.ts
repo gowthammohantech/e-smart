@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadConfig } from './config';
+import { LIXI_DEFAULT_MODELS, lixiModels, loadConfig } from './config';
 
 /** Every provider real and credentialed: the baseline each case breaks one thing in. */
 const ready = {
@@ -109,6 +109,14 @@ describe('production config guards', () => {
     const openai = { ...ready, ASSISTANT_PROVIDER: 'openai', ANTHROPIC_API_KEY: undefined, OPENAI_API_KEY: 'sk-x', LIXI_MODEL: 'gpt-5-mini' };
     expect(loadConfig(openai).OPENAI_BASE_URL).toBe('https://api.openai.com/v1');
     expect(() => loadConfig({ ...openai, LIXI_MODEL: undefined })).toThrow(/LIXI_MODEL/);
+    // OpenRouter needs no model named: the built-in free primary and secondary are used.
+    const openRouter = loadConfig({ ...openai, LIXI_MODEL: undefined, OPENAI_BASE_URL: 'https://openrouter.ai/api/v1' });
+    expect(lixiModels(openRouter)).toEqual([LIXI_DEFAULT_MODELS.primary, LIXI_DEFAULT_MODELS.secondary]);
+    // What the environment sets wins, each one on its own.
+    expect(lixiModels({ ...openRouter, LIXI_MODEL: 'openai/gpt-5-mini' })).toEqual(['openai/gpt-5-mini', LIXI_DEFAULT_MODELS.secondary]);
+    expect(lixiModels({ ...openRouter, LIXI_MODEL: 'a/one', LIXI_SECONDARY_MODEL: 'b/two' })).toEqual(['a/one', 'b/two']);
+    // Off OpenRouter there are no defaults to fall back to.
+    expect(lixiModels(loadConfig(openai))).toEqual(['gpt-5-mini']);
     expect(() => loadConfig({ ...openai, OPENAI_API_KEY: undefined })).toThrow(/OPENAI_API_KEY/);
     // A local Ollama or vLLM server needs no key.
     expect(loadConfig({ ...openai, OPENAI_API_KEY: undefined, OPENAI_BASE_URL: 'http://localhost:11434/v1' }).OPENAI_API_KEY).toBeUndefined();

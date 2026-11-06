@@ -78,6 +78,7 @@ export default defineRailway((ctx) => {
     // Lixi's model: anthropic, or any OpenAI-compatible server (see apps/api/.env.example).
     ASSISTANT_PROVIDER: preserve(),
     LIXI_MODEL: preserve(),
+    LIXI_SECONDARY_MODEL: preserve(),
     ANTHROPIC_API_KEY: preserve(),
     OPENAI_BASE_URL: preserve(),
     OPENAI_API_KEY: preserve(),

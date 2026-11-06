@@ -180,8 +180,13 @@ const Env = z.object({
    */
   ASSISTANT_PROVIDER: z.enum(['simulator', 'anthropic', 'openai']).default('simulator'),
   ANTHROPIC_API_KEY: z.string().optional(),
-  /** Model id on the chosen provider. Anthropic defaults to claude-opus-5-5; `openai` must name one. */
+  /**
+   * Lixi's primary model on the chosen provider. Anthropic defaults to claude-opus-5-5;
+   * `openai` on OpenRouter defaults to a free model (LIXI_DEFAULT_MODELS), any other server must name one.
+   */
   LIXI_MODEL: z.string().trim().min(1).optional(),
+  /** `openai` only: tried when the primary model fails. On OpenRouter it defaults to a second free model. */
+  LIXI_SECONDARY_MODEL: z.string().trim().min(1).optional(),
   /** Ends before /chat/completions, e.g. https://api.openai.com/v1, https://openrouter.ai/api/v1, http://localhost:11434/v1 */
   OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   /** Optional: a local Ollama or vLLM server needs none. */
@@ -211,14 +216,44 @@ const Env = z.object({
   } catch (err) {
     ctx.addIssue({ code: 'custom', path: ['TAXATION_TAXPAYER_PROVIDER'], message: (err as Error).message });
   }
-  if (env.ASSISTANT_PROVIDER === 'openai' && !env.LIXI_MODEL) {
-    ctx.addIssue({ code: 'custom', path: ['LIXI_MODEL'], message: 'LIXI_MODEL must be set for ASSISTANT_PROVIDER=openai (e.g. gpt-5-mini, llama-3.3-70b-versatile).' });
+  // The built-in models are OpenRouter ids; any other server has to be told which model to use.
+  if (env.ASSISTANT_PROVIDER === 'openai' && !env.LIXI_MODEL && !isOpenRouter(env.OPENAI_BASE_URL)) {
+    ctx.addIssue({ code: 'custom', path: ['LIXI_MODEL'], message: 'LIXI_MODEL must be set for ASSISTANT_PROVIDER=openai unless OPENAI_BASE_URL is OpenRouter (e.g. gpt-5-mini, llama-3.3-70b-versatile).' });
   }
   // The sandbox-only settings are allowed by TAXATION_GSTIN_ALLOW_SANDBOX and by nothing else, in any NODE_ENV.
   for (const message of sandboxProblems(env)) ctx.addIssue({ code: 'custom', path: ['TAXATION_GSTIN_ALLOW_SANDBOX'], message });
 });
 
 export type Config = z.infer<typeof Env>;
+
+/**
+ * Lixi's models on OpenRouter when LIXI_MODEL / LIXI_SECONDARY_MODEL are unset:
+ * two free models that call tools. Free models have daily caps and their providers
+ * may log prompts, so set paid models in the environment for real customer data.
+ */
+export const LIXI_DEFAULT_MODELS = {
+  primary: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+  secondary: 'google/gemma-4-31b-it:free',
+} as const;
+
+export function isOpenRouter(baseUrl: string): boolean {
+  try {
+    return /(^|\.)openrouter\.ai$/i.test(new URL(baseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The models Lixi tries in order on an OpenAI-compatible server. Each one falls
+ * back to its built-in default on OpenRouter; elsewhere only what is set is used.
+ */
+export function lixiModels(config: Pick<Config, 'LIXI_MODEL' | 'LIXI_SECONDARY_MODEL' | 'OPENAI_BASE_URL'>): string[] {
+  const openRouter = isOpenRouter(config.OPENAI_BASE_URL);
+  const primary = config.LIXI_MODEL ?? (openRouter ? LIXI_DEFAULT_MODELS.primary : undefined);
+  const secondary = config.LIXI_SECONDARY_MODEL ?? (openRouter ? LIXI_DEFAULT_MODELS.secondary : undefined);
+  return [...new Set([primary, secondary].filter((m): m is string => Boolean(m)))];
+}
 
 /** Dev defaults that must never reach production. */
 const DEV_WEBHOOK_SECRETS = { RAZORPAY_WEBHOOK_SECRET: 'dev-razorpay-secret', WHATSAPP_WEBHOOK_SECRET: 'dev-whatsapp-secret' } as const;

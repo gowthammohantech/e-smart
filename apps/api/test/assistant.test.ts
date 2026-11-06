@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LIXI_DEFAULT_MODELS } from '../src/config';
 import { AnthropicAssistant, AssistantUnavailable, OpenAICompatibleAssistant, parseReply, type ToolOutcome } from '../src/providers/assistant';
 
 const message = (content: unknown[], stop_reason: string) => ({
@@ -207,6 +208,37 @@ describe('OpenAICompatibleAssistant', () => {
 
     const down = fakeOpenAI([401]);
     await expect(new OpenAICompatibleAssistant(oaiConfig, down.fetch).reply(req)).rejects.toBeInstanceOf(AssistantUnavailable);
+  });
+
+  it('on OpenRouter with no models set, uses the built-in free primary', async () => {
+    const api = fakeOpenAI([completion({ content: '{"text":"Hi"}' }, 'stop')]);
+    const req = { history: [{ role: 'user' as const, text: 'hi' }], context: '', tools, execute: async (): Promise<ToolOutcome> => ({ ok: true, value: {} }), routes: [] };
+    await new OpenAICompatibleAssistant({ ...oaiConfig, OPENAI_BASE_URL: 'https://openrouter.ai/api/v1', LIXI_MODEL: undefined }, api.fetch).reply(req);
+    expect(api.requests[0].body.model).toBe(LIXI_DEFAULT_MODELS.primary);
+  });
+
+  it('falls back to the secondary when the primary fails, and stays on it for the rest of the reply', async () => {
+    const call = { tool_calls: [{ id: 'c', type: 'function', function: { name: 'get_receivables', arguments: '{}' } }] };
+    // The primary is refused outright (403); the secondary answers both rounds.
+    const api = fakeOpenAI([403, completion(call, 'tool_calls'), completion({ content: '{"text":"₹1,180 is owed."}' }, 'stop')]);
+    const fallbacks: string[][] = [];
+    const reply = await new OpenAICompatibleAssistant(
+      { ...oaiConfig, OPENAI_BASE_URL: 'https://openrouter.ai/api/v1', LIXI_MODEL: 'paid/primary', LIXI_SECONDARY_MODEL: 'paid/secondary' },
+      api.fetch,
+    ).reply({
+      history: [{ role: 'user', text: 'who owes me?' }], context: '', tools, execute: async () => ({ ok: true, value: {} }), routes: [],
+      onFallback: (failed, next) => fallbacks.push([failed, next]),
+    });
+    expect(reply.text).toBe('₹1,180 is owed.');
+    expect(api.requests.map((r) => r.body.model)).toEqual(['paid/primary', 'paid/secondary', 'paid/secondary']);
+    expect(fallbacks).toEqual([['paid/primary', 'paid/secondary']]);
+  });
+
+  it('off OpenRouter, uses only the models it is given', async () => {
+    const down = fakeOpenAI([401]);
+    const req = { history: [{ role: 'user' as const, text: 'hi' }], context: '', tools, execute: async (): Promise<ToolOutcome> => ({ ok: true, value: {} }), routes: [] };
+    await expect(new OpenAICompatibleAssistant(oaiConfig, down.fetch).reply(req)).rejects.toBeInstanceOf(AssistantUnavailable);
+    expect(down.requests.map((r) => r.body.model)).toEqual(['llama-3.3-70b-versatile']);
   });
 
   it('tells the model when its arguments are not JSON, and handles a refusal', async () => {
