@@ -17,7 +17,9 @@ export type Module =
   | 'branches'
   | 'payables'
   /** The general ledger: chart of accounts, vouchers, trial balance, P&L, balance sheet. */
-  | 'books';
+  | 'books'
+  /** Retail item fields — SKU, barcode, category and brand — on every plan. Fields only: no routes. */
+  | 'pos';
 
 export type PlanInfo = {
   key: PlanTier;
@@ -119,9 +121,11 @@ export function moduleSetFor(tier: PlanTier): ModuleSet {
   return tier === 'pro' || tier === 'business' ? 'full' : 'sales';
 }
 
+/** Modules every plan has: they only show or hide fields, so there is nothing to sell. */
+const EVERY_PLAN: readonly Module[] = ['pos'];
+
 export function hasModule(tier: PlanTier, module: Module): boolean {
-  void module;
-  return moduleSetFor(tier) === 'full';
+  return EVERY_PLAN.includes(module) || moduleSetFor(tier) === 'full';
 }
 
 /** What a module can't work without: payables are the buying side's bills, scanning fills in expenses. */
@@ -151,7 +155,11 @@ export const MODULES: Module[] = [
   'branches',
   'payables',
   'books',
+  'pos',
 ];
+
+/** The modules a plan sells (stored in plan_modules), leaving out the field toggles every plan has. */
+export const GATED_MODULES = MODULES.filter((m): m is Exclude<Module, 'pos'> => !EVERY_PLAN.includes(m));
 
 /** Reports that read the buying side of the books, and the module each needs. */
 const FULL_PLAN_REPORTS: Record<string, Module> = {
@@ -164,6 +172,8 @@ const FULL_PLAN_REPORTS: Record<string, Module> = {
   'tds-payable': 'payables',
   'tds-26q': 'payables',
   'tds-challans': 'payables',
+  // The TCS register is the sales side's own (every plan); what is owed and deposited reads the books.
+  'tcs-payable': 'books',
   'trial-balance': 'books',
   'msme-payables': 'payables',
 };
@@ -175,9 +185,9 @@ export function moduleForReport(key: string): Module | null {
 /**
  * Route prefixes (as `usePathname` reports them, groups stripped) that
  * belong to a module outside the Sales plan. Order matters only in that the
- * first match wins, and none overlap.
+ * first match wins: a null module opens a path inside a gated prefix.
  */
-const GATED_PATHS: [prefix: string, module: Module][] = [
+const GATED_PATHS: [prefix: string, module: Module | null][] = [
   ['/purchases', 'purchases'],
   ['/contacts/suppliers', 'purchases'],
   ['/payables', 'payables'],
@@ -191,10 +201,18 @@ const GATED_PATHS: [prefix: string, module: Module][] = [
   ['/books', 'books'],
   // Accounts & P&L reads the books.
   ['/accounts', 'books'],
+  // Adjusting advances and credit notes against invoices is a payments screen, open like payments
+  // (it only sits under /receipts); the supplier side's own screens are gated by payables.
+  ['/receipts/adjust', null],
   // Receipts are receipt vouchers.
   ['/receipts', 'books'],
   // Matching 2B needs the purchase register.
   ['/gst/gstr2b', 'purchases'],
+  ['/gst/gstr2b-reconciliation', 'purchases'],
+  // The set-off, GST challans and GST journals post to the books.
+  ['/gst/utilization', 'books'],
+  ['/gst/challan', 'books'],
+  ['/gst/journal', 'books'],
 ];
 
 /** The module a route belongs to, or null when every plan can open it. */

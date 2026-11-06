@@ -75,7 +75,8 @@
     "payment": "Payment",
     "expense": "Expense",
     "receipt": "Receipt voucher",
-    "proforma": "Proforma invoice"
+    "proforma": "Proforma invoice",
+    "gstChallan": "GST challan"
   },
   "noteReason": {
     "discount": "Discount after the sale",
@@ -92,7 +93,8 @@
     "fx": "Multi-currency",
     "branches": "Branches",
     "payables": "Payables",
-    "books": "Books"
+    "books": "Books",
+    "pos": "Retail item fields"
   },
   "paymentMethod": {
     "cash": "Cash",

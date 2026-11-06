@@ -13,6 +13,11 @@ export type TdsInput = {
   baseMinor: number;
   /** Earlier bills of the year with this deductee under this section: their base and the TDS already deducted. */
   prior: { baseMinor: number; tdsMinor: number };
+  /**
+   * TDS already kept back under this section on payments allocated to this very bill (an advance
+   * paid before it, net of TDS): the bill keeps back only the rest, so nothing is deducted twice.
+   */
+  deductedOnPaymentsMinor?: number;
 };
 
 export type TdsResult = {
@@ -45,6 +50,12 @@ const pct = (minor: number, rate: number) => Math.round((minor * rate) / 100);
  * ₹50 lakh by is taxed.
  */
 export function tdsFor(input: TdsInput): TdsResult {
+  const r = tdsBeforePayments(input);
+  const already = Math.max(input.deductedOnPaymentsMinor ?? 0, 0);
+  return already && r.amountMinor ? { ...r, amountMinor: Math.max(r.amountMinor - already, 0) } : r;
+}
+
+function tdsBeforePayments(input: TdsInput): TdsResult {
   const section = tdsSection(input.section);
   if (!section || input.baseMinor <= 0) return { rate: 0, amountMinor: 0, reason: 'none' };
   const { rate, reason } = tdsRate(section, input.pan, input.certificate, input.date);
@@ -66,6 +77,21 @@ export function tdsFor(input: TdsInput): TdsResult {
     return { rate, amountMinor: Math.max(owed, 0), reason: owed > pct(input.baseMinor, rate) ? 'catchUp' : reason };
   }
   return { rate, amountMinor: pct(input.baseMinor, rate), reason };
+}
+
+/**
+ * TDS a customer is expected to deduct from an invoice (RULES 4.14, pending CA): the rate given, or
+ * the section's for the seller's PAN, on the taxable value without GST (CBDT circular 23/2017).
+ * Thresholds are the customer's to apply over their year with the business, so none here. Nothing
+ * is posted: it only says what the receipt is likely to be short by.
+ */
+export function expectedSaleTds(input: { section: string | undefined | null; rate?: number | null; sellerPan?: string; date: string; baseMinor: number }): { section: string; rate: number; amountMinor: number } | undefined {
+  const section = tdsSection(input.section ?? undefined);
+  if (!section || input.baseMinor <= 0) return undefined;
+  // A seller whose PAN isn't on file is taken to have one (its customer sees it): the usual rate, not the no-PAN one.
+  const rate = input.rate ?? (input.sellerPan ? tdsRate(section, input.sellerPan, undefined, input.date).rate : section.rateOther);
+  if (!(rate > 0)) return undefined;
+  return { section: section.code, rate, amountMinor: pct(input.baseMinor, rate) };
 }
 
 /** The quarter TDS is reported in (Form 26Q): Q1 is April–June. */

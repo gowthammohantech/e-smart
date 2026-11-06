@@ -98,6 +98,12 @@ export const costCentreHandlers = defineHandlers({
     checkIfMatch(ctx.req, current.version);
     const c = ctx.company.id;
     const [doc] = await ctx.db.select({ n: schema.documents.number }).from(schema.documents).where(and(eq(schema.documents.companyId, c), eq(schema.documents.costCentreId, current.id))).limit(1);
+    const [line] = await ctx.db
+      .select({ n: schema.documents.number })
+      .from(schema.documentLines)
+      .innerJoin(schema.documents, eq(schema.documents.id, schema.documentLines.documentId))
+      .where(and(eq(schema.documents.companyId, c), eq(schema.documentLines.costCentreId, current.id)))
+      .limit(1);
     const [exp] = await ctx.db.select({ n: schema.expenses.number }).from(schema.expenses).where(and(eq(schema.expenses.companyId, c), eq(schema.expenses.costCentreId, current.id))).limit(1);
     const [vch] = await ctx.db
       .select({ n: schema.vouchers.number })
@@ -105,7 +111,7 @@ export const costCentreHandlers = defineHandlers({
       .where(and(eq(schema.vouchers.companyId, c), sql`${schema.vouchers.lines} @> ${JSON.stringify([{ costCentreId: current.id }])}::jsonb`))
       .limit(1);
     const [child] = await ctx.db.select({ n: CC.name }).from(CC).where(and(eq(CC.companyId, c), eq(CC.parentId, current.id))).limit(1);
-    const used = doc?.n ?? exp?.n ?? vch?.n;
+    const used = doc?.n ?? line?.n ?? exp?.n ?? vch?.n;
     if (used) throw conflict('COST_CENTRE_IN_USE', `${current.name} is on ${used}; mark it inactive instead`);
     if (child) throw conflict('COST_CENTRE_IN_USE', `${child.n} sits under ${current.name}; move it first`);
     await ctx.db.transaction(async (tx) => {

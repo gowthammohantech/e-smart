@@ -69,7 +69,10 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
         })),
       unallocated: money(r.unallocatedMinor, currency),
       fxGainLoss: maybeMoney(r.fxGainLossMinor, baseCurrency),
-      advanceTax: r.advanceTaxCategoryId ? { taxCategoryId: r.advanceTaxCategoryId, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply! } : undefined,
+      advanceTax: r.advanceTaxCategoryId
+        ? compact({ taxCategoryId: r.advanceTaxCategoryId, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply!, hsn: r.advanceHsn ?? undefined, cessRate: r.advanceCessRate != null && Number(r.advanceCessRate) > 0 ? Number(r.advanceCessRate) : undefined })
+        : undefined,
+      advanceTds: r.tdsMinor ? money(r.tdsMinor, currency) : undefined,
       refundOf: r.refundOfPaymentId ?? undefined,
       tdsSection: r.tdsSection ?? undefined,
       refunds: r.direction === 'received' ? refunds.filter((f) => f.of === r.id).map((f) => ({ paymentId: f.id, number: f.number, date: f.date, amount: money(f.amountMinor, f.currency.trim()) })) : undefined,

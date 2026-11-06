@@ -1503,6 +1503,14 @@ export interface paths {
          *     are editable only while the document is a draft. After finalisation only
          *     `notes`, `terms`, `reference` and `attachmentIds` can change, and an
          *     e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
+         *
+         *     The exception (RULES 6.23, pending CA): an issued invoice whose `editable` is true is edited
+         *     in full. It is recomputed as a draft save is and keeps its number and branch; its stock is
+         *     taken back and posted again, and its expected TDS and TCS worked out afresh. Its date may not
+         *     move before the invoice issued before it (422 DATE_BEFORE_PREVIOUS), out of its numbering
+         *     period (422 DATE_OUTSIDE_SERIES), or into a closed (409 PERIOD_LOCKED) or filed (409
+         *     RETURN_FILED) period. The audit trail keeps the invoice before and after. When `editable` is
+         *     false, a change beyond those fields is 409 DOCUMENT_FINALIZED, naming the reason.
          */
         patch: operations["updateDocument"];
         trace?: never;
@@ -1994,6 +2002,64 @@ export interface paths {
         get: operations["summarizePaymentList"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/credit-applications/{applicationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                applicationId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Undoes a credit note applied to an invoice or bill
+         * @description Takes back a direct note's credit from the document it was applied to (adjustAdvances): the
+         *     document owes that much again and the note has it to apply elsewhere. Refused in a closed
+         *     period (409 PERIOD_LOCKED).
+         */
+        delete: operations["removeCreditApplication"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payments/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A party's unadjusted advances and credit, and its open documents they can settle
+         * @description Credit on one side: receipts (or payments made) with an unallocated part, and direct credit
+         *     notes (or a supplier's credit notes) not yet applied in full. Open on the other: invoices and
+         *     debit notes (or bills and supplier debit notes) still owed, oldest first. Base currency only.
+         *     `side` picks which side of a party that is both is read; a supplier is read as one.
+         */
+        get: operations["listAdjustable"];
+        put?: never;
+        /**
+         * Applies a party's advances and direct notes to its open documents
+         * @description With `allocations`, each names its source (`payment` or `note`) and target; without, every
+         *     unadjusted advance is applied oldest first to the oldest open document (FIFO), notes before
+         *     payments. A payment's part is added to its allocations, so the GST on a service advance comes
+         *     back on the invoice's date (GSTR-1 11B). A note's part is a credit application: not money, and
+         *     no GST on advance moves (RULES 8.13). Refused in a closed period.
+         */
+        post: operations["adjustAdvances"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2740,6 +2806,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/vouchers/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many vouchers a list's filters match, what they add up to, and the split by account
+         * @description Takes the filters of `listVouchers`. `total` adds up each voucher's debits; `byAccount` totals by the account credited (for receipts, what the money was for). Base currency.
+         */
+        get: operations["summarizeVoucherList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/vouchers": {
         parameters: {
             query?: never;
@@ -3122,7 +3210,7 @@ export interface paths {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "tcs-register" | "tcs-payable" | "msme-payables" | "gstr1";
             };
             cookie?: never;
         };
@@ -3292,6 +3380,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/gst/gstr2b/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reads a GSTR-2B file downloaded from the GST portal, in place of downloading it through a session
+         * @description The JSON the portal gives (Returns → GSTR-2B → Download → JSON: `data.docdata.b2b`, `b2ba`, `cdnr`,
+         *     `cdnra`, `impg`, `impgsez`, `isd`), or its Excel workbook (the B2B, B2BA, B2B-CDNR, B2B-CDNRA and
+         *     IMPG sheets). Stored as a download is, keeping decisions already made, then matched. At most 6 MB
+         *     decoded. 422 `GSTR2B_WRONG_GSTIN` or `GSTR2B_WRONG_PERIOD` when a JSON file is another
+         *     registration's or month's; 422 `UNSUPPORTED_FILE` when it isn't a 2B file.
+         */
+        post: operations["importGstr2b"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/gst/gstr2b/claim": {
         parameters: {
             query?: never;
@@ -3344,6 +3458,29 @@ export interface paths {
         get: operations["getGstr3b"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/utilization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** A period's GST set-off (utilization) to record, worked out from its GSTR-3B data, with the GST cash ledger */
+        get: operations["getGstUtilization"];
+        put?: never;
+        /**
+         * Posts the set-off as one GST journal
+         * @description Dr Output / Cr Input for credit used; Dr Output, Reverse charge payable, Interest on GST and Late fee / Cr GST cash ledger for cash. Checked against the period's GSTR-3B: rule 88A order, CGST never for SGST, reverse charge, interest and late fee in cash only, every head paid in full (422 with the issues). 422 CASH_LEDGER_SHORT when the cash ledger holds too little: record a GST challan first. 409 SET_OFF_EXISTS when the period already has one. Refused in a closed period.
+         */
+        post: operations["postGstUtilization"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4587,7 +4724,7 @@ export interface components {
             taxRegistration?: components["schemas"]["TaxRegistration"];
             fiscalYearStartMonth: number;
             /** @description Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it. */
-            disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
+            disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books" | "pos")[];
             /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued; with kind `payment`, payments made over it wait as payment requests. Only an owner can change them. */
             approvalRules?: {
                 /** @description A document kind, or `payment` for payments made to suppliers (RULES 6.14). */
@@ -4716,7 +4853,7 @@ export interface components {
             readonly companyId?: string;
             name: string;
             /** @enum {string} */
-            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt" | "gstChallan";
             narration?: string;
             lines: {
                 account: string;
@@ -4801,7 +4938,7 @@ export interface components {
             readonly id?: string;
             readonly companyId?: string;
             /** @enum {string} */
-            kind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            kind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt" | "gstChallan";
             /** @example INV */
             prefix: string;
             nextNumber: number;
@@ -4896,6 +5033,10 @@ export interface components {
                 /** Format: date */
                 validTill: string;
             };
+            /** @description Sales to this customer collect TCS (s.206C) by default, under tcsSection */
+            tcsApplicable?: boolean;
+            /** @description The TCS section this customer's invoices fall under by default; needs tcsApplicable */
+            tcsSection?: components["schemas"]["TcsSectionCode"];
             /** Format: email */
             email?: string;
             phone?: string;
@@ -5175,7 +5316,7 @@ export interface components {
              * @description receipt: money in that isn't from an invoice (interest, rent, a refund); it debits cash or bank only
              * @enum {string}
              */
-            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt" | "gstChallan";
             readonly number?: string;
             /** Format: date */
             date: string;
@@ -5189,6 +5330,11 @@ export interface components {
                 /** Format: date */
                 depositedOn: string;
             };
+            gstChallan?: components["schemas"]["GstChallan"];
+            /** @description On a GST set-off journal, the registration it sets off */
+            readonly gstin?: string;
+            /** @description On a GST set-off journal, the return period (MMYYYY) it sets off */
+            readonly gstPeriod?: string;
             /**
              * @description Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft.
              * @enum {string}
@@ -5197,6 +5343,10 @@ export interface components {
             /** Format: date-time */
             readonly postedAt?: string;
             lines: components["schemas"]["VoucherLine"][];
+            /** @description On a receipt: the customer, supplier or contact it came from, for reference. The lines are what post. */
+            partyId?: string;
+            /** @description Files kept with the voucher (a receipt's slip) */
+            attachmentIds?: string[];
             readonly createdBy?: string;
         };
         TrialBalance: {
@@ -5360,6 +5510,8 @@ export interface components {
                 cash?: components["schemas"]["GstAmounts"];
                 carriedIn?: components["schemas"]["GstAmounts"];
                 carriedForward?: components["schemas"]["GstAmounts"];
+                /** @description The electronic cash ledger as the books hold it today (challans less what set-offs used) */
+                cashLedger?: components["schemas"]["GstAmounts"];
             };
             /** @description This period's GSTR-1 and GSTR-3B as recorded */
             returns?: components["schemas"]["GstReturn"][];
@@ -5378,11 +5530,93 @@ export interface components {
                 })[];
             };
         };
+        /** @description An amount in paise per GST head */
+        GstHeadMinor: {
+            igst: number;
+            cgst: number;
+            sgst: number;
+            cess: number;
+        };
+        /** @description A GST deposit (PMT-06). Each head's minor heads in paise; the voucher's lines debit the GST cash ledger by each head's total and credit the bank. */
+        GstChallan: {
+            /** @description The 14-character common portal identification number */
+            cpin: string;
+            /** @description The challan identification number the bank gave */
+            cin?: string;
+            /** @description The bank reference number */
+            brn?: string;
+            /** Format: date */
+            depositedOn: string;
+            heads: {
+                igst?: components["schemas"]["GstChallanHead"];
+                cgst?: components["schemas"]["GstChallanHead"];
+                sgst?: components["schemas"]["GstChallanHead"];
+                cess?: components["schemas"]["GstChallanHead"];
+            };
+        };
+        GstChallanHead: {
+            tax: number;
+            interest: number;
+            penalty: number;
+            fee: number;
+            others: number;
+        };
+        /** @description A set-off, in paise by head: credit[from][to], forward tax paid in cash, reverse charge (cash only), older reverse charge payable, interest and late fee (cash only). */
+        GstSetOff: {
+            credit: {
+                igst: components["schemas"]["GstHeadMinor"];
+                cgst: components["schemas"]["GstHeadMinor"];
+                sgst: components["schemas"]["GstHeadMinor"];
+                cess: components["schemas"]["GstHeadMinor"];
+            };
+            cash: components["schemas"]["GstHeadMinor"];
+            reverseCharge: components["schemas"]["GstHeadMinor"];
+            oldReverseCharge: components["schemas"]["GstHeadMinor"];
+            interest: components["schemas"]["GstHeadMinor"];
+            lateFee: components["schemas"]["GstHeadMinor"];
+        };
+        GstUtilizationView: {
+            gstin: string;
+            period: string;
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            currency: string;
+            /** @description 3.1(a) and (b) from the GSTR-3B data: payable by credit or cash */
+            forward: components["schemas"]["GstHeadMinor"];
+            /** @description 3.1(d): payable in cash only */
+            reverseCharge: components["schemas"]["GstHeadMinor"];
+            /** @description Net credit (4C) plus what the last return carried forward */
+            available: components["schemas"]["GstHeadMinor"];
+            carriedIn: components["schemas"]["GstHeadMinor"];
+            /** @description The GST cash ledger in the books on the asked date */
+            cashBalance: components["schemas"]["GstHeadMinor"];
+            /** @description Reverse charge payable from before Output took it, still open */
+            oldReverseChargeOpen: components["schemas"]["GstHeadMinor"];
+            interest: components["schemas"]["GstHeadMinor"];
+            lateFee: components["schemas"]["GstHeadMinor"];
+            prefill: components["schemas"]["GstSetOff"];
+            /** @description The Output ledger's credit over the period (set-offs left out) against forward plus reverse-charge liability */
+            outputCheck: {
+                books: components["schemas"]["GstHeadMinor"];
+                expected: components["schemas"]["GstHeadMinor"];
+                difference: components["schemas"]["GstHeadMinor"];
+                ok: boolean;
+            };
+            /** @description The set-off already posted for this GSTIN and period (by hand, or when 3B was filed) */
+            existing: components["schemas"]["Voucher"][];
+        };
         /**
          * @description 194J(a) is 194JA, 194I(b) is 194IB, and so on.
          * @enum {string}
          */
         TdsSectionCode: "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+        /**
+         * @description A TCS section of s.206C, as core TCS_SECTIONS names it.
+         * @enum {string}
+         */
+        TcsSectionCode: "scrap" | "liquor" | "tenduLeaves" | "timberLease" | "timberOther" | "forestProduce" | "minerals" | "motorVehicle" | "luxuryGoods";
         TdsDeduction: {
             section: components["schemas"]["TdsSectionCode"];
             rate: number;
@@ -5485,6 +5719,8 @@ export interface components {
             gst?: components["schemas"]["GstFlags"];
             /** @description A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED) */
             expenseId?: string;
+            /** @description On a purchase document: this line's cost centre, for a line that is not stock (an item that tracks stock takes the document's). Left out takes the document's. */
+            costCentreId?: string;
         };
         TaxComponent: {
             /** @enum {string} */
@@ -5574,6 +5810,18 @@ export interface components {
              * @enum {string}
              */
             noteReason?: "discount" | "priceChange" | "taxCorrection" | "deficiency" | "other";
+            /**
+             * @description A direct note's GST treatment (no sourceDocumentId; RULES 6.24). withGst (the default) is a s.34 note: it names the original invoice or bill (originalNumber, originalDate), goes to GSTR-1 CDNR/CDNUR and, for a credit note, must be issued by 30 November after the end of the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or commercial note: no tax on any line, posted to discount allowed (or received), and left out of GSTR-1 and GSTR-3B.
+             * @enum {string}
+             */
+            noteGst?: "withGst" | "noGst";
+            /** @description A direct note with GST: the number of the original invoice or bill it adjusts */
+            originalNumber?: string;
+            /**
+             * Format: date
+             * @description A direct note with GST: the date of the original invoice or bill
+             */
+            originalDate?: string;
             /** @description The project or department it belongs to */
             costCentreId?: string;
             /** @description The vehicle it moved on */
@@ -5584,10 +5832,12 @@ export interface components {
              */
             tcsSection?: "none" | "scrap" | "liquor" | "tenduLeaves" | "timberLease" | "timberOther" | "forestProduce" | "minerals" | "motorVehicle" | "luxuryGoods";
             /**
-             * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN.
+             * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's.
              * @enum {string}
              */
             tdsSection?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+            /** @description On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN. */
+            tdsRate?: number;
             /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
             overrideCreditLimit?: boolean;
             /**
@@ -5607,6 +5857,8 @@ export interface components {
             readonly partyGstin?: string;
             /** @description TDS deducted on the bill: what is owed the supplier is the grand total less this */
             tds?: components["schemas"]["TdsDeduction"];
+            /** @description On an invoice: TDS the customer is expected to deduct (on the taxable value, without GST). Not posted and not settled: the receipt that allocates to the invoice records what was deducted. The grand total is unchanged. */
+            tdsExpected?: components["schemas"]["TdsDeduction"];
             /** @description The self-invoice for a reverse-charge purchase from an unregistered supplier (Rule 46(f)) */
             readonly selfInvoiceNumber?: string;
             /**
@@ -5656,6 +5908,24 @@ export interface components {
             };
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
+            /** @description On an invoice: whether it can be edited in full. A draft always can; an issued one only while it is the latest in its series, with nothing allocated, applied or raised against it, no IRN or e-way bill, and its GSTR-1 month and books period open (RULES 6.23). Unset on other kinds. */
+            readonly editable?: boolean;
+            /**
+             * @description Why an issued invoice can't be edited in full (editable false)
+             * @enum {string}
+             */
+            readonly editBlock?: "notInvoice" | "notFinal" | "periodLocked" | "notLatest" | "hasPayments" | "hasCredit" | "hasNotes" | "eInvoiced" | "ewayBill" | "returnFiled" | "laterStock";
+        };
+        /** @description A direct credit note applied to an invoice (or a supplier's to a bill), through adjustAdvances */
+        CreditApplication: {
+            id: string;
+            noteId: string;
+            noteNumber: string;
+            documentId: string;
+            documentNumber: string;
+            amount: components["schemas"]["Money"];
+            /** Format: date */
+            date: string;
         };
         /** @description Light row for lists */
         DocumentSummary: {
@@ -5679,6 +5949,8 @@ export interface components {
             exchangeRate?: number;
             totalTax?: components["schemas"]["Money"];
             outstanding?: components["schemas"]["Money"];
+            /** @description On an invoice: TDS the customer is expected to deduct (not settled) */
+            tdsExpected?: components["schemas"]["TdsDeduction"];
             eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
             /** @description The IRN once one is issued */
             irn?: string;
@@ -5693,6 +5965,8 @@ export interface components {
             linkedDocuments?: components["schemas"]["DocumentSummary"][];
             allowedTransitions?: components["schemas"]["DocStatus"][];
             allowedConversions?: components["schemas"]["DocumentKind"][];
+            /** @description Direct notes applied to this document, or (on a note) the documents it is applied to */
+            creditApplications?: components["schemas"]["CreditApplication"][];
         };
         /** @enum {string} */
         EInvoiceStatus: "notApplicable" | "pending" | "generated" | "cancelled" | "failed";
@@ -5916,6 +6190,43 @@ export interface components {
             paymentId?: string;
             version: number;
         };
+        AdjustmentAllocation: {
+            /**
+             * @description payment: an advance (its unallocated part); note: a direct credit note applied to the document
+             * @enum {string}
+             */
+            sourceType: "payment" | "note";
+            sourceId: string;
+            documentId: string;
+            amount: components["schemas"]["Money"];
+        };
+        Adjustable: {
+            /** @description Unadjusted advances and direct notes, oldest first */
+            credits: {
+                /** @enum {string} */
+                sourceType: "payment" | "note";
+                id: string;
+                number: string;
+                /** Format: date */
+                date: string;
+                total?: components["schemas"]["Money"];
+                left: components["schemas"]["Money"];
+                /** @description A service advance taxed on receipt */
+                advanceTax?: boolean;
+            }[];
+            /** @description Documents still owed, oldest first */
+            open: {
+                documentId: string;
+                number: string;
+                kind: components["schemas"]["DocumentKind"];
+                /** Format: date */
+                date: string;
+                total?: components["schemas"]["Money"];
+                outstanding: components["schemas"]["Money"];
+                /** @description Has a line for a service (an item of type service, or a SAC code starting 99) */
+                hasServiceLines?: boolean;
+            }[];
+        };
         Payment: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
@@ -5942,8 +6253,14 @@ export interface components {
                 /** @description The rate on the day received */
                 readonly rate?: number;
                 placeOfSupplyStateCode: string;
+                /** @description The SAC (or HSN) of the service the advance is for, for table 11 and the receipt voucher */
+                hsn?: string;
+                /** @description Cess on the advance, percent of its value; the amount received includes it */
+                cessRate?: number;
             };
-            /** @description On money paid: the TDS section of what its allocations kept back (tdsDeducted), so it is reported under that section in 26Q and TDS payable */
+            /** @description On money received: TDS the customer deducted from an advance before any invoice, under `tdsSection`. It credits the customer as money would, so it adds to the advance. */
+            advanceTds?: components["schemas"]["Money"];
+            /** @description The TDS section of what its allocations settled as tdsDeducted: on money paid, what was kept back (26Q and TDS payable); on money received, what the customer deducted (TDS receivable by section, matched to 26AS) */
             tdsSection?: string;
             /** @description Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date. */
             refundOf?: string;
@@ -6623,6 +6940,10 @@ export interface components {
             invoiceValue?: components["schemas"]["Money"];
             /** @description Set on an export, or a credit note against one */
             exported?: boolean;
+            /** @description On a note: the invoice it adjusts, linked or (a direct note with GST) as entered on it */
+            originalNumber?: string;
+            /** Format: date */
+            originalDate?: string;
         };
         HsnRow: {
             hsnCode?: string;
@@ -6646,7 +6967,7 @@ export interface components {
         /** @description GSTR-1 table 13, one row per numbering series */
         DocIssueRow: {
             /** @enum {string} */
-            nature?: "invoice" | "creditNote";
+            nature?: "invoice" | "creditNote" | "debitNote";
             series?: string;
             from?: string;
             to?: string;
@@ -11036,6 +11357,90 @@ export interface operations {
             };
         };
     };
+    removeCreditApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                applicationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listAdjustable: {
+        parameters: {
+            query: {
+                partyId: string;
+                side?: "customer" | "supplier";
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adjustable"];
+                };
+            };
+        };
+    };
+    adjustAdvances: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    partyId: string;
+                    /** @enum {string} */
+                    side?: "customer" | "supplier";
+                    allocations?: components["schemas"]["AdjustmentAllocation"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Applied; what is left on both sides */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adjustable"] & {
+                        applied: components["schemas"]["AdjustmentAllocation"][];
+                    };
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
     listPayments: {
         parameters: {
             query?: {
@@ -12556,13 +12961,53 @@ export interface operations {
             };
         };
     };
+    summarizeVoucherList: {
+        parameters: {
+            query?: {
+                kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt" | "gstChallan";
+                status?: "draft" | "posted";
+                partyId?: string;
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                        byAccount: {
+                            account: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listVouchers: {
         parameters: {
             query?: {
-                kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt" | "gstChallan";
                 status?: "draft" | "posted";
+                partyId?: string;
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -12633,7 +13078,7 @@ export interface operations {
                     dryRun?: boolean;
                     vouchers: {
                         /** @enum {string} */
-                        kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                        kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt" | "gstChallan";
                         /** Format: date */
                         date: string;
                         reference?: string;
@@ -13371,7 +13816,7 @@ export interface operations {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "tcs-register" | "tcs-payable" | "msme-payables" | "gstr1";
             };
             cookie?: never;
         };
@@ -13609,6 +14054,39 @@ export interface operations {
             };
         };
     };
+    importGstr2b: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    fileName: string;
+                    /** @description The file, base64 encoded */
+                    contentBase64: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Imported and matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr2bReconciliation"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
     claimGstr2b: {
         parameters: {
             query?: never;
@@ -13691,6 +14169,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Gstr3bView"];
+                };
+            };
+        };
+    };
+    getGstUtilization: {
+        parameters: {
+            query: {
+                gstin: string;
+                period: string;
+                /** @description The set-off date the cash ledger is read on (default today) */
+                date?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstUtilizationView"];
+                };
+            };
+        };
+    };
+    postGstUtilization: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    /** Format: date */
+                    date: string;
+                    narration?: string;
+                    setOff: components["schemas"]["GstSetOff"];
+                };
+            };
+        };
+        responses: {
+            /** @description Posted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
                 };
             };
         };

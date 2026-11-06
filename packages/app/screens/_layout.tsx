@@ -54,7 +54,7 @@ function RootNavigator() {
       return;
     }
     if (authenticated && !onboardingComplete && group !== '(onboarding)') {
-      router.replace('/(onboarding)/business');
+      router.replace('/(onboarding)/tax');
       return;
     }
     if (authenticated && onboardingComplete && (group === '(auth)' || group === '(onboarding)')) {

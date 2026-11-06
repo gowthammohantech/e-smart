@@ -56,6 +56,9 @@ export type Gstr1Row = {
   reverseCharge?: boolean;
   /** Set on a note: C (credit, lowers the supply) or D (debit, adds to it). */
   noteType?: 'C' | 'D';
+  /** On a note: the invoice it adjusts, linked or (a direct note with GST) as entered on it. */
+  originalNumber?: string;
+  originalDate?: string;
 };
 
 export type HsnRow = {
@@ -266,8 +269,9 @@ export function gstr1Summary(args: {
   let tax = 0;
   let value = 0;
 
+  // A financial note without GST is no supply (RULES 6.24): it is in no table.
   const issued = documents.filter(
-    (d) => GSTR1_KINDS.includes(d.kind) && d.status !== 'draft' && inRange(d.date, period),
+    (d) => GSTR1_KINDS.includes(d.kind) && d.status !== 'draft' && d.noteGst !== 'noGst' && inRange(d.date, period),
   );
   const reportable = issued.filter((d) => !isCancelled(d.status));
 
@@ -288,6 +292,7 @@ export function gstr1Summary(args: {
     const source = noteType && doc.sourceDocumentId ? documents.find((d) => d.id === doc.sourceDocumentId) : undefined;
     const originalValue = source ? toBase(source.totals.grandTotal, source.currency === baseCurrency ? 1 : source.exchangeRate) : invoiceValue;
     const table = tableFor(doc, party, placeOfSupply, interState, originalValue);
+    const original = source ? { number: source.number, date: source.date } : { number: doc.originalNumber, date: doc.originalDate };
     // The buyer as registered when the document was issued.
     const gstin = isRegistered(party) ? (doc.partyGstin ?? party.taxId) : undefined;
 
@@ -345,6 +350,8 @@ export function gstr1Summary(args: {
         ...(isExport(party, placeOfSupply) && { exported: true }),
         ...(reverseCharge && { reverseCharge: true }),
         ...(noteType && { noteType }),
+        ...(noteType && original.number && { originalNumber: original.number }),
+        ...(noteType && original.date && { originalDate: original.date }),
       };
       rows.push(row);
       taxable += sign * row.taxableValue.minor;
@@ -414,4 +421,32 @@ export function gstr1Summary(args: {
       documents: reportable.length,
     },
   };
+}
+
+/** One line of the rate-wise summary: everything reported at a rate, across the invoice and note tables. */
+export type Gstr1RateLine = { rate: number; taxableValue: Money; igst: Money; cgst: Money; sgst: Money; cess: Money; documents: number };
+
+/**
+ * The return's supplies by rate, across B2B, B2CL, B2CS, EXP, CDNR and CDNUR, net of credit notes (a
+ * credit note takes away; a debit note adds). Reverse-charge rows count too: the seller reports them.
+ * Lowest rate first.
+ */
+export function gstr1RateSummary(summary: Pick<Gstr1Summary, Gstr1Table>, currency: string): Gstr1RateLine[] {
+  const out = new Map<number, Gstr1RateLine & { ids: Set<string> }>();
+  for (const table of GSTR1_TABLES) {
+    for (const r of summary[table] ?? []) {
+      const line = out.get(r.rate) ?? { rate: r.rate, taxableValue: zero(currency), igst: zero(currency), cgst: zero(currency), sgst: zero(currency), cess: zero(currency), documents: 0, ids: new Set<string>() };
+      const sign = r.noteType === 'C' ? -1 : 1;
+      const plus = (a: Money, b: Money) => money(a.minor + sign * b.minor, currency);
+      line.taxableValue = plus(line.taxableValue, r.taxableValue);
+      line.igst = plus(line.igst, r.igst);
+      line.cgst = plus(line.cgst, r.cgst);
+      line.sgst = plus(line.sgst, r.sgst);
+      line.cess = plus(line.cess, r.cess);
+      line.ids.add(r.documentId);
+      line.documents = line.ids.size;
+      out.set(r.rate, line);
+    }
+  }
+  return [...out.values()].sort((a, b) => a.rate - b.rate).map(({ ids: _ids, ...l }) => l);
 }

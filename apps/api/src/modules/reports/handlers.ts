@@ -10,9 +10,10 @@ import { profitSnapshot, summarizeAdvances, summarizeDocuments, summarizeExpense
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
 import { loadBook, loadPerpetualCost, loadVouchers } from '../books/book';
-import { gstr1ForRange } from '../gst/handlers';
+import { amendmentsForScreen, gstr1ForRange } from '../gst/handlers';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
-import { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { tds26asMatch, tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { tcsPayableSummary, tcsRegister } from '@esmart/core/domain/tcsReports';
 import { msmePayables, sec43bh } from '@esmart/core/domain/msme';
 import { today } from '../documents/lifecycle';
 import { trialBalance } from '@esmart/core/domain/ledger/reports';
@@ -229,7 +230,19 @@ export const reportsHandlers = defineHandlers({
         const { postings, book } = await loadBook(all);
         if (key === 'tds-payable') return { rows: tdsPayableSummary(postings, range, today(ctx.now)) } as never;
         const parties = await loadParties(all, book.parties.map((p) => p.id));
-        return { rows: tdsReceivable(postings, parties, range) } as never;
+        // The 26AS match: what invoices expected customers to deduct against what receipts recorded.
+        const { docs: invoices } = await loadDocuments(all, ['invoice']);
+        return { rows: tdsReceivable(postings, parties, range), match: tds26asMatch(postings, inScope(invoices), parties, base, range) } as never;
+      }
+      case 'tcs-register':
+      case 'tcs-payable': {
+        const { docs } = await loadDocuments(all, ['invoice', 'creditNote', 'salesReturn']);
+        const live = inScope(docs);
+        const register = tcsRegister(live, await partiesOf(live), base, range);
+        if (key === 'tcs-register') return { rows: register } as never;
+        if (ctx.user.branchIds.length) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
+        const { postings } = await loadBook(all);
+        return tcsPayableSummary(postings, register, range, today(ctx.now)) as never;
       }
       case 'tds-26q':
       case 'tds-challans': {
@@ -243,7 +256,10 @@ export const reportsHandlers = defineHandlers({
       case 'gstr1': {
         // The screen's range and branch, within the branches the user may see.
         const branchIds = branchId ? [branchId] : ctx.user.branchIds;
-        return gstr1ForRange(ctx.db, ctx.company, range, ctx.now, { branchIds }) as never;
+        const summary = await gstr1ForRange(ctx.db, ctx.company, range, ctx.now, { branchIds });
+        // A month's screen shows what its return amends of earlier filed ones.
+        const amendments = await amendmentsForScreen(ctx.db, ctx.company, range, ctx.now, branchIds);
+        return (amendments ? { ...summary, amendments } : summary) as never;
       }
       case 'msme-payables': {
         const { docs } = await loadDocuments(all, [...BUY_SIDE]);

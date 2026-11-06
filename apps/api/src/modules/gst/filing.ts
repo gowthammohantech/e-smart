@@ -14,6 +14,8 @@ import { build3b, branchesOf } from './gstr3bBuild';
 import { gstnJson } from './gstn';
 import { buildGstr1, reportedRows } from './handlers';
 import { assertCompanyGstin, portalContext, returnsFailure } from './portal';
+import { cashLedgerOf, existingSetOffs } from './utilization';
+import { businessDate } from '@esmart/core/lib/date';
 
 const R = schema.gstReturns;
 type ReturnRow = typeof R.$inferSelect;
@@ -99,8 +101,8 @@ async function recordFiled(db: DbOrTx, company: CompanyRow, actor: AuthUser, row
 
 /**
  * After GSTR-3B is filed: the books close through the period, and the set-off is posted as a GST
- * journal (output tax against the credit that paid it). Tax paid in cash stays on the output and
- * reverse-charge ledgers until the challan payment is recorded.
+ * journal (output tax against the credit that paid it), unless one was posted by hand from the
+ * Utilization screen. Tax paid in cash stays on Output until a set-off takes it from the GST cash ledger.
  */
 async function afterFiled3b(tx: DbOrTx, company: CompanyRow, actor: AuthUser, row: ReturnRow, now: Date) {
   const { to } = periodBounds(row.period);
@@ -109,6 +111,8 @@ async function afterFiled3b(tx: DbOrTx, company: CompanyRow, actor: AuthUser, ro
   }
   const used = (row.payload as { utilization?: { credit: Record<TaxKind, Record<TaxKind, number>> } } | null)?.utilization?.credit;
   if (!used) return;
+  // Set off by hand on the Utilization screen already (RULES 6.21): that journal stands, none is added.
+  if ((await existingSetOffs(tx, company.id, row.gstin, row.period)).length) return;
   const out: Record<TaxKind, number> = { igst: 0, cgst: 0, sgst: 0, cess: 0 };
   const inp: Record<TaxKind, number> = { igst: 0, cgst: 0, sgst: 0, cess: 0 };
   for (const from of KINDS) for (const to2 of KINDS) {
@@ -133,6 +137,8 @@ async function afterFiled3b(tx: DbOrTx, company: CompanyRow, actor: AuthUser, ro
     narration: `GST set-off for ${row.period.slice(0, 2)}/${row.period.slice(2)} (GSTR-3B ${row.arn ?? ''})`.trim(),
     reference: row.arn,
     lines,
+    gstin: row.gstin,
+    gstPeriod: row.period,
     createdBy: actor.id,
     createdAt: now,
     updatedAt: now,
@@ -191,6 +197,7 @@ export const gstFilingHandlers = defineHandlers({
         cash: amounts(b.utilization.cash, base),
         carriedIn: amounts(b.carriedIn, base),
         carriedForward: amounts(b.utilization.carriedForward, base),
+        cashLedger: amounts(await cashLedgerOf(ctx.db, ctx.company, gstin, businessDate(ctx.now)), base),
       },
       returns: returns.map(returnWire),
       breakup: Object.fromEntries(

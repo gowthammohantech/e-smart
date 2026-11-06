@@ -29,7 +29,8 @@ describe('the menu', () => {
 
   it('gives the Sales plan Money without the money-out pages', () => {
     const money = MENU.find((s) => s.name === 'money')!.pages.filter((p) => canOpen('free', p.route)).map((p) => p.key);
-    expect(money).toEqual(['paymentsIn', 'receivables']);
+    // Adjusting advances is a payments screen, open like payments (plan.ts), though it sits under /receipts.
+    expect(money).toEqual(['paymentsIn', 'advanceReceipt', 'adjustAdvance', 'receivables']);
     expect(PHONE_TABS.sales).toEqual(['index', 'sales', 'gst', 'more']);
   });
 

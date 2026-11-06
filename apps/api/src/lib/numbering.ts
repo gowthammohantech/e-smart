@@ -11,7 +11,7 @@ const S = schema.numberingSeries;
 
 /** GST rule 46: a tax invoice or credit note number has at most 16 characters. */
 export const MAX_TAX_INVOICE_NUMBER = 16;
-const VOUCHER_KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'];
+const VOUCHER_KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt', 'gstChallan'];
 const isVoucherKind = (kind: SeriesKind): kind is VoucherKind => (VOUCHER_KINDS as string[]).includes(kind);
 
 export const TAX_INVOICE_KINDS: SeriesKind[] = ['invoice', 'salesReturn', 'creditNote', 'debitNote'];
@@ -129,4 +129,17 @@ export async function assignNumber(
   // drawing a number is part of the document's own change.
   await tx.insert(schema.changeLog).values({ companyId: series.companyId, entityType: 'numbering_series', entityId: series.id, op: 'upsert', version });
   return number;
+}
+
+/**
+ * Whether two dates fall in the same numbering period of a company's series for `kind`: a number
+ * drawn for one date stays right on the other (a yearly series prints the financial year).
+ */
+export async function sameNumberingPeriod(tx: DbOrTx, companyId: string, kind: SeriesKind, a: string, b: string): Promise<boolean> {
+  const [series] = await tx.select({ resetPolicy: S.resetPolicy, includeFiscalYear: S.includeFiscalYear }).from(S).where(and(eq(S.companyId, companyId), eq(S.kind, kind)));
+  const [company] = await tx.select({ fy: schema.companies.fiscalYearStartMonth }).from(schema.companies).where(eq(schema.companies.id, companyId));
+  const fy = company?.fy ?? 4;
+  if (financialYearOf(a, fy).start !== financialYearOf(b, fy).start && (series?.includeFiscalYear ?? true)) return false;
+  const policy = series?.resetPolicy ?? 'yearly';
+  return periodStart(policy, a, fy) === periodStart(policy, b, fy);
 }

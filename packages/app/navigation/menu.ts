@@ -95,8 +95,14 @@ export const MENU: MenuSection[] = [
     pages: [
       { key: 'accountsHub', labelKey: 'reports:dash.accounts.open', icon: 'scale-balance', route: '/accounts', group: 'accounts' },
       { key: 'paymentsIn', labelKey: 'nav:title.paymentsReceived', icon: 'cash-plus', route: '/payments/received', group: 'cashFlow', createRoute: '/payments/new?direction=received' },
+      // A receipt opened with the service-advance switch on: GST on it, with SAC, cess and TDS (RULES 8.12).
+      { key: 'advanceReceipt', labelKey: 'nav:title.advanceReceipt', icon: 'cash-fast', route: '/payments/new?direction=received&advance=1', group: 'cashFlow', action: true },
       { key: 'paymentsOut', labelKey: 'nav:title.paymentsMade', icon: 'cash-minus', route: '/payments/made', group: 'cashFlow', createRoute: '/payments/new?direction=paid' },
       { key: 'receipts', labelKey: 'nav:title.receipts', icon: 'receipt', route: '/receipts', group: 'cashFlow', createRoute: '/receipts/new' },
+      // The adjustment entry: advances and direct notes applied to open invoices and debit notes (RULES 8.13).
+      { key: 'adjustAdvance', labelKey: 'nav:title.adjustAdvance', icon: 'swap-horizontal', route: '/receipts/adjust', group: 'cashFlow' },
+      // The transfer entry: cash and bank to each other, posted as a contra.
+      { key: 'transfer', labelKey: 'nav:title.transfer', icon: 'bank-transfer', route: '/books/transfer', group: 'cashFlow' },
       { key: 'receivables', labelKey: 'nav:title.receivables', icon: 'clock-alert-outline', route: '/receivables', group: 'dues' },
       { key: 'payables', labelKey: 'nav:title.payables', icon: 'file-clock-outline', route: '/payables', group: 'dues' },
       { key: 'expenses', labelKey: 'nav:title.expenses', icon: 'receipt-text-outline', route: '/expenses', group: 'spending', createRoute: '/expenses/new' },
@@ -105,6 +111,7 @@ export const MENU: MenuSection[] = [
       { key: 'cashForecast', labelKey: 'nav:title.cashForecast', icon: 'chart-areaspline', route: '/books/cash-forecast', group: 'accounts' },
       { key: 'fixedAssets', labelKey: 'nav:title.fixedAssets', icon: 'office-building-cog-outline', route: '/books/fixed-assets', group: 'accounts', createRoute: '/books/fixed-assets/new' },
       { key: 'budgets', labelKey: 'nav:title.budgets', icon: 'target', route: '/books/budgets', group: 'accounts', createRoute: '/books/budgets/new' },
+      { key: 'costCentres', labelKey: 'nav:title.costCentres', icon: 'sitemap-outline', route: '/books/cost-centres', group: 'accounts' },
     ],
   },
   {
@@ -115,8 +122,13 @@ export const MENU: MenuSection[] = [
     pages: [
       { key: 'compliance', labelKey: 'nav:more.entry.gstCompliance', icon: 'shield-check-outline', route: '/compliance', badge: 'eInvoiceFailed', group: 'compliance' },
       { key: 'gstr1', labelKey: 'nav:title.gstr1', icon: 'file-send-outline', route: '/gst/gstr1', group: 'returns' },
-      { key: 'gstr2b', labelKey: 'nav:title.gstr2b', icon: 'file-compare', route: '/gst/gstr2b', group: 'returns' },
+      { key: 'gstr2b', labelKey: 'nav:title.gstr2b', icon: 'file-download-outline', route: '/gst/gstr2b', group: 'returns' },
+      { key: 'gstr2bReconciliation', labelKey: 'nav:title.gstr2bReconciliation', icon: 'file-compare', route: '/gst/gstr2b-reconciliation', group: 'returns' },
       { key: 'gstReturns', labelKey: 'nav:title.gstReturns', icon: 'file-certificate-outline', route: '/gst/returns', group: 'returns' },
+      // The set-off by hand, the challan that fills the cash ledger it pays from, and GST journals (RULES 6.21).
+      { key: 'gstUtilization', labelKey: 'nav:title.gstUtilization', icon: 'scale-balance', route: '/gst/utilization', group: 'returns' },
+      { key: 'gstChallan', labelKey: 'nav:title.gstChallan', icon: 'bank-plus', route: '/gst/challan', group: 'returns' },
+      { key: 'gstJournal', labelKey: 'nav:title.gstJournal', icon: 'book-edit-outline', route: '/gst/journal', group: 'returns' },
     ],
   },
   { name: 'contacts', icon: 'account-group-outline', activeIcon: 'account-group', sidebarGroup: 'manage', pages: [] },

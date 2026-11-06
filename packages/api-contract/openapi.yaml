@@ -2189,6 +2189,14 @@ paths:
         are editable only while the document is a draft. After finalisation only
         `notes`, `terms`, `reference` and `attachmentIds` can change, and an
         e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
+
+        The exception (RULES 6.23, pending CA): an issued invoice whose `editable` is true is edited
+        in full. It is recomputed as a draft save is and keeps its number and branch; its stock is
+        taken back and posted again, and its expected TDS and TCS worked out afresh. Its date may not
+        move before the invoice issued before it (422 DATE_BEFORE_PREVIOUS), out of its numbering
+        period (422 DATE_OUTSIDE_SERIES), or into a closed (409 PERIOD_LOCKED) or filed (409
+        RETURN_FILED) period. The audit trail keeps the invoice before and after. When `editable` is
+        false, a change beyond those fields is 409 DOCUMENT_FINALIZED, naming the reason.
       x-roles: [owner, admin, accountant, sales]
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
       requestBody:
@@ -2829,6 +2837,81 @@ paths:
                 properties:
                   count: { type: integer }
                   total: { $ref: '#/components/schemas/Money' }
+  /companies/{companyId}/credit-applications/{applicationId}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: applicationId, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [Payments]
+      operationId: removeCreditApplication
+      summary: Undoes a credit note applied to an invoice or bill
+      description: |
+        Takes back a direct note's credit from the document it was applied to (adjustAdvances): the
+        document owes that much again and the note has it to apply elsewhere. Refused in a closed
+        period (409 PERIOD_LOCKED).
+      x-roles: [owner, admin, accountant]
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/payments/adjust:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: listAdjustable
+      summary: A party's unadjusted advances and credit, and its open documents they can settle
+      description: |
+        Credit on one side: receipts (or payments made) with an unallocated part, and direct credit
+        notes (or a supplier's credit notes) not yet applied in full. Open on the other: invoices and
+        debit notes (or bills and supplier debit notes) still owed, oldest first. Base currency only.
+        `side` picks which side of a party that is both is read; a supplier is read as one.
+      parameters:
+        - { name: partyId, in: query, required: true, schema: { type: string } }
+        - { name: side, in: query, schema: { type: string, enum: [customer, supplier] } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Adjustable' }
+    post:
+      tags: [Payments]
+      operationId: adjustAdvances
+      summary: Applies a party's advances and direct notes to its open documents
+      description: |
+        With `allocations`, each names its source (`payment` or `note`) and target; without, every
+        unadjusted advance is applied oldest first to the oldest open document (FIFO), notes before
+        payments. A payment's part is added to its allocations, so the GST on a service advance comes
+        back on the invoice's date (GSTR-1 11B). A note's part is a credit application: not money, and
+        no GST on advance moves (RULES 8.13). Refused in a closed period.
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyId]
+              properties:
+                partyId: { type: string }
+                side: { type: string, enum: [customer, supplier] }
+                allocations:
+                  type: array
+                  items: { $ref: '#/components/schemas/AdjustmentAllocation' }
+      responses:
+        '200':
+          description: Applied; what is left on both sides
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Adjustable'
+                  - type: object
+                    required: [applied]
+                    properties:
+                      applied: { type: array, items: { $ref: '#/components/schemas/AdjustmentAllocation' } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/payments:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -3913,6 +3996,38 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+  /companies/{companyId}/vouchers/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: summarizeVoucherList
+      x-plan-module: books
+      summary: How many vouchers a list's filters match, what they add up to, and the split by account
+      description: Takes the filters of `listVouchers`. `total` adds up each voucher's debits; `byAccount` totals by the account credited (for receipts, what the money was for). Base currency.
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt, gstChallan] } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, posted] } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total, byAccount]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  byAccount:
+                    type: array
+                    items:
+                      type: object
+                      required: [account, total]
+                      properties: { account: { type: string }, total: { $ref: '#/components/schemas/Money' } }
   /companies/{companyId}/vouchers:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -3920,10 +4035,12 @@ paths:
       operationId: listVouchers
       x-plan-module: books
       parameters:
-        - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] } }
+        - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt, gstChallan] } }
         - { name: status, in: query, schema: { type: string, enum: [draft, posted] } }
+        - { name: partyId, in: query, schema: { type: string } }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
@@ -3981,7 +4098,7 @@ paths:
                     type: object
                     required: [date, lines]
                     properties:
-                      kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] }
+                      kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt, gstChallan] }
                       date: { type: string, format: date }
                       reference: { type: string }
                       narration: { type: string }
@@ -4487,7 +4604,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, advances, profit, tds-register, tds-payable, tds-receivable, tds-26q, tds-challans, msme-payables, gstr1]
+          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, advances, profit, tds-register, tds-payable, tds-receivable, tds-26q, tds-challans, tcs-register, tcs-payable, msme-payables, gstr1]
     get:
       tags: [Reports]
       operationId: getReportData
@@ -4686,6 +4803,39 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Gstr2bReconciliation' }
+  /companies/{companyId}/gst/gstr2b/import:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [GST]
+      operationId: importGstr2b
+      summary: Reads a GSTR-2B file downloaded from the GST portal, in place of downloading it through a session
+      description: |
+        The JSON the portal gives (Returns → GSTR-2B → Download → JSON: `data.docdata.b2b`, `b2ba`, `cdnr`,
+        `cdnra`, `impg`, `impgsez`, `isd`), or its Excel workbook (the B2B, B2BA, B2B-CDNR, B2B-CDNRA and
+        IMPG sheets). Stored as a download is, keeping decisions already made, then matched. At most 6 MB
+        decoded. 422 `GSTR2B_WRONG_GSTIN` or `GSTR2B_WRONG_PERIOD` when a JSON file is another
+        registration's or month's; 422 `UNSUPPORTED_FILE` when it isn't a 2B file.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: purchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period, fileName, contentBase64]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+                fileName: { type: string, maxLength: 200 }
+                contentBase64: { type: string, description: 'The file, base64 encoded' }
+      responses:
+        '200':
+          description: Imported and matched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Gstr2bReconciliation' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/gst/gstr2b/claim:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -4749,6 +4899,54 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Gstr3bView' }
+  /companies/{companyId}/gst/utilization:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [GST]
+      operationId: getGstUtilization
+      summary: A period's GST set-off (utilization) to record, worked out from its GSTR-3B data, with the GST cash ledger
+      x-roles: [owner, admin, accountant]
+      parameters:
+        - { name: gstin, in: query, required: true, schema: { type: string } }
+        - { name: period, in: query, required: true, schema: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' } }
+        - { name: date, in: query, description: The set-off date the cash ledger is read on (default today), schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstUtilizationView' }
+    post:
+      tags: [GST]
+      operationId: postGstUtilization
+      summary: Posts the set-off as one GST journal
+      description: >-
+        Dr Output / Cr Input for credit used; Dr Output, Reverse charge payable, Interest on GST and
+        Late fee / Cr GST cash ledger for cash. Checked against the period's GSTR-3B: rule 88A order,
+        CGST never for SGST, reverse charge, interest and late fee in cash only, every head paid in full
+        (422 with the issues). 422 CASH_LEDGER_SHORT when the cash ledger holds too little: record a
+        GST challan first. 409 SET_OFF_EXISTS when the period already has one. Refused in a closed period.
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period, date, setOff]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+                date: { type: string, format: date }
+                narration: { type: string }
+                setOff: { $ref: '#/components/schemas/GstSetOff' }
+      responses:
+        '201':
+          description: Posted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Voucher' }
   /companies/{companyId}/gst/returns/{returnType}/save:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -6482,7 +6680,7 @@ components:
             website: { type: string }
             taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
             fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
-            disabledModules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables, books] }, description: 'Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it.' }
+            disabledModules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables, books, pos] }, description: 'Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it.' }
             approvalRules:
               type: array
               description: 'Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued; with kind `payment`, payments made over it wait as payment requests. Only an owner can change them.'
@@ -6599,7 +6797,7 @@ components:
             id: { type: string, readOnly: true }
             companyId: { type: string, readOnly: true }
             name: { type: string, maxLength: 100 }
-            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] }
+            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt, gstChallan] }
             narration: { type: string }
             lines:
               type: array
@@ -6699,7 +6897,7 @@ components:
             companyId: { type: string, readOnly: true }
             kind:
               type: string
-              enum: [quote, proforma, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, selfInvoice, payment, expense, journal, contra, gstJournal, tdsChallan, receipt]
+              enum: [quote, proforma, salesOrder, delivery, invoice, salesReturn, purchaseOrder, goodsReceipt, purchaseBill, purchaseReturn, creditNote, debitNote, supplierCreditNote, supplierDebitNote, selfInvoice, payment, expense, journal, contra, gstJournal, tdsChallan, receipt, gstChallan]
             prefix: { type: string, example: INV }
             nextNumber: { type: integer, minimum: 1 }
             padding: { type: integer, minimum: 1, maximum: 8 }
@@ -6778,6 +6976,8 @@ components:
               properties:
                 rate: { type: number, minimum: 0, maximum: 100 }
                 validTill: { type: string, format: date }
+            tcsApplicable: { type: boolean, description: "Sales to this customer collect TCS (s.206C) by default, under tcsSection" }
+            tcsSection: { allOf: [{ $ref: '#/components/schemas/TcsSectionCode' }], description: "The TCS section this customer's invoices fall under by default; needs tcsApplicable" }
             email: { type: string, format: email }
             phone: { type: string }
             currency: { type: string }
@@ -7047,7 +7247,7 @@ components:
             id: { type: string, readOnly: true }
             companyId: { type: string, readOnly: true }
             branchId: { type: string }
-            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt], description: "receipt: money in that isn't from an invoice (interest, rent, a refund); it debits cash or bank only" }
+            kind: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt, gstChallan], description: "receipt: money in that isn't from an invoice (interest, rent, a refund); it debits cash or bank only" }
             number: { type: string, readOnly: true }
             date: { type: string, format: date }
             narration: { type: string }
@@ -7060,9 +7260,14 @@ components:
                 bsrCode: { type: string, pattern: '^[0-9]{7}$' }
                 serial: { type: string, pattern: '^[0-9]{1,5}$' }
                 depositedOn: { type: string, format: date }
+            gstChallan: { $ref: '#/components/schemas/GstChallan' }
+            gstin: { type: string, readOnly: true, description: "On a GST set-off journal, the registration it sets off" }
+            gstPeriod: { type: string, readOnly: true, description: "On a GST set-off journal, the return period (MMYYYY) it sets off" }
             status: { type: string, enum: [draft, posted], description: "Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft." }
             postedAt: { type: string, format: date-time, readOnly: true }
             lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/VoucherLine' } }
+            partyId: { type: string, description: "On a receipt: the customer, supplier or contact it came from, for reference. The lines are what post." }
+            attachmentIds: { type: array, items: { type: string }, description: Files kept with the voucher (a receipt's slip) }
             createdBy: { type: string, readOnly: true }
     TrialBalance:
       type: object
@@ -7213,6 +7418,7 @@ components:
             cash: { $ref: '#/components/schemas/GstAmounts' }
             carriedIn: { $ref: '#/components/schemas/GstAmounts' }
             carriedForward: { $ref: '#/components/schemas/GstAmounts' }
+            cashLedger: { allOf: [{ $ref: '#/components/schemas/GstAmounts' }], description: "The electronic cash ledger as the books hold it today (challans less what set-offs used)" }
         returns: { type: array, items: { $ref: '#/components/schemas/GstReturn' }, description: This period's GSTR-1 and GSTR-3B as recorded }
         breakup:
           type: object
@@ -7231,10 +7437,95 @@ components:
                     date: { type: string, format: date }
                     partyId: { type: string }
                     partyName: { type: string }
+    GstHeadMinor:
+      type: object
+      description: An amount in paise per GST head
+      required: [igst, cgst, sgst, cess]
+      properties:
+        igst: { type: integer }
+        cgst: { type: integer }
+        sgst: { type: integer }
+        cess: { type: integer }
+    GstChallan:
+      type: object
+      description: A GST deposit (PMT-06). Each head's minor heads in paise; the voucher's lines debit the GST cash ledger by each head's total and credit the bank.
+      required: [cpin, depositedOn, heads]
+      properties:
+        cpin: { type: string, pattern: '^[0-9A-Za-z]{14}$', description: The 14-character common portal identification number }
+        cin: { type: string, maxLength: 20, description: The challan identification number the bank gave }
+        brn: { type: string, maxLength: 40, description: The bank reference number }
+        depositedOn: { type: string, format: date }
+        heads:
+          type: object
+          additionalProperties: false
+          properties:
+            igst: { $ref: '#/components/schemas/GstChallanHead' }
+            cgst: { $ref: '#/components/schemas/GstChallanHead' }
+            sgst: { $ref: '#/components/schemas/GstChallanHead' }
+            cess: { $ref: '#/components/schemas/GstChallanHead' }
+    GstChallanHead:
+      type: object
+      required: [tax, interest, penalty, fee, others]
+      properties:
+        tax: { type: integer, minimum: 0 }
+        interest: { type: integer, minimum: 0 }
+        penalty: { type: integer, minimum: 0 }
+        fee: { type: integer, minimum: 0 }
+        others: { type: integer, minimum: 0 }
+    GstSetOff:
+      type: object
+      description: "A set-off, in paise by head: credit[from][to], forward tax paid in cash, reverse charge (cash only), older reverse charge payable, interest and late fee (cash only)."
+      required: [credit, cash, reverseCharge, oldReverseCharge, interest, lateFee]
+      properties:
+        credit:
+          type: object
+          required: [igst, cgst, sgst, cess]
+          properties:
+            igst: { $ref: '#/components/schemas/GstHeadMinor' }
+            cgst: { $ref: '#/components/schemas/GstHeadMinor' }
+            sgst: { $ref: '#/components/schemas/GstHeadMinor' }
+            cess: { $ref: '#/components/schemas/GstHeadMinor' }
+        cash: { $ref: '#/components/schemas/GstHeadMinor' }
+        reverseCharge: { $ref: '#/components/schemas/GstHeadMinor' }
+        oldReverseCharge: { $ref: '#/components/schemas/GstHeadMinor' }
+        interest: { $ref: '#/components/schemas/GstHeadMinor' }
+        lateFee: { $ref: '#/components/schemas/GstHeadMinor' }
+    GstUtilizationView:
+      type: object
+      required: [gstin, period, from, to, currency, forward, reverseCharge, available, carriedIn, cashBalance, oldReverseChargeOpen, interest, lateFee, prefill, outputCheck, existing]
+      properties:
+        gstin: { type: string }
+        period: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        currency: { type: string }
+        forward: { allOf: [{ $ref: '#/components/schemas/GstHeadMinor' }], description: "3.1(a) and (b) from the GSTR-3B data: payable by credit or cash" }
+        reverseCharge: { allOf: [{ $ref: '#/components/schemas/GstHeadMinor' }], description: "3.1(d): payable in cash only" }
+        available: { allOf: [{ $ref: '#/components/schemas/GstHeadMinor' }], description: Net credit (4C) plus what the last return carried forward }
+        carriedIn: { $ref: '#/components/schemas/GstHeadMinor' }
+        cashBalance: { allOf: [{ $ref: '#/components/schemas/GstHeadMinor' }], description: The GST cash ledger in the books on the asked date }
+        oldReverseChargeOpen: { allOf: [{ $ref: '#/components/schemas/GstHeadMinor' }], description: "Reverse charge payable from before Output took it, still open" }
+        interest: { $ref: '#/components/schemas/GstHeadMinor' }
+        lateFee: { $ref: '#/components/schemas/GstHeadMinor' }
+        prefill: { $ref: '#/components/schemas/GstSetOff' }
+        outputCheck:
+          type: object
+          description: The Output ledger's credit over the period (set-offs left out) against forward plus reverse-charge liability
+          required: [books, expected, difference, ok]
+          properties:
+            books: { $ref: '#/components/schemas/GstHeadMinor' }
+            expected: { $ref: '#/components/schemas/GstHeadMinor' }
+            difference: { $ref: '#/components/schemas/GstHeadMinor' }
+            ok: { type: boolean }
+        existing: { type: array, items: { $ref: '#/components/schemas/Voucher' }, description: "The set-off already posted for this GSTIN and period (by hand, or when 3B was filed)" }
     TdsSectionCode:
       type: string
       enum: [194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q]
       description: '194J(a) is 194JA, 194I(b) is 194IB, and so on.'
+    TcsSectionCode:
+      type: string
+      enum: [scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods]
+      description: 'A TCS section of s.206C, as core TCS_SECTIONS names it.'
     TdsDeduction:
       type: object
       readOnly: true
@@ -7325,6 +7616,7 @@ components:
         taxInclusive: { type: boolean, default: false }
         gst: { allOf: [{ $ref: '#/components/schemas/GstFlags' }], description: "Defaults to the item's; kept as it was once the document is finalised" }
         expenseId: { type: string, description: "A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED)" }
+        costCentreId: { type: string, description: "On a purchase document: this line's cost centre, for a line that is not stock (an item that tracks stock takes the document's). Left out takes the document's." }
     TaxComponent:
       type: object
       properties:
@@ -7399,10 +7691,23 @@ components:
         attachmentIds: { type: array, items: { type: string } }
         sourceDocumentId: { type: string }
         noteReason: { type: string, enum: [discount, priceChange, taxCorrection, deficiency, other], description: Why a credit or debit note was raised }
+        noteGst:
+          type: string
+          enum: [withGst, noGst]
+          description: >-
+            A direct note's GST treatment (no sourceDocumentId; RULES 6.24). withGst (the default) is a
+            s.34 note: it names the original invoice or bill (originalNumber, originalDate), goes to
+            GSTR-1 CDNR/CDNUR and, for a credit note, must be issued by 30 November after the end of
+            the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or
+            commercial note: no tax on any line, posted to discount allowed (or received), and left
+            out of GSTR-1 and GSTR-3B.
+        originalNumber: { type: string, maxLength: 40, description: 'A direct note with GST: the number of the original invoice or bill it adjusts' }
+        originalDate: { type: string, format: date, description: 'A direct note with GST: the date of the original invoice or bill' }
         costCentreId: { type: string, description: The project or department it belongs to }
         vehicleId: { type: string, description: The vehicle it moved on }
         tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
-        tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN." }
+        tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's." }
+        tdsRate: { type: number, minimum: 0, maximum: 100, writeOnly: true, description: "On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN." }
         overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
         status:
           allOf: [{ $ref: '#/components/schemas/DocStatus' }]
@@ -7426,6 +7731,7 @@ components:
             totals: { $ref: '#/components/schemas/DocumentTotals' }
             partyGstin: { type: string, readOnly: true, description: "The party's GSTIN when the document was finalised" }
             tds: { allOf: [{ $ref: '#/components/schemas/TdsDeduction' }], description: 'TDS deducted on the bill: what is owed the supplier is the grand total less this' }
+            tdsExpected: { allOf: [{ $ref: '#/components/schemas/TdsDeduction' }], description: 'On an invoice: TDS the customer is expected to deduct (on the taxable value, without GST). Not posted and not settled: the receipt that allocates to the invoice records what was deducted. The grand total is unchanged.' }
             selfInvoiceNumber: { type: string, readOnly: true, description: 'The self-invoice for a reverse-charge purchase from an unregistered supplier (Rule 46(f))' }
             itcReversedOn: { type: string, format: date, readOnly: true, description: 'Input tax credit reversed after 180 days unpaid' }
             itcReclaimedOn: { type: string, format: date, readOnly: true, description: 'Credit claimed again once paid' }
@@ -7456,6 +7762,31 @@ components:
                 note: { type: string }
             compliance: { $ref: '#/components/schemas/ComplianceInfo' }
             createdBy: { type: string, readOnly: true }
+            editable:
+              type: boolean
+              readOnly: true
+              description: >-
+                On an invoice: whether it can be edited in full. A draft always can; an issued one only
+                while it is the latest in its series, with nothing allocated, applied or raised against
+                it, no IRN or e-way bill, and its GSTR-1 month and books period open (RULES 6.23).
+                Unset on other kinds.
+            editBlock:
+              type: string
+              readOnly: true
+              enum: [notInvoice, notFinal, periodLocked, notLatest, hasPayments, hasCredit, hasNotes, eInvoiced, ewayBill, returnFiled, laterStock]
+              description: Why an issued invoice can't be edited in full (editable false)
+    CreditApplication:
+      type: object
+      description: A direct credit note applied to an invoice (or a supplier's to a bill), through adjustAdvances
+      required: [id, noteId, noteNumber, documentId, documentNumber, amount, date]
+      properties:
+        id: { type: string }
+        noteId: { type: string }
+        noteNumber: { type: string }
+        documentId: { type: string }
+        documentNumber: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        date: { type: string, format: date }
     DocumentSummary:
       type: object
       description: Light row for lists
@@ -7475,6 +7806,7 @@ components:
         exchangeRate: { type: number, description: To base currency }
         totalTax: { $ref: '#/components/schemas/Money' }
         outstanding: { $ref: '#/components/schemas/Money' }
+        tdsExpected: { allOf: [{ $ref: '#/components/schemas/TdsDeduction' }], description: 'On an invoice: TDS the customer is expected to deduct (not settled)' }
         eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }
         irn: { type: string, description: The IRN once one is issued }
         ewayBillStatus: { type: string, enum: [notApplicable, notRequired, pending, generated, cancelled, expired] }
@@ -7491,6 +7823,7 @@ components:
             linkedDocuments: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' } }
             allowedTransitions: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
             allowedConversions: { type: array, items: { $ref: '#/components/schemas/DocumentKind' } }
+            creditApplications: { type: array, items: { $ref: '#/components/schemas/CreditApplication' }, description: 'Direct notes applied to this document, or (on a note) the documents it is applied to' }
 
     # ---------------------------------------------------------------- compliance
     EInvoiceStatus: { type: string, enum: [notApplicable, pending, generated, cancelled, failed] }
@@ -7682,6 +8015,46 @@ components:
         note: { type: string }
         paymentId: { type: string }
         version: { type: integer }
+    AdjustmentAllocation:
+      type: object
+      required: [sourceType, sourceId, documentId, amount]
+      properties:
+        sourceType: { type: string, enum: [payment, note], description: 'payment: an advance (its unallocated part); note: a direct credit note applied to the document' }
+        sourceId: { type: string }
+        documentId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+    Adjustable:
+      type: object
+      required: [credits, open]
+      properties:
+        credits:
+          type: array
+          description: Unadjusted advances and direct notes, oldest first
+          items:
+            type: object
+            required: [sourceType, id, number, date, left]
+            properties:
+              sourceType: { type: string, enum: [payment, note] }
+              id: { type: string }
+              number: { type: string }
+              date: { type: string, format: date }
+              total: { $ref: '#/components/schemas/Money' }
+              left: { $ref: '#/components/schemas/Money' }
+              advanceTax: { type: boolean, description: A service advance taxed on receipt }
+        open:
+          type: array
+          description: Documents still owed, oldest first
+          items:
+            type: object
+            required: [documentId, number, kind, date, outstanding]
+            properties:
+              documentId: { type: string }
+              number: { type: string }
+              kind: { $ref: '#/components/schemas/DocumentKind' }
+              date: { type: string, format: date }
+              total: { $ref: '#/components/schemas/Money' }
+              outstanding: { $ref: '#/components/schemas/Money' }
+              hasServiceLines: { type: boolean, description: 'Has a line for a service (an item of type service, or a SAC code starting 99)' }
     Payment:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -7713,7 +8086,10 @@ components:
                 taxCategoryId: { type: string }
                 rate: { type: number, readOnly: true, description: The rate on the day received }
                 placeOfSupplyStateCode: { type: string, pattern: '^\d{2}$' }
-            tdsSection: { type: string, description: "On money paid: the TDS section of what its allocations kept back (tdsDeducted), so it is reported under that section in 26Q and TDS payable" }
+                hsn: { type: string, pattern: '^\d{4,8}$', description: 'The SAC (or HSN) of the service the advance is for, for table 11 and the receipt voucher' }
+                cessRate: { type: number, minimum: 0, description: 'Cess on the advance, percent of its value; the amount received includes it' }
+            advanceTds: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "On money received: TDS the customer deducted from an advance before any invoice, under `tdsSection`. It credits the customer as money would, so it adds to the advance." }
+            tdsSection: { type: string, description: "The TDS section of what its allocations settled as tdsDeducted: on money paid, what was kept back (26Q and TDS payable); on money received, what the customer deducted (TDS receivable by section, matched to 26AS)" }
             refundOf:
               type: string
               description: "Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date."
@@ -8405,6 +8781,8 @@ components:
         igst: { $ref: '#/components/schemas/Money' }
         invoiceValue: { $ref: '#/components/schemas/Money' }
         exported: { type: boolean, description: 'Set on an export, or a credit note against one' }
+        originalNumber: { type: string, description: 'On a note: the invoice it adjusts, linked or (a direct note with GST) as entered on it' }
+        originalDate: { type: string, format: date }
     HsnRow:
       type: object
       properties:
@@ -8429,7 +8807,7 @@ components:
       type: object
       description: GSTR-1 table 13, one row per numbering series
       properties:
-        nature: { type: string, enum: [invoice, creditNote] }
+        nature: { type: string, enum: [invoice, creditNote, debitNote] }
         series: { type: string }
         from: { type: string }
         to: { type: string }

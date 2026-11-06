@@ -13,7 +13,6 @@ import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { Text } from '@esmart/ui/components/Text';
 import { FieldRow } from '@esmart/ui/components/Layout';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { useSignOut } from '../../features/session/useSignOut';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -28,7 +27,6 @@ export default function BusinessStep() {
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
   const desktop = useIsDesktop();
-  const signOut = useSignOut();
 
   const [typeOpen, setTypeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
@@ -69,7 +67,6 @@ export default function BusinessStep() {
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('business', draft.plan)}
       onPrimary={next}
-      onSignOut={signOut}
     >
       <View style={desktop ? { flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg } : { alignItems: 'center', gap: t.spacing.sm }}>
         <Pressable

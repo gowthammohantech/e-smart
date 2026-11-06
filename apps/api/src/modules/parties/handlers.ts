@@ -1,7 +1,8 @@
 import { and, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues } from '../settings/customFields';
-import { buysFrom, hasLedger } from '@esmart/core/domain/partyKinds';
+import { buysFrom, hasLedger, sellsTo } from '@esmart/core/domain/partyKinds';
+import { tcsSection } from '@esmart/core/data/tcsSections';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
 import { isValidGstin } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
@@ -53,6 +54,12 @@ async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
   if (body.openingBalanceDate && body.openingBalanceDate > today) {
     issues.push({ field: 'openingBalanceDate', message: 'The opening balance date cannot be in the future', severity: 'blocking' });
   }
+  // TCS is collected on sales, so only from someone we sell to, and always under a section.
+  if (body.tcsApplicable) {
+    if (!sellsTo(body.kind)) issues.push({ field: 'tcsApplicable', message: 'TCS is collected on sales; only a customer or a party that is both can have it', severity: 'blocking' });
+    if (!body.tcsSection) issues.push({ field: 'tcsSection', message: 'Choose the TCS section their sales fall under', severity: 'blocking' });
+  }
+  if (body.tcsSection && !tcsSection(body.tcsSection)) issues.push({ field: 'tcsSection', message: `Unknown TCS section ${body.tcsSection}`, severity: 'blocking' });
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.currency));
   if (!cur) issues.push({ field: 'currency', message: `Unknown currency ${body.currency}`, severity: 'blocking' });
   if (issues.length) throw unprocessable(issues);

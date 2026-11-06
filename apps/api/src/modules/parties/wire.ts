@@ -22,6 +22,8 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
     reverseCharge: row.reverseCharge || undefined,
     tdsSection: (row.tdsSection ?? undefined) as Schema<'Party'>['tdsSection'],
     lowerTdsCertificate: row.lowerTdsRate !== null && row.lowerTdsValidTill ? { rate: Number(row.lowerTdsRate), validTill: row.lowerTdsValidTill } : undefined,
+    tcsApplicable: row.tcsApplicable || undefined,
+    tcsSection: (row.tcsSection ?? undefined) as Schema<'Party'>['tcsSection'],
     email: row.email,
     phone: row.phone,
     currency,
@@ -66,6 +68,9 @@ export function partyColumns(body: Schema<'Party'>) {
     tdsSection: body.tdsSection ?? null,
     lowerTdsRate: body.lowerTdsCertificate ? String(body.lowerTdsCertificate.rate) : null,
     lowerTdsValidTill: body.lowerTdsCertificate?.validTill ?? null,
+    // A section means something only while TCS applies; switching it off forgets the section.
+    tcsApplicable: body.tcsApplicable ?? false,
+    tcsSection: body.tcsApplicable ? (body.tcsSection ?? null) : null,
     // Addresses aren't case-sensitive; one spelling keeps search and duplicates simple.
     email: body.email?.trim().toLowerCase() || null,
     phone: body.phone ?? null,

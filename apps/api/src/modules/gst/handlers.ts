@@ -62,6 +62,33 @@ export async function amendmentsFor(db: DbOrTx, company: CompanyRow, gstin: stri
   return out.rows.length || out.b2csa.length ? out : undefined;
 }
 
+/**
+ * The amendment tables for the GSTR-1 screen: when its range is one whole month, those of every GSTIN
+ * the chosen branches file under (all the company's, with none chosen), put together.
+ */
+export async function amendmentsForScreen(db: DbOrTx, company: CompanyRow, range: { from: string; to: string }, now: Date, branchIds?: string[]): Promise<Gstr1Amendments | undefined> {
+  const [y, m] = range.from.split('-');
+  const period = `${m}${y}`;
+  if (!/^\d{4}-\d{2}-01$/.test(range.from) || periodRange(period).to !== range.to) return undefined;
+  const branches = await db.select({ id: schema.branches.id, gstin: schema.branches.gstin }).from(schema.branches).where(eq(schema.branches.companyId, company.id));
+  const gstins = [...new Set(branches.filter((b) => !branchIds?.length || branchIds.includes(b.id)).map((b) => b.gstin ?? company.taxIdentifier).filter((g): g is string => !!g && g.length === 15))];
+  let out: Gstr1Amendments | undefined;
+  for (const gstin of gstins) {
+    const a = await amendmentsFor(db, company, gstin, period, now);
+    if (!a) continue;
+    if (!out) {
+      out = a;
+      continue;
+    }
+    for (const k of ['b2ba', 'b2cla', 'expa', 'cdnra', 'cdnura'] as const) out[k].push(...a[k]);
+    out.b2csa.push(...a.b2csa);
+    out.changes.push(...a.changes);
+    out.rows.push(...a.rows);
+    for (const k of ['taxable', 'igst', 'cgst', 'sgst', 'cess'] as const) out.delta[k] += a.delta[k];
+  }
+  return out;
+}
+
 /** Every row a return reports, ordinary and amended, to keep with it once filed. */
 export function reportedRows(summary: Gstr1Summary): Gstr1Row[] {
   return [...GSTR1_TABLES.flatMap((t) => summary[t]), ...(summary.amendments?.rows ?? [])];
@@ -123,19 +150,20 @@ function flatRows(summary: Gstr1Summary) {
       cgst: major(r.cgst),
       sgst: major(r.sgst),
       igst: major(r.igst),
+      cess: major(r.cess),
       invoiceValue: major(r.invoiceValue),
     })),
   );
 }
 
-const ROW_COLUMNS = ['table', 'gstin', 'partyName', 'number', 'date', 'kind', 'placeOfSupply', 'rate', 'taxableValue', 'cgst', 'sgst', 'igst', 'invoiceValue'];
+const ROW_COLUMNS = ['table', 'gstin', 'partyName', 'number', 'date', 'kind', 'placeOfSupply', 'rate', 'taxableValue', 'cgst', 'sgst', 'igst', 'cess', 'invoiceValue'];
 
 /** One sheet per GSTR-1 table plus HSN and a summary, as the offline tool's Excel template is laid out. */
 async function workbook(summary: Gstr1Summary, company: CompanyRow, period: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Elixir Books';
   const rows = flatRows(summary);
-  const head = ['GSTIN', 'Party', 'Number', 'Date', 'Place of supply', 'Rate', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Invoice value'];
+  const head = ['GSTIN', 'Party', 'Number', 'Date', 'Place of supply', 'Rate', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Cess', 'Invoice value'];
 
   const sum = wb.addWorksheet('Summary');
   sum.addRows([
@@ -153,18 +181,24 @@ async function workbook(summary: Gstr1Summary, company: CompanyRow, period: stri
     ws.addRow([GSTR1_TABLE_LABELS[table]]);
     ws.addRow(head).font = { bold: true };
     for (const r of rows.filter((x) => x.table === table)) {
-      ws.addRow([r.gstin, r.partyName, r.number, r.date, r.placeOfSupply, r.rate, r.taxableValue, r.cgst, r.sgst, r.igst, r.invoiceValue]);
+      ws.addRow([r.gstin, r.partyName, r.number, r.date, r.placeOfSupply, r.rate, r.taxableValue, r.cgst, r.sgst, r.igst, r.cess, r.invoiceValue]);
     }
   }
   const hsn = wb.addWorksheet('HSN');
-  hsn.addRow(['HSN', 'Description', 'UQC', 'Quantity', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total value']).font = { bold: true };
-  for (const h of summary.hsn) hsn.addRow([h.hsnCode, h.description, h.unit, h.quantity, major(h.taxableValue), major(h.cgst), major(h.sgst), major(h.igst), major(h.totalValue)]);
+  hsn.addRow(['HSN', 'Description', 'UQC', 'Quantity', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Cess', 'Total value']).font = { bold: true };
+  for (const h of summary.hsn) hsn.addRow([h.hsnCode, h.description, h.unit, h.quantity, major(h.taxableValue), major(h.cgst), major(h.sgst), major(h.igst), major(h.cess), major(h.totalValue)]);
   const nil = wb.addWorksheet('NIL');
   nil.addRow(['Supply type', 'Nil rated', 'Exempted', 'Non-GST']).font = { bold: true };
   for (const n of summary.nil) nil.addRow([NIL_SUPPLY_LABELS[n.supplyType], major(n.nilRated), major(n.exempt), major(n.nonGst)]);
   const docs = wb.addWorksheet('DOCS');
   docs.addRow(['Nature of document', 'From', 'To', 'Total number', 'Cancelled', 'Net issued']).font = { bold: true };
   for (const d of summary.docs) docs.addRow([d.nature === 'invoice' ? 'Invoices for outward supply' : 'Credit Note', d.from, d.to, d.total, d.cancelled, d.total - d.cancelled]);
+  // Table 11: tax on advances received (11A, the offline tool's AT sheet) and adjusted (11B, ATADJ).
+  for (const [name, list] of [['AT', summary.advances.received], ['ATADJ', summary.advances.adjusted]] as const) {
+    const ws = wb.addWorksheet(name);
+    ws.addRow(['Place of supply', 'Rate', 'Gross advance', 'IGST', 'CGST', 'SGST', 'Cess']).font = { bold: true };
+    for (const a of list) ws.addRow([a.placeOfSupply, a.rate, a.taxable / 100, a.igst / 100, a.cgst / 100, a.sgst / 100, a.cess / 100]);
+  }
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 

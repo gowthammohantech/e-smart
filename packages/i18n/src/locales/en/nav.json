@@ -116,7 +116,15 @@
     "approvals": "Waiting for approval",
     "cashForecast": "Cash-flow forecast",
     "fixedAssets": "Fixed assets",
-    "budgets": "Budgets"
+    "budgets": "Budgets",
+    "gstr2bReconciliation": "2B reconciliation",
+    "advanceReceipt": "Advance receipt",
+    "adjustAdvance": "Adjust advance",
+    "costCentres": "Cost centres",
+    "transfer": "Transfer",
+    "gstUtilization": "Utilization entry",
+    "gstChallan": "GST challan",
+    "gstJournal": "GST journal"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {

@@ -16,7 +16,8 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency, useDocuments, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
-import { usePaymentRecord } from '../../../remote/queries';
+import { adjustAdvancesFor, usePaymentRecord } from '../../../remote/queries';
+import { describeError } from '../../../remote/errors';
 import { LoadingView } from '../../../components/LoadingView';
 import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import { RefundAdvanceSheet } from '../../../features/payments/RefundAdvanceSheet';
@@ -205,14 +206,19 @@ export default function PaymentDetail() {
               title={tr('sales:payment.adjustAdvance')}
               size="sm"
               variant="secondary"
-              onPress={() => {
-                const applied = applyAdvances(payment.partyId, payment.direction);
-                toast.show(
-                  applied.length
-                    ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
-                    : tr('sales:payment.advanceNothingToAdjust'),
-                  applied.length ? 'success' : 'info',
-                );
+              onPress={async () => {
+                // On the server while online (notes too, and a service advance's GST); on the device offline.
+                try {
+                  const applied = await adjustAdvancesFor(payment.partyId, payment.direction, undefined, () => applyAdvances(payment.partyId, payment.direction));
+                  toast.show(
+                    applied.length
+                      ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
+                      : tr('sales:payment.advanceNothingToAdjust'),
+                    applied.length ? 'success' : 'info',
+                  );
+                } catch (err) {
+                  toast.show(describeError(err, tr), 'error');
+                }
               }}
             />
           </Card>

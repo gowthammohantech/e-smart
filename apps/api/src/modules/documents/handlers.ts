@@ -17,6 +17,7 @@ import { tdsOn, tdsSectionFor } from '../../lib/tds';
 import { afterFinalize } from '../compliance/handlers';
 import { partyToWire } from '../parties/wire';
 import { paymentsToWire } from '../payments/wire';
+import { creditApplicationsOf } from '../payments/adjust';
 import {
   assertKindAllowed,
   auditSnapshot,
@@ -34,7 +35,27 @@ import {
   type DocRow,
   type LineInput,
 } from './engine';
-import { CONVERSIONS, DERIVED, FINAL_STATUS, effectiveStatus, effectiveStatusSql, assertNoLiveReturns, assertPeriodOpen, finalizeInTx, isCredit, reverseStock, syncPaymentState, today } from './lifecycle';
+import {
+  CONVERSIONS,
+  DERIVED,
+  EDIT_BLOCK_MESSAGES,
+  FINAL_STATUS,
+  canEditLatest,
+  effectiveStatus,
+  effectiveStatusSql,
+  assertNoLiveReturns,
+  assertPeriodOpen,
+  finalizeInTx,
+  gstr1Closed,
+  isCredit,
+  postStock,
+  previousInSeries,
+  reverseStock,
+  syncPaymentState,
+  today,
+  withdrawStock,
+} from './lifecycle';
+import { sameNumberingPeriod } from '../../lib/numbering';
 import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
 import { companyLogoFile } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
@@ -90,7 +111,66 @@ const branchVisible = (user: AuthUser, branchId: string) => !user.branchIds.leng
 
 async function toWire(ctx: AnyCtx, row: DocRow): Promise<DocumentWire> {
   const [doc] = await documentsToWire(ctx.db, [row], ctx.now, ctx.company.baseCurrency.trim());
-  return doc;
+  // An invoice says whether it can still be edited in full (a draft always can; RULES 6.23 after issue).
+  if (row.kind !== 'invoice') return doc;
+  if (row.status === 'draft') return { ...doc, editable: true };
+  const block = await canEditLatest(ctx.db, ctx.company, row);
+  return { ...doc, editable: !block, ...(block && { editBlock: block }) };
+}
+
+/**
+ * A full edit of an issued invoice that is still the latest of its series (RULES 6.23, pending CA):
+ * recomputed as a draft save is, same number, its stock taken back and posted again, its expected
+ * TDS and TCS worked out afresh. The date may not move before the invoice issued just before it,
+ * out of its numbering period, or into a closed or filed period. The ledger reposts from it.
+ */
+async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body: Schema<'NewDocumentInput'>, changed: string[]): Promise<DocRow> {
+  const block = await canEditLatest(tx, ctx.company, current);
+  if (block) {
+    throw conflict('DOCUMENT_FINALIZED', `A finalised document only takes notes, terms, reference and attachments (changed: ${changed.join(', ')}). ${EDIT_BLOCK_MESSAGES[block]}, so it can't be edited`);
+  }
+  if (body.kind !== current.kind) throw invalid('kind', 'A document cannot change kind; convert it instead');
+  const f = fieldsFromWire(body, current);
+  if (f.branchId !== current.branchId) throw invalid('branchId', `${current.number} keeps its branch: its number was drawn there`);
+  const dateIssue = (message: string, code: string) => unprocessable([{ field: 'date', message, severity: 'blocking' }], code);
+  if (f.date !== current.date) {
+    assertPeriodOpen(ctx.company, f.date);
+    if (f.date > addDaysISO(today(ctx.now), 1)) throw dateIssue(`An invoice cannot be dated ${f.date}, in the future`, 'DOCUMENT_DATED_IN_FUTURE');
+    const prev = await previousInSeries(tx, current);
+    if (prev && f.date < prev.date) throw dateIssue(`${current.number} cannot be dated before ${prev.number} (${prev.date}), issued before it`, 'DATE_BEFORE_PREVIOUS');
+    if (!(await sameNumberingPeriod(tx, ctx.company.id, 'invoice', current.date, f.date))) throw dateIssue(`${current.number} cannot move out of the numbering period it was issued in`, 'DATE_OUTSIDE_SERIES');
+    if (await gstr1Closed(tx, ctx.company.id, f.date)) throw conflict('RETURN_FILED', `GSTR-1 for ${f.date.slice(0, 7)} is filed; the invoice cannot move into it`);
+  }
+  const prepared = await prepareDocument(tx, ctx.company, f, linesFromWire(body.lines), { snapshotRates: true, documentId: current.id });
+  // The party as registered now: the edit issues the invoice again.
+  const [party] = await tx.select({ taxId: P.taxId, stateCode: P.billingStateCode }).from(P).where(eq(P.id, prepared.columns.partyId!));
+  await withdrawStock(tx, current);
+  const [updated] = await tx
+    .update(D)
+    .set({ ...prepared.columns, partyGstin: party?.taxId ?? null, partyStateCode: party?.stateCode ?? null, version: current.version + 1, updatedAt: ctx.now })
+    .where(and(eq(D.id, current.id), eq(D.version, current.version)))
+    .returning();
+  if (!updated) throw preconditionFailed();
+  await writeLines(tx, current.id, prepared);
+  await postStock(tx, ctx.company, updated, ctx.user.id);
+  // Nothing is allocated to it (or it couldn't be edited); the due date may have moved its status.
+  await syncPaymentState(tx, ctx.user, ctx.company.id, [updated.id], ctx.now);
+  const [settled] = await tx.select().from(D).where(eq(D.id, updated.id));
+  return settled;
+}
+
+/** What the audit trail keeps of a full edit after issue: the document as it read, totals and tax too. */
+async function editSnapshot(tx: DbOrTx, row: DocRow, lines: (typeof schema.documentLines.$inferSelect)[]) {
+  return {
+    ...(await auditSnapshot(tx, row, lines)),
+    number: row.number,
+    partyGstin: row.partyGstin ?? undefined,
+    placeOfSupply: row.placeOfSupplyStateCode ?? undefined,
+    taxable: { minor: row.taxableAmountMinor, currency: row.currency.trim() },
+    tax: { minor: row.totalTaxMinor, currency: row.currency.trim() },
+    tcs: row.tcsSection ? { section: row.tcsSection, rate: Number(row.tcsRate) } : undefined,
+    tdsExpected: row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection, minor: row.tdsAmountMinor } : undefined,
+  };
 }
 
 /** Attachments listed on a document point back at it. */
@@ -230,6 +310,9 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('placeOfSupplyStateCode', body.placeOfSupplyStateCode, row.placeOfSupplyStateCode);
   cmp('supplierDocNumber', body.supplierDocNumber, row.supplierDocNumber);
   cmp('sourceDocumentId', body.sourceDocumentId, row.sourceDocumentId);
+  cmp('noteGst', body.noteGst, row.noteGst ?? undefined);
+  cmp('originalNumber', body.originalNumber, row.originalNumber ?? undefined);
+  cmp('originalDate', body.originalDate, row.originalDate ?? undefined);
   const sig = (l: LineInput) => [l.itemId ?? '', l.name, l.quantity, l.unit, l.unitPriceMinor, l.discountMode, l.discountValue, l.taxCategoryId, l.taxInclusive].join('|');
   const sent = linesFromWire(body.lines).map(sig);
   const have = stored.map(sig);
@@ -448,20 +531,30 @@ export const documentsHandlers = defineHandlers({
       linkedDocuments: await summariesToWire(ctx.db, related as SummaryRow[], ctx.now),
       allowedTransitions: nextStatuses(row.kind, status).filter((s) => !DERIVED.includes(s)),
       allowedConversions: conversions,
+      creditApplications: await creditApplicationsOf(ctx.db, ctx.company.id, row.id, currency),
     };
   },
 
   async updateDocument(ctx) {
     const body = ctx.body;
-    const current = await findDocument(ctx, ctx.db, ctx.params.id);
-    checkIfMatch(ctx.req, current.version);
-    if (await eInvoiceGenerated(ctx.db, current.id)) throw conflict('DOCUMENT_LOCKED', 'An e-invoiced document cannot be edited; cancel the IRN first');
-    const storedLines = await ctx.db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, current.id));
+    const found = await findDocument(ctx, ctx.db, ctx.params.id);
+    checkIfMatch(ctx.req, found.version);
+    if (await eInvoiceGenerated(ctx.db, found.id)) throw conflict('DOCUMENT_LOCKED', 'An e-invoiced document cannot be edited; cancel the IRN first');
 
+    let action = 'updated';
+    let snapshot = auditSnapshot;
     const row = await ctx.db.transaction(async (tx) => {
+      // Locked: a full edit of an issued invoice re-checks it is still the latest, and nothing lands on it meanwhile.
+      const current = await findDocument(ctx, tx, found.id, { lock: true });
+      checkIfMatch(ctx.req, current.version);
+      const storedLines = await tx.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, current.id));
       let updated: DocRow | undefined;
-      if (isFinalized(current.status) || current.status === 'cancelled') {
-        const changed = frozenChanges(current, body, linesFromRows(storedLines));
+      const changed = isFinalized(current.status) || current.status === 'cancelled' ? frozenChanges(current, body, linesFromRows(storedLines)) : [];
+      if (changed.length && current.kind === 'invoice' && current.status !== 'cancelled') {
+        updated = await editLatestInvoice(ctx, tx, current, body, changed);
+        action = 'edited after issue';
+        snapshot = editSnapshot;
+      } else if (isFinalized(current.status) || current.status === 'cancelled') {
         if (changed.length) throw conflict('DOCUMENT_FINALIZED', `A finalised document only takes notes, terms, reference and attachments (changed: ${changed.join(', ')})`);
         [updated] = await tx
           .update(D)
@@ -491,13 +584,13 @@ export const documentsHandlers = defineHandlers({
       const newLines = await tx.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, current.id));
       await recordChange(tx, ctx.user, {
         companyId: ctx.company.id,
-        action: 'updated',
+        action,
         entityType: 'document',
         entityId: updated.id,
         entityLabel: updated.number,
         version: updated.version,
-        before: await auditSnapshot(tx, current, storedLines),
-        after: await auditSnapshot(tx, updated, newLines),
+        before: await snapshot(tx, current, storedLines),
+        after: await snapshot(tx, updated, newLines),
       });
       return updated;
     });

@@ -8,12 +8,14 @@ import { Icon } from '@esmart/ui/components/Icon';
 import { Menu, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { WEB_INPUT_RESET } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import type { DocumentLine, TaxCategory } from '@esmart/core/types';
+import type { DocumentLine, GstFlags, ItcEligibility, TaxCategory } from '@esmart/core/types';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import type { TaxContext } from '@esmart/core/domain/taxEngine';
 import { formatMoney, formatPercent, sanitizeAmountInput } from '@esmart/core/lib/format';
 import { fromMajor, subtract, toMajor } from '@esmart/core/lib/money';
-import { unitDecimals } from '@esmart/core/data/masters';
+import { unitDecimals, unitShortName } from '@esmart/core/data/masters';
+import { useCostCentres } from '../../store/books';
+import { useItems } from '../../store/selectors';
 
 type Col = 'name' | 'qty' | 'rate' | 'discount';
 
@@ -39,6 +41,7 @@ export function LineGrid({
   onEdit,
   onAddRequest,
   maxQuantity,
+  purchase = false,
 }: {
   lines: DocumentLine[];
   currency: string;
@@ -52,10 +55,32 @@ export function LineGrid({
   onAddRequest: () => void;
   /** A return can't take back more than its source line carried. */
   maxQuantity?: (line: DocumentLine) => number | undefined;
+  /** A purchase: each line also says reverse charge, capital goods and whether its credit can be claimed. */
+  purchase?: boolean;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common']);
+  const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
   const [taxFor, setTaxFor] = useState<DocumentLine | null>(null);
+  const [itcFor, setItcFor] = useState<DocumentLine | null>(null);
+  // A purchase line that isn't stock may carry its own cost centre (RULES 6.20); shown once there are centres.
+  const [centreFor, setCentreFor] = useState<DocumentLine | null>(null);
+  const centres = useCostCentres();
+  const items = useItems();
+  const ownCentre = (line: DocumentLine) => purchase && centres.length > 0 && !items.find((i) => i.id === line.itemId)?.trackInventory;
+  const centreName = (id?: string) => (id ? (centres.find((c) => c.id === id)?.name ?? id) : undefined);
+  // A flag changed on a line: sent as {} once plain again, so the server doesn't take the item's back.
+  const setFlag = (line: DocumentLine, p: Partial<GstFlags>) => {
+    const next: GstFlags = { ...line.gst, ...p };
+    (Object.keys(next) as (keyof GstFlags)[]).forEach((k) => (next[k] === undefined || next[k] === false || (k === 'itcEligibility' && next[k] === 'eligible')) && delete next[k]);
+    onUpdate(line.id, { gst: next });
+  };
+  // What a purchase line says beyond a plain creditable supply, under its name.
+  const flagsOf = (line: DocumentLine) =>
+    [
+      line.gst?.reverseCharge && tr('inventory:gst.reverseCharge'),
+      line.gst?.capitalGoods && tr('inventory:gst.capitalGoods'),
+      line.gst?.itcEligibility && line.gst.itcEligibility !== 'eligible' && tr(`inventory:gst.itcOption.${line.gst.itcEligibility}`),
+    ].filter(Boolean).join(' · ');
   // The grid's own width: inside the sideways scroller the rows would otherwise take their
   // natural width, and a long item name would push the totals and ⋯ out of view.
   const [boxWidth, setBoxWidth] = useState(0);
@@ -146,6 +171,16 @@ export function LineGrid({
                   {`HSN ${line.hsnCode}`}
                 </Text>
               ) : null}
+              {purchase && flagsOf(line) ? (
+                <Text variant="micro" tone="primary" style={{ paddingHorizontal: 6 }} numberOfLines={1}>
+                  {flagsOf(line)}
+                </Text>
+              ) : null}
+              {ownCentre(line) && line.costCentreId ? (
+                <Text variant="micro" tone="muted" style={{ paddingHorizontal: 6 }} numberOfLines={1}>
+                  {centreName(line.costCentreId)}
+                </Text>
+              ) : null}
             </View>
             <View role="cell" style={{ width: W.qty, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
               <View style={{ flex: 1 }}>
@@ -167,7 +202,7 @@ export function LineGrid({
               </View>
               {/* The unit rides along with the quantity it counts, rather than taking a column. */}
               <Text variant="micro" tone="muted" numberOfLines={1} style={{ maxWidth: 34 }}>
-                {line.unit}
+                {unitShortName(line.unit)}
               </Text>
             </View>
             <View role="cell" style={{ width: W.rate, paddingHorizontal: 4 }}>
@@ -266,6 +301,18 @@ export function LineGrid({
                 label={tr('sales:grid.lineActions', { n })}
                 onEdit={() => onEdit(line)}
                 onRemove={() => onRemove(line.id)}
+                gstItems={
+                  purchase && !line.gst?.reimbursement && (line.gst?.supplyType ?? 'taxable') === 'taxable'
+                    ? [
+                        { icon: line.gst?.reverseCharge ? 'checkbox-marked-outline' : 'checkbox-blank-outline', label: tr('inventory:gst.reverseCharge'), onPress: () => setFlag(line, { reverseCharge: !line.gst?.reverseCharge }) },
+                        { icon: line.gst?.capitalGoods ? 'checkbox-marked-outline' : 'checkbox-blank-outline', label: tr('inventory:gst.capitalGoods'), onPress: () => setFlag(line, { capitalGoods: !line.gst?.capitalGoods }) },
+                        { icon: 'cash-refund', label: `${tr('inventory:gst.itc')}: ${tr(`inventory:gst.itcOption.${line.gst?.itcEligibility ?? 'eligible'}`)}`, onPress: () => setItcFor(line) },
+                        ...(ownCentre(line) ? [{ icon: 'sitemap-outline', label: `${tr('sales:line.costCentre')}: ${centreName(line.costCentreId) ?? tr('sales:line.costCentreBill')}`, onPress: () => setCentreFor(line) }] : []),
+                      ]
+                    : ownCentre(line)
+                      ? [{ icon: 'sitemap-outline', label: `${tr('sales:line.costCentre')}: ${centreName(line.costCentreId) ?? tr('sales:line.costCentreBill')}`, onPress: () => setCentreFor(line) }]
+                      : undefined
+                }
               />
             </View>
           </View>
@@ -290,6 +337,29 @@ export function LineGrid({
           const cat = taxCategories.find((c) => c.id === id);
           if (taxFor && cat) onUpdate(taxFor.id, { taxCategoryId: cat.id, taxRate: cat.rate });
           setTaxFor(null);
+        }}
+      />
+      <SelectSheet
+        visible={!!itcFor}
+        onClose={() => setItcFor(null)}
+        title={tr('inventory:gst.itc')}
+        options={(['eligible', 'blocked', 'ineligible'] as ItcEligibility[]).map((s) => ({ value: s, label: tr(`inventory:gst.itcOption.${s}`), description: tr(`inventory:gst.itcOptionHint.${s}`) }))}
+        value={itcFor?.gst?.itcEligibility ?? 'eligible'}
+        onSelect={(v) => {
+          if (itcFor) setFlag(itcFor, { itcEligibility: v as ItcEligibility });
+          setItcFor(null);
+        }}
+        searchable={false}
+      />
+      <SelectSheet
+        visible={!!centreFor}
+        onClose={() => setCentreFor(null)}
+        title={tr('sales:line.costCentre')}
+        options={[{ value: '', label: tr('sales:line.costCentreBill') }, ...centres.map((c) => ({ value: c.id, label: c.category ? `${c.name} · ${c.category}` : c.name }))]}
+        value={centreFor?.costCentreId ?? ''}
+        onSelect={(v) => {
+          if (centreFor) onUpdate(centreFor.id, { costCentreId: v || undefined });
+          setCentreFor(null);
         }}
       />
     </View>
@@ -373,7 +443,7 @@ function GridInput({
 }
 
 /** A line's ⋯ button: the full editor, or remove. */
-function LineMenu({ label, onEdit, onRemove }: { label: string; onEdit: () => void; onRemove: () => void }) {
+function LineMenu({ label, onEdit, onRemove, gstItems }: { label: string; onEdit: () => void; onRemove: () => void; gstItems?: { icon: string; label: string; onPress: () => void }[] }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales']);
   const { setAnchor, rect, open, close, visible } = useMenuAnchor();
@@ -400,7 +470,7 @@ function LineMenu({ label, onEdit, onRemove }: { label: string; onEdit: () => vo
       >
         <Icon name="dots-horizontal" size={18} color={t.c.muted} />
       </Pressable>
-      <Menu anchor={rect} onClose={close} align="right" width={200}>
+      <Menu anchor={rect} onClose={close} align="right" width={gstItems ? 260 : 200}>
         <MenuItem
           icon="pencil-outline"
           label={tr('sales:grid.moreDetails')}
@@ -409,6 +479,17 @@ function LineMenu({ label, onEdit, onRemove }: { label: string; onEdit: () => vo
             onEdit();
           }}
         />
+        {gstItems?.map((g) => (
+          <MenuItem
+            key={g.label}
+            icon={g.icon as never}
+            label={g.label}
+            onPress={() => {
+              close();
+              g.onPress();
+            }}
+          />
+        ))}
         <MenuItem
           icon="trash-can-outline"
           label={tr('sales:line.remove')}

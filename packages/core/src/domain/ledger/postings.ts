@@ -70,6 +70,16 @@ function chargedTax(doc: BusinessDocument, reverseCharge: boolean): Record<TaxKi
   return out;
 }
 
+/**
+ * Reverse-charge tax is owed to the government like any other output tax (RULES 2.6, pending CA):
+ * from this date it is credited to Output tax, so the 3B set-off and the Output ledger agree. What
+ * was dated earlier stays in Reverse charge payable, so filed and closed periods read as they did.
+ */
+export const RCM_OUTPUT_FROM = '2026-11-01';
+
+/** Where reverse-charge tax of a kind dated `date` is owed. */
+export const rcmAccount = (k: TaxKind, date: string): string => (date >= RCM_OUTPUT_FROM ? `sys:output${k}` : `sys:rcmPayable${k}`);
+
 const scaleSplit = (s: TaxSplit, by: number): TaxSplit => ({ igst: s.igst * by, cgst: s.cgst * by, sgst: s.sgst * by, cess: s.cess * by });
 const splitSum = (...splits: TaxSplit[]): TaxSplit => splits.reduce((a, b) => ({ igst: a.igst + b.igst, cgst: a.cgst + b.cgst, sgst: a.sgst + b.sgst, cess: a.cess + b.cess }), { igst: 0, cgst: 0, sgst: 0, cess: 0 });
 const splitTotal = (s: TaxSplit) => s.igst + s.cgst + s.sgst + s.cess;
@@ -103,12 +113,15 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
   const source = { type: 'document' as const, id: doc.id, number: doc.number, kind: doc.kind };
   const extra = { branchId: doc.branchId, partyId: doc.partyId, costCentreId: doc.costCentreId };
   const entries: Entry[] = [];
+  // A financial or commercial note without GST (RULES 6.24) is a discount after the sale, not a
+  // return: its value goes to discount allowed (received), not sales (purchases). It carries no tax.
+  const discountNote = doc.noteGst === 'noGst' && !doc.sourceDocumentId;
 
   if (sales) {
     const tax = chargedTax(doc, false);
     entries.push(
       [party, b(t.grandTotal.minor)],
-      ['sys:sales', -b(t.taxableAmount.minor)],
+      [discountNote ? 'sys:discountAllowed' : 'sys:sales', -b(t.taxableAmount.minor)],
       ...TAX_KINDS.map((k): Entry => [`sys:output${k}`, -b(tax[k])]),
       ['sys:discountAllowed', b(t.documentDiscount.minor)],
       // Recovering a billable expense clears what it put in Reimbursements recoverable: none of it is income.
@@ -129,12 +142,13 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
     const capital = doc.lines
       .filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement)
       .reduce((a, l) => a + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor, 0);
+    const cost = b(t.taxableAmount.minor - capital + (t.reimbursements?.minor ?? 0)) + lost;
     entries.push(
       [party, -b(t.grandTotal.minor)],
-      ['sys:purchases', b(t.taxableAmount.minor - capital + (t.reimbursements?.minor ?? 0)) + lost],
+      ...(discountNote ? [['sys:discountReceived', cost] as Entry] : purchasesByCentre(doc, cost)),
       ['sys:fixedAssets', b(capital)],
       ...TAX_KINDS.map((k): Entry => [`sys:input${k}`, claimable[SPLIT_KEY[k]]]),
-      ...TAX_KINDS.map((k): Entry => [`sys:rcmPayable${k}`, -b(rcm[k])]),
+      ...TAX_KINDS.map((k): Entry => [rcmAccount(k, doc.date), -b(rcm[k])]),
       ['sys:discountReceived', -b(t.documentDiscount.minor)],
       ['sys:freightInward', b(t.charges.minor)],
       ['sys:roundOff', b(t.roundOff.minor)],
@@ -149,12 +163,63 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
       entries.push(['sys:inputIgst', boe.igst.minor], ['sys:inputCess', boe.cess?.minor ?? 0], ['sys:customsPayable', -duty]);
     }
   }
-  return toPostings(
-    entries.map(([a, v]) => [a, sign * v]),
+  const posted = toPostings(
+    entries.map(([a, v, cc]) => [a, sign * v, cc]),
     source,
     doc.date,
     extra,
   );
+  if (sales) return posted;
+  return [...posted, ...itcReversalPostings(doc, baseCurrency, source, extra)];
+}
+
+/**
+ * Credit on a bill unpaid 180 days after its date (rule 37) leaves Input tax on the day it is
+ * reversed (`itcReversedOn`, which GSTR-3B shows in 4B(2)) and goes to Input tax credit reversed;
+ * it comes back on the day the bill is paid (`itcReclaimedOn`, 4A(5) and 4D(1)). The same credit
+ * 3B moves: what was claimable, not the reverse charge (RULES 6.22, pending CA).
+ */
+function itcReversalPostings(doc: BusinessDocument, baseCurrency: string, source: Posting['source'], extra: Pick<Posting, 'branchId' | 'partyId' | 'costCentreId'>): Posting[] {
+  if (!doc.itcReversedOn) return [];
+  const itc = itcOfDocument(doc, baseCurrency);
+  const sum = splitSum(itc.eligible, itc.capitalGoods);
+  const claimable: TaxSplit = { igst: Math.round(sum.igst), cgst: Math.round(sum.cgst), sgst: Math.round(sum.sgst), cess: Math.round(sum.cess) };
+  if (!splitTotal(claimable)) return [];
+  const move = (side: 1 | -1): Entry[] => [
+    ['sys:itcReversed', side * splitTotal(claimable)],
+    ...TAX_KINDS.map((k): Entry => [`sys:input${k}`, -side * claimable[SPLIT_KEY[k]]]),
+  ];
+  return [
+    ...toPostings(move(1), source, doc.itcReversedOn, extra),
+    ...(doc.itcReclaimedOn ? toPostings(move(-1), source, doc.itcReclaimedOn, extra) : []),
+  ];
+}
+
+/**
+ * What a purchase costs, split over the cost centres its lines carry (RULES 6.20): a non-stock line's
+ * own centre, else the document's. Shared by each centre's taxable value, so the parts add up to the
+ * whole exactly; a document whose lines carry no centre of their own posts as one.
+ */
+function purchasesByCentre(doc: BusinessDocument, amount: number): Entry[] {
+  const own = doc.lines.some((l) => l.costCentreId && l.costCentreId !== doc.costCentreId);
+  if (!own) return [['sys:purchases', amount]];
+  const weights = new Map<string, number>();
+  for (const l of doc.lines) {
+    if (l.gst?.capitalGoods && !l.gst?.reimbursement) continue;
+    const cc = l.costCentreId ?? doc.costCentreId ?? '';
+    weights.set(cc, (weights.get(cc) ?? 0) + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor);
+  }
+  const total = [...weights.values()].reduce((a, w) => a + w, 0);
+  if (total <= 0) return [['sys:purchases', amount]];
+  const rounded = Math.round(amount);
+  const parts = [...weights.entries()].map(([cc, w]): Entry => ['sys:purchases', Math.round((rounded * w) / total), cc || undefined]);
+  // Rounding left over stays with the largest part.
+  const off = rounded - parts.reduce((a, [, v]) => a + v, 0);
+  if (off) {
+    const big = parts.reduce((m, e, i) => (Math.abs(e[1]) > Math.abs(parts[m][1]) ? i : m), 0);
+    parts[big] = [parts[big][0], parts[big][1] + off, parts[big][2]];
+  }
+  return parts;
 }
 
 /**
@@ -171,7 +236,9 @@ export function postPayment(p: Payment, ctx: { homeState?: string; documentDate?
   const entries: Entry[] = received
     ? [
         [`pay:${p.accountId}`, cash],
-        ['sys:tdsReceivable', b(sum('tdsDeducted'))],
+        // Deducted by the customer under its section, so it matches their 26AS entry; none given stays plain (older receipts).
+        // With TDS the customer deducted from an advance before any invoice: it credits them as money does.
+        [p.tdsSection && p.tdsSection !== 'none' ? `sys:tdsReceivable:${p.tdsSection}` : 'sys:tdsReceivable', b(sum('tdsDeducted') + (p.advanceTds?.minor ?? 0))],
         ['sys:discountAllowed', b(sum('discount'))],
         ['sys:badDebts', b(sum('writeOff'))],
         ['sys:fxGainLoss', -gain],
@@ -191,13 +258,15 @@ export function postPayment(p: Payment, ctx: { homeState?: string; documentDate?
   const extra = { branchId: p.branchId, partyId: p.partyId };
   const advance = advanceTaxEvents(p, ctx.homeState, ctx.documentDate ?? (() => undefined)).flatMap((e) => {
     const sign = e.kind === 'received' ? 1 : -1;
-    const tax = e.igst + e.cgst + e.sgst;
+    const cess = e.cess ?? 0;
+    const tax = e.igst + e.cgst + e.sgst + cess;
     return toPostings(
       [
         ['sys:gstOnAdvances', sign * tax],
         ['sys:outputIgst', -sign * e.igst],
         ['sys:outputCgst', -sign * e.cgst],
         ['sys:outputSgst', -sign * e.sgst],
+        ['sys:outputCess', -sign * cess],
       ],
       source,
       e.date,
@@ -219,7 +288,7 @@ export function postExpense(e: Expense, ctx: { company?: Company; branches: Bran
   const entries: Entry[] = [
     [e.billable ? 'sys:reimbursementsRecoverable' : `exp:${e.categoryId}`, b(expenseCost(e).minor)],
     ...TAX_KINDS.map((k): Entry => [`sys:input${k}`, claim ? b(byKind(k)) : 0]),
-    ...TAX_KINDS.map((k): Entry => [`sys:rcmPayable${k}`, e.reverseCharge ? -b(byKind(k)) : 0]),
+    ...TAX_KINDS.map((k): Entry => [rcmAccount(k, e.date), e.reverseCharge ? -b(byKind(k)) : 0]),
     [`pay:${e.accountId}`, -b(e.amount.minor)],
   ];
   return toPostings(entries, { type: 'expense', id: e.id, number: e.number }, e.date, { branchId: e.branchId, partyId: e.supplierId, costCentreId: e.costCentreId });

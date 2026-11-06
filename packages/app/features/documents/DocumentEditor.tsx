@@ -22,9 +22,9 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
 import { DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
-import { NOTE_KINDS, PURCHASE_KINDS } from '@esmart/core/domain/documentStates';
+import { NOTE_KINDS, PURCHASE_KINDS, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
-import { TCS_SECTIONS, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
+import { TCS_SECTIONS, partyTcsSection, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
@@ -34,7 +34,7 @@ import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate, parseDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from '@esmart/core/lib/money';
-import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
+import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
 import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
@@ -50,6 +50,7 @@ import {
   useItems,
   useParties,
   useDefaultBranchId,
+  useDocument,
   useTaxCategories,
 } from '../../store/selectors';
 import {
@@ -76,6 +77,9 @@ import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 import { tdsForDocument } from '../../store/tds';
+import { useItcBreakup } from './itcBreakup';
+import { expectedSaleTds } from '@esmart/core/domain/tds';
+import { panOfGstin } from '@esmart/core/domain/gstin';
 import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
 import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
@@ -135,6 +139,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const baseCurrency = useBaseCurrency();
   const hasFx = useHasModule('fx');
   const hasInventory = useHasModule('inventory');
+  const hasPos = useHasModule('pos');
   const branches = useBranches();
   const taxCategories = useTaxCategories();
   const exchangeRates = useExchangeRates();
@@ -150,6 +155,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const isNote = NOTE_KINDS.includes(kind);
   const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn || isNote);
 
+  // An issued invoice opened here is the latest of its series being edited in full (RULES 6.23): it is
+  // saved, never finalised again, and the server says whether it may be.
+  const existing = useDocument(documentId);
+  const editingIssued = !!existing && isFinalized(existing.status) && existing.status !== 'cancelled';
   const createDocument = useAppStore((s) => s.createDocument);
   const updateDocument = useAppStore((s) => s.updateDocument);
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
@@ -180,6 +189,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(d.date, p.paymentTermsDays) : d.dueDate,
         // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
         ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
+        // A customer with TCS puts their invoices under its section; another party clears one picked before.
+        ...(kind === 'invoice' && { tcsSection: partyTcsSection(p) ?? (d.tcsSection ? 'none' : undefined) }),
       },
       p.currency,
       p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, d.date),
@@ -223,16 +234,19 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   // Party and place of supply decide export / SEZ / import treatment (IGST, or none under LUT).
   const draftTaxContext = useCallback(
-    (d: DraftState) =>
-      buildTaxContext(company, {
+    (d: DraftState) => {
+      const ctx = buildTaxContext(company, {
         placeOfSupply: d.placeOfSupplyStateCode,
         party: parties.find((p) => p.id === d.partyId),
         date: d.date,
         purchase: isPurchase,
         branch: branches.find((b) => b.id === (d.branchId ?? defaultBranchId)),
         reverseCharge: d.reverseCharge,
-      }),
-    [company, parties, isPurchase, branches, defaultBranchId],
+      });
+      // A financial note without GST charges none, as the server works it out (RULES 6.24).
+      return isNote && !d.sourceDocumentId && d.noteGst === 'noGst' ? { ...ctx, registered: false, reverseCharge: false } : ctx;
+    },
+    [company, parties, isPurchase, isNote, branches, defaultBranchId],
   );
 
   // TCS on an invoice (s.206C): the section's rate, higher for a buyer with no PAN, over the 206C(1F) threshold only.
@@ -243,14 +257,19 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     },
     [parties],
   );
+  // A credit note or return against an invoice that collected TCS gives it back at that invoice's rate.
+  const tcsRateOfNote = useCallback((d: { sourceDocumentId?: string }) => documents.find((x) => x.id === d.sourceDocumentId)?.tcs?.rate ?? 0, [documents]);
   const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, setPricesIncludeTax, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
     taxContext: draftTaxContext,
     initial: initialDraft ?? seed?.draft,
-    tcsRate: kind === 'invoice' ? tcsRateOfDraft : undefined,
+    tcsRate: kind === 'invoice' ? tcsRateOfDraft : kind === 'creditNote' || kind === 'salesReturn' ? tcsRateOfNote : undefined,
   });
+
+  // A note raised against no one invoice or bill (?direct=1): it chooses its GST treatment.
+  const directNote = isNote && !draft.sourceDocumentId;
 
   // What the person has picked or typed, to tell an untouched form from one with changes to lose.
   const entered = JSON.stringify([
@@ -262,7 +281,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const leaveGuard = useLeaveGuard(entered !== untouched);
 
   // TDS kept back on a supplier's bill or debit note, for a business with a TAN: worked out as the server will.
-  const takesTds = !!company?.tan && (kind === 'purchaseBill' || kind === 'supplierDebitNote');
+  // The section shows on every bill: without a TAN it says where to add one, rather than hiding.
+  const billTds = kind === 'purchaseBill' || kind === 'supplierDebitNote';
+  const takesTds = !!company?.tan && billTds;
+  // On an invoice: TDS the customer will deduct (RULES 4.14). Shown, never taken off the GST invoice value.
+  const saleTds = kind === 'invoice';
   const fx = draft.currency === company?.baseCurrency ? 1 : draft.exchangeRate || 1;
   // The server counts the deductee's year so far; the device's own figure is the fallback while it answers or offline.
   const serverTds = useTdsPreview(
@@ -286,7 +309,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     // The server answers in base currency; the bill shows its own.
     return { section: serverTds.section, rate: serverTds.rate, amount: money(Math.round(serverTds.amount.minor / fx), draft.currency) };
   }, [takesTds, serverTds, deviceTds, fx, draft.currency]);
-  const tdsRow = draftTds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(draftTds.section)?.label ?? draftTds.section, rate: formatPercent(draftTds.rate) }), amount: draftTds.amount } : undefined;
+  const saleSection = saleTds ? (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection) : undefined;
+  const expectedTds = useMemo(() => {
+    if (!saleTds || !saleSection || saleSection === 'none') return undefined;
+    const e = expectedSaleTds({ section: saleSection, rate: draft.tdsRate, sellerPan: panOfGstin(company?.taxRegistration?.identifier) || undefined, date: draft.date, baseMinor: totals.taxableAmount.minor });
+    return e ? { section: e.section, rate: e.rate, amount: money(e.amountMinor, draft.currency) } : undefined;
+  }, [saleTds, saleSection, draft.tdsRate, draft.date, draft.currency, totals.taxableAmount.minor, company]);
+  const tdsRow = draftTds
+    ? { label: tr('common:totals.tdsLabel', { section: tdsSection(draftTds.section)?.label ?? draftTds.section, rate: formatPercent(draftTds.rate) }), amount: draftTds.amount }
+    : expectedTds
+      ? { label: tr('sales:tds.expectedLabel', { section: tdsSection(expectedTds.section)?.label ?? expectedTds.section, rate: formatPercent(expectedTds.rate) }), amount: expectedTds.amount, netLabel: tr('sales:tds.netReceivable') }
+      : undefined;
+  const itcBreakup = useItcBreakup({ kind, lines: draft.lines, totals, currency: draft.currency, exchangeRate: draft.exchangeRate, reverseCharge: draft.reverseCharge }, company?.baseCurrency ?? draft.currency);
   const tdsSectionLabel = (code: string | undefined) => (!code || code === 'none' ? tr('purchases:tds.none') : `${tdsSection(code)?.label ?? code} · ${tdsSection(code)?.nature ?? ''}`);
 
   const [step, setStep] = useState(seed?.step ?? 0);
@@ -535,6 +569,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
       // Not over another sheet (picking an item, editing a line…): finish that first.
       if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
+      if (editingIssued) return void save(false);
       setSendAfter(false);
       requestFinalize();
     };
@@ -593,8 +628,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
       reverseCharge: draft.reverseCharge || undefined,
       noteReason: isNote ? draft.noteReason : undefined,
-      tdsSection: takesTds ? draft.tdsSection : undefined,
-      tcsSection: kind === 'invoice' && draft.tcsSection && draft.tcsSection !== 'none' ? draft.tcsSection : undefined,
+      // A direct note says how it stands with GST; with GST it names the supply it adjusts (RULES 6.24).
+      noteGst: directNote ? (draft.noteGst ?? 'withGst') : undefined,
+      originalNumber: directNote && draft.noteGst !== 'noGst' ? draft.originalNumber?.trim() || undefined : undefined,
+      originalDate: directNote && draft.noteGst !== 'noGst' ? draft.originalDate : undefined,
+      tdsSection: billTds || saleTds ? draft.tdsSection : undefined,
+      tdsRate: saleTds && draft.tdsSection && draft.tdsSection !== 'none' ? draft.tdsRate : undefined,
+      // `none` is sent as itself: unset on a new invoice would take the customer's section.
+      tcsSection: kind === 'invoice' ? draft.tcsSection : undefined,
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
@@ -630,25 +671,29 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       return;
     }
     const id = res.id ?? res.result;
-    // An issued invoice or bill is usually paid next, so the toast offers it.
-    const payable = finalize && (kind === 'invoice' || kind === 'purchaseBill');
+    // An issued invoice can still be put right while it is the latest (RULES 6.23), so the toast offers
+    // that; an issued bill is usually paid next, so its toast offers that.
+    const issuedInvoice = kind === 'invoice' && (finalize || editingIssued);
     toast.show(
       res.outcome === 'queued'
         ? tr('common:save.queued')
-        : finalize
-          ? tr('common:documentEditor.finalised', { kind: kindName })
-          : tr('common:documentEditor.savedDraft'),
+        : editingIssued
+          ? tr('common:documentEditor.updatedIssued', { kind: kindName })
+          : finalize
+            ? tr('common:documentEditor.finalised', { kind: kindName })
+            : tr('common:documentEditor.savedDraft'),
       'success',
       {
-        icon: finalize ? 'file-check-outline' : 'content-save-outline',
+        icon: finalize || editingIssued ? 'file-check-outline' : 'content-save-outline',
         detail: [party?.name, formatMoney(totals.grandTotal)].filter(Boolean).join(' · '),
-        action: payable
-          ? {
-              label: tr(kind === 'invoice' ? 'common:toast.recordPayment' : 'common:toast.paySupplier'),
-              onPress: () =>
-                router.push(`/(app)/payments/new?direction=${kind === 'invoice' ? 'received' : 'paid'}&partyId=${draft.partyId}&documentId=${id}` as never),
-            }
-          : undefined,
+        action: issuedInvoice
+          ? { label: tr('common:toast.editInvoice'), onPress: () => router.push(`${detailRouteFor(kind, id)}/edit` as never) }
+          : finalize && kind === 'purchaseBill'
+            ? {
+                label: tr('common:toast.paySupplier'),
+                onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${draft.partyId}&documentId=${id}` as never),
+              }
+            : undefined,
       },
     );
     // Saved: leaving for the saved document isn't leaving changes behind.
@@ -850,14 +895,51 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
       </FieldRow>
 
-      {takesTds ? (
-        <PickerField
-          label={tr('purchases:tds.section')}
-          value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
-          onPress={() => setTdsOpen(true)}
-          icon="bank-minus"
-          hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
-        />
+      {billTds ? (
+        <View style={{ gap: t.spacing.xs }}>
+          <PickerField
+            label={tr('purchases:tds.section')}
+            value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
+            onPress={() => setTdsOpen(true)}
+            icon="bank-minus"
+            hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
+          />
+          {/* Without a TAN nothing is kept back: say so where the section is chosen, with the way to add one. */}
+          {!company?.tan && (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none') !== 'none' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, flexWrap: 'wrap' }}>
+              <Text variant="caption" tone="warn" style={{ flex: 1, minWidth: 180 }}>
+                {tr('purchases:tds.needsTan')}
+              </Text>
+              <Button title={tr('purchases:tds.addTan')} variant="ghost" size="sm" icon="office-building-cog-outline" onPress={() => router.push('/(app)/settings/company')} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {saleTds ? (
+        <View style={{ gap: t.spacing.xs }}>
+          <PickerField
+            label={tr('sales:tds.section')}
+            value={tdsSectionLabel(saleSection)}
+            onPress={() => setTdsOpen(true)}
+            icon="bank-plus"
+            hint={expectedTds ? tr('sales:tds.willDeduct', { amount: formatMoney(expectedTds.amount), net: formatMoney(subtract(totals.grandTotal, expectedTds.amount)) }) : tr('sales:tds.hint')}
+          />
+          {saleSection && saleSection !== 'none' ? (
+            <TextField
+              label={tr('sales:tds.rate')}
+              value={draft.tdsRate !== undefined ? String(draft.tdsRate) : ''}
+              onChangeText={(v) => {
+                const clean = v.replace(/[^0-9.]/g, '');
+                patch({ tdsRate: clean === '' ? undefined : Math.min(Number(clean) || 0, 100) });
+              }}
+              placeholder={expectedTds ? String(expectedTds.rate) : '0'}
+              keyboardType="decimal-pad"
+              icon="percent-outline"
+              hint={tr('sales:tds.rateHint')}
+            />
+          ) : null}
+        </View>
       ) : null}
 
       {kind === 'invoice' ? (
@@ -882,6 +964,42 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           icon="text-box-outline"
           hint={tr('sales:editor.noteReasonHint')}
         />
+      ) : null}
+
+      {directNote ? (
+        <View style={{ gap: t.spacing.sm }}>
+          <Text variant="small" tone="muted" weight="500">
+            {tr('sales:editor.noteGst.label')}
+          </Text>
+          <Segmented
+            options={[
+              { value: 'withGst', label: tr('sales:editor.noteGst.withGst') },
+              { value: 'noGst', label: tr('sales:editor.noteGst.noGst') },
+            ]}
+            value={draft.noteGst ?? 'withGst'}
+            onChange={(v) => patch({ noteGst: v as 'withGst' | 'noGst' })}
+          />
+          <Text variant="caption" tone="muted">
+            {tr(draft.noteGst === 'noGst' ? 'sales:editor.noteGst.noGstHint' : 'sales:editor.noteGst.withGstHint')}
+          </Text>
+          {draft.noteGst !== 'noGst' ? (
+            <FieldRow>
+              <TextField
+                label={tr(isPurchase ? 'sales:editor.noteGst.originalBill' : 'sales:editor.noteGst.originalInvoice')}
+                value={draft.originalNumber ?? ''}
+                onChangeText={(originalNumber) => patch({ originalNumber })}
+                icon="file-document-outline"
+                maxLength={40}
+              />
+              <DateField
+                label={tr('sales:editor.noteGst.originalDate')}
+                value={draft.originalDate ?? ''}
+                onChange={(originalDate) => patch({ originalDate })}
+                maximumDate={new Date()}
+              />
+            </FieldRow>
+          ) : null}
+        </View>
       ) : null}
 
       {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
@@ -963,6 +1081,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onEdit={setEditingLine}
           onAddRequest={() => setItemOpen(true)}
           maxQuantity={(line) => maxReturnQty(line)}
+          purchase={isPurchase}
         />
       ) : (
         <Card padded={false}>
@@ -1023,7 +1142,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                     decimals={unitDecimals(line.unit)}
                   />
                   <Text variant="caption" tone="muted">
-                    {line.unit} × {formatMoney(line.unitPrice)}
+                    {unitShortName(line.unit)} × {formatMoney(line.unitPrice)}
                     {line.discountValue > 0
                       ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, draft.currency))}`
                       : ''}
@@ -1045,6 +1164,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             exchangeRate={draft.exchangeRate}
             compact
             tds={tdsRow}
+            itc={itcBreakup}
           />
         </Card>
       ) : null}
@@ -1200,6 +1320,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           exchangeRate={draft.exchangeRate}
           compact
           tds={tdsRow}
+          itc={itcBreakup}
         />
       </Card>
     </View>
@@ -1248,6 +1369,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
           tds={tdsRow}
+          itc={itcBreakup}
         />
       </Card>
 
@@ -1281,6 +1403,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             <Stack.Screen
               options={{
                 headerRight: () => (
+                  editingIssued ? (
+                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId || draft.lines.length === 0} />
+                  ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
                     <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
                     {canSend && !onSaved ? (
@@ -1309,6 +1434,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                       disabled={blocked || !draft.partyId || draft.lines.length === 0}
                     />
                   </View>
+                  )
                 ),
               }}
             />
@@ -1389,10 +1515,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   style={{ flex: 2 }}
                 />
               ) : (
+                editingIssued ? (
+                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                ) : (
                 <>
                   <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
                   <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} disabled={blocked} style={{ flex: 1 }} />
                 </>
+                )
               )}
             </View>
           </View>
@@ -1404,10 +1534,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <SelectSheet
           visible={tdsOpen}
           onClose={() => setTdsOpen(false)}
-          title={tr('purchases:tds.section')}
+          title={saleTds ? tr('sales:tds.section') : tr('purchases:tds.section')}
           options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature, trailing: formatPercent(x.rateOther) }))]}
           value={draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none'}
-          onSelect={(v) => patch({ tdsSection: v })}
+          // A new section takes its own rate, unless the person types another.
+          onSelect={(v) => patch(saleTds ? { tdsSection: v, tdsRate: undefined } : { tdsSection: v })}
           searchable={false}
         />
         <SelectSheet
@@ -1468,13 +1599,13 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               ? sourceDoc.lines.map((l) => ({
                   value: l.id,
                   label: l.name,
-                  description: `${formatQty(l.quantity)} ${l.unit} × ${formatMoney(l.unitPrice)}`,
+                  description: `${formatQty(l.quantity)} ${unitShortName(l.unit)} × ${formatMoney(l.unitPrice)}`,
                   trailing: formatPercent(l.taxRate),
                 }))
               : itemOptions.map((i) => ({
                   value: i.id,
                   label: i.name,
-                  description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
+                  description: `${hasPos ? `${i.sku} · ` : ''}${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${unitShortName(i.unit)}`,
                   trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
                   note: stockNote(i),
                   blocked: openingStockBlock(i) ?? outOfStockBlock(i),
@@ -1577,6 +1708,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onRemove={editingIsNew ? undefined : () => editingLine && removeLine(editingLine.id)}
           hsnRequired={needsHsn}
           maxQuantity={maxReturnQty(editingLine)}
+          purchase={isPurchase}
         />
 
         <ConfirmDialog

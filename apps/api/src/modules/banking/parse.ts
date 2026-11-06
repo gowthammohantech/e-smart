@@ -10,7 +10,7 @@ const MAX_COLUMNS = 60;
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** One Excel cell as the text a CSV of it would hold: dates dd/mm/yyyy, numbers plain. */
-function cellText(value: ExcelJS.CellValue): string {
+export function cellText(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return `${pad(value.getUTCDate())}/${pad(value.getUTCMonth() + 1)}/${value.getUTCFullYear()}`;
   if (typeof value === 'number') return Number.isInteger(value) ? String(value) : String(Math.round(value * 1e6) / 1e6);

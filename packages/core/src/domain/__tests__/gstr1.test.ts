@@ -302,6 +302,27 @@ describe('GSTR-1 credit and debit notes', () => {
     expect(s.totals.taxableValue.minor).toBe(-200000);
   });
 
+  it('carries the original invoice on a note row: the linked one, or the one a direct note names (RULES 6.24)', () => {
+    const inv = doc('registered', { number: 'INV-7', date: '2026-08-10' });
+    const linked = doc('registered', { kind: 'creditNote', number: 'CN-1', sourceDocumentId: inv.id, lines: [line({ quantity: 1 })] });
+    const direct = doc('registered', { kind: 'creditNote', number: 'CN-2', noteGst: 'withGst', originalNumber: 'OLD/0042', originalDate: '2026-04-20', lines: [line({ quantity: 1 })] });
+    const s = summarize([inv, linked, direct]);
+    expect(s.cdnr.map((r) => [r.number, r.originalNumber, r.originalDate])).toEqual([
+      ['CN-1', 'INV-7', '2026-08-10'],
+      ['CN-2', 'OLD/0042', '2026-04-20'],
+    ]);
+  });
+
+  it('leaves a financial note without GST out of every table and the totals (RULES 6.24)', () => {
+    const inv = doc('registered');
+    const financial = doc('registered', { kind: 'creditNote', number: 'CN-9', noteGst: 'noGst', lines: [line({ quantity: 1, gst: { supplyType: 'nonGst' } })] });
+    const s = summarize([inv, financial]);
+    expect(s.cdnr).toEqual([]);
+    expect(s.b2cs).toEqual([]);
+    expect(s.totals.taxableValue.minor).toBe(1000000);
+    expect(s.docs.map((d) => d.nature)).toEqual(['invoice']);
+  });
+
   it('leaves the HSN quantity alone for a value-only note', () => {
     const inv = doc('registered');
     const cn = doc('registered', { kind: 'creditNote', number: 'CN-1', sourceDocumentId: inv.id, lines: [line({ quantity: 1 })] });

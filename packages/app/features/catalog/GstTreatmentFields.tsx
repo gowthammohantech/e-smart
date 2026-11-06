@@ -101,3 +101,39 @@ export function GstTreatmentFields({ value, onChange, type }: { value: GstFlags 
     </>
   );
 }
+
+/**
+ * The part of a line's GST treatment a purchase decides for itself: reverse charge, capital goods and
+ * whether the credit can be claimed. Picked from the item when the line is added; changed here per bill.
+ */
+export function PurchaseLineGstFields({ value, onChange, type }: { value: GstFlags | undefined; onChange: (v: GstFlags | undefined) => void; type: ItemType }) {
+  const { t: tr } = useTranslation(['inventory']);
+  const [itcOpen, setItcOpen] = useState(false);
+  const flags = value ?? {};
+  const set = (p: Partial<GstFlags>) => onChange(tidy({ ...flags, ...p }));
+  if (flags.reimbursement || (flags.supplyType && flags.supplyType !== 'taxable')) return null;
+  return (
+    <>
+      <SwitchField label={tr('inventory:gst.reverseCharge')} description={tr('inventory:gst.reverseChargeHint')} value={!!flags.reverseCharge} onValueChange={(reverseCharge) => set({ reverseCharge })} />
+      {type === 'goods' ? (
+        <SwitchField label={tr('inventory:gst.capitalGoods')} description={tr('inventory:gst.capitalGoodsHint')} value={!!flags.capitalGoods} onValueChange={(capitalGoods) => set({ capitalGoods })} />
+      ) : null}
+      <PickerField
+        label={tr('inventory:gst.itc')}
+        value={tr(`inventory:gst.itcOption.${flags.itcEligibility ?? 'eligible'}`)}
+        onPress={() => setItcOpen(true)}
+        icon="cash-refund"
+        hint={tr('inventory:gst.itcHint')}
+      />
+      <SelectSheet
+        visible={itcOpen}
+        onClose={() => setItcOpen(false)}
+        title={tr('inventory:gst.itc')}
+        options={ITC.map((s) => ({ value: s, label: tr(`inventory:gst.itcOption.${s}`), description: tr(`inventory:gst.itcOptionHint.${s}`) }))}
+        value={flags.itcEligibility ?? 'eligible'}
+        onSelect={(s) => set({ itcEligibility: s as ItcEligibility })}
+        searchable={false}
+      />
+    </>
+  );
+}

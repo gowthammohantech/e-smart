@@ -97,15 +97,15 @@ export const LEGACY_BUSINESS_TYPE_LABELS: Record<string, BusinessType> = {
 };
 
 export const UNITS: Unit[] = [
-  { id: 'unit_pcs', code: 'PCS', name: 'Pieces', decimals: 0 },
-  { id: 'unit_box', code: 'BOX', name: 'Box', decimals: 0 },
-  { id: 'unit_kg', code: 'KG', name: 'Kilogram', decimals: 3 },
-  { id: 'unit_ltr', code: 'LTR', name: 'Litre', decimals: 2 },
-  { id: 'unit_mtr', code: 'MTR', name: 'Metre', decimals: 2 },
-  { id: 'unit_hr', code: 'HR', name: 'Hour', decimals: 2 },
-  { id: 'unit_day', code: 'DAY', name: 'Day', decimals: 1 },
-  { id: 'unit_set', code: 'SET', name: 'Set', decimals: 0 },
-  { id: 'unit_nos', code: 'NOS', name: 'Numbers', decimals: 0 },
+  { id: 'unit_pcs', code: 'PCS', name: 'Pieces', shortName: 'Pcs', decimals: 0 },
+  { id: 'unit_box', code: 'BOX', name: 'Box', shortName: 'Box', decimals: 0 },
+  { id: 'unit_kg', code: 'KG', name: 'Kilogram', shortName: 'Kg', decimals: 3 },
+  { id: 'unit_ltr', code: 'LTR', name: 'Litre', shortName: 'Ltr', decimals: 2 },
+  { id: 'unit_mtr', code: 'MTR', name: 'Metre', shortName: 'Mtr', decimals: 2 },
+  { id: 'unit_hr', code: 'HR', name: 'Hour', shortName: 'Hr', decimals: 2 },
+  { id: 'unit_day', code: 'DAY', name: 'Day', shortName: 'Day', decimals: 1 },
+  { id: 'unit_set', code: 'SET', name: 'Set', shortName: 'Set', decimals: 0 },
+  { id: 'unit_nos', code: 'NOS', name: 'Numbers', shortName: 'Nos', decimals: 0 },
 ];
 
 /** A service is billed as a count of jobs: 'Nos' only. */
@@ -116,6 +116,26 @@ export function unitsFor(type: 'goods' | 'service'): Unit[] {
 }
 
 /** Decimal places a quantity in this unit may carry (NOS/PCS are whole numbers). */
+/** The short name a quantity is printed with ("5 Nos"); falls back to the code. */
+export function unitShortName(code: string | null | undefined): string {
+  if (!code) return '';
+  const u = UNITS.find((x) => x.code === code.toUpperCase());
+  return u?.shortName ?? code;
+}
+
+/** "Pieces (Pcs)" — a unit as a picker shows it. */
+export function unitLabel(code: string): string {
+  const u = UNITS.find((x) => x.code === code.toUpperCase());
+  if (!u) return code;
+  return u.shortName && u.shortName !== u.name ? `${u.name} (${u.shortName})` : u.name;
+}
+
+/** "5 Nos" — a quantity with its unit's short name. */
+export function qtyWithUnit(qty: number | string, code: string | null | undefined): string {
+  const short = unitShortName(code);
+  return short ? `${qty} ${short}` : String(qty);
+}
+
 export function unitDecimals(code: string): number {
   return UNITS.find((u) => u.code === code)?.decimals ?? 2;
 }

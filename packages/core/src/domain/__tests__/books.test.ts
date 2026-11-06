@@ -1,9 +1,9 @@
 import { calculateDocument } from '../lineCalc';
 import { buildTaxContext } from '../taxEngine';
-import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting } from '../ledger/postings';
+import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting, RCM_OUTPUT_FROM } from '../ledger/postings';
 import { balanceSheet, ledgerStatement, profitAndLoss, trialBalance } from '../ledger/reports';
 import { balanceSheetColumns, comparisonPeriod, profitAndLossColumns, splitPeriods, variance } from '../ledger/comparative';
-import { Book, chartOfAccounts } from '../ledger/accounts';
+import { Book, chartOfAccounts, groupTree } from '../ledger/accounts';
 import { BusinessDocument, Company, DocumentKind, DocumentLine, Expense, GstFlags, Item, Party, Payment, PaymentAccount, StockMovement, Voucher } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
 
@@ -106,6 +106,30 @@ describe('postings', () => {
     expect(net(ps, 'sys:sales')).toBe(10000);
   });
 
+  it('posts a financial credit note without GST to discount allowed, with no tax (RULES 6.24)', () => {
+    const ps = postDocument(doc('creditNote', { noteGst: 'noGst', lines: [line({ quantity: 1, gst: { supplyType: 'nonGst' } })] }), 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'party:cus')).toBe(-10000);
+    expect(net(ps, 'sys:discountAllowed')).toBe(10000);
+    expect(net(ps, 'sys:sales')).toBe(0);
+    expect(ps.filter((p) => p.account.startsWith('sys:output'))).toEqual([]);
+  });
+
+  it('posts a supplier’s financial credit note without GST to discount received', () => {
+    const ps = postDocument(doc('supplierCreditNote', { noteGst: 'noGst', lines: [line({ quantity: 1, gst: { supplyType: 'nonGst' } })] }), 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'party:sup')).toBe(10000);
+    expect(net(ps, 'sys:discountReceived')).toBe(-10000);
+    expect(net(ps, 'sys:purchases')).toBe(0);
+    expect(ps.filter((p) => p.account.startsWith('sys:input'))).toEqual([]);
+  });
+
+  it('still posts a direct note with GST to sales, as a return of value', () => {
+    const ps = postDocument(doc('creditNote', { noteGst: 'withGst', originalNumber: 'INV-1', originalDate: '2026-05-01', lines: [line({ quantity: 1 })] }), 'INR');
+    expect(net(ps, 'sys:sales')).toBe(10000);
+    expect(net(ps, 'sys:outputCgst')).toBe(900);
+  });
+
   it('posts a bill with input credit, a blocked line to cost, capital goods to assets and TDS kept back', () => {
     const d = doc('purchaseBill', {
       lines: [line(), line({ gst: { itcEligibility: 'blocked' } }), line({ gst: { capitalGoods: true } })],
@@ -121,12 +145,87 @@ describe('postings', () => {
     expect(net(ps, 'sys:purchases')).toBe(200000 + 18000);
   });
 
-  it('self-assesses reverse-charge tax: credit taken, the same owed', () => {
+  it('self-assesses reverse-charge tax before the cutover in Reverse charge payable', () => {
     const ps = postDocument(doc('purchaseBill', { reverseCharge: true }), 'INR');
     expect(balanced(ps)).toBe(0);
     expect(net(ps, 'sys:inputCgst')).toBe(9000);
     expect(net(ps, 'sys:rcmPayableCgst')).toBe(-9000);
+    expect(net(ps, 'sys:outputCgst')).toBe(0);
     expect(net(ps, 'party:sup')).toBe(-100000);
+  });
+
+  it('owes reverse-charge tax as Output tax from RCM_OUTPUT_FROM (RULES 2.6)', () => {
+    const ps = postDocument(doc('purchaseBill', { reverseCharge: true, date: RCM_OUTPUT_FROM }), 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:inputCgst')).toBe(9000);
+    expect(net(ps, 'sys:outputCgst')).toBe(-9000);
+    expect(net(ps, 'sys:outputSgst')).toBe(-9000);
+    expect(net(ps, 'sys:rcmPayableCgst')).toBe(0);
+    // A note against it runs the other way, on the same account.
+    const note = postDocument(doc('supplierCreditNote', { reverseCharge: true, date: '2026-11-20' }), 'INR');
+    expect(net(note, 'sys:outputCgst')).toBe(9000);
+  });
+
+  it('takes reversed credit out of Input on the reversal date and back on the reclaim date (rule 37, RULES 6.22)', () => {
+    const d = doc('purchaseBill', { lines: [line(), line({ gst: { itcEligibility: 'blocked' } })], itcReversedOn: '2026-12-01', itcReclaimedOn: '2027-01-05' });
+    const ps = postDocument(d, 'INR');
+    expect(balanced(ps)).toBe(0);
+    const on = (date: string) => ps.filter((p) => p.date === date);
+    expect(balanced(on('2026-12-01'))).toBe(0);
+    // Claimable credit only: the blocked line is cost already.
+    expect(net(on('2026-12-01'), 'sys:inputCgst')).toBe(-9000);
+    expect(net(on('2026-12-01'), 'sys:itcReversed')).toBe(18000);
+    expect(net(on('2027-01-05'), 'sys:inputCgst')).toBe(9000);
+    expect(net(ps, 'sys:itcReversed')).toBe(0);
+    // Not yet paid: it stays reversed.
+    const open = postDocument({ ...d, itcReclaimedOn: undefined }, 'INR');
+    expect(net(open, 'sys:itcReversed')).toBe(18000);
+  });
+
+  it('owes reverse-charge tax on an expense as Output tax from the cutover, Reverse charge payable before', () => {
+    const e = (date: string) => ({ id: 'e', number: 'EXP-1', categoryId: 'legal', accountId: 'cash', branchId: 'b', date, amount: inr('1000'), taxAmount: inr('180'), exchangeRate: 1, taxCategoryId: 'tax_18', reverseCharge: true }) as Expense;
+    const ctx = { company, branches: [], taxCategories: [{ id: 'tax_18', rate: 18 } as never] };
+    const before = postExpense(e('2026-10-31'), ctx);
+    const after = postExpense(e('2026-11-01'), ctx);
+    expect(balanced(before)).toBe(0);
+    expect(balanced(after)).toBe(0);
+    expect(net(before, 'sys:rcmPayableCgst')).toBeLessThan(0);
+    expect(net(before, 'sys:outputCgst')).toBe(0);
+    expect(net(after, 'sys:outputCgst')).toBe(net(before, 'sys:rcmPayableCgst'));
+    expect(net(after, 'sys:rcmPayableCgst')).toBe(0);
+  });
+
+  it('posts no TDS for an invoice, even with TDS expected from the customer', () => {
+    const d = doc('invoice', { tdsExpected: { section: '194JB', rate: 10, amount: inr('100') } });
+    const ps = postDocument(d, 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'party:cus')).toBe(d.totals.grandTotal.minor);
+    expect(ps.some((p) => p.account.startsWith('sys:tds'))).toBe(false);
+  });
+
+  it('posts TDS a customer deducted to TDS receivable under its section, plain without one', () => {
+    const p = { id: 'r', number: 'RCPT-1', direction: 'received', partyId: 'cus', accountId: 'bank', date: '2026-11-10', amount: inr('900'), exchangeRate: 1, tdsSection: '194JB', allocations: [{ documentId: 'x', documentNumber: 'X', amount: inr('900'), tdsDeducted: inr('100') }] } as Payment;
+    const ps = postPayment(p);
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:tdsReceivable:194JB')).toBe(10000);
+    expect(net(ps, 'sys:tdsReceivable')).toBe(0);
+    expect(net(postPayment({ ...p, tdsSection: undefined }), 'sys:tdsReceivable')).toBe(10000);
+  });
+
+  it('gives TCS back on a credit note against a TCS invoice: Dr TCS payable under its section', () => {
+    const tcsDoc = (kind: DocumentKind) => {
+      const d = doc(kind, { tcs: { section: 'scrap', rate: 1 } });
+      const totals = calculateDocument({
+        lines: d.lines, currency: 'INR', baseCurrency: 'INR', exchangeRate: 1, documentDiscountMode: 'amount', documentDiscountValue: 0, charges: zero('INR'), applyRoundOff: true, taxCategories: [],
+        taxContext: buildTaxContext(company, { party: customer, placeOfSupply: '27', date: '2026-06-01', purchase: false }), tcsRate: 1,
+      });
+      return { ...d, totals };
+    };
+    const inv = postDocument(tcsDoc('invoice'), 'INR');
+    const cn = postDocument(tcsDoc('creditNote'), 'INR');
+    expect(balanced(cn)).toBe(0);
+    expect(net(inv, 'sys:tcsPayable:scrap')).toBe(-1200);
+    expect(net(cn, 'sys:tcsPayable:scrap')).toBe(1200);
   });
 
   it('posts a receipt with TDS deducted and a discount, the customer credited for all of it', () => {
@@ -232,6 +331,27 @@ describe('books', () => {
     expect(tb.totals.closingDebit).toBe(tb.totals.closingCredit);
     expect(tb.totals.debit).toBe(tb.totals.credit);
     expect(tb.rows.find((r) => r.account.key === 'pay:bank')?.closing).toBe(7000000);
+  });
+
+  it('rolls the chart up Nature → group → account to the trial balance totals', () => {
+    const tb = trialBalance(postings, book, { from: '2026-04-01', to: '2027-03-31' });
+    const tree = groupTree(tb.rows);
+    expect(tree.totals.debit).toBe(tb.totals.debit);
+    expect(tree.totals.credit).toBe(tb.totals.credit);
+    expect(tree.totals.closingDebit).toBe(tb.totals.closingDebit);
+    expect(tree.totals.closingCredit).toBe(tb.totals.closingCredit);
+    expect(tree.totals.closing).toBe(0);
+    // Every account lands once, and each level is the sum of what is under it.
+    const leaves = tree.natures.flatMap((n) => n.headings.flatMap((h) => [...h.accounts, ...h.subGroups.flatMap((g) => g.accounts)]));
+    expect(leaves).toHaveLength(tb.rows.length);
+    for (const n of tree.natures) {
+      expect(n.totals.closing).toBe(n.headings.reduce((a, h) => a + h.totals.closing, 0));
+      for (const h of n.headings) expect(h.totals.debit).toBe([...h.accounts, ...h.subGroups.map((g) => g.totals)].reduce((a, x) => a + x.debit, 0));
+    }
+    expect(tree.natures.map((n) => n.nature)).toEqual(['asset', 'liability', 'income', 'expense']);
+    // The bank sits under Current Assets → Bank Accounts.
+    const current = tree.natures[0].headings.find((h) => h.group === 'currentAssets');
+    expect(current?.subGroups.find((g) => g.group === 'bankAccounts')?.accounts.map((a) => a.account.key)).toContain('pay:bank');
   });
 
   it('works out gross profit from sales, purchases and the change in stock', () => {

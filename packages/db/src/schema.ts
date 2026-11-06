@@ -64,7 +64,7 @@ export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed',
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
 export const messageChannel = pgEnum("message_channel", ['whatsapp', 'sms', 'email'])
 export const notificationKind = pgEnum("notification_kind", ['invoiceSent', 'paymentReceived', 'invoiceOverdue', 'lowStock', 'compliance', 'syncFailure', 'system'])
-export const numberingKind = pgEnum("numbering_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
+export const numberingKind = pgEnum("numbering_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt', 'gstChallan'])
 export const ocrFieldKey = pgEnum("ocr_field_key", ['vendor', 'gstin', 'date', 'amount', 'tax', 'reference', 'category'])
 export const ocrKind = pgEnum("ocr_kind", ['expense', 'purchaseBill'])
 export const ocrStatus = pgEnum("ocr_status", ['queued', 'processing', 'completed', 'failed'])
@@ -82,7 +82,7 @@ export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank'
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
 export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables', 'books'])
-export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
+export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt', 'gstChallan'])
 /** A draft voucher is kept but not in the books: no number from the series, no postings, until it is posted. */
 export const voucherStatus = pgEnum("voucher_status", ['draft', 'posted'])
 export const ledgerGroup = pgEnum("ledger_group", ['capital', 'reserves', 'loans', 'sundryCreditors', 'dutiesTaxes', 'provisions', 'currentLiabilities', 'fixedAssets', 'investments', 'sundryDebtors', 'cashInHand', 'bankAccounts', 'stockInHand', 'loansAdvances', 'currentAssets', 'salesAccounts', 'directIncomes', 'indirectIncomes', 'purchaseAccounts', 'directExpenses', 'indirectExpenses'])
@@ -639,6 +639,12 @@ export const documents = pgTable("documents", {
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
 	noteReason: noteReason("note_reason"),
+	// A direct note (no source document): 'withGst' (s.34, the default) or 'noGst' (a financial or
+	// commercial note: no tax, posted to discount, out of the returns).
+	noteGst: varchar("note_gst", { length: 8 }),
+	// A direct note with GST: the original invoice or bill it adjusts, for GSTR-1 CDNR/CDNUR and the s.34 deadline.
+	originalNumber: varchar("original_number", { length: 40 }),
+	originalDate: date("original_date"),
 	// An import bill's bill of entry: { number, date, portCode, assessableMinor, igstMinor, cessMinor }. IGST paid at customs.
 	billOfEntry: jsonb("bill_of_entry"),
 	// A bill from the business's Input Service Distributor: its credit goes to 3B 4A(4).
@@ -767,6 +773,8 @@ export const documentLines = pgTable("document_lines", {
 	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 	cessRate: numeric("cess_rate", { precision: 6, scale:  3 }).default('0').notNull(),
 	lineTotalMinor: bigint("line_total_minor", { mode: "number" }).default(0).notNull(),
+	// A purchase line's own cost centre (non-stock lines only); null takes the document's.
+	costCentreId: varchar("cost_centre_id", { length: 40 }),
 }, (table): PgTableExtraConfigValue[] => [
 	uniqueIndex("document_lines_document_id_position_idx").using("btree", table.documentId.asc().nullsLast(), table.position.asc().nullsLast()),
 	index("document_lines_item_id_idx").using("btree", table.itemId.asc().nullsLast()),
@@ -874,6 +882,9 @@ export const parties = pgTable("parties", {
 	tdsSection: varchar("tds_section", { length: 8 }),
 	lowerTdsRate: numeric("lower_tds_rate", { precision: 6, scale:  3 }),
 	lowerTdsValidTill: date("lower_tds_valid_till"),
+	// Sales to this customer collect TCS by default, under this section (s.206C).
+	tcsApplicable: boolean("tcs_applicable").default(false).notNull(),
+	tcsSection: varchar("tcs_section", { length: 20 }),
 	email: varchar({ length: 254 }),
 	phone: varchar({ length: 20 }),
 	currency: char({ length: 3 }).notNull(),
@@ -1199,6 +1210,11 @@ export const payments = pgTable("payments", {
 	advanceTaxCategoryId: varchar("advance_tax_category_id", { length: 40 }),
 	advanceTaxRate: numeric("advance_tax_rate", { precision: 6, scale:  3 }),
 	advancePlaceOfSupply: varchar("advance_place_of_supply", { length: 2 }),
+	// The advance's SAC (or HSN) and cess rate, for GSTR-1 table 11 and the receipt voucher (Rule 50).
+	advanceHsn: varchar("advance_hsn", { length: 8 }),
+	advanceCessRate: numeric("advance_cess_rate", { precision: 6, scale:  3 }),
+	// On money received: TDS the customer deducted from an advance, before any invoice (under tds_section).
+	tdsMinor: bigint("tds_minor", { mode: "number" }).default(0).notNull(),
 	// Money paid back to a customer out of an advance they paid: the receipt it refunds (Rule 51).
 	refundOfPaymentId: varchar("refund_of_payment_id", { length: 40 }),
 	// On money paid: the TDS section of what its allocations kept back, so it goes to that section's payable and 26Q.
@@ -1704,6 +1720,8 @@ export const pincodes = pgTable("pincodes", {
 export const units = pgTable("units", {
 	code: varchar({ length: 10 }).primaryKey().notNull(),
 	name: varchar({ length: 40 }).notNull(),
+	// What a quantity is printed with, like "5 Nos".
+	shortName: varchar("short_name", { length: 10 }),
 	decimals: smallint().default(0).notNull(),
 });
 
@@ -2463,6 +2481,13 @@ export const vouchers = pgTable("vouchers", {
 	lines: jsonb().notNull(),
 	// A TDS challan's deposit details: `{ bsrCode, serial, depositedOn }`, for the challan register and 26Q.
 	challan: jsonb(),
+	// A receipt's payer, when it is a party (for reference; the ledger lines are what post).
+	partyId: varchar("party_id", { length: 40 }),
+	// A GST challan's (PMT-06) deposit: `{ cpin, cin?, brn?, depositedOn, heads: { igst: { tax, interest, penalty, fee, others } … } }` in paise.
+	gstChallan: jsonb("gst_challan"),
+	// A GST set-off (utilization) journal: the registration and return period (MMYYYY) it sets off.
+	gstin: varchar({ length: 15 }),
+	gstPeriod: varchar("gst_period", { length: 6 }),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -2470,6 +2495,7 @@ export const vouchers = pgTable("vouchers", {
 }, (table): PgTableExtraConfigValue[] => [
 	index("vouchers_company_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	uniqueIndex("vouchers_company_id_kind_number_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()),
+	index("vouchers_company_id_gstin_gst_period_idx").using("btree", table.companyId.asc().nullsLast(), table.gstin.asc().nullsLast(), table.gstPeriod.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
@@ -2484,6 +2510,50 @@ export const vouchers = pgTable("vouchers", {
 			columns: [table.createdBy],
 			foreignColumns: [users.id],
 			name: "vouchers_created_by_fkey"
+		}),
+	foreignKey({
+			columns: [table.partyId],
+			foreignColumns: [parties.id],
+			name: "vouchers_party_id_fkey"
+		}),
+]);
+
+/**
+ * A direct credit note (or a supplier's credit note) applied to an open invoice, debit note or bill
+ * of the same party. It is not money: no payment, no GST on advance (RULES 8.13). The target's
+ * `amount_paid_minor` counts it, and the note's credit left is its total less what is applied.
+ */
+export const creditApplications = pgTable("credit_applications", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	noteId: varchar("note_id", { length: 40 }).notNull(),
+	documentId: varchar("document_id", { length: 40 }).notNull(),
+	amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+	date: date().notNull(),
+	createdBy: varchar("created_by", { length: 40 }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	uniqueIndex("credit_applications_note_id_document_id_idx").using("btree", table.noteId.asc().nullsLast(), table.documentId.asc().nullsLast()),
+	index("credit_applications_document_id_idx").using("btree", table.documentId.asc().nullsLast()),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "credit_applications_company_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.noteId],
+			foreignColumns: [documents.id],
+			name: "credit_applications_note_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.documentId],
+			foreignColumns: [documents.id],
+			name: "credit_applications_document_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [users.id],
+			name: "credit_applications_created_by_fkey"
 		}),
 ]);
 

@@ -47,11 +47,15 @@ const TA_LATIN_ALLOWLIST = new RegExp(
     // Keyboard keys, as printed on the key.
     'Enter|Esc',
     // The GST portal's own menu, which is English only ("Profile → Manage API Access").
-    'Profile|Manage|API|Access',
+    'Profile|Manage|API|Access|Returns|Download',
     // A word typed to confirm, exactly as the app checks it.
     'DELETE',
+    // GSTR-1 table codes, as the portal names them.
+    'EXP|CDNR|CDNUR|AT|ATADJ|B2BA|B2CLA|B2CSA|EXPA|CDNRA|CDNURA|B2CL|B2CS|NIL|DOCS|AMEND|A|UIN',
     // The postal code, which Indian forms call a PIN in every language.
     'PIN',
+    // A GST challan's identifiers, as printed on PMT-06.
+    'CPIN|CIN|BRN',
   ].join('|')})$`,
 );
 

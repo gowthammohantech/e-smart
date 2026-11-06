@@ -57,7 +57,13 @@
     "rcmPayableCgst": "CGST payable on reverse charge",
     "rcmPayableSgst": "SGST payable on reverse charge",
     "rcmPayableIgst": "IGST payable on reverse charge",
-    "rcmPayableCess": "CESS payable on reverse charge"
+    "rcmPayableCess": "CESS payable on reverse charge",
+    "tdsReceivableSection": "TDS receivable {{section}}",
+    "gstCashLedgerHead": "GST cash ledger {{head}}",
+    "cessHead": "cess",
+    "gstInterest": "Interest on GST",
+    "gstLateFee": "Late fee on GST returns",
+    "itcReversed": "Input tax credit reversed"
   },
   "group": {
     "capital": "Capital",
@@ -104,7 +110,15 @@
     "creditSide": "Credit (Cr)",
     "openingOnDate": "Opening balance as on a date",
     "openingOnDateHint": "Off: it stands at the start of your books.",
-    "openingDate": "As on"
+    "openingDate": "As on",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "nature": {
+      "asset": "Assets",
+      "liability": "Liabilities",
+      "income": "Income",
+      "expense": "Expenses"
+    }
   },
   "vouchers": {
     "empty": "No vouchers yet",
@@ -115,14 +129,16 @@
       "contra": "Contra",
       "gstJournal": "GST journal",
       "tdsChallan": "TDS challan",
-      "receipt": "Receipt"
+      "receipt": "Receipt",
+      "gstChallan": "GST challan"
     },
     "kindHint": {
       "journal": "Any adjustment: depreciation, provisions, a refund, a correction.",
       "contra": "Money between cash and bank: a deposit, a withdrawal, a transfer.",
       "gstJournal": "Adjustments to the GST ledgers: a credit reversed, interest, a set-off.",
       "tdsChallan": "TDS paid to the government, from the challan.",
-      "receipt": "Money in that isn't from an invoice, into cash or bank."
+      "receipt": "Money in that isn't from an invoice, into cash or bank.",
+      "gstChallan": "GST paid into the portal’s cash ledger (PMT-06), head by head."
     },
     "date": "Date",
     "narration": "Narration",
@@ -314,7 +330,19 @@
     "referencePlaceholder": "Cheque or UTR number",
     "save": "Save receipt",
     "saved": "Receipt saved",
-    "newIncome": "Add \"{{name}}\" as an income"
+    "newIncome": "Add \"{{name}}\" as an income",
+    "party": "Party",
+    "partyPlaceholder": "Optional: a customer, supplier or contact",
+    "attach": "Attach the slip",
+    "attachReady": "Slip ready to attach",
+    "attached_one": "{{count}} file attached",
+    "attached_other": "{{count}} files attached",
+    "attachHint": "A photo of the cheque, deposit slip or letter",
+    "attachments": "Files",
+    "edit": "Edit receipt",
+    "search": "Search number, party or narration",
+    "emptyFiltered": "Nothing matches. Try another period or search.",
+    "adjust": "Adjust advance"
   },
   "integrity": {
     "basis": "Checked as of the last day of the period",
@@ -583,5 +611,50 @@
     "income": "Income",
     "expense": "Expenses",
     "profit": "Profit"
+  },
+  "adjust": {
+    "title": "Adjust advance",
+    "intro": "Apply what a party has paid in advance, or a credit note not raised against an invoice, to what they still owe.",
+    "party": "Party",
+    "pickParty": "Pick a customer or supplier",
+    "customerSide": "As customer",
+    "supplierSide": "As supplier",
+    "noCredit": "No unadjusted advance or credit note",
+    "noOpen": "Nothing is owed on an invoice or note",
+    "emptyHint": "Advances and direct credit notes show here once there is something open to apply them to.",
+    "credits": "Advances and credit notes",
+    "open": "Open invoices and notes",
+    "note": "Credit note",
+    "advance": "Advance received",
+    "advancePaid": "Advance paid",
+    "gst": "GST",
+    "amount": "Apply",
+    "notService": "This invoice has no service on it: GST paid on a service advance should only come back on a service invoice.",
+    "autoNotService": "Some open invoices have no service on them; a service advance applied to one takes its GST back on goods. Choose by hand to avoid that.",
+    "over": "More than is left of it ({{amount}})",
+    "applyChosen": "Apply {{amount}}",
+    "applyAll": "Apply all, oldest first",
+    "applyAllHint": "Or pick an advance above to choose where it goes.",
+    "done": "{{amount}} adjusted",
+    "nothing": "Nothing to adjust",
+    "back": "Back to the document"
+  },
+  "transfer": {
+    "title": "Transfer",
+    "hint": "Move money between your cash and bank accounts: a deposit, a withdrawal or a bank-to-bank transfer. It is posted as a contra voucher.",
+    "from": "From account",
+    "to": "To account",
+    "pickAccount": "Pick a cash or bank account",
+    "amount": "Amount",
+    "referenceHint": "A cheque, UTR or slip number.",
+    "recent": "Recent transfers",
+    "allContras": "All contra vouchers",
+    "none": "No transfers yet.",
+    "save": "Record transfer",
+    "saved": "Transfer recorded",
+    "pickBoth": "Pick both accounts",
+    "same": "Pick two different accounts",
+    "noAmount": "Enter the amount moved",
+    "defaultNarration": "Transfer from {{from}} to {{to}}"
   }
 }

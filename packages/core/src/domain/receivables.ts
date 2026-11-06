@@ -167,6 +167,39 @@ export function statusForOutstanding(
   return partly ? 'partiallyPaid' : 'issued';
 }
 
+/** Credit a party holds (an advance, a direct note) and a document it still owes, for FIFO matching. */
+export type FifoCredit = { id: string; date: string; left: number; currency?: string };
+export type FifoOpen = { id: string; date: string; outstanding: number; currency?: string };
+export type FifoMatch = { creditId: string; documentId: string; amount: number };
+
+/**
+ * Oldest credit first against the oldest document first, same currency only. Credits are taken in
+ * the order given when their dates are equal (so callers can put notes before payments). Pure: the
+ * app and the server both use it, so an adjustment comes out the same on either.
+ */
+export function fifoAllocate(credits: FifoCredit[], open: FifoOpen[]): FifoMatch[] {
+  const docs = open.map((o, i) => ({ ...o, i })).sort((a, b) => a.date.localeCompare(b.date) || a.i - b.i);
+  const left = new Map(docs.map((d) => [d.id, d.outstanding]));
+  const out: FifoMatch[] = [];
+  credits
+    .map((c, i) => ({ ...c, i }))
+    .filter((c) => c.left > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.i - b.i)
+    .forEach((c) => {
+      let remaining = c.left;
+      for (const d of docs) {
+        if (remaining <= 0) break;
+        if (c.currency && d.currency && c.currency !== d.currency) continue;
+        const take = Math.min(remaining, left.get(d.id) ?? 0);
+        if (take <= 0) continue;
+        out.push({ creditId: c.id, documentId: d.id, amount: take });
+        left.set(d.id, (left.get(d.id) ?? 0) - take);
+        remaining -= take;
+      }
+    });
+  return out;
+}
+
 /**
  * Adjust a party's advances (the unallocated part of earlier payments) against
  * its open documents: oldest advance first, oldest document first. Only
@@ -174,31 +207,23 @@ export function statusForOutstanding(
  * their allocations extended and `unallocated` reduced.
  */
 export function allocateAdvances(docs: BusinessDocument[], payments: Payment[]): Payment[] {
-  const open = buildOutstanding(docs, payments).sort((a, b) => a.document.date.localeCompare(b.document.date));
-  const left = new Map(open.map((o) => [o.document.id, o.outstanding.minor]));
+  const open = buildOutstanding(docs, payments);
+  const matches = fifoAllocate(
+    payments.map((p) => ({ id: p.id, date: p.date, left: p.unallocated.minor, currency: p.currency })),
+    open.map((o) => ({ id: o.document.id, date: o.document.date, outstanding: o.outstanding.minor, currency: o.document.currency })),
+  );
   const changed: Payment[] = [];
-
-  [...payments]
-    .filter((p) => p.unallocated.minor > 0)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .forEach((p) => {
-      let remaining = p.unallocated.minor;
-      const allocations = p.allocations.map((a) => ({ ...a }));
-      open.forEach((o) => {
-        if (remaining <= 0 || o.document.currency !== p.currency) return;
-        const take = Math.min(remaining, left.get(o.document.id) ?? 0);
-        if (take <= 0) return;
-        const existing = allocations.find((a) => a.documentId === o.document.id);
-        if (existing) existing.amount = money(existing.amount.minor + take, p.currency);
-        else allocations.push({ documentId: o.document.id, documentNumber: o.document.number, amount: money(take, p.currency) });
-        left.set(o.document.id, (left.get(o.document.id) ?? 0) - take);
-        remaining -= take;
-      });
-      if (remaining !== p.unallocated.minor) {
-        changed.push({ ...p, allocations, unallocated: money(remaining, p.currency) });
-      }
-    });
-
+  for (const p of payments) {
+    const mine = matches.filter((m) => m.creditId === p.id);
+    if (!mine.length) continue;
+    const allocations = p.allocations.map((a) => ({ ...a }));
+    for (const m of mine) {
+      const existing = allocations.find((a) => a.documentId === m.documentId);
+      if (existing) existing.amount = money(existing.amount.minor + m.amount, p.currency);
+      else allocations.push({ documentId: m.documentId, documentNumber: open.find((o) => o.document.id === m.documentId)!.document.number, amount: money(m.amount, p.currency) });
+    }
+    changed.push({ ...p, allocations, unallocated: money(p.unallocated.minor - mine.reduce((a, m) => a + m.amount, 0), p.currency) });
+  }
   return changed;
 }
 

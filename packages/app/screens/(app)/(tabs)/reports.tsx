@@ -30,8 +30,10 @@ type ReportLink = {
 /** Each report's route key, its catalogue entry under `reports:report`, and its icon. */
 const REPORTS: {
   key: string;
-  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'advances' | 'profit' | 'tdsRegister' | 'tdsPayable' | 'tdsReceivable' | 'tds26q' | 'tdsChallans' | 'msmePayables';
+  id: 'salesSummary' | 'purchaseSummary' | 'expenseSummary' | 'receivables' | 'payables' | 'stock' | 'taxSummary' | 'payments' | 'advances' | 'profit' | 'tdsRegister' | 'tdsPayable' | 'tdsReceivable' | 'tds26q' | 'tdsChallans' | 'tcsRegister' | 'tcsPayable' | 'msmePayables';
   icon: ReportLink['icon'];
+  /** Listed under "TDS & TCS" rather than with the rest. */
+  tax?: boolean;
 }[] = [
   { key: 'sales-summary', id: 'salesSummary', icon: 'trending-up' },
   { key: 'purchase-summary', id: 'purchaseSummary', icon: 'cart-outline' },
@@ -43,12 +45,14 @@ const REPORTS: {
   { key: 'payments', id: 'payments', icon: 'cash-sync' },
   { key: 'advances', id: 'advances', icon: 'cash-clock' },
   { key: 'profit', id: 'profit', icon: 'chart-line' },
-  { key: 'tds-register', id: 'tdsRegister', icon: 'bank-minus' },
-  { key: 'tds-payable', id: 'tdsPayable', icon: 'bank-outline' },
-  { key: 'tds-receivable', id: 'tdsReceivable', icon: 'bank-plus' },
-  { key: 'tds-26q', id: 'tds26q', icon: 'file-table-outline' },
-  { key: 'tds-challans', id: 'tdsChallans', icon: 'bank-transfer-out' },
   { key: 'msme-payables', id: 'msmePayables', icon: 'timer-sand' },
+  { key: 'tds-register', id: 'tdsRegister', icon: 'bank-minus', tax: true },
+  { key: 'tds-payable', id: 'tdsPayable', icon: 'bank-outline', tax: true },
+  { key: 'tds-receivable', id: 'tdsReceivable', icon: 'bank-plus', tax: true },
+  { key: 'tds-26q', id: 'tds26q', icon: 'file-table-outline', tax: true },
+  { key: 'tds-challans', id: 'tdsChallans', icon: 'bank-transfer-out', tax: true },
+  { key: 'tcs-register', id: 'tcsRegister', icon: 'cash-plus', tax: true },
+  { key: 'tcs-payable', id: 'tcsPayable', icon: 'cash-lock', tax: true },
 ];
 
 export default function ReportsTab() {
@@ -60,12 +64,18 @@ export default function ReportsTab() {
 
   const canOpen = useCanOpen();
   const full = useModuleSet() === 'full';
-  const reports: ReportLink[] = REPORTS.filter((r) => canOpen(`/reports/${r.key}`)).map((r) => ({
+  const linkOf = (r: (typeof REPORTS)[number]): ReportLink => ({
     key: r.key,
     icon: r.icon,
     label: tr(`reports:report.${r.id}.title`),
     description: tr(`reports:report.${r.id}.description`),
-  }));
+  });
+  const open = REPORTS.filter((r) => canOpen(`/reports/${r.key}`));
+  // TDS and TCS together, under their own heading, so they're found in one place.
+  const groups = [
+    { title: tr('reports:hub.allReports'), reports: open.filter((r) => !r.tax).map(linkOf) },
+    { title: tr('reports:hub.tdsTcs'), reports: open.filter((r) => r.tax).map(linkOf) },
+  ].filter((g) => g.reports.length);
   const range = resolveRange('thisFY');
   // Always 'phone' in the native apps, so the desktop layouts below only ever reach a browser.
   const bp = useBreakpoint();
@@ -99,12 +109,15 @@ export default function ReportsTab() {
 
   // Three to a row on a desktop, two on a tablet, the last row padded so every card keeps the same width.
   const perRow = wide ? 3 : 2;
-  const grid: (ReportLink | null)[][] = [];
-  for (let i = 0; i < reports.length; i += perRow) {
-    const row: (ReportLink | null)[] = reports.slice(i, i + perRow);
-    while (row.length < perRow) row.push(null);
-    grid.push(row);
-  }
+  const gridOf = (reports: ReportLink[]) => {
+    const grid: (ReportLink | null)[][] = [];
+    for (let i = 0; i < reports.length; i += perRow) {
+      const row: (ReportLink | null)[] = reports.slice(i, i + perRow);
+      while (row.length < perRow) row.push(null);
+      grid.push(row);
+    }
+    return grid;
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -194,10 +207,12 @@ export default function ReportsTab() {
           </>
         ) : null}
 
-        <SectionHeader title={tr('reports:hub.allReports')} />
+        {groups.map(({ title, reports }) => (
+          <React.Fragment key={title}>
+        <SectionHeader title={title} />
         {desktop ? (
           <View style={{ gap: t.spacing.md }}>
-            {grid.map((row, ri) => (
+            {gridOf(reports).map((row, ri) => (
               <View key={ri} style={{ flexDirection: 'row', gap: t.spacing.md }}>
                 {row.map((r, i) =>
                   r ? (
@@ -296,6 +311,8 @@ export default function ReportsTab() {
           ))}
         </Card>
         )}
+          </React.Fragment>
+        ))}
       </ScrollView>
     </View>
   );

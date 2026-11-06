@@ -15,6 +15,7 @@ import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { GstRegistrationType, MsmeType, Party, PartyKind } from '@esmart/core/types';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
+import { TCS_SECTIONS, tcsSection } from '@esmart/core/data/tcsSections';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
@@ -107,6 +108,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const [msmeOpen, setMsmeOpen] = useState(false);
   const [tdsSectionCode, setTdsSectionCode] = useState(party?.tdsSection);
   const [tdsOpen, setTdsOpen] = useState(false);
+  const [tcsApplicable, setTcsApplicable] = useState(!!party?.tcsApplicable);
+  const [tcsSectionCode, setTcsSectionCode] = useState(party?.tcsSection);
+  const [tcsOpen, setTcsOpen] = useState(false);
   const [certRate, setCertRate] = useState(party?.lowerTdsCertificate ? String(party.lowerTdsCertificate.rate) : '');
   const [certValidTill, setCertValidTill] = useState(party?.lowerTdsCertificate?.validTill ?? '');
   const [active, setActive] = useState((party?.status ?? 'active') === 'active');
@@ -114,7 +118,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const [stateOpen, setStateOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode' | 'tcsSection'>>({});
 
   // Both cities hang off the one state, so a city left over from the old state goes.
   const changeState = (code: string) => {
@@ -170,6 +174,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     setUdyam('');
     setReverseCharge(false);
     setTdsSectionCode(undefined);
+    setTcsApplicable(false);
+    setTcsSectionCode(undefined);
     setCertRate('');
     setCertValidTill('');
     setErrors({});
@@ -180,7 +186,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
 
   const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode' | 'tcsSection'> = {
       name: required(name, nameLabel),
       email: validEmail(email),
       phone: phone.error(),
@@ -191,6 +197,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
           : undefined),
       country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
       postalCode: validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
+      tcsSection: sellsTo(kind) && tcsApplicable && !tcsSectionCode ? tr('contacts:form.tcsSectionRequired') : undefined,
     };
     setErrors(next);
     if (hasErrors(next)) {
@@ -222,6 +229,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       reverseCharge: buysFrom(kind) && reverseCharge ? true : undefined,
       tdsSection: buysFrom(kind) ? tdsSectionCode : undefined,
       lowerTdsCertificate: buysFrom(kind) && tdsSectionCode && certRate && certValidTill ? { rate: Number(certRate), validTill: certValidTill } : undefined,
+      tcsApplicable: sellsTo(kind) && tcsApplicable ? true : undefined,
+      tcsSection: sellsTo(kind) && tcsApplicable ? tcsSectionCode : undefined,
       email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
@@ -354,6 +363,31 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         ) : null}
       </>
     ) : null;
+  // TCS is collected on sales (s.206C), so only from someone the business sells to.
+  const customerTaxFields = sellsTo(kind) ? (
+    <>
+      <SwitchField
+        label={tr('contacts:form.tcsApplicable')}
+        description={tr('contacts:form.tcsApplicableHint')}
+        value={tcsApplicable}
+        onValueChange={(on) => {
+          setTcsApplicable(on);
+          if (on && !tcsSectionCode) setTcsOpen(true);
+        }}
+      />
+      {tcsApplicable ? (
+        <PickerField
+          label={tr('contacts:form.tcsSection')}
+          value={tcsSectionCode ? `${tcsSection(tcsSectionCode)?.label} · ${tcsSection(tcsSectionCode)?.nature}` : undefined}
+          placeholder={tr('contacts:form.tcsSectionPick')}
+          onPress={() => setTcsOpen(true)}
+          icon="bank-plus"
+          error={errors.tcsSection}
+          required
+        />
+      ) : null}
+    </>
+  ) : null;
   const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
   const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
 
@@ -496,6 +530,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       {creditLimitField}
       {openingBalanceField}
       {panField}
+      {customerTaxFields}
       {supplierTaxFields}
 
       {customFieldsBlock}
@@ -559,6 +594,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       {creditLimitField}
       {openingBalanceField}
       {panField}
+      {customerTaxFields}
       {supplierTaxFields}
     </FormSection>
   );
@@ -692,6 +728,18 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
           options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature }))]}
           value={tdsSectionCode ?? 'none'}
           onSelect={(v) => setTdsSectionCode(v === 'none' ? undefined : v)}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={tcsOpen}
+          onClose={() => setTcsOpen(false)}
+          title={tr('contacts:form.tcsSection')}
+          options={TCS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature }))}
+          value={tcsSectionCode}
+          onSelect={(v) => {
+            setTcsSectionCode(v);
+            setErrors((e) => ({ ...e, tcsSection: undefined }));
+          }}
           searchable={false}
         />
         <SelectSheet

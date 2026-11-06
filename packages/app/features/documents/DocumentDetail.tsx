@@ -31,7 +31,7 @@ import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedg
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { money, type Money } from '@esmart/core/lib/money';
-import { INDIAN_STATES } from '@esmart/core/data/masters';
+import { INDIAN_STATES, unitShortName } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
@@ -47,7 +47,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { useDocumentRecord, useEwayBillRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
+import { queryClient, useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
@@ -60,11 +60,14 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
-import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
+import { documentPdf, paymentLink, pdfFileName, pdfLink, removeCreditApplication, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
 import { RecurrenceSheet } from './RecurrenceSheet';
 import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
+import { useItcBreakup } from './itcBreakup';
+import { useFixedAssets } from '../../remote/fixedAssets';
+import { calculateLine } from '@esmart/core/domain/lineCalc';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   useRefreshOnFocus();
@@ -86,7 +89,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   useDocumentRecord(doc.sourceDocumentId);
   const sourceDoc = useDocument(doc.sourceDocumentId);
   // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
-  const record = useDocumentRecord(doc.id).data;
+  const recordQuery = useDocumentRecord(doc.id);
+  const record = recordQuery.data;
   const allPayments = usePayments();
   // Its current e-way bill, fetched into the store: the device keeps only the bills it has seen.
   useEwayBillRecord(doc.compliance?.ewayBillId);
@@ -103,6 +107,17 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const duplicateDocument = useAppStore((s) => s.duplicateDocument);
   const convertDocument = useAppStore((s) => s.convertDocument);
   const allDocuments = useAppStore((s) => s.documents);
+
+  // Input tax credit by bucket on a purchase; and the capital goods on a finalised bill, for the asset register.
+  const itcBreakup = useItcBreakup(doc, baseCurrency);
+  const capitalCost = useMemo(() => {
+    if (doc.kind !== 'purchaseBill' || !isFinalized(doc.status) || doc.status === 'cancelled') return 0;
+    const rate = doc.currency === baseCurrency ? 1 : doc.exchangeRate || 1;
+    // As the bill posted it to Plant and machinery (ledger/postings.ts): the lines' taxable value, in base currency.
+    return Math.round(doc.lines.filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement).reduce((a, l) => a + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor, 0) * rate);
+  }, [doc, baseCurrency]);
+  const assets = useFixedAssets(undefined, capitalCost > 0).data;
+  const registered = !assets || assets.some((a) => a.sourceDocumentId === doc.id);
 
   const [actionsOpen, setActionsOpen] = useState(false);
   const [recurrenceOpen, setRecurrenceOpen] = useState(false);
@@ -149,6 +164,10 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
+  // Advances and direct notes the party holds, which the adjustment entry can apply to this document.
+  const partyAdvance = (usePartyRecord(doc.partyId).data as { advance?: Money } | undefined)?.advance;
+  const canAdjust = outstanding.minor > 0 && isFinalized(doc.status) && (partyAdvance?.minor ?? 0) > 0 && ['invoice', 'debitNote', 'purchaseBill', 'supplierDebitNote'].includes(doc.kind);
+  const adjustRoute = `/(app)/receipts/adjust?partyId=${doc.partyId}&documentId=${doc.id}${['purchaseBill', 'supplierDebitNote'].includes(doc.kind) ? '&side=supplier' : ''}`;
 
   const customFields = useAppStore((s) => s.customFields);
   const documentHtml = () =>
@@ -296,7 +315,7 @@ ${url}`;
   // document reads as finalised, and drop the flag so a reload or Back doesn't send again.
   const { send: sendParam } = useLocalSearchParams<{ send?: string }>();
   const sentFromEditor = useRef(false);
-  const sendNow = useRef(sendVia);
+  const sendNow = useRef<typeof sendVia | null>(null);
   // Kept current after each render, as the editor does for its finalise shortcut.
   useEffect(() => {
     sendNow.current = sendVia;
@@ -305,7 +324,7 @@ ${url}`;
     if (sendParam !== 'email' || sentFromEditor.current || !isFinalized(doc.status)) return;
     sentFromEditor.current = true;
     router.setParams({ send: undefined });
-    sendNow.current('email');
+    sendNow.current?.('email');
   }, [sendParam, doc.status, router]);
 
   const convert = async (target: DocumentKind) => {
@@ -514,6 +533,15 @@ ${url}`;
               fullWidth
             />
           ) : null}
+          {canAdjust ? (
+            <Button
+              title={tr('sales:detail.adjustAdvance', { amount: formatMoney(partyAdvance!) })}
+              icon="swap-horizontal"
+              variant="secondary"
+              onPress={() => router.push(adjustRoute as never)}
+              fullWidth
+            />
+          ) : null}
         </Card>
       ) : null}
     </>
@@ -539,7 +567,7 @@ ${url}`;
                 {line.name}
               </Text>
               <Text variant="caption" tone="muted">
-                {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
+                {formatQty(line.quantity)} {unitShortName(line.unit)} × {formatMoney(line.unitPrice)}
                 {line.discountValue > 0
                   ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, doc.currency))}`
                   : ''}
@@ -566,8 +594,42 @@ ${url}`;
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}
-          tds={doc.tds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount } : undefined}
+          tds={
+            doc.tds
+              ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount }
+              : doc.tdsExpected
+                ? { label: tr('sales:tds.expectedLabel', { section: tdsSection(doc.tdsExpected.section)?.label ?? doc.tdsExpected.section, rate: formatPercent(doc.tdsExpected.rate) }), amount: doc.tdsExpected.amount, netLabel: tr('sales:tds.netReceivable') }
+                : undefined
+          }
+          itc={itcBreakup}
         />
+        {/* Capital goods bought on this bill: their cost is in Plant and machinery; the register adds depreciation. */}
+        {capitalCost > 0 && !registered ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, marginTop: t.spacing.sm, flexWrap: 'wrap' }}>
+            <Text variant="caption" tone="muted" style={{ flex: 1, minWidth: 180 }}>
+              {tr('purchases:asset.prompt', { amount: formatMoney(money(capitalCost, baseCurrency)) })}
+            </Text>
+            <Button
+              title={tr('purchases:asset.add')}
+              variant="secondary"
+              size="sm"
+              icon="office-building-plus-outline"
+              onPress={() =>
+                router.push({
+                  pathname: '/(app)/books/fixed-assets/new',
+                  params: {
+                    sourceDocumentId: doc.id,
+                    name: doc.lines.filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement).map((l) => l.name).join(', ').slice(0, 200),
+                    cost: String(capitalCost),
+                    acquiredOn: doc.date,
+                    branchId: doc.branchId,
+                    notes: tr('purchases:asset.fromBill', { number: doc.supplierDocNumber ? `${doc.number} (${doc.supplierDocNumber})` : doc.number }),
+                  },
+                } as never)
+              }
+            />
+          </View>
+        ) : null}
         {doc.selfInvoiceNumber ? (
           <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm }}>
             {tr('purchases:tds.selfInvoice', { number: doc.selfInvoiceNumber })}
@@ -581,8 +643,71 @@ ${url}`;
       </Card>
     </>
   );
+  // An issued invoice may be edited in full while it is the latest of its series and nothing stands on
+  // it (RULES 6.23): the server says so. When it can't for a reason other than a later invoice, the
+  // reason is the hint.
+  const editable = !isFinalized(doc.status) || (record?.editable ?? doc.editable) === true;
+  type HintedBlock = 'periodLocked' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
+  const editBlock = (record?.editBlock ?? doc.editBlock) as string | undefined;
+  const hinted = (b: string | undefined): b is HintedBlock => !!b && !['notLatest', 'notFinal', 'notInvoice'].includes(b);
+  const editHint: string | undefined = !editable && doc.kind === 'invoice' && doc.status !== 'cancelled' && hinted(editBlock) ? tr(`sales:detail.editBlock.${editBlock}`) : undefined;
+  const openEditor = () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never);
+
+  // Direct credit notes applied to it (or, on a note, where it was applied), each of which can be undone.
+  const applications = record?.creditApplications ?? [];
+  const undoApplication = (applicationId: string, label: string) =>
+    runRemote(
+      async () => {
+        await removeCreditApplication(doc.companyId, applicationId);
+        await recordQuery.refetch();
+        void queryClient.invalidateQueries({ queryKey: ['document'] });
+      },
+      { loading: tr('sales:detail.creditApplications.undoing'), success: tr('sales:detail.creditApplications.undone', { label }), icon: 'undo-variant' },
+    );
+
   const paymentsSection = (
     <>
+      {applications.length > 0 ? (
+        <>
+          <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.creditApplications.title')}</Text>
+          <Card padded={false}>
+            {applications.map((a, i) => {
+              const other = a.noteId === doc.id ? a.documentNumber : a.noteNumber;
+              return (
+                <View
+                  key={a.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: t.spacing.md,
+                    padding: t.spacing.lg,
+                    borderBottomWidth: i < applications.length - 1 ? 0.5 : 0,
+                    borderBottomColor: t.c.line,
+                  }}
+                >
+                  <Icon name="file-document-minus-outline" size={20} color={t.c.primary} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text variant="body" weight="600">
+                      {other}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {formatDate(a.date)} · {formatMoney(a.amount as Money)}
+                    </Text>
+                  </View>
+                  <Button
+                    title={tr('sales:detail.creditApplications.undo')}
+                    variant="ghost"
+                    size="sm"
+                    icon="undo-variant"
+                    onPress={() => undoApplication(a.id, other)}
+                    disabled={busy}
+                  />
+                </View>
+              );
+            })}
+          </Card>
+        </>
+      ) : null}
       {/* Payments */}
       {relatedPayments.length > 0 ? (
         <>
@@ -682,7 +807,7 @@ ${url}`;
               </View>
             ),
           },
-          { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${line.unit}`}</Cell> },
+          { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${unitShortName(line.unit)}`}</Cell> },
           { key: 'rate', header: tr('sales:detail.rate'), width: 130, align: 'right', render: (line) => <Cell mono>{formatMoney(line.unitPrice)}</Cell> },
           {
             key: 'discount',
@@ -720,13 +845,10 @@ ${url}`;
 
   const desktopActions = (
     <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-      {!isFinalized(doc.status) ? (
-        <Button
-          title={tr('sales:detail.edit')}
-          variant="ghost"
-          icon="pencil-outline"
-          onPress={() => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never)}
-        />
+      {editable ? (
+        <Button title={tr('sales:detail.edit')} variant="ghost" icon="pencil-outline" onPress={openEditor} />
+      ) : editHint ? (
+        <Button title={tr('sales:detail.edit')} variant="ghost" icon="pencil-off-outline" tooltip={editHint} onPress={() => toast.show(editHint, 'info')} />
       ) : null}
       <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
       {!isFinalized(doc.status) ? (
@@ -836,6 +958,7 @@ ${url}`;
 
       {/* Action sheet */}
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>
+        {/* eslint-disable-next-line react-hooks/refs -- these onPress handlers read remoteBusy.current only when tapped, never while rendering */}
         {[
           ...(isFinalized(doc.status)
             ? [
@@ -860,8 +983,13 @@ ${url}`;
                             icon: 'credit-card-outline',
                           }) }]
                   : []),
+                ...(editable
+                  ? [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]
+                  : editHint
+                    ? [{ label: tr('sales:detail.edit'), icon: 'pencil-off-outline' as const, onPress: () => toast.show(editHint, 'info') }]
+                    : []),
               ]
-            : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
+            : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]),
           {
             label: doc.kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
             icon: 'cash-plus' as const,

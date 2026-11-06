@@ -179,6 +179,10 @@ export type Party = {
   tdsSection?: string;
   /** A lower or nil deduction certificate they hold (s.197). */
   lowerTdsCertificate?: { rate: number; validTill: string };
+  /** Sales to this customer collect TCS (s.206C) by default, under `tcsSection`. */
+  tcsApplicable?: boolean;
+  /** The TCS section their invoices fall under by default (a TCS_SECTIONS code). */
+  tcsSection?: string;
   email?: string;
   phone?: string;
   currency: string;
@@ -258,7 +262,7 @@ export type Item = {
   createdAt: string;
 };
 
-export type Unit = { id: string; code: string; name: string; decimals: number };
+export type Unit = { id: string; code: string; name: string; shortName?: string | null; decimals: number };
 
 /* ------------------------------------------------------------------ */
 /* Tax engine (FRD 15)                                                 */
@@ -389,6 +393,8 @@ export type DocumentLine = {
   gst?: GstFlags;
   /** A reimbursement line: the billable expense it recovers from the customer. */
   expenseId?: string;
+  /** On a purchase: this non-stock line's own cost centre; absent takes the document's. */
+  costCentreId?: string;
 };
 
 export type DocumentTotals = {
@@ -457,12 +463,32 @@ export type BusinessDocument = {
   sourceDocumentId?: string;
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
-  /** The TDS section asked for on a supplier's bill: a code, `none`, or unset for the supplier's own. */
+  /**
+   * A direct note's GST treatment (RULES 6.24): `withGst` (s.34, the default) or `noGst`, a financial
+   * or commercial note with no tax, posted to discount and left out of GSTR-1 and GSTR-3B.
+   */
+  noteGst?: 'withGst' | 'noGst';
+  /** A direct note with GST: the original invoice or bill it adjusts (GSTR-1 CDNR/CDNUR, the s.34 deadline). */
+  originalNumber?: string;
+  originalDate?: string;
+  /** On an invoice from the server: whether it can be edited in full, and why not (RULES 6.23). */
+  editable?: boolean;
+  editBlock?: string;
+  /** The TDS section asked for on a supplier's bill (or, on an invoice, the customer's): a code, `none`, or unset for the party's own. */
   tdsSection?: string;
   /** TDS the business deducted on a supplier's bill: what's paid them is the total less this. */
   tds?: { section: string; rate: number; amount: Money };
+  /**
+   * On an invoice: TDS the customer is expected to deduct (on the taxable value, CBDT circular 23/2017).
+   * Not posted and not settled: the receipt allocated to it records what was deducted. The total is unchanged.
+   */
+  tdsExpected?: { section: string; rate: number; amount: Money };
+  /** On an invoice: the rate asked for the customer's TDS; unset takes the section's. */
+  tdsRate?: number;
   /** TCS collected on a sale (s.206C): its section and rate; the amount is `totals.tcs`. */
   tcs?: { section: string; rate: number };
+  /** The TCS section asked for on an invoice, or `none`; unset on a new invoice takes the customer's. */
+  tcsSection?: string;
   /** The self-invoice raised for a reverse-charge purchase from an unregistered supplier (Rule 46(f)). */
   selfInvoiceNumber?: string;
   /** Input tax credit reversed because the bill went unpaid for 180 days, and claimed again once paid. */
@@ -806,7 +832,9 @@ export type Payment = {
    * An advance received for services carries GST when received (s.13(2)): the rate and place of
    * supply it is taxed at. Advances for goods carry none (notification 66/2017).
    */
-  advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string };
+  advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number };
+  /** On money received: TDS the customer deducted from an advance, before any invoice (under `tdsSection`). */
+  advanceTds?: Money;
   /** On money paid: the TDS section of what its allocations kept back (26Q). */
   tdsSection?: string;
   /** Money paid back to a customer: the advance receipt it refunds (CGST Rule 51). */
@@ -1094,12 +1122,17 @@ export type CostCentre = {
 
 /** Journal: any adjustment. Contra: money between cash and bank. GST journal: adjustments to the GST ledgers. TDS challan: TDS paid to the government. */
 /** `receipt`: money in that isn't from a customer's invoice: interest, rent, a refund, capital brought in. */
-export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt';
+export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt' | 'gstChallan';
 /** A draft is kept but not in the books (no number, no postings) until it is posted. */
 export type VoucherStatus = 'draft' | 'posted';
 
 /** Where a TDS challan was deposited, as printed on it (ITNS 281). */
 export type TdsChallan = { bsrCode: string; serial: string; depositedOn: string };
+
+/** A GST challan head's minor heads, in paise, as PMT-06 splits them. */
+export type GstChallanHead = { tax: number; interest: number; penalty: number; fee: number; others: number };
+/** A GST deposit (PMT-06): its CPIN, the bank's CIN or BRN, the day paid, and what was paid under each head. */
+export type GstChallan = { cpin: string; cin?: string; brn?: string; depositedOn: string; heads: Partial<Record<'igst' | 'cgst' | 'sgst' | 'cess', GstChallanHead>> };
 
 export type VoucherLine = {
   /** An account key: `sys:sales`, `party:<id>`, `pay:<id>`, `exp:<id>`, `acc:<id>`, `sys:tdsPayable:194C`. */
@@ -1136,7 +1169,16 @@ export type Voucher = {
   reference?: string;
   /** A TDS challan's deposit details. */
   challan?: TdsChallan;
+  /** A GST challan's (PMT-06) deposit details. */
+  gstChallan?: GstChallan;
+  /** A GST set-off (utilization) journal: the GSTIN and return period (MMYYYY) it sets off. */
+  gstin?: string;
+  gstPeriod?: string;
   lines: VoucherLine[];
+  /** On a receipt: the party it came from, for reference (the lines post). */
+  partyId?: string;
+  /** Files kept with it (a receipt's slip). */
+  attachmentIds?: string[];
   createdBy: string;
   createdAt: string;
   updatedAt?: string;

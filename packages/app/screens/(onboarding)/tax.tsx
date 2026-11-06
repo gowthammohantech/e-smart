@@ -9,17 +9,46 @@ import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
-import { COUNTRIES } from '@esmart/core/data/masters';
+import { COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
+import { useSignOut } from '../../features/session/useSignOut';
+import { useGstinLookup, type GstinDetails } from '../../features/gstin/useGstinLookup';
 import { validGstin } from '@esmart/core/lib/validators';
 
 export default function TaxStep() {
   const t = useTheme();
   const { t: tr } = useTranslation(['onboarding']);
   const router = useRouter();
-  const { draft, set } = useOnboardingStore();
+  const { draft, set, setAddress } = useOnboardingStore();
+  const signOut = useSignOut();
   const [error, setError] = useState<string | undefined>();
   const country = COUNTRIES.find((c) => c.code === draft.country);
   const isGst = country?.regime === 'GST';
+
+  /** The GSTIN's registered details become the business step's starting point; it can still edit them. */
+  const fillFromPortal = (d: GstinDetails) => {
+    const patch: Partial<typeof draft> = { prefilledFromGstin: draft.taxIdentifier };
+    if (d.legalName) patch.legalName = d.legalName;
+    const name = d.tradeName ?? d.legalName;
+    if (name) patch.name = name;
+    set(patch);
+    const a = d.address;
+    if (!a) return;
+    const street = [a.line1, a.line2].filter(Boolean).join(', ');
+    const code = a.stateCode ?? draft.taxIdentifier.slice(0, 2);
+    const state = INDIAN_STATES.find((st) => st.code === code);
+    setAddress({
+      ...(street ? { line1: street } : {}),
+      ...(state ? { stateCode: state.code, state: state.name } : {}),
+      ...(a.city ? { city: a.city } : {}),
+      ...(a.postalCode ? { postalCode: a.postalCode } : {}),
+    });
+  };
+  const gstinLookup = useGstinLookup({
+    gstin: draft.taxIdentifier,
+    opened: draft.prefilledFromGstin,
+    enabled: draft.taxRegistered && isGst && draft.country === 'IN',
+    fill: fillFromPortal,
+  });
 
   const next = () => {
     if (draft.taxRegistered && isGst && draft.country === 'IN') {
@@ -41,6 +70,7 @@ export default function TaxStep() {
       currentStep={stepIndex('tax', draft.plan)}
       onPrimary={next}
       onSkip={() => router.push(nextStepRoute('tax', draft.plan))}
+      onSignOut={signOut}
     >
       <SwitchField
         label={tr('onboarding:tax.registeredFor', { regime: country?.regime === 'VAT' ? 'VAT' : 'GST' })}
@@ -62,7 +92,8 @@ export default function TaxStep() {
             autoCapitalize="characters"
             icon="card-account-details-outline"
             error={error}
-            hint={draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined}
+            hint={gstinLookup.hint ?? (draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined)}
+            suffix={gstinLookup.suffix}
           />
 
           {isGst && draft.country === 'IN' ? (

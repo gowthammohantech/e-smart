@@ -5,7 +5,7 @@ import { defineHandlers } from '../../context';
 import { ApiError } from '../../http/errors';
 import { recordChange } from '../../lib/audit';
 import { encrypt } from '../../lib/crypto';
-import { claimMatched, decide, fetchGstr2b, reconciliation } from './gstr2b';
+import { claimMatched, decide, fetchGstr2b, importGstr2b, reconciliation } from './gstr2b';
 import { assertCompanyGstin, companyGstins, portalContext, returnsFailure, sessionWire } from './portal';
 
 const S = schema.gstPortalSessions;
@@ -115,6 +115,15 @@ export const gstr2bHandlers = defineHandlers({
     await assertCompanyGstin(ctx.db, ctx.company, gstin);
     const r = await fetchGstr2b(ctx.db, ctx.deps, ctx.company, ctx.user.id, gstin, period);
     if (!r.generated) throw new ApiError(409, 'GSTR2B_NOT_GENERATED', `GSTN hasn't made GSTR-2B for ${period.slice(0, 2)}/${period.slice(2)} yet; it usually comes on the 14th of the next month`);
+    return reconciliation(ctx.db, ctx.company, gstin, period);
+  },
+
+  /** The 2B file a person downloaded from the portal themselves: no portal session needed. */
+  async importGstr2b(ctx) {
+    const { gstin, period, fileName, contentBase64 } = ctx.body;
+    await assertCompanyGstin(ctx.db, ctx.company, gstin);
+    const { lines } = await importGstr2b(ctx.db, ctx.company, ctx.user.id, gstin, period, fileName, contentBase64, ctx.now);
+    await recordChange(ctx.db, ctx.user, { companyId: ctx.company.id, action: `imported the GSTR-2B file for ${period}`, entityType: 'company', entityId: ctx.company.id, entityLabel: gstin, version: ctx.company.version, after: { fileName, lines } });
     return reconciliation(ctx.db, ctx.company, gstin, period);
   },
 

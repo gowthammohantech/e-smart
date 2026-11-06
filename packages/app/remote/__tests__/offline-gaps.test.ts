@@ -446,6 +446,16 @@ describe('entries that depend on each other', () => {
     expect(copy.status).toBe('requested');
   });
 
+  it('a note against some of an invoice\'s lines copies only those, and sends them to the server', () => {
+    const source = actions().documents.find((d) => d.kind === 'invoice' && d.status !== 'draft' && d.status !== 'cancelled' && d.lines.length > 1)!;
+    const keep = [source.lines[1].id];
+    const id = actions().convertDocument(source.id, 'creditNote', keep);
+    const copy = actions().documents.find((d) => d.id === id)!;
+    expect(copy.lines.map((l) => l.name)).toEqual([source.lines[1].name]);
+    const convert = queue().find((e) => e.path.endsWith('/convert'))!;
+    expect(convert.body).toMatchObject({ targetKind: 'creditNote', lineIds: keep });
+  });
+
   it('B2: keeps the chosen numbering when a pending company is edited', () => {
     const companyId = actions().createCompany({ ...actions().companies[0], name: 'New Co' } as never);
     const series = actions().numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice')!;

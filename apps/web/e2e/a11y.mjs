@@ -63,8 +63,7 @@ async function check(label, page) {
 }
 
 for (const theme of ['light', 'dark']) {
-  // The served page only runs its own scripts (CSP script-src 'self'); axe goes in as an inline script.
-  const ctx = await device(b, undefined, { bypassCSP: true });
+  const ctx = await device(b);
   await ctx.addInitScript((mode) => {
     localStorage.setItem('ebs.ui.v1', JSON.stringify({ state: { themeMode: mode, language: 'en' }, version: 2 }));
   }, theme);

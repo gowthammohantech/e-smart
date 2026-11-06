@@ -11,7 +11,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { Item, ItemType } from '@esmart/core/types';
-import { UNITS, unitsFor } from '@esmart/core/data/masters';
+import { unitLabel, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { formatPercent } from '@esmart/core/lib/format';
 import { uid } from '@esmart/core/lib/id';
@@ -47,6 +47,8 @@ export function ItemForm({ item }: { item?: Item }) {
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   // Without the stock module a new item starts untracked; an existing item keeps its setting.
   const hasInventory = useHasModule('inventory');
+  // SKU, barcode, category and brand are retail fields a business can switch off; the server still gives a SKU.
+  const hasPos = useHasModule('pos');
 
   // A new one starts as goods or a service from ?type= (Items & services passes its open tab).
   const params = useLocalSearchParams<{ type?: string; from?: string }>();
@@ -186,18 +188,24 @@ export function ItemForm({ item }: { item?: Item }) {
           </FieldShell>
 
           <TextField id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
-          <TextField
-            label={tr('inventory:form.sku')}
-            value={sku}
-            onChangeText={(v) => setSku(v.toUpperCase())}
-            placeholder={tr('inventory:form.skuHint')}
-            autoCapitalize="characters"
-            icon="barcode"
-            error={errors.sku}
-          />
+          {hasPos ? (
+            <TextField
+              label={tr('inventory:form.sku')}
+              value={sku}
+              onChangeText={(v) => setSku(v.toUpperCase())}
+              placeholder={tr('inventory:form.skuHint')}
+              autoCapitalize="characters"
+              icon="barcode"
+              error={errors.sku}
+            />
+          ) : null}
           <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
-          <PickerField label={tr('inventory:form.category')} value={itemCategories.find((c) => c.id === categoryId)?.name ?? tr('inventory:form.none')} onPress={() => setCategoryOpen(true)} icon="tag-outline" />
-          <PickerField label={tr('inventory:form.brand')} value={brands.find((b) => b.id === brandId)?.name ?? tr('inventory:form.none')} onPress={() => setBrandOpen(true)} icon="star-circle-outline" />
+          {hasPos ? (
+            <>
+              <PickerField label={tr('inventory:form.category')} value={itemCategories.find((c) => c.id === categoryId)?.name ?? tr('inventory:form.none')} onPress={() => setCategoryOpen(true)} icon="tag-outline" />
+              <PickerField label={tr('inventory:form.brand')} value={brands.find((b) => b.id === brandId)?.name ?? tr('inventory:form.none')} onPress={() => setBrandOpen(true)} icon="star-circle-outline" />
+            </>
+          ) : null}
           <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} />
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
@@ -205,7 +213,7 @@ export function ItemForm({ item }: { item?: Item }) {
             <AmountField label={tr('inventory:form.purchasePrice')} value={purchasePrice} onChangeValue={setPurchasePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
           </View>
 
-          <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" disabled={type === 'service'} hint={type === 'service' ? tr('inventory:form.serviceUnitHint') : undefined} />
+          <PickerField label={tr('inventory:form.unit')} value={unitLabel(unit)} onPress={() => setUnitOpen(true)} icon="ruler" disabled={type === 'service'} hint={type === 'service' ? tr('inventory:form.serviceUnitHint') : undefined} />
           <PickerField
             label={tr('inventory:form.taxRate')}
             value={category ? `${category.name} (${formatPercent(category.rate)})` : tr('inventory:form.select')}
@@ -227,7 +235,7 @@ export function ItemForm({ item }: { item?: Item }) {
 
           {type === 'goods' ? (
             <>
-              <TextField label={tr('inventory:form.barcode')} value={barcode} onChangeText={setBarcode} placeholder={tr('inventory:form.barcodePlaceholder')} icon="barcode-scan" />
+              {hasPos ? <TextField label={tr('inventory:form.barcode')} value={barcode} onChangeText={setBarcode} placeholder={tr('inventory:form.barcodePlaceholder')} icon="barcode-scan" /> : null}
               {hasInventory ? (
               <SwitchField
                 label={tr('inventory:form.trackStock')}
@@ -288,7 +296,7 @@ export function ItemForm({ item }: { item?: Item }) {
           visible={unitOpen}
           onClose={() => setUnitOpen(false)}
           title={tr('inventory:form.unit')}
-          options={unitsFor(type).map((u) => ({ value: u.code, label: u.name, trailing: u.code }))}
+          options={unitsFor(type).map((u) => ({ value: u.code, label: u.name, trailing: u.shortName ?? u.code }))}
           value={unit}
           onSelect={setUnit}
         />

@@ -82,7 +82,7 @@ Entries your plan can't open are hidden. For example, Payables, Payments made an
   - **↑↓** to move, **Enter** to open, **Esc** to close.
   - The palette also lists **Quick actions** (New invoice, Receive payment, …) and **Pages**.
 
-**Rules & gotchas:** Recent searches are remembered. Clear them with **Clear history**. Search looks only in the business you are in.
+**Rules & gotchas:** Searches are not remembered. Search looks only in the business you are in.
 
 ### 3.6 Notifications
 

@@ -26,11 +26,11 @@ function changed() {
   for (const key of [fixedAssetKeys.all(c), ['books', c], ['reports', c]]) void queryClient.invalidateQueries({ queryKey: key });
 }
 
-export function useFixedAssets(status?: 'active' | 'disposed') {
+export function useFixedAssets(status?: 'active' | 'disposed', enabled = true) {
   const c = useAppStore((s) => s.activeCompanyId);
   return useQuery({
     queryKey: fixedAssetKeys.list(c, status),
-    enabled: !!c,
+    enabled: !!c && enabled,
     placeholderData: keepPreviousData,
     queryFn: async () => (await api.GET('/companies/{companyId}/fixed-assets', { params: { path: { companyId: c }, query: { status } } })).data!.data,
   });

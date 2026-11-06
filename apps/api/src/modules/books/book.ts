@@ -102,6 +102,9 @@ export async function loadVouchers(s: Pick<Scope, 'db' | 'company' | 'to'>, kind
     narration: v.narration ?? undefined,
     reference: v.reference ?? undefined,
     challan: (v.challan as Voucher['challan']) ?? undefined,
+    gstChallan: (v.gstChallan as Voucher['gstChallan']) ?? undefined,
+    gstin: v.gstin ?? undefined,
+    gstPeriod: v.gstPeriod ?? undefined,
     // A line's narration and cost centre come with it: profit by centre splits a voucher by line (RULES 6.7).
     lines: (v.lines as { account: string; debitMinor: number; creditMinor: number; narration?: string; costCentreId?: string }[]).map((l) => ({
       account: l.account,

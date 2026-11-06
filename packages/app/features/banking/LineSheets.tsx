@@ -102,10 +102,9 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
   );
   if (!line) return null;
   const amount = Math.abs(line.amount.minor);
-  // Each ticked document takes what it's owed from what the earlier ones left.
   const allocations = docs.reduce<{ documentId: string; amountMinor: number }[]>((acc, d) => {
-    const left = amount - acc.reduce((sum, a) => sum + a.amountMinor, 0);
-    acc.push({ documentId: d.id, amountMinor: unticked.has(d.id) ? 0 : Math.min(left, d.outstanding!.minor) });
+    const used = acc.reduce((sum, a) => sum + a.amountMinor, 0);
+    acc.push({ documentId: d.id, amountMinor: unticked.has(d.id) ? 0 : Math.min(amount - used, d.outstanding!.minor) });
     return acc;
   }, []);
   const left = amount - allocations.reduce((sum, a) => sum + a.amountMinor, 0);

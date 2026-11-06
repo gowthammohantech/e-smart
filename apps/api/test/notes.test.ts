@@ -75,7 +75,7 @@ describe('credit and debit notes', () => {
     const orphan = await t.post(`${m.c}/documents`, note(m, 'creditNote', '', 1000, { sourceDocumentId: undefined, noteReason: undefined }), { token: m.token });
     expect(orphan.status).toBe(422);
     expect(orphan.body.issues[0].field).toBe('noteReason');
-    const direct = await t.post(`${m.c}/documents`, note(m, 'creditNote', '', 100000, { sourceDocumentId: undefined, noteReason: 'discount' }), { token: m.token });
+    const direct = await t.post(`${m.c}/documents`, note(m, 'creditNote', '', 100000, { sourceDocumentId: undefined, noteReason: 'discount', originalNumber: 'INV/26-27/0007', originalDate: '2026-08-01' }), { token: m.token });
     expect(direct.status).toBe(201);
     expect(direct.body).toMatchObject({ kind: 'creditNote', status: 'issued', number: 'CN/26-27/0001' });
     // With no invoice to take it off, the credit waits on the party, like an advance.
@@ -139,6 +139,64 @@ describe('credit and debit notes', () => {
     const notes = json.body.cdnr[0].nt.map((n: { ntty: string; val: number }) => [n.ntty, n.val]);
     expect(notes).toEqual(expect.arrayContaining([['C', 118], ['D', 59]]));
     expect(json.body.doc_issue.doc_det.map((d: { doc_num: number }) => d.doc_num)).toEqual([1, 4, 5]);
+  });
+});
+
+describe('direct notes: with GST (s.34) or a financial note without (RULES 6.24)', () => {
+  const direct = (m: Money, kind: string, minor: number, over: Record<string, unknown> = {}) => note(m, kind, '', minor, { sourceDocumentId: undefined, ...over });
+
+  it('with GST: needs the original invoice number and date, keeps the s.34 deadline from it, and reports them', async () => {
+    const m = await moneySetup(t);
+    const bare = await t.post(`${m.c}/documents`, direct(m, 'creditNote', 10000, { partyId: m.bengaluru.id }), { token: m.token });
+    expect(bare.status).toBe(422);
+    expect(bare.body.issues.map((i: { field: string }) => i.field).sort()).toEqual(['originalDate', 'originalNumber']);
+
+    const late = await t.post(`${m.c}/documents`, direct(m, 'creditNote', 10000, { partyId: m.bengaluru.id, originalNumber: 'INV/24-25/0042', originalDate: '2025-03-10' }), { token: m.token });
+    expect(late.status).toBe(422);
+    expect(late.body.code).toBe('NOTE_TIME_BARRED');
+
+    const ok = await t.post(`${m.c}/documents`, direct(m, 'creditNote', 10000, { partyId: m.bengaluru.id, originalNumber: 'INV/25-26/0042', originalDate: '2025-06-10' }), { token: m.token });
+    expect(ok.status).toBe(201);
+    expect(ok.body).toMatchObject({ noteGst: 'withGst', originalNumber: 'INV/25-26/0042', originalDate: '2025-06-10' });
+    expect(ok.body.totals.totalTax.minor).toBe(1800);
+    const gstr1 = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '092026' } });
+    expect(gstr1.status).toBe(200);
+    expect(gstr1.body.cdnr).toEqual([expect.objectContaining({ number: ok.body.number, originalNumber: 'INV/25-26/0042', originalDate: '2025-06-10' })]);
+  });
+
+  it('without GST: no tax on any line, posted to discount allowed, out of GSTR-1', async () => {
+    const m = await moneySetup(t);
+    const res = await t.post(`${m.c}/documents`, direct(m, 'creditNote', 50000, { partyId: m.bengaluru.id, noteGst: 'noGst' }), { token: m.token });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ noteGst: 'noGst', totals: { totalTax: inr(0), grandTotal: inr(50000) } });
+    expect(res.body.originalNumber).toBeUndefined();
+    expect(res.body.lines[0].gst).toMatchObject({ supplyType: 'nonGst' });
+
+    const tb = await t.get(`${m.c}/reports/trial-balance`, { token: m.token, query: { from: '2026-04-01', to: '2027-03-31' } });
+    const row = (account: string) => tb.body.rows.find((r: { account: string }) => r.account === account);
+    expect(row('sys:discountAllowed').closing.minor).toBe(50000);
+    expect(row('sys:sales')).toBeUndefined();
+    expect(row(`party:${m.bengaluru.id}`).closing.minor).toBe(-50000);
+
+    const gstr1 = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '092026' } });
+    expect(gstr1.body.cdnr).toEqual([]);
+    expect(gstr1.body.b2cs).toEqual([]);
+
+    // A note against an invoice adjusts its GST; it can't be a financial one.
+    const inv = await issueInvoice(t, m);
+    const linked = await t.post(`${m.c}/documents`, note(m, 'creditNote', inv.id, 1000, { noteGst: 'noGst' }), { token: m.token });
+    expect(linked.status).toBe(422);
+    expect(linked.body.issues[0].field).toBe('noteGst');
+  });
+
+  it('a supplier’s financial note goes to discount received', async () => {
+    const m = await moneySetup(t);
+    const res = await t.post(`${m.c}/documents`, direct(m, 'supplierCreditNote', 20000, { partyId: m.supplier!.id, noteGst: 'noGst', supplierDocNumber: 'KS-FN-1' }), { token: m.token });
+    expect(res.status).toBe(201);
+    expect(res.body.totals.totalTax.minor).toBe(0);
+    const tb = await t.get(`${m.c}/reports/trial-balance`, { token: m.token, query: { from: '2026-04-01', to: '2027-03-31' } });
+    const row = (account: string) => tb.body.rows.find((r: { account: string }) => r.account === account);
+    expect(row('sys:discountReceived').closing.minor).toBe(-20000);
   });
 });
 

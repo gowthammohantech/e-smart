@@ -72,7 +72,9 @@
     "hint": "TDS is kept back once the supplier passes the section’s threshold for the year.",
     "willKeep": "{{amount}} kept back at {{rate}}, paid to the government",
     "selfInvoice": "Self-invoice {{number}}: the GST on this bill is paid by you under reverse charge.",
-    "itcReversed": "Input tax credit reversed on {{date}}: unpaid 180 days after the bill. It is claimed again once paid."
+    "itcReversed": "Input tax credit reversed on {{date}}: unpaid 180 days after the bill. It is claimed again once paid.",
+    "needsTan": "Add your TAN in the business profile to deduct TDS on bills. Without it nothing is kept back.",
+    "addTan": "Add TAN"
   },
   "expense": {
     "billable": "Billable",
@@ -153,5 +155,18 @@
   "isd": {
     "label": "Input Service Distributor invoice",
     "hint": "A credit your ISD passed on. Its tax is claimed in 3B 4A(4) instead of 4A(5)."
+  },
+  "itc": {
+    "title": "Input tax credit",
+    "eligible": "Eligible",
+    "capitalGoods": "Capital goods",
+    "reverseCharge": "Reverse charge",
+    "blocked": "Blocked (s.17(5))",
+    "ineligible": "Not claimable"
+  },
+  "asset": {
+    "prompt": "Capital goods worth {{amount}} on this bill are in your fixed assets. Add them to the register so they depreciate.",
+    "add": "Add to fixed asset register",
+    "fromBill": "Bought on bill {{number}}"
   }
 }

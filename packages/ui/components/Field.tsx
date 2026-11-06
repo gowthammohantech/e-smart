@@ -373,11 +373,14 @@ export function AmountField({
   autoFocus,
   size = 'md',
   allowNegative,
+  align = 'left',
 }: {
   label?: string;
   value: string;
   onChangeValue: (v: string) => void;
   currency: string;
+  /** `right` lines the figure up under a right-aligned column heading, as in a ledger grid. */
+  align?: 'left' | 'right';
   /** Accept a leading "-" (signed adjustments). */
   allowNegative?: boolean;
   error?: string;
@@ -406,7 +409,8 @@ export function AmountField({
           borderWidth: 1,
           borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
-          height: size === 'lg' ? 64 : desktop ? 40 : 48,
+          // As tall as a TextField beside it, Tamil's extra room included.
+          height: size === 'lg' ? 64 : t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48,
           ...webFocusHalo(t, focused && !error),
         }}
       >
@@ -435,6 +439,8 @@ export function AmountField({
             fontSize: size === 'lg' ? t.fontSize.h2 : t.fontSize.body,
             fontWeight: size === 'lg' ? '700' : '500',
             fontVariant: ['tabular-nums'],
+            textAlign: align,
+            minWidth: 0,
             ...WEB_INPUT_RESET,
           }}
         />
@@ -507,7 +513,7 @@ export function PickerField({
           borderWidth: 1,
           borderColor: error ? t.c.bad : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
-          height: desktop ? 40 : 48,
+          height: t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48,
           opacity: disabled ? 0.6 : state.pressed ? 0.7 : 1,
           // The app's keyboard focus ring, in place of the browser's black outline.
           ...(WEB ? focusRing(t, (state as WebPressState).focused) : {}),

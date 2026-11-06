@@ -48,10 +48,16 @@ export function TotalsPanel({
   exchangeRate,
   compact,
   tds,
+  itc,
 }: {
   totals: DocumentTotals;
-  /** TDS kept back on a supplier's bill, with how it reads ("TDS 194C @ 2%"). */
-  tds?: { label: string; amount: Money };
+  /**
+   * TDS kept back on a supplier's bill, with how it reads ("TDS 194C @ 2%"); or, on an invoice, what
+   * the customer is expected to deduct, with `netLabel` for what they then pay (the total is unchanged).
+   */
+  tds?: { label: string; amount: Money; netLabel?: string };
+  /** On a purchase: the input tax credit by bucket (eligible, capital goods, reverse charge, blocked, ineligible). */
+  itc?: { title: string; rows: { label: string; amount: Money; tone?: 'muted' | 'bad' }[] };
   currency: string;
   baseCurrency?: string;
   exchangeRate?: number;
@@ -97,8 +103,19 @@ export function TotalsPanel({
       {tds && !isZero(tds.amount) ? (
         <>
           <Row label={tds.label} value={`− ${formatMoney(tds.amount)}`} />
-          <Row label={tr('common:totals.payableToSupplier')} value={formatMoney(subtract(totals.grandTotal, tds.amount))} bold />
+          <Row label={tds.netLabel ?? tr('common:totals.payableToSupplier')} value={formatMoney(subtract(totals.grandTotal, tds.amount))} bold />
         </>
+      ) : null}
+
+      {itc && itc.rows.length ? (
+        <View style={{ gap: 4, marginTop: 4 }}>
+          <Text variant="micro" tone="muted" weight="600">
+            {itc.title}
+          </Text>
+          {itc.rows.map((r) => (
+            <Row key={r.label} label={r.label} value={formatMoney(r.amount)} tone={r.tone} />
+          ))}
+        </View>
       ) : null}
 
       {totals.reverseChargeTax && !isZero(totals.reverseChargeTax) ? (

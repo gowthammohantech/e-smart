@@ -116,7 +116,15 @@
     "approvals": "ஒப்புதலுக்குக் காத்திருப்பவை",
     "cashForecast": "பணப்புழக்க முன்கணிப்பு",
     "fixedAssets": "நிலைச் சொத்துகள்",
-    "budgets": "வரவுசெலவுத் திட்டங்கள்"
+    "budgets": "வரவுசெலவுத் திட்டங்கள்",
+    "gstr2bReconciliation": "2B சரிபார்ப்பு",
+    "advanceReceipt": "முன்பண ரசீது",
+    "adjustAdvance": "முன்பணத்தைச் சரிசெய்",
+    "costCentres": "செலவு மையங்கள்",
+    "transfer": "பணப் பரிமாற்றம்",
+    "gstUtilization": "வரவுப் பயன்பாட்டுப் பதிவு",
+    "gstChallan": "GST செலுத்துச்சீட்டு",
+    "gstJournal": "GST பேரேட்டுப் பதிவு"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {

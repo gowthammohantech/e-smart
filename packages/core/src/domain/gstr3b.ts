@@ -110,6 +110,8 @@ export function gstr3b(input: Input): Gstr3b {
 
   for (const doc of documents) {
     if (OFF.includes(doc.status)) continue;
+    // A financial note without GST is no supply (RULES 6.24): not in the return.
+    if (doc.noteGst === 'noGst') continue;
     const rate = doc.currency === baseCurrency ? 1 : doc.exchangeRate || 1;
     const b = (m: number) => Math.round(m * rate);
     const sign = CREDIT_KINDS.includes(doc.kind) ? -1 : 1;
@@ -223,13 +225,13 @@ export function gstr3b(input: Input): Gstr3b {
     const to = new Date(Date.UTC(Number(period.slice(2)), Number(period.slice(0, 2)), 0)).toISOString().slice(0, 10);
     const t11 = advancesForPeriod(input.advances, from, to);
     for (const [rows, sign] of [[t11.received, 1], [t11.adjusted, -1]] as const) {
-      for (const r of rows) add(out.outward.taxable, { taxable: sign * r.taxable, igst: sign * r.igst, cgst: sign * r.cgst, sgst: sign * r.sgst, cess: 0 });
+      for (const r of rows) add(out.outward.taxable, { taxable: sign * r.taxable, igst: sign * r.igst, cgst: sign * r.cgst, sgst: sign * r.sgst, cess: sign * r.cess });
     }
     // The same, advance by advance, as advancesForPeriod counts them: an advance adjusted in the month it came nets to nothing.
     const within = (d: string) => d >= from && d <= to;
     for (const e of input.advances) {
       const sign = e.kind === 'received' ? (within(e.receivedOn) ? 1 : 0) : within(e.date) && (within(e.receivedOn) || e.receivedOn < from) ? -1 : 0;
-      if (sign) put('3.1a', null, { type: 'advance', id: e.paymentId, date: e.kind === 'received' ? e.receivedOn : e.date }, { taxable: e.taxable, igst: e.igst, cgst: e.cgst, sgst: e.sgst }, sign);
+      if (sign) put('3.1a', null, { type: 'advance', id: e.paymentId, date: e.kind === 'received' ? e.receivedOn : e.date }, { taxable: e.taxable, igst: e.igst, cgst: e.cgst, sgst: e.sgst, cess: e.cess ?? 0 }, sign);
     }
   }
 

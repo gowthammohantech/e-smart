@@ -14,6 +14,7 @@ import { partiesHandlers } from './parties/handlers';
 import { catalogHandlers } from './catalog/handlers';
 import { documentsHandlers } from './documents/handlers';
 import { paymentsHandlers } from './payments/handlers';
+import { adjustHandlers } from './payments/adjust';
 import { paymentRequestHandlers } from './payments/requests';
 import { expensesHandlers } from './expenses/handlers';
 import { inventoryHandlers } from './inventory/handlers';
@@ -28,6 +29,7 @@ import { costCentreHandlers } from './books/costCentres';
 import { fixedAssetHandlers } from './assets/handlers';
 import { budgetHandlers } from './books/budgets';
 import { gstFilingHandlers } from './gst/filing';
+import { gstUtilizationHandlers } from './gst/utilization';
 import { gstPortalHandlers, gstr2bHandlers } from './gst/portalHandlers';
 import { dashboardHandlers } from './dashboard/handlers';
 import { searchHandlers } from './search/handlers';
@@ -60,6 +62,7 @@ export const handlers: Handlers = {
   ...catalogHandlers,
   ...documentsHandlers,
   ...paymentsHandlers,
+  ...adjustHandlers,
   ...paymentRequestHandlers,
   ...expensesHandlers,
   ...inventoryHandlers,
@@ -73,6 +76,7 @@ export const handlers: Handlers = {
   ...gstPortalHandlers,
   ...gstr2bHandlers,
   ...gstFilingHandlers,
+  ...gstUtilizationHandlers,
   ...costCentreHandlers,
   ...fixedAssetHandlers,
   ...budgetHandlers,

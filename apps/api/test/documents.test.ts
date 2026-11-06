@@ -164,6 +164,8 @@ describe('documents: numbering and lifecycle', () => {
     const notes = await t.patch(url, { ...body, notes: 'Thank you for your business' }, { token: m.token });
     expect(notes.status).toBe(200);
     expect(notes.body.notes).toBe('Thank you for your business');
+    // Once a later invoice is issued in its series it can't be edited in full (RULES 6.23; edit-latest-invoice.test).
+    await issueInvoice(t, m);
     const change = await t.patch(url, { ...body, lines: [line(m.gst(12), { quantity: 5 })] }, { token: m.token });
     expect(change.status).toBe(409);
     expect(change.body.code).toBe('DOCUMENT_FINALIZED');

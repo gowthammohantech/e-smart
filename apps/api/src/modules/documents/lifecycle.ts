@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, ne, notInArray, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
@@ -342,7 +342,8 @@ export async function finalizeInTx(
   await postStock(tx, company, updated, actor.id);
   // A bill with TDS kept back starts part-settled.
   if (isCredit(updated) && updated.sourceDocumentId) await syncPaymentState(tx, actor, updated.companyId, [updated.sourceDocumentId], now);
-  if (updated.tdsAmountMinor > 0) {
+  // (An invoice's TDS is only what the customer is expected to deduct: it settles nothing until a receipt says so.)
+  if (updated.tdsAmountMinor > 0 && updated.kind !== 'invoice') {
     await syncPaymentState(tx, actor, updated.companyId, [updated.id], now);
     const [settled] = await tx.select().from(D).where(eq(D.id, updated.id));
     return settled;
@@ -432,7 +433,13 @@ async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
   const blocking = (field: string, message: string, code = 'VALIDATION_FAILED') => {
     throw unprocessable([{ field, message, severity: 'blocking' }], code);
   };
-  if (!row.sourceDocumentId && NOTE_KINDS.includes(row.kind)) return;
+  if (!row.sourceDocumentId && NOTE_KINDS.includes(row.kind)) {
+    // A direct credit note with GST keeps the s.34(2) deadline, from the original invoice it names (RULES 6.24).
+    if (row.kind === 'creditNote' && row.noteGst !== 'noGst' && row.originalDate && row.date > creditNoteDeadline(row.originalDate)) {
+      return blocking('date', `A credit note for ${row.originalNumber ?? 'an invoice'} of ${row.originalDate} had to be issued by ${creditNoteDeadline(row.originalDate)} (CGST s.34(2))`, 'NOTE_TIME_BARRED');
+    }
+    return;
+  }
   if (!row.sourceDocumentId) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');
   const [source] = await tx.select().from(D).where(and(eq(D.companyId, row.companyId), eq(D.id, row.sourceDocumentId))).for('update');
   if (!source || source.kind !== NOTE_SOURCE[row.kind]) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');
@@ -459,6 +466,10 @@ async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
 export async function assertNoLiveReturns(tx: DbOrTx, row: DocRow) {
   const [live] = await tx.select({ number: D.number, kind: D.kind }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN)).limit(1);
   if (live) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel ${isReturn(live) ? 'return' : 'note'} ${live.number} before cancelling ${row.number}`);
+  // A direct note applied to an invoice (or an invoice a note was applied to) holds the other up.
+  const CA = schema.creditApplications;
+  const [applied] = await tx.select({ id: CA.id }).from(CA).where(or(eq(CA.noteId, row.id), eq(CA.documentId, row.id))).limit(1);
+  if (applied) throw conflict('DOCUMENT_HAS_RETURNS', `${row.number} is in a credit note adjustment; remove that adjustment first`);
 }
 
 /**
@@ -487,10 +498,19 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
     .where(and(inArray(D.sourceDocumentId, ids), inArray(D.kind, CREDIT_KINDS), LIVE_RETURN))
     .groupBy(D.sourceDocumentId);
   const creditOf = new Map(credits.map((c) => [c.documentId, Number(c.credited)]));
+  // Direct notes applied to it (the adjustment entry): credit, not money.
+  const CA = schema.creditApplications;
+  const applied = await tx
+    .select({ documentId: CA.documentId, applied: sql<number>`coalesce(sum(${CA.amountMinor}), 0)::bigint` })
+    .from(CA)
+    .where(inArray(CA.documentId, ids))
+    .groupBy(CA.documentId);
+  for (const a of applied) creditOf.set(a.documentId, (creditOf.get(a.documentId!) ?? 0) + Number(a.applied));
   const rows = await tx.select().from(D).where(and(eq(D.companyId, companyId), inArray(D.id, ids)));
   for (const row of rows) {
     // TDS kept back is paid to the government, so it settles the bill as far as the supplier goes.
-    const allocated = (paidOf.get(row.id) ?? 0) + row.tdsAmountMinor;
+    // An invoice's TDS is only expected: the receipt's tdsDeducted settles it, counted above.
+    const allocated = (paidOf.get(row.id) ?? 0) + (row.kind === 'invoice' ? 0 : row.tdsAmountMinor);
     const amountPaidMinor = Math.max(allocated, Math.min(allocated + (creditOf.get(row.id) ?? 0), row.grandTotalMinor));
     const status = isFinalized(row.status) ? effectiveStatus({ ...row, amountPaidMinor }, today(now)) : row.status;
     if (amountPaidMinor === row.amountPaidMinor && status === row.status) continue;
@@ -510,4 +530,120 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
       after: { status, amountPaidMinor },
     });
   }
+}
+
+// ------------------------------------------------------------ editing the latest invoice
+
+/** Why a finalised invoice can't be edited in full (RULES 6.23); the app shows it as a hint. */
+export type EditBlock = 'notInvoice' | 'notFinal' | 'periodLocked' | 'notLatest' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
+
+export const EDIT_BLOCK_MESSAGES: Record<EditBlock, string> = {
+  notInvoice: 'Only an invoice can be edited after it is issued',
+  notFinal: 'Only an issued invoice can be edited this way',
+  periodLocked: 'The books are closed for its date',
+  notLatest: 'A later invoice has been issued in its series',
+  hasPayments: 'A payment is allocated to it',
+  hasCredit: 'A credit note is adjusted against it',
+  hasNotes: 'A return, credit note or debit note stands against it',
+  eInvoiced: 'It has an IRN (e-invoice)',
+  ewayBill: 'It has an e-way bill',
+  returnFiled: 'Its GSTR-1 period is filed',
+  laterStock: 'Its items have later stock movements, and stock is costed FIFO',
+};
+
+/** GSTR-1 for the month `date` falls in is filed, or frozen for filing. */
+export async function gstr1Closed(tx: DbOrTx, companyId: string, date: string): Promise<boolean> {
+  const R = schema.gstReturns;
+  const period = `${date.slice(5, 7)}${date.slice(0, 4)}`;
+  const [r] = await tx
+    .select({ id: R.id })
+    .from(R)
+    .where(and(eq(R.companyId, companyId), eq(R.returnType, 'gstr1'), eq(R.period, period), inArray(R.status, ['submitted', 'filed'])))
+    .limit(1);
+  return !!r;
+}
+
+/** The finalised invoice issued just before this one in its series (by when it was issued), if any. */
+export async function previousInSeries(tx: DbOrTx, row: DocRow): Promise<DocRow | undefined> {
+  if (!row.finalizedAt) return undefined;
+  const [prev] = await tx
+    .select()
+    .from(D)
+    .where(and(eq(D.companyId, row.companyId), eq(D.kind, row.kind), ne(D.id, row.id), sql`${D.number} not like '%-DRAFT'`, or(lt(D.finalizedAt, row.finalizedAt), and(eq(D.finalizedAt, row.finalizedAt), lt(D.id, row.id)))))
+    .orderBy(desc(D.finalizedAt), desc(D.id))
+    .limit(1);
+  return prev;
+}
+
+/**
+ * Whether a finalised invoice may still be edited in full (RULES 6.23, pending CA), and if not, why:
+ * it is the latest issued in its numbering series, nothing has settled or adjusted it, it is not
+ * e-invoiced or e-way billed, its GSTR-1 month is open and its books period too. With FIFO costing,
+ * a later movement of any of its items holds it too: re-costing this sale would re-cost those.
+ */
+export async function canEditLatest(tx: DbOrTx, company: Pick<CompanyRow, 'id' | 'lockedThroughDate' | 'stockCosting'>, row: DocRow): Promise<EditBlock | null> {
+  if (row.kind !== 'invoice') return 'notInvoice';
+  if (!isFinalized(row.status) || row.status === 'cancelled' || !row.finalizedAt) return 'notFinal';
+  if (company.lockedThroughDate && row.date <= company.lockedThroughDate) return 'periodLocked';
+  const [later] = await tx
+    .select({ id: D.id })
+    .from(D)
+    .where(
+      and(
+        eq(D.companyId, row.companyId),
+        eq(D.kind, row.kind),
+        ne(D.id, row.id),
+        sql`${D.number} not like '%-DRAFT'`,
+        or(gt(D.finalizedAt, row.finalizedAt), and(eq(D.finalizedAt, row.finalizedAt), gt(D.id, row.id))),
+      ),
+    )
+    .limit(1);
+  if (later) return 'notLatest';
+  const A = schema.paymentAllocations;
+  const [paid] = await tx.select({ id: A.paymentId }).from(A).where(eq(A.documentId, row.id)).limit(1);
+  if (paid) return 'hasPayments';
+  const CA = schema.creditApplications;
+  const [applied] = await tx.select({ id: CA.id }).from(CA).where(eq(CA.documentId, row.id)).limit(1);
+  if (applied) return 'hasCredit';
+  const [note] = await tx.select({ id: D.id }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN)).limit(1);
+  if (note) return 'hasNotes';
+  const [einv] = await tx.select({ irn: schema.eInvoices.irn }).from(schema.eInvoices).where(eq(schema.eInvoices.documentId, row.id));
+  if (einv?.irn) return 'eInvoiced';
+  const E = schema.ewayBills;
+  const [eway] = await tx.select({ id: E.id }).from(E).where(and(eq(E.documentId, row.id), ne(E.status, 'cancelled'))).limit(1);
+  if (eway) return 'ewayBill';
+  if (await gstr1Closed(tx, row.companyId, row.date)) return 'returnFiled';
+  if (company.stockCosting === 'fifo') {
+    // Its own movements, and when the ledger got them: the database's clock, as the others carry.
+    const own = await tx.select({ itemId: M.itemId, createdAt: M.createdAt }).from(M).where(and(eq(M.referenceType, 'document'), eq(M.referenceId, row.id)));
+    const ids = [...new Set(own.map((m) => m.itemId))];
+    if (ids.length) {
+      const postedAt = new Date(Math.min(...own.map((m) => m.createdAt.getTime())));
+      const [moved] = await tx
+        .select({ id: M.id })
+        .from(M)
+        .where(
+          and(
+            eq(M.companyId, row.companyId),
+            inArray(M.itemId, ids),
+            or(ne(M.referenceId, row.id), sql`${M.referenceId} is null`),
+            or(gt(M.date, row.date), and(eq(M.date, row.date), gt(M.createdAt, postedAt))),
+          ),
+        )
+        .limit(1);
+      if (moved) return 'laterStock';
+    }
+  }
+  return null;
+}
+
+/**
+ * Takes back what a finalised document put on the stock ledger so it can post again after a full
+ * edit. Its own movements are deleted rather than reversed: the edit re-issues the same document,
+ * and a reversal left beside the new movements would read as stock in at no cost. The edit's audit
+ * entry keeps what it was.
+ */
+export async function withdrawStock(tx: DbOrTx, row: DocRow): Promise<number> {
+  const gone = await tx.delete(M).where(and(eq(M.companyId, row.companyId), eq(M.referenceType, 'document'), eq(M.referenceId, row.id))).returning({ id: M.id });
+  return gone.length;
 }

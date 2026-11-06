@@ -3,11 +3,13 @@ import type { Schema } from '@esmart/api-contract';
 import { CLAIMABLE, normalizeNumber, reconcile2b, type BookBill, type TwoBLine } from '@esmart/core/domain/reconcile2b';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
-import { notFound } from '../../http/errors';
+import { invalid, notFound } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { notify } from '../../lib/notify';
 import { money } from '../../lib/wire';
+import type { Gstr2bResult } from '../../providers/returns';
+import { readGstr2bFile } from './gstr2bFile';
 import { portalContext, returnsFailure } from './portal';
 
 const P = schema.gstr2bPeriods;
@@ -38,6 +40,25 @@ export async function fetchGstr2b(db: DbOrTx, deps: Deps, company: CompanyRow, a
     returnsFailure(error);
   }
   if (result.status === 'notGenerated') return { generated: false as const };
+  await store2b(db, company, actorId, gstin, period, result, deps.now());
+  return { generated: true as const, lines: result.entries.length };
+}
+
+/**
+ * Reads a GSTR-2B the taxpayer downloaded from the GST portal (its JSON, or its Excel workbook) and
+ * stores it as a download would, for a business with no portal session. A JSON file names its
+ * GSTIN and period; one that isn't this GSTIN's or period's is refused.
+ */
+export async function importGstr2b(db: DbOrTx, company: CompanyRow, actorId: string, gstin: string, period: string, fileName: string, contentBase64: string, now: Date) {
+  const file = await readGstr2bFile(fileName, contentBase64);
+  if (file.gstin && file.gstin !== gstin) throw invalid('contentBase64', `This file is the GSTR-2B of ${file.gstin}, not ${gstin}`, 'GSTR2B_WRONG_GSTIN');
+  if (file.period && file.period !== period) throw invalid('contentBase64', `This file is the GSTR-2B for ${file.period.slice(0, 2)}/${file.period.slice(2)}, not ${period.slice(0, 2)}/${period.slice(2)}`, 'GSTR2B_WRONG_PERIOD');
+  await store2b(db, company, actorId, gstin, period, file.result, now);
+  return { lines: file.result.entries.length };
+}
+
+/** A period's 2B lines, in place of what was there, carrying each line's decision over by supplier, kind and number. */
+async function store2b(db: DbOrTx, company: CompanyRow, actorId: string | null, gstin: string, period: string, result: Extract<Gstr2bResult, { status: 'generated' }>, now: Date) {
   await db.transaction(async (tx) => {
     const before = await tx.select().from(E).where(and(eq(E.companyId, company.id), eq(E.gstin, gstin), eq(E.period, period)));
     const kept = new Map(before.filter((e) => e.decision).map((e) => [decisionKey(e), e]));
@@ -54,7 +75,7 @@ export async function fetchGstr2b(db: DbOrTx, deps: Deps, company: CompanyRow, a
             period,
             section: x.section,
             supplierGstin: x.supplierGstin,
-            supplierName: x.supplierName ?? null,
+            supplierName: x.supplierName?.slice(0, 200) ?? null,
             documentType: x.documentType,
             number: x.number.slice(0, 40),
             matchKey,
@@ -67,9 +88,9 @@ export async function fetchGstr2b(db: DbOrTx, deps: Deps, company: CompanyRow, a
             sgstMinor: x.sgstMinor,
             cessMinor: x.cessMinor,
             itcAvailable: x.itcAvailable,
-            itcReason: x.itcReason ?? null,
+            itcReason: x.itcReason?.slice(0, 40) ?? null,
             supplierFiledOn: x.supplierFiledOn ?? null,
-            originalNumber: x.originalNumber ?? null,
+            originalNumber: x.originalNumber?.slice(0, 40) ?? null,
             decision: old?.decision ?? null,
             linkedDocumentId: old?.linkedDocumentId ?? null,
             decidedBy: old?.decidedBy ?? null,
@@ -81,10 +102,9 @@ export async function fetchGstr2b(db: DbOrTx, deps: Deps, company: CompanyRow, a
     const generatedOn = /^\d{4}-\d{2}-\d{2}$/.test(result.generatedAt) ? result.generatedAt : null;
     await tx
       .insert(P)
-      .values({ companyId: company.id, gstin, period, generatedOn, fetchedAt: deps.now(), fetchedBy: actorId })
-      .onConflictDoUpdate({ target: [P.companyId, P.gstin, P.period], set: { generatedOn, fetchedAt: deps.now(), fetchedBy: actorId } });
+      .values({ companyId: company.id, gstin, period, generatedOn, fetchedAt: now, fetchedBy: actorId })
+      .onConflictDoUpdate({ target: [P.companyId, P.gstin, P.period], set: { generatedOn, fetchedAt: now, fetchedBy: actorId } });
   });
-  return { generated: true as const, lines: result.entries.length };
 }
 
 /** The GSTIN a bill's credit is claimed under: its branch's own, else the company's. */

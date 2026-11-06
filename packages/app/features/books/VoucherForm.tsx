@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
@@ -12,6 +13,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { TDS_SECTIONS } from '@esmart/core/data/tdsSections';
+import { TCS_SECTIONS } from '@esmart/core/data/tcsSections';
 import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/ledger/accounts';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
@@ -26,11 +28,19 @@ import { VoucherGrid, gridLine, type GridLine } from './VoucherGrid';
 
 const KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan'];
 
+/** A `?kind=` a menu opens the form on, when it is one this form makes. */
+export const voucherKindParam = (v: string | string[] | undefined): VoucherKind | undefined => (KINDS as string[]).includes(String(v)) ? (v as VoucherKind) : undefined;
+
+/** The empty rows a new voucher starts with: a contra moves money between two accounts, a journal often spreads over more. */
+const blankLines = (kind: VoucherKind): GridLine[] =>
+  kind === 'contra' || kind === 'tdsChallan' ? [gridLine('dr'), gridLine('cr')] : [gridLine('dr'), gridLine('cr'), gridLine('dr'), gridLine('cr')];
+const isBlank = (l: GridLine) => !l.account && !l.amount && !l.narration && !l.costCentreId;
+
 /**
  * A journal, contra, GST journal or TDS challan: lines of debits and credits that must balance.
  * The server checks the same rules (apps/api/src/modules/books/handlers.ts).
  */
-export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: (id: string) => void }) {
+export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Voucher; onSaved: (id: string) => void; initialKind?: VoucherKind }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['books', 'common']);
   const { run: serverSave, saving, blocked } = useServerSave();
@@ -47,7 +57,8 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const nameOf = useAccountName();
   const groupName = useGroupName();
 
-  const [kind, setKind] = useState<VoucherKind>(voucher?.kind ?? 'journal');
+  const params = useLocalSearchParams<{ kind?: string }>();
+  const [kind, setKind] = useState<VoucherKind>(voucher?.kind ?? initialKind ?? voucherKindParam(params.kind) ?? 'journal');
   const [date, setDate] = useState(voucher?.date ?? today());
   const [narration, setNarration] = useState(voucher?.narration ?? '');
   const [reference, setReference] = useState(voucher?.reference ?? '');
@@ -63,19 +74,22 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       amount: String(toMajor(l.credit.minor ? l.credit : l.debit)),
       narration: l.narration,
       costCentreId: l.costCentreId,
-    })) ?? [gridLine('dr'), gridLine('cr')],
+    })) ?? blankLines(kind),
   );
   const [picking, setPicking] = useState<string | null>(null);
 
-  // What each kind may post to: a contra only cash and bank, a TDS challan TDS payable against cash or bank.
+  // What each kind may post to: a contra only cash and bank, a TDS challan TDS or TCS payable against cash or bank.
   const accounts = useMemo(() => {
     const tdsPayable: Account[] = TDS_SECTIONS.map((s) => accountFor(`sys:tdsPayable:${s.code}`, book)!);
-    const all = [...chartOfAccounts(book).filter((a) => a.key !== 'sys:openingStock'), ...tdsPayable];
+    const tcsPayable: Account[] = TCS_SECTIONS.map((s) => accountFor(`sys:tcsPayable:${s.code}`, book)!);
+    const all = [...chartOfAccounts(book).filter((a) => a.key !== 'sys:openingStock'), ...tdsPayable, ...tcsPayable];
     const cash = (a: Account) => a.group === 'cashInHand' || a.group === 'bankAccounts';
     if (kind === 'contra') return all.filter(cash);
-    if (kind === 'tdsChallan') return all.filter((a) => cash(a) || a.key.startsWith('sys:tdsPayable'));
+    // The same challan deposits TCS collected, so TCS payable may be cleared too.
+    if (kind === 'tdsChallan') return all.filter((a) => cash(a) || a.key.startsWith('sys:tdsPayable') || a.key.startsWith('sys:tcsPayable'));
     return all;
   }, [book, kind]);
+  const accountOptions = useMemo(() => accounts.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) })), [accounts, nameOf, groupName]);
 
   const minor = (v: string) => fromMajor(v || '0', baseCurrency).minor;
   const total = (ls: GridLine[], side: GridLine['side']) => ls.reduce((a, l) => a + (l.side === side ? minor(l.amount) : 0), 0);
@@ -91,7 +105,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
 
   /**
    * As in a ledger book: picking an account on an empty row fills in what's left to balance, and
-   * while the voucher doesn't balance a fresh row waits on the short side.
+   * once the last row is begun a fresh one waits under it, on the short side.
    */
   const patchLine = (id: string, p: Partial<GridLine>) =>
     setLines((ls) => {
@@ -104,7 +118,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       }
       const last = next[next.length - 1];
       const off = total(next, 'dr') - total(next, 'cr');
-      if (last.account && minor(last.amount) && off) next = [...next, gridLine(off > 0 ? 'cr' : 'dr')];
+      if (last.account || minor(last.amount)) next = [...next, gridLine(off > 0 ? 'cr' : off < 0 ? 'dr' : last.side === 'dr' ? 'cr' : 'dr')];
       return next;
     });
 
@@ -121,6 +135,8 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       narration: narration.trim() || undefined,
       reference: reference.trim() || undefined,
       challan: challanGiven ? { bsrCode, serial, depositedOn } : undefined,
+      // A GST challan is entered on its own screen; edited here, it keeps its deposit details.
+      gstChallan: voucher?.gstChallan,
       lines: filled.map((l) => ({
         account: l.account,
         debit: money(l.side === 'dr' ? minor(l.amount) : 0, baseCurrency),
@@ -140,7 +156,15 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       <FormContainer wide>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           {voucher ? null : (
-            <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`books:vouchers.kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as VoucherKind)} />
+            <Segmented
+              options={KINDS.map((k) => ({ value: k, label: tr(`books:vouchers.kind.${k}`) }))}
+              value={kind}
+              onChange={(v) => {
+                setKind(v as VoucherKind);
+                // Nothing typed yet: start over with the rows the new kind starts with.
+                if (lines.every(isBlank)) setLines(blankLines(v as VoucherKind));
+              }}
+            />
           )}
           {voucher || !templates.length ? null : (
             <Button title={tr('books:templates.use')} icon="content-copy" variant="secondary" size="sm" onPress={() => setTemplatesOpen(true)} />
@@ -159,6 +183,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
               const a = accounts.find((x) => x.key === key) ?? accountFor(key, book);
               return a ? nameOf(a) : undefined;
             }}
+            accountOptions={accountOptions}
             onPickAccount={setPicking}
             onPatch={patchLine}
             onRemove={(id) => setLines((ls) => ls.filter((x) => x.id !== id))}
@@ -202,7 +227,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
           // The template's accounts and sides; amounts it leaves out are filled in now.
           setKind(tpl.kind);
           if (tpl.narration) setNarration(tpl.narration);
-          setLines(tpl.lines.map((l) => ({ id: uid('vl'), side: l.side, account: l.account, amount: l.amount ? String(toMajor(l.amount)) : '', narration: l.narration, costCentreId: l.costCentreId })));
+          setLines([...tpl.lines.map((l) => ({ id: uid('vl'), side: l.side, account: l.account, amount: l.amount ? String(toMajor(l.amount)) : '', narration: l.narration, costCentreId: l.costCentreId })), gridLine()]);
         }}
       />
       <Sheet visible={templateName !== null} onClose={() => setTemplateName(null)} title={tr('books:templates.save')}>
@@ -230,7 +255,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
         visible={!!picking}
         onClose={() => setPicking(null)}
         title={tr('books:vouchers.pickAccount')}
-        options={accounts.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) }))}
+        options={accountOptions}
         value={lines.find((l) => l.id === picking)?.account}
         onSelect={(account) => picking && patchLine(picking, { account })}
       />

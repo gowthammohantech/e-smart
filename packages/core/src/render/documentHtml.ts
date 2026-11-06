@@ -5,7 +5,7 @@ import { formatMoney, formatPercent, formatQty } from '../lib/format';
 import { formatDate } from '../lib/date';
 import { money } from '../lib/money';
 import { amountInWords } from '../lib/amountInWords';
-import { INDIAN_STATES } from '../data/masters';
+import { INDIAN_STATES, unitShortName } from '../data/masters';
 import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '../lib/qr';
 import { E_INVOICE_CANCEL_REASONS } from '../domain/eInvoice';
 import type { LanguageCode } from '@esmart/i18n/config';
@@ -187,7 +187,7 @@ export function buildDocumentHtml({
           ${line.hsnCode && tpl.showHsn ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
           ${line.gst?.supplyType && line.gst.supplyType !== 'taxable' ? `<div class="sub">${SUPPLY_NOTE[line.gst.supplyType]}</div>` : ''}
         </td>
-        <td class="num">${formatQty(line.quantity)} ${esc(line.unit)}</td>
+        <td class="num">${formatQty(line.quantity)} ${esc(unitShortName(line.unit))}</td>
         <td class="num">${formatMoney(line.unitPrice)}</td>
         ${tpl.showDiscountColumn ? `<td class="num">${discount}</td>` : ''}
         ${tpl.showTaxColumn ? `<td class="num">${formatPercent(line.taxRate)}</td>` : ''}

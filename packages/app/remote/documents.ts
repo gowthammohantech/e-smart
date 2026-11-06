@@ -55,3 +55,8 @@ export async function paymentLink(companyId: string, id: string, amount?: Money)
 
 /** A file name for a document's PDF: `INV-26-27-0042.pdf`. */
 export const pdfFileName = (kind: DocumentKind, number: string) => `${(number || kind).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`;
+
+/** Takes back a credit note applied to an invoice or bill (adjustAdvances); refused in a closed period. */
+export async function removeCreditApplication(companyId: string, applicationId: string): Promise<void> {
+  await api.DELETE('/companies/{companyId}/credit-applications/{applicationId}', { params: { path: { companyId, applicationId } } });
+}

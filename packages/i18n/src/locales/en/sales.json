@@ -117,7 +117,18 @@
     "bankNone": "No bank account on your invoices yet.",
     "bankEdit": "Change in settings",
     "bankAdd": "Add bank details",
-    "bankUpiQr": "UPI QR for the total prints on the invoice"
+    "bankUpiQr": "UPI QR for the total prints on the invoice",
+    "noteGst": {
+      "label": "GST treatment",
+      "withGst": "With GST (s.34)",
+      "noGst": "Financial note — no GST",
+      "withGstHint": "Adjusts the GST of one earlier supply: give its number and date. It goes to GSTR-1, and a credit note must be issued by 30 November after that invoice’s financial year.",
+      "noGstHint": "A commercial discount or adjustment with no GST: no tax on any line, posted to discount, and left out of GSTR-1 and GSTR-3B.",
+      "originalInvoice": "Original invoice number",
+      "originalBill": "Original bill number",
+      "originalDate": "Original date"
+    },
+    "saveChanges": "Save changes"
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",
@@ -201,7 +212,24 @@
     "duplicate": "Duplicate",
     "deleteDraft": "Delete draft",
     "cancelTitle": "Cancel {{number}}?",
-    "convertToProforma": "Make a proforma invoice"
+    "convertToProforma": "Make a proforma invoice",
+    "adjustAdvance": "Adjust advance ({{amount}})",
+    "editBlock": {
+      "periodLocked": "Can't edit: the books are closed for its date",
+      "hasPayments": "Can't edit: a payment is allocated to it",
+      "hasCredit": "Can't edit: a credit note is adjusted against it",
+      "hasNotes": "Can't edit: a return or note stands against it",
+      "eInvoiced": "Can't edit: it has an IRN (e-invoice)",
+      "ewayBill": "Can't edit: it has an e-way bill",
+      "returnFiled": "Can't edit: its GSTR-1 month is filed",
+      "laterStock": "Can't edit: its items have moved since, and stock is costed FIFO"
+    },
+    "creditApplications": {
+      "title": "Credit notes adjusted",
+      "undo": "Undo",
+      "undoing": "Undoing the adjustment…",
+      "undone": "Adjustment with {{label}} undone"
+    }
   },
   "line": {
     "editLine": "Edit line",
@@ -228,7 +256,9 @@
     "newLine": "New line",
     "hsnCode": "HSN code",
     "sacCode": "SAC code",
-    "taxWithRate": "Tax ({{rate}})"
+    "taxWithRate": "Tax ({{rate}})",
+    "costCentre": "Cost centre",
+    "costCentreBill": "The bill's"
   },
   "payment": {
     "selectContact": "Select contact",
@@ -318,7 +348,16 @@
     "tdsSectionPick": "Pick the section",
     "tdsSectionHint": "The TDS kept back here is reported under this section in 26Q and TDS payable.",
     "received": "Payment received",
-    "totalApplied": "Total applied"
+    "totalApplied": "Total applied",
+    "advanceReceipt": "Advance receipt",
+    "advanceTds": "TDS deducted by the customer",
+    "advanceTdsHint": "Kept back from this advance; it credits them as money does.",
+    "advancePosUnknown": "Not known: another state (IGST)",
+    "advanceSac": "SAC",
+    "advanceGoods": "That is goods: an advance for goods carries no GST",
+    "advanceCess": "Cess %",
+    "advanceCessIs": "cess {{cess}}",
+    "advanceTaxable": "value {{value}}"
   },
   "aging": {
     "overdue": "Overdue",
@@ -407,7 +446,20 @@
     "purchaseHint": "Pick the bill being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",
     "search": "Search by number or party",
     "empty": "Nothing to return against yet",
-    "created": "Return draft created"
+    "created": "Return draft created",
+    "allParties": "All parties",
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "clearParty": "Show every party",
+    "linesTitle": "Which lines?",
+    "linesSubtitle": "{{number}} · {{party}}",
+    "linesHint": "Untick the lines this doesn't cover. You can still change quantities and amounts in the draft.",
+    "allLines": "All lines",
+    "linesPicked": "{{count}} of {{total}} lines",
+    "noLines": "Pick at least one line",
+    "createReturn": "Create return",
+    "createNote": "Create note",
+    "busy": "Creating the draft…"
   },
   "notePicker": {
     "created": "Note draft created",
@@ -418,7 +470,15 @@
       "supplierDebitNote": "Pick the supplier’s bill their debit note is against, then enter it as they issued it."
     },
     "directInvoice": "Without an invoice",
-    "directBill": "Without a bill"
+    "directBill": "Without a bill",
+    "directHint": {
+      "invoice": "For a discount over a period or a rate change that isn't against one invoice. You give the reason on the note.",
+      "bill": "For a supplier's note that isn't against one of their bills. You give the reason on the note."
+    },
+    "orPick": {
+      "invoice": "Or raise it against an invoice",
+      "bill": "Or raise it against a bill"
+    }
   },
   "refund": {
     "action": "Refund",
@@ -493,5 +553,14 @@
     "none": "No TCS",
     "hint": "For sales of scrap, minerals, timber and similar goods, or vehicles and luxury goods over ₹10 lakh.",
     "willCollect": "Collects {{amount}} from the buyer"
+  },
+  "tds": {
+    "section": "TDS the customer will deduct",
+    "hint": "If this customer deducts TDS from what they pay you, pick the section: the invoice total stays the same.",
+    "expectedLabel": "TDS expected {{section}}, {{rate}}",
+    "netReceivable": "Net receivable",
+    "willDeduct": "The customer is expected to deduct {{amount}} and pay {{net}}",
+    "rate": "TDS rate (%)",
+    "rateHint": "Worked on the value before GST. Leave empty for the section's rate."
   }
 }

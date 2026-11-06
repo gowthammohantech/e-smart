@@ -33,7 +33,16 @@ describe('plan tiers', () => {
     expect(moduleForPath('/payments/made')).toBe('payables');
     expect(moduleForPath('/reports/stock')).toBe('inventory');
     expect(moduleForPath('/reports/profit')).toBe('expenses');
+    expect(moduleForPath('/gst/gstr2b')).toBe('purchases');
+    expect(moduleForPath('/gst/gstr2b-reconciliation')).toBe('purchases');
     expect(moduleForPath('/purchasesque')).toBeNull();
+    expect(moduleForPath('/gst/utilization')).toBe('books');
+    expect(moduleForPath('/gst/challan')).toBe('books');
+    expect(moduleForPath('/gst/journal')).toBe('books');
+    expect(moduleForPath('/books/transfer')).toBe('books');
+    expect(moduleForPath('/receipts')).toBe('books');
+    // Adjusting advances sits under /receipts but is a payments screen, open like payments.
+    expect(moduleForPath('/receipts/adjust')).toBeNull();
   });
 
   it('keeps selling, GST and sales reports open on every tier', () => {
@@ -46,6 +55,7 @@ describe('plan tiers', () => {
       '/(app)/reports/sales-summary',
       '/(app)/reports/tax-summary',
       '/(app)/payments/new?direction=received',
+      '/(app)/receipts/adjust?partyId=p_1',
       '/(app)/(tabs)/gst',
     ];
     everywhere.forEach((route) => expect(canOpen('free', route)).toBe(true));
@@ -62,8 +72,8 @@ describe('plan tiers', () => {
 describe('onboarding by plan', () => {
   it('walks business, tax and numbering on every plan, as India and one location are the defaults', () => {
     for (const plan of ['basic', 'pro', 'business'] as const) {
-      expect(onboardingSteps(plan)).toEqual(['business', 'tax', 'numbering']);
-      expect(nextStepRoute('business', plan)).toBe('/(onboarding)/tax');
+      expect(onboardingSteps(plan)).toEqual(['tax', 'business', 'numbering']);
+      expect(nextStepRoute('tax', plan)).toBe('/(onboarding)/business');
       expect(nextStepRoute('numbering', plan)).toBe('/(onboarding)/done');
     }
   });

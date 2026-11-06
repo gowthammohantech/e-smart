@@ -31,7 +31,14 @@ const CATEGORIES = ['plant', 'computers', 'furniture', 'vehicles', 'office', 'bu
  * Adds an asset to the register, or edits one: what it cost and where that sits in the books, when it
  * was put to use, and how it wears out. An existing one can be disposed of, or taken out of the register.
  */
-export function FixedAssetForm({ asset }: { asset?: FixedAsset }) {
+/**
+ * What a new asset starts from when it comes from a bill's capital-goods lines (RULES 6.15): their
+ * taxable value, the bill's date and number. The bill already put the cost in Plant and machinery, so
+ * the register only links to it (sourceDocumentId) and posts no cost of its own.
+ */
+export type AssetPrefill = { name?: string; costMinor?: number; acquiredOn?: string; sourceDocumentId?: string; branchId?: string; notes?: string };
+
+export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill?: AssetPrefill }) {
   const t = useTheme();
   const router = useRouter();
   const toast = useToast();
@@ -43,13 +50,13 @@ export function FixedAssetForm({ asset }: { asset?: FixedAsset }) {
   const nameOf = useAccountName();
   const major = (m?: { minor: number; currency: string }) => (m && m.minor ? String(toMajor(m)) : '');
 
-  const [name, setName] = useState(asset?.name ?? '');
+  const [name, setName] = useState(asset?.name ?? prefill?.name ?? '');
   const [category, setCategory] = useState(asset?.category ?? '');
   const [assetCode, setAssetCode] = useState(asset?.assetCode ?? '');
   const [account, setAccount] = useState(asset?.account ?? 'sys:fixedAssets');
-  const [acquiredOn, setAcquiredOn] = useState(asset?.acquiredOn ?? today());
-  const [inUseFrom, setInUseFrom] = useState(asset?.inUseFrom ?? today());
-  const [cost, setCost] = useState(major(asset?.cost));
+  const [acquiredOn, setAcquiredOn] = useState(asset?.acquiredOn ?? prefill?.acquiredOn ?? today());
+  const [inUseFrom, setInUseFrom] = useState(asset?.inUseFrom ?? prefill?.acquiredOn ?? today());
+  const [cost, setCost] = useState(major(asset?.cost ?? (prefill?.costMinor ? money(prefill.costMinor, currency) : undefined)));
   const [residual, setResidual] = useState(major(asset?.residualValue));
   const [method, setMethod] = useState<'slm' | 'wdv'>(asset?.method ?? 'slm');
   const [lifeYears, setLifeYears] = useState(asset?.lifeMonths ? String(+(asset.lifeMonths / 12).toFixed(2)) : '5');
@@ -57,7 +64,7 @@ export function FixedAssetForm({ asset }: { asset?: FixedAsset }) {
   const [brought, setBrought] = useState(!!asset?.openingDepreciation?.minor);
   const [openingDep, setOpeningDep] = useState(major(asset?.openingDepreciation));
   const [openingAsOf, setOpeningAsOf] = useState(asset?.openingAsOf ?? addDaysISO(financialYearOf(today(), company.fiscalYearStartMonth).start, -1));
-  const [notes, setNotes] = useState(asset?.notes ?? '');
+  const [notes, setNotes] = useState(asset?.notes ?? prefill?.notes ?? '');
   const [disposing, setDisposing] = useState(!!asset?.disposedOn);
   const [disposedOn, setDisposedOn] = useState(asset?.disposedOn ?? today());
   const [disposalNote, setDisposalNote] = useState(asset?.disposalNote ?? '');
@@ -98,9 +105,9 @@ export function FixedAssetForm({ asset }: { asset?: FixedAsset }) {
         ...(brought && { openingAsOf }),
         notes: notes.trim() || undefined,
         ...(disposing && { disposedOn, disposalNote: disposalNote.trim() || undefined }),
-        sourceDocumentId: asset?.sourceDocumentId,
+        sourceDocumentId: asset?.sourceDocumentId ?? prefill?.sourceDocumentId,
         costCentreId: asset?.costCentreId,
-        branchId: asset?.branchId,
+        branchId: asset?.branchId ?? prefill?.branchId,
       } as FixedAsset;
       const out = await saveFixedAsset(body);
       toast.show(tr(asset?.id ? 'books:assets.saved' : 'books:assets.added'), 'success');

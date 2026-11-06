@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
 import { vehicleIssues } from '../settings/vehicles';
-import { tcsRateFor } from '@esmart/core/data/tcsSections';
+import { partyTcsSection, tcsRateFor } from '@esmart/core/data/tcsSections';
 import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues } from '../settings/customFields';
@@ -22,6 +22,8 @@ import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { gstColumns, gstFlagsFrom, iso, requiredAddressFrom } from '../../lib/wire';
 import { tdsOn, tdsSectionFor } from '../../lib/tds';
+import { expectedSaleTds } from '@esmart/core/domain/tds';
+import { panOfGstin } from '@esmart/core/domain/gstin';
 import { costCentreIssues } from '../books/costCentres';
 import { partyToWire } from '../parties/wire';
 
@@ -134,6 +136,8 @@ export type LineInput = {
   gst?: GstFlags;
   /** A reimbursement line: the billable expense it recovers. */
   expenseId?: string | null;
+  /** On a purchase: a non-stock line's own cost centre; null takes the document's. */
+  costCentreId?: string | null;
 };
 
 /** The header of a document, after defaults are applied. */
@@ -160,10 +164,17 @@ export type DocFields = {
   placeOfSupplyStateCode: string | null;
   reverseCharge: boolean | null;
   noteReason: NonNullable<DocRow['noteReason']> | null;
-  /** A TDS section, `none`, or unset for the supplier's own. */
+  /** A direct note's GST treatment (RULES 6.24): with GST under s.34 (null too), or a financial note without. */
+  noteGst: 'withGst' | 'noGst' | null;
+  /** A direct note with GST: the original invoice or bill it adjusts. */
+  originalNumber: string | null;
+  originalDate: string | null;
+  /** A TDS section, `none`, or unset for the supplier's own (on an invoice, the customer's). */
   tdsSection?: string;
+  /** On an invoice: the rate the customer will deduct at; unset takes the section's. */
+  tdsRate?: number | null;
   costCentreId: string | null;
-  /** A TCS section (s.206C), `none`, or unset: an invoice keeps what it had. */
+  /** A TCS section (s.206C), `none`, or unset: an invoice keeps what it had, a new one takes the customer's. */
   tcsSection?: string | null;
   vehicleId?: string | null;
   /** Undefined keeps what the document had. */
@@ -190,6 +201,7 @@ export function linesFromWire(lines: Schema<'DocumentLine'>[]): LineInput[] {
     taxInclusive: l.taxInclusive ?? false,
     gst: l.gst,
     expenseId: l.expenseId ?? null,
+    costCentreId: l.costCentreId ?? null,
   }));
 }
 
@@ -212,6 +224,7 @@ export function linesFromRows(rows: LineRow[]): LineInput[] {
       taxRate: Number(l.taxRate),
       gst: gstFlagsFrom(l) ?? {},
       expenseId: l.expenseId,
+      costCentreId: l.costCentreId,
     }));
 }
 
@@ -243,11 +256,16 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     placeOfSupplyStateCode: keep(body.placeOfSupplyStateCode, base?.placeOfSupplyStateCode),
     reverseCharge: keep(body.reverseCharge, base?.reverseCharge),
     noteReason: keep(body.noteReason, base?.noteReason),
+    noteGst: keep(body.noteGst, base?.noteGst as DocFields['noteGst'] | undefined),
+    originalNumber: keep(body.originalNumber === undefined ? undefined : body.originalNumber.trim() || null, base?.originalNumber),
+    originalDate: keep(body.originalDate, base?.originalDate),
     // A stored document keeps what it had; a new one takes the supplier's section unless told otherwise.
     tdsSection: body.tdsSection ?? (base ? (base.tdsSection ?? 'none') : undefined),
+    tdsRate: body.tdsRate ?? (base?.tdsRate != null && (body.tdsSection === undefined || body.tdsSection === base.tdsSection) ? Number(base.tdsRate) : null),
     costCentreId: keep(body.costCentreId, base?.costCentreId),
     customFields: (body.customFields as Record<string, unknown> | undefined) ?? (base?.customFields as Record<string, unknown> | undefined),
-    tcsSection: body.tcsSection ?? base?.tcsSection ?? null,
+    // Like TDS: a stored invoice keeps what it had; a new one takes the customer's section unless told otherwise.
+    tcsSection: body.tcsSection ?? (base ? base.tcsSection : undefined),
     vehicleId: keep(body.vehicleId, base?.vehicleId),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
@@ -277,7 +295,11 @@ export function fieldsFromRow(row: DocRow): DocFields {
     placeOfSupplyStateCode: row.placeOfSupplyStateCode,
     reverseCharge: row.reverseCharge,
     noteReason: row.noteReason,
+    noteGst: row.noteGst as DocFields['noteGst'],
+    originalNumber: row.originalNumber,
+    originalDate: row.originalDate,
     tdsSection: row.tdsSection ?? (row.finalizedAt ? 'none' : undefined),
+    tdsRate: row.tdsRate != null ? Number(row.tdsRate) : null,
     costCentreId: row.costCentreId,
     customFields: row.customFields as Record<string, unknown>,
     tcsSection: row.tcsSection,
@@ -329,6 +351,9 @@ async function checkRecoveredExpenses(db: DbOrTx, companyId: string, f: DocField
     throw conflict('EXPENSE_ALREADY_RECOVERED', `${e?.number ?? 'The expense'} is already recovered on ${taken.number}`);
   }
 }
+
+/** A direct note's GST treatment; with GST unless it says otherwise. */
+export const directNoteGst = (f: Pick<DocFields, 'noteGst'>): 'withGst' | 'noGst' => (f.noteGst === 'noGst' ? 'noGst' : 'withGst');
 
 export type Prepared = {
   /** Columns for `documents`, totals included. */
@@ -407,11 +432,22 @@ export async function prepareDocument(
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
     // What a document is made from (the quote behind an order, the invoice behind a return) came first.
     else if (f.date < src.date) blocking('date', `Can't be before ${src.date}, the date of ${src.number.trim()} it was made from`);
-  } else if (NOTE_KINDS.includes(f.kind) && !f.noteReason) {
+  } else if (NOTE_KINDS.includes(f.kind)) {
     // A direct note (a discount over several invoices, a rate revision) needn't name one invoice or bill, but must say why.
-    blocking('noteReason', `A ${f.kind} not raised against a ${isPurchaseKind(f.kind) ? 'purchase bill' : 'invoice'} needs a reason`);
+    if (!f.noteReason) blocking('noteReason', `A ${f.kind} not raised against a ${isPurchaseKind(f.kind) ? 'purchase bill' : 'invoice'} needs a reason`);
+    // With GST (s.34) it still adjusts one supply: its number and date go to GSTR-1 CDNR/CDNUR and set the
+    // credit note's deadline (RULES 6.24). A financial note without GST adjusts none.
+    if (directNoteGst(f) === 'withGst') {
+      const what = isPurchaseKind(f.kind) ? 'bill' : 'invoice';
+      if (!f.originalNumber) blocking('originalNumber', `A ${f.kind} with GST and no linked ${what} needs the original ${what} number`);
+      if (!f.originalDate) blocking('originalDate', `A ${f.kind} with GST and no linked ${what} needs the original ${what} date`);
+      else if (f.originalDate > f.date) blocking('originalDate', `The original ${what} cannot be dated after the note (${f.date})`);
+    }
   }
+  if (f.noteGst && !NOTE_KINDS.includes(f.kind)) blocking('noteGst', 'Only a credit or debit note has a GST treatment');
+  if (f.noteGst === 'noGst' && f.sourceDocumentId) blocking('noteGst', 'A note against an invoice or bill adjusts its GST; only a direct note can be without GST');
 
+  const noGst = NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId && f.noteGst === 'noGst';
   const categories = (await db.select().from(schema.taxCategories).where(eq(schema.taxCategories.companyId, company.id))).map(taxCategoryCore);
   const itemIds = [...new Set(lines.map((l) => l.itemId).filter((x): x is string => !!x))];
   const items = itemIds.length
@@ -445,8 +481,14 @@ export async function prepareDocument(
     if (!(l.quantity > 0)) blocking(`lines[${i}].quantity`, 'Must be more than zero');
     if (l.unitPriceMinor < 0) blocking(`lines[${i}].unitPrice`, 'Cannot be negative');
     // The line's own treatment, else the item's. A non-taxable supply is charged at 0%.
-    const gst = l.gst ?? (item ? gstFlagsFrom(item) : undefined) ?? {};
+    // A financial note without GST charges none on any line (RULES 6.24).
+    const own = l.gst ?? (item ? gstFlagsFrom(item) : undefined) ?? {};
+    const gst = noGst ? { ...own, supplyType: 'nonGst' as const, reverseCharge: false, cessRate: 0 } : own;
     const taxable = !gst.reimbursement && (gst.supplyType ?? 'taxable') === 'taxable';
+    // A line's own cost centre is for what is spent, not stock (RULES 6.20): stock takes the document's,
+    // since its cost reaches profit only when it is sold.
+    if (l.costCentreId && !isPurchaseKind(f.kind)) blocking(`lines[${i}].costCentreId`, 'A line has its own cost centre only on a purchase; the document carries one');
+    else if (l.costCentreId && item?.trackInventory) blocking(`lines[${i}].costCentreId`, `${item.name} is stock: it takes the bill's cost centre`);
     return {
       id: l.id ?? '',
       itemId: l.itemId ?? undefined,
@@ -463,6 +505,7 @@ export async function prepareDocument(
       taxInclusive: l.taxInclusive,
       gst,
       expenseId: l.expenseId ?? undefined,
+      costCentreId: l.costCentreId ?? undefined,
     };
   });
 
@@ -475,7 +518,7 @@ export async function prepareDocument(
   }
   if (exchangeRate !== null && !(exchangeRate > 0)) blocking('exchangeRate', 'Must be more than zero');
 
-  issues.push(...(await costCentreIssues(db, company.id, [{ field: 'costCentreId', id: f.costCentreId }])));
+  issues.push(...(await costCentreIssues(db, company.id, [{ field: 'costCentreId', id: f.costCentreId }, ...lines.map((l, i) => ({ field: `lines[${i}].costCentreId`, id: l.costCentreId }))])));
   issues.push(...(await vehicleIssues(db, company.id, f.vehicleId)));
   await checkRecoveredExpenses(db, company.id, f, coreLines, opts.documentId, blocking);
   if (issues.length) throw unprocessable(issues);
@@ -491,7 +534,7 @@ export async function prepareDocument(
 
   const coreCompany = companyCore(company);
   // A supplier marked reverse charge puts the whole bill under it unless the document says otherwise.
-  const reverseCharge = f.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge);
+  const reverseCharge = noGst ? false : (f.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge));
   const taxContext = buildTaxContext(coreCompany, {
     placeOfSupply: placeOfSupply ?? undefined,
     party: partyCore(party!),
@@ -516,7 +559,17 @@ export async function prepareDocument(
   };
   let totals = calculateDocument(calcInput);
   // TCS the seller collects on an invoice under its section (s.206C), worked on the price with GST.
-  const tcsRate = f.kind === 'invoice' ? tcsRateFor(f.tcsSection, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
+  let tcsCode = f.tcsSection === undefined ? (partyTcsSection(party!) ?? null) : f.tcsSection;
+  let tcsRate = f.kind === 'invoice' ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
+  // A credit note or return against an invoice that collected TCS gives it back in proportion: at the
+  // invoice's rate and under its section, on the note's own value (RULES 6.13, pending CA).
+  if ((f.kind === 'creditNote' || f.kind === 'salesReturn') && f.sourceDocumentId) {
+    const [src] = await db.select({ section: D.tcsSection, rate: D.tcsRate }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
+    if (src?.section && Number(src.rate) > 0) {
+      tcsCode = src.section;
+      tcsRate = Number(src.rate);
+    }
+  }
   if (tcsRate > 0) totals = calculateDocument({ ...calcInput, tcsRate });
 
   // TDS the business keeps back from a supplier, worked on the taxable value in base currency.
@@ -524,6 +577,11 @@ export async function prepareDocument(
   const baseMinor = Math.round(totals.taxableAmount.minor * exchangeRate!);
   if (f.kind === 'purchaseBill' || f.kind === 'supplierDebitNote') {
     tds = await tdsOn(db, company, party!, tdsSectionFor(company, party!, f.tdsSection), f.date, baseMinor, { documentId: opts.documentId });
+  } else if (f.kind === 'invoice') {
+    // TDS the customer will deduct (RULES 4.14): expected only, never posted, and the total is unchanged.
+    const section = f.tdsSection === 'none' ? null : (f.tdsSection ?? party!.tdsSection ?? null);
+    const expected = expectedSaleTds({ section, rate: f.tdsRate, sellerPan: panOfGstin(company.taxIdentifier ?? undefined) || undefined, date: f.date, baseMinor });
+    if (expected) tds = expected;
   } else if (f.kind === 'supplierCreditNote' && f.sourceDocumentId) {
     // A credit note gives back TDS at the rate its bill was taxed at.
     const [src] = await db.select({ section: D.tdsSection, rate: D.tdsRate }).from(D).where(eq(D.id, f.sourceDocumentId));
@@ -559,7 +617,10 @@ export async function prepareDocument(
       placeOfSupplyStateCode: placeOfSupply,
       reverseCharge,
       noteReason: NOTE_KINDS.includes(f.kind) ? f.noteReason : null,
-      tcsSection: tcsRate > 0 ? f.tcsSection : null,
+      noteGst: NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId ? directNoteGst(f) : null,
+      originalNumber: NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId && !noGst ? f.originalNumber : null,
+      originalDate: NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId && !noGst ? f.originalDate : null,
+      tcsSection: tcsRate > 0 ? tcsCode : null,
       vehicleId: f.vehicleId ?? null,
       tcsRate: tcsRate > 0 ? String(tcsRate) : null,
       tdsSection: tds.amountMinor > 0 || tds.section ? tds.section : null,
@@ -599,6 +660,7 @@ export async function prepareDocument(
       taxInclusive: l.taxInclusive,
       ...gstColumns(l.gst),
       expenseId: l.expenseId ?? null,
+      costCentreId: l.costCentreId ?? null,
       lineTotalMinor: calculateLine(l, f.currency, taxContext).total.minor,
     })),
   };
