@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
+import { useSingleFlight } from '../../components/useSingleFlight';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
@@ -110,9 +111,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [complianceSheet, setComplianceSheet] = useState<'generate' | 'cancel' | null>(null);
-  const [busy, setBusy] = useState(false);
-  // The same, read at once: a second tap on Send can land before `busy` re-renders.
-  const remoteBusy = useRef(false);
+  // One server round trip at a time: a second tap on Send can land before `busy` re-renders.
+  const { run: oneAtATime, busy } = useSingleFlight();
   const desktop = useIsDesktop();
   const [desktopTab, setDesktopTab] = useState<'details' | 'preview'>('details');
 
@@ -166,32 +166,28 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     });
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
-  const shareDocument = async () => {
-    if (remoteBusy.current) return;
-    remoteBusy.current = true;
-    setBusy(true);
-    try {
-      await toast.promise(
-        (async () => {
-          const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
-          await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
-        })(),
-        {
-          loading: tr('sales:detail.pdfPreparing'),
-          success: { text: tr(Platform.OS === 'web' ? 'sales:detail.pdfDownloaded' : 'sales:detail.pdfReady'), detail: pdfFileName(doc.kind, doc.number) },
-          error: (err) => `${tr('sales:detail.pdfFailed')} ${describeError(err, tr)}`,
-          icon: 'file-pdf-box',
-        },
-      );
-      if ((doc.kind === 'quote' || doc.kind === 'proforma') && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
-    } catch {
-      // The toast has said what went wrong.
-    } finally {
-      remoteBusy.current = false;
-      setBusy(false);
-      setActionsOpen(false);
-    }
-  };
+  const shareDocument = () =>
+    oneAtATime(async () => {
+      try {
+        await toast.promise(
+          (async () => {
+            const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
+            await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
+          })(),
+          {
+            loading: tr('sales:detail.pdfPreparing'),
+            success: { text: tr(Platform.OS === 'web' ? 'sales:detail.pdfDownloaded' : 'sales:detail.pdfReady'), detail: pdfFileName(doc.kind, doc.number) },
+            error: (err) => `${tr('sales:detail.pdfFailed')} ${describeError(err, tr)}`,
+            icon: 'file-pdf-box',
+          },
+        );
+        if ((doc.kind === 'quote' || doc.kind === 'proforma') && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
+      } catch {
+        // The toast has said what went wrong.
+      } finally {
+        setActionsOpen(false);
+      }
+    });
 
   /** A link copied in a browser, or offered to the share sheet on a phone. */
   const handOverLink = async (url: string) => {
@@ -210,16 +206,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   /** A server round trip under a promise toast: working while it is out, then done or why not. */
   /** One at a time: a send, a link or a payment link already on its way isn't started again. */
   const runRemote = (job: () => Promise<void>, messages: { loading: string; success: string; icon: ToastIcon }) => {
-    if (remoteBusy.current) return;
-    remoteBusy.current = true;
-    setBusy(true);
-    toast
-      .promise(job(), { ...messages, success: { text: messages.success, detail: about }, error: (err) => describeError(err, tr) })
-      .catch(() => {})
-      .finally(() => {
-        remoteBusy.current = false;
-        setBusy(false);
-      });
+    void oneAtATime(() =>
+      toast.promise(job(), { ...messages, success: { text: messages.success, detail: about }, error: (err) => describeError(err, tr) }).catch(() => {}),
+    );
   };
 
   const send = (channel: SendChannel) =>
