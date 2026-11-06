@@ -17,7 +17,7 @@ import { usePlan } from '@esmart/app/store/selectors';
 // A page swap the open form can't see coming; it asks first when there are unsaved changes.
 import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
 import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth as width, useSidebarCollapsed } from './sidebarState';
-import { SETTINGS_HREF } from './navLinks';
+import { SETTINGS_HREF, sectionHref } from './navLinks';
 import { TOP_BAR_HEIGHT } from './shell/TopBar';
 
 export { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH };
@@ -347,7 +347,10 @@ function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) 
         gap: 1,
       }}
     >
-      <PanelItem page={hub} label={tr('nav:shell.overview', { label: name })} active={pathname === hub.route} badge={undefined} />
+      {/* No overview when the plan can't open the section's own page. */}
+      {canOpen(plan, hub.route) ? (
+        <PanelItem page={hub} label={tr('nav:shell.overview', { label: name })} active={pathname === hub.route} badge={undefined} />
+      ) : null}
       {columns.map((col) => (
         <View key={col.group ?? 'all'} role="group" aria-label={col.group ? tr(`nav:menuGroup.${col.group}`) : undefined} style={{ gap: 1 }}>
           {col.group ? (
@@ -465,6 +468,15 @@ function SectionPanel({
         ]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+          {/* The plan can't open the section's own page: its name heads the panel, not a link to it. */}
+          {!canOpen(plan, hub) ? (
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, height: ROW_HEIGHT, paddingHorizontal: t.spacing.sm }}>
+              <Icon name={section(tab).activeIcon} size={ICON_SIZE} color={t.c.primary} />
+              <Text variant="body" weight="600" numberOfLines={1} style={{ flex: 1 }}>
+                {name}
+              </Text>
+            </View>
+          ) : (
           <Pressable
             {...({ href: hub } as object)}
             onPress={(e) => {
@@ -497,6 +509,7 @@ function SectionPanel({
             </Text>
             <Icon name="arrow-right" size={16} color={t.c.muted} />
           </Pressable>
+          )}
           {actions.map((a) => (
             <Pressable
               key={a.key}
@@ -641,7 +654,8 @@ export function Sidebar() {
     compact ? { onHoverIn: (rect: Rect) => setTip({ label, rect, on: pathname }), onHoverOut: () => setTip(null) } : {};
 
   const labelFor = (name: TabName) => tr(`nav:tab.${name}` as 'nav:tab.index');
-  const visible = TABS.filter((tab) => tab.name !== 'more' && canOpen(plan, tabPath(tab.name)));
+  // A section shows while the plan can open any of its pages (Stock on Free has Items & services).
+  const visible = TABS.filter((tab) => tab.name !== 'more' && sectionHref(plan, tab.name));
   const groups = GROUPS.map((key) => ({ key, tabs: visible.filter((tab) => section(tab.name).sidebarGroup === key) })).filter((g) => g.tabs.length > 0);
 
   return (

@@ -44,6 +44,8 @@ const PickerButton = React.forwardRef<
             gap: t.spacing.sm,
             height: 40,
             maxWidth: compact ? undefined : maxWidth,
+            // Its side of the bar is only half what search leaves: short of room, the name shortens rather than running under search.
+            flexShrink: 1,
             minWidth: 0,
             paddingLeft: t.spacing.xs + 2,
             paddingRight: t.spacing.sm,

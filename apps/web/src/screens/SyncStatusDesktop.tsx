@@ -280,6 +280,13 @@ export function SyncStatusDesktop() {
                 {tr('settings:sync.conflictNote')}
               </Text>
             </Card>
+            {/* The queue is saved only in this browser: clearing its site data deletes it. */}
+            <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              <Icon name="content-save-alert-outline" size={19} color={t.c.muted} />
+              <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
+                {tr('settings:sync.storageNoteWeb')}
+              </Text>
+            </Card>
           </View>
         </View>
       </ScrollView>

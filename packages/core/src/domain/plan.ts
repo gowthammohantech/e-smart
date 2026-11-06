@@ -196,7 +196,7 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
   ['/expenses', 'expenses'],
   ['/settings/expense-categories', 'expenses'],
   ['/ocr', 'ocr'],
-  ['/settings/currencies', 'fx'],
+  // Currencies & rates is open on every plan: a customer on any plan can be billed in their currency.
   // Branches opens on every plan: Free has its one branch to name, and adding more is what is locked.
   ['/books', 'books'],
   // Accounts & P&L reads the books.

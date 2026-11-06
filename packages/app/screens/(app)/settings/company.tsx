@@ -6,7 +6,8 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { PhoneField, PickerField, Segmented, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { focusFirstInvalid, PhoneField, PickerField, Segmented, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { useToast } from '@esmart/ui/components/Toast';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
@@ -37,6 +38,7 @@ export default function CompanySettings() {
   const months = monthNames();
   const goBack = useGoBack();
   const { run: serverSave, saving, blocked } = useServerSave();
+  const toast = useToast();
 
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
@@ -89,20 +91,28 @@ export default function CompanySettings() {
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = async () => {
+    // In the order the fields sit on the page, so the toast names the first one you'd reach.
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'> = {
       name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
-      taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       postalCode: validPostalCode(postalCode, company?.country, stateCode),
-      tan: taxRegistered ? validTan(tan) : undefined,
       // The same shapes the server checks, said here in words.
-      ifsc: ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
       accountNumber: accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
+      ifsc: ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
       upiId: upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
+      taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
+      tan: taxRegistered ? validTan(tan) : undefined,
     };
     setErrors(next);
-    if (hasErrors(next) || !company) return;
+    if (hasErrors(next)) {
+      // The page is long: the field may be out of sight, so say what's wrong and go to it.
+      const first = Object.values(next).find(Boolean);
+      if (first) toast.show(first, 'error');
+      focusFirstInvalid();
+      return;
+    }
+    if (!company) return;
 
     const res = await serverSave(() =>
       saveCompany({

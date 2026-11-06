@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { IconName } from '@esmart/ui/components/Icon';
-import { canOpen } from '@esmart/core/domain/plan';
+import { canOpen, type Module } from '@esmart/core/domain/plan';
+import type { PlanTier } from '@esmart/core/types';
 import { useDisabledModules, usePlan } from '../store/selectors';
-import { MENU, SETTINGS, TOOLS, appHref, sectionPath, type SettingsGroupKey } from './menu';
+import { MENU, SETTINGS, TOOLS, appHref, section, sectionPath, type SettingsGroupKey } from './menu';
 import type { TabName } from './tabs';
 
 export type SubLink = { href: string; labelKey: string };
@@ -15,6 +16,16 @@ export type SubLink = { href: string; labelKey: string };
 export const SECTION_LINKS: Partial<Record<TabName, SubLink[]>> = Object.fromEntries(
   MENU.filter((s) => s.pages.length > 0).map((s) => [s.name, s.pages.map((p) => ({ href: p.route, labelKey: p.labelKey }))]),
 );
+
+/**
+ * Where a section leads on a plan: its own page, or the first of its pages the
+ * plan can open when the section's page is locked (Stock on Free still has
+ * Items & services). Null when the plan can open none of it.
+ */
+export function sectionHref(plan: PlanTier, name: TabName, disabled?: readonly Module[] | null): string | null {
+  if (canOpen(plan, sectionPath(name), disabled)) return sectionPath(name);
+  return section(name).pages.find((p) => !p.action && canOpen(plan, p.route, disabled))?.route ?? null;
+}
 
 /** Where the desktop's Settings entry opens: the first settings page. */
 export const SETTINGS_HREF = SETTINGS[0].pages[0].route;
@@ -47,7 +58,8 @@ export function useAppPages(): AppPage[] {
 
     MENU.filter((s) => s.name !== 'more').forEach((s) => {
       const name = tr(`nav:tab.${s.name}` as 'nav:tab.index');
-      add({ key: `tab-${s.name}`, title: name, icon: s.icon, route: sectionPath(s.name) });
+      const href = sectionHref(plan, s.name, disabled);
+      if (href) add({ key: `tab-${s.name}`, title: name, icon: s.icon, route: href });
       s.pages.forEach((p) =>
         add({
           key: p.route,

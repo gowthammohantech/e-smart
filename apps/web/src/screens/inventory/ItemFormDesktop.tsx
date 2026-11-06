@@ -21,6 +21,7 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCategories, useItems, useTaxCategories } from '@esmart/app/store/selectors';
 import { Divider, Panel, Row, SummaryRow, TwoColumns } from './parts';
 import { useGoBack } from '@esmart/app/navigation/useGoBack';
+import { FROM_DOCUMENT, handBack } from '@esmart/app/navigation/handBack';
 import { CustomFieldsSection } from '@esmart/app/features/customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 
@@ -50,7 +51,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const hasPos = useHasModule('pos');
 
   // A new one starts as goods or a service from ?type= (Items & services passes its open tab).
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; from?: string }>();
   const startType: ItemType = item?.type ?? (params.type === 'service' ? 'service' : 'goods');
   const [type, setType] = useState<ItemType>(startType);
   const [name, setName] = useState(item?.name ?? '');
@@ -147,9 +148,14 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
 
     const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'), { icon: 'tag-check-outline', detail: record.name });
     if (!res) return;
+    const id = res.id ?? record.id;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else if (another) resetForAnother();
-    else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
+    else if (params.from === FROM_DOCUMENT && router.canGoBack()) {
+      // Back to the document it was made from, which adds it as a line.
+      handBack({ kind: 'item', record: { ...record, id } });
+      router.back();
+    } else router.replace(`/(app)/catalog/items/${id}`);
   };
   useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
 
@@ -185,7 +191,8 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
               <Panel title={tr('inventory:form.section.details')} subtitle={tr('inventory:form.section.detailsHint')} icon="tag-outline">
                 {/* What it is on the left, and whether it is offered on new documents on the right. */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: t.spacing.lg }}>
-                  <FieldShell label={tr('inventory:form.type')}>
+                  {/* A saved item stays a product or a service: its documents and stock were made as one. */}
+                  <FieldShell label={tr('inventory:form.type')} hint={item ? tr('inventory:form.typeLocked') : undefined}>
                     <Segmented
                       style={{ width: 280 }}
                       options={[
@@ -193,6 +200,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                         { value: 'service', label: tr('inventory:type.service') },
                       ]}
                       value={type}
+                      disabled={!!item}
                       onChange={(v) => {
                         setType(v as ItemType);
                         if (v === 'service') {

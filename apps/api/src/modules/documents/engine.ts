@@ -428,8 +428,10 @@ export async function prepareDocument(
   }
 
   if (f.sourceDocumentId) {
-    const [src] = await db.select({ id: D.id }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
+    const [src] = await db.select({ id: D.id, date: D.date, number: D.number }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
+    // What a document is made from (the quote behind an order, the invoice behind a return) came first.
+    else if (f.date < src.date) blocking('date', `Can't be before ${src.date}, the date of ${src.number.trim()} it was made from`);
   } else if (NOTE_KINDS.includes(f.kind)) {
     // A direct note (a discount over several invoices, a rate revision) needn't name one invoice or bill, but must say why.
     if (!f.noteReason) blocking('noteReason', `A ${f.kind} not raised against a ${isPurchaseKind(f.kind) ? 'purchase bill' : 'invoice'} needs a reason`);

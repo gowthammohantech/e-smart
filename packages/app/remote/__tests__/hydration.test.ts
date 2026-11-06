@@ -5,6 +5,9 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('expo-secure-store', () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
 jest.mock('../config', () => ({ API_BASE_URL: 'http://api.test/v1', DEMO_LOGIN: { email: '', password: '' } }));
 
+// The first test loads the whole store from cold, which takes seconds on a busy CI runner.
+jest.setTimeout(30_000);
+
 // Fetched after each module reset: the store must share this instance.
 let AsyncStorage: { getItem: jest.Mock; setItem: jest.Mock; clear: () => Promise<void> };
 

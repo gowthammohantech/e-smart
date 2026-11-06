@@ -6,11 +6,10 @@ import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import type { WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
-import { canOpen } from '@esmart/core/domain/plan';
 import { quickActions } from '@esmart/app/components/QuickActions';
-import { TABS, tabPath } from '@esmart/app/navigation/tabs';
+import { TABS } from '@esmart/app/navigation/tabs';
 import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
-import { matchPages, useAppPages } from '@esmart/app/navigation/pages';
+import { matchPages, sectionHref, useAppPages } from '@esmart/app/navigation/pages';
 import { appHref } from '@esmart/app/navigation/menu';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
 
@@ -51,12 +50,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       return [...matchedActions, ...matchedPages, ...Array.from(byGroup.values()).flat()];
     }
     // More is the phone's catch-all; the sidebar and settings cover it here.
-    const sections: Entry[] = TABS.filter((tab) => tab.name !== 'more' && canOpen(plan, tabPath(tab.name))).map((tab) => ({
+    // A section whose own page is locked opens the first of its pages the plan has.
+    const sections: Entry[] = TABS.filter((tab) => tab.name !== 'more' && sectionHref(plan, tab.name)).map((tab) => ({
       key: `tab-${tab.name}`,
       group: tr('nav:shell.goTo'),
       title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
       icon: tab.icon,
-      route: appHref(tabPath(tab.name)),
+      route: appHref(sectionHref(plan, tab.name) as string),
     }));
     return [...actions, ...sections];
   }, [searching, query, pages, results, tr, t.c.primary, allowed, plan]);

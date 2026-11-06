@@ -1059,7 +1059,6 @@ paths:
     get:
       tags: [Settings]
       operationId: listExchangeRates
-      x-plan-module: fx
       responses:
         '200':
           description: OK
@@ -1073,7 +1072,6 @@ paths:
       tags: [Settings]
       operationId: createExchangeRate
       x-roles: [owner, admin, accountant]
-      x-plan-module: fx
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1095,7 +1093,6 @@ paths:
       tags: [Settings]
       operationId: saveExchangeRate
       x-roles: [owner, admin, accountant]
-      x-plan-module: fx
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
       requestBody:
         required: true
@@ -1184,7 +1181,6 @@ paths:
       operationId: refreshExchangeRates
       summary: Pull today's rates from the FX provider for every currency the company uses
       x-roles: [owner, admin, accountant]
-      x-plan-module: fx
       responses:
         '200':
           description: Rates stored with source `provider`

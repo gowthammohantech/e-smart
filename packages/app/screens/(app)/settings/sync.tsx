@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -131,6 +131,13 @@ export default function SyncStatus() {
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
           <Icon name="information-outline" size={19} color={t.c.muted} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('settings:sync.conflictNote')}</Text>
+        </Card>
+        {/* The queue is saved only on this device: clearing the browser's or the app's data deletes it. */}
+        <Card variant="flat" style={{ marginTop: t.spacing.sm, flexDirection: 'row', gap: t.spacing.md }}>
+          <Icon name="content-save-alert-outline" size={19} color={t.c.muted} />
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
+            {tr(Platform.OS === 'web' ? 'settings:sync.storageNoteWeb' : 'settings:sync.storageNoteApp')}
+          </Text>
         </Card>
       </ScrollView>
 

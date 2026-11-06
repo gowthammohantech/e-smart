@@ -6,7 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, focusFirstInvalid, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, FieldShell, focusFirstInvalid, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
@@ -22,6 +22,7 @@ import { useAppStore } from '../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCategories, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { FROM_DOCUMENT, handBack } from '../../navigation/handBack';
 import { GstTreatmentFields } from './GstTreatmentFields';
 import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
@@ -50,7 +51,7 @@ export function ItemForm({ item }: { item?: Item }) {
   const hasPos = useHasModule('pos');
 
   // A new one starts as goods or a service from ?type= (Items & services passes its open tab).
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; from?: string }>();
   const startType: ItemType = item?.type ?? (params.type === 'service' ? 'service' : 'goods');
   const [type, setType] = useState<ItemType>(startType);
   const [name, setName] = useState(item?.name ?? '');
@@ -148,9 +149,14 @@ export function ItemForm({ item }: { item?: Item }) {
 
     const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'), { icon: 'tag-check-outline', detail: record.name });
     if (!res) return;
+    const id = res.id ?? record.id;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
     else if (another) resetForAnother();
-    else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
+    else if (params.from === FROM_DOCUMENT && router.canGoBack()) {
+      // Back to the document it was made from, which adds it as a line.
+      handBack({ kind: 'item', record: { ...record, id } });
+      router.back();
+    } else router.replace(`/(app)/catalog/items/${id}`);
   };
   useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
 
@@ -162,20 +168,24 @@ export function ItemForm({ item }: { item?: Item }) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         >
-          <Segmented
-            options={[
-              { value: 'goods', label: tr('inventory:type.goods') },
-              { value: 'service', label: tr('inventory:type.service') },
-            ]}
-            value={type}
-            onChange={(v) => {
-              setType(v as ItemType);
-              if (v === 'service') {
-                setTrackInventory(false);
-                setUnit('NOS');
-              }
-            }}
-          />
+          {/* A saved item stays a product or a service: its documents and stock were made as one. */}
+          <FieldShell hint={item ? tr('inventory:form.typeLocked') : undefined}>
+            <Segmented
+              options={[
+                { value: 'goods', label: tr('inventory:type.goods') },
+                { value: 'service', label: tr('inventory:type.service') },
+              ]}
+              value={type}
+              disabled={!!item}
+              onChange={(v) => {
+                setType(v as ItemType);
+                if (v === 'service') {
+                  setTrackInventory(false);
+                  setUnit('NOS');
+                }
+              }}
+            />
+          </FieldShell>
 
           <TextField id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
           {hasPos ? (

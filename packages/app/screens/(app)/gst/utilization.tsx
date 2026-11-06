@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -65,6 +65,13 @@ export default function GstUtilizationScreen() {
   const [busy, setBusy] = useState(false);
   const [inputs, setInputs] = useState<Inputs | null>(null);
   const g = gstin ?? gstins[0];
+  // A new GSTIN or period starts from the prefill again; a new date only reads the cash ledger again.
+  const scope = `${g}|${period}`;
+  const [inputsScope, setInputsScope] = useState(scope);
+  if (inputsScope !== scope) {
+    setInputsScope(scope);
+    setInputs(null);
+  }
 
   const toInputs = (s: SetOff): Inputs => {
     const str = (m: number) => (m ? toAmountInput(money(m, baseCurrency)) : '');
@@ -89,8 +96,6 @@ export default function GstUtilizationScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g, period, date, company.id]);
-  // A new GSTIN or period starts from the prefill again; a new date only reads the cash ledger again.
-  useEffect(() => setInputs(null), [g, period]);
   // Back from recording a challan: the cash ledger has moved.
   useFocusEffect(
     useCallback(() => {

@@ -75,6 +75,7 @@ import { LoadingView } from '../../components/LoadingView';
 import { useDebounced } from '../../components/useDebounced';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
+import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 import { tdsForDocument } from '../../store/tds';
 import { useItcBreakup } from './itcBreakup';
 import { expectedSaleTds } from '@esmart/core/domain/tds';
@@ -410,7 +411,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const dueBeforeDate = (kind === 'invoice' || kind === 'purchaseBill') && draft.dueDate && draft.dueDate < draft.date ? beforeDocDate : undefined;
   const validBeforeDate = (kind === 'quote' || kind === 'proforma') && draft.validUntil && draft.validUntil < draft.date ? beforeDocDate : undefined;
   // What the server refuses on any save, a draft too.
-  const dateProblem = dateBeforeOpeningStock ?? dueBeforeDate ?? validBeforeDate;
+  // A draft can't be dated before what it was made from either; the server refuses it.
+  const dateProblem = dateBeforeSource ?? dateBeforeOpeningStock ?? dueBeforeDate ?? validBeforeDate;
   const editingIsNew = !!editingLine && !draft.lines.some((l) => l.id === editingLine.id);
 
   // The item list shows stock at this branch when finalising this document moves
@@ -476,6 +478,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     // refresh or a shared link reopens it with the same party.
     if (!documentId) setParams({ partyId: id });
   };
+
+  // Back from New item opened from this document: the item goes on as a line.
+  const takeMade = useRef<() => void>(() => {});
+  useEffect(() => {
+    takeMade.current = () => {
+      const made = takeHandBack();
+      if (made?.kind !== 'item') return;
+      const line = lineFromItem(made.record, isPurchase, taxCategories);
+      addLine({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) });
+    };
+  });
+  useFocusEffect(useCallback(() => takeMade.current(), []));
 
   // "Add customer" from the picker: the party saved there is the one this document is for.
   const partiesBeforeAdd = useRef<Set<string> | null>(null);
@@ -545,39 +559,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (warning) setCreditWarning(warning);
     else setConfirmFinalize(true);
   };
-
-  // Ctrl+Enter (⌘+Enter on a Mac, shown on the Finalise button) does what the Finalise button does: the same
-  // checks, then the same confirmation, so nothing is finalised without it.
-  // Only while this editor is the screen in view; a phone has no keyboard for it.
-  const finalizeShortcut = useRef(() => {});
-  useEffect(() => {
-    finalizeShortcut.current = () => {
-      if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
-      // Not over another sheet (picking an item, editing a line…): finish that first.
-      if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
-      if (editingIssued) return void save(false);
-      setSendAfter(false);
-      requestFinalize();
-    };
-  });
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
-      const onKey = (e: KeyboardEvent) => {
-        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-        // Held down, the key repeats: one finalise per press.
-        if (e.repeat) {
-          e.preventDefault();
-          return;
-        }
-        e.preventDefault();
-        finalizeShortcut.current();
-      };
-      // Capturing, so it still works from inside a text field, which keeps Enter to itself.
-      document.addEventListener('keydown', onKey, true);
-      return () => document.removeEventListener('keydown', onKey, true);
-    }, []),
-  );
 
   const save = async (finalize: boolean) => {
     if (!draft.partyId) return;
@@ -706,6 +687,40 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       setDocumentStatus(id, target, creditOverride ? { overrideCreditLimit: true } : undefined);
     }
   };
+
+  // Ctrl+Enter (⌘+Enter on a Mac, shown on the Finalise button) does what the Finalise button does: the same
+  // checks, then the same confirmation, so nothing is finalised without it.
+  // Only while this editor is the screen in view; a phone has no keyboard for it.
+  const finalizeShortcut = useRef(() => {});
+  useEffect(() => {
+    finalizeShortcut.current = () => {
+      if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
+      // Not over another sheet (picking an item, editing a line…): finish that first.
+      if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
+      if (editingIssued) return void save(false);
+      setSendAfter(false);
+      requestFinalize();
+    };
+  });
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+        // Held down, the key repeats: one finalise per press.
+        if (e.repeat) {
+          e.preventDefault();
+          return;
+        }
+        e.preventDefault();
+        finalizeShortcut.current();
+      };
+      // Capturing, so it still works from inside a text field, which keeps Enter to itself.
+      document.addEventListener('keydown', onKey, true);
+      return () => document.removeEventListener('keydown', onKey, true);
+    }, []),
+  );
+
   // Ctrl+S (⌘+S) saves the draft, as "Save draft" does; not over another sheet.
   useSaveShortcut(
     () => void save(false),
@@ -1637,7 +1652,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   style={{ flex: 1 }}
                   onPress={() => {
                     setItemOpen(false);
-                    router.push('/(app)/catalog/items/new');
+                    router.push(`/(app)/catalog/items/new?from=${FROM_DOCUMENT}` as never);
                   }}
                 />
               </View>
