@@ -22,6 +22,8 @@ export type OnboardingDraft = {
   fiscalYearStartMonth: number;
   taxRegistered: boolean;
   taxIdentifier: string;
+  /** The GSTIN the business details were last filled from, so going back to Tax doesn't fill them over again. */
+  prefilledFromGstin: string;
   compositionScheme: boolean;
   invoicePrefix: string;
   invoiceNextNumber: string;
@@ -69,6 +71,7 @@ const initial: OnboardingDraft = {
   fiscalYearStartMonth: 4,
   taxRegistered: true,
   taxIdentifier: '',
+  prefilledFromGstin: '',
   compositionScheme: false,
   invoicePrefix: 'INV',
   invoiceNextNumber: '1',
@@ -104,8 +107,8 @@ export const useOnboardingStore = create<OnboardingState>()(
   ),
 );
 
-/** Step order. Names live in `onboarding:step.*`. */
-export const ONBOARDING_STEPS = ['business', 'country', 'tax', 'numbering', 'branches'] as const;
+/** Step order: Tax comes first so a GSTIN can fill in the business details after it. Names live in `onboarding:step.*`. */
+export const ONBOARDING_STEPS = ['tax', 'business', 'country', 'numbering', 'branches'] as const;
 
 export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number];
 

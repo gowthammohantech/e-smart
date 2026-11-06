@@ -325,7 +325,7 @@ ${url}`;
   // document reads as finalised, and drop the flag so a reload or Back doesn't send again.
   const { send: sendParam } = useLocalSearchParams<{ send?: string }>();
   const sentFromEditor = useRef(false);
-  const sendNow = useRef(sendVia);
+  const sendNow = useRef<typeof sendVia | null>(null);
   // Kept current after each render, as the editor does for its finalise shortcut.
   useEffect(() => {
     sendNow.current = sendVia;
@@ -334,7 +334,7 @@ ${url}`;
     if (sendParam !== 'email' || sentFromEditor.current || !isFinalized(doc.status)) return;
     sentFromEditor.current = true;
     router.setParams({ send: undefined });
-    sendNow.current('email');
+    sendNow.current?.('email');
   }, [sendParam, doc.status, router]);
 
   const convert = async (target: DocumentKind) => {
@@ -908,6 +908,7 @@ ${url}`;
 
       {/* Action sheet */}
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>
+        {/* eslint-disable-next-line react-hooks/refs -- these onPress handlers read remoteBusy.current only when tapped, never while rendering */}
         {[
           ...(isFinalized(doc.status)
             ? [
