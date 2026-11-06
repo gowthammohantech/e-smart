@@ -104,7 +104,15 @@
     "creditSide": "Credit (Cr)",
     "openingOnDate": "Opening balance as on a date",
     "openingOnDateHint": "Off: it stands at the start of your books.",
-    "openingDate": "As on"
+    "openingDate": "As on",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "nature": {
+      "asset": "Assets",
+      "liability": "Liabilities",
+      "income": "Income",
+      "expense": "Expenses"
+    }
   },
   "vouchers": {
     "empty": "No vouchers yet",

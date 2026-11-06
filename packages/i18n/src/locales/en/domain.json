@@ -92,7 +92,8 @@
     "fx": "Multi-currency",
     "branches": "Branches",
     "payables": "Payables",
-    "books": "Books"
+    "books": "Books",
+    "pos": "Retail item fields"
   },
   "paymentMethod": {
     "cash": "Cash",

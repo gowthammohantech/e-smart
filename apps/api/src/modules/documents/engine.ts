@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
 import { vehicleIssues } from '../settings/vehicles';
-import { tcsRateFor } from '@esmart/core/data/tcsSections';
+import { partyTcsSection, tcsRateFor } from '@esmart/core/data/tcsSections';
 import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues } from '../settings/customFields';
@@ -163,7 +163,7 @@ export type DocFields = {
   /** A TDS section, `none`, or unset for the supplier's own. */
   tdsSection?: string;
   costCentreId: string | null;
-  /** A TCS section (s.206C), `none`, or unset: an invoice keeps what it had. */
+  /** A TCS section (s.206C), `none`, or unset: an invoice keeps what it had, a new one takes the customer's. */
   tcsSection?: string | null;
   vehicleId?: string | null;
   /** Undefined keeps what the document had. */
@@ -247,7 +247,8 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     tdsSection: body.tdsSection ?? (base ? (base.tdsSection ?? 'none') : undefined),
     costCentreId: keep(body.costCentreId, base?.costCentreId),
     customFields: (body.customFields as Record<string, unknown> | undefined) ?? (base?.customFields as Record<string, unknown> | undefined),
-    tcsSection: body.tcsSection ?? base?.tcsSection ?? null,
+    // Like TDS: a stored invoice keeps what it had; a new one takes the customer's section unless told otherwise.
+    tcsSection: body.tcsSection ?? (base ? base.tcsSection : undefined),
     vehicleId: keep(body.vehicleId, base?.vehicleId),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
@@ -514,7 +515,8 @@ export async function prepareDocument(
   };
   let totals = calculateDocument(calcInput);
   // TCS the seller collects on an invoice under its section (s.206C), worked on the price with GST.
-  const tcsRate = f.kind === 'invoice' ? tcsRateFor(f.tcsSection, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
+  const tcsCode = f.tcsSection === undefined ? (partyTcsSection(party!) ?? null) : f.tcsSection;
+  const tcsRate = f.kind === 'invoice' ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
   if (tcsRate > 0) totals = calculateDocument({ ...calcInput, tcsRate });
 
   // TDS the business keeps back from a supplier, worked on the taxable value in base currency.
@@ -557,7 +559,7 @@ export async function prepareDocument(
       placeOfSupplyStateCode: placeOfSupply,
       reverseCharge,
       noteReason: NOTE_KINDS.includes(f.kind) ? f.noteReason : null,
-      tcsSection: tcsRate > 0 ? f.tcsSection : null,
+      tcsSection: tcsRate > 0 ? tcsCode : null,
       vehicleId: f.vehicleId ?? null,
       tcsRate: tcsRate > 0 ? String(tcsRate) : null,
       tdsSection: tds.amountMinor > 0 || tds.section ? tds.section : null,

@@ -11,6 +11,25 @@ describe('switching modules off', () => {
     expect(moduleEnabled('pro', ['purchases'], 'payables')).toBe(false);
     expect(moduleEnabled('pro', ['expenses'], 'ocr')).toBe(false);
     expect(moduleEnabled('basic', [], 'books')).toBe(false);
+    // Retail item fields are on for every plan until switched off.
+    expect(moduleEnabled('free', [], 'pos')).toBe(true);
+    expect(moduleEnabled('pro', ['pos'], 'pos')).toBe(false);
+  });
+
+  it('switches the retail item fields off and still numbers an item left without a SKU', async () => {
+    const m = await moneySetup(t);
+    const company = await t.get(`${m.c}`, { token: m.token });
+    const off = await t.put(`${m.c}`, { ...company.body, disabledModules: ['pos'] }, { token: m.token, headers: { 'if-match': `"v${company.body.version}"` } });
+    expect(off.status).toBe(200);
+    expect(off.body.disabledModules).toEqual(['pos']);
+    const tax = (await t.get(`${m.c}/tax-categories`, { token: m.token })).body.data[0];
+    const item = await t.post(
+      `${m.c}/items`,
+      { sku: '', name: 'Plain thing', type: 'goods', unit: 'NOS', salePrice: { minor: 1000, currency: 'INR' }, purchasePrice: { minor: 500, currency: 'INR' }, taxCategoryId: tax.id },
+      { token: m.token },
+    );
+    expect(item.status).toBe(201);
+    expect(item.body.sku).toMatch(/^SKU-\d{4}$/);
   });
 
   it('refuses a switched-off module until the owner switches it back on', async () => {

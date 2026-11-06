@@ -56,3 +56,9 @@ export function tcsRateFor(code: string | undefined | null, buyerHasPan: boolean
   if (sec.singleThresholdMinor !== undefined && saleValueBaseMinor <= sec.singleThresholdMinor) return 0;
   return buyerHasPan ? sec.rate : sec.noPanRate;
 }
+
+/** The section a new invoice to this customer takes: theirs while TCS applies to them and it is known. */
+export function partyTcsSection(p: { tcsApplicable?: boolean | null; tcsSection?: string | null } | undefined): TcsSectionCode | undefined {
+  if (!p?.tcsApplicable) return undefined;
+  return tcsSection(p.tcsSection)?.code;
+}

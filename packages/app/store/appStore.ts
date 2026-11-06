@@ -203,7 +203,8 @@ type Actions = {
   finalizeDocument: (id: string) => void;
   removeDocument: (id: string) => void;
   duplicateDocument: (id: string) => string;
-  convertDocument: (id: string, target: DocumentKind) => string;
+  /** `lineIds` keeps only those of the source's lines (a note or return against part of an invoice). */
+  convertDocument: (id: string, target: DocumentKind, lineIds?: string[]) => string;
 
   /* payments */
   /** Returns the id, or '' when the account does not fit the payment method. */
@@ -271,6 +272,7 @@ export type NewDocumentInput = {
   reverseCharge?: boolean;
   noteReason?: BusinessDocument['noteReason'];
   tdsSection?: string;
+  tcsSection?: string;
   branchId?: string;
   attachmentIds?: string[];
   sourceDocumentId?: string;
@@ -870,6 +872,7 @@ export const useAppStore = create<AppState>()(
             reverseCharge: draft.reverseCharge,
             noteReason: draft.noteReason,
             tdsSection: draft.tdsSection,
+            tcsSection: draft.tcsSection,
             notes: draft.notes,
             terms: draft.terms,
             attachmentIds: draft.attachmentIds ?? [],
@@ -998,7 +1001,7 @@ export const useAppStore = create<AppState>()(
           });
         },
 
-        convertDocument: (id, target) => {
+        convertDocument: (id, target, lineIds) => {
           const src = get().documents.find((d) => d.id === id);
           // Nothing is made from a cancelled or draft document, nor twice from one order.
           if (!src || conversionBlock(src, target, get().documents)) return '';
@@ -1013,7 +1016,7 @@ export const useAppStore = create<AppState>()(
                 : undefined,
             currency: src.currency,
             exchangeRate: src.exchangeRate,
-            lines: src.lines.map((l) => ({ ...l, id: uid('ln') })),
+            lines: src.lines.filter((l) => !lineIds?.length || lineIds.includes(l.id)).map((l) => ({ ...l, id: uid('ln') })),
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,

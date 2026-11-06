@@ -13,7 +13,7 @@ import { calculateLine } from '@esmart/core/domain/lineCalc';
 import type { TaxContext } from '@esmart/core/domain/taxEngine';
 import { formatMoney, formatPercent, sanitizeAmountInput } from '@esmart/core/lib/format';
 import { fromMajor, subtract, toMajor } from '@esmart/core/lib/money';
-import { unitDecimals } from '@esmart/core/data/masters';
+import { unitDecimals, unitShortName } from '@esmart/core/data/masters';
 
 type Col = 'name' | 'qty' | 'rate' | 'discount';
 
@@ -155,7 +155,7 @@ export function LineGrid({
               </View>
               {/* The unit rides along with the quantity it counts, rather than taking a column. */}
               <Text variant="micro" tone="muted" numberOfLines={1} style={{ maxWidth: 34 }}>
-                {line.unit}
+                {unitShortName(line.unit)}
               </Text>
             </View>
             <View role="cell" style={{ width: W.rate, paddingHorizontal: 4 }}>

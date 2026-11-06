@@ -17,7 +17,8 @@ import { useItemPages } from '../../../../remote/queries';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../../../components/pagedTable';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
-import { useBrands, useItemCategories } from '../../../../store/selectors';
+import { useBrands, useHasModule, useItemCategories } from '../../../../store/selectors';
+import { unitShortName } from '@esmart/core/data/masters';
 import { useDebounced } from '../../../../components/useDebounced';
 import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
@@ -42,6 +43,9 @@ export default function ItemList() {
   const [brandId, setBrandId] = useState('all');
   const categories = useItemCategories();
   const brands = useBrands();
+  // Switched off, SKU, category and brand leave the list too.
+  const hasPos = useHasModule('pos');
+  const showFilters = hasPos && (categories.length > 0 || brands.length > 0);
   const filtering = categoryId !== 'all' || brandId !== 'all';
   const pages = useItemPages({ type: tab, q: search, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
   const filtered = pages.rows as unknown as (Item & { stockOnHand?: number })[];
@@ -104,7 +108,7 @@ export default function ItemList() {
   );
   const filters = (
     <>
-      {categories.length ? (
+      {hasPos && categories.length ? (
         <FilterMenu
           icon="tag-outline"
           label={tr('inventory:catalog.allCategories')}
@@ -114,7 +118,7 @@ export default function ItemList() {
           onChange={setCategoryId}
         />
       ) : null}
-      {brands.length ? (
+      {hasPos && brands.length ? (
         <FilterMenu
           icon="star-circle-outline"
           label={tr('inventory:catalog.allBrands')}
@@ -159,7 +163,7 @@ export default function ItemList() {
                 secondary: true,
                 width: 120,
                 render: (i) =>
-                  i.type === 'service' ? <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" /> : <Cell tone="muted">{i.unit}</Cell>,
+                  i.type === 'service' ? <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" /> : <Cell tone="muted">{unitShortName(i.unit)}</Cell>,
               },
               {
                 key: 'onHand',
@@ -168,7 +172,7 @@ export default function ItemList() {
                 align: 'right',
                 render: (i) => (
                   <Cell tone={i.trackInventory && (stock[i.id] ?? 0) <= (i.reorderLevel ?? 0) ? 'bad' : 'default'} mono>
-                    {i.trackInventory ? `${formatQty(stock[i.id] ?? 0)} ${i.unit}` : '—'}
+                    {i.trackInventory ? `${formatQty(stock[i.id] ?? 0)} ${unitShortName(i.unit)}` : '—'}
                   </Cell>
                 ),
               },
@@ -180,7 +184,7 @@ export default function ItemList() {
                 render: (i) => <Cell weight="600" mono>{formatMoney(i.salePrice)}</Cell>,
               },
               // A service carries no stock (nor a goods unit to show as its type), so its tab leaves those out.
-            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => tab === 'goods' || (c.key !== 'onHand' && c.key !== 'type'))}
+            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => (tab === 'goods' || (c.key !== 'onHand' && c.key !== 'type')) && (hasPos || c.key !== 'sku'))}
             rows={filtered}
             rowKey={(i) => i.id}
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
@@ -216,7 +220,7 @@ export default function ItemList() {
         {tabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
         <Button title={tr('inventory:import.title')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
-        {categories.length || brands.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{filters}</View> : null}
+        {showFilters ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{filters}</View> : null}
         {pages.isLoading && !filtered.length ? (
           <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
         ) : filtered.length === 0 ? (
@@ -233,8 +237,8 @@ export default function ItemList() {
               <ListRow
                 key={item.id}
                 title={item.name}
-                subtitle={`${item.sku}${item.hsnCode ? ` · HSN ${item.hsnCode}` : ''}`}
-                meta={`${formatMoney(item.salePrice)} / ${item.unit}`}
+                subtitle={[hasPos ? item.sku : '', item.hsnCode ? `HSN ${item.hsnCode}` : ''].filter(Boolean).join(' · ') || undefined}
+                meta={`${formatMoney(item.salePrice)} / ${unitShortName(item.unit)}`}
                 right={item.type === 'service' ? <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" /> : undefined}
                 divider={i < filtered.length - 1}
                 onPress={() => router.push(`/(app)/catalog/items/${item.id}`)}

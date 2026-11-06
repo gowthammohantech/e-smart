@@ -3,7 +3,7 @@ import { allCities } from '@esmart/core/data/cities';
 import { COUNTRIES, INTEGRATIONS, UNITS, WORLD_COUNTRIES } from '@esmart/core/data/masters';
 import { GST_STATE_CODES } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
-import { MODULES, PLANS, moduleSetFor } from '@esmart/core/domain/plan';
+import { GATED_MODULES, PLANS, moduleSetFor } from '@esmart/core/domain/plan';
 import type { Db } from './index';
 import * as s from './schema';
 
@@ -110,8 +110,11 @@ export async function seedReference(db: Db): Promise<void> {
 
     await tx
       .insert(s.units)
-      .values(UNITS.map((u) => ({ code: u.code, name: u.name, decimals: u.decimals })))
-      .onConflictDoUpdate({ target: s.units.code, set: { name: sql`excluded.name`, decimals: sql`excluded.decimals` } });
+      .values(UNITS.map((u) => ({ code: u.code, name: u.name, shortName: u.shortName ?? null, decimals: u.decimals })))
+      .onConflictDoUpdate({
+        target: s.units.code,
+        set: { name: sql`excluded.name`, shortName: sql`excluded.short_name`, decimals: sql`excluded.decimals` },
+      });
 
     await tx
       .insert(s.hsnCodes)
@@ -138,7 +141,7 @@ export async function seedReference(db: Db): Promise<void> {
       });
     await tx
       .insert(s.planModules)
-      .values(PLANS.filter((p) => moduleSetFor(p.key) === 'full').flatMap((p) => MODULES.map((module) => ({ plan: p.key, module }))))
+      .values(PLANS.filter((p) => moduleSetFor(p.key) === 'full').flatMap((p) => GATED_MODULES.map((module) => ({ plan: p.key, module }))))
       .onConflictDoNothing();
 
     await tx

@@ -160,3 +160,69 @@ export function chartOfAccounts(book: Book): Account[] {
 export const natureOf = (group: LedgerGroup): Nature => GROUPS[group].nature;
 /** Assets and expenses are debit balances; liabilities and income credit. */
 export const isDebitNature = (group: LedgerGroup) => ['asset', 'expense'].includes(natureOf(group));
+
+/** An account's movement over a period, debit positive: as a trial-balance row carries it. */
+export type AccountFigures = { opening: number; debit: number; credit: number; closing: number };
+export type TreeAccount = AccountFigures & { account: Account };
+/** A group within a heading (Sundry Debtors under Current Assets), with its accounts. */
+export type TreeGroup = { group: LedgerGroup; accounts: TreeAccount[]; totals: AccountFigures };
+/** A heading of the chart (Current Assets, Capital, Sales Accounts): its own accounts and its sub-groups. */
+export type TreeHeading = { group: LedgerGroup; accounts: TreeAccount[]; subGroups: TreeGroup[]; totals: AccountFigures };
+export type TreeNature = { nature: Nature; headings: TreeHeading[]; totals: AccountFigures };
+export type GroupTree = {
+  natures: TreeNature[];
+  /** Over every account; closingDebit/closingCredit split the closing balances as a trial balance totals them. */
+  totals: AccountFigures & { closingDebit: number; closingCredit: number };
+};
+
+const NATURES: Nature[] = ['asset', 'liability', 'income', 'expense'];
+const GROUP_ORDER = Object.keys(GROUPS) as LedgerGroup[];
+const zeroFigures = (): AccountFigures => ({ opening: 0, debit: 0, credit: 0, closing: 0 });
+const addFigures = (to: AccountFigures, x: AccountFigures) => {
+  to.opening += x.opening;
+  to.debit += x.debit;
+  to.credit += x.credit;
+  to.closing += x.closing;
+};
+const sumFigures = (xs: AccountFigures[]) => xs.reduce((to, x) => (addFigures(to, x), to), zeroFigures());
+
+/** The heading a group sits under: its balance-sheet parent, or itself (income and expense groups). */
+export const headingOf = (group: LedgerGroup): LedgerGroup => (GROUPS[group].parent as LedgerGroup | undefined) ?? group;
+
+/**
+ * The chart as a tree: Nature → heading → sub-group → account, each level with the sum of what is
+ * under it. Headings and groups keep the chart's order; accounts go by `name` (the English name
+ * unless the caller translates). Empty branches are left out. The grand totals are the trial
+ * balance's: debits equal credits, and the closing balances net to nothing.
+ */
+export function groupTree(rows: TreeAccount[], name: (a: Account) => string = (a) => a.name): GroupTree {
+  const byGroup = new Map<LedgerGroup, TreeAccount[]>();
+  for (const r of rows) byGroup.set(r.account.group, [...(byGroup.get(r.account.group) ?? []), r]);
+  const sorted = (g: LedgerGroup) => [...(byGroup.get(g) ?? [])].sort((a, b) => name(a.account).localeCompare(name(b.account)));
+
+  const natures: TreeNature[] = [];
+  for (const nature of NATURES) {
+    const headings: TreeHeading[] = [];
+    for (const h of GROUP_ORDER.filter((g) => GROUPS[g].nature === nature && headingOf(g) === g)) {
+      const accounts = sorted(h);
+      const subGroups: TreeGroup[] = GROUP_ORDER.filter((g) => g !== h && headingOf(g) === h)
+        .map((g) => {
+          const accs = sorted(g);
+          return { group: g, accounts: accs, totals: sumFigures(accs) };
+        })
+        .filter((g) => g.accounts.length);
+      if (!accounts.length && !subGroups.length) continue;
+      headings.push({ group: h, accounts, subGroups, totals: sumFigures([...accounts, ...subGroups.map((g) => g.totals)]) });
+    }
+    if (headings.length) natures.push({ nature, headings, totals: sumFigures(headings.map((h) => h.totals)) });
+  }
+  const all = sumFigures(natures.map((n) => n.totals));
+  return {
+    natures,
+    totals: {
+      ...all,
+      closingDebit: rows.reduce((a, r) => a + Math.max(r.closing, 0), 0),
+      closingCredit: rows.reduce((a, r) => a + Math.max(-r.closing, 0), 0),
+    },
+  };
+}

@@ -4690,6 +4690,39 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Gstr2bReconciliation' }
+  /companies/{companyId}/gst/gstr2b/import:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [GST]
+      operationId: importGstr2b
+      summary: Reads a GSTR-2B file downloaded from the GST portal, in place of downloading it through a session
+      description: |
+        The JSON the portal gives (Returns → GSTR-2B → Download → JSON: `data.docdata.b2b`, `b2ba`, `cdnr`,
+        `cdnra`, `impg`, `impgsez`, `isd`), or its Excel workbook (the B2B, B2BA, B2B-CDNR, B2B-CDNRA and
+        IMPG sheets). Stored as a download is, keeping decisions already made, then matched. At most 6 MB
+        decoded. 422 `GSTR2B_WRONG_GSTIN` or `GSTR2B_WRONG_PERIOD` when a JSON file is another
+        registration's or month's; 422 `UNSUPPORTED_FILE` when it isn't a 2B file.
+      x-roles: [owner, admin, accountant]
+      x-plan-module: purchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period, fileName, contentBase64]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+                fileName: { type: string, maxLength: 200 }
+                contentBase64: { type: string, description: 'The file, base64 encoded' }
+      responses:
+        '200':
+          description: Imported and matched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Gstr2bReconciliation' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/gst/gstr2b/claim:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -6486,7 +6519,7 @@ components:
             website: { type: string }
             taxRegistration: { $ref: '#/components/schemas/TaxRegistration' }
             fiscalYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
-            disabledModules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables, books] }, description: 'Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it.' }
+            disabledModules: { type: array, items: { type: string, enum: [purchases, inventory, expenses, ocr, fx, branches, payables, books, pos] }, description: 'Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it.' }
             approvalRules:
               type: array
               description: 'Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued; with kind `payment`, payments made over it wait as payment requests. Only an owner can change them.'
@@ -6782,6 +6815,8 @@ components:
               properties:
                 rate: { type: number, minimum: 0, maximum: 100 }
                 validTill: { type: string, format: date }
+            tcsApplicable: { type: boolean, description: "Sales to this customer collect TCS (s.206C) by default, under tcsSection" }
+            tcsSection: { allOf: [{ $ref: '#/components/schemas/TcsSectionCode' }], description: "The TCS section this customer's invoices fall under by default; needs tcsApplicable" }
             email: { type: string, format: email }
             phone: { type: string }
             currency: { type: string }
@@ -7239,6 +7274,10 @@ components:
       type: string
       enum: [194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q]
       description: '194J(a) is 194JA, 194I(b) is 194IB, and so on.'
+    TcsSectionCode:
+      type: string
+      enum: [scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods]
+      description: 'A TCS section of s.206C, as core TCS_SECTIONS names it.'
     TdsDeduction:
       type: object
       readOnly: true

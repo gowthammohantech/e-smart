@@ -3292,6 +3292,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/gst/gstr2b/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reads a GSTR-2B file downloaded from the GST portal, in place of downloading it through a session
+         * @description The JSON the portal gives (Returns → GSTR-2B → Download → JSON: `data.docdata.b2b`, `b2ba`, `cdnr`,
+         *     `cdnra`, `impg`, `impgsez`, `isd`), or its Excel workbook (the B2B, B2BA, B2B-CDNR, B2B-CDNRA and
+         *     IMPG sheets). Stored as a download is, keeping decisions already made, then matched. At most 6 MB
+         *     decoded. 422 `GSTR2B_WRONG_GSTIN` or `GSTR2B_WRONG_PERIOD` when a JSON file is another
+         *     registration's or month's; 422 `UNSUPPORTED_FILE` when it isn't a 2B file.
+         */
+        post: operations["importGstr2b"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/gst/gstr2b/claim": {
         parameters: {
             query?: never;
@@ -4587,7 +4613,7 @@ export interface components {
             taxRegistration?: components["schemas"]["TaxRegistration"];
             fiscalYearStartMonth: number;
             /** @description Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it. */
-            disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
+            disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books" | "pos")[];
             /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued; with kind `payment`, payments made over it wait as payment requests. Only an owner can change them. */
             approvalRules?: {
                 /** @description A document kind, or `payment` for payments made to suppliers (RULES 6.14). */
@@ -4896,6 +4922,10 @@ export interface components {
                 /** Format: date */
                 validTill: string;
             };
+            /** @description Sales to this customer collect TCS (s.206C) by default, under tcsSection */
+            tcsApplicable?: boolean;
+            /** @description The TCS section this customer's invoices fall under by default; needs tcsApplicable */
+            tcsSection?: components["schemas"]["TcsSectionCode"];
             /** Format: email */
             email?: string;
             phone?: string;
@@ -5383,6 +5413,11 @@ export interface components {
          * @enum {string}
          */
         TdsSectionCode: "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+        /**
+         * @description A TCS section of s.206C, as core TCS_SECTIONS names it.
+         * @enum {string}
+         */
+        TcsSectionCode: "scrap" | "liquor" | "tenduLeaves" | "timberLease" | "timberOther" | "forestProduce" | "minerals" | "motorVehicle" | "luxuryGoods";
         TdsDeduction: {
             section: components["schemas"]["TdsSectionCode"];
             rate: number;
@@ -13607,6 +13642,39 @@ export interface operations {
                     "application/json": components["schemas"]["Gstr2bReconciliation"];
                 };
             };
+        };
+    };
+    importGstr2b: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    fileName: string;
+                    /** @description The file, base64 encoded */
+                    contentBase64: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Imported and matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr2bReconciliation"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
         };
     };
     claimGstr2b: {

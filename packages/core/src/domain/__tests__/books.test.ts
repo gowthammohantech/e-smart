@@ -3,7 +3,7 @@ import { buildTaxContext } from '../taxEngine';
 import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting } from '../ledger/postings';
 import { balanceSheet, ledgerStatement, profitAndLoss, trialBalance } from '../ledger/reports';
 import { balanceSheetColumns, comparisonPeriod, profitAndLossColumns, splitPeriods, variance } from '../ledger/comparative';
-import { Book, chartOfAccounts } from '../ledger/accounts';
+import { Book, chartOfAccounts, groupTree } from '../ledger/accounts';
 import { BusinessDocument, Company, DocumentKind, DocumentLine, Expense, GstFlags, Item, Party, Payment, PaymentAccount, StockMovement, Voucher } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
 
@@ -232,6 +232,27 @@ describe('books', () => {
     expect(tb.totals.closingDebit).toBe(tb.totals.closingCredit);
     expect(tb.totals.debit).toBe(tb.totals.credit);
     expect(tb.rows.find((r) => r.account.key === 'pay:bank')?.closing).toBe(7000000);
+  });
+
+  it('rolls the chart up Nature → group → account to the trial balance totals', () => {
+    const tb = trialBalance(postings, book, { from: '2026-04-01', to: '2027-03-31' });
+    const tree = groupTree(tb.rows);
+    expect(tree.totals.debit).toBe(tb.totals.debit);
+    expect(tree.totals.credit).toBe(tb.totals.credit);
+    expect(tree.totals.closingDebit).toBe(tb.totals.closingDebit);
+    expect(tree.totals.closingCredit).toBe(tb.totals.closingCredit);
+    expect(tree.totals.closing).toBe(0);
+    // Every account lands once, and each level is the sum of what is under it.
+    const leaves = tree.natures.flatMap((n) => n.headings.flatMap((h) => [...h.accounts, ...h.subGroups.flatMap((g) => g.accounts)]));
+    expect(leaves).toHaveLength(tb.rows.length);
+    for (const n of tree.natures) {
+      expect(n.totals.closing).toBe(n.headings.reduce((a, h) => a + h.totals.closing, 0));
+      for (const h of n.headings) expect(h.totals.debit).toBe([...h.accounts, ...h.subGroups.map((g) => g.totals)].reduce((a, x) => a + x.debit, 0));
+    }
+    expect(tree.natures.map((n) => n.nature)).toEqual(['asset', 'liability', 'income', 'expense']);
+    // The bank sits under Current Assets → Bank Accounts.
+    const current = tree.natures[0].headings.find((h) => h.group === 'currentAssets');
+    expect(current?.subGroups.find((g) => g.group === 'bankAccounts')?.accounts.map((a) => a.account.key)).toContain('pay:bank');
   });
 
   it('works out gross profit from sales, purchases and the change in stock', () => {

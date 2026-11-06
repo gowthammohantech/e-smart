@@ -32,4 +32,17 @@ describe('TCS on sales (s.206C)', () => {
     expect(car.body.totals.tcs).toBeUndefined();
     expect(car.body.tcs).toBeUndefined();
   });
+
+  it("takes a new invoice's section from a customer with TCS, unless the invoice says none", async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.parties).set({ tcsApplicable: true, tcsSection: 'scrap' }).where(eq(schema.parties.id, m.bengaluru.id));
+    const inv = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, status: 'issued' }), { token: m.token });
+    expect(inv.status).toBe(201);
+    expect(inv.body.tcs).toEqual({ section: 'scrap', rate: 1 });
+    const none = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, tcsSection: 'none', status: 'issued' }), { token: m.token });
+    expect(none.body.tcs).toBeUndefined();
+    // A customer without TCS gets none.
+    const plain = await t.post(`${m.c}/documents`, invoiceBody(m, { status: 'issued' }), { token: m.token });
+    expect(plain.body.tcs).toBeUndefined();
+  });
 });

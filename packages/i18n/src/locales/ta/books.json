@@ -104,7 +104,15 @@
     "creditSide": "வரவு",
     "openingOnDate": "ஒரு தேதியின்படி தொடக்க இருப்பு",
     "openingOnDateHint": "அணைத்தால்: கணக்குகளின் தொடக்கத்தில் இருக்கும்.",
-    "openingDate": "தேதியின்படி"
+    "openingDate": "தேதியின்படி",
+    "expandAll": "அனைத்தையும் விரி",
+    "collapseAll": "அனைத்தையும் சுருக்கு",
+    "nature": {
+      "asset": "சொத்துகள்",
+      "liability": "பொறுப்புகள்",
+      "income": "வருமானம்",
+      "expense": "செலவுகள்"
+    }
   },
   "vouchers": {
     "empty": "இன்னும் வவுச்சர்கள் இல்லை",

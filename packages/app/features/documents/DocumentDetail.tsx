@@ -30,7 +30,7 @@ import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedg
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { money, type Money } from '@esmart/core/lib/money';
-import { INDIAN_STATES } from '@esmart/core/data/masters';
+import { INDIAN_STATES, unitShortName } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
@@ -550,7 +550,7 @@ ${url}`;
                 {line.name}
               </Text>
               <Text variant="caption" tone="muted">
-                {formatQty(line.quantity)} {line.unit} × {formatMoney(line.unitPrice)}
+                {formatQty(line.quantity)} {unitShortName(line.unit)} × {formatMoney(line.unitPrice)}
                 {line.discountValue > 0
                   ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, doc.currency))}`
                   : ''}
@@ -693,7 +693,7 @@ ${url}`;
               </View>
             ),
           },
-          { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${line.unit}`}</Cell> },
+          { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${unitShortName(line.unit)}`}</Cell> },
           { key: 'rate', header: tr('sales:detail.rate'), width: 130, align: 'right', render: (line) => <Cell mono>{formatMoney(line.unitPrice)}</Cell> },
           {
             key: 'discount',

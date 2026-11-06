@@ -71,6 +71,31 @@ describe('parties', () => {
     expect(wrongState.body.issues[0].field).toBe('billingAddress.stateCode');
   });
 
+  it('keeps a customer\'s TCS section, and forgets it when TCS is switched off', async () => {
+    const { token, c } = await ownerWithCompany(t);
+    const created = await t.post(`${c}/parties`, customer({ tcsApplicable: true, tcsSection: 'scrap' }), { token });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ tcsApplicable: true, tcsSection: 'scrap' });
+    const url = `${c}/parties/${created.body.id}`;
+    expect((await t.get(url, { token })).body).toMatchObject({ tcsApplicable: true, tcsSection: 'scrap' });
+
+    const off = await t.put(url, customer({ tcsApplicable: false, tcsSection: 'scrap' }), { token, headers: { 'if-match': '"v1"' } });
+    expect(off.status).toBe(200);
+    expect(off.body.tcsApplicable).toBeUndefined();
+    expect(off.body.tcsSection).toBeUndefined();
+
+    const noSection = await t.post(`${c}/parties`, customer({ name: 'No section', tcsApplicable: true }), { token });
+    expect(noSection.status).toBe(422);
+    expect(noSection.body.issues[0].field).toBe('tcsSection');
+  });
+
+  it('refuses TCS on a supplier', async () => {
+    const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
+    const res = await t.post(`${c}/parties`, customer({ kind: 'supplier', tcsApplicable: true, tcsSection: 'scrap' }), { token });
+    expect(res.status).toBe(422);
+    expect(res.body.issues.map((i: { field: string }) => i.field)).toContain('tcsApplicable');
+  });
+
   it('saves with If-Match and refuses a stale version', async () => {
     const { token, c } = await ownerWithCompany(t);
     const created = await t.post(`${c}/parties`, customer(), { token });

@@ -179,6 +179,10 @@ export type Party = {
   tdsSection?: string;
   /** A lower or nil deduction certificate they hold (s.197). */
   lowerTdsCertificate?: { rate: number; validTill: string };
+  /** Sales to this customer collect TCS (s.206C) by default, under `tcsSection`. */
+  tcsApplicable?: boolean;
+  /** The TCS section their invoices fall under by default (a TCS_SECTIONS code). */
+  tcsSection?: string;
   email?: string;
   phone?: string;
   currency: string;
@@ -258,7 +262,7 @@ export type Item = {
   createdAt: string;
 };
 
-export type Unit = { id: string; code: string; name: string; decimals: number };
+export type Unit = { id: string; code: string; name: string; shortName?: string | null; decimals: number };
 
 /* ------------------------------------------------------------------ */
 /* Tax engine (FRD 15)                                                 */
@@ -463,6 +467,8 @@ export type BusinessDocument = {
   tds?: { section: string; rate: number; amount: Money };
   /** TCS collected on a sale (s.206C): its section and rate; the amount is `totals.tcs`. */
   tcs?: { section: string; rate: number };
+  /** The TCS section asked for on an invoice, or `none`; unset on a new invoice takes the customer's. */
+  tcsSection?: string;
   /** The self-invoice raised for a reverse-charge purchase from an unregistered supplier (Rule 46(f)). */
   selfInvoiceNumber?: string;
   /** Input tax credit reversed because the bill went unpaid for 180 days, and claimed again once paid. */

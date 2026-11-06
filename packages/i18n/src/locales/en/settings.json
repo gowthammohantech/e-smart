@@ -78,7 +78,12 @@
     "signatureUploading": "Uploading signature…",
     "signatureUpdated": "Signature updated",
     "signatureRemoved": "Signature removed",
-    "signatureOffline": "You’re offline. Add the signature when you’re back online."
+    "signatureOffline": "You’re offline. Add the signature when you’re back online.",
+    "signaturePreviewTitle": "Check the signature",
+    "signaturePreviewHint": "This is how it prints at the foot of your documents. If it looks faint or cropped, pick a clearer photo.",
+    "signatureFor": "For {{name}}",
+    "signatureConfirm": "Use this signature",
+    "signatureView": "View signature full size"
   },
   "gstPortal": {
     "howTitle": "Before you connect",
@@ -620,7 +625,8 @@
       "fx": "Customers and suppliers billed in other currencies.",
       "branches": "More than one branch or godown.",
       "payables": "What you owe suppliers, TDS and MSME dues.",
-      "books": "Chart of accounts, vouchers, bank reconciliation and the statements."
+      "books": "Chart of accounts, vouchers, bank reconciliation and the statements.",
+      "pos": "SKU, barcode, category and brand on items. Off, items are just a name, unit and price; a SKU is still given to each."
     }
   },
   "customFields": {

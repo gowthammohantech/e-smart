@@ -24,7 +24,7 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
-import { TCS_SECTIONS, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
+import { TCS_SECTIONS, partyTcsSection, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
@@ -34,7 +34,7 @@ import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { addDaysISO, formatDate, parseDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from '@esmart/core/lib/money';
-import { INDIAN_STATES, unitDecimals } from '@esmart/core/data/masters';
+import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
 import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
@@ -134,6 +134,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const baseCurrency = useBaseCurrency();
   const hasFx = useHasModule('fx');
   const hasInventory = useHasModule('inventory');
+  const hasPos = useHasModule('pos');
   const branches = useBranches();
   const taxCategories = useTaxCategories();
   const exchangeRates = useExchangeRates();
@@ -179,6 +180,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(d.date, p.paymentTermsDays) : d.dueDate,
         // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
         ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
+        // A customer with TCS puts their invoices under its section; another party clears one picked before.
+        ...(kind === 'invoice' && { tcsSection: partyTcsSection(p) ?? (d.tcsSection ? 'none' : undefined) }),
       },
       p.currency,
       p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, d.date),
@@ -580,7 +583,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       reverseCharge: draft.reverseCharge || undefined,
       noteReason: isNote ? draft.noteReason : undefined,
       tdsSection: takesTds ? draft.tdsSection : undefined,
-      tcsSection: kind === 'invoice' && draft.tcsSection && draft.tcsSection !== 'none' ? draft.tcsSection : undefined,
+      // `none` is sent as itself: unset on a new invoice would take the customer's section.
+      tcsSection: kind === 'invoice' ? draft.tcsSection : undefined,
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
@@ -1009,7 +1013,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                     decimals={unitDecimals(line.unit)}
                   />
                   <Text variant="caption" tone="muted">
-                    {line.unit} × {formatMoney(line.unitPrice)}
+                    {unitShortName(line.unit)} × {formatMoney(line.unitPrice)}
                     {line.discountValue > 0
                       ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, draft.currency))}`
                       : ''}
@@ -1454,13 +1458,13 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               ? sourceDoc.lines.map((l) => ({
                   value: l.id,
                   label: l.name,
-                  description: `${formatQty(l.quantity)} ${l.unit} × ${formatMoney(l.unitPrice)}`,
+                  description: `${formatQty(l.quantity)} ${unitShortName(l.unit)} × ${formatMoney(l.unitPrice)}`,
                   trailing: formatPercent(l.taxRate),
                 }))
               : itemOptions.map((i) => ({
                   value: i.id,
                   label: i.name,
-                  description: `${i.sku} · ${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${i.unit}`,
+                  description: `${hasPos ? `${i.sku} · ` : ''}${formatMoney(isPurchase ? i.purchasePrice : i.salePrice)} / ${unitShortName(i.unit)}`,
                   trailing: formatPercent(taxCategories.find((c) => c.id === i.taxCategoryId)?.rate ?? 0),
                   note: stockNote(i),
                   blocked: openingStockBlock(i) ?? outOfStockBlock(i),

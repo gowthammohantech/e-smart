@@ -874,6 +874,9 @@ export const parties = pgTable("parties", {
 	tdsSection: varchar("tds_section", { length: 8 }),
 	lowerTdsRate: numeric("lower_tds_rate", { precision: 6, scale:  3 }),
 	lowerTdsValidTill: date("lower_tds_valid_till"),
+	// Sales to this customer collect TCS by default, under this section (s.206C).
+	tcsApplicable: boolean("tcs_applicable").default(false).notNull(),
+	tcsSection: varchar("tcs_section", { length: 20 }),
 	email: varchar({ length: 254 }),
 	phone: varchar({ length: 20 }),
 	currency: char({ length: 3 }).notNull(),
@@ -1704,6 +1707,8 @@ export const pincodes = pgTable("pincodes", {
 export const units = pgTable("units", {
 	code: varchar({ length: 10 }).primaryKey().notNull(),
 	name: varchar({ length: 40 }).notNull(),
+	// What a quantity is printed with, like "5 Nos".
+	shortName: varchar("short_name", { length: 10 }),
 	decimals: smallint().default(0).notNull(),
 });
 

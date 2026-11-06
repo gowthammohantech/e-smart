@@ -14,7 +14,7 @@ import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { validHsn } from '@esmart/core/lib/validators';
 import { TaxContext } from '@esmart/core/domain/taxEngine';
-import { unitDecimals, unitsFor } from '@esmart/core/data/masters';
+import { unitDecimals, unitShortName, unitsFor } from '@esmart/core/data/masters';
 import { useItems } from '../../store/selectors';
 
 type EditorProps = {
@@ -191,7 +191,7 @@ function LineEditorForm({
           </View>
           <PickerField
             label={tr('sales:line.unit')}
-            value={unit}
+            value={unitShortName(unit)}
             onPress={() => setUnitOpen(true)}
             containerStyle={{ width: 120 }}
             disabled={fromCatalogue}
@@ -310,7 +310,7 @@ function LineEditorForm({
         visible={unitOpen}
         onClose={() => setUnitOpen(false)}
         title={tr('sales:line.unit')}
-        options={unitsFor(itemType).map((u) => ({ value: u.code, label: `${u.name} (${u.code})` }))}
+        options={unitsFor(itemType).map((u) => ({ value: u.code, label: `${u.name} (${u.shortName ?? u.code})` }))}
         value={unit}
         onSelect={(code) => {
           setUnit(code);

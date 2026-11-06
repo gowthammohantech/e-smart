@@ -121,3 +121,11 @@ describe('invoice template', () => {
     expect(render(invoice(), company({ invoiceTemplate: { accentColor: 'red;}</style><script>' } }))).toContain('#007AFF');
   });
 });
+
+describe('quantities on the printed document', () => {
+  it('prints each quantity with its unit\'s short name', () => {
+    const html = render(invoice({ lines: [{ ...line, quantity: 5, unit: 'NOS' }] }), company());
+    expect(html).toContain('5 Nos');
+    expect(html).not.toContain('5 NOS');
+  });
+});
