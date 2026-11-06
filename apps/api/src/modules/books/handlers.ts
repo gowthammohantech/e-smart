@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, gte, ilike, inArray, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { USER_GROUPS, accountFor, chartOfAccounts, type Book } from '@esmart/core/domain/ledger/accounts';
 import { balanceSheet, costCentreProfit, dayBook, ledgerStatement, monthEndBalances, profitAndLoss, trialBalance } from '@esmart/core/domain/ledger/reports';
@@ -60,7 +60,7 @@ function accountToWire(row: AccountRow, base: string): Schema<'LedgerAccount'> {
   return compact({ id: row.id, companyId: row.companyId, name: row.name, group: row.group, openingBalance: money(row.openingBalanceMinor, base), openingBalanceDate: row.openingBalanceDate, status: row.status, ...versioned(row) });
 }
 
-export function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> {
+export function voucherToWire(row: VoucherRow, base: string, attachmentIds?: string[]): Schema<'Voucher'> {
   const lines = row.lines as StoredLine[];
   return compact({
     id: row.id,
@@ -74,11 +74,51 @@ export function voucherToWire(row: VoucherRow, base: string): Schema<'Voucher'> 
     narration: row.narration,
     reference: row.reference,
     challan: row.challan as Schema<'Voucher'>['challan'],
+    partyId: row.partyId ?? undefined,
+    attachmentIds,
     lines: lines.map((l) => compact({ account: l.account, debit: money(l.debitMinor, base), credit: money(l.creditMinor, base), narration: l.narration, costCentreId: l.costCentreId })),
     createdBy: row.createdBy,
     ...versioned(row),
     createdAt: iso(row.createdAt),
   });
+}
+
+/** Vouchers with the files kept with each (attachments pointing back at them). */
+async function vouchersToWire(db: DbOrTx, rows: VoucherRow[], base: string): Promise<Schema<'Voucher'>[]> {
+  const AT = schema.attachments;
+  const files = rows.length
+    ? await db.select({ id: AT.id, entityId: AT.entityId }).from(AT).where(and(eq(AT.entityType, 'voucher'), inArray(AT.entityId, rows.map((r) => r.id))))
+    : [];
+  return rows.map((r) => voucherToWire(r, base, files.filter((f) => f.entityId === r.id).map((f) => f.id)));
+}
+
+/** Attachments listed on a voucher point back at it; ones dropped from the list are let go. */
+async function linkVoucherAttachments(tx: DbOrTx, companyId: string, voucherId: string, ids: string[] | undefined) {
+  if (ids === undefined) return;
+  const AT = schema.attachments;
+  await tx.update(AT).set({ entityType: null, entityId: null }).where(and(eq(AT.companyId, companyId), eq(AT.entityType, 'voucher'), eq(AT.entityId, voucherId)));
+  if (ids.length) await tx.update(AT).set({ entityType: 'voucher', entityId: voucherId }).where(and(eq(AT.companyId, companyId), inArray(AT.id, ids)));
+}
+
+type VoucherQuery = Pick<Ctx<'listVouchers'>['query'], 'kind' | 'status' | 'partyId' | 'from' | 'to' | 'q'>;
+
+/** The WHERE of a voucher list, shared by the list and its summary so the two never disagree. */
+function voucherFilters(ctx: Pick<Ctx<'listVouchers'>, 'company' | 'user' | 'db'>, q: VoucherQuery): (SQL | undefined)[] {
+  const filters: (SQL | undefined)[] = [
+    eq(V.companyId, ctx.company.id),
+    ctx.user.branchIds.length ? inArray(V.branchId, ctx.user.branchIds) : undefined,
+    q.kind ? eq(V.kind, q.kind) : undefined,
+    q.status ? eq(V.status, q.status) : undefined,
+    q.partyId ? eq(V.partyId, q.partyId) : undefined,
+    q.from ? gte(V.date, q.from) : undefined,
+    q.to ? lte(V.date, q.to) : undefined,
+  ];
+  if (q.q?.trim()) {
+    const like = `%${q.q.trim()}%`;
+    const P = schema.parties;
+    filters.push(or(ilike(V.number, like), ilike(V.narration, like), ilike(V.reference, like), exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, V.partyId), ilike(P.name, like))))));
+  }
+  return filters;
 }
 
 // ------------------------------------------------------------ accounts
@@ -154,8 +194,9 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     if (body.kind === 'contra' && !groups.every(isCash)) block('lines', 'A contra moves money between cash and bank accounts only');
     if (body.kind === 'gstJournal' && !groups.some((g) => g === 'dutiesTaxes')) block('lines', 'A GST journal adjusts a GST ledger');
     if (body.kind === 'tdsChallan') {
-      const ok = lines.every((l, i) => (l.debitMinor > 0 ? l.account.startsWith('sys:tdsPayable') : isCash(groups[i])));
-      if (!ok) block('lines', 'A TDS challan clears TDS payable from a cash or bank account');
+      // The same challan (ITNS 281) deposits TDS and TCS: either payable may be cleared.
+      const ok = lines.every((l, i) => (l.debitMinor > 0 ? l.account.startsWith('sys:tdsPayable') || l.account.startsWith('sys:tcsPayable') : isCash(groups[i])));
+      if (!ok) block('lines', 'A TDS challan clears TDS or TCS payable from a cash or bank account');
     }
     if (body.kind === 'receipt') {
       // Money in: cash or bank takes it, and whatever it's for (an income, a loan, capital) gives it.
@@ -164,6 +205,17 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     }
   }
   if (body.challan && body.kind !== 'tdsChallan') block('challan', 'Only a TDS challan has challan details');
+  const partyId = body.partyId?.trim() || null;
+  if (partyId) {
+    const [p] = await db.select({ id: schema.parties.id }).from(schema.parties).where(and(eq(schema.parties.companyId, ctx.company.id), eq(schema.parties.id, partyId)));
+    if (!p) block('partyId', 'No such party in this company');
+  }
+  if (body.attachmentIds?.length) {
+    const AT = schema.attachments;
+    const found = await db.select({ id: AT.id }).from(AT).where(and(eq(AT.companyId, ctx.company.id), inArray(AT.id, body.attachmentIds)));
+    const missing = body.attachmentIds.filter((id) => !found.some((f) => f.id === id));
+    if (missing.length) block('attachmentIds', `No such attachment in this company: ${missing.join(', ')}`);
+  }
   if (body.challan && body.challan.depositedOn > ctx.now.toISOString().slice(0, 10)) block('challan.depositedOn', 'The deposit date cannot be in the future');
 
   let branchId = body.branchId ?? null;
@@ -177,7 +229,7 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   }
   if (branchId && ctx.user.branchIds.length && !ctx.user.branchIds.includes(branchId)) block('branchId', 'You cannot record vouchers in this branch');
   if (issues.length) throw unprocessable(issues, !draft && debit !== credit ? 'VOUCHER_UNBALANCED' : 'VALIDATION_FAILED');
-  const columns = { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, lines };
+  const columns = { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, partyId, lines };
   if (draft) return columns;
   assertPeriodOpen(ctx.company, body.date);
 
@@ -351,29 +403,43 @@ export const booksHandlers = defineHandlers({
     const rows = await ctx.db
       .select()
       .from(V)
-      .where(
-        and(
-          eq(V.companyId, ctx.company.id),
-          ctx.user.branchIds.length ? inArray(V.branchId, ctx.user.branchIds) : undefined,
-          q.kind ? eq(V.kind, q.kind) : undefined,
-          q.status ? eq(V.status, q.status) : undefined,
-          q.from ? gte(V.date, q.from) : undefined,
-          q.to ? lte(V.date, q.to) : undefined,
-          k.where,
-        ),
-      )
+      .where(and(...voucherFilters(ctx, q), k.where))
       .orderBy(...k.orderBy)
       .limit(k.take);
     const base = ctx.company.baseCurrency.trim();
-    return k.page(rows.slice(0, k.take - 1).map((r) => voucherToWire(r, base)), rows);
+    return k.page(await vouchersToWire(ctx.db, rows.slice(0, k.take - 1), base), rows);
+  },
+
+  /** Count and total of a voucher list, and (for receipts) what the money was for, by the account credited. */
+  async summarizeVoucherList(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const rows = await ctx.db.select({ lines: V.lines }).from(V).where(and(...voucherFilters(ctx, ctx.query)));
+    let total = 0;
+    const byAccount = new Map<string, number>();
+    for (const r of rows) {
+      for (const l of r.lines as StoredLine[]) {
+        total += l.debitMinor;
+        if (l.creditMinor > 0) byAccount.set(l.account, (byAccount.get(l.account) ?? 0) + l.creditMinor);
+      }
+    }
+    return {
+      count: rows.length,
+      total: money(total, base),
+      byAccount: [...byAccount.entries()].sort((a, b) => b[1] - a[1]).map(([account, minor]) => ({ account, total: money(minor, base) })),
+    };
   },
 
   async createVoucher(ctx) {
     const draft = ctx.body.status === 'draft';
     const cols = await voucherColumns(ctx, ctx.db, ctx.body, undefined, draft);
-    const row = await ctx.db.transaction((tx) => insertVoucher(ctx, tx, cols, draft));
+    const row = await ctx.db.transaction(async (tx) => {
+      const created = await insertVoucher(ctx, tx, cols, draft);
+      await linkVoucherAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);
+      return created;
+    });
     setEtag(ctx.reply, row.version);
-    return voucherToWire(row, ctx.company.baseCurrency.trim());
+    const [wire] = await vouchersToWire(ctx.db, [row], ctx.company.baseCurrency.trim());
+    return wire;
   },
 
   /** Journals from a spreadsheet, each checked as one entered by hand; drafts when asked, else posted. */
@@ -469,7 +535,8 @@ export const booksHandlers = defineHandlers({
   async getVoucher(ctx) {
     const row = await findVoucher(ctx, ctx.db, ctx.params.id);
     setEtag(ctx.reply, row.version);
-    return voucherToWire(row, ctx.company.baseCurrency.trim());
+    const [wire] = await vouchersToWire(ctx.db, [row], ctx.company.baseCurrency.trim());
+    return wire;
   },
 
   async saveVoucher(ctx) {
@@ -489,11 +556,13 @@ export const booksHandlers = defineHandlers({
       const posted = posting ? { status: 'posted' as const, postedAt: ctx.now, postedBy: ctx.user.id } : {};
       const [updated] = await tx.update(V).set({ ...cols, number, ...posted, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning();
       if (!updated) throw preconditionFailed();
+      await linkVoucherAttachments(tx, ctx.company.id, updated.id, ctx.body.attachmentIds);
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: posting ? 'posted' : 'updated', entityType: 'voucher', entityId: updated.id, entityLabel: updated.number, version: updated.version, before: { status: current.status, date: current.date, lines: current.lines }, after: { status: updated.status, date: updated.date, lines: updated.lines } });
       return updated;
     });
     setEtag(ctx.reply, row.version);
-    return voucherToWire(row, ctx.company.baseCurrency.trim());
+    const [wire] = await vouchersToWire(ctx.db, [row], ctx.company.baseCurrency.trim());
+    return wire;
   },
 
   async removeVoucher(ctx) {
@@ -502,6 +571,7 @@ export const booksHandlers = defineHandlers({
     // A draft was never in the books, so a closed period doesn't hold it.
     if (current.status !== 'draft') assertPeriodOpen(ctx.company, current.date);
     await ctx.db.transaction(async (tx) => {
+      await linkVoucherAttachments(tx, ctx.company.id, current.id, []);
       const deleted = await tx.delete(V).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning({ id: V.id });
       if (!deleted.length) throw preconditionFailed();
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'voucher', entityId: current.id, entityLabel: current.number, version: current.version + 1, deleted: true });

@@ -8,7 +8,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { AmountField, PickerField, Segmented, SwitchField, TextField , QuantityStepper } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { DocumentLine, TaxCategory } from '@esmart/core/types';
+import { DocumentLine, GstFlags, TaxCategory } from '@esmart/core/types';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
@@ -16,6 +16,8 @@ import { validHsn } from '@esmart/core/lib/validators';
 import { TaxContext } from '@esmart/core/domain/taxEngine';
 import { unitDecimals, unitShortName, unitsFor } from '@esmart/core/data/masters';
 import { useItems } from '../../store/selectors';
+import { PurchaseLineGstFields } from '../catalog/GstTreatmentFields';
+import { CostCentreField } from '../books/CostCentreField';
 
 type EditorProps = {
   visible: boolean;
@@ -30,6 +32,8 @@ type EditorProps = {
   hsnRequired?: boolean;
   /** Upper bound on quantity, e.g. what the source invoice carried for a return. */
   maxQuantity?: number;
+  /** A purchase line: it also says reverse charge, capital goods and whether its credit can be claimed. */
+  purchase?: boolean;
 };
 
 /**
@@ -54,6 +58,7 @@ function LineEditorForm({
   onRemove,
   hsnRequired = false,
   maxQuantity,
+  purchase = false,
 }: EditorProps & { line: DocumentLine }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
@@ -72,12 +77,18 @@ function LineEditorForm({
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
   // A pure-agent reimbursement (Rule 33): recovered at cost, with no tax and outside the taxable value.
   const [reimbursement, setReimbursement] = useState(!!line?.gst?.reimbursement);
-  const gst = line?.gst || reimbursement ? { ...line?.gst, reimbursement: reimbursement || undefined } : undefined;
+  // The rest of the line's GST treatment: from the item when it was added, changed here on a purchase.
+  const [flags, setFlags] = useState<GstFlags | undefined>(line?.gst);
+  // Cleared on a line that had some, it is sent as {} (plain), so the server doesn't take the item's back.
+  const gst = flags || reimbursement ? { ...flags, reimbursement: reimbursement || undefined } : line?.gst ? {} : undefined;
   const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; hsn?: string; quantity?: string; rate?: string; discount?: string }>({});
   const item = useItems().find((i) => i.id === line?.itemId);
+  // A purchase line that isn't stock may carry its own cost centre; stock takes the bill's (RULES 6.20).
+  const [costCentreId, setCostCentreId] = useState<string | undefined>(line?.costCentreId);
+  const ownCentre = purchase && !item?.trackInventory;
   // Services bill in 'Nos' only; one-off lines are treated as goods.
   const itemType = item?.type ?? 'goods';
   // A catalogue line keeps the unit and HSN from the item master; only one-off lines choose their own.
@@ -133,6 +144,7 @@ function LineEditorForm({
       taxRate: reimbursement ? 0 : (category?.rate ?? 0),
       taxInclusive: reimbursement ? false : taxInclusive,
       gst,
+      costCentreId: ownCentre ? costCentreId : undefined,
     });
     onClose();
   };
@@ -272,6 +284,9 @@ function LineEditorForm({
           value={reimbursement}
           onValueChange={setReimbursement}
         />
+
+        {purchase && !reimbursement ? <PurchaseLineGstFields value={flags} onChange={setFlags} type={itemType} /> : null}
+        {ownCentre ? <CostCentreField value={costCentreId} onChange={setCostCentreId} /> : null}
 
         <View
           style={{

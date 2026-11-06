@@ -172,6 +172,8 @@ const FULL_PLAN_REPORTS: Record<string, Module> = {
   'tds-payable': 'payables',
   'tds-26q': 'payables',
   'tds-challans': 'payables',
+  // The TCS register is the sales side's own (every plan); what is owed and deposited reads the books.
+  'tcs-payable': 'books',
   'trial-balance': 'books',
   'msme-payables': 'payables',
 };

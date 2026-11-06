@@ -127,6 +127,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
           taxInclusive: l.taxInclusive,
           gst: gstFlagsFrom(l),
           expenseId: l.expenseId ?? undefined,
+          costCentreId: l.costCentreId ?? undefined,
         })),
       documentDiscountMode: row.documentDiscountMode,
       documentDiscountValue: Number(row.documentDiscountValue),
@@ -144,7 +145,9 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       noteReason: row.noteReason,
       billOfEntry: boeToWire(row.billOfEntry, baseCurrency),
       isdInvoice: row.isdInvoice || undefined,
-      tds: row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: m(row.tdsAmountMinor) } : undefined,
+      // On a bill, what was kept back; on an invoice, what the customer is expected to deduct (not settled).
+      tds: row.kind !== 'invoice' && row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: m(row.tdsAmountMinor) } : undefined,
+      tdsExpected: row.kind === 'invoice' && row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: m(row.tdsAmountMinor) } : undefined,
       selfInvoiceNumber: row.selfInvoiceNumber,
       itcReversedOn: row.itcReversedOn,
       itcReclaimedOn: row.itcReclaimedOn,
@@ -223,6 +226,8 @@ export async function summariesToWire(db: DbOrTx, rows: SummaryRow[], now: Date)
       exchangeRate: Number(row.exchangeRate),
       totalTax: money(row.totalTaxMinor, currency),
       outstanding: money(open ? Math.max(row.grandTotalMinor - row.amountPaidMinor, 0) : 0, currency),
+      // An invoice's expected TDS, so the receipt that allocates to it can take it as deducted.
+      tdsExpected: row.kind === 'invoice' && row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: money(row.tdsAmountMinor, currency) } : undefined,
       eInvoiceStatus: compliance.einv.get(row.id)?.status,
       irn: compliance.einv.get(row.id)?.irn?.trim(),
       ewayBillStatus: ewayStatus(row.currentEwayBillId ? compliance.eway.get(row.currentEwayBillId) : undefined, now),

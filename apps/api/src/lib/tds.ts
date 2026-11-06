@@ -7,6 +7,22 @@ import type { DbOrTx } from './audit';
 
 const D = schema.documents;
 const P = schema.parties;
+const A = schema.paymentAllocations;
+const PAY = schema.payments;
+
+/**
+ * TDS already kept back under `section` on money paid that is allocated to this bill: the bill then
+ * keeps back only the rest (RULES 4.16, pending CA), so an advance paid net of TDS isn't taxed twice.
+ */
+export async function tdsOnPaymentsTo(db: DbOrTx, documentId: string | undefined, section: string): Promise<number> {
+  if (!documentId) return 0;
+  const [row] = await db
+    .select({ tds: sql<number>`coalesce(sum(${A.tdsMinor}), 0)::bigint` })
+    .from(A)
+    .innerJoin(PAY, eq(PAY.id, A.paymentId))
+    .where(and(eq(A.documentId, documentId), eq(PAY.direction, 'paid'), eq(PAY.tdsSection, section)));
+  return Number(row?.tds ?? 0);
+}
 
 type PartyRow = typeof schema.parties.$inferSelect;
 
@@ -66,5 +82,6 @@ export async function tdsOn(
   if (!section) return { section: null, rate: 0, amountMinor: 0, reason: 'none' };
   const prior = await tdsYearSoFar(db, company.id, party, section, date, except);
   const certificate = party.lowerTdsRate !== null && party.lowerTdsValidTill ? { rate: Number(party.lowerTdsRate), validTill: party.lowerTdsValidTill } : undefined;
-  return { section, ...tdsFor({ section, pan: party.pan ?? undefined, certificate, date, baseMinor, prior }) };
+  const deductedOnPaymentsMinor = await tdsOnPaymentsTo(db, except.documentId, section);
+  return { section, ...tdsFor({ section, pan: party.pan ?? undefined, certificate, date, baseMinor, prior, deductedOnPaymentsMinor }) };
 }

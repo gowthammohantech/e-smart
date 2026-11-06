@@ -75,6 +75,9 @@ import { useDebounced } from '../../components/useDebounced';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { tdsForDocument } from '../../store/tds';
+import { useItcBreakup } from './itcBreakup';
+import { expectedSaleTds } from '@esmart/core/domain/tds';
+import { panOfGstin } from '@esmart/core/domain/gstin';
 import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
 import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
@@ -245,13 +248,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     },
     [parties],
   );
+  // A credit note or return against an invoice that collected TCS gives it back at that invoice's rate.
+  const tcsRateOfNote = useCallback((d: { sourceDocumentId?: string }) => documents.find((x) => x.id === d.sourceDocumentId)?.tcs?.rate ?? 0, [documents]);
   const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, setPricesIncludeTax, totals } = useDocumentDraft({
     kind,
     baseCurrency,
     taxCategories,
     taxContext: draftTaxContext,
     initial: initialDraft ?? seed?.draft,
-    tcsRate: kind === 'invoice' ? tcsRateOfDraft : undefined,
+    tcsRate: kind === 'invoice' ? tcsRateOfDraft : kind === 'creditNote' || kind === 'salesReturn' ? tcsRateOfNote : undefined,
   });
 
   // What the person has picked or typed, to tell an untouched form from one with changes to lose.
@@ -264,7 +269,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const leaveGuard = useLeaveGuard(entered !== untouched);
 
   // TDS kept back on a supplier's bill or debit note, for a business with a TAN: worked out as the server will.
-  const takesTds = !!company?.tan && (kind === 'purchaseBill' || kind === 'supplierDebitNote');
+  // The section shows on every bill: without a TAN it says where to add one, rather than hiding.
+  const billTds = kind === 'purchaseBill' || kind === 'supplierDebitNote';
+  const takesTds = !!company?.tan && billTds;
+  // On an invoice: TDS the customer will deduct (RULES 4.14). Shown, never taken off the GST invoice value.
+  const saleTds = kind === 'invoice';
   const fx = draft.currency === company?.baseCurrency ? 1 : draft.exchangeRate || 1;
   // The server counts the deductee's year so far; the device's own figure is the fallback while it answers or offline.
   const serverTds = useTdsPreview(
@@ -288,7 +297,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     // The server answers in base currency; the bill shows its own.
     return { section: serverTds.section, rate: serverTds.rate, amount: money(Math.round(serverTds.amount.minor / fx), draft.currency) };
   }, [takesTds, serverTds, deviceTds, fx, draft.currency]);
-  const tdsRow = draftTds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(draftTds.section)?.label ?? draftTds.section, rate: formatPercent(draftTds.rate) }), amount: draftTds.amount } : undefined;
+  const saleSection = saleTds ? (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection) : undefined;
+  const expectedTds = useMemo(() => {
+    if (!saleTds || !saleSection || saleSection === 'none') return undefined;
+    const e = expectedSaleTds({ section: saleSection, rate: draft.tdsRate, sellerPan: panOfGstin(company?.taxRegistration?.identifier) || undefined, date: draft.date, baseMinor: totals.taxableAmount.minor });
+    return e ? { section: e.section, rate: e.rate, amount: money(e.amountMinor, draft.currency) } : undefined;
+  }, [saleTds, saleSection, draft.tdsRate, draft.date, draft.currency, totals.taxableAmount.minor, company]);
+  const tdsRow = draftTds
+    ? { label: tr('common:totals.tdsLabel', { section: tdsSection(draftTds.section)?.label ?? draftTds.section, rate: formatPercent(draftTds.rate) }), amount: draftTds.amount }
+    : expectedTds
+      ? { label: tr('sales:tds.expectedLabel', { section: tdsSection(expectedTds.section)?.label ?? expectedTds.section, rate: formatPercent(expectedTds.rate) }), amount: expectedTds.amount, netLabel: tr('sales:tds.netReceivable') }
+      : undefined;
+  const itcBreakup = useItcBreakup({ kind, lines: draft.lines, totals, currency: draft.currency, exchangeRate: draft.exchangeRate, reverseCharge: draft.reverseCharge }, company?.baseCurrency ?? draft.currency);
   const tdsSectionLabel = (code: string | undefined) => (!code || code === 'none' ? tr('purchases:tds.none') : `${tdsSection(code)?.label ?? code} · ${tdsSection(code)?.nature ?? ''}`);
 
   const [step, setStep] = useState(seed?.step ?? 0);
@@ -582,7 +602,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
       reverseCharge: draft.reverseCharge || undefined,
       noteReason: isNote ? draft.noteReason : undefined,
-      tdsSection: takesTds ? draft.tdsSection : undefined,
+      tdsSection: billTds || saleTds ? draft.tdsSection : undefined,
+      tdsRate: saleTds && draft.tdsSection && draft.tdsSection !== 'none' ? draft.tdsRate : undefined,
       // `none` is sent as itself: unset on a new invoice would take the customer's section.
       tcsSection: kind === 'invoice' ? draft.tcsSection : undefined,
       costCentreId: draft.costCentreId,
@@ -840,14 +861,51 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
       </FieldRow>
 
-      {takesTds ? (
-        <PickerField
-          label={tr('purchases:tds.section')}
-          value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
-          onPress={() => setTdsOpen(true)}
-          icon="bank-minus"
-          hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
-        />
+      {billTds ? (
+        <View style={{ gap: t.spacing.xs }}>
+          <PickerField
+            label={tr('purchases:tds.section')}
+            value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
+            onPress={() => setTdsOpen(true)}
+            icon="bank-minus"
+            hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
+          />
+          {/* Without a TAN nothing is kept back: say so where the section is chosen, with the way to add one. */}
+          {!company?.tan && (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none') !== 'none' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, flexWrap: 'wrap' }}>
+              <Text variant="caption" tone="warn" style={{ flex: 1, minWidth: 180 }}>
+                {tr('purchases:tds.needsTan')}
+              </Text>
+              <Button title={tr('purchases:tds.addTan')} variant="ghost" size="sm" icon="office-building-cog-outline" onPress={() => router.push('/(app)/settings/company')} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {saleTds ? (
+        <View style={{ gap: t.spacing.xs }}>
+          <PickerField
+            label={tr('sales:tds.section')}
+            value={tdsSectionLabel(saleSection)}
+            onPress={() => setTdsOpen(true)}
+            icon="bank-plus"
+            hint={expectedTds ? tr('sales:tds.willDeduct', { amount: formatMoney(expectedTds.amount), net: formatMoney(subtract(totals.grandTotal, expectedTds.amount)) }) : tr('sales:tds.hint')}
+          />
+          {saleSection && saleSection !== 'none' ? (
+            <TextField
+              label={tr('sales:tds.rate')}
+              value={draft.tdsRate !== undefined ? String(draft.tdsRate) : ''}
+              onChangeText={(v) => {
+                const clean = v.replace(/[^0-9.]/g, '');
+                patch({ tdsRate: clean === '' ? undefined : Math.min(Number(clean) || 0, 100) });
+              }}
+              placeholder={expectedTds ? String(expectedTds.rate) : '0'}
+              keyboardType="decimal-pad"
+              icon="percent-outline"
+              hint={tr('sales:tds.rateHint')}
+            />
+          ) : null}
+        </View>
       ) : null}
 
       {kind === 'invoice' ? (
@@ -953,6 +1011,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onEdit={setEditingLine}
           onAddRequest={() => setItemOpen(true)}
           maxQuantity={(line) => maxReturnQty(line)}
+          purchase={isPurchase}
         />
       ) : (
         <Card padded={false}>
@@ -1035,6 +1094,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             exchangeRate={draft.exchangeRate}
             compact
             tds={tdsRow}
+            itc={itcBreakup}
           />
         </Card>
       ) : null}
@@ -1190,6 +1250,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           exchangeRate={draft.exchangeRate}
           compact
           tds={tdsRow}
+          itc={itcBreakup}
         />
       </Card>
     </View>
@@ -1238,6 +1299,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
           tds={tdsRow}
+          itc={itcBreakup}
         />
       </Card>
 
@@ -1394,10 +1456,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <SelectSheet
           visible={tdsOpen}
           onClose={() => setTdsOpen(false)}
-          title={tr('purchases:tds.section')}
+          title={saleTds ? tr('sales:tds.section') : tr('purchases:tds.section')}
           options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature, trailing: formatPercent(x.rateOther) }))]}
           value={draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none'}
-          onSelect={(v) => patch({ tdsSection: v })}
+          // A new section takes its own rate, unless the person types another.
+          onSelect={(v) => patch(saleTds ? { tdsSection: v, tdsRate: undefined } : { tdsSection: v })}
           searchable={false}
         />
         <SelectSheet
@@ -1567,6 +1630,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onRemove={editingIsNew ? undefined : () => editingLine && removeLine(editingLine.id)}
           hsnRequired={needsHsn}
           maxQuantity={maxReturnQty(editingLine)}
+          purchase={isPurchase}
         />
 
         <ConfirmDialog

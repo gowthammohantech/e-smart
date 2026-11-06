@@ -57,7 +57,7 @@ import { CREDIT_KINDS, PURCHASE_KINDS, conversionBlock, initialStatus, isFinaliz
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import { LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
-import { tdsForDocument } from './tds';
+import { expectedTdsForDocument, tdsForDocument } from './tds';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
@@ -463,7 +463,8 @@ export const useAppStore = create<AppState>()(
       };
 
       const computeTds = (doc: BusinessDocument) =>
-        tdsForDocument(doc, { company: companyOf(doc.companyId), parties: get().parties, documents: get().documents });
+        tdsForDocument(doc, { company: companyOf(doc.companyId), parties: get().parties, documents: get().documents, payments: get().payments });
+      const computeExpectedTds = (doc: BusinessDocument) => expectedTdsForDocument(doc, { company: companyOf(doc.companyId), parties: get().parties });
 
       /**
        * Re-derive paid / partly paid / unpaid for documents whose allocations
@@ -895,6 +896,7 @@ export const useAppStore = create<AppState>()(
           };
           doc.totals = computeTotals(doc);
           doc.tds = computeTds(doc);
+          doc.tdsExpected = computeExpectedTds(doc);
 
           set({ documents: [doc, ...get().documents] });
           if (finalized) postStockFor(doc);
@@ -911,6 +913,7 @@ export const useAppStore = create<AppState>()(
           const merged = { ...existing, ...patch, updatedAt: nowISO() };
           merged.totals = computeTotals(merged);
           merged.tds = computeTds(merged);
+          merged.tdsExpected = computeExpectedTds(merged);
           set({ documents: get().documents.map((d) => (d.id === id ? merged : d)) });
           const partyName = (pid: string) => get().parties.find((p) => p.id === pid)?.name;
           audit('updated', existing.kind, id, merged.number, {

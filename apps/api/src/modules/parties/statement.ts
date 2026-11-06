@@ -73,7 +73,8 @@ export async function partyStatement(db: DbOrTx, company: CompanyRow, party: Par
       const debit = SALES_KINDS.includes(d.kind) ? raises : PURCHASE_KINDS.includes(d.kind) ? !raises : raises;
       const at = iso(d.finalizedAt ?? d.createdAt)!;
       const entry = { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: d.number, debit: debit ? amount : 0, credit: debit ? 0 : amount };
-      if (!d.tdsAmountMinor) return [entry];
+      // An invoice's TDS is only what the customer is expected to deduct: the receipt records it.
+      if (!d.tdsAmountMinor || d.kind === 'invoice') return [entry];
       // TDS kept back goes to the government: it lowers what the supplier is owed (or a credit note gives it back).
       const tds = inPartyCurrency(d.tdsAmountMinor, d.currency, Math.round(d.tdsAmountMinor * Number(d.exchangeRate)));
       return [entry, { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: `${d.number} TDS`, debit: debit ? 0 : tds, credit: debit ? tds : 0 }];

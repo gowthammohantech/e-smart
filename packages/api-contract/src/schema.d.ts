@@ -2000,6 +2000,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/payments/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A party's unadjusted advances and credit, and its open documents they can settle
+         * @description Credit on one side: receipts (or payments made) with an unallocated part, and direct credit
+         *     notes (or a supplier's credit notes) not yet applied in full. Open on the other: invoices and
+         *     debit notes (or bills and supplier debit notes) still owed, oldest first. Base currency only.
+         *     `side` picks which side of a party that is both is read; a supplier is read as one.
+         */
+        get: operations["listAdjustable"];
+        put?: never;
+        /**
+         * Applies a party's advances and direct notes to its open documents
+         * @description With `allocations`, each names its source (`payment` or `note`) and target; without, every
+         *     unadjusted advance is applied oldest first to the oldest open document (FIFO), notes before
+         *     payments. A payment's part is added to its allocations, so the GST on a service advance comes
+         *     back on the invoice's date (GSTR-1 11B). A note's part is a credit application: not money, and
+         *     no GST on advance moves (RULES 8.13). Refused in a closed period.
+         */
+        post: operations["adjustAdvances"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payments": {
         parameters: {
             query?: never;
@@ -2740,6 +2773,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/vouchers/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many vouchers a list's filters match, what they add up to, and the split by account
+         * @description Takes the filters of `listVouchers`. `total` adds up each voucher's debits; `byAccount` totals by the account credited (for receipts, what the money was for). Base currency.
+         */
+        get: operations["summarizeVoucherList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/vouchers": {
         parameters: {
             query?: never;
@@ -3122,7 +3177,7 @@ export interface paths {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "tcs-register" | "tcs-payable" | "msme-payables" | "gstr1";
             };
             cookie?: never;
         };
@@ -5227,6 +5282,10 @@ export interface components {
             /** Format: date-time */
             readonly postedAt?: string;
             lines: components["schemas"]["VoucherLine"][];
+            /** @description On a receipt: the customer, supplier or contact it came from, for reference. The lines are what post. */
+            partyId?: string;
+            /** @description Files kept with the voucher (a receipt's slip) */
+            attachmentIds?: string[];
             readonly createdBy?: string;
         };
         TrialBalance: {
@@ -5520,6 +5579,8 @@ export interface components {
             gst?: components["schemas"]["GstFlags"];
             /** @description A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED) */
             expenseId?: string;
+            /** @description On a purchase document: this line's cost centre, for a line that is not stock (an item that tracks stock takes the document's). Left out takes the document's. */
+            costCentreId?: string;
         };
         TaxComponent: {
             /** @enum {string} */
@@ -5619,10 +5680,12 @@ export interface components {
              */
             tcsSection?: "none" | "scrap" | "liquor" | "tenduLeaves" | "timberLease" | "timberOther" | "forestProduce" | "minerals" | "motorVehicle" | "luxuryGoods";
             /**
-             * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN.
+             * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's.
              * @enum {string}
              */
             tdsSection?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+            /** @description On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN. */
+            tdsRate?: number;
             /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
             overrideCreditLimit?: boolean;
             /**
@@ -5642,6 +5705,8 @@ export interface components {
             readonly partyGstin?: string;
             /** @description TDS deducted on the bill: what is owed the supplier is the grand total less this */
             tds?: components["schemas"]["TdsDeduction"];
+            /** @description On an invoice: TDS the customer is expected to deduct (on the taxable value, without GST). Not posted and not settled: the receipt that allocates to the invoice records what was deducted. The grand total is unchanged. */
+            tdsExpected?: components["schemas"]["TdsDeduction"];
             /** @description The self-invoice for a reverse-charge purchase from an unregistered supplier (Rule 46(f)) */
             readonly selfInvoiceNumber?: string;
             /**
@@ -5714,6 +5779,8 @@ export interface components {
             exchangeRate?: number;
             totalTax?: components["schemas"]["Money"];
             outstanding?: components["schemas"]["Money"];
+            /** @description On an invoice: TDS the customer is expected to deduct (not settled) */
+            tdsExpected?: components["schemas"]["TdsDeduction"];
             eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
             /** @description The IRN once one is issued */
             irn?: string;
@@ -5951,6 +6018,43 @@ export interface components {
             paymentId?: string;
             version: number;
         };
+        AdjustmentAllocation: {
+            /**
+             * @description payment: an advance (its unallocated part); note: a direct credit note applied to the document
+             * @enum {string}
+             */
+            sourceType: "payment" | "note";
+            sourceId: string;
+            documentId: string;
+            amount: components["schemas"]["Money"];
+        };
+        Adjustable: {
+            /** @description Unadjusted advances and direct notes, oldest first */
+            credits: {
+                /** @enum {string} */
+                sourceType: "payment" | "note";
+                id: string;
+                number: string;
+                /** Format: date */
+                date: string;
+                total?: components["schemas"]["Money"];
+                left: components["schemas"]["Money"];
+                /** @description A service advance taxed on receipt */
+                advanceTax?: boolean;
+            }[];
+            /** @description Documents still owed, oldest first */
+            open: {
+                documentId: string;
+                number: string;
+                kind: components["schemas"]["DocumentKind"];
+                /** Format: date */
+                date: string;
+                total?: components["schemas"]["Money"];
+                outstanding: components["schemas"]["Money"];
+                /** @description Has a line for a service (an item of type service, or a SAC code starting 99) */
+                hasServiceLines?: boolean;
+            }[];
+        };
         Payment: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
@@ -5977,8 +6081,14 @@ export interface components {
                 /** @description The rate on the day received */
                 readonly rate?: number;
                 placeOfSupplyStateCode: string;
+                /** @description The SAC (or HSN) of the service the advance is for, for table 11 and the receipt voucher */
+                hsn?: string;
+                /** @description Cess on the advance, percent of its value; the amount received includes it */
+                cessRate?: number;
             };
-            /** @description On money paid: the TDS section of what its allocations kept back (tdsDeducted), so it is reported under that section in 26Q and TDS payable */
+            /** @description On money received: TDS the customer deducted from an advance before any invoice, under `tdsSection`. It credits the customer as money would, so it adds to the advance. */
+            advanceTds?: components["schemas"]["Money"];
+            /** @description The TDS section of what its allocations settled as tdsDeducted: on money paid, what was kept back (26Q and TDS payable); on money received, what the customer deducted (TDS receivable by section, matched to 26AS) */
             tdsSection?: string;
             /** @description Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date. */
             refundOf?: string;
@@ -11071,6 +11181,67 @@ export interface operations {
             };
         };
     };
+    listAdjustable: {
+        parameters: {
+            query: {
+                partyId: string;
+                side?: "customer" | "supplier";
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adjustable"];
+                };
+            };
+        };
+    };
+    adjustAdvances: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    partyId: string;
+                    /** @enum {string} */
+                    side?: "customer" | "supplier";
+                    allocations?: components["schemas"]["AdjustmentAllocation"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Applied; what is left on both sides */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adjustable"] & {
+                        applied: components["schemas"]["AdjustmentAllocation"][];
+                    };
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
     listPayments: {
         parameters: {
             query?: {
@@ -12591,13 +12762,53 @@ export interface operations {
             };
         };
     };
+    summarizeVoucherList: {
+        parameters: {
+            query?: {
+                kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                status?: "draft" | "posted";
+                partyId?: string;
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                        byAccount: {
+                            account: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listVouchers: {
         parameters: {
             query?: {
                 kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
                 status?: "draft" | "posted";
+                partyId?: string;
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -13406,7 +13617,7 @@ export interface operations {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "tcs-register" | "tcs-payable" | "msme-payables" | "gstr1";
             };
             cookie?: never;
         };

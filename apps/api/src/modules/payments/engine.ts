@@ -63,7 +63,9 @@ export type PaymentInput = {
   accountId: string;
   notes?: string | null;
   /** An advance for services, taxed when received at this category's rate and place of supply. */
-  advanceTax?: { taxCategoryId: string; placeOfSupplyStateCode: string } | null;
+  advanceTax?: { taxCategoryId: string; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number } | null;
+  /** On money received: TDS the customer deducted from an advance, not tied to an invoice. Credits them as money does. */
+  advanceTdsMinor?: number;
   /** Money paid back to a customer out of this advance receipt (a refund voucher, Rule 51). */
   refundOf?: string | null;
   /** On money paid: the section of the TDS its allocations kept back. */
@@ -207,6 +209,10 @@ export async function writePayment(
       if ((a[k] ?? 0) < 0) return blocking(`${field}.${k}`, 'Cannot be negative');
     }
     if (!(settles(a) > 0)) return blocking(`${field}.amount.minor`, 'Must be more than zero');
+    // TDS is kept back once (RULES 4.16, pending CA): a bill that kept it back under this section takes no more on what pays it.
+    if (input.direction === 'paid' && (a.tdsMinor ?? 0) > 0 && doc.tdsAmountMinor > 0 && (!input.tdsSection || input.tdsSection === 'none' || doc.tdsSection === input.tdsSection)) {
+      blocking(`${field}.tdsDeducted`, `${doc.number} already kept back TDS under ${doc.tdsSection ?? 'its section'}; it is not deducted again on the payment`);
+    }
     const earlier = before.find((b) => b.documentId === doc.id);
     const mine = earlier ? earlier.amountMinor + earlier.tdsMinor + earlier.discountMinor + earlier.writeOffMinor : 0;
     const owed = doc.grandTotalMinor - doc.amountPaidMinor + mine;
@@ -217,7 +223,13 @@ export async function writePayment(
   });
   // Only cash comes out of the payment; adjustments settle on top of it.
   const allocated = input.allocations.reduce((s, a) => s + a.amountMinor, 0);
-  if (allocated > input.amountMinor) blocking('allocations', `Allocations (${input.currency} ${(allocated / 100).toFixed(2)}) exceed the payment (${input.currency} ${(input.amountMinor / 100).toFixed(2)})`);
+  // TDS the customer deducted from an advance credits them as the money does.
+  const advanceTds = input.advanceTdsMinor ?? 0;
+  if (advanceTds < 0) blocking('advanceTds', 'Cannot be negative');
+  if (advanceTds > 0 && input.direction !== 'received') blocking('advanceTds', 'Only money received carries TDS the customer deducted; TDS kept back from a supplier goes on the bill it settles');
+  if (advanceTds > 0 && !(input.tdsSection && input.tdsSection !== 'none')) blocking('tdsSection', 'Which section the customer deducted TDS under');
+  const credit = input.amountMinor + Math.max(advanceTds, 0);
+  if (allocated > credit) blocking('allocations', `Allocations (${input.currency} ${(allocated / 100).toFixed(2)}) exceed the payment (${input.currency} ${(credit / 100).toFixed(2)})`);
 
   // No account pays out more than it holds: cash, bank or wallet.
   let shortOfCash = false;
@@ -240,6 +252,11 @@ export async function writePayment(
     if (!tax) blocking('advanceTax.taxCategoryId', 'No such tax category in this company');
     else if (!(Number(tax.rate) > 0)) blocking('advanceTax.taxCategoryId', 'An advance taxed at 0% carries no tax; leave it off');
     else advanceTaxRate = existing?.advanceTaxCategoryId === advance.taxCategoryId && existing.advanceTaxRate && existing.date === input.date ? existing.advanceTaxRate : String(tax.rate);
+    const hsn = advance.hsn?.trim();
+    if (hsn && !/^\d{4,8}$/.test(hsn)) blocking('advanceTax.hsn', 'A SAC or HSN of 4 to 8 digits');
+    // Advances for goods carry no GST (notification 66/2017): only a service's SAC (99…) is taxed on receipt.
+    else if (hsn && !hsn.startsWith('99')) blocking('advanceTax.hsn', `${hsn} is goods: an advance for goods carries no GST (notification 66/2017); leave the tax off`);
+    if (advance.cessRate != null && !(advance.cessRate >= 0 && advance.cessRate <= 300)) blocking('advanceTax.cessRate', 'A cess rate from 0 to 300 percent');
   }
   // A refund pays a customer back out of an advance they paid (Rule 51): it settles nothing else,
   // and takes no more than is left of that advance.
@@ -263,7 +280,7 @@ export async function writePayment(
   const refunded = existing && input.direction === 'received' ? await refundedFrom(tx, existing.id) : 0;
   if (refunded) {
     if (input.partyId !== existing!.partyId || input.currency !== existing!.currency.trim()) blocking('partyId', `${existing!.number} has refunds against it; its party and currency stay`);
-    if (allocated + refunded > input.amountMinor) blocking('allocations', `${input.currency} ${(refunded / 100).toFixed(2)} of it has been refunded; allocations can use only the rest`);
+    if (allocated + refunded > credit) blocking('allocations', `${input.currency} ${(refunded / 100).toFixed(2)} of it has been refunded; allocations can use only the rest`);
   }
   if (input.tdsSection && input.tdsSection !== 'none' && !tdsSectionOf(input.tdsSection)) blocking('tdsSection', `Unknown TDS section ${input.tdsSection}`);
   if (issues.length) throw unprocessable(issues, overOutstanding ? 'ALLOCATION_EXCEEDS_OUTSTANDING' : shortOfCash ? 'INSUFFICIENT_BALANCE' : 'VALIDATION_FAILED');
@@ -291,13 +308,17 @@ export async function writePayment(
     reference: input.reference ?? null,
     accountId: input.accountId,
     // A refund is all applied: to the advance it pays back.
-    unallocatedMinor: refundOf ? 0 : input.amountMinor - allocated - refunded,
+    unallocatedMinor: refundOf ? 0 : credit - allocated - refunded,
     fxGainLossMinor,
     advanceTaxCategoryId: advance?.taxCategoryId ?? null,
     advanceTaxRate,
     advancePlaceOfSupply: advance?.placeOfSupplyStateCode ?? null,
+    advanceHsn: advance?.hsn?.trim() || null,
+    advanceCessRate: advance?.cessRate ? String(advance.cessRate) : null,
+    tdsMinor: input.direction === 'received' ? Math.max(advanceTds, 0) : 0,
     refundOfPaymentId: refundOf,
-    tdsSection: input.direction === 'paid' && input.allocations.some((a) => (a.tdsMinor ?? 0) > 0) ? (input.tdsSection ?? null) : null,
+    // Paid: what was kept back (26Q). Received: what the customer deducted, so it reaches that section's receivable (26AS).
+    tdsSection: input.allocations.some((a) => (a.tdsMinor ?? 0) > 0) || advanceTds > 0 ? (input.tdsSection ?? null) : null,
     notes: input.notes ?? null,
   };
 

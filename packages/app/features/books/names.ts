@@ -14,6 +14,7 @@ export function useAccountName() {
       if (account.kind !== 'system') return account.name;
       const [, id, section] = account.key.split(':');
       if (id === 'tdsPayable' && section) return tr('books:account.tdsPayableSection', { section: tdsSection(section)?.label ?? section });
+      if (id === 'tdsReceivable' && section) return tr('books:account.tdsReceivableSection', { section: tdsSection(section)?.label ?? section });
       return tr(`books:account.${id}` as 'books:account.sales', { defaultValue: account.name });
     },
     [tr],

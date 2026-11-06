@@ -393,6 +393,8 @@ export type DocumentLine = {
   gst?: GstFlags;
   /** A reimbursement line: the billable expense it recovers from the customer. */
   expenseId?: string;
+  /** On a purchase: this non-stock line's own cost centre; absent takes the document's. */
+  costCentreId?: string;
 };
 
 export type DocumentTotals = {
@@ -461,10 +463,17 @@ export type BusinessDocument = {
   sourceDocumentId?: string;
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
-  /** The TDS section asked for on a supplier's bill: a code, `none`, or unset for the supplier's own. */
+  /** The TDS section asked for on a supplier's bill (or, on an invoice, the customer's): a code, `none`, or unset for the party's own. */
   tdsSection?: string;
   /** TDS the business deducted on a supplier's bill: what's paid them is the total less this. */
   tds?: { section: string; rate: number; amount: Money };
+  /**
+   * On an invoice: TDS the customer is expected to deduct (on the taxable value, CBDT circular 23/2017).
+   * Not posted and not settled: the receipt allocated to it records what was deducted. The total is unchanged.
+   */
+  tdsExpected?: { section: string; rate: number; amount: Money };
+  /** On an invoice: the rate asked for the customer's TDS; unset takes the section's. */
+  tdsRate?: number;
   /** TCS collected on a sale (s.206C): its section and rate; the amount is `totals.tcs`. */
   tcs?: { section: string; rate: number };
   /** The TCS section asked for on an invoice, or `none`; unset on a new invoice takes the customer's. */
@@ -812,7 +821,9 @@ export type Payment = {
    * An advance received for services carries GST when received (s.13(2)): the rate and place of
    * supply it is taxed at. Advances for goods carry none (notification 66/2017).
    */
-  advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string };
+  advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number };
+  /** On money received: TDS the customer deducted from an advance, before any invoice (under `tdsSection`). */
+  advanceTds?: Money;
   /** On money paid: the TDS section of what its allocations kept back (26Q). */
   tdsSection?: string;
   /** Money paid back to a customer: the advance receipt it refunds (CGST Rule 51). */
@@ -1143,6 +1154,10 @@ export type Voucher = {
   /** A TDS challan's deposit details. */
   challan?: TdsChallan;
   lines: VoucherLine[];
+  /** On a receipt: the party it came from, for reference (the lines post). */
+  partyId?: string;
+  /** Files kept with it (a receipt's slip). */
+  attachmentIds?: string[];
   createdBy: string;
   createdAt: string;
   updatedAt?: string;

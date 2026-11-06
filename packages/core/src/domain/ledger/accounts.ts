@@ -104,6 +104,7 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
     TAX.flatMap((t) => [
       [`sys:output${t}`, { name: `Output ${t.toUpperCase()}`, group: 'dutiesTaxes' as const }],
       [`sys:input${t}`, { name: `Input ${t.toUpperCase()}`, group: 'dutiesTaxes' as const }],
+      // Reverse-charge tax dated before RCM_OUTPUT_FROM (postings.ts); later tax goes to Output. Kept so old books still read.
       [`sys:rcmPayable${t}`, { name: `${t.toUpperCase()} payable on reverse charge`, group: 'dutiesTaxes' as const }],
     ]),
   ),
@@ -123,6 +124,7 @@ export function accountFor(key: string, book: Book): Account | undefined {
   const [prefix, id, extra] = key.split(':');
   if (prefix === 'sys') {
     if (id === 'tdsPayable' && extra) return { key, name: `TDS payable ${tdsSection(extra)?.label ?? extra}`, group: 'dutiesTaxes', kind: 'system' };
+    if (id === 'tdsReceivable' && extra) return { key, name: `TDS receivable ${tdsSection(extra)?.label ?? extra}`, group: 'loansAdvances', kind: 'system' };
     if (id === 'tcsPayable' && extra) return { key, name: `TCS payable ${tcsSection(extra)?.label ?? extra}`, group: 'dutiesTaxes', kind: 'system' };
     const s = SYSTEM_ACCOUNTS[key];
     return s ? { key, ...s, kind: 'system' } : undefined;

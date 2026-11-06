@@ -665,7 +665,8 @@ export function useServerBook() {
   return { book: data?.book ?? EMPTY_BOOK, accounts: data?.accounts ?? [], balances: data?.balances ?? {}, loaded: !!data };
 }
 
-export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt'; status?: 'draft' | 'posted'; from?: string; to?: string };
+export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt'; status?: 'draft' | 'posted'; from?: string; to?: string; q?: string; partyId?: string };
+const voucherParams = (f: VoucherQuery) => ({ kind: f.kind, status: f.status, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined });
 const voucherKeys = {
   all: (companyId: string) => ['vouchers', companyId] as const,
 };
@@ -678,13 +679,56 @@ export function useVoucherPages(f: VoucherQuery) {
     enabled: !!companyId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/vouchers', { params: { path: { companyId }, query: { kind: f.kind, status: f.status, from: f.from, to: f.to, limit: PAGE, cursor: pageParam } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/vouchers', { params: { path: { companyId }, query: { ...voucherParams(f), limit: PAGE, cursor: pageParam } }, signal });
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
   return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as Voucher[] };
+}
+
+/** A party's unadjusted advances and direct notes, and its open documents, from the server (the adjustment entry). */
+export function useAdjustable(partyId: string | undefined, side: 'customer' | 'supplier' = 'customer') {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: ['adjustable', companyId, partyId, side],
+    enabled: !!companyId && !!partyId,
+    staleTime: 0,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments/adjust', { params: { path: { companyId }, query: { partyId: partyId!, side } }, signal });
+      return data!;
+    },
+  });
+}
+
+export type AdjustmentAllocation = Schema<'AdjustmentAllocation'>;
+
+/**
+ * Applies advances and direct notes on the server (all of them oldest first when `allocations` is
+ * left out), then marks what it changed stale. Needs a connection.
+ */
+export async function adjustOnServer(partyId: string, side: 'customer' | 'supplier', allocations?: AdjustmentAllocation[]) {
+  const companyId = useAppStore.getState().activeCompanyId;
+  const { data } = await api.POST('/companies/{companyId}/payments/adjust', { params: { path: { companyId } }, body: { partyId, side, allocations } });
+  for (const key of [['adjustable', companyId], documentKeys.all(companyId), paymentKeys.all(companyId), partyKeys.all(companyId), ['reports', companyId], ['books', companyId]]) {
+    void queryClient.invalidateQueries({ queryKey: key });
+  }
+  return data!;
+}
+
+/** How many vouchers the filters match, their total, and (for receipts) the split by what they were for. */
+export function useVoucherSummary(f: VoucherQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...voucherKeys.all(companyId), 'summary', f],
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/vouchers/summary', { params: { path: { companyId }, query: voucherParams(f) }, signal });
+      return data!;
+    },
+    placeholderData: keepPreviousData,
+  });
 }
 
 /** Every voucher of a kind in a range, for screens that total them (Receipts, the TDS reports). */
@@ -728,7 +772,7 @@ export function useVoucherRecord(id: string | undefined) {
 
 export type ReportDataKey =
   | 'sales-summary' | 'purchase-summary' | 'expense-summary' | 'receivables' | 'payables' | 'stock' | 'tax-summary'
-  | 'payments' | 'advances' | 'profit' | 'tds-register' | 'tds-payable' | 'tds-receivable' | 'tds-26q' | 'tds-challans' | 'msme-payables' | 'gstr1';
+  | 'payments' | 'advances' | 'profit' | 'tds-register' | 'tds-payable' | 'tds-receivable' | 'tds-26q' | 'tds-challans' | 'tcs-register' | 'tcs-payable' | 'msme-payables' | 'gstr1';
 
 /** A report as the app shows it, worked out on the server by the same core function (see getReportData). */
 export function useReportData<T>(key: ReportDataKey | null, scope: { from: string; to: string; branchId?: string | null; partyId?: string | null }) {
@@ -1102,6 +1146,7 @@ export function watchStoreForQueries(): () => void {
     if (stale.has('vouchers')) {
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'pages'] });
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'all'] });
+      void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'summary'] });
       void queryClient.invalidateQueries({ queryKey: ['books', companyId] });
       // Contra and journal lines move money between accounts.
       void queryClient.invalidateQueries({ queryKey: [...paymentKeys.all(companyId), 'balances'] });

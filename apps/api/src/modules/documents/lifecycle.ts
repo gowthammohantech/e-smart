@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, ne, notInArray, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, inArray, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
@@ -342,7 +342,8 @@ export async function finalizeInTx(
   await postStock(tx, company, updated, actor.id);
   // A bill with TDS kept back starts part-settled.
   if (isCredit(updated) && updated.sourceDocumentId) await syncPaymentState(tx, actor, updated.companyId, [updated.sourceDocumentId], now);
-  if (updated.tdsAmountMinor > 0) {
+  // (An invoice's TDS is only what the customer is expected to deduct: it settles nothing until a receipt says so.)
+  if (updated.tdsAmountMinor > 0 && updated.kind !== 'invoice') {
     await syncPaymentState(tx, actor, updated.companyId, [updated.id], now);
     const [settled] = await tx.select().from(D).where(eq(D.id, updated.id));
     return settled;
@@ -459,6 +460,10 @@ async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
 export async function assertNoLiveReturns(tx: DbOrTx, row: DocRow) {
   const [live] = await tx.select({ number: D.number, kind: D.kind }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN)).limit(1);
   if (live) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel ${isReturn(live) ? 'return' : 'note'} ${live.number} before cancelling ${row.number}`);
+  // A direct note applied to an invoice (or an invoice a note was applied to) holds the other up.
+  const CA = schema.creditApplications;
+  const [applied] = await tx.select({ id: CA.id }).from(CA).where(or(eq(CA.noteId, row.id), eq(CA.documentId, row.id))).limit(1);
+  if (applied) throw conflict('DOCUMENT_HAS_RETURNS', `${row.number} is in a credit note adjustment; remove that adjustment first`);
 }
 
 /**
@@ -487,10 +492,19 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
     .where(and(inArray(D.sourceDocumentId, ids), inArray(D.kind, CREDIT_KINDS), LIVE_RETURN))
     .groupBy(D.sourceDocumentId);
   const creditOf = new Map(credits.map((c) => [c.documentId, Number(c.credited)]));
+  // Direct notes applied to it (the adjustment entry): credit, not money.
+  const CA = schema.creditApplications;
+  const applied = await tx
+    .select({ documentId: CA.documentId, applied: sql<number>`coalesce(sum(${CA.amountMinor}), 0)::bigint` })
+    .from(CA)
+    .where(inArray(CA.documentId, ids))
+    .groupBy(CA.documentId);
+  for (const a of applied) creditOf.set(a.documentId, (creditOf.get(a.documentId!) ?? 0) + Number(a.applied));
   const rows = await tx.select().from(D).where(and(eq(D.companyId, companyId), inArray(D.id, ids)));
   for (const row of rows) {
     // TDS kept back is paid to the government, so it settles the bill as far as the supplier goes.
-    const allocated = (paidOf.get(row.id) ?? 0) + row.tdsAmountMinor;
+    // An invoice's TDS is only expected: the receipt's tdsDeducted settles it, counted above.
+    const allocated = (paidOf.get(row.id) ?? 0) + (row.kind === 'invoice' ? 0 : row.tdsAmountMinor);
     const amountPaidMinor = Math.max(allocated, Math.min(allocated + (creditOf.get(row.id) ?? 0), row.grandTotalMinor));
     const status = isFinalized(row.status) ? effectiveStatus({ ...row, amountPaidMinor }, today(now)) : row.status;
     if (amountPaidMinor === row.amountPaidMinor && status === row.status) continue;

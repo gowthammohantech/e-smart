@@ -12,7 +12,8 @@ import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
 import { loadBook, loadPerpetualCost, loadVouchers } from '../books/book';
 import { amendmentsForScreen, gstr1ForRange } from '../gst/handlers';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
-import { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { tds26asMatch, tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
+import { tcsPayableSummary, tcsRegister } from '@esmart/core/domain/tcsReports';
 import { msmePayables, sec43bh } from '@esmart/core/domain/msme';
 import { today } from '../documents/lifecycle';
 import { trialBalance } from '@esmart/core/domain/ledger/reports';
@@ -229,7 +230,19 @@ export const reportsHandlers = defineHandlers({
         const { postings, book } = await loadBook(all);
         if (key === 'tds-payable') return { rows: tdsPayableSummary(postings, range, today(ctx.now)) } as never;
         const parties = await loadParties(all, book.parties.map((p) => p.id));
-        return { rows: tdsReceivable(postings, parties, range) } as never;
+        // The 26AS match: what invoices expected customers to deduct against what receipts recorded.
+        const { docs: invoices } = await loadDocuments(all, ['invoice']);
+        return { rows: tdsReceivable(postings, parties, range), match: tds26asMatch(postings, inScope(invoices), parties, base, range) } as never;
+      }
+      case 'tcs-register':
+      case 'tcs-payable': {
+        const { docs } = await loadDocuments(all, ['invoice', 'creditNote', 'salesReturn']);
+        const live = inScope(docs);
+        const register = tcsRegister(live, await partiesOf(live), base, range);
+        if (key === 'tcs-register') return { rows: register } as never;
+        if (ctx.user.branchIds.length) throw forbidden('BOOKS_ALL_BRANCHES', 'The books cover every branch; ask an owner or admin');
+        const { postings } = await loadBook(all);
+        return tcsPayableSummary(postings, register, range, today(ctx.now)) as never;
       }
       case 'tds-26q':
       case 'tds-challans': {

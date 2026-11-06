@@ -31,8 +31,10 @@ export type DraftState = {
   reverseCharge?: boolean;
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
-  /** A TDS section, `none`, or unset for the supplier's own. */
+  /** A TDS section, `none`, or unset for the supplier's own (on an invoice, the customer's). */
   tdsSection?: string;
+  /** On an invoice: the rate the customer will deduct at; unset takes the section's. */
+  tdsRate?: number;
   costCentreId?: string;
   /** Values of the company's document fields, by field id. */
   customFields?: CustomValues;
@@ -113,7 +115,8 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     reverseCharge: doc.reverseCharge,
     noteReason: doc.noteReason,
     // A stored bill keeps what it was worked out with.
-    tdsSection: doc.tdsSection ?? doc.tds?.section ?? 'none',
+    tdsSection: doc.tdsSection ?? doc.tds?.section ?? doc.tdsExpected?.section ?? 'none',
+    tdsRate: doc.tdsRate ?? doc.tdsExpected?.rate,
     costCentreId: doc.costCentreId,
     customFields: doc.customFields,
     tcsSection: doc.tcs?.section,
@@ -144,6 +147,8 @@ export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: Tax
     taxCategoryId: item.taxCategoryId,
     taxRate: taxable ? (category?.rate ?? 0) : 0,
     taxInclusive: false,
+    // The item's treatment is the line's default, set once here when it is picked: later edits on
+    // the line (a bill's capital goods, credit or reverse charge) are the line's own and stay.
     ...(item.gst && { gst: { ...item.gst } }),
   };
 }

@@ -11,7 +11,8 @@
     "allReports": "All reports",
     "subtitle": "Financial year to date · {{currency}}",
     "open": "Open",
-    "margin": "{{percent}} margin"
+    "margin": "{{percent}} margin",
+    "tdsTcs": "TDS & TCS"
   },
   "home": {
     "firstSteps": "First steps",
@@ -247,6 +248,16 @@
       "title": "TDS challans",
       "description": "Challans deposited, with BSR code and serial",
       "basis": "TDS challan vouchers deposited in the period, and how many deductions each settles"
+    },
+    "tcsRegister": {
+      "title": "TCS register",
+      "description": "TCS collected on each invoice and given back on its credit notes",
+      "basis": "Invoices, credit notes and returns dated in the period that carry TCS: customer, PAN, section, base, rate and TCS. A credit note against a TCS invoice gives TCS back in proportion, shown negative."
+    },
+    "tcsPayable": {
+      "title": "TCS payable",
+      "description": "TCS collected, deposited and still to deposit, by section and month, with the 27EQ quarter rows",
+      "basis": "Collected on invoices (less what credit notes gave back), against the TDS/TCS challans. A challan settles its section's oldest month first; each month is due within seven days of its end."
     }
   },
   "figure": {
@@ -380,7 +391,15 @@
     "bsr": "BSR code",
     "serial": "Serial",
     "noChallans": "No TDS challans in this period",
-    "noChallansBody": "Record each deposit as a TDS challan voucher in Books, with its BSR code and serial."
+    "noChallansBody": "Record each deposit as a TDS challan voucher in Books, with its BSR code and serial.",
+    "expected": "Expected",
+    "recorded": "Recorded",
+    "difference": "Difference",
+    "shortOfExpected": "Short of expected",
+    "bySectionQuarter": "By section, customer and quarter",
+    "match26as": "26AS match",
+    "match26asHint": "TDS your invoices expected each customer to deduct, against what receipts recorded, by quarter. Tick each row against the customer's credit in Form 26AS or the AIS.",
+    "tanOrPan": "TAN or PAN"
   },
   "dash": {
     "period": {
@@ -541,5 +560,17 @@
       "closingBalance": "Closing",
       "booksAllBranches": "The books cover every branch. Ask an owner or admin to see the balance sheet and accounts."
     }
+  },
+  "tcs": {
+    "noSection": "No section",
+    "none": "No TCS in this period",
+    "noneBody": "TCS shows here once an invoice to a customer under a TCS section is finalised.",
+    "collected": "Collected",
+    "collectees": "Collectees",
+    "byInvoice": "By invoice",
+    "base": "Base",
+    "rate": "Rate",
+    "tcs": "TCS",
+    "quarterRows": "27EQ quarter rows"
   }
 }

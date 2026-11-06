@@ -2833,6 +2833,64 @@ paths:
                 properties:
                   count: { type: integer }
                   total: { $ref: '#/components/schemas/Money' }
+  /companies/{companyId}/payments/adjust:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: listAdjustable
+      summary: A party's unadjusted advances and credit, and its open documents they can settle
+      description: |
+        Credit on one side: receipts (or payments made) with an unallocated part, and direct credit
+        notes (or a supplier's credit notes) not yet applied in full. Open on the other: invoices and
+        debit notes (or bills and supplier debit notes) still owed, oldest first. Base currency only.
+        `side` picks which side of a party that is both is read; a supplier is read as one.
+      parameters:
+        - { name: partyId, in: query, required: true, schema: { type: string } }
+        - { name: side, in: query, schema: { type: string, enum: [customer, supplier] } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Adjustable' }
+    post:
+      tags: [Payments]
+      operationId: adjustAdvances
+      summary: Applies a party's advances and direct notes to its open documents
+      description: |
+        With `allocations`, each names its source (`payment` or `note`) and target; without, every
+        unadjusted advance is applied oldest first to the oldest open document (FIFO), notes before
+        payments. A payment's part is added to its allocations, so the GST on a service advance comes
+        back on the invoice's date (GSTR-1 11B). A note's part is a credit application: not money, and
+        no GST on advance moves (RULES 8.13). Refused in a closed period.
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyId]
+              properties:
+                partyId: { type: string }
+                side: { type: string, enum: [customer, supplier] }
+                allocations:
+                  type: array
+                  items: { $ref: '#/components/schemas/AdjustmentAllocation' }
+      responses:
+        '200':
+          description: Applied; what is left on both sides
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Adjustable'
+                  - type: object
+                    required: [applied]
+                    properties:
+                      applied: { type: array, items: { $ref: '#/components/schemas/AdjustmentAllocation' } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/payments:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -3917,6 +3975,38 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+  /companies/{companyId}/vouchers/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Books]
+      operationId: summarizeVoucherList
+      x-plan-module: books
+      summary: How many vouchers a list's filters match, what they add up to, and the split by account
+      description: Takes the filters of `listVouchers`. `total` adds up each voucher's debits; `byAccount` totals by the account credited (for receipts, what the money was for). Base currency.
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, posted] } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total, byAccount]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  byAccount:
+                    type: array
+                    items:
+                      type: object
+                      required: [account, total]
+                      properties: { account: { type: string }, total: { $ref: '#/components/schemas/Money' } }
   /companies/{companyId}/vouchers:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -3926,8 +4016,10 @@ paths:
       parameters:
         - { name: kind, in: query, schema: { type: string, enum: [journal, contra, gstJournal, tdsChallan, receipt] } }
         - { name: status, in: query, schema: { type: string, enum: [draft, posted] } }
+        - { name: partyId, in: query, schema: { type: string } }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
@@ -4491,7 +4583,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, advances, profit, tds-register, tds-payable, tds-receivable, tds-26q, tds-challans, msme-payables, gstr1]
+          enum: [sales-summary, purchase-summary, expense-summary, receivables, payables, stock, tax-summary, payments, advances, profit, tds-register, tds-payable, tds-receivable, tds-26q, tds-challans, tcs-register, tcs-payable, msme-payables, gstr1]
     get:
       tags: [Reports]
       operationId: getReportData
@@ -7102,6 +7194,8 @@ components:
             status: { type: string, enum: [draft, posted], description: "Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft." }
             postedAt: { type: string, format: date-time, readOnly: true }
             lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/VoucherLine' } }
+            partyId: { type: string, description: "On a receipt: the customer, supplier or contact it came from, for reference. The lines are what post." }
+            attachmentIds: { type: array, items: { type: string }, description: Files kept with the voucher (a receipt's slip) }
             createdBy: { type: string, readOnly: true }
     TrialBalance:
       type: object
@@ -7368,6 +7462,7 @@ components:
         taxInclusive: { type: boolean, default: false }
         gst: { allOf: [{ $ref: '#/components/schemas/GstFlags' }], description: "Defaults to the item's; kept as it was once the document is finalised" }
         expenseId: { type: string, description: "A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED)" }
+        costCentreId: { type: string, description: "On a purchase document: this line's cost centre, for a line that is not stock (an item that tracks stock takes the document's). Left out takes the document's." }
     TaxComponent:
       type: object
       properties:
@@ -7445,7 +7540,8 @@ components:
         costCentreId: { type: string, description: The project or department it belongs to }
         vehicleId: { type: string, description: The vehicle it moved on }
         tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
-        tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN." }
+        tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's." }
+        tdsRate: { type: number, minimum: 0, maximum: 100, writeOnly: true, description: "On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN." }
         overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
         status:
           allOf: [{ $ref: '#/components/schemas/DocStatus' }]
@@ -7469,6 +7565,7 @@ components:
             totals: { $ref: '#/components/schemas/DocumentTotals' }
             partyGstin: { type: string, readOnly: true, description: "The party's GSTIN when the document was finalised" }
             tds: { allOf: [{ $ref: '#/components/schemas/TdsDeduction' }], description: 'TDS deducted on the bill: what is owed the supplier is the grand total less this' }
+            tdsExpected: { allOf: [{ $ref: '#/components/schemas/TdsDeduction' }], description: 'On an invoice: TDS the customer is expected to deduct (on the taxable value, without GST). Not posted and not settled: the receipt that allocates to the invoice records what was deducted. The grand total is unchanged.' }
             selfInvoiceNumber: { type: string, readOnly: true, description: 'The self-invoice for a reverse-charge purchase from an unregistered supplier (Rule 46(f))' }
             itcReversedOn: { type: string, format: date, readOnly: true, description: 'Input tax credit reversed after 180 days unpaid' }
             itcReclaimedOn: { type: string, format: date, readOnly: true, description: 'Credit claimed again once paid' }
@@ -7518,6 +7615,7 @@ components:
         exchangeRate: { type: number, description: To base currency }
         totalTax: { $ref: '#/components/schemas/Money' }
         outstanding: { $ref: '#/components/schemas/Money' }
+        tdsExpected: { allOf: [{ $ref: '#/components/schemas/TdsDeduction' }], description: 'On an invoice: TDS the customer is expected to deduct (not settled)' }
         eInvoiceStatus: { $ref: '#/components/schemas/EInvoiceStatus' }
         irn: { type: string, description: The IRN once one is issued }
         ewayBillStatus: { type: string, enum: [notApplicable, notRequired, pending, generated, cancelled, expired] }
@@ -7725,6 +7823,46 @@ components:
         note: { type: string }
         paymentId: { type: string }
         version: { type: integer }
+    AdjustmentAllocation:
+      type: object
+      required: [sourceType, sourceId, documentId, amount]
+      properties:
+        sourceType: { type: string, enum: [payment, note], description: 'payment: an advance (its unallocated part); note: a direct credit note applied to the document' }
+        sourceId: { type: string }
+        documentId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+    Adjustable:
+      type: object
+      required: [credits, open]
+      properties:
+        credits:
+          type: array
+          description: Unadjusted advances and direct notes, oldest first
+          items:
+            type: object
+            required: [sourceType, id, number, date, left]
+            properties:
+              sourceType: { type: string, enum: [payment, note] }
+              id: { type: string }
+              number: { type: string }
+              date: { type: string, format: date }
+              total: { $ref: '#/components/schemas/Money' }
+              left: { $ref: '#/components/schemas/Money' }
+              advanceTax: { type: boolean, description: A service advance taxed on receipt }
+        open:
+          type: array
+          description: Documents still owed, oldest first
+          items:
+            type: object
+            required: [documentId, number, kind, date, outstanding]
+            properties:
+              documentId: { type: string }
+              number: { type: string }
+              kind: { $ref: '#/components/schemas/DocumentKind' }
+              date: { type: string, format: date }
+              total: { $ref: '#/components/schemas/Money' }
+              outstanding: { $ref: '#/components/schemas/Money' }
+              hasServiceLines: { type: boolean, description: 'Has a line for a service (an item of type service, or a SAC code starting 99)' }
     Payment:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -7756,7 +7894,10 @@ components:
                 taxCategoryId: { type: string }
                 rate: { type: number, readOnly: true, description: The rate on the day received }
                 placeOfSupplyStateCode: { type: string, pattern: '^\d{2}$' }
-            tdsSection: { type: string, description: "On money paid: the TDS section of what its allocations kept back (tdsDeducted), so it is reported under that section in 26Q and TDS payable" }
+                hsn: { type: string, pattern: '^\d{4,8}$', description: 'The SAC (or HSN) of the service the advance is for, for table 11 and the receipt voucher' }
+                cessRate: { type: number, minimum: 0, description: 'Cess on the advance, percent of its value; the amount received includes it' }
+            advanceTds: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "On money received: TDS the customer deducted from an advance before any invoice, under `tdsSection`. It credits the customer as money would, so it adds to the advance." }
+            tdsSection: { type: string, description: "The TDS section of what its allocations settled as tdsDeducted: on money paid, what was kept back (26Q and TDS payable); on money received, what the customer deducted (TDS receivable by section, matched to 26AS)" }
             refundOf:
               type: string
               description: "Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date."

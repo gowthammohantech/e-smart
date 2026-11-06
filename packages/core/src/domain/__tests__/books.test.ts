@@ -1,6 +1,6 @@
 import { calculateDocument } from '../lineCalc';
 import { buildTaxContext } from '../taxEngine';
-import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting } from '../ledger/postings';
+import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting, RCM_OUTPUT_FROM } from '../ledger/postings';
 import { balanceSheet, ledgerStatement, profitAndLoss, trialBalance } from '../ledger/reports';
 import { balanceSheetColumns, comparisonPeriod, profitAndLossColumns, splitPeriods, variance } from '../ledger/comparative';
 import { Book, chartOfAccounts, groupTree } from '../ledger/accounts';
@@ -121,12 +121,71 @@ describe('postings', () => {
     expect(net(ps, 'sys:purchases')).toBe(200000 + 18000);
   });
 
-  it('self-assesses reverse-charge tax: credit taken, the same owed', () => {
+  it('self-assesses reverse-charge tax before the cutover in Reverse charge payable', () => {
     const ps = postDocument(doc('purchaseBill', { reverseCharge: true }), 'INR');
     expect(balanced(ps)).toBe(0);
     expect(net(ps, 'sys:inputCgst')).toBe(9000);
     expect(net(ps, 'sys:rcmPayableCgst')).toBe(-9000);
+    expect(net(ps, 'sys:outputCgst')).toBe(0);
     expect(net(ps, 'party:sup')).toBe(-100000);
+  });
+
+  it('owes reverse-charge tax as Output tax from RCM_OUTPUT_FROM (RULES 2.6)', () => {
+    const ps = postDocument(doc('purchaseBill', { reverseCharge: true, date: RCM_OUTPUT_FROM }), 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:inputCgst')).toBe(9000);
+    expect(net(ps, 'sys:outputCgst')).toBe(-9000);
+    expect(net(ps, 'sys:outputSgst')).toBe(-9000);
+    expect(net(ps, 'sys:rcmPayableCgst')).toBe(0);
+    // A note against it runs the other way, on the same account.
+    const note = postDocument(doc('supplierCreditNote', { reverseCharge: true, date: '2026-11-20' }), 'INR');
+    expect(net(note, 'sys:outputCgst')).toBe(9000);
+  });
+
+  it('owes reverse-charge tax on an expense as Output tax from the cutover, Reverse charge payable before', () => {
+    const e = (date: string) => ({ id: 'e', number: 'EXP-1', categoryId: 'legal', accountId: 'cash', branchId: 'b', date, amount: inr('1000'), taxAmount: inr('180'), exchangeRate: 1, taxCategoryId: 'tax_18', reverseCharge: true }) as Expense;
+    const ctx = { company, branches: [], taxCategories: [{ id: 'tax_18', rate: 18 } as never] };
+    const before = postExpense(e('2026-10-31'), ctx);
+    const after = postExpense(e('2026-11-01'), ctx);
+    expect(balanced(before)).toBe(0);
+    expect(balanced(after)).toBe(0);
+    expect(net(before, 'sys:rcmPayableCgst')).toBeLessThan(0);
+    expect(net(before, 'sys:outputCgst')).toBe(0);
+    expect(net(after, 'sys:outputCgst')).toBe(net(before, 'sys:rcmPayableCgst'));
+    expect(net(after, 'sys:rcmPayableCgst')).toBe(0);
+  });
+
+  it('posts no TDS for an invoice, even with TDS expected from the customer', () => {
+    const d = doc('invoice', { tdsExpected: { section: '194JB', rate: 10, amount: inr('100') } });
+    const ps = postDocument(d, 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'party:cus')).toBe(d.totals.grandTotal.minor);
+    expect(ps.some((p) => p.account.startsWith('sys:tds'))).toBe(false);
+  });
+
+  it('posts TDS a customer deducted to TDS receivable under its section, plain without one', () => {
+    const p = { id: 'r', number: 'RCPT-1', direction: 'received', partyId: 'cus', accountId: 'bank', date: '2026-11-10', amount: inr('900'), exchangeRate: 1, tdsSection: '194JB', allocations: [{ documentId: 'x', documentNumber: 'X', amount: inr('900'), tdsDeducted: inr('100') }] } as Payment;
+    const ps = postPayment(p);
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:tdsReceivable:194JB')).toBe(10000);
+    expect(net(ps, 'sys:tdsReceivable')).toBe(0);
+    expect(net(postPayment({ ...p, tdsSection: undefined }), 'sys:tdsReceivable')).toBe(10000);
+  });
+
+  it('gives TCS back on a credit note against a TCS invoice: Dr TCS payable under its section', () => {
+    const tcsDoc = (kind: DocumentKind) => {
+      const d = doc(kind, { tcs: { section: 'scrap', rate: 1 } });
+      const totals = calculateDocument({
+        lines: d.lines, currency: 'INR', baseCurrency: 'INR', exchangeRate: 1, documentDiscountMode: 'amount', documentDiscountValue: 0, charges: zero('INR'), applyRoundOff: true, taxCategories: [],
+        taxContext: buildTaxContext(company, { party: customer, placeOfSupply: '27', date: '2026-06-01', purchase: false }), tcsRate: 1,
+      });
+      return { ...d, totals };
+    };
+    const inv = postDocument(tcsDoc('invoice'), 'INR');
+    const cn = postDocument(tcsDoc('creditNote'), 'INR');
+    expect(balanced(cn)).toBe(0);
+    expect(net(inv, 'sys:tcsPayable:scrap')).toBe(-1200);
+    expect(net(cn, 'sys:tcsPayable:scrap')).toBe(1200);
   });
 
   it('posts a receipt with TDS deducted and a discount, the customer credited for all of it', () => {

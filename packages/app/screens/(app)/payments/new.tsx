@@ -31,8 +31,10 @@ import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
-import { Money, fromMajor, inclusiveTax, money, subtract, zero } from '@esmart/core/lib/money';
+import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
+import { DEFAULT_ADVANCE_RATE, advanceInterState, advanceTaxSplit } from '@esmart/core/domain/advanceTax';
+import { homeStateCode } from '@esmart/core/domain/taxEngine';
 
 import { useAppStore } from '../../../store/appStore';
 import {
@@ -67,7 +69,7 @@ export default function NewPayment() {
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
 
-  const params = useLocalSearchParams<{ direction?: string; partyId?: string; documentId?: string }>();
+  const params = useLocalSearchParams<{ direction?: string; partyId?: string; documentId?: string; advance?: string }>();
   // Paying suppliers is part of payables, which the Sales plan leaves out.
   const canPay = useHasModule('payables');
   const direction: PaymentDirection = params.direction === 'paid' && canPay ? 'paid' : 'received';
@@ -103,9 +105,16 @@ export default function NewPayment() {
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   // An advance for services carries GST from the day it is received (s.13(2)).
-  const [serviceAdvance, setServiceAdvance] = useState(false);
+  // Opened as "Advance receipt" from the menu: the switch starts on.
+  const [serviceAdvance, setServiceAdvance] = useState(params.advance === '1');
   const [advanceTaxId, setAdvanceTaxId] = useState<string | undefined>();
   const [advancePos, setAdvancePos] = useState<string | undefined>();
+  /** The service's SAC, and any cess on it (percent), for table 11 and the receipt voucher. */
+  const [advanceSac, setAdvanceSac] = useState('');
+  const [advanceCess, setAdvanceCess] = useState(0);
+  const cessText = useDecimalText(advanceCess, setAdvanceCess);
+  /** TDS the customer deducted from an advance, before any invoice. */
+  const [advanceTdsText, setAdvanceTdsText] = useState('');
   const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
   /** The section of TDS kept back on money paid; the supplier's own until changed. */
   const [tdsSectionChoice, setTdsSectionChoice] = useState<string | null>(null);
@@ -146,7 +155,7 @@ export default function NewPayment() {
     return (open.data ?? [])
       .filter((d) => d.grandTotal.currency === currency && (d.outstanding?.minor ?? 0) > 0)
       .map((d) => ({
-        document: { id: d.id, number: d.number, date: d.date, dueDate: d.dueDate, exchangeRate: d.exchangeRate ?? 1 },
+        document: { id: d.id, number: d.number, date: d.date, dueDate: d.dueDate, exchangeRate: d.exchangeRate ?? 1, tdsExpected: d.tdsExpected },
         outstanding: d.outstanding as Money,
         daysOverdue: d.dueDate ? daysBetween(d.dueDate, asOf) : 0,
       }))
@@ -163,10 +172,20 @@ export default function NewPayment() {
   // Seed the allocation from the invoice we were opened from, on the first
   // render where that invoice is actually in the outstanding list.
   const prefill = params.documentId ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
+  // TDS the customer was expected to deduct from an invoice (RULES 4.14): taken as deducted unless changed.
+  const expectedTdsOf = (docId: string): number => {
+    if (direction !== 'received') return 0;
+    const o = outstanding.find((x) => x.document.id === docId);
+    const e = o?.document.tdsExpected;
+    return e && e.amount.currency === currency ? Math.min(e.amount.minor, o!.outstanding.minor) : 0;
+  };
   if (prefill && !seeded) {
     setSeeded(true);
-    setAllocations({ [prefill.document.id]: toAmountInput(prefill.outstanding) });
-    setAmountText(toAmountInput(prefill.outstanding));
+    const tds = expectedTdsOf(prefill.document.id);
+    const cash = money(prefill.outstanding.minor - tds, currency);
+    setAllocations({ [prefill.document.id]: toAmountInput(cash) });
+    if (tds) setAdjustments({ [prefill.document.id]: { tdsDeducted: toAmountInput(money(tds, currency)) } });
+    setAmountText(toAmountInput(cash));
   }
 
   // Advances already held against this party (unallocated parts of earlier payments).
@@ -203,10 +222,22 @@ export default function NewPayment() {
   );
   const unallocated = subtract(amount, allocatedTotal);
   const taxed = taxCategories.filter((c) => c.rate > 0);
-  const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === 18) ?? taxed[0];
-  const pos = advancePos ?? party?.billingAddress?.stateCode ?? company.taxRegistration?.placeOfSupplyStateCode;
+  // A rate not known is 18% (RULES 8.12).
+  const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
+  const homeState = homeStateCode(company);
+  // A place of supply not known is taken as another state: IGST, under "Other Territory" (97).
+  const pos = advancePos ?? party?.billingAddress?.stateCode;
   const canAdvance = direction === 'received' && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
-  const advanceTax = canAdvance && serviceAdvance && advanceTaxCategory && pos ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos } : null;
+  const sac = advanceSac.trim();
+  // An HSN that isn't a SAC (99…) is goods, which carry no GST on an advance (notification 66/2017).
+  const goodsSac = !!sac && !sac.startsWith('99');
+  const advanceTds = direction === 'received' ? fromMajor(advanceTdsText || '0', currency) : zero(currency);
+  const advanceTax =
+    canAdvance && serviceAdvance && advanceTaxCategory && !goodsSac
+      ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }) }
+      : null;
+  // The tax inside what was received (and what the customer kept back as TDS), shown as it is typed.
+  const advanceSplit = advanceTax ? advanceTaxSplit(Math.round((unallocated.minor + advanceTds.minor) * (exchangeRate || 1)), advanceTax.rate, advanceCess, advanceInterState(homeState, pos)) : null;
   const overAllocated = unallocated.minor < 0;
 
   /**
@@ -249,8 +280,12 @@ export default function NewPayment() {
     setAllocations(spread(fromMajor(v || '0', currency).minor, ticked.length ? ticked : undefined));
   };
 
-  const toggleAllocation = (docId: string, full: Money) => {
+  const toggleAllocation = (docId: string, owed: Money) => {
     const next = { ...allocations };
+    // The invoice's expected TDS settles that much without cash; the rest is what the cash applies.
+    const tds = !next[docId] && !adjustedOf(docId) ? expectedTdsOf(docId) : 0;
+    if (tds) setAdjustments((a) => ({ ...a, [docId]: { ...a[docId], tdsDeducted: toAmountInput(money(tds, currency)) } }));
+    const full = money(owed.minor - tds, currency);
     if (next[docId]) {
       delete next[docId];
     } else if (amountFollows) {
@@ -294,10 +329,13 @@ export default function NewPayment() {
     }
   };
   const adjustedTotal = Object.keys(allocations).reduce((acc, id) => acc + adjustedOf(id), 0);
-  // TDS kept back on money paid goes under a section (26Q): the supplier's own unless changed.
-  const keepsTds = direction === 'paid' && Object.keys(allocations).some((id) => fromMajor(adjustments[id]?.tdsDeducted || '0', currency).minor > 0);
+  // TDS kept back on money paid goes under a section (26Q): the supplier's own unless changed. TDS a
+  // customer deducted goes to TDS receivable under its section (26AS): the invoice's expected one, else theirs.
+  const tdsRows = Object.keys(allocations).filter((id) => fromMajor(adjustments[id]?.tdsDeducted || '0', currency).minor > 0);
+  const keepsTds = tdsRows.length > 0;
   const partySection = (party as { tdsSection?: string } | undefined)?.tdsSection;
-  const tdsSectionPicked = tdsSectionChoice ?? (partySection && partySection !== 'none' ? partySection : undefined);
+  const invoiceSection = direction === 'received' ? tdsRows.map((id) => outstanding.find((o) => o.document.id === id)?.document.tdsExpected?.section).find(Boolean) : undefined;
+  const tdsSectionPicked = tdsSectionChoice ?? invoiceSection ?? (partySection && partySection !== 'none' ? partySection : undefined);
 
   const fxGainLoss = useMemo(() => {
     if (currency === baseCurrency) return undefined;
@@ -326,7 +364,16 @@ export default function NewPayment() {
   const balanceBlocks = shortfall && !!account;
 
   // A receipt may move no money when it only records TDS deducted, a discount or a write-off.
-  const canSave = !!partyId && (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) && !overAllocated && !!accountId && !balanceBlocks && (!keepsTds || !!tdsSectionPicked);
+  const canSave =
+    !!partyId &&
+    (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) &&
+    !overAllocated &&
+    !!accountId &&
+    !balanceBlocks &&
+    (!keepsTds || direction === 'received' || !!tdsSectionPicked) &&
+    // TDS on an advance goes to a section's receivable (26AS); an advance for goods takes no GST.
+    (advanceTds.minor === 0 || !!tdsSectionPicked) &&
+    !(serviceAdvance && canAdvance && goodsSac);
 
   const save = async () => {
     if (!canSave || !partyId) return;
@@ -361,10 +408,11 @@ export default function NewPayment() {
       reference: reference || undefined,
       accountId,
       allocations: allocationRows,
-      unallocated: unallocated.minor > 0 ? unallocated : zero(currency),
+      unallocated: unallocated.minor > 0 ? money(unallocated.minor + advanceTds.minor, currency) : zero(currency),
       fxGainLoss,
       advanceTax: advanceTax ?? undefined,
-      tdsSection: keepsTds ? tdsSectionPicked : undefined,
+      advanceTds: advanceTds.minor > 0 ? advanceTds : undefined,
+      tdsSection: keepsTds || advanceTds.minor > 0 ? tdsSectionPicked : undefined,
       notes: notes || undefined,
       attachmentIds: [],
       createdBy: '',
@@ -689,7 +737,16 @@ export default function NewPayment() {
 
   const notesField = (
     <>
-      {keepsTds ? (
+      {direction === 'received' && unallocated.minor > 0 ? (
+        <AmountField
+          label={tr('sales:payment.advanceTds')}
+          value={advanceTdsText}
+          onChangeValue={setAdvanceTdsText}
+          currency={currency}
+          hint={tr('sales:payment.advanceTdsHint')}
+        />
+      ) : null}
+      {keepsTds || advanceTds.minor > 0 ? (
         <>
           <PickerField
             label={tr('sales:payment.tdsSection')}
@@ -713,14 +770,40 @@ export default function NewPayment() {
         <>
           <SwitchField label={tr('sales:payment.serviceAdvance')} description={tr('sales:payment.serviceAdvanceHint')} value={serviceAdvance} onValueChange={setServiceAdvance} />
           {serviceAdvance ? (
-            <FieldRow>
-              <PickerField label={tr('sales:payment.advanceRate')} value={advanceTaxCategory?.name} onPress={() => setAdvanceSheet('tax')} icon="percent-outline" />
-              <PickerField label={tr('sales:editor.placeOfSupply')} value={INDIAN_STATES.find((st) => st.code === pos)?.name} onPress={() => setAdvanceSheet('pos')} icon="map-marker-outline" />
-            </FieldRow>
+            <>
+              <FieldRow>
+                <PickerField label={tr('sales:payment.advanceRate')} value={advanceTaxCategory?.name} onPress={() => setAdvanceSheet('tax')} icon="percent-outline" />
+                <PickerField
+                  label={tr('sales:editor.placeOfSupply')}
+                  value={pos ? INDIAN_STATES.find((st) => st.code === pos)?.name : undefined}
+                  placeholder={tr('sales:payment.advancePosUnknown')}
+                  onPress={() => setAdvanceSheet('pos')}
+                  icon="map-marker-outline"
+                />
+              </FieldRow>
+              <FieldRow>
+                <TextField
+                  label={tr('sales:payment.advanceSac')}
+                  value={advanceSac}
+                  onChangeText={(v) => setAdvanceSac(v.replace(/\D/g, '').slice(0, 8))}
+                  keyboardType="number-pad"
+                  placeholder="9983"
+                  error={goodsSac ? tr('sales:payment.advanceGoods') : undefined}
+                />
+                <TextField label={tr('sales:payment.advanceCess')} {...cessText} keyboardType="decimal-pad" placeholder="0" />
+              </FieldRow>
+            </>
           ) : null}
-          {advanceTax ? (
+          {advanceTax && advanceSplit ? (
             <Text variant="caption" tone="muted">
-              {tr('sales:payment.advanceTaxIs', { tax: formatMoney(inclusiveTax(money(Math.round(unallocated.minor * exchangeRate), baseCurrency), advanceTax.rate)) })}
+              {[
+                tr('sales:payment.advanceTaxIs', { tax: formatMoney(money(advanceSplit.igst + advanceSplit.cgst + advanceSplit.sgst + advanceSplit.cess, baseCurrency)) }),
+                advanceSplit.igst ? `IGST ${formatMoney(money(advanceSplit.igst, baseCurrency))}` : `CGST ${formatMoney(money(advanceSplit.cgst, baseCurrency))} · SGST ${formatMoney(money(advanceSplit.sgst, baseCurrency))}`,
+                advanceSplit.cess ? tr('sales:payment.advanceCessIs', { cess: formatMoney(money(advanceSplit.cess, baseCurrency)) }) : '',
+                tr('sales:payment.advanceTaxable', { value: formatMoney(money(advanceSplit.taxable, baseCurrency)) }),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </Text>
           ) : null}
           <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxed.map((c) => ({ value: c.id, label: c.name }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
@@ -844,7 +927,7 @@ export default function NewPayment() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>
-        <Stack.Screen options={{ title: direction === 'received' ? tr('common:quickAction.receivePayment') : tr('sales:payment.makePayment') }} />
+        <Stack.Screen options={{ title: direction === 'received' ? (params.advance === '1' ? tr('sales:payment.advanceReceipt') : tr('common:quickAction.receivePayment')) : tr('sales:payment.makePayment') }} />
 
         {desktop ? desktopForm : phoneForm}
 

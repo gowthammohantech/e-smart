@@ -76,23 +76,97 @@ export function tdsPayableSummary(postings: Posting[], range: { from: string; to
     .sort((a, b) => a.month.localeCompare(b.month) || a.section.localeCompare(b.section));
 }
 
-export type TdsReceivableRow = { partyId: string; partyName: string; pan?: string; quarter: string; tdsMinor: number; receipts: number };
+const RECEIVABLE = 'sys:tdsReceivable';
+/** TDS receivable, plain (older receipts that named no section) or under a section: `sys:tdsReceivable:194J`. */
+const isReceivable = (account: string) => account === RECEIVABLE || account.startsWith(`${RECEIVABLE}:`);
+const receivableSection = (account: string) => (account.startsWith(`${RECEIVABLE}:`) ? account.slice(RECEIVABLE.length + 1) : '');
 
-/** TDS customers kept back from what they paid, by customer and quarter: to tick off against Form 26AS. */
+export type TdsReceivableRow = {
+  /** The section the customer deducted under; '' for an older receipt that named none. */
+  section: string;
+  sectionLabel: string;
+  partyId: string;
+  partyName: string;
+  pan?: string;
+  /** Financial year (2026-27) and quarter, as Form 26AS lists credits. */
+  fy: string;
+  quarter: string;
+  tdsMinor: number;
+  receipts: number;
+};
+
+/**
+ * TDS customers kept back from what they paid, by section, customer and quarter (financial year and
+ * quarter of the receipt): to tick off against Form 26AS. Reversals in the books net in.
+ */
 export function tdsReceivable(postings: Posting[], parties: Pick<Party, 'id' | 'name' | 'pan'>[], range: { from: string; to: string }): TdsReceivableRow[] {
   const rows = new Map<string, TdsReceivableRow>();
   for (const p of postings) {
-    if (p.account !== 'sys:tdsReceivable' || p.source.type !== 'payment' || !p.partyId || p.date < range.from || p.date > range.to) continue;
+    if (!isReceivable(p.account) || p.source.type !== 'payment' || !p.partyId || p.date < range.from || p.date > range.to) continue;
     const q = tdsQuarter(p.date);
     const quarter = `FY ${q.fy} Q${q.quarter}`;
-    const key = `${p.partyId}|${quarter}`;
+    const section = receivableSection(p.account);
+    const key = `${section}|${p.partyId}|${quarter}`;
     const party = parties.find((x) => x.id === p.partyId);
-    const row = rows.get(key) ?? { partyId: p.partyId, partyName: party?.name ?? '—', pan: party?.pan, quarter, tdsMinor: 0, receipts: 0 };
+    const row = rows.get(key) ?? { section, sectionLabel: section ? (tdsSection(section)?.label ?? section) : '—', partyId: p.partyId, partyName: party?.name ?? '—', pan: party?.pan, fy: q.fy, quarter, tdsMinor: 0, receipts: 0 };
     row.tdsMinor += p.debit - p.credit;
     row.receipts += 1;
     rows.set(key, row);
   }
-  return [...rows.values()].filter((r) => r.tdsMinor).sort((a, b) => a.quarter.localeCompare(b.quarter) || a.partyName.localeCompare(b.partyName));
+  return [...rows.values()].filter((r) => r.tdsMinor).sort((a, b) => a.quarter.localeCompare(b.quarter) || a.section.localeCompare(b.section) || a.partyName.localeCompare(b.partyName));
+}
+
+export type Tds26asRow = {
+  partyId: string;
+  partyName: string;
+  /** How the customer is found in 26AS: their TAN where kept, else their PAN. */
+  tan?: string;
+  pan?: string;
+  fy: string;
+  quarter: string;
+  /** TDS the invoices of the quarter expected the customer to deduct, and what receipts recorded as deducted. */
+  expectedMinor: number;
+  recordedMinor: number;
+  /** Recorded less expected: short (negative) is TDS to chase, or a receipt to correct. */
+  differenceMinor: number;
+};
+
+/**
+ * The 26AS match list (RULES 4.15, pending CA): per customer and quarter, the TDS invoices expected
+ * (by invoice date) against what receipts recorded as deducted (by receipt date). The CA ticks each
+ * row against the customer's credit in Form 26AS or the AIS; a difference is a deduction still to
+ * come, a receipt recorded wrongly, or a customer who didn't deduct.
+ */
+export function tds26asMatch(
+  postings: Posting[],
+  invoices: Pick<BusinessDocument, 'id' | 'kind' | 'status' | 'partyId' | 'date' | 'currency' | 'exchangeRate' | 'tdsExpected'>[],
+  parties: (Pick<Party, 'id' | 'name' | 'pan'> & { tan?: string })[],
+  baseCurrency: string,
+  range: { from: string; to: string },
+): Tds26asRow[] {
+  const rows = new Map<string, Tds26asRow>();
+  const row = (partyId: string, date: string) => {
+    const q = tdsQuarter(date);
+    const quarter = `FY ${q.fy} Q${q.quarter}`;
+    const key = `${partyId}|${quarter}`;
+    const party = parties.find((x) => x.id === partyId);
+    const r = rows.get(key) ?? { partyId, partyName: party?.name ?? '—', tan: party?.tan || undefined, pan: party?.pan, fy: q.fy, quarter, expectedMinor: 0, recordedMinor: 0, differenceMinor: 0 };
+    rows.set(key, r);
+    return r;
+  };
+  for (const d of invoices) {
+    if (d.kind !== 'invoice' || !d.tdsExpected?.amount.minor || ['draft', 'requested', 'cancelled', 'rejected'].includes(d.status) || d.date < range.from || d.date > range.to) continue;
+    const rate = d.currency === baseCurrency ? 1 : d.exchangeRate || 1;
+    row(d.partyId, d.date).expectedMinor += Math.round(d.tdsExpected.amount.minor * rate);
+  }
+  for (const p of postings) {
+    if (!isReceivable(p.account) || p.source.type !== 'payment' || !p.partyId || p.date < range.from || p.date > range.to) continue;
+    row(p.partyId, p.date).recordedMinor += p.debit - p.credit;
+  }
+  return [...rows.values()]
+    .map((r) => ({ ...r, differenceMinor: r.recordedMinor - r.expectedMinor }))
+    .filter((r) => r.expectedMinor || r.recordedMinor)
+    .sort((a, b) => a.quarter.localeCompare(b.quarter) || a.partyName.localeCompare(b.partyName));
 }
 
 export type TdsChallanRow = {

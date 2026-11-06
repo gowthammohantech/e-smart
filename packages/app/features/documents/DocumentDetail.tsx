@@ -46,7 +46,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { useDocumentRecord, useEwayBillRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
+import { useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
@@ -64,6 +64,9 @@ import { describeError } from '../../remote/errors';
 import { RecurrenceSheet } from './RecurrenceSheet';
 import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
+import { useItcBreakup } from './itcBreakup';
+import { useFixedAssets } from '../../remote/fixedAssets';
+import { calculateLine } from '@esmart/core/domain/lineCalc';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   useRefreshOnFocus();
@@ -102,6 +105,17 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const duplicateDocument = useAppStore((s) => s.duplicateDocument);
   const convertDocument = useAppStore((s) => s.convertDocument);
   const allDocuments = useAppStore((s) => s.documents);
+
+  // Input tax credit by bucket on a purchase; and the capital goods on a finalised bill, for the asset register.
+  const itcBreakup = useItcBreakup(doc, baseCurrency);
+  const capitalCost = useMemo(() => {
+    if (doc.kind !== 'purchaseBill' || !isFinalized(doc.status) || doc.status === 'cancelled') return 0;
+    const rate = doc.currency === baseCurrency ? 1 : doc.exchangeRate || 1;
+    // As the bill posted it to Plant and machinery (ledger/postings.ts): the lines' taxable value, in base currency.
+    return Math.round(doc.lines.filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement).reduce((a, l) => a + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor, 0) * rate);
+  }, [doc, baseCurrency]);
+  const assets = useFixedAssets(undefined, capitalCost > 0).data;
+  const registered = !assets || assets.some((a) => a.sourceDocumentId === doc.id);
 
   const [actionsOpen, setActionsOpen] = useState(false);
   const [recurrenceOpen, setRecurrenceOpen] = useState(false);
@@ -149,6 +163,10 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
+  // Advances and direct notes the party holds, which the adjustment entry can apply to this document.
+  const partyAdvance = (usePartyRecord(doc.partyId).data as { advance?: Money } | undefined)?.advance;
+  const canAdjust = outstanding.minor > 0 && isFinalized(doc.status) && (partyAdvance?.minor ?? 0) > 0 && ['invoice', 'debitNote', 'purchaseBill', 'supplierDebitNote'].includes(doc.kind);
+  const adjustRoute = `/(app)/receipts/adjust?partyId=${doc.partyId}&documentId=${doc.id}${['purchaseBill', 'supplierDebitNote'].includes(doc.kind) ? '&side=supplier' : ''}`;
 
   const customFields = useAppStore((s) => s.customFields);
   const documentHtml = () =>
@@ -525,6 +543,15 @@ ${url}`;
               fullWidth
             />
           ) : null}
+          {canAdjust ? (
+            <Button
+              title={tr('sales:detail.adjustAdvance', { amount: formatMoney(partyAdvance!) })}
+              icon="swap-horizontal"
+              variant="secondary"
+              onPress={() => router.push(adjustRoute as never)}
+              fullWidth
+            />
+          ) : null}
         </Card>
       ) : null}
     </>
@@ -577,8 +604,42 @@ ${url}`;
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}
-          tds={doc.tds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount } : undefined}
+          tds={
+            doc.tds
+              ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount }
+              : doc.tdsExpected
+                ? { label: tr('sales:tds.expectedLabel', { section: tdsSection(doc.tdsExpected.section)?.label ?? doc.tdsExpected.section, rate: formatPercent(doc.tdsExpected.rate) }), amount: doc.tdsExpected.amount, netLabel: tr('sales:tds.netReceivable') }
+                : undefined
+          }
+          itc={itcBreakup}
         />
+        {/* Capital goods bought on this bill: their cost is in Plant and machinery; the register adds depreciation. */}
+        {capitalCost > 0 && !registered ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, marginTop: t.spacing.sm, flexWrap: 'wrap' }}>
+            <Text variant="caption" tone="muted" style={{ flex: 1, minWidth: 180 }}>
+              {tr('purchases:asset.prompt', { amount: formatMoney(money(capitalCost, baseCurrency)) })}
+            </Text>
+            <Button
+              title={tr('purchases:asset.add')}
+              variant="secondary"
+              size="sm"
+              icon="office-building-plus-outline"
+              onPress={() =>
+                router.push({
+                  pathname: '/(app)/books/fixed-assets/new',
+                  params: {
+                    sourceDocumentId: doc.id,
+                    name: doc.lines.filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement).map((l) => l.name).join(', ').slice(0, 200),
+                    cost: String(capitalCost),
+                    acquiredOn: doc.date,
+                    branchId: doc.branchId,
+                    notes: tr('purchases:asset.fromBill', { number: doc.supplierDocNumber ? `${doc.number} (${doc.supplierDocNumber})` : doc.number }),
+                  },
+                } as never)
+              }
+            />
+          </View>
+        ) : null}
         {doc.selfInvoiceNumber ? (
           <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm }}>
             {tr('purchases:tds.selfInvoice', { number: doc.selfInvoiceNumber })}
