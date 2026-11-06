@@ -10,6 +10,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../components/useServerSave';
+import { useSingleFlight } from '../../components/useSingleFlight';
 import { useAppStore } from '../../store/appStore';
 import { fetchDocumentRecord, useDocumentPages, type ListedDocument } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
@@ -50,13 +51,20 @@ function SourceList({ kind }: { kind: AgainstSource }) {
     .filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status ?? ''))
     .map((d) => ({ doc: d, partyName: d.partyName ?? '—' }));
 
-  const pick = async (id: string) => {
-    // Converting copies the source's lines on the device, so it needs the whole document.
-    await fetchDocumentRecord(companyId, id);
-    const res = await serverSave(() => convertDocument(id, kind), tr(isReturn ? 'sales:returnPicker.created' : 'sales:notePicker.created'), { icon: isReturn ? 'keyboard-return' : 'file-document-edit-outline' });
-    if (!res?.result) return;
-    router.replace(`${detailRouteFor(kind, res.id ?? res.result)}/edit` as never);
-  };
+  // One at a time, and shut while it leaves: a second tap would create a second note.
+  const flight = useSingleFlight();
+  const pick = (id: string) =>
+    flight.run(
+      async () => {
+        // Converting copies the source's lines on the device, so it needs the whole document.
+        await fetchDocumentRecord(companyId, id);
+        const res = await serverSave(() => convertDocument(id, kind), tr(isReturn ? 'sales:returnPicker.created' : 'sales:notePicker.created'), { icon: isReturn ? 'keyboard-return' : 'file-document-edit-outline' });
+        if (!res?.result) return undefined;
+        router.replace(`${detailRouteFor(kind, res.id ?? res.result)}/edit` as never);
+        return true;
+      },
+      { hold: true },
+    );
 
   return (
     <View style={{ flex: 1 }}>

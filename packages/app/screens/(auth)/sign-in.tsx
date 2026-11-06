@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -50,10 +50,14 @@ export default function SignIn() {
     });
   };
 
+  // The code screen sends an SMS as it opens: a double tap would open it, and send, twice.
+  const openedOtp = useRef(0);
   const submitPhone = () => {
+    if (Date.now() - openedOtp.current < 2000) return;
     const next = { phone: required(phone.field.value, tr('errors:field.phoneNumber')) ?? phone.error() };
     setErrors(next);
     if (hasErrors(next)) return;
+    openedOtp.current = Date.now();
     router.push({ pathname: '/(auth)/otp', params: { phone: phone.value } });
   };
 

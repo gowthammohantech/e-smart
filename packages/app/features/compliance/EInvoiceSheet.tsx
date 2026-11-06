@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -93,30 +93,42 @@ export function EInvoiceSheet({
   const cancellation = canCancelEInvoice(doc.compliance, nowISO());
   const meta = E_INVOICE_STATUS_META[doc.compliance?.eInvoiceStatus ?? 'pending'];
 
-  const generate = async () => {
+  // One portal call at a time: a second tap would ask the portal again.
+  const inFlight = useRef(false);
+  const once = async (job: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
-    const outcome = await portalToast(toast, compliance.generateEInvoice(doc.id), {
-      loading: tr('compliance:einv.generating'),
-      success: { text: tr('compliance:einv.generated'), detail: doc.number },
-      failed: tr('compliance:einv.refused'),
-      icon: 'file-certificate-outline',
-    });
-    setBusy(false);
-    setResult(outcome.issues);
-    if (outcome.ok) onClose();
+    try {
+      await job();
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
   };
 
-  const cancel = async () => {
-    setBusy(true);
-    const outcome = await portalToast(toast, compliance.cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined), {
-      loading: tr('compliance:einv.cancelling'),
-      success: { text: tr('compliance:einv.cancelled'), detail: doc.number },
-      failed: tr('compliance:einv.cancelFailed'),
-      icon: 'file-cancel-outline',
+  const generate = () =>
+    once(async () => {
+      const outcome = await portalToast(toast, compliance.generateEInvoice(doc.id), {
+        loading: tr('compliance:einv.generating'),
+        success: { text: tr('compliance:einv.generated'), detail: doc.number },
+        failed: tr('compliance:einv.refused'),
+        icon: 'file-certificate-outline',
+      });
+      setResult(outcome.issues);
+      if (outcome.ok) onClose();
     });
-    setBusy(false);
-    if (outcome.ok) onClose();
-  };
+
+  const cancel = () =>
+    once(async () => {
+      const outcome = await portalToast(toast, compliance.cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined), {
+        loading: tr('compliance:einv.cancelling'),
+        success: { text: tr('compliance:einv.cancelled'), detail: doc.number },
+        failed: tr('compliance:einv.cancelFailed'),
+        icon: 'file-cancel-outline',
+      });
+      if (outcome.ok) onClose();
+    });
 
   /* ---------------- cancel ---------------- */
 

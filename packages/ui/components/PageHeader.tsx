@@ -11,7 +11,7 @@ import { Button } from './Button';
 export type PageAction = {
   label: string;
   icon?: IconName;
-  onPress: () => void;
+  onPress: () => unknown;
   /** Working: the button spins and can't be pressed again. */
   loading?: boolean;
   /** "N" runs it. Off for an action that commits something, like raising an e-way bill. */
@@ -44,6 +44,8 @@ export function PageActionsProvider({ children }: { children: React.ReactNode })
       const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       if (typing || e.metaKey || e.ctrlKey || e.altKey || e.key.toLowerCase() !== 'n') return;
       e.preventDefault();
+      // Held down, or while it is already running: once.
+      if (e.repeat || action.loading) return;
       action.onPress();
     };
     document.addEventListener('keydown', onKey);

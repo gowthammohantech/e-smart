@@ -111,6 +111,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [complianceSheet, setComplianceSheet] = useState<'generate' | 'cancel' | null>(null);
   const [busy, setBusy] = useState(false);
+  // The same, read at once: a second tap on Send can land before `busy` re-renders.
+  const remoteBusy = useRef(false);
   const desktop = useIsDesktop();
   const [desktopTab, setDesktopTab] = useState<'details' | 'preview'>('details');
 
@@ -165,6 +167,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
   const shareDocument = async () => {
+    if (remoteBusy.current) return;
+    remoteBusy.current = true;
     setBusy(true);
     try {
       await toast.promise(
@@ -183,6 +187,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     } catch {
       // The toast has said what went wrong.
     } finally {
+      remoteBusy.current = false;
       setBusy(false);
       setActionsOpen(false);
     }
@@ -203,12 +208,18 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const about = [doc.number, party?.name].filter(Boolean).join(' · ');
 
   /** A server round trip under a promise toast: working while it is out, then done or why not. */
+  /** One at a time: a send, a link or a payment link already on its way isn't started again. */
   const runRemote = (job: () => Promise<void>, messages: { loading: string; success: string; icon: ToastIcon }) => {
+    if (remoteBusy.current) return;
+    remoteBusy.current = true;
     setBusy(true);
     toast
       .promise(job(), { ...messages, success: { text: messages.success, detail: about }, error: (err) => describeError(err, tr) })
       .catch(() => {})
-      .finally(() => setBusy(false));
+      .finally(() => {
+        remoteBusy.current = false;
+        setBusy(false);
+      });
   };
 
   const send = (channel: SendChannel) =>

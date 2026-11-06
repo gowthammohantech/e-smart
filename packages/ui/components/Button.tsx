@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleProp, View, ViewStyle , Platform } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import * as Haptics from 'expo-haptics';
@@ -12,7 +12,11 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 
 type Props = {
   title: string;
-  onPress?: () => void;
+  /**
+   * When it returns a promise, the button is busy until it settles: further
+   * presses are ignored and the spinner shows, so a double tap can't run it twice.
+   */
+  onPress?: () => unknown;
   variant?: ButtonVariant;
   size?: ButtonSize;
   icon?: IconName;
@@ -70,7 +74,13 @@ export function Button({
     success: { bg: t.c.goodSoft, fg: t.c.good, border: 'transparent' },
   };
   const p = palette[variant];
-  const isDisabled = disabled || loading;
+  // Held in a ref as well as state: a second tap can land before the re-render.
+  const inFlight = useRef(false);
+  const [pending, setPending] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => () => void (mounted.current = false), []);
+  const busy = !!loading || pending;
+  const isDisabled = disabled || busy;
   const keys = shortcut && desktop && Platform.OS === 'web' ? `${onMac ? '⌘' : 'Ctrl+'}${shortcut === 'Enter' ? 'Enter' : shortcut.toUpperCase()}` : null;
   const tip = (tooltip && desktop && Platform.OS === 'web' ? tooltip : null) ?? keys;
 
@@ -86,17 +96,26 @@ export function Button({
   };
 
   const handlePress = () => {
-    if (isDisabled) return;
+    if (isDisabled || inFlight.current) return;
     if (haptic && Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
-    onPress?.();
+    const ran = onPress?.();
+    if (ran && typeof (ran as Promise<unknown>).then === 'function') {
+      inFlight.current = true;
+      setPending(true);
+      const done = () => {
+        inFlight.current = false;
+        if (mounted.current) setPending(false);
+      };
+      (ran as Promise<unknown>).then(done, done);
+    }
   };
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+      accessibilityState={{ disabled: !!isDisabled, busy }}
       accessibilityLabel={title}
       onPress={handlePress}
       disabled={isDisabled}
@@ -131,7 +150,7 @@ export function Button({
     >
       {(state) => (
         <>
-          {loading ? (
+          {busy ? (
             <ActivityIndicator color={p.fg} size="small" />
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>

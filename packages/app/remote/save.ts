@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useAppStore, type AppState } from '../store/appStore';
 import { COLLECTIONS } from './collections';
 import { askToWorkOffline, canWrite, useConnectivity } from './connectivity';
@@ -145,16 +145,38 @@ export async function saveOnline<T>(run: () => T, opts: { waitMs?: number } = {}
   return confirm(result, before, after, fresh, opts.waitMs);
 }
 
-/** `saveOnline` for a screen: `saving` while it waits, so the button can show it. */
+/**
+ * `saveOnline` for a screen: `saving` while it waits, so the button can show it.
+ *
+ * One save at a time: a call while another is running resolves with `null`
+ * and does nothing, so a double tap (which can land before the re-render
+ * that disables the button) can't create the record twice. With `hold`, a
+ * save the server took keeps the lock until the screen goes away: a form
+ * that navigates off after creating something stays shut while it leaves.
+ */
 export function useSaveOnline() {
   const [saving, setSaving] = useState(false);
-  const save = useCallback(async <T>(run: () => T, opts?: { waitMs?: number }) => {
+  const lock = useRef(false);
+  const save = useCallback(async <T>(run: () => T, opts?: { waitMs?: number; hold?: boolean }): Promise<SaveResult<T> | null> => {
+    if (lock.current) return null;
+    lock.current = true;
     setSaving(true);
+    let keep = false;
     try {
-      return await saveOnline(run, opts);
+      const res = await saveOnline(run, opts);
+      keep = !!opts?.hold && (res.outcome === 'saved' || res.outcome === 'queued');
+      return res;
     } finally {
-      setSaving(false);
+      if (!keep) {
+        lock.current = false;
+        setSaving(false);
+      }
     }
   }, []);
-  return { save, saving };
+  /** Lets a held save go: the screen stayed after all. */
+  const release = useCallback(() => {
+    lock.current = false;
+    setSaving(false);
+  }, []);
+  return { save, saving, release };
 }

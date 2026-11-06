@@ -22,6 +22,8 @@ export function useSaveShortcut(onSave: () => void, enabled = true, onSaveAnothe
         const another = e.shiftKey ? latest.current.onSaveAnother : undefined;
         if (e.shiftKey && !another) return;
         e.preventDefault();
+        // Held down, the key repeats: one save per press.
+        if (e.repeat) return;
         if (latest.current.enabled) (another ?? latest.current.onSave)();
       };
       // Capturing, so it still works from inside a text field.

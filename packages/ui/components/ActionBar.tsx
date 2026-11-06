@@ -58,7 +58,7 @@ export function PrimaryActionBar({
 }: {
   title: string;
   icon?: IconName;
-  onPress: () => void;
+  onPress: () => unknown;
   loading?: boolean;
   /** Shown above the button on hover in a desktop browser, e.g. why it is locked. */
   tooltip?: string;
@@ -66,7 +66,7 @@ export function PrimaryActionBar({
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const hosted = usePageAction(desktop ? { label: title, icon, onPress, tooltip } : null);
+  const hosted = usePageAction(desktop ? { label: title, icon, onPress, tooltip, loading } : null);
   if (hosted) return null;
   return (
     <View

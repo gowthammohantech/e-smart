@@ -61,7 +61,7 @@ export default function NewPayment() {
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
-  const { run: serverSave, saving, blocked } = useServerSave();
+  const { run: serverSave, saving, blocked, release: releaseSave } = useServerSave();
   const insets = useSafeAreaInsets();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
@@ -375,9 +375,12 @@ export default function NewPayment() {
       icon: direction === 'received' ? 'cash-check' : 'cash-fast',
       // A template literal, so the compiler knows it is a plain string and not a handle on the party.
       detail: `${formatMoney(amount)}${party ? ` · ${party.name}` : ''}`,
+      // Busy until it has left for the payment: a second tap would record it again.
+      hold: true,
     });
     if (!res) return;
     if (!res.result) {
+      releaseSave();
       toast.show(tr('sales:payment.noAccountForMethod'), 'error', { icon: 'bank-off-outline' });
       return;
     }

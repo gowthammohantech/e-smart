@@ -69,7 +69,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
-  const { run: serverSave, saving, blocked } = useServerSave();
+  const { run: serverSave, saving, blocked, release: releaseSave } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
@@ -265,9 +265,12 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? tr('purchases:form.expenseUpdated') : tr('purchases:form.expenseRecorded'), {
       icon: 'receipt-text-check-outline',
       detail: [formatMoney(totalPaid), attachmentIds.length ? tr('purchases:form.withReceipt') : ''].filter(Boolean).join(' · '),
+      // A new expense keeps the button busy until it has left: a second tap would record it again.
+      hold: !expense,
     });
     if (!res) return;
     if (!res.result) {
+      releaseSave();
       setAccountError(tr('purchases:form.accountRequired'));
       return;
     }
