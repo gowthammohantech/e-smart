@@ -51,15 +51,16 @@ async function advanceVoucher(db: DbOrTx, company: CompanyRow, p: Schema<'Paymen
   const taxRows = received.interState
     ? `<tr><td>IGST @ ${received.rate}%</td><td class="num">${m(received.igst)}</td></tr>`
     : `<tr><td>CGST @ ${received.rate / 2}%</td><td class="num">${m(received.cgst)}</td></tr><tr><td>SGST @ ${received.rate / 2}%</td><td class="num">${m(received.sgst)}</td></tr>`;
+  const cessRow = received.cess ? `<tr><td>Cess @ ${p.advanceTax.cessRate ?? 0}%</td><td class="num">${m(received.cess)}</td></tr>` : '';
   return `
   <h1 style="margin-top:24px">RECEIPT VOUCHER</h1>
   <div class="muted">Advance received for services: CGST Act s.31(3)(d), Rule 50</div>
   <p>Recipient: <span class="strong">${esc(party?.name)}</span>${party?.taxId ? `, GSTIN ${esc(party.taxId)}` : ''}${party?.billingLine1 ? `<br/>${esc([party.billingLine1, party.billingCity].filter(Boolean).join(', '))}` : ''}</p>
-  <p>Place of supply: <span class="strong">${esc(pos)} (${esc(received.placeOfSupply)})</span></p>
+  <p>Place of supply: <span class="strong">${esc(pos)} (${esc(received.placeOfSupply)})</span>${received.hsn ? `<br/>SAC: <span class="strong">${esc(received.hsn)}</span>` : ''}</p>
   <table><thead><tr><th>Advance for services</th><th class="num">Amount</th></tr></thead><tbody>
     <tr><td>Value of the advance (taxable)</td><td class="num">${m(received.taxable)}</td></tr>
-    ${taxRows}
-    <tr><td class="strong">Advance received</td><td class="num strong">${m(received.taxable + received.igst + received.cgst + received.sgst)}</td></tr>
+    ${taxRows}${cessRow}
+    <tr><td class="strong">Advance received</td><td class="num strong">${m(received.taxable + received.igst + received.cgst + received.sgst + received.cess)}</td></tr>
   </tbody></table>
   <p class="muted">Tax payable on reverse charge: No. The tax is adjusted against the invoice raised for these services.</p>`;
 }

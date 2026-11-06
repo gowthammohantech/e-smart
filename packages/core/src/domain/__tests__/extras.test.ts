@@ -1,4 +1,4 @@
-import { advanceTaxEvents, advancesForPeriod } from '../advanceTax';
+import { advanceInterState, advanceTaxEvents, advanceTaxSplit, advancesForPeriod } from '../advanceTax';
 import { gstr3b } from '../gstr3b';
 import { postDocument, postPayment, postVoucher, Posting } from '../ledger/postings';
 import { costCentreProfit } from '../ledger/reports';
@@ -129,6 +129,79 @@ describe('cost centres', () => {
       ['cc_a', 100_000, 30_000, 70_000],
       ['cc_b', 0, 20_000, -20_000],
     ]);
+  });
+});
+
+describe('advance receipts: cess, TDS and defaults (G9)', () => {
+  const dateOf = () => undefined;
+  it('splits cess out of the amount received and posts it to Output cess', () => {
+    const p = advance({ amount: inr('12800'), advanceTax: { taxCategoryId: 'tax_18', rate: 18, placeOfSupplyStateCode: '29', hsn: '998311', cessRate: 10 } });
+    const [e] = advanceTaxEvents(p, '27', dateOf);
+    expect(e).toMatchObject({ interState: true, taxable: 1_000_000, igst: 180_000, cess: 100_000, hsn: '998311' });
+    expect(advancesForPeriod([e], '2026-09-01', '2026-09-30').received[0]).toMatchObject({ igst: 180_000, cess: 100_000 });
+    const ps = postPayment(p, { homeState: '27' });
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:outputCess')).toBe(-100_000);
+    expect(net(ps, 'sys:gstOnAdvances')).toBe(280_000);
+  });
+
+  it('counts TDS the customer deducted with the money, and credits them for it', () => {
+    const p = advance({ amount: inr('11600'), advanceTds: inr('200'), tdsSection: '194JB' });
+    const [e] = advanceTaxEvents(p, '27', dateOf);
+    expect(e.taxable + e.cgst + e.sgst).toBe(1_180_000);
+    const ps = postPayment(p, { homeState: '27' });
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'sys:tdsReceivable:194JB')).toBe(20_000);
+    expect(net(ps, 'party:cus')).toBe(-1_180_000);
+  });
+
+  it('takes an unknown place of supply as another state', () => {
+    expect(advanceInterState('27', '')).toBe(true);
+    expect(advanceInterState(undefined, '27')).toBe(true);
+    expect(advanceInterState('27', '27')).toBe(false);
+    expect(advanceTaxSplit(1_180_000, 18, 0, false)).toEqual({ taxable: 1_000_000, igst: 0, cgst: 90_000, sgst: 90_000, cess: 0 });
+  });
+});
+
+describe('cost centres on purchase lines (RULES 6.20)', () => {
+  const bill = (lines: { minor: number; cc?: string; capital?: boolean }[]) =>
+    ({
+      id: 'bill',
+      kind: 'purchaseBill',
+      status: 'issued',
+      number: 'B-1',
+      date: '2026-09-10',
+      partyId: 'sup',
+      branchId: 'b',
+      currency: 'INR',
+      exchangeRate: 1,
+      costCentreId: 'cc_doc',
+      lines: lines.map((l, i) => ({ id: `l${i}`, name: 'x', quantity: 1, unit: 'NOS', unitPrice: { minor: l.minor, currency: 'INR' }, discountMode: 'percent', discountValue: 0, taxCategoryId: 't', taxRate: 0, taxInclusive: false, costCentreId: l.cc, gst: l.capital ? { capitalGoods: true } : undefined })),
+      totals: { grandTotal: inr(String(lines.reduce((a, l) => a + l.minor, 0) / 100)), taxableAmount: inr(String(lines.reduce((a, l) => a + l.minor, 0) / 100)), taxLines: [], totalTax: inr('0'), documentDiscount: inr('0'), charges: inr('0'), roundOff: inr('0') },
+    }) as unknown as BusinessDocument;
+  const byCentre = (ps: Posting[]) => ps.filter((p) => p.account === 'sys:purchases').map((p) => [p.costCentreId, p.debit]);
+
+  it('splits Purchases by each line’s centre, the rest on the document’s', () => {
+    const ps = postDocument(bill([{ minor: 30_000 }, { minor: 70_000, cc: 'cc_b' }]), 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(byCentre(ps)).toEqual([
+      ['cc_doc', 30_000],
+      ['cc_b', 70_000],
+    ]);
+    // The supplier's side stays whole, on the document's centre.
+    expect(ps.find((p) => p.account === 'party:sup')).toMatchObject({ credit: 100_000, costCentreId: 'cc_doc' });
+    const rows = costCentreProfit(ps, book, { from: '2026-09-01', to: '2026-09-30' });
+    expect(rows.map((r) => [r.costCentreId, r.expense])).toEqual([
+      ['cc_doc', 30_000],
+      ['cc_b', 70_000],
+    ]);
+  });
+
+  it('posts as one when no line has a centre of its own, and keeps the parts adding up', () => {
+    expect(byCentre(postDocument(bill([{ minor: 10_000 }, { minor: 20_000 }]), 'INR'))).toEqual([['cc_doc', 30_000]]);
+    const odd = postDocument(bill([{ minor: 10_001, cc: 'cc_a' }, { minor: 10_001, cc: 'cc_b' }, { minor: 10_001 }]), 'INR');
+    expect(balanced(odd)).toBe(0);
+    expect(byCentre(odd).reduce((a, [, d]) => a + (d as number), 0)).toBe(30_003);
   });
 });
 

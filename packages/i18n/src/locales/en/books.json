@@ -57,7 +57,8 @@
     "rcmPayableCgst": "CGST payable on reverse charge",
     "rcmPayableSgst": "SGST payable on reverse charge",
     "rcmPayableIgst": "IGST payable on reverse charge",
-    "rcmPayableCess": "CESS payable on reverse charge"
+    "rcmPayableCess": "CESS payable on reverse charge",
+    "tdsReceivableSection": "TDS receivable {{section}}"
   },
   "group": {
     "capital": "Capital",
@@ -322,7 +323,19 @@
     "referencePlaceholder": "Cheque or UTR number",
     "save": "Save receipt",
     "saved": "Receipt saved",
-    "newIncome": "Add \"{{name}}\" as an income"
+    "newIncome": "Add \"{{name}}\" as an income",
+    "party": "Party",
+    "partyPlaceholder": "Optional: a customer, supplier or contact",
+    "attach": "Attach the slip",
+    "attachReady": "Slip ready to attach",
+    "attached_one": "{{count}} file attached",
+    "attached_other": "{{count}} files attached",
+    "attachHint": "A photo of the cheque, deposit slip or letter",
+    "attachments": "Files",
+    "edit": "Edit receipt",
+    "search": "Search number, party or narration",
+    "emptyFiltered": "Nothing matches. Try another period or search.",
+    "adjust": "Adjust advance"
   },
   "integrity": {
     "basis": "Checked as of the last day of the period",
@@ -591,5 +604,32 @@
     "income": "Income",
     "expense": "Expenses",
     "profit": "Profit"
+  },
+  "adjust": {
+    "title": "Adjust advance",
+    "intro": "Apply what a party has paid in advance, or a credit note not raised against an invoice, to what they still owe.",
+    "party": "Party",
+    "pickParty": "Pick a customer or supplier",
+    "customerSide": "As customer",
+    "supplierSide": "As supplier",
+    "noCredit": "No unadjusted advance or credit note",
+    "noOpen": "Nothing is owed on an invoice or note",
+    "emptyHint": "Advances and direct credit notes show here once there is something open to apply them to.",
+    "credits": "Advances and credit notes",
+    "open": "Open invoices and notes",
+    "note": "Credit note",
+    "advance": "Advance received",
+    "advancePaid": "Advance paid",
+    "gst": "GST",
+    "amount": "Apply",
+    "notService": "This invoice has no service on it: GST paid on a service advance should only come back on a service invoice.",
+    "autoNotService": "Some open invoices have no service on them; a service advance applied to one takes its GST back on goods. Choose by hand to avoid that.",
+    "over": "More than is left of it ({{amount}})",
+    "applyChosen": "Apply {{amount}}",
+    "applyAll": "Apply all, oldest first",
+    "applyAllHint": "Or pick an advance above to choose where it goes.",
+    "done": "{{amount}} adjusted",
+    "nothing": "Nothing to adjust",
+    "back": "Back to the document"
   }
 }

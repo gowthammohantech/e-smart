@@ -9,7 +9,7 @@ export default function NewReceipt() {
   return (
     <>
       <Stack.Screen options={{ title: tr('books:receipts.new') }} />
-      <ReceiptForm onSaved={(id) => router.replace(`/(app)/books/vouchers/${id}` as never)} />
+      <ReceiptForm onSaved={(id) => router.replace(`/(app)/receipts/${id}` as never)} />
     </>
   );
 }

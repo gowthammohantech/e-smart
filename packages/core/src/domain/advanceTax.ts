@@ -12,7 +12,14 @@ import { Payment } from '../types';
  * advance being adjusted, on that invoice's date. Money paid back out of it (a refund voucher, Rule 51)
  * takes its share of the tax back on the day it is refunded, as an adjustment does. Amounts are
  * base-currency paise.
+ *
+ * The amount received includes the tax (and any cess on the service). TDS the customer deducted from
+ * the advance is part of what they paid for the service, so it counts with the money. A place of
+ * supply the business doesn't know is taken as another state (IGST), and a rate it doesn't know as
+ * 18% (DEFAULT_ADVANCE_RATE, applied where the advance is entered). RULES 8.12, pending CA sign-off.
  */
+export const DEFAULT_ADVANCE_RATE = 18;
+
 export type AdvanceEvent = {
   paymentId: string;
   /** Received: the advance's tax arises. Adjusted: an invoice was raised against it. Refunded: paid back. */
@@ -30,7 +37,22 @@ export type AdvanceEvent = {
   igst: number;
   cgst: number;
   sgst: number;
+  /** Cess on the advance (0 when none). */
+  cess: number;
+  /** The advance's SAC, when given. */
+  hsn?: string;
 };
+
+/** The tax inside an amount received for a service, split by kind. */
+export function advanceTaxSplit(grossMinor: number, rate: number, cessRate: number, interState: boolean): { taxable: number; igst: number; cgst: number; sgst: number; cess: number } {
+  const total = inclusiveTax(money(grossMinor, 'INR'), rate + cessRate);
+  const [gst, cess] = allocate(total, [rate, cessRate]);
+  const [c, s] = allocate(gst, [1, 1]);
+  return { taxable: grossMinor - total.minor, igst: interState ? gst.minor : 0, cgst: interState ? 0 : c.minor, sgst: interState ? 0 : s.minor, cess: cess.minor };
+}
+
+/** Inter-state unless both the business's state and the place of supply are known and the same. */
+export const advanceInterState = (homeState: string | undefined, placeOfSupply: string | undefined) => !placeOfSupply || !homeState || homeState !== placeOfSupply;
 
 export function advanceTaxEvents(p: Payment, homeState: string | undefined, documentDate: (id: string) => string | undefined): AdvanceEvent[] {
   const at = p.advanceTax;
@@ -44,10 +66,11 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
     return !!d && d > p.date;
   });
   const settled = p.allocations.filter((a) => !later.includes(a)).reduce((s, a) => s + a.amount.minor, 0);
-  const gross = base(p.amount.minor - settled);
+  const gross = base(p.amount.minor + (p.advanceTds?.minor ?? 0) - settled);
   if (gross <= 0) return [];
-  const interState = !!homeState && homeState !== at.placeOfSupplyStateCode;
-  const tax = inclusiveTax(money(gross, 'INR'), at.rate);
+  const interState = advanceInterState(homeState, at.placeOfSupplyStateCode);
+  const cessRate = at.cessRate ?? 0;
+  const tax = inclusiveTax(money(gross, 'INR'), at.rate + cessRate);
   // The tax shared out over each adjustment, each refund and what is still unadjusted, so the parts add up exactly.
   const adjustedGross = later.map((a) => base(a.amount.minor));
   const refunds = (p.refunds ?? []).filter((r) => r.date >= p.date);
@@ -55,7 +78,8 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
   const rest = Math.max(0, gross - [...adjustedGross, ...refundedGross].reduce((s, x) => s + x, 0));
   const taxParts = allocate(tax, [...adjustedGross, ...refundedGross, rest]);
   const event = (kind: AdvanceEvent['kind'], date: string, g: number, t: number, documentId?: string, refundId?: string): AdvanceEvent => {
-    const [c, s] = allocate(money(t, 'INR'), [1, 1]);
+    const [gst, cess] = allocate(money(t, 'INR'), [at.rate, cessRate]);
+    const [c, s] = allocate(gst, [1, 1]);
     return {
       paymentId: p.id,
       kind,
@@ -67,9 +91,11 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
       rate: at.rate,
       interState,
       taxable: g - t,
-      igst: interState ? t : 0,
+      igst: interState ? gst.minor : 0,
       cgst: interState ? 0 : c.minor,
       sgst: interState ? 0 : s.minor,
+      cess: cess.minor,
+      ...(at.hsn && { hsn: at.hsn }),
     };
   };
   return [
@@ -98,9 +124,10 @@ export function advancesForPeriod(events: AdvanceEvent[], from: string, to: stri
       r.igst += sign * e.igst;
       r.cgst += sign * e.cgst;
       r.sgst += sign * e.sgst;
+      r.cess += sign * (e.cess ?? 0);
       rows.set(key, r);
     }
-    return [...rows.values()].filter((r) => r.taxable || r.igst || r.cgst || r.sgst).sort((a, b) => a.placeOfSupply.localeCompare(b.placeOfSupply) || a.rate - b.rate);
+    return [...rows.values()].filter((r) => r.taxable || r.igst || r.cgst || r.sgst || r.cess).sort((a, b) => a.placeOfSupply.localeCompare(b.placeOfSupply) || a.rate - b.rate);
   };
   const received = events.filter((e) => inPeriod(e.receivedOn));
   return {

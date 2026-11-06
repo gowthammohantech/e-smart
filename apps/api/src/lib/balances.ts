@@ -58,7 +58,12 @@ export async function partyBalances(
     // A direct credit note, against no one invoice or bill, is credit the party holds until it is
     // applied: counted with their advances. TDS a supplier credit note gives back was never theirs.
     db
-      .select({ partyId: d.partyId, kind: d.kind, total: sql<number>`coalesce(sum(${d.grandTotalMinor} - coalesce(${d.tdsAmountMinor}, 0)), 0)::bigint` })
+      // Less what has been applied to an invoice or bill since (the adjustment entry).
+      .select({
+        partyId: d.partyId,
+        kind: d.kind,
+        total: sql<number>`coalesce(sum(${d.grandTotalMinor} - coalesce(${d.tdsAmountMinor}, 0) - coalesce((select sum(ca.amount_minor) from credit_applications ca where ca.note_id = "documents"."id"), 0)), 0)::bigint`,
+      })
       .from(d)
       .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, ['creditNote', 'supplierCreditNote']), isNull(d.sourceDocumentId), notInArray(d.status, [...CLOSED, 'requested'])))
       .groupBy(d.partyId, d.kind),

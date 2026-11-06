@@ -177,6 +177,7 @@ export function requestInput(body: PaymentBody): PaymentInput {
     advanceTax: body.advanceTax ?? null,
     refundOf: body.refundOf ?? null,
     tdsSection: body.tdsSection ?? null,
+    advanceTdsMinor: body.advanceTds?.minor ?? 0,
     allocations: (body.allocations ?? []).map((a) => ({
       documentId: a.documentId,
       amountMinor: a.amount.minor,

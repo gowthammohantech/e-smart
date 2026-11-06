@@ -117,7 +117,10 @@
     "cashForecast": "Cash-flow forecast",
     "fixedAssets": "Fixed assets",
     "budgets": "Budgets",
-    "gstr2bReconciliation": "2B reconciliation"
+    "gstr2bReconciliation": "2B reconciliation",
+    "advanceReceipt": "Advance receipt",
+    "adjustAdvance": "Adjust advance",
+    "costCentres": "Cost centres"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {

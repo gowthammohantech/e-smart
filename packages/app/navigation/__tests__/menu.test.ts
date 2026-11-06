@@ -29,7 +29,7 @@ describe('the menu', () => {
 
   it('gives the Sales plan Money without the money-out pages', () => {
     const money = MENU.find((s) => s.name === 'money')!.pages.filter((p) => canOpen('free', p.route)).map((p) => p.key);
-    expect(money).toEqual(['paymentsIn', 'receivables']);
+    expect(money).toEqual(['paymentsIn', 'advanceReceipt', 'receivables']);
     expect(PHONE_TABS.sales).toEqual(['index', 'sales', 'gst', 'more']);
   });
 
