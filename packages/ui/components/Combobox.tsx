@@ -48,6 +48,13 @@ export function Combobox({
   const [typed, setTyped] = useState(false);
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
+  // The picked value changed from outside (a template, a balancing fill), or the field was left: show its name.
+  const pickedLabel = current?.label ?? '';
+  const [shown, setShown] = useState({ label: pickedLabel, focused });
+  if (shown.label !== pickedLabel || shown.focused !== focused) {
+    setShown({ label: pickedLabel, focused });
+    if (!focused) setText(pickedLabel);
+  }
   const [active, setActive] = useState(0);
   const input = useRef<TextInput>(null);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,10 +64,6 @@ export function Combobox({
     labelRef.current = current?.label ?? '';
   }, [current?.label]);
 
-  // The picked value changed from outside (a template, a balancing fill): show its name.
-  useEffect(() => {
-    if (!focused) setText(current?.label ?? '');
-  }, [current?.label, focused]);
   useEffect(() => () => void (blurTimer.current && clearTimeout(blurTimer.current)), []);
 
   const matches = useMemo(() => {

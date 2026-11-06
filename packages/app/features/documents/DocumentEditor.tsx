@@ -560,39 +560,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     else setConfirmFinalize(true);
   };
 
-  // Ctrl+Enter (⌘+Enter on a Mac, shown on the Finalise button) does what the Finalise button does: the same
-  // checks, then the same confirmation, so nothing is finalised without it.
-  // Only while this editor is the screen in view; a phone has no keyboard for it.
-  const finalizeShortcut = useRef(() => {});
-  useEffect(() => {
-    finalizeShortcut.current = () => {
-      if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
-      // Not over another sheet (picking an item, editing a line…): finish that first.
-      if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
-      if (editingIssued) return void save(false);
-      setSendAfter(false);
-      requestFinalize();
-    };
-  });
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
-      const onKey = (e: KeyboardEvent) => {
-        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-        // Held down, the key repeats: one finalise per press.
-        if (e.repeat) {
-          e.preventDefault();
-          return;
-        }
-        e.preventDefault();
-        finalizeShortcut.current();
-      };
-      // Capturing, so it still works from inside a text field, which keeps Enter to itself.
-      document.addEventListener('keydown', onKey, true);
-      return () => document.removeEventListener('keydown', onKey, true);
-    }, []),
-  );
-
   const save = async (finalize: boolean) => {
     if (!draft.partyId) return;
     if (roundOffError) {
@@ -720,6 +687,40 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       setDocumentStatus(id, target, creditOverride ? { overrideCreditLimit: true } : undefined);
     }
   };
+
+  // Ctrl+Enter (⌘+Enter on a Mac, shown on the Finalise button) does what the Finalise button does: the same
+  // checks, then the same confirmation, so nothing is finalised without it.
+  // Only while this editor is the screen in view; a phone has no keyboard for it.
+  const finalizeShortcut = useRef(() => {});
+  useEffect(() => {
+    finalizeShortcut.current = () => {
+      if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
+      // Not over another sheet (picking an item, editing a line…): finish that first.
+      if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
+      if (editingIssued) return void save(false);
+      setSendAfter(false);
+      requestFinalize();
+    };
+  });
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+        // Held down, the key repeats: one finalise per press.
+        if (e.repeat) {
+          e.preventDefault();
+          return;
+        }
+        e.preventDefault();
+        finalizeShortcut.current();
+      };
+      // Capturing, so it still works from inside a text field, which keeps Enter to itself.
+      document.addEventListener('keydown', onKey, true);
+      return () => document.removeEventListener('keydown', onKey, true);
+    }, []),
+  );
+
   // Ctrl+S (⌘+S) saves the draft, as "Save draft" does; not over another sheet.
   useSaveShortcut(
     () => void save(false),

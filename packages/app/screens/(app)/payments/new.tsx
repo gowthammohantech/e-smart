@@ -244,7 +244,8 @@ export default function NewPayment() {
   const taxed = taxCategories.filter((c) => c.rate > 0);
   // A rate not known is 18% (RULES 8.12).
   const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
-  const homeState = homeStateCode(company);
+  // Memoised: called while rendering, the compiler would take `company` as changed by it and skip this screen.
+  const homeState = useMemo(() => homeStateCode(company), [company]);
   // A place of supply not known is taken as another state: IGST, under "Other Territory" (97).
   const pos = advancePos ?? party?.billingAddress?.stateCode;
   const canAdvance = direction === 'received' && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
