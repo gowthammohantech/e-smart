@@ -120,7 +120,11 @@
     "gstr2bReconciliation": "2B சரிபார்ப்பு",
     "advanceReceipt": "முன்பண ரசீது",
     "adjustAdvance": "முன்பணத்தைச் சரிசெய்",
-    "costCentres": "செலவு மையங்கள்"
+    "costCentres": "செலவு மையங்கள்",
+    "transfer": "பணப் பரிமாற்றம்",
+    "gstUtilization": "வரவுப் பயன்பாட்டுப் பதிவு",
+    "gstChallan": "GST செலுத்துச்சீட்டு",
+    "gstJournal": "GST பேரேட்டுப் பதிவு"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {

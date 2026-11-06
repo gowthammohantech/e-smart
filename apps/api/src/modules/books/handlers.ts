@@ -15,7 +15,9 @@ import { compact, iso, money, versioned } from '../../lib/wire';
 import { assertPeriodOpen } from '../documents/lifecycle';
 import { accountBalanceMinor } from '../payments/engine';
 import { costCentreIssues } from './costCentres';
-import { loadBook } from './book';
+import { loadBook, loadVouchers } from './book';
+import { cashLedgerBalance } from '@esmart/core/domain/gstUtilization';
+import { postVoucher } from '@esmart/core/domain/ledger/postings';
 import { comparisonPeriod, profitAndLossColumns, balanceSheetColumns, splitPeriods } from '@esmart/core/domain/ledger/comparative';
 import { integrityChecks, type IntegrityInput } from '@esmart/core/domain/ledger/integrity';
 import { partyStatement } from '../parties/statement';
@@ -591,6 +593,13 @@ export const booksHandlers = defineHandlers({
     checkIfMatch(ctx.req, current.version);
     // A draft was never in the books, so a closed period doesn't hold it.
     if (current.status !== 'draft') assertPeriodOpen(ctx.company, current.date);
+    // A GST challan whose money a set-off has already used can't go: the cash ledger would run negative.
+    if (current.kind === 'gstChallan' && current.status !== 'draft') {
+      const others = (await loadVouchers({ db: ctx.db, company: ctx.company, to: '9999-12-31' })).filter((v) => v.id !== current.id);
+      const left = cashLedgerBalance(others.flatMap(postVoucher), '9999-12-31');
+      const head = (['igst', 'cgst', 'sgst', 'cess'] as const).find((k) => left[k] < 0);
+      if (head) throw conflict('CHALLAN_USED', `A GST set-off has used this challan's ${head.toUpperCase()}; reverse the set-off first`);
+    }
     await ctx.db.transaction(async (tx) => {
       await linkVoucherAttachments(tx, ctx.company.id, current.id, []);
       const deleted = await tx.delete(V).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning({ id: V.id });

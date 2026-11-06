@@ -54,6 +54,8 @@ const TA_LATIN_ALLOWLIST = new RegExp(
     'EXP|CDNR|CDNUR|AT|ATADJ|B2BA|B2CLA|B2CSA|EXPA|CDNRA|CDNURA|B2CL|B2CS|NIL|DOCS|AMEND|A|UIN',
     // The postal code, which Indian forms call a PIN in every language.
     'PIN',
+    // A GST challan's identifiers, as printed on PMT-06.
+    'CPIN|CIN|BRN',
   ].join('|')})$`,
 );
 

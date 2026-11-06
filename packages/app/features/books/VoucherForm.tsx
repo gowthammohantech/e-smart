@@ -40,7 +40,7 @@ const isBlank = (l: GridLine) => !l.account && !l.amount && !l.narration && !l.c
  * A journal, contra, GST journal or TDS challan: lines of debits and credits that must balance.
  * The server checks the same rules (apps/api/src/modules/books/handlers.ts).
  */
-export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: (id: string) => void }) {
+export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Voucher; onSaved: (id: string) => void; initialKind?: VoucherKind }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['books', 'common']);
   const { run: serverSave, saving, blocked } = useServerSave();
@@ -58,7 +58,7 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const groupName = useGroupName();
 
   const params = useLocalSearchParams<{ kind?: string }>();
-  const [kind, setKind] = useState<VoucherKind>(voucher?.kind ?? voucherKindParam(params.kind) ?? 'journal');
+  const [kind, setKind] = useState<VoucherKind>(voucher?.kind ?? initialKind ?? voucherKindParam(params.kind) ?? 'journal');
   const [date, setDate] = useState(voucher?.date ?? today());
   const [narration, setNarration] = useState(voucher?.narration ?? '');
   const [reference, setReference] = useState(voucher?.reference ?? '');
@@ -135,6 +135,8 @@ export function VoucherForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       narration: narration.trim() || undefined,
       reference: reference.trim() || undefined,
       challan: challanGiven ? { bsrCode, serial, depositedOn } : undefined,
+      // A GST challan is entered on its own screen; edited here, it keeps its deposit details.
+      gstChallan: voucher?.gstChallan,
       lines: filled.map((l) => ({
         account: l.account,
         debit: money(l.side === 'dr' ? minor(l.amount) : 0, baseCurrency),

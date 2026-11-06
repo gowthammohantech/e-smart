@@ -58,7 +58,12 @@
     "rcmPayableSgst": "SGST payable on reverse charge",
     "rcmPayableIgst": "IGST payable on reverse charge",
     "rcmPayableCess": "CESS payable on reverse charge",
-    "tdsReceivableSection": "TDS receivable {{section}}"
+    "tdsReceivableSection": "TDS receivable {{section}}",
+    "gstCashLedgerHead": "GST cash ledger {{head}}",
+    "cessHead": "cess",
+    "gstInterest": "Interest on GST",
+    "gstLateFee": "Late fee on GST returns",
+    "itcReversed": "Input tax credit reversed"
   },
   "group": {
     "capital": "Capital",
@@ -124,14 +129,16 @@
       "contra": "Contra",
       "gstJournal": "GST journal",
       "tdsChallan": "TDS challan",
-      "receipt": "Receipt"
+      "receipt": "Receipt",
+      "gstChallan": "GST challan"
     },
     "kindHint": {
       "journal": "Any adjustment: depreciation, provisions, a refund, a correction.",
       "contra": "Money between cash and bank: a deposit, a withdrawal, a transfer.",
       "gstJournal": "Adjustments to the GST ledgers: a credit reversed, interest, a set-off.",
       "tdsChallan": "TDS paid to the government, from the challan.",
-      "receipt": "Money in that isn't from an invoice, into cash or bank."
+      "receipt": "Money in that isn't from an invoice, into cash or bank.",
+      "gstChallan": "GST paid into the portal’s cash ledger (PMT-06), head by head."
     },
     "date": "Date",
     "narration": "Narration",
@@ -631,5 +638,23 @@
     "done": "{{amount}} adjusted",
     "nothing": "Nothing to adjust",
     "back": "Back to the document"
+  },
+  "transfer": {
+    "title": "Transfer",
+    "hint": "Move money between your cash and bank accounts: a deposit, a withdrawal or a bank-to-bank transfer. It is posted as a contra voucher.",
+    "from": "From account",
+    "to": "To account",
+    "pickAccount": "Pick a cash or bank account",
+    "amount": "Amount",
+    "referenceHint": "A cheque, UTR or slip number.",
+    "recent": "Recent transfers",
+    "allContras": "All contra vouchers",
+    "none": "No transfers yet.",
+    "save": "Record transfer",
+    "saved": "Transfer recorded",
+    "pickBoth": "Pick both accounts",
+    "same": "Pick two different accounts",
+    "noAmount": "Enter the amount moved",
+    "defaultNarration": "Transfer from {{from}} to {{to}}"
   }
 }

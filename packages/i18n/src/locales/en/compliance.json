@@ -361,7 +361,8 @@
       "placeOfSupply": "Place of supply",
       "interState": "Inter-state",
       "intraState": "Intra-state",
-      "table": "Table"
+      "table": "Table",
+      "cashLedger": "Cash ledger"
     },
     "fromBooks": "Worked out from your books. Connect the GST portal to save and file it.",
     "breakupOf": "{{table}} · {{count}}",
@@ -427,7 +428,10 @@
       "used": "Used",
       "available": "Available",
       "matrixNote": "Which credit paid which tax, in the order the law sets (s.49, rule 88A): IGST credit first, then CGST and SGST credit; cess credit pays only cess. Available is this period’s net credit plus what last period carried forward."
-    }
+    },
+    "cashLedger": "GST cash ledger",
+    "openUtilization": "Utilization entry",
+    "recordChallan": "Record a challan"
   },
   "status": {
     "eInvoice": {
@@ -591,5 +595,68 @@
     "2": "Vehicle breakdown",
     "3": "Transhipment",
     "4": "Others"
+  },
+  "challan": {
+    "title": "GST challan",
+    "hint": "Record a GST deposit (PMT-06) as the challan shows it. It moves the money from your bank into the GST cash ledger; the set-off then pays tax from there.",
+    "paidFrom": "Paid from",
+    "cpin": "CPIN",
+    "cpinHint": "The 14-character number on the challan.",
+    "cin": "CIN",
+    "brn": "BRN",
+    "depositedOn": "Paid on",
+    "part": {
+      "tax": "Tax",
+      "interest": "Interest",
+      "penalty": "Penalty",
+      "fee": "Fee",
+      "others": "Others"
+    },
+    "total": "Challan total: {{amount}}",
+    "recent": "Recent challans",
+    "none": "No GST challans yet.",
+    "save": "Record challan",
+    "saved": "Challan recorded",
+    "narration": "GST challan {{cpin}}",
+    "pickBank": "Pick the account it was paid from",
+    "cpinInvalid": "The CPIN has 14 letters and digits",
+    "noAmount": "Enter what was paid under at least one head"
+  },
+  "utilization": {
+    "title": "Utilization entry",
+    "hint": "Set off the period’s GST: tax from the GSTR-3B data, paid from credit in the order the law sets and the rest from the GST cash ledger. Reverse charge, interest and late fee are paid in cash only.",
+    "date": "Set-off date",
+    "outputMismatch": "Output tax in the books does not match the return",
+    "outputMismatchBody": "The Output ledgers carry a different amount for this period than GSTR-3B says is owed (forward and reverse charge). Check for documents dated in another month or journals posted to Output by hand before you set off.",
+    "outputBooks": "Output in books",
+    "outputReturn": "Owed in 3B",
+    "difference": "Difference",
+    "position": "This period",
+    "forward": "Payable",
+    "reverseCharge": "Reverse charge",
+    "available": "Credit available",
+    "interestLateFee": "Interest and late fee",
+    "oldRcmOpen": "{{amount}} of reverse charge from before November 2026 is still open; you can pay it from the cash ledger here.",
+    "existing": "Already set off",
+    "existingHint": "A period is set off once. Reverse this entry to record it again.",
+    "reverse": "Reverse",
+    "reversed": "Set-off reversed",
+    "posted": "Set-off posted",
+    "credit": "Paid from credit",
+    "creditFrom": "{{head}} credit ({{amount}} available)",
+    "toHead": "For {{head}}",
+    "cashSection": "Paid from the cash ledger",
+    "row": {
+      "cash": "Tax paid in cash",
+      "oldReverseCharge": "Older reverse charge payable",
+      "interest": "Interest",
+      "lateFee": "Late fee"
+    },
+    "rcmCash": "Reverse charge of {{amount}} is paid in cash, in full.",
+    "cashNeeded": "{{head}} needed / in cash ledger",
+    "short": "The GST cash ledger holds too little. Record a challan first.",
+    "narrationPlaceholder": "GST set-off for {{period}}",
+    "resetPrefill": "Start again from the suggested set-off",
+    "post": "Post set-off"
   }
 }

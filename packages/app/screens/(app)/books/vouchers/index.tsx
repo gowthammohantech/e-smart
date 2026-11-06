@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
@@ -15,7 +15,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { useVoucherPages } from '../../../../remote/queries';
+import { useVoucherPages, type VoucherQuery } from '../../../../remote/queries';
 import { useBaseCurrency } from '../../../../store/selectors';
 
 export default function VoucherList() {
@@ -24,14 +24,18 @@ export default function VoucherList() {
   const { t: tr } = useTranslation(['books']);
   // From the server, newest first, 50 at a time.
   const [status, setStatus] = useState<'all' | 'draft' | 'posted'>('all');
-  const pages = useVoucherPages(status === 'all' ? {} : { status });
+  // `?kind=contra` (the transfer entry's "all transfers") lists one kind.
+  const KINDS = ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt', 'gstChallan'] as const;
+  const kindParam = useLocalSearchParams<{ kind?: string }>().kind;
+  const kind = (KINDS as readonly string[]).includes(String(kindParam)) ? (kindParam as VoucherQuery['kind']) : undefined;
+  const pages = useVoucherPages({ ...(status === 'all' ? {} : { status }), kind });
   const vouchers = pages.rows;
   const baseCurrency = useBaseCurrency();
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
-          title: tr('books:hub.vouchers'),
+          title: kind ? `${tr('books:hub.vouchers')} · ${tr(`books:vouchers.kind.${kind}`)}` : tr('books:hub.vouchers'),
           headerRight: () => <Button title={tr('books:journalImport.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/books/vouchers/import' as never)} />,
         }}
       />

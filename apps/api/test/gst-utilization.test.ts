@@ -99,6 +99,10 @@ describe('GST utilization (set-off) and the GST cash ledger', () => {
     const twice = await m.post(after.body.prefill);
     expect(twice.status).toBe(409);
     expect(twice.body.code).toBe('SET_OFF_EXISTS');
+    // The challan's money is spent: it can't be deleted from under the set-off.
+    const gone = await t.del(`${m.c}/vouchers/${paid.body.id}`, { token: m.token });
+    expect(gone.status).toBe(409);
+    expect(gone.body.code).toBe('CHALLAN_USED');
     const shown = await m.view();
     expect(shown.body.existing.map((x: { id: string }) => x.id)).toEqual([posted.body.id]);
     expect(shown.body.cashBalance.igst).toBe(0);
