@@ -463,6 +463,17 @@ export type BusinessDocument = {
   sourceDocumentId?: string;
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
+  /**
+   * A direct note's GST treatment (RULES 6.22): `withGst` (s.34, the default) or `noGst`, a financial
+   * or commercial note with no tax, posted to discount and left out of GSTR-1 and GSTR-3B.
+   */
+  noteGst?: 'withGst' | 'noGst';
+  /** A direct note with GST: the original invoice or bill it adjusts (GSTR-1 CDNR/CDNUR, the s.34 deadline). */
+  originalNumber?: string;
+  originalDate?: string;
+  /** On an invoice from the server: whether it can be edited in full, and why not (RULES 6.21). */
+  editable?: boolean;
+  editBlock?: string;
   /** The TDS section asked for on a supplier's bill (or, on an invoice, the customer's): a code, `none`, or unset for the party's own. */
   tdsSection?: string;
   /** TDS the business deducted on a supplier's bill: what's paid them is the total less this. */
@@ -1111,12 +1122,17 @@ export type CostCentre = {
 
 /** Journal: any adjustment. Contra: money between cash and bank. GST journal: adjustments to the GST ledgers. TDS challan: TDS paid to the government. */
 /** `receipt`: money in that isn't from a customer's invoice: interest, rent, a refund, capital brought in. */
-export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt';
+export type VoucherKind = 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt' | 'gstChallan';
 /** A draft is kept but not in the books (no number, no postings) until it is posted. */
 export type VoucherStatus = 'draft' | 'posted';
 
 /** Where a TDS challan was deposited, as printed on it (ITNS 281). */
 export type TdsChallan = { bsrCode: string; serial: string; depositedOn: string };
+
+/** A GST challan head's minor heads, in paise, as PMT-06 splits them. */
+export type GstChallanHead = { tax: number; interest: number; penalty: number; fee: number; others: number };
+/** A GST deposit (PMT-06): its CPIN, the bank's CIN or BRN, the day paid, and what was paid under each head. */
+export type GstChallan = { cpin: string; cin?: string; brn?: string; depositedOn: string; heads: Partial<Record<'igst' | 'cgst' | 'sgst' | 'cess', GstChallanHead>> };
 
 export type VoucherLine = {
   /** An account key: `sys:sales`, `party:<id>`, `pay:<id>`, `exp:<id>`, `acc:<id>`, `sys:tdsPayable:194C`. */
@@ -1153,6 +1169,11 @@ export type Voucher = {
   reference?: string;
   /** A TDS challan's deposit details. */
   challan?: TdsChallan;
+  /** A GST challan's (PMT-06) deposit details. */
+  gstChallan?: GstChallan;
+  /** A GST set-off (utilization) journal: the GSTIN and return period (MMYYYY) it sets off. */
+  gstin?: string;
+  gstPeriod?: string;
   lines: VoucherLine[];
   /** On a receipt: the party it came from, for reference (the lines post). */
   partyId?: string;

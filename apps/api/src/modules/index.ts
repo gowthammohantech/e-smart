@@ -29,6 +29,7 @@ import { costCentreHandlers } from './books/costCentres';
 import { fixedAssetHandlers } from './assets/handlers';
 import { budgetHandlers } from './books/budgets';
 import { gstFilingHandlers } from './gst/filing';
+import { gstUtilizationHandlers } from './gst/utilization';
 import { gstPortalHandlers, gstr2bHandlers } from './gst/portalHandlers';
 import { dashboardHandlers } from './dashboard/handlers';
 import { searchHandlers } from './search/handlers';
@@ -75,6 +76,7 @@ export const handlers: Handlers = {
   ...gstPortalHandlers,
   ...gstr2bHandlers,
   ...gstFilingHandlers,
+  ...gstUtilizationHandlers,
   ...costCentreHandlers,
   ...fixedAssetHandlers,
   ...budgetHandlers,

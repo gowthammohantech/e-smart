@@ -54,6 +54,14 @@ describe('GSTR-3B', () => {
     expect(r.outward.nilExempt.taxable).toBe(200_000);
   });
 
+  it('leaves a financial note without GST out of every table (RULES 6.22)', () => {
+    const financial = doc('creditNote', 'b2b', [line('3000', { supplyType: 'nonGst' })], { noteGst: 'noGst' });
+    const supplierNote = doc('supplierCreditNote', 'sup', [line('800', { supplyType: 'nonGst' })], { noteGst: 'noGst', itcClaimPeriod: '092026' });
+    const withNotes = gstr3b({ period: '092026', company, gstin: GSTIN, baseCurrency: 'INR', documents: [...documents, financial, supplierNote], expenses: [], parties, expenseSplit: new Map() });
+    expect(withNotes.outward).toEqual(r.outward);
+    expect(withNotes.itc).toEqual(r.itc);
+  });
+
   it('shows reverse-charge tax owed in 3.1(d) and its credit in 4A(3)', () => {
     expect(r.outward.reverseCharge).toEqual({ taxable: 300_000, igst: 0, cgst: 27_000, sgst: 27_000, cess: 0 });
     expect(r.itc.reverseCharge).toMatchObject({ cgst: 27_000, sgst: 27_000 });

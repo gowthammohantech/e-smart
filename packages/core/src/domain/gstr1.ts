@@ -56,6 +56,9 @@ export type Gstr1Row = {
   reverseCharge?: boolean;
   /** Set on a note: C (credit, lowers the supply) or D (debit, adds to it). */
   noteType?: 'C' | 'D';
+  /** On a note: the invoice it adjusts, linked or (a direct note with GST) as entered on it. */
+  originalNumber?: string;
+  originalDate?: string;
 };
 
 export type HsnRow = {
@@ -266,8 +269,9 @@ export function gstr1Summary(args: {
   let tax = 0;
   let value = 0;
 
+  // A financial note without GST is no supply (RULES 6.22): it is in no table.
   const issued = documents.filter(
-    (d) => GSTR1_KINDS.includes(d.kind) && d.status !== 'draft' && inRange(d.date, period),
+    (d) => GSTR1_KINDS.includes(d.kind) && d.status !== 'draft' && d.noteGst !== 'noGst' && inRange(d.date, period),
   );
   const reportable = issued.filter((d) => !isCancelled(d.status));
 
@@ -288,6 +292,7 @@ export function gstr1Summary(args: {
     const source = noteType && doc.sourceDocumentId ? documents.find((d) => d.id === doc.sourceDocumentId) : undefined;
     const originalValue = source ? toBase(source.totals.grandTotal, source.currency === baseCurrency ? 1 : source.exchangeRate) : invoiceValue;
     const table = tableFor(doc, party, placeOfSupply, interState, originalValue);
+    const original = source ? { number: source.number, date: source.date } : { number: doc.originalNumber, date: doc.originalDate };
     // The buyer as registered when the document was issued.
     const gstin = isRegistered(party) ? (doc.partyGstin ?? party.taxId) : undefined;
 
@@ -345,6 +350,8 @@ export function gstr1Summary(args: {
         ...(isExport(party, placeOfSupply) && { exported: true }),
         ...(reverseCharge && { reverseCharge: true }),
         ...(noteType && { noteType }),
+        ...(noteType && original.number && { originalNumber: original.number }),
+        ...(noteType && original.date && { originalDate: original.date }),
       };
       rows.push(row);
       taxable += sign * row.taxableValue.minor;

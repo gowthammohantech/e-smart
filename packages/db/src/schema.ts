@@ -64,7 +64,7 @@ export const jobStatus = pgEnum("job_status", ['queued', 'running', 'completed',
 export const linkStatus = pgEnum("link_status", ['active', 'paid', 'expired', 'cancelled'])
 export const messageChannel = pgEnum("message_channel", ['whatsapp', 'sms', 'email'])
 export const notificationKind = pgEnum("notification_kind", ['invoiceSent', 'paymentReceived', 'invoiceOverdue', 'lowStock', 'compliance', 'syncFailure', 'system'])
-export const numberingKind = pgEnum("numbering_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
+export const numberingKind = pgEnum("numbering_kind", ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'payment', 'expense', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'selfInvoice', 'journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt', 'gstChallan'])
 export const ocrFieldKey = pgEnum("ocr_field_key", ['vendor', 'gstin', 'date', 'amount', 'tax', 'reference', 'category'])
 export const ocrKind = pgEnum("ocr_kind", ['expense', 'purchaseBill'])
 export const ocrStatus = pgEnum("ocr_status", ['queued', 'processing', 'completed', 'failed'])
@@ -82,7 +82,7 @@ export const paymentAccountType = pgEnum("payment_account_type", ['cash', 'bank'
 export const paymentDirection = pgEnum("payment_direction", ['received', 'paid'])
 export const paymentMethod = pgEnum("payment_method", ['cash', 'bank', 'upi', 'card', 'cheque', 'wallet', 'other'])
 export const planModule = pgEnum("plan_module", ['purchases', 'inventory', 'expenses', 'ocr', 'fx', 'branches', 'payables', 'books'])
-export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt'])
+export const voucherKind = pgEnum("voucher_kind", ['journal', 'contra', 'gstJournal', 'tdsChallan', 'receipt', 'gstChallan'])
 /** A draft voucher is kept but not in the books: no number from the series, no postings, until it is posted. */
 export const voucherStatus = pgEnum("voucher_status", ['draft', 'posted'])
 export const ledgerGroup = pgEnum("ledger_group", ['capital', 'reserves', 'loans', 'sundryCreditors', 'dutiesTaxes', 'provisions', 'currentLiabilities', 'fixedAssets', 'investments', 'sundryDebtors', 'cashInHand', 'bankAccounts', 'stockInHand', 'loansAdvances', 'currentAssets', 'salesAccounts', 'directIncomes', 'indirectIncomes', 'purchaseAccounts', 'directExpenses', 'indirectExpenses'])
@@ -639,6 +639,12 @@ export const documents = pgTable("documents", {
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
 	noteReason: noteReason("note_reason"),
+	// A direct note (no source document): 'withGst' (s.34, the default) or 'noGst' (a financial or
+	// commercial note: no tax, posted to discount, out of the returns).
+	noteGst: varchar("note_gst", { length: 8 }),
+	// A direct note with GST: the original invoice or bill it adjusts, for GSTR-1 CDNR/CDNUR and the s.34 deadline.
+	originalNumber: varchar("original_number", { length: 40 }),
+	originalDate: date("original_date"),
 	// An import bill's bill of entry: { number, date, portCode, assessableMinor, igstMinor, cessMinor }. IGST paid at customs.
 	billOfEntry: jsonb("bill_of_entry"),
 	// A bill from the business's Input Service Distributor: its credit goes to 3B 4A(4).
@@ -2477,6 +2483,11 @@ export const vouchers = pgTable("vouchers", {
 	challan: jsonb(),
 	// A receipt's payer, when it is a party (for reference; the ledger lines are what post).
 	partyId: varchar("party_id", { length: 40 }),
+	// A GST challan's (PMT-06) deposit: `{ cpin, cin?, brn?, depositedOn, heads: { igst: { tax, interest, penalty, fee, others } … } }` in paise.
+	gstChallan: jsonb("gst_challan"),
+	// A GST set-off (utilization) journal: the registration and return period (MMYYYY) it sets off.
+	gstin: varchar({ length: 15 }),
+	gstPeriod: varchar("gst_period", { length: 6 }),
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -2484,6 +2495,7 @@ export const vouchers = pgTable("vouchers", {
 }, (table): PgTableExtraConfigValue[] => [
 	index("vouchers_company_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	uniqueIndex("vouchers_company_id_kind_number_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()),
+	index("vouchers_company_id_gstin_gst_period_idx").using("btree", table.companyId.asc().nullsLast(), table.gstin.asc().nullsLast(), table.gstPeriod.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],

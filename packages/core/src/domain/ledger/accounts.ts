@@ -100,6 +100,15 @@ export const SYSTEM_ACCOUNTS: Record<string, { name: string; group: LedgerGroup 
   'sys:gstOnAdvances': { name: 'GST paid on advances', group: 'dutiesTaxes' },
   // IGST and cess on imports, assessed on the bill of entry: owed to customs until paid (a payment voucher clears it).
   'sys:customsPayable': { name: 'Customs IGST payable', group: 'dutiesTaxes' },
+  // The electronic cash ledger on the GST portal, per head: a challan (PMT-06) puts money in, the set-off takes it out (RULES 6.21).
+  'sys:gstCashLedger:igst': { name: 'GST cash ledger IGST', group: 'loansAdvances' },
+  'sys:gstCashLedger:cgst': { name: 'GST cash ledger CGST', group: 'loansAdvances' },
+  'sys:gstCashLedger:sgst': { name: 'GST cash ledger SGST', group: 'loansAdvances' },
+  'sys:gstCashLedger:cess': { name: 'GST cash ledger cess', group: 'loansAdvances' },
+  'sys:gstInterest': { name: 'Interest on GST', group: 'indirectExpenses' },
+  'sys:gstLateFee': { name: 'Late fee on GST returns', group: 'indirectExpenses' },
+  // Credit reversed on a bill unpaid 180 days (rule 37), taken back when it is paid (RULES 6.22).
+  'sys:itcReversed': { name: 'Input tax credit reversed', group: 'indirectExpenses' },
   ...Object.fromEntries(
     TAX.flatMap((t) => [
       [`sys:output${t}`, { name: `Output ${t.toUpperCase()}`, group: 'dutiesTaxes' as const }],

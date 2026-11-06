@@ -36,6 +36,9 @@ describe('plan tiers', () => {
     expect(moduleForPath('/gst/gstr2b')).toBe('purchases');
     expect(moduleForPath('/gst/gstr2b-reconciliation')).toBe('purchases');
     expect(moduleForPath('/purchasesque')).toBeNull();
+    expect(moduleForPath('/receipts')).toBe('books');
+    // Adjusting advances sits under /receipts but is a payments screen, open like payments.
+    expect(moduleForPath('/receipts/adjust')).toBeNull();
   });
 
   it('keeps selling, GST and sales reports open on every tier', () => {
@@ -48,6 +51,7 @@ describe('plan tiers', () => {
       '/(app)/reports/sales-summary',
       '/(app)/reports/tax-summary',
       '/(app)/payments/new?direction=received',
+      '/(app)/receipts/adjust?partyId=p_1',
       '/(app)/(tabs)/gst',
     ];
     everywhere.forEach((route) => expect(canOpen('free', route)).toBe(true));

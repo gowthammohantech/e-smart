@@ -143,6 +143,9 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       attachmentIds: attachments.filter((a) => a.entityId === row.id).map((a) => a.id),
       sourceDocumentId: row.sourceDocumentId,
       noteReason: row.noteReason,
+      noteGst: row.noteGst as DocumentWire['noteGst'],
+      originalNumber: row.originalNumber,
+      originalDate: row.originalDate,
       billOfEntry: boeToWire(row.billOfEntry, baseCurrency),
       isdInvoice: row.isdInvoice || undefined,
       // On a bill, what was kept back; on an invoice, what the customer is expected to deduct (not settled).

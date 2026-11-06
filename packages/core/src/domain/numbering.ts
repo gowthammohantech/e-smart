@@ -27,6 +27,7 @@ export const SERIES_KINDS: SeriesKind[] = [
   'gstJournal',
   'tdsChallan',
   'receipt',
+  'gstChallan',
 ];
 
 /**
@@ -90,6 +91,7 @@ export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   gstJournal: 'GJV',
   tdsChallan: 'TDS',
   receipt: 'RV',
+  gstChallan: 'GCH',
 };
 
 /** The series a document numbers from. An opening invoice or bill keeps its own number and has none. */

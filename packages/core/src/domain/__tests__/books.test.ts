@@ -106,6 +106,30 @@ describe('postings', () => {
     expect(net(ps, 'sys:sales')).toBe(10000);
   });
 
+  it('posts a financial credit note without GST to discount allowed, with no tax (RULES 6.22)', () => {
+    const ps = postDocument(doc('creditNote', { noteGst: 'noGst', lines: [line({ quantity: 1, gst: { supplyType: 'nonGst' } })] }), 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'party:cus')).toBe(-10000);
+    expect(net(ps, 'sys:discountAllowed')).toBe(10000);
+    expect(net(ps, 'sys:sales')).toBe(0);
+    expect(ps.filter((p) => p.account.startsWith('sys:output'))).toEqual([]);
+  });
+
+  it('posts a supplier’s financial credit note without GST to discount received', () => {
+    const ps = postDocument(doc('supplierCreditNote', { noteGst: 'noGst', lines: [line({ quantity: 1, gst: { supplyType: 'nonGst' } })] }), 'INR');
+    expect(balanced(ps)).toBe(0);
+    expect(net(ps, 'party:sup')).toBe(10000);
+    expect(net(ps, 'sys:discountReceived')).toBe(-10000);
+    expect(net(ps, 'sys:purchases')).toBe(0);
+    expect(ps.filter((p) => p.account.startsWith('sys:input'))).toEqual([]);
+  });
+
+  it('still posts a direct note with GST to sales, as a return of value', () => {
+    const ps = postDocument(doc('creditNote', { noteGst: 'withGst', originalNumber: 'INV-1', originalDate: '2026-05-01', lines: [line({ quantity: 1 })] }), 'INR');
+    expect(net(ps, 'sys:sales')).toBe(10000);
+    expect(net(ps, 'sys:outputCgst')).toBe(900);
+  });
+
   it('posts a bill with input credit, a blocked line to cost, capital goods to assets and TDS kept back', () => {
     const d = doc('purchaseBill', {
       lines: [line(), line({ gst: { itcEligibility: 'blocked' } }), line({ gst: { capitalGoods: true } })],
@@ -140,6 +164,22 @@ describe('postings', () => {
     // A note against it runs the other way, on the same account.
     const note = postDocument(doc('supplierCreditNote', { reverseCharge: true, date: '2026-11-20' }), 'INR');
     expect(net(note, 'sys:outputCgst')).toBe(9000);
+  });
+
+  it('takes reversed credit out of Input on the reversal date and back on the reclaim date (rule 37, RULES 6.22)', () => {
+    const d = doc('purchaseBill', { lines: [line(), line({ gst: { itcEligibility: 'blocked' } })], itcReversedOn: '2026-12-01', itcReclaimedOn: '2027-01-05' });
+    const ps = postDocument(d, 'INR');
+    expect(balanced(ps)).toBe(0);
+    const on = (date: string) => ps.filter((p) => p.date === date);
+    expect(balanced(on('2026-12-01'))).toBe(0);
+    // Claimable credit only: the blocked line is cost already.
+    expect(net(on('2026-12-01'), 'sys:inputCgst')).toBe(-9000);
+    expect(net(on('2026-12-01'), 'sys:itcReversed')).toBe(18000);
+    expect(net(on('2027-01-05'), 'sys:inputCgst')).toBe(9000);
+    expect(net(ps, 'sys:itcReversed')).toBe(0);
+    // Not yet paid: it stays reversed.
+    const open = postDocument({ ...d, itcReclaimedOn: undefined }, 'INR');
+    expect(net(open, 'sys:itcReversed')).toBe(18000);
   });
 
   it('owes reverse-charge tax on an expense as Output tax from the cutover, Reverse charge payable before', () => {

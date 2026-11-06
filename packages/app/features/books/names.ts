@@ -15,6 +15,8 @@ export function useAccountName() {
       const [, id, section] = account.key.split(':');
       if (id === 'tdsPayable' && section) return tr('books:account.tdsPayableSection', { section: tdsSection(section)?.label ?? section });
       if (id === 'tdsReceivable' && section) return tr('books:account.tdsReceivableSection', { section: tdsSection(section)?.label ?? section });
+      // The GST portal's electronic cash ledger, one per head (RULES 6.21).
+      if (id === 'gstCashLedger' && section) return tr('books:account.gstCashLedgerHead', { head: section === 'cess' ? tr('books:account.cessHead') : section.toUpperCase() });
       return tr(`books:account.${id}` as 'books:account.sales', { defaultValue: account.name });
     },
     [tr],

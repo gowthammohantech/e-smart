@@ -233,7 +233,7 @@ export type CashFlow = { date: string; category: CashCategory; minor: number };
 export function voucherCashFlows(v: { date: string; kind: string; lines: { account: string; debitMinor: number; creditMinor: number }[] }): CashFlow[] {
   const net = v.lines.filter((l) => l.account.startsWith('pay:')).reduce((s, l) => s + l.debitMinor - l.creditMinor, 0);
   if (net === 0) return [];
-  const category: CashCategory = v.kind === 'tdsChallan' || v.kind === 'gstJournal' ? 'tax' : v.kind === 'receipt' ? 'receipts' : 'other';
+  const category: CashCategory = v.kind === 'tdsChallan' || v.kind === 'gstJournal' || v.kind === 'gstChallan' ? 'tax' : v.kind === 'receipt' ? 'receipts' : 'other';
   return [{ date: v.date, category, minor: net }];
 }
 

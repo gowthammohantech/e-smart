@@ -317,8 +317,14 @@ export default function GstReturnsScreen() {
                     { label: tr('compliance:returns.dueDate'), value: formatDate(view.dueDate!) },
                     { label: tr('compliance:returns.creditUsed'), value: formatMoney(add(...KINDS.map(usedFor))), tone: 'good' },
                     { label: tr('compliance:returns.cashToPay'), value: formatMoney(taxOf(s?.cash)), tone: taxOf(s?.cash).minor ? 'warn' : undefined },
+                    // What challans have put in the portal's cash ledger, as the books hold it (RULES 6.21).
+                    { label: tr('compliance:returns.cashLedger'), value: formatMoney(taxOf(s?.cashLedger)), tone: taxOf(s?.cashLedger).minor < taxOf(s?.cash).minor ? 'warn' : 'good' },
                   ]}
                 />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+                  <Button title={tr('compliance:returns.openUtilization')} icon="scale-balance" variant="secondary" size="sm" onPress={() => router.push(`/(app)/gst/utilization?gstin=${gstin}&period=${period}` as never)} />
+                  <Button title={tr('compliance:returns.recordChallan')} icon="bank-plus" variant="ghost" size="sm" onPress={() => router.push('/(app)/gst/challan' as never)} />
+                </View>
                 {lateTotal.minor ? (
                   <Text variant="caption" tone="warn">
                     {tr('compliance:returns.lateFee', { amount: formatMoney(lateTotal) })}
@@ -447,8 +453,8 @@ export default function GstReturnsScreen() {
                     </ReportSection>
                     <ReportSection title={tr('compliance:returns.setOff')}>
                       <DataTable
-                        headers={[tr('compliance:returns.head.tax'), tr('compliance:returns.head.liability'), tr('compliance:returns.head.credit'), tr('compliance:returns.head.cash'), tr('compliance:returns.head.forward')]}
-                        rows={KINDS.map((k) => [k === 'cess' ? tr('compliance:returns.head.cess') : k.toUpperCase(), formatMoney(s?.liability?.[k] ?? add()), formatMoney(usedFor(k)), formatMoney(s?.cash?.[k] ?? add()), formatMoney(s?.carriedForward?.[k] ?? add())])}
+                        headers={[tr('compliance:returns.head.tax'), tr('compliance:returns.head.liability'), tr('compliance:returns.head.credit'), tr('compliance:returns.head.cash'), tr('compliance:returns.head.cashLedger'), tr('compliance:returns.head.forward')]}
+                        rows={KINDS.map((k) => [k === 'cess' ? tr('compliance:returns.head.cess') : k.toUpperCase(), formatMoney(s?.liability?.[k] ?? add()), formatMoney(usedFor(k)), formatMoney(s?.cash?.[k] ?? add()), formatMoney(s?.cashLedger?.[k] ?? add()), formatMoney(s?.carriedForward?.[k] ?? add())])}
                       />
                     </ReportSection>
                   </>

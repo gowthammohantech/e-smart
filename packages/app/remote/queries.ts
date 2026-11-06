@@ -665,7 +665,7 @@ export function useServerBook() {
   return { book: data?.book ?? EMPTY_BOOK, accounts: data?.accounts ?? [], balances: data?.balances ?? {}, loaded: !!data };
 }
 
-export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt'; status?: 'draft' | 'posted'; from?: string; to?: string; q?: string; partyId?: string };
+export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt' | 'gstChallan'; status?: 'draft' | 'posted'; from?: string; to?: string; q?: string; partyId?: string };
 const voucherParams = (f: VoucherQuery) => ({ kind: f.kind, status: f.status, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined });
 const voucherKeys = {
   all: (companyId: string) => ['vouchers', companyId] as const,

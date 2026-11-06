@@ -109,7 +109,7 @@ describe('the adjustment entry', () => {
     expect(dn.status).toBe(201);
     const cn = await t.post(
       `${m.c}/documents`,
-      { kind: 'creditNote', partyId: m.mumbai.id, date: '2026-09-25', currency: 'INR', noteReason: 'discount', status: 'issued', lines: [line(m.gst(18), { name: 'Volume discount', quantity: 1, unitPrice: inr(50_000) })] },
+      { kind: 'creditNote', partyId: m.mumbai.id, date: '2026-09-25', currency: 'INR', noteReason: 'discount', originalNumber: 'INV/26-27/0001', originalDate: '2026-09-20', status: 'issued', lines: [line(m.gst(18), { name: 'Volume discount', quantity: 1, unitPrice: inr(50_000) })] },
       { token: m.token },
     );
     expect(cn.status).toBe(201);

@@ -113,12 +113,15 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
   const source = { type: 'document' as const, id: doc.id, number: doc.number, kind: doc.kind };
   const extra = { branchId: doc.branchId, partyId: doc.partyId, costCentreId: doc.costCentreId };
   const entries: Entry[] = [];
+  // A financial or commercial note without GST (RULES 6.22) is a discount after the sale, not a
+  // return: its value goes to discount allowed (received), not sales (purchases). It carries no tax.
+  const discountNote = doc.noteGst === 'noGst' && !doc.sourceDocumentId;
 
   if (sales) {
     const tax = chargedTax(doc, false);
     entries.push(
       [party, b(t.grandTotal.minor)],
-      ['sys:sales', -b(t.taxableAmount.minor)],
+      [discountNote ? 'sys:discountAllowed' : 'sys:sales', -b(t.taxableAmount.minor)],
       ...TAX_KINDS.map((k): Entry => [`sys:output${k}`, -b(tax[k])]),
       ['sys:discountAllowed', b(t.documentDiscount.minor)],
       // Recovering a billable expense clears what it put in Reimbursements recoverable: none of it is income.
@@ -139,9 +142,10 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
     const capital = doc.lines
       .filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement)
       .reduce((a, l) => a + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor, 0);
+    const cost = b(t.taxableAmount.minor - capital + (t.reimbursements?.minor ?? 0)) + lost;
     entries.push(
       [party, -b(t.grandTotal.minor)],
-      ...purchasesByCentre(doc, b(t.taxableAmount.minor - capital + (t.reimbursements?.minor ?? 0)) + lost),
+      ...(discountNote ? [['sys:discountReceived', cost] as Entry] : purchasesByCentre(doc, cost)),
       ['sys:fixedAssets', b(capital)],
       ...TAX_KINDS.map((k): Entry => [`sys:input${k}`, claimable[SPLIT_KEY[k]]]),
       ...TAX_KINDS.map((k): Entry => [rcmAccount(k, doc.date), -b(rcm[k])]),
@@ -159,12 +163,36 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
       entries.push(['sys:inputIgst', boe.igst.minor], ['sys:inputCess', boe.cess?.minor ?? 0], ['sys:customsPayable', -duty]);
     }
   }
-  return toPostings(
+  const posted = toPostings(
     entries.map(([a, v, cc]) => [a, sign * v, cc]),
     source,
     doc.date,
     extra,
   );
+  if (sales) return posted;
+  return [...posted, ...itcReversalPostings(doc, baseCurrency, source, extra)];
+}
+
+/**
+ * Credit on a bill unpaid 180 days after its date (rule 37) leaves Input tax on the day it is
+ * reversed (`itcReversedOn`, which GSTR-3B shows in 4B(2)) and goes to Input tax credit reversed;
+ * it comes back on the day the bill is paid (`itcReclaimedOn`, 4A(5) and 4D(1)). The same credit
+ * 3B moves: what was claimable, not the reverse charge (RULES 6.22, pending CA).
+ */
+function itcReversalPostings(doc: BusinessDocument, baseCurrency: string, source: Posting['source'], extra: Pick<Posting, 'branchId' | 'partyId' | 'costCentreId'>): Posting[] {
+  if (!doc.itcReversedOn) return [];
+  const itc = itcOfDocument(doc, baseCurrency);
+  const sum = splitSum(itc.eligible, itc.capitalGoods);
+  const claimable: TaxSplit = { igst: Math.round(sum.igst), cgst: Math.round(sum.cgst), sgst: Math.round(sum.sgst), cess: Math.round(sum.cess) };
+  if (!splitTotal(claimable)) return [];
+  const move = (side: 1 | -1): Entry[] => [
+    ['sys:itcReversed', side * splitTotal(claimable)],
+    ...TAX_KINDS.map((k): Entry => [`sys:input${k}`, -side * claimable[SPLIT_KEY[k]]]),
+  ];
+  return [
+    ...toPostings(move(1), source, doc.itcReversedOn, extra),
+    ...(doc.itcReclaimedOn ? toPostings(move(-1), source, doc.itcReclaimedOn, extra) : []),
+  ];
 }
 
 /**

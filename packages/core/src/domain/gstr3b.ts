@@ -110,6 +110,8 @@ export function gstr3b(input: Input): Gstr3b {
 
   for (const doc of documents) {
     if (OFF.includes(doc.status)) continue;
+    // A financial note without GST is no supply (RULES 6.22): not in the return.
+    if (doc.noteGst === 'noGst') continue;
     const rate = doc.currency === baseCurrency ? 1 : doc.exchangeRate || 1;
     const b = (m: number) => Math.round(m * rate);
     const sign = CREDIT_KINDS.includes(doc.kind) ? -1 : 1;

@@ -1,4 +1,5 @@
 import { and, eq, gt, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Schema } from '@esmart/api-contract';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { fifoAllocate } from '@esmart/core/domain/receivables';
@@ -202,7 +203,20 @@ export async function applyAdjustments(ctx: AnyCtx, tx: DbOrTx, partyId: string,
 
 const strip = <T extends { left: unknown }>(x: { credits: T[]; open: unknown[] }) => ({ credits: x.credits, open: x.open });
 
-/** Payments: listAdjustable, adjustAdvances. */
+/** The credit notes applied to a document, or (on a note) the documents it is applied to. */
+export async function creditApplicationsOf(db: DbOrTx, companyId: string, documentId: string, currency: string): Promise<Schema<'CreditApplication'>[]> {
+  const N = alias(D, 'note');
+  const rows = await db
+    .select({ id: CA.id, noteId: CA.noteId, noteNumber: N.number, documentId: CA.documentId, documentNumber: D.number, amountMinor: CA.amountMinor, date: CA.date })
+    .from(CA)
+    .innerJoin(N, eq(N.id, CA.noteId))
+    .innerJoin(D, eq(D.id, CA.documentId))
+    .where(and(eq(CA.companyId, companyId), or(eq(CA.noteId, documentId), eq(CA.documentId, documentId))))
+    .orderBy(CA.date, CA.id);
+  return rows.map((r) => ({ id: r.id, noteId: r.noteId, noteNumber: r.noteNumber, documentId: r.documentId, documentNumber: r.documentNumber, amount: money(r.amountMinor, currency), date: r.date }));
+}
+
+/** Payments: listAdjustable, adjustAdvances, removeCreditApplication. */
 export const adjustHandlers = defineHandlers({
   async listAdjustable(ctx) {
     const { side } = await partySide(ctx, ctx.db, ctx.query.partyId, ctx.query.side);
@@ -213,5 +227,31 @@ export const adjustHandlers = defineHandlers({
     const { side } = await partySide(ctx, ctx.db, ctx.body.partyId, ctx.body.side);
     const applied = await ctx.db.transaction((tx) => applyAdjustments(ctx, tx, ctx.body.partyId, side, ctx.body.allocations));
     return { ...(strip(await adjustable(ctx, ctx.db, ctx.body.partyId, side)) as Schema<'Adjustable'>), applied };
+  },
+
+  async removeCreditApplication(ctx) {
+    await ctx.db.transaction(async (tx) => {
+      const [app] = await tx.select().from(CA).where(and(eq(CA.companyId, ctx.company.id), eq(CA.id, ctx.params.applicationId))).for('update');
+      if (!app) throw notFound('Credit application');
+      // The credit is gone from the books on the date it was applied: that period must be open.
+      assertPeriodOpen(ctx.company, app.date);
+      const docs = await tx.select().from(D).where(inArray(D.id, [app.noteId, app.documentId].sort())).orderBy(D.id).for('update');
+      const branches = ctx.user.branchIds;
+      if (branches.length && docs.some((d) => !branches.includes(d.branchId))) throw notFound('Credit application');
+      await tx.delete(CA).where(eq(CA.id, app.id));
+      const note = docs.find((d) => d.id === app.noteId);
+      const doc = docs.find((d) => d.id === app.documentId);
+      await recordChange(tx, ctx.user, {
+        companyId: ctx.company.id,
+        action: 'credit unapplied',
+        entityType: 'document',
+        entityId: app.noteId,
+        entityLabel: note?.number ?? app.noteId,
+        version: note?.version ?? 1,
+        before: { documentId: app.documentId, documentNumber: doc?.number, amountMinor: app.amountMinor, date: app.date },
+      });
+      await syncPaymentState(tx, ctx.user, ctx.company.id, [app.documentId], ctx.now);
+    });
+    return undefined;
   },
 });

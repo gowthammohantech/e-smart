@@ -47,7 +47,7 @@ function voucherType(source: Posting['source'], debitsParty: boolean): string {
   if (source.type === 'payment') return debitsParty ? 'Payment' : 'Receipt';
   if (source.type === 'expense') return 'Payment';
   if (source.kind === 'contra') return 'Contra';
-  if (source.kind === 'tdsChallan') return 'Payment';
+  if (source.kind === 'tdsChallan' || source.kind === 'gstChallan') return 'Payment';
   if (source.kind === 'receipt') return 'Receipt';
   return 'Journal';
 }

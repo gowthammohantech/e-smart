@@ -74,6 +74,9 @@ export function voucherToWire(row: VoucherRow, base: string, attachmentIds?: str
     narration: row.narration,
     reference: row.reference,
     challan: row.challan as Schema<'Voucher'>['challan'],
+    gstChallan: (row.gstChallan as Schema<'Voucher'>['gstChallan']) ?? undefined,
+    gstin: row.gstin ?? undefined,
+    gstPeriod: row.gstPeriod ?? undefined,
     partyId: row.partyId ?? undefined,
     attachmentIds,
     lines: lines.map((l) => compact({ account: l.account, debit: money(l.debitMinor, base), credit: money(l.creditMinor, base), narration: l.narration, costCentreId: l.costCentreId })),
@@ -198,6 +201,21 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
       const ok = lines.every((l, i) => (l.debitMinor > 0 ? l.account.startsWith('sys:tdsPayable') || l.account.startsWith('sys:tcsPayable') : isCash(groups[i])));
       if (!ok) block('lines', 'A TDS challan clears TDS or TCS payable from a cash or bank account');
     }
+    if (body.kind === 'gstChallan') {
+      // A PMT-06 deposit: money from cash or bank into the GST cash ledger, head by head (RULES 6.21).
+      const ok = lines.every((l, i) => (l.debitMinor > 0 ? l.account.startsWith('sys:gstCashLedger:') : isCash(groups[i])));
+      if (!ok) block('lines', 'A GST challan puts money from a cash or bank account into the GST cash ledger');
+      const c = body.gstChallan;
+      if (!c) block('gstChallan', 'Give the challan’s CPIN and deposit date');
+      else {
+        for (const head of ['igst', 'cgst', 'sgst', 'cess'] as const) {
+          const h = c.heads[head];
+          const total = h ? h.tax + h.interest + h.penalty + h.fee + h.others : 0;
+          const debited = lines.filter((l) => l.account === `sys:gstCashLedger:${head}`).reduce((a, l) => a + l.debitMinor - l.creditMinor, 0);
+          if (total !== debited) block(`gstChallan.heads.${head}`, `The challan pays ${(total / 100).toFixed(2)} of ${head.toUpperCase()}; the lines put ${(debited / 100).toFixed(2)} in the cash ledger`);
+        }
+      }
+    }
     if (body.kind === 'receipt') {
       // Money in: cash or bank takes it, and whatever it's for (an income, a loan, capital) gives it.
       const ok = lines.every((l, i) => (l.debitMinor > 0 ? isCash(groups[i]) : !isCash(groups[i])));
@@ -205,6 +223,8 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     }
   }
   if (body.challan && body.kind !== 'tdsChallan') block('challan', 'Only a TDS challan has challan details');
+  if (body.gstChallan && body.kind !== 'gstChallan') block('gstChallan', 'Only a GST challan has GST challan details');
+  if (body.gstChallan && body.gstChallan.depositedOn > ctx.now.toISOString().slice(0, 10)) block('gstChallan.depositedOn', 'The deposit date cannot be in the future');
   const partyId = body.partyId?.trim() || null;
   if (partyId) {
     const [p] = await db.select({ id: schema.parties.id }).from(schema.parties).where(and(eq(schema.parties.companyId, ctx.company.id), eq(schema.parties.id, partyId)));
@@ -229,7 +249,7 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   }
   if (branchId && ctx.user.branchIds.length && !ctx.user.branchIds.includes(branchId)) block('branchId', 'You cannot record vouchers in this branch');
   if (issues.length) throw unprocessable(issues, !draft && debit !== credit ? 'VOUCHER_UNBALANCED' : 'VALIDATION_FAILED');
-  const columns = { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, partyId, lines };
+  const columns = { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, gstChallan: body.gstChallan ?? null, partyId, lines };
   if (draft) return columns;
   assertPeriodOpen(ctx.company, body.date);
 
@@ -548,6 +568,7 @@ export const booksHandlers = defineHandlers({
     if (!wasDraft && draft) throw unprocessable([{ field: 'status', message: 'A posted voucher cannot go back to draft; delete it or post a correcting voucher', severity: 'blocking' }]);
     if (!wasDraft) assertPeriodOpen(ctx.company, current.date);
     if (ctx.body.kind !== current.kind) throw unprocessable([{ field: 'kind', message: 'A voucher keeps its kind; delete it and make another', severity: 'blocking' }]);
+    if (current.gstPeriod) throw unprocessable([{ field: 'lines', message: 'A GST set-off is changed by reversing it and posting it again from Utilization', severity: 'blocking' }], 'SET_OFF_LOCKED');
     const cols = await voucherColumns(ctx, ctx.db, ctx.body, current.id, draft);
     const row = await ctx.db.transaction(async (tx) => {
       // Posting a draft: it takes its number now, on the date it is posted with.

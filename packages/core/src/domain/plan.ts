@@ -185,9 +185,9 @@ export function moduleForReport(key: string): Module | null {
 /**
  * Route prefixes (as `usePathname` reports them, groups stripped) that
  * belong to a module outside the Sales plan. Order matters only in that the
- * first match wins, and none overlap.
+ * first match wins: a null module opens a path inside a gated prefix.
  */
-const GATED_PATHS: [prefix: string, module: Module][] = [
+const GATED_PATHS: [prefix: string, module: Module | null][] = [
   ['/purchases', 'purchases'],
   ['/contacts/suppliers', 'purchases'],
   ['/payables', 'payables'],
@@ -201,6 +201,9 @@ const GATED_PATHS: [prefix: string, module: Module][] = [
   ['/books', 'books'],
   // Accounts & P&L reads the books.
   ['/accounts', 'books'],
+  // Adjusting advances and credit notes against invoices is a payments screen, open like payments
+  // (it only sits under /receipts); the supplier side's own screens are gated by payables.
+  ['/receipts/adjust', null],
   // Receipts are receipt vouchers.
   ['/receipts', 'books'],
   // Matching 2B needs the purchase register.
