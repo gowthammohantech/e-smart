@@ -34,6 +34,6 @@
     "jest": "^30.5.1",
     "jest-expo": "~57.0.5",
     "lucide-react": "1.55.0",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   }
 }

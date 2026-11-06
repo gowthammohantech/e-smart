@@ -39,6 +39,6 @@
     "eslint": "^9.39.5",
     "playwright-core": "^1.63.0",
     "tailwindcss": "4.3.3",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   }
 }

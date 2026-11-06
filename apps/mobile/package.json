@@ -71,7 +71,7 @@
     "eslint": "^9.39.5",
     "react-dom": "^19.2.3",
     "react-native-web": "^0.21.2",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   },
   "version": "1.0.1"
 }
