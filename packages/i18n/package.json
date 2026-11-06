@@ -14,17 +14,17 @@
     "test": "jest"
   },
   "dependencies": {
-    "i18next": "^26.4.2",
+    "i18next": "^26.7.1",
     "intl-pluralrules": "^2.0.1"
   },
   "devDependencies": {
     "@esmart/eslint-config": "*",
     "@esmart/tsconfig": "*",
-    "@swc/core": "^1.16.12",
+    "@swc/core": "^1.16.21",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
     "eslint": "^9.39.5",
-    "jest": "^30.5.1",
+    "jest": "^30.5.2",
     "typescript": "~6.0.3"
   }
 }
