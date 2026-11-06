@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { StyleProp, View, ViewStyle } from 'react-native';
+import { ScrollView, StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useBreakpoint, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable as UiDataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
@@ -121,10 +121,13 @@ export function DataTable({
   headers,
   rows,
   widths,
+  minWidth,
 }: {
   headers: string[];
   rows: (string | number)[][];
   widths?: number[];
+  /** On a phone, the narrowest the table may be: a wider one (a column per tax head) scrolls sideways. */
+  minWidth?: number;
 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -153,8 +156,8 @@ export function DataTable({
     );
   }
 
-  return (
-    <Card padded={false}>
+  const table = (
+    <View style={minWidth ? { minWidth } : undefined}>
       <View
         style={{
           flexDirection: 'row',
@@ -202,6 +205,17 @@ export function DataTable({
           ))}
         </View>
       ))}
+    </View>
+  );
+  return (
+    <Card padded={false}>
+      {minWidth ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+          {table}
+        </ScrollView>
+      ) : (
+        table
+      )}
     </Card>
   );
 }

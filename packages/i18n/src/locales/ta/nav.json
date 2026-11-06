@@ -116,7 +116,8 @@
     "approvals": "ஒப்புதலுக்குக் காத்திருப்பவை",
     "cashForecast": "பணப்புழக்க முன்கணிப்பு",
     "fixedAssets": "நிலைச் சொத்துகள்",
-    "budgets": "வரவுசெலவுத் திட்டங்கள்"
+    "budgets": "வரவுசெலவுத் திட்டங்கள்",
+    "gstr2bReconciliation": "2B சரிபார்ப்பு"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {

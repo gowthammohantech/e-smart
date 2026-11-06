@@ -10,7 +10,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { PickerField, TextField } from '@esmart/ui/components/Field';
+import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -24,6 +24,8 @@ import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import type { DocumentKind } from '@esmart/core/types';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
+import { deliverFile } from '../../../features/reports/exportFiles';
+import { XLSX_MIME, toCsv, xlsxBytes, type ReportTable } from '../../../features/reports/reportTable';
 
 type View3b = Schema<'Gstr3bView'>;
 type Amounts = Schema<'GstAmounts'>;
@@ -38,8 +40,13 @@ const ITC = ['importOfGoods', 'importOfServices', 'reverseCharge', 'isd', 'allOt
 /** Each row as the portal numbers it; the key into the breakup. */
 const OUTWARD_TABLE: Record<(typeof OUTWARD)[number], string> = { taxable: '3.1a', zeroRated: '3.1b', nilExempt: '3.1c', reverseCharge: '3.1d', nonGst: '3.1e' };
 const ITC_TABLE: Record<(typeof ITC)[number], string> = { importOfGoods: '4A1', importOfServices: '4A2', reverseCharge: '4A3', isd: '4A4', allOther: '4A5', reversedRules: '4B1', reversedOther: '4B2', net: '4C', reclaimed: '4D1' };
+/** The detailed sheet's columns: the table number, its description, then the amounts. */
+const SHEET_WIDTHS = [0.7, 2.4, 1.1, 1, 1, 1, 0.8];
 /** "3.1a" → "3.1(a)", "4A5" → "4A(5)". */
 const tableLabel = (k: string) => k.replace(/^(3\.1|4[ABD])([a-e1-5])$/, '$1($2)');
+
+/** A GSTIN as the portal issues it: what the server files under. */
+const isGstin = (g?: string | null): g is string => !!g && g.length === 15;
 
 const add = (...m: (Money | undefined)[]): Money => ({ minor: m.reduce((s, x) => s + (x?.minor ?? 0), 0), currency: m.find(Boolean)?.currency ?? 'INR' });
 const taxOf = (a?: Amounts) => add(a?.igst, a?.cgst, a?.sgst, a?.cess);
@@ -66,20 +73,25 @@ export default function GstReturnsScreen() {
   const [open, setOpen] = useState<'gstin' | 'period' | null>(null);
   const [connected, setConnected] = useState(false);
   const [breakup, setBreakup] = useState<string | null>(null);
+  const [layout, setLayout] = useState<'summary' | 'sheet'>('summary');
   const branches = useBranches();
 
   useEffect(() => {
-    api.GET('/companies/{companyId}/gst/portal-sessions', { params: { path } }).then(({ data }) => {
-      const sessions = (data?.data ?? []).map((s) => s.gstin!);
-      // Without a portal session the return is still worked out from the books, to check before filing.
-      const own = [company.taxRegistration?.identifier, ...branches.map((b) => b.gstin)].filter((g): g is string => !!g);
-      const list = sessions.length ? sessions : [...new Set(own)];
-      setConnected(sessions.length > 0);
+    // Without a portal session the return is still worked out from the books, to check before
+    // filing: the company's and its branches' GSTINs are listed whether or not one is connected.
+    const own = [company.taxRegistration?.identifier, ...branches.map((b) => b.gstin)].filter(isGstin);
+    const settle = (sessions: Schema<'GstPortalSession'>[]) => {
+      const list = [...new Set([...sessions.map((x) => x.gstin!).filter(isGstin), ...own])];
+      setConnected(sessions.some((x) => x.connected));
       setGstins(list);
       setGstin((g) => g ?? list[0] ?? null);
-    });
+    };
+    api
+      .GET('/companies/{companyId}/gst/portal-sessions', { params: { path } })
+      .then(({ data }) => settle(data?.data ?? []))
+      .catch(() => settle([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company.id]);
+  }, [company.id, branches.length]);
 
   const load = useCallback(() => {
     if (!gstin) return Promise.resolve();
@@ -126,6 +138,8 @@ export default function GstReturnsScreen() {
   const statusOf = (r: ReturnType): Status => returnOf(r)?.status ?? 'none';
   const amountsRow = (label: string, a?: Amounts) => [label, formatMoney(a?.taxable ?? add()), ...KINDS.map((k) => formatMoney(a?.[k] ?? add()))];
   const headers = [tr('compliance:returns.head.section'), tr('compliance:returns.head.taxable'), 'IGST', 'CGST', 'SGST', tr('compliance:returns.head.cess')];
+  const sheetHeaders = [tr('compliance:returns.head.table'), tr('compliance:returns.head.section'), tr('compliance:returns.head.taxable'), 'IGST', 'CGST', 'SGST/UTGST', tr('compliance:returns.head.cess')];
+  const sheetRow = (x: { table: string; label: string; a: Amounts }) => [x.table, x.label, formatMoney(x.a.taxable ?? add()), ...KINDS.map((k) => formatMoney(x.a[k] ?? add()))];
   const s = view?.setOff;
   const usedFor = (k: (typeof KINDS)[number]) => add(...KINDS.map((from) => s?.credit?.[from]?.[k]));
   const lateTotal = add(taxOf(view?.interest), taxOf(view?.lateFee));
@@ -140,6 +154,91 @@ export default function GstReturnsScreen() {
         ))}
       </View>
     ) : null;
+  };
+
+  // The detailed sheet, laid out as the portal's form: every row, zero where the books keep nothing.
+  const z = add();
+  const blank: Amounts = { taxable: z, igst: z, cgst: z, sgst: z, cess: z };
+  const rcm = view?.outward?.reverseCharge;
+  const headOf = (k: (typeof KINDS)[number]) => (k === 'cess' ? tr('compliance:returns.head.cess') : k.toUpperCase());
+  const sheetRows: { table: string; label: string; a: Amounts }[] = view
+    ? [
+        ...OUTWARD.map((k) => ({ table: tableLabel(OUTWARD_TABLE[k]), label: tr(`compliance:returns.sheet.outward.${k}`), a: view.outward?.[k] ?? blank })),
+        // E-commerce supplies (s.9(5)) aren't kept apart in the books: the portal's rows, at nil.
+        { table: '3.1.1(i)', label: tr('compliance:returns.sheet.eco95'), a: blank },
+        { table: '3.1.1(ii)', label: tr('compliance:returns.sheet.ecoThrough'), a: blank },
+        ...ITC.filter((k) => k !== 'net' && k !== 'reclaimed').map((k) => ({ table: tableLabel(ITC_TABLE[k]), label: tr(`compliance:returns.sheet.itc.${k}`), a: view.itc?.[k] ?? blank })),
+        { table: '4C', label: tr('compliance:returns.sheet.itc.net'), a: view.itc?.net ?? blank },
+        { table: '4D(1)', label: tr('compliance:returns.sheet.itc.reclaimed'), a: view.itc?.reclaimed ?? blank },
+        { table: '4D(2)', label: tr('compliance:returns.sheet.itc.ineligible'), a: blank },
+        { table: '5.1', label: tr('compliance:returns.interestRow'), a: view.interest ?? blank },
+        { table: '5.1', label: tr('compliance:returns.lateFeeRow'), a: view.lateFee ?? blank },
+      ]
+    : [];
+  const unregisteredTotal = { taxable: add(...(view?.interStateUnregistered ?? []).map((x) => x.taxable)), igst: add(...(view?.interStateUnregistered ?? []).map((x) => x.igst)) };
+  const supplies32 = [
+    { label: tr('compliance:returns.sheet.to.unregistered'), ...unregisteredTotal },
+    { label: tr('compliance:returns.sheet.to.composition'), taxable: z, igst: z },
+    { label: tr('compliance:returns.sheet.to.uin'), taxable: z, igst: z },
+  ];
+  // 6.1: the set-off's cash holds the interest and late fee too; take them out to show the tax alone.
+  const payment = KINDS.map((k) => {
+    const reverse = rcm?.[k]?.minor ?? 0;
+    const interest = view?.interest?.[k]?.minor ?? 0;
+    const late = view?.lateFee?.[k]?.minor ?? 0;
+    const cash = (s?.cash?.[k]?.minor ?? 0) - interest - late;
+    return {
+      k,
+      payable: add({ minor: (s?.liability?.[k]?.minor ?? 0) - reverse, currency: z.currency }),
+      credit: KINDS.map((from) => s?.credit?.[from]?.[k] ?? z),
+      cash: add({ minor: cash - reverse, currency: z.currency }),
+      interest: add(view?.interest?.[k]),
+      late: add(view?.lateFee?.[k]),
+      reversePayable: add(rcm?.[k]),
+      reverseCash: add(rcm?.[k]),
+    };
+  });
+  /** Credit by head: what it paid of each tax, what there was and what is left. */
+  const matrix = KINDS.map((from) => ({
+    from,
+    to: KINDS.map((k) => s?.credit?.[from]?.[k] ?? z),
+    used: add(...KINDS.map((k) => s?.credit?.[from]?.[k])),
+    available: add(view?.itc?.net?.[from], s?.carriedIn?.[from]),
+    forward: add(s?.carriedForward?.[from]),
+  }));
+
+  /** The detailed sheet as one table for Excel or CSV, in rupees. */
+  const sheetTable = (): ReportTable => {
+    const r = (x?: Money) => (x?.minor ?? 0) / 100;
+    const amountsCells = (a: Amounts) => [r(a.taxable), ...KINDS.map((k) => r(a[k]))];
+    return {
+      headers: ['Table', 'Description', 'Taxable value', 'IGST', 'CGST', 'SGST/UTGST', 'Cess'],
+      rows: [
+        ['GSTIN', gstin ?? '', 'Period', period],
+        [],
+        ...sheetRows.filter((x) => !x.table.startsWith('5.1')).map((x) => [x.table, x.label, ...amountsCells(x.a)]),
+        ...supplies32.map((x) => ['3.2', x.label, r(x.taxable), r(x.igst)]),
+        ...(view?.interStateUnregistered ?? []).map((x) => ['3.2', `  ${x.placeOfSupply ?? ''}`, r(x.taxable), r(x.igst)]),
+        [],
+        ['5', 'Description', 'Inter-state', 'Intra-state'],
+        ['5', tr('compliance:returns.sheet.exemptFrom'), r(view?.inwardExempt?.interState), r(view?.inwardExempt?.intraState)],
+        ['5', tr('compliance:returns.sheet.nonGstIn'), 0, 0],
+        ...sheetRows.filter((x) => x.table.startsWith('5.1')).map((x) => [x.table, x.label, ...amountsCells(x.a)]),
+        [],
+        ['6.1(A)', 'Tax', 'Tax payable', 'Paid through ITC: IGST', 'Paid through ITC: CGST', 'Paid through ITC: SGST', 'Paid through ITC: Cess', 'Tax paid in cash', 'Interest paid in cash', 'Late fee paid in cash'],
+        ...payment.map((p) => ['6.1(A)', headOf(p.k), r(p.payable), ...p.credit.map(r), r(p.cash), r(p.interest), r(p.late)]),
+        ['6.1(B)', 'Tax', 'Tax payable (reverse charge)', 'Tax paid in cash'],
+        ...payment.map((p) => ['6.1(B)', headOf(p.k), r(p.reversePayable), r(p.reverseCash)]),
+        [],
+        ['Credit', 'Credit of', 'Paid IGST', 'Paid CGST', 'Paid SGST', 'Paid cess', 'Used', 'Available', 'Carried forward'],
+        ...matrix.map((x) => ['Credit', headOf(x.from), ...x.to.map(r), r(x.used), r(x.available), r(x.forward)]),
+      ],
+    };
+  };
+  const exportSheet = (format: 'xlsx' | 'csv') => {
+    const name = `GSTR3B_${gstin ?? company.id}_${period}`;
+    const table = sheetTable();
+    void (format === 'xlsx' ? deliverFile(`${name}.xlsx`, xlsxBytes('GSTR-3B', table), XLSX_MIME) : deliverFile(`${name}.csv`, new TextEncoder().encode(toCsv(table)), 'text/csv'));
   };
 
   const returnCard = (r: ReturnType) => {
@@ -198,7 +297,7 @@ export default function GstReturnsScreen() {
       <Stack.Screen options={{ title: tr('nav:title.gstReturns') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {!gstins.length ? (
-          <EmptyState icon="link-variant-off" title={tr('compliance:gstr2b.notConnected')} message={tr('compliance:returns.notConnectedBody')} actionLabel={tr('nav:title.gstPortal')} onAction={() => router.push('/(app)/settings/gst-portal')} />
+          <EmptyState icon="card-account-details-outline" title={tr('compliance:returns.noGstin')} message={tr('compliance:returns.noGstinBody')} actionLabel={tr('compliance:returns.addGstin')} onAction={() => router.push('/(app)/settings/company')} />
         ) : (
           <>
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
@@ -240,45 +339,120 @@ export default function GstReturnsScreen() {
                 ) : null}
                 {connected ? returnCard('gstr1') : null}
                 {connected ? returnCard('gstr3b') : null}
-                <ReportSection title={tr('compliance:returns.outward')}>
-                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={OUTWARD.map((k) => amountsRow(`${tableLabel(OUTWARD_TABLE[k])} ${tr(`compliance:returns.outwardRow.${k}`)}`, view.outward?.[k]))} />
-                  {breakupLinks(Object.values(OUTWARD_TABLE))}
-                </ReportSection>
-                <ReportSection title={tr('compliance:returns.unregistered')}>
-                  {view.interStateUnregistered?.length ? (
-                    <DataTable
-                      headers={[tr('compliance:returns.head.placeOfSupply'), tr('compliance:returns.head.taxable'), 'IGST']}
-                      widths={[2, 1, 1]}
-                      rows={view.interStateUnregistered.map((x) => [x.placeOfSupply ?? '', formatMoney(x.taxable ?? add()), formatMoney(x.igst ?? add())])}
-                    />
-                  ) : (
-                    <Text variant="caption" tone="muted">
-                      {tr('compliance:returns.none')}
-                    </Text>
-                  )}
-                  {breakupLinks(['3.2'])}
-                </ReportSection>
-                <ReportSection title={tr('compliance:returns.itc')}>
-                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={ITC.map((k) => amountsRow(`${tableLabel(ITC_TABLE[k])} ${tr(`compliance:returns.itcRow.${k}`)}`, view.itc?.[k]))} />
-                  {breakupLinks(Object.values(ITC_TABLE))}
-                </ReportSection>
-                <ReportSection title={tr('compliance:returns.inwardExempt')}>
-                  <DataTable
-                    headers={[tr('compliance:returns.head.section'), tr('compliance:returns.head.interState'), tr('compliance:returns.head.intraState')]}
-                    widths={[2, 1, 1]}
-                    rows={[[tr('compliance:returns.exemptRow'), formatMoney(view.inwardExempt?.interState ?? add()), formatMoney(view.inwardExempt?.intraState ?? add())]]}
-                  />
-                  {breakupLinks(['5'])}
-                </ReportSection>
-                <ReportSection title={tr('compliance:returns.interestLateFee')}>
-                  <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={[amountsRow(tr('compliance:returns.interestRow'), view.interest), amountsRow(tr('compliance:returns.lateFeeRow'), view.lateFee)]} />
-                </ReportSection>
-                <ReportSection title={tr('compliance:returns.setOff')}>
-                  <DataTable
-                    headers={[tr('compliance:returns.head.tax'), tr('compliance:returns.head.liability'), tr('compliance:returns.head.credit'), tr('compliance:returns.head.cash'), tr('compliance:returns.head.forward')]}
-                    rows={KINDS.map((k) => [k === 'cess' ? tr('compliance:returns.head.cess') : k.toUpperCase(), formatMoney(s?.liability?.[k] ?? add()), formatMoney(usedFor(k)), formatMoney(s?.cash?.[k] ?? add()), formatMoney(s?.carriedForward?.[k] ?? add())])}
-                  />
-                </ReportSection>
+                <Segmented
+                  size="sm"
+                  value={layout}
+                  onChange={(v) => setLayout(v as 'summary' | 'sheet')}
+                  options={[
+                    { value: 'summary', label: tr('compliance:returns.layout.summary') },
+                    { value: 'sheet', label: tr('compliance:returns.layout.sheet') },
+                  ]}
+                />
+                {layout === 'sheet' ? (
+                  <>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+                      <Button title={tr('compliance:returns.exportExcel')} icon="file-excel-box" size="sm" variant="secondary" onPress={() => exportSheet('xlsx')} />
+                      <Button title={tr('compliance:returns.exportCsv')} icon="file-delimited-outline" size="sm" variant="secondary" onPress={() => exportSheet('csv')} />
+                    </View>
+                    <ReportSection title={tr('compliance:returns.sheet.title31')}>
+                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} rows={sheetRows.filter((x) => x.table.startsWith('3.')).map((x) => sheetRow(x))} />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.unregistered')}>
+                      <DataTable
+                        headers={[tr('compliance:returns.head.section'), tr('compliance:returns.head.taxable'), 'IGST']}
+                        widths={[2, 1, 1]}
+                        rows={[
+                          ...supplies32.map((x) => [x.label, formatMoney(x.taxable), formatMoney(x.igst)]),
+                          ...(view.interStateUnregistered ?? []).map((x) => [`   ${x.placeOfSupply ?? ''}`, formatMoney(x.taxable ?? z), formatMoney(x.igst ?? z)]),
+                        ]}
+                      />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.itc')}>
+                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} rows={sheetRows.filter((x) => x.table.startsWith('4')).map((x) => sheetRow(x))} />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.inwardExempt')}>
+                      <DataTable
+                        headers={[tr('compliance:returns.head.section'), tr('compliance:returns.head.interState'), tr('compliance:returns.head.intraState')]}
+                        widths={[2, 1, 1]}
+                        rows={[
+                          [tr('compliance:returns.sheet.exemptFrom'), formatMoney(view.inwardExempt?.interState ?? z), formatMoney(view.inwardExempt?.intraState ?? z)],
+                          [tr('compliance:returns.sheet.nonGstIn'), formatMoney(z), formatMoney(z)],
+                        ]}
+                      />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.interestLateFee')}>
+                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} rows={sheetRows.filter((x) => x.table === '5.1').map((x) => sheetRow(x))} />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.sheet.title61a')}>
+                      <DataTable
+                        headers={[tr('compliance:returns.head.tax'), tr('compliance:returns.sheet.payable'), ...KINDS.map((k) => tr('compliance:returns.sheet.viaCredit', { head: headOf(k) })), tr('compliance:returns.head.cash'), tr('compliance:returns.interestRow'), tr('compliance:returns.lateFeeRow')]}
+                        widths={[0.8, 1.1, 1, 1, 1, 1, 1, 0.9, 0.9]}
+                        minWidth={900}
+                        rows={payment.map((p) => [headOf(p.k), formatMoney(p.payable), ...p.credit.map((x) => formatMoney(x)), formatMoney(p.cash), formatMoney(p.interest), formatMoney(p.late)])}
+                      />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.sheet.title61b')}>
+                      <DataTable
+                        headers={[tr('compliance:returns.head.tax'), tr('compliance:returns.sheet.payable'), tr('compliance:returns.head.cash')]}
+                        widths={[1, 1, 1]}
+                        rows={payment.map((p) => [headOf(p.k), formatMoney(p.reversePayable), formatMoney(p.reverseCash)])}
+                      />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.sheet.matrix')}>
+                      <DataTable
+                        headers={[tr('compliance:returns.sheet.creditOf'), ...KINDS.map((k) => tr('compliance:returns.sheet.paid', { head: headOf(k) })), tr('compliance:returns.sheet.used'), tr('compliance:returns.sheet.available'), tr('compliance:returns.head.forward')]}
+                        widths={[0.9, 1, 1, 1, 1, 1, 1.1, 1.1]}
+                        minWidth={820}
+                        rows={matrix.map((x) => [headOf(x.from), ...x.to.map((y) => formatMoney(y)), formatMoney(x.used), formatMoney(x.available), formatMoney(x.forward)])}
+                      />
+                      <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm, lineHeight: 18 }}>
+                        {tr('compliance:returns.sheet.matrixNote')}
+                      </Text>
+                    </ReportSection>
+                  </>
+                ) : (
+                  <>
+                    <ReportSection title={tr('compliance:returns.outward')}>
+                      <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={OUTWARD.map((k) => amountsRow(`${tableLabel(OUTWARD_TABLE[k])} ${tr(`compliance:returns.outwardRow.${k}`)}`, view.outward?.[k]))} />
+                      {breakupLinks(Object.values(OUTWARD_TABLE))}
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.unregistered')}>
+                      {view.interStateUnregistered?.length ? (
+                        <DataTable
+                          headers={[tr('compliance:returns.head.placeOfSupply'), tr('compliance:returns.head.taxable'), 'IGST']}
+                          widths={[2, 1, 1]}
+                          rows={view.interStateUnregistered.map((x) => [x.placeOfSupply ?? '', formatMoney(x.taxable ?? add()), formatMoney(x.igst ?? add())])}
+                        />
+                      ) : (
+                        <Text variant="caption" tone="muted">
+                          {tr('compliance:returns.none')}
+                        </Text>
+                      )}
+                      {breakupLinks(['3.2'])}
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.itc')}>
+                      <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={ITC.map((k) => amountsRow(`${tableLabel(ITC_TABLE[k])} ${tr(`compliance:returns.itcRow.${k}`)}`, view.itc?.[k]))} />
+                      {breakupLinks(Object.values(ITC_TABLE))}
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.inwardExempt')}>
+                      <DataTable
+                        headers={[tr('compliance:returns.head.section'), tr('compliance:returns.head.interState'), tr('compliance:returns.head.intraState')]}
+                        widths={[2, 1, 1]}
+                        rows={[[tr('compliance:returns.exemptRow'), formatMoney(view.inwardExempt?.interState ?? add()), formatMoney(view.inwardExempt?.intraState ?? add())]]}
+                      />
+                      {breakupLinks(['5'])}
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.interestLateFee')}>
+                      <DataTable headers={headers} widths={[2, 1, 1, 1, 1, 1]} rows={[amountsRow(tr('compliance:returns.interestRow'), view.interest), amountsRow(tr('compliance:returns.lateFeeRow'), view.lateFee)]} />
+                    </ReportSection>
+                    <ReportSection title={tr('compliance:returns.setOff')}>
+                      <DataTable
+                        headers={[tr('compliance:returns.head.tax'), tr('compliance:returns.head.liability'), tr('compliance:returns.head.credit'), tr('compliance:returns.head.cash'), tr('compliance:returns.head.forward')]}
+                        rows={KINDS.map((k) => [k === 'cess' ? tr('compliance:returns.head.cess') : k.toUpperCase(), formatMoney(s?.liability?.[k] ?? add()), formatMoney(usedFor(k)), formatMoney(s?.cash?.[k] ?? add()), formatMoney(s?.carriedForward?.[k] ?? add())])}
+                      />
+                    </ReportSection>
+                  </>
+                )}
               </>
             ) : null}
           </>

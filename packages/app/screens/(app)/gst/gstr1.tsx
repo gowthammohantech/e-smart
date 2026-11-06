@@ -17,14 +17,17 @@ import {
   Gstr1Summary,
   Gstr1Table,
   consolidateB2cs,
+  gstr1RateSummary,
   gstr1Summary,
 } from '@esmart/core/domain/gstr1';
+import type { AmendTable } from '@esmart/core/domain/gstr1Amend';
+import { periodLabel } from '../../../features/compliance/periods';
 import { useActiveCompany, useBaseCurrency } from '../../../store/selectors';
 import { useReportData } from '../../../remote/queries';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { money, toMajor } from '@esmart/core/lib/money';
 
-type View_ = Gstr1Table | 'hsn' | 'nil' | 'docs' | 'at';
+type View_ = Gstr1Table | 'hsn' | 'nil' | 'docs' | 'at' | 'amend';
 
 const VIEWS: { value: View_; label: string }[] = [
   { value: 'b2b', label: 'B2B' },
@@ -37,7 +40,12 @@ const VIEWS: { value: View_; label: string }[] = [
   { value: 'hsn', label: 'HSN' },
   { value: 'docs', label: 'DOCS' },
   { value: 'at', label: '11A/B' },
+  { value: 'amend', label: 'AMEND' },
 ];
+
+const AMEND_TABLES: AmendTable[] = ['b2ba', 'b2cla', 'expa', 'cdnra', 'cdnura'];
+/** Every view but NIL and DOCS carries a column per tax head. */
+const TAX_HEADS = ['IGST', 'CGST', 'SGST'];
 
 // The exported file keeps the GSTN offline tool's English column names and
 // values, so it lines up with what the portal expects; the screen translates.
@@ -73,41 +81,74 @@ export default function Gstr1Report() {
   );
 
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
+  const f = (x: { minor: number }) => formatMoney(money(x.minor, baseCurrency));
+  /** IGST, CGST, SGST and cess, the four columns each table ends in. */
+  const taxCells = (igst: number, cgst: number, sgst: number, cess: number) => [m(igst), m(cgst), m(sgst), m(cess)];
+  const taxHeads = [...TAX_HEADS, tr('compliance:gstr1.col.cess')];
   const advanceRows = [
     ...summary.advances.received.map((r) => ({ table: '11A', ...r })),
     ...summary.advances.adjusted.map((r) => ({ table: '11B', ...r })),
   ];
+  const rates = useMemo(() => gstr1RateSummary(summary, baseCurrency), [summary, baseCurrency]);
+  const amend = summary.amendments;
+  // Each amended document as reported again (B2BA … CDNURA), then B2CSA by original month, place and rate.
+  const amendRows = AMEND_TABLES.flatMap((table) => (amend?.[table] ?? []).map((r) => ({ table: table.toUpperCase(), r })));
+  const b2csa = (amend?.b2csa ?? []).flatMap((x) =>
+    consolidateB2cs(x.rows, company.taxRegistration?.placeOfSupplyStateCode, baseCurrency).map((l) => ({ originalPeriod: x.originalPeriod, l })),
+  );
+  const shortGstin = (g?: string) => (g ? g.slice(0, 2) + '…' + g.slice(-4) : undefined);
+
   const tableRows =
     view === 'at'
-      ? advanceRows.map((r) => [r.table, r.placeOfSupply, formatPercent(r.rate), m(r.taxable), m(r.igst + r.cgst + r.sgst + r.cess)])
+      ? advanceRows.map((r) => [r.table, r.placeOfSupply, formatPercent(r.rate), m(r.taxable), ...taxCells(r.igst, r.cgst, r.sgst, r.cess)])
       : view === 'b2cs'
-      ? b2cs.map((l) => [l.placeOfSupplyName, l.supplyType, formatPercent(l.rate), formatMoney(l.taxableValue), m(l.cgst.minor + l.sgst.minor + l.igst.minor + l.cess.minor)])
+      ? b2cs.map((l) => [l.placeOfSupplyName, l.supplyType, formatPercent(l.rate), formatMoney(l.taxableValue), ...taxCells(l.igst.minor, l.cgst.minor, l.sgst.minor, l.cess.minor)])
       : view === 'hsn'
       ? summary.hsn.map((h) => [
           h.hsnCode,
           formatQty(h.quantity),
           formatMoney(h.taxableValue),
+          ...taxCells(h.igst.minor, h.cgst.minor, h.sgst.minor, h.cess.minor),
           formatMoney(h.totalValue),
         ])
       : view === 'nil'
         ? summary.nil.map((n) => [tr(`compliance:gstr1.nil.${n.supplyType}`), formatMoney(n.nilRated), formatMoney(n.exempt), formatMoney(n.nonGst)])
         : view === 'docs'
           ? summary.docs.map((d) => [tr(NATURE_KEY[d.nature]), `${d.from} – ${d.to}`, String(d.total), String(d.cancelled), String(d.total - d.cancelled)])
-          : rowsFor(view).map((r) => [
-              r.number,
-              r.gstin ? r.gstin.slice(0, 2) + '…' + r.gstin.slice(-4) : r.placeOfSupply,
-              formatPercent(r.rate),
-              formatMoney(r.taxableValue),
-              m(r.cgst.minor + r.sgst.minor + r.igst.minor),
-            ]);
+          : view === 'amend'
+            ? [
+                ...amendRows.map(({ table, r }) => [
+                  table,
+                  `${r.originalNumber} · ${periodLabel(r.originalPeriod)}`,
+                  shortGstin(r.gstin) ?? r.placeOfSupplyName,
+                  formatPercent(r.rate),
+                  f(r.taxableValue),
+                  ...taxCells(r.igst.minor, r.cgst.minor, r.sgst.minor, r.cess.minor),
+                ]),
+                ...b2csa.map(({ originalPeriod, l }) => [
+                  'B2CSA',
+                  periodLabel(originalPeriod),
+                  l.placeOfSupplyName,
+                  formatPercent(l.rate),
+                  formatMoney(l.taxableValue),
+                  ...taxCells(l.igst.minor, l.cgst.minor, l.sgst.minor, l.cess.minor),
+                ]),
+              ]
+            : rowsFor(view).map((r) => [
+                r.number,
+                shortGstin(r.gstin) ?? r.placeOfSupply,
+                formatPercent(r.rate),
+                formatMoney(r.taxableValue),
+                ...taxCells(r.igst.minor, r.cgst.minor, r.sgst.minor, r.cess.minor),
+              ]);
 
   const headers =
     view === 'at'
-      ? [tr('compliance:gstr1.col.table'), tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), tr('common:table.tax')]
+      ? [tr('compliance:gstr1.col.table'), tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads]
       : view === 'b2cs'
-      ? [tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), tr('common:table.tax')]
+      ? [tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads]
       : view === 'hsn'
-      ? ['HSN', tr('compliance:gstr1.col.qty'), tr('compliance:gstr1.col.taxable'), tr('common:table.total')]
+      ? ['HSN', tr('compliance:gstr1.col.qty'), tr('compliance:gstr1.col.taxable'), ...taxHeads, tr('common:table.total')]
       : view === 'nil'
         ? [tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.nilRated'), tr('compliance:gstr1.col.exempt'), tr('compliance:gstr1.col.nonGst')]
         : view === 'docs'
@@ -118,13 +159,23 @@ export default function Gstr1Report() {
               tr('compliance:gstr1.col.cancelled'),
               tr('compliance:gstr1.col.net'),
             ]
-          : [
-              tr('compliance:gstr1.col.document'),
-              view === 'b2b' || view === 'cdnr' ? 'GSTIN' : tr('compliance:gstr1.col.pos'),
-              tr('compliance:gstr1.col.rate'),
-              tr('compliance:gstr1.col.taxable'),
-              tr('common:table.tax'),
-            ];
+          : view === 'amend'
+            ? [tr('compliance:gstr1.col.table'), tr('compliance:gstr1.col.original'), 'GSTIN / PoS', tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads]
+            : [
+                tr('compliance:gstr1.col.document'),
+                view === 'b2b' || view === 'cdnr' ? 'GSTIN' : tr('compliance:gstr1.col.pos'),
+                tr('compliance:gstr1.col.rate'),
+                tr('compliance:gstr1.col.taxable'),
+                ...taxHeads,
+              ];
+  const widths =
+    view === 'nil' || view === 'docs'
+      ? [1.4, 1.2, 0.8, 0.8, 0.8]
+      : view === 'amend'
+        ? [0.8, 1.6, 1.1, 0.6, 1.1, 1, 1, 1, 0.8]
+        : view === 'hsn'
+          ? [1.1, 0.7, 1.1, 1, 1, 1, 0.8, 1.1]
+          : [1.4, 1.1, 0.6, 1.1, 1, 1, 1, 0.8];
 
   const exportRows = () => {
     if (view === 'at') {
@@ -153,22 +204,32 @@ export default function Gstr1Report() {
     }
     if (view === 'hsn') {
       return reportTable(
-        ['HSN', 'Description', 'UQC', 'Quantity', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total'],
+        ['HSN', 'Description', 'UQC', 'Quantity', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess', 'Total'],
         summary.hsn.map((h) => [
           h.hsnCode,
           h.description,
           h.unit,
           h.quantity,
           toMajor(h.taxableValue),
+          toMajor(h.igst),
           toMajor(h.cgst),
           toMajor(h.sgst),
-          toMajor(h.igst),
+          toMajor(h.cess),
           toMajor(h.totalValue),
         ]),
       );
     }
+    if (view === 'amend') {
+      return reportTable(
+        ['Table', 'Original number', 'Original date', 'Original period', 'GSTIN', 'Revised number', 'Revised date', 'Place of supply', 'Rate', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess', 'Invoice value'],
+        [
+          ...amendRows.map(({ table, r }) => [table, r.originalNumber, r.originalDate, r.originalPeriod, r.gstin ?? 'URP', r.number, r.date, r.placeOfSupplyName, r.rate, toMajor(r.taxableValue), toMajor(r.igst), toMajor(r.cgst), toMajor(r.sgst), toMajor(r.cess), toMajor(r.invoiceValue)]),
+          ...b2csa.map(({ originalPeriod, l }) => ['B2CSA', '', '', originalPeriod, '', '', '', l.placeOfSupplyName, l.rate, toMajor(l.taxableValue), toMajor(l.igst), toMajor(l.cgst), toMajor(l.sgst), toMajor(l.cess), '']),
+        ],
+      );
+    }
     return reportTable(
-      ['GSTIN', 'Customer', 'Document', 'Date', 'Place of supply', 'Rate', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Invoice value'],
+      ['GSTIN', 'Customer', 'Document', 'Date', 'Place of supply', 'Rate', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess', 'Invoice value'],
       rowsFor(view).map((r) => [
         r.gstin ?? 'URP',
         r.partyName,
@@ -177,9 +238,10 @@ export default function Gstr1Report() {
         r.placeOfSupplyName,
         r.rate,
         toMajor(r.taxableValue),
+        toMajor(r.igst),
         toMajor(r.cgst),
         toMajor(r.sgst),
-        toMajor(r.igst),
+        toMajor(r.cess),
         toMajor(r.invoiceValue),
       ]),
     );
@@ -193,7 +255,7 @@ export default function Gstr1Report() {
   };
 
   const count =
-    view === 'at' ? advanceRows.length : view === 'hsn' ? summary.hsn.length : view === 'nil' ? summary.nil.length : view === 'docs' ? summary.docs.length : view === 'b2cs' ? b2cs.length : rowsFor(view).length;
+    view === 'amend' ? amendRows.length + b2csa.length : view === 'at' ? advanceRows.length : view === 'hsn' ? summary.hsn.length : view === 'nil' ? summary.nil.length : view === 'docs' ? summary.docs.length : view === 'b2cs' ? b2cs.length : rowsFor(view).length;
 
   return (
     <>
@@ -216,6 +278,23 @@ export default function Gstr1Report() {
 
         <View style={{ height: t.spacing.lg }} />
 
+        {rates.length ? (
+          <>
+            <ReportSection title={tr('compliance:gstr1.rateSummary')}>
+              <DataTable
+                headers={[tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.documents'), tr('compliance:gstr1.col.taxable'), ...taxHeads]}
+                rows={rates.map((l) => [formatPercent(l.rate), String(l.documents), formatMoney(l.taxableValue), ...taxCells(l.igst.minor, l.cgst.minor, l.sgst.minor, l.cess.minor)])}
+                widths={[0.7, 0.7, 1.2, 1, 1, 1, 0.8]}
+                minWidth={620}
+              />
+              <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm, lineHeight: 18 }}>
+                {tr('compliance:gstr1.rateSummaryNote')}
+              </Text>
+            </ReportSection>
+            <View style={{ height: t.spacing.lg }} />
+          </>
+        ) : null}
+
         {/* Nine tables do not fit a phone's width side by side; let them scroll. */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, minWidth: VIEWS.length * 64 }}>
           <View style={{ flex: 1 }}>
@@ -234,6 +313,8 @@ export default function Gstr1Report() {
                 ? tr('compliance:gstr1.docsNote')
                 : view === 'at'
                   ? tr('compliance:gstr1.advancesNote')
+                  : view === 'amend'
+                    ? tr('compliance:gstr1.amendNote')
                   : `${VIEWS.find((v) => v.value === view)?.label} — ${tr(`compliance:gstr1.table.${view}`)}`}
         </Text>
 
@@ -245,13 +326,13 @@ export default function Gstr1Report() {
               illustration="no-documents"
               icon="file-send-outline"
               title={tr('compliance:gstr1.emptyTable')}
-              message={tr('compliance:gstr1.emptyTableBody')}
+              message={view === 'amend' ? tr('compliance:gstr1.emptyAmendBody') : tr('compliance:gstr1.emptyTableBody')}
               compact
             />
           </Card>
         ) : (
           <ReportSection title={tr('compliance:gstr1.rows', { count })}>
-            <DataTable headers={headers} rows={tableRows} widths={[1.4, 1.2, 0.7, 1.1, 1]} />
+            <DataTable headers={headers} rows={tableRows} widths={widths} minWidth={view === 'nil' || view === 'docs' ? undefined : 720} />
           </ReportSection>
         )}
       </ReportShell>

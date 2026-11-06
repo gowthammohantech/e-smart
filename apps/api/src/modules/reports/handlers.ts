@@ -10,7 +10,7 @@ import { profitSnapshot, summarizeAdvances, summarizeDocuments, summarizeExpense
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
 import { loadBook, loadPerpetualCost, loadVouchers } from '../books/book';
-import { gstr1ForRange } from '../gst/handlers';
+import { amendmentsForScreen, gstr1ForRange } from '../gst/handlers';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
 import { tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
 import { msmePayables, sec43bh } from '@esmart/core/domain/msme';
@@ -243,7 +243,10 @@ export const reportsHandlers = defineHandlers({
       case 'gstr1': {
         // The screen's range and branch, within the branches the user may see.
         const branchIds = branchId ? [branchId] : ctx.user.branchIds;
-        return gstr1ForRange(ctx.db, ctx.company, range, ctx.now, { branchIds }) as never;
+        const summary = await gstr1ForRange(ctx.db, ctx.company, range, ctx.now, { branchIds });
+        // A month's screen shows what its return amends of earlier filed ones.
+        const amendments = await amendmentsForScreen(ctx.db, ctx.company, range, ctx.now, branchIds);
+        return (amendments ? { ...summary, amendments } : summary) as never;
       }
       case 'msme-payables': {
         const { docs } = await loadDocuments(all, [...BUY_SIDE]);

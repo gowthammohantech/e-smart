@@ -33,6 +33,8 @@ describe('plan tiers', () => {
     expect(moduleForPath('/payments/made')).toBe('payables');
     expect(moduleForPath('/reports/stock')).toBe('inventory');
     expect(moduleForPath('/reports/profit')).toBe('expenses');
+    expect(moduleForPath('/gst/gstr2b')).toBe('purchases');
+    expect(moduleForPath('/gst/gstr2b-reconciliation')).toBe('purchases');
     expect(moduleForPath('/purchasesque')).toBeNull();
   });
 

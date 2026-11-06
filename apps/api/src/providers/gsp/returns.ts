@@ -59,8 +59,9 @@ const sumItems = (items: Item[] | undefined, single: Item) => {
 };
 
 /**
- * GSTR-2B as GSTN publishes it (`data.docdata.b2b`, `b2ba`, `cdnr`, `cdnra`, `impg`, `isd`), flattened into
- * one entry per supplier document. Amounts are rupees there, paise here.
+ * GSTR-2B as GSTN publishes it (`data.docdata.b2b`, `b2ba`, `cdnr`, `cdnra`, `impg`, `impgsez`, `isd`), flattened into
+ * one entry per supplier document. Amounts are rupees there, paise here. The JSON a taxpayer downloads from
+ * the portal (Returns → GSTR-2B → Download JSON) has the same shape, so an uploaded file is read here too.
  */
 export function parseGstr2b(json: unknown): Gstr2bResult {
   const data = (json as { data?: { gendt?: string; docdata?: Record<string, unknown[]> } })?.data;
@@ -110,7 +111,9 @@ export function parseGstr2b(json: unknown): Gstr2bResult {
       }
     }
   }
-  for (const boe of (d.impg ?? []) as Record<string, unknown>[]) {
+  // Imports from overseas (impg) and from a SEZ (impgsez, grouped under the SEZ unit): both by bill of entry.
+  const boes = [...((d.impg ?? []) as Record<string, unknown>[]), ...((d.impgsez ?? []) as { boe?: Record<string, unknown>[] }[]).flatMap((s) => s.boe ?? [])];
+  for (const boe of boes) {
     entries.push({
       section: 'impg',
       supplierGstin: String(boe.portcode ?? ''),

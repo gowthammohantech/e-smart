@@ -415,3 +415,31 @@ export function gstr1Summary(args: {
     },
   };
 }
+
+/** One line of the rate-wise summary: everything reported at a rate, across the invoice and note tables. */
+export type Gstr1RateLine = { rate: number; taxableValue: Money; igst: Money; cgst: Money; sgst: Money; cess: Money; documents: number };
+
+/**
+ * The return's supplies by rate, across B2B, B2CL, B2CS, EXP, CDNR and CDNUR, net of credit notes (a
+ * credit note takes away; a debit note adds). Reverse-charge rows count too: the seller reports them.
+ * Lowest rate first.
+ */
+export function gstr1RateSummary(summary: Pick<Gstr1Summary, Gstr1Table>, currency: string): Gstr1RateLine[] {
+  const out = new Map<number, Gstr1RateLine & { ids: Set<string> }>();
+  for (const table of GSTR1_TABLES) {
+    for (const r of summary[table] ?? []) {
+      const line = out.get(r.rate) ?? { rate: r.rate, taxableValue: zero(currency), igst: zero(currency), cgst: zero(currency), sgst: zero(currency), cess: zero(currency), documents: 0, ids: new Set<string>() };
+      const sign = r.noteType === 'C' ? -1 : 1;
+      const plus = (a: Money, b: Money) => money(a.minor + sign * b.minor, currency);
+      line.taxableValue = plus(line.taxableValue, r.taxableValue);
+      line.igst = plus(line.igst, r.igst);
+      line.cgst = plus(line.cgst, r.cgst);
+      line.sgst = plus(line.sgst, r.sgst);
+      line.cess = plus(line.cess, r.cess);
+      line.ids.add(r.documentId);
+      line.documents = line.ids.size;
+      out.set(r.rate, line);
+    }
+  }
+  return [...out.values()].sort((a, b) => a.rate - b.rate).map(({ ids: _ids, ...l }) => l);
+}

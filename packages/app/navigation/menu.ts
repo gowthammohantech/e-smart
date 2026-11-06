@@ -115,7 +115,8 @@ export const MENU: MenuSection[] = [
     pages: [
       { key: 'compliance', labelKey: 'nav:more.entry.gstCompliance', icon: 'shield-check-outline', route: '/compliance', badge: 'eInvoiceFailed', group: 'compliance' },
       { key: 'gstr1', labelKey: 'nav:title.gstr1', icon: 'file-send-outline', route: '/gst/gstr1', group: 'returns' },
-      { key: 'gstr2b', labelKey: 'nav:title.gstr2b', icon: 'file-compare', route: '/gst/gstr2b', group: 'returns' },
+      { key: 'gstr2b', labelKey: 'nav:title.gstr2b', icon: 'file-download-outline', route: '/gst/gstr2b', group: 'returns' },
+      { key: 'gstr2bReconciliation', labelKey: 'nav:title.gstr2bReconciliation', icon: 'file-compare', route: '/gst/gstr2b-reconciliation', group: 'returns' },
       { key: 'gstReturns', labelKey: 'nav:title.gstReturns', icon: 'file-certificate-outline', route: '/gst/returns', group: 'returns' },
     ],
   },

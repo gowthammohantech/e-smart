@@ -224,8 +224,14 @@
       "nature": "Nature",
       "series": "Series",
       "cancelled": "Cancelled",
-      "net": "Net"
-    }
+      "net": "Net",
+      "cess": "Cess",
+      "original": "Original"
+    },
+    "rateSummary": "Rate-wise summary",
+    "rateSummaryNote": "Every rate across B2B, B2CL, B2CS, EXP, CDNR and CDNUR, net of credit notes.",
+    "amendNote": "Amendments — documents of earlier filed returns changed since (B2BA, B2CLA, EXPA, CDNRA, CDNURA), and B2CSA by original month. A cancelled one is reported again at nil.",
+    "emptyAmendBody": "Nothing filed earlier has changed. Amendments show when the range is one month."
   },
   "gstr2b": {
     "notConnected": "Connect to the GST portal first",
@@ -275,7 +281,21 @@
     "link": "Link to a bill",
     "linkTitle": "Which bill is it?",
     "linkEmpty": "No unclaimed bills from this supplier",
-    "exportCsv": "Export CSV"
+    "exportCsv": "Export CSV",
+    "upload": "Upload 2B file",
+    "uploaded": "GSTR-2B file read and matched",
+    "uploadHint": "Or upload the JSON or Excel file from the GST portal (Returns → GSTR-2B → Download).",
+    "noSessionHint": "This GSTIN isn’t connected to the GST portal. Download GSTR-2B there (Returns → GSTR-2B → Download, JSON or Excel) and upload the file here.",
+    "noGstinBody": "GSTR-2B is matched against a GSTIN of the business. Add the GSTIN in the business profile.",
+    "nothingYet": "No GSTR-2B for this period yet",
+    "nothingYetBody": "Download it through the portal, or upload the file from the portal, on the GSTR-2B page.",
+    "totals": "Totals by status",
+    "head": {
+      "status": "Status",
+      "count": "Lines"
+    },
+    "totalIn2b": "All lines in 2B",
+    "totalsNote": "Check “All lines in 2B” against the portal’s own GSTR-2B summary. Bills not in 2B are your bills, not in the total."
   },
   "returns": {
     "notConnectedBody": "Returns are saved and filed through your own GST portal session.",
@@ -340,7 +360,8 @@
       "forward": "Carried forward",
       "placeOfSupply": "Place of supply",
       "interState": "Inter-state",
-      "intraState": "Intra-state"
+      "intraState": "Intra-state",
+      "table": "Table"
     },
     "fromBooks": "Worked out from your books. Connect the GST portal to save and file it.",
     "breakupOf": "{{table}} · {{count}}",
@@ -356,6 +377,56 @@
       "document": "Document",
       "expense": "Expense",
       "advance": "Advance received"
+    },
+    "noGstin": "No GSTIN yet",
+    "noGstinBody": "Returns are worked out for a GSTIN of the business. Add it in the business profile, or to a branch registered in another state.",
+    "addGstin": "Business profile",
+    "layout": {
+      "summary": "Summary",
+      "sheet": "Detailed sheet"
+    },
+    "exportExcel": "Export Excel",
+    "exportCsv": "Export CSV",
+    "sheet": {
+      "title31": "Outward and reverse-charge inward supplies (3.1, 3.1.1)",
+      "outward": {
+        "taxable": "Outward taxable supplies (other than zero rated, nil rated and exempted)",
+        "zeroRated": "Outward taxable supplies (zero rated)",
+        "nilExempt": "Other outward supplies (nil rated, exempted)",
+        "reverseCharge": "Inward supplies (liable to reverse charge)",
+        "nonGst": "Non-GST outward supplies"
+      },
+      "eco95": "Taxable supplies on which the e-commerce operator pays tax u/s 9(5)",
+      "ecoThrough": "Taxable supplies made by the registered person through an e-commerce operator, on which it pays tax u/s 9(5)",
+      "itc": {
+        "importOfGoods": "ITC available: import of goods",
+        "importOfServices": "ITC available: import of services",
+        "reverseCharge": "ITC available: inward supplies liable to reverse charge (other than 1 and 2)",
+        "isd": "ITC available: inward supplies from ISD",
+        "allOther": "ITC available: all other ITC",
+        "reversedRules": "ITC reversed: as per rules 38, 42 and 43 and s.17(5)",
+        "reversedOther": "ITC reversed: others",
+        "net": "Net ITC available (A − B)",
+        "reclaimed": "ITC reclaimed which was reversed under 4B(2) earlier",
+        "ineligible": "Ineligible ITC under s.16(4) and ITC restricted by place-of-supply rules"
+      },
+      "to": {
+        "unregistered": "Supplies made to unregistered persons",
+        "composition": "Supplies made to composition taxable persons",
+        "uin": "Supplies made to UIN holders"
+      },
+      "exemptFrom": "From a supplier under composition scheme, exempt and nil rated supply",
+      "nonGstIn": "Non-GST supply",
+      "title61a": "Payment of tax (6.1): other than reverse charge",
+      "title61b": "Payment of tax (6.1): reverse charge",
+      "payable": "Tax payable",
+      "viaCredit": "ITC {{head}}",
+      "matrix": "Credit utilisation",
+      "creditOf": "Credit of",
+      "paid": "Paid {{head}}",
+      "used": "Used",
+      "available": "Available",
+      "matrixNote": "Which credit paid which tax, in the order the law sets (s.49, rule 88A): IGST credit first, then CGST and SGST credit; cess credit pays only cess. Available is this period’s net credit plus what last period carried forward."
     }
   },
   "status": {

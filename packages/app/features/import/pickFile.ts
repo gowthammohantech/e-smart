@@ -26,6 +26,7 @@ const MIME: Record<string, string[]> = {
   '.csv': ['text/csv', 'text/comma-separated-values', 'application/csv', 'text/plain'],
   '.xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
   '.xls': ['application/vnd.ms-excel'],
+  '.json': ['application/json', 'text/plain'],
 };
 
 /** Asks for a file of one of the `accept` kinds (extensions or MIME types); null when none was chosen. */

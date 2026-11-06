@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
+import { schema } from '@esmart/db';
 import { ownerWithCompany, setupApi } from './helpers';
 import { invoiceBody, issueInvoice, line, moneySetup } from './money-fixtures';
 
@@ -29,6 +30,21 @@ async function september() {
 }
 
 describe('gst: GSTR-1', () => {
+  it('shows the GSTR-1 screen the amendments of an earlier filed month', async () => {
+    const { m, b2b } = await september();
+    const sept = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '092026' } });
+    // September's return was filed when the B2B invoice said less than it does now.
+    const was = { ...sept.body.b2b[0], taxableValue: { minor: 150000, currency: 'INR' }, igst: { minor: 27000, currency: 'INR' } };
+    await t.deps.db.insert(schema.gstReturns).values({ id: 'gsr_amend1', companyId: m.companyId, gstin: '27AAPFU0939F1ZV', returnType: 'gstr1', period: '092026', status: 'filed', payload: { reported: [was] } });
+    const oct = await t.get(`${m.c}/report-data/gstr1`, { token: m.token, query: { from: '2026-10-01', to: '2026-10-31' } });
+    expect(oct.status).toBe(200);
+    expect(oct.body.amendments.b2ba).toEqual([expect.objectContaining({ documentId: b2b.id, originalNumber: b2b.number, originalPeriod: '092026', taxableValue: { minor: 200000, currency: 'INR' }, igst: { minor: 36000, currency: 'INR' } })]);
+    expect(oct.body.amendments.delta).toMatchObject({ taxable: 50000, igst: 9000 });
+    // A range that isn't one month has no return to amend.
+    const range = await t.get(`${m.c}/report-data/gstr1`, { token: m.token, query: { from: '2026-10-01', to: '2026-10-15' } });
+    expect(range.body.amendments).toBeUndefined();
+  });
+
   it('puts each document in its table and totals match the invoices', async () => {
     const { m, b2b, b2c, credit } = await september();
     const res = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '092026' } });
@@ -85,16 +101,16 @@ describe('gst: GSTR-1', () => {
     expect(csv.headers['content-type']).toContain('text/csv');
     expect(csv.headers['content-disposition']).toContain('GSTR1_27AAPFU0939F1ZV_092026.csv');
     const lines = csv.raw.trim().split('\r\n');
-    expect(lines[0]).toBe('table,gstin,partyName,number,date,kind,placeOfSupply,rate,taxableValue,cgst,sgst,igst,invoiceValue');
+    expect(lines[0]).toBe('table,gstin,partyName,number,date,kind,placeOfSupply,rate,taxableValue,cgst,sgst,igst,cess,invoiceValue');
     expect(lines).toHaveLength(4);
-    expect(lines[1]).toBe(`b2b,29AABCG4321K1ZM,Anand Enterprises,${b2b.number},2026-09-10,invoice,29-Karnataka,18,2000,0,0,360,2360`);
+    expect(lines[1]).toBe(`b2b,29AABCG4321K1ZM,Anand Enterprises,${b2b.number},2026-09-10,invoice,29-Karnataka,18,2000,0,0,360,0,2360`);
 
     const xlsx = await t.get(`${m.c}/gst/gstr1/export`, { token: m.token, query: { period: '092026', format: 'xlsx' } });
     expect(xlsx.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(xlsx.body as unknown as ExcelJS.Buffer);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(['Summary', 'B2B', 'B2CL', 'B2CS', 'EXP', 'CDNR', 'CDNUR', 'HSN', 'NIL', 'DOCS']);
-    expect(wb.getWorksheet('B2B')!.getRow(3).getCell(11).value).toBe(2360);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Summary', 'B2B', 'B2CL', 'B2CS', 'EXP', 'CDNR', 'CDNUR', 'HSN', 'NIL', 'DOCS', 'AT', 'ATADJ']);
+    expect(wb.getWorksheet('B2B')!.getRow(3).getCell(12).value).toBe(2360);
 
     const bad = await t.get(`${m.c}/gst/gstr1/export`, { token: m.token, query: { period: 'sept' } });
     expect(bad.status).toBe(422);
